@@ -1,0 +1,22 @@
+---
+import { getCollection } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+
+const projects = (await getCollection('projects')).sort(
+	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
+);
+---
+
+<Layout title="Projects">
+	<h1>Projects</h1>
+	<ul>
+		{
+			projects.map((project) => (
+				<li>
+					<a href={`/projects/${project.id}`}>{project.data.title}</a>
+					<p>{project.data.description}</p>
+				</li>
+			))
+		}
+	</ul>
+</Layout>
