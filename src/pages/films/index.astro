@@ -1,0 +1,101 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import FilmPoster from '../../components/FilmPoster.astro';
+import StarRating from '../../components/StarRating.astro';
+import { listLogs } from '../../lib/films';
+import { formatWatchedDate } from '../../lib/format';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const logs = await listLogs();
+---
+
+<Layout title="Film diary">
+	<h1>Film diary</h1>
+
+	{
+		logs.length === 0 ? (
+			<p class="empty">No films logged yet.</p>
+		) : (
+			<ul class="grid">
+				{logs.map((log) => (
+					<li>
+						<a class="card" href={`/films/${log.id}`}>
+							<FilmPoster posterPath={log.poster_path} title={log.title} />
+							<div class="card__meta">
+								<span class="card__title">
+									{log.title}
+									{log.release_year && <span class="card__year">{log.release_year}</span>}
+								</span>
+								<span class="card__sub">
+									<StarRating rating={log.rating} />
+									{log.liked && <span class="heart" title="Liked">♥</span>}
+									{log.rewatch && <span class="rewatch" title="Rewatch">↻</span>}
+								</span>
+								{log.watched_date && (
+									<span class="card__date">{formatWatchedDate(log.watched_date)}</span>
+								)}
+							</div>
+						</a>
+					</li>
+				))}
+			</ul>
+		)
+	}
+</Layout>
+
+<style>
+	h1 {
+		margin-bottom: 1.5rem;
+	}
+	.empty {
+		opacity: 0.7;
+	}
+	.grid {
+		list-style: none;
+		padding: 0;
+		margin: 0;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+		gap: 1.25rem;
+	}
+	.card {
+		display: block;
+		text-decoration: none;
+		color: inherit;
+	}
+	.card:hover .card__title {
+		text-decoration: underline;
+	}
+	.card__meta {
+		margin-top: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.card__title {
+		font-weight: 600;
+		font-size: 0.95rem;
+		line-height: 1.25;
+	}
+	.card__year {
+		font-weight: 400;
+		opacity: 0.6;
+	}
+	.card__sub {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.heart {
+		color: #e0405e;
+	}
+	.rewatch {
+		opacity: 0.7;
+	}
+	.card__date {
+		font-size: 0.8rem;
+		opacity: 0.6;
+	}
+</style>

@@ -1,0 +1,41 @@
+---
+// Renders a 0.5–5.0 rating as five stars with a clipped gold fill layer, so
+// half-stars display exactly. Renders nothing when rating is null.
+interface Props {
+	rating: number | null;
+}
+const { rating } = Astro.props;
+const pct = rating != null ? (rating / 5) * 100 : 0;
+---
+
+{
+	rating != null && (
+		<span class="stars" role="img" aria-label={`${rating} out of 5 stars`}>
+			<span class="stars__empty">★★★★★</span>
+			<span class="stars__fill" style={`width:${pct}%`}>
+				★★★★★
+			</span>
+		</span>
+	)
+}
+
+<style>
+	.stars {
+		position: relative;
+		display: inline-block;
+		line-height: 1;
+		white-space: nowrap;
+		font-size: 1rem;
+		letter-spacing: 0.1em;
+	}
+	.stars__empty {
+		color: var(--border);
+	}
+	.stars__fill {
+		position: absolute;
+		top: 0;
+		left: 0;
+		overflow: hidden;
+		color: #f5a623;
+	}
+</style>

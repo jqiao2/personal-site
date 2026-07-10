@@ -1,0 +1,179 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import FilmPoster from '../../components/FilmPoster.astro';
+import StarRating from '../../components/StarRating.astro';
+import { getLogById } from '../../lib/films';
+import { formatWatchedDate } from '../../lib/format';
+import { imageUrl } from '../../lib/tmdb';
+
+export const prerender = false;
+
+const id = Number(Astro.params.id);
+const log = Number.isInteger(id) ? await getLogById(id) : null;
+
+if (!log) {
+	return new Response('Log not found', { status: 404 });
+}
+
+const { movie } = log;
+const backdrop = imageUrl(movie.backdrop_path, 'w780');
+const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
+const watched = formatWatchedDate(log.watched_date);
+---
+
+<Layout title={`${movie.title} — Film diary`}>
+	<p class="back"><a href="/films">← Film diary</a></p>
+
+	{backdrop && <div class="backdrop" style={`background-image:url(${backdrop})`} aria-hidden="true" />}
+
+	<article class="detail">
+		<div class="detail__poster">
+			<FilmPoster posterPath={movie.poster_path} title={movie.title} size="w342" />
+		</div>
+
+		<div class="detail__body">
+			<h1>
+				{movie.title}
+				{movie.release_year && <span class="year">{movie.release_year}</span>}
+			</h1>
+
+			<div class="stats">
+				<StarRating rating={log.rating} />
+				{log.liked && <span class="heart" title="Liked">♥ Liked</span>}
+				{log.rewatch && <span class="badge">↻ Rewatch</span>}
+				{watched && <span class="watched">Watched {watched}</span>}
+			</div>
+
+			{log.review_text && (
+				<div class="review">
+					{log.review_text.split(/\n{2,}/).map((para) => (
+						<p>{para}</p>
+					))}
+				</div>
+			)}
+
+			{log.tags.length > 0 && (
+				<ul class="tags">
+					{log.tags.map((tag) => (
+						<li>{tag}</li>
+					))}
+				</ul>
+			)}
+
+			{movie.overview && (
+				<details class="synopsis">
+					<summary>Synopsis</summary>
+					<p>{movie.overview}</p>
+				</details>
+			)}
+
+			<p class="tmdb-link">
+				<a href={tmdbUrl} rel="noopener" target="_blank">View on TMDB ↗</a>
+			</p>
+		</div>
+	</article>
+</Layout>
+
+<style>
+	.back {
+		margin: 0 0 1rem;
+		font-size: 0.9rem;
+	}
+	.back a {
+		color: inherit;
+		opacity: 0.7;
+		text-decoration: none;
+	}
+	.back a:hover {
+		opacity: 1;
+		text-decoration: underline;
+	}
+	.backdrop {
+		height: 220px;
+		background-size: cover;
+		background-position: center;
+		border-radius: 8px;
+		margin-bottom: 1.5rem;
+		opacity: 0.85;
+	}
+	.detail {
+		display: grid;
+		grid-template-columns: 180px 1fr;
+		gap: 1.5rem;
+		align-items: start;
+	}
+	.detail__poster {
+		position: sticky;
+		top: 1rem;
+	}
+	h1 {
+		margin: 0 0 0.75rem;
+		font-size: 1.6rem;
+		line-height: 1.2;
+	}
+	.year {
+		font-weight: 400;
+		opacity: 0.55;
+	}
+	.stats {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.75rem 1rem;
+		margin-bottom: 1.25rem;
+		font-size: 0.9rem;
+	}
+	.heart {
+		color: #e0405e;
+	}
+	.badge,
+	.watched {
+		opacity: 0.75;
+	}
+	.review p {
+		line-height: 1.65;
+		margin: 0 0 1rem;
+	}
+	.tags {
+		list-style: none;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		padding: 0;
+		margin: 1rem 0;
+	}
+	.tags li {
+		font-size: 0.8rem;
+		padding: 0.15rem 0.6rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		opacity: 0.85;
+	}
+	.synopsis {
+		margin: 1.25rem 0;
+		font-size: 0.9rem;
+	}
+	.synopsis summary {
+		cursor: pointer;
+		opacity: 0.7;
+	}
+	.synopsis p {
+		margin: 0.75rem 0 0;
+		line-height: 1.6;
+		opacity: 0.85;
+	}
+	.tmdb-link {
+		margin-top: 1.5rem;
+		font-size: 0.85rem;
+	}
+	.tmdb-link a {
+		color: inherit;
+		opacity: 0.7;
+	}
+	@media (max-width: 560px) {
+		.detail {
+			grid-template-columns: 120px 1fr;
+			gap: 1rem;
+		}
+	}
+</style>

@@ -1,7 +1,7 @@
 // Service layer that sits between the API routes and Supabase/TMDB.
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
-import { supabaseAdmin } from './supabase';
+import { supabaseAdmin, supabasePublic } from './supabase';
 import { getMovieDetails, releaseYear } from './tmdb';
 
 /** How long a cached movie row is considered fresh before we re-sync from TMDB. */
@@ -127,4 +127,92 @@ async function attachTags(logId: number, names: string[]): Promise<void> {
 	const links = (tagRows as { id: number }[]).map((t) => ({ log_id: logId, tag_id: t.id }));
 	const { error: linkErr } = await supabaseAdmin.from('log_tags').insert(links);
 	if (linkErr) throw new Error(`link tags failed: ${linkErr.message}`);
+}
+
+// --- Reads (public, via anon key + RLS public-read policies) ---
+
+/** A watch as shown in the diary list — flattened by the logs_with_movie view. */
+export interface LogListItem {
+	id: number;
+	watched_date: string | null;
+	rating: number | null;
+	review_text: string | null;
+	rewatch: boolean;
+	liked: boolean;
+	created_at: string;
+	tmdb_id: number;
+	title: string;
+	release_year: number | null;
+	poster_path: string | null;
+	tags: string[];
+}
+
+/** A single watch with the full cached movie row, for the detail page. */
+export interface LogDetail {
+	id: number;
+	watched_date: string | null;
+	rating: number | null;
+	review_text: string | null;
+	rewatch: boolean;
+	liked: boolean;
+	created_at: string;
+	movie: {
+		tmdb_id: number;
+		title: string;
+		release_year: number | null;
+		poster_path: string | null;
+		backdrop_path: string | null;
+		overview: string | null;
+		runtime: number | null;
+	};
+	tags: string[];
+}
+
+/** All logged watches, newest first. */
+export async function listLogs(): Promise<LogListItem[]> {
+	const { data, error } = await supabasePublic
+		.from('logs_with_movie')
+		.select('*')
+		.order('watched_date', { ascending: false, nullsFirst: false })
+		.order('created_at', { ascending: false });
+	if (error) throw new Error(`listLogs failed: ${error.message}`);
+	return (data ?? []) as LogListItem[];
+}
+
+/** One watch by id, with its movie and tags. Null if it doesn't exist. */
+export async function getLogById(id: number): Promise<LogDetail | null> {
+	const { data, error } = await supabasePublic
+		.from('logs')
+		.select(
+			'id, watched_date, rating, review_text, rewatch, liked, created_at, ' +
+				'movies(tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime), ' +
+				'log_tags(tags(name))',
+		)
+		.eq('id', id)
+		.maybeSingle();
+	if (error) throw new Error(`getLogById failed: ${error.message}`);
+	if (!data) return null;
+
+	const row = data as unknown as {
+		id: number;
+		watched_date: string | null;
+		rating: number | null;
+		review_text: string | null;
+		rewatch: boolean;
+		liked: boolean;
+		created_at: string;
+		movies: LogDetail['movie'];
+		log_tags: { tags: { name: string } }[];
+	};
+	return {
+		id: row.id,
+		watched_date: row.watched_date,
+		rating: row.rating,
+		review_text: row.review_text,
+		rewatch: row.rewatch,
+		liked: row.liked,
+		created_at: row.created_at,
+		movie: row.movies,
+		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
+	};
 }

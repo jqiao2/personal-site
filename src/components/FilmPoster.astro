@@ -1,0 +1,42 @@
+---
+import { imageUrl, type ImageSize } from '../lib/tmdb';
+// A movie poster with a text placeholder when TMDB has no poster_path.
+interface Props {
+	posterPath: string | null;
+	title: string;
+	size?: ImageSize;
+}
+const { posterPath, title, size = 'w342' } = Astro.props;
+const src = imageUrl(posterPath, size);
+---
+
+{
+	src ? (
+		<img class="poster" src={src} alt={`${title} poster`} loading="lazy" />
+	) : (
+		<div class="poster poster--placeholder">
+			<span>{title}</span>
+		</div>
+	)
+}
+
+<style>
+	.poster {
+		display: block;
+		width: 100%;
+		aspect-ratio: 2 / 3;
+		object-fit: cover;
+		border-radius: 6px;
+		background: var(--border);
+	}
+	.poster--placeholder {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		padding: 0.5rem;
+		box-sizing: border-box;
+		font-size: 0.85rem;
+		line-height: 1.3;
+	}
+</style>
