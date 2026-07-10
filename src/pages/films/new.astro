@@ -1,0 +1,416 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { requireOwner } from '../../lib/auth';
+
+export const prerender = false;
+
+// Owner-only. Bounce to login (preserving intent) if not authenticated.
+if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?redirect=/films/new');
+
+const today = new Date().toISOString().slice(0, 10);
+---
+
+<Layout title="Log a film">
+	<h1>Log a film</h1>
+
+	<form id="logform" autocomplete="off">
+		<!-- Film search / selection -->
+		<label class="field-label" for="q">Film</label>
+		<div class="search" id="search-wrap">
+			<input type="text" id="q" placeholder="Search for a film…" />
+			<ul id="results" class="results" hidden></ul>
+		</div>
+		<div class="selected" id="selected" hidden>
+			<img id="sel-poster" alt="" width="46" height="69" />
+			<span id="sel-title"></span>
+			<button type="button" id="change" class="link">change</button>
+		</div>
+
+		<!-- Rating -->
+		<label class="field-label">Rating</label>
+		<div class="rating-row">
+			<span class="starpicker" id="starpicker">
+				<span class="sp-empty">★★★★★</span>
+				<span class="sp-fill" id="sp-fill"></span>
+				<span class="sp-hits" id="sp-hits"></span>
+			</span>
+			<button type="button" id="clear-rating" class="link" hidden>clear</button>
+		</div>
+
+		<!-- Watched date -->
+		<label class="field-label" for="date">Watched date</label>
+		<input type="date" id="date" value={today} />
+
+		<!-- Flags -->
+		<div class="flags">
+			<button type="button" id="like" class="flagbtn" aria-pressed="false">♥ Like</button>
+			<label class="checkbox"><input type="checkbox" id="rewatch" /> Rewatch</label>
+		</div>
+
+		<!-- Review -->
+		<label class="field-label" for="review">Review</label>
+		<textarea id="review" rows="5" placeholder="Optional — leave everything blank to just mark it watched."></textarea>
+
+		<!-- Tags -->
+		<label class="field-label" for="tags">Tags</label>
+		<input type="text" id="tags" placeholder="comma, separated" />
+
+		<div class="actions">
+			<button type="submit" id="submit" disabled>Save</button>
+			<span id="msg" class="msg"></span>
+		</div>
+	</form>
+</Layout>
+
+<style>
+	h1 {
+		margin-bottom: 1.5rem;
+	}
+	form {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		max-width: 560px;
+	}
+	.field-label {
+		font-weight: 600;
+		font-size: 0.9rem;
+		margin-top: 1rem;
+	}
+	input[type='text'],
+	input[type='date'],
+	textarea {
+		padding: 0.55rem 0.7rem;
+		font-size: 1rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--bg);
+		color: var(--fg);
+		font-family: inherit;
+		width: 100%;
+		box-sizing: border-box;
+	}
+	.search {
+		position: relative;
+	}
+	.results {
+		list-style: none;
+		margin: 0.25rem 0 0;
+		padding: 0;
+		position: absolute;
+		z-index: 10;
+		width: 100%;
+		max-height: 320px;
+		overflow-y: auto;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 6px;
+	}
+	.results li {
+		display: flex;
+		gap: 0.6rem;
+		align-items: center;
+		padding: 0.4rem 0.5rem;
+		cursor: pointer;
+	}
+	.results li:hover,
+	.results li[aria-selected='true'] {
+		background: color-mix(in srgb, var(--fg) 8%, transparent);
+	}
+	.results img {
+		width: 34px;
+		height: 51px;
+		object-fit: cover;
+		border-radius: 3px;
+		background: var(--border);
+		flex-shrink: 0;
+	}
+	.results .r-year {
+		opacity: 0.6;
+		margin-left: 0.35rem;
+	}
+	.selected {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		margin-top: 0.5rem;
+	}
+	.selected img {
+		object-fit: cover;
+		border-radius: 4px;
+		background: var(--border);
+	}
+	.selected span {
+		font-weight: 600;
+	}
+	.rating-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+	.starpicker {
+		position: relative;
+		display: inline-block;
+		line-height: 1;
+		font-size: 1.9rem;
+		letter-spacing: 0.15em;
+		cursor: pointer;
+		user-select: none;
+	}
+	.sp-empty {
+		color: var(--border);
+	}
+	.sp-fill {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		color: #f5a623;
+		pointer-events: none;
+	}
+	.sp-fill::before {
+		content: '★★★★★';
+	}
+	.sp-hits {
+		position: absolute;
+		inset: 0;
+		display: flex;
+	}
+	.sp-hits span {
+		flex: 1;
+	}
+	.flags {
+		display: flex;
+		align-items: center;
+		gap: 1.25rem;
+		margin-top: 1rem;
+	}
+	.flagbtn {
+		padding: 0.4rem 0.9rem;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		background: var(--bg);
+		color: var(--fg);
+		cursor: pointer;
+		font-size: 0.9rem;
+	}
+	.flagbtn[aria-pressed='true'] {
+		background: #e0405e;
+		border-color: #e0405e;
+		color: #fff;
+	}
+	.checkbox {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.95rem;
+	}
+	.link {
+		background: none;
+		border: none;
+		color: inherit;
+		opacity: 0.6;
+		cursor: pointer;
+		font-size: 0.85rem;
+		text-decoration: underline;
+		padding: 0;
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		margin-top: 1.75rem;
+	}
+	#submit {
+		padding: 0.6rem 1.4rem;
+		font-size: 1rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--fg);
+		color: var(--bg);
+		cursor: pointer;
+	}
+	#submit:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.msg {
+		font-size: 0.9rem;
+	}
+	.msg.error {
+		color: #e0405e;
+	}
+</style>
+
+<script>
+	const IMG = 'https://image.tmdb.org/t/p/w92';
+
+	const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+	const q = el<HTMLInputElement>('q');
+	const results = el<HTMLUListElement>('results');
+	const selected = el<HTMLDivElement>('selected');
+	const selPoster = el<HTMLImageElement>('sel-poster');
+	const selTitle = el<HTMLSpanElement>('sel-title');
+	const searchWrap = el<HTMLDivElement>('search-wrap');
+	const fill = el<HTMLSpanElement>('sp-fill');
+	const hits = el<HTMLSpanElement>('sp-hits');
+	const clearRating = el<HTMLButtonElement>('clear-rating');
+	const like = el<HTMLButtonElement>('like');
+	const submit = el<HTMLButtonElement>('submit');
+	const msg = el<HTMLSpanElement>('msg');
+
+	let tmdbId: number | null = null;
+	let rating: number | null = null;
+	let liked = false;
+
+	// --- TMDB search (debounced) ---
+	let timer: number | undefined;
+	q.addEventListener('input', () => {
+		window.clearTimeout(timer);
+		const query = q.value.trim();
+		if (!query) return hideResults();
+		timer = window.setTimeout(() => runSearch(query), 300);
+	});
+
+	async function runSearch(query: string) {
+		try {
+			const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+			if (!res.ok) return hideResults();
+			const data = await res.json();
+			renderResults(data.results ?? []);
+		} catch {
+			hideResults();
+		}
+	}
+
+	function renderResults(items: any[]) {
+		results.textContent = '';
+		if (!items.length) return hideResults();
+		for (const m of items.slice(0, 8)) {
+			const li = document.createElement('li');
+			const img = document.createElement('img');
+			if (m.poster_path) img.src = IMG + m.poster_path;
+			img.alt = '';
+			const label = document.createElement('span');
+			label.textContent = m.title;
+			if (m.release_date) {
+				const yr = document.createElement('span');
+				yr.className = 'r-year';
+				yr.textContent = m.release_date.slice(0, 4);
+				label.appendChild(yr);
+			}
+			li.append(img, label);
+			li.addEventListener('click', () => selectMovie(m));
+			results.appendChild(li);
+		}
+		results.hidden = false;
+	}
+
+	function hideResults() {
+		results.hidden = true;
+		results.textContent = '';
+	}
+
+	function selectMovie(m: any) {
+		tmdbId = m.id;
+		selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+		if (m.poster_path) {
+			selPoster.src = IMG + m.poster_path;
+			selPoster.hidden = false;
+		} else {
+			selPoster.removeAttribute('src');
+			selPoster.hidden = true;
+		}
+		hideResults();
+		searchWrap.hidden = true;
+		selected.hidden = false;
+		submit.disabled = false;
+	}
+
+	el<HTMLButtonElement>('change').addEventListener('click', () => {
+		tmdbId = null;
+		selected.hidden = true;
+		searchWrap.hidden = false;
+		submit.disabled = true;
+		q.value = '';
+		q.focus();
+	});
+
+	// Dismiss the results dropdown when clicking away.
+	document.addEventListener('click', (e) => {
+		if (!searchWrap.contains(e.target as Node)) hideResults();
+	});
+
+	// --- Star picker (10 half-star hotspots) ---
+	function setFill(value: number) {
+		fill.style.width = `${(value / 5) * 100}%`;
+	}
+	for (let i = 1; i <= 10; i++) {
+		const hit = document.createElement('span');
+		const value = i / 2;
+		hit.addEventListener('mousemove', () => setFill(value));
+		hit.addEventListener('click', () => {
+			rating = value;
+			setFill(value);
+			clearRating.hidden = false;
+		});
+		hits.appendChild(hit);
+	}
+	hits.addEventListener('mouseleave', () => setFill(rating ?? 0));
+	clearRating.addEventListener('click', () => {
+		rating = null;
+		setFill(0);
+		clearRating.hidden = true;
+	});
+
+	// --- Like toggle ---
+	like.addEventListener('click', () => {
+		liked = !liked;
+		like.setAttribute('aria-pressed', String(liked));
+	});
+
+	// --- Submit ---
+	el<HTMLFormElement>('logform').addEventListener('submit', async (e) => {
+		e.preventDefault();
+		if (!tmdbId) return;
+		submit.disabled = true;
+		msg.className = 'msg';
+		msg.textContent = 'Saving…';
+
+		const tags = el<HTMLInputElement>('tags')
+			.value.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
+
+		const payload = {
+			tmdbId,
+			watchedDate: el<HTMLInputElement>('date').value || null,
+			rating,
+			reviewText: el<HTMLTextAreaElement>('review').value,
+			rewatched: el<HTMLInputElement>('rewatch').checked,
+			liked,
+			tags,
+		};
+
+		try {
+			const res = await fetch('/api/films/logs', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
+			if (res.status === 401) {
+				window.location.href = '/films/login?redirect=/films/new';
+				return;
+			}
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || 'Save failed');
+			window.location.href = data.logId ? `/films/${data.logId}` : '/films';
+		} catch (err) {
+			msg.className = 'msg error';
+			msg.textContent = err instanceof Error ? err.message : 'Save failed';
+			submit.disabled = false;
+		}
+	});
+</script>

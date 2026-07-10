@@ -1,28 +1,27 @@
 import type { APIRoute } from 'astro';
-import { supabasePublic } from '../../../lib/supabase';
-import { createLog } from '../../../lib/films';
+import { logFilm, listLogs } from '../../../lib/films';
 import { requireOwner } from '../../../lib/auth';
 import { json, apiError } from '../../../lib/http';
 
 export const prerender = false;
 
-// GET /api/films/logs?limit=50&offset=0  → public list of watches (newest first).
+// GET /api/films/logs?limit=50&offset=0  → public list of watches (newest first,
+// soft-deleted excluded).
 export const GET: APIRoute = async ({ url }) => {
 	const limit = clamp(Number.parseInt(url.searchParams.get('limit') ?? '50', 10), 1, 100, 50);
 	const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') ?? '0', 10) || 0);
 
-	const { data, error } = await supabasePublic
-		.from('logs_with_movie')
-		.select('*')
-		.order('watched_date', { ascending: false, nullsFirst: false })
-		.order('created_at', { ascending: false })
-		.range(offset, offset + limit - 1);
-	if (error) return apiError(error.message, 500);
-
-	return json({ logs: data });
+	try {
+		const logs = await listLogs(limit, offset);
+		return json({ logs });
+	} catch (e) {
+		return apiError(e instanceof Error ? e.message : 'failed to list logs', 500);
+	}
 };
 
-// POST /api/films/logs  (owner only)
+// POST /api/films/logs  (owner only) — "log a film".
+// Always marks the film watched; creates a dated diary log only when the entry
+// has content (rating/like/rewatch/review/tags). Returns { watchedOnly, logId }.
 // Body: { tmdbId, watchedDate?, rating?, reviewText?, rewatched?, liked?, tags? }
 export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
@@ -43,7 +42,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	}
 
 	try {
-		const result = await createLog({
+		const result = await logFilm({
 			tmdbId,
 			watchedDate: asDateString(body.watchedDate),
 			rating,
@@ -54,7 +53,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 		});
 		return json(result, 201);
 	} catch (e) {
-		return apiError(e instanceof Error ? e.message : 'failed to create log', 500);
+		return apiError(e instanceof Error ? e.message : 'failed to log film', 500);
 	}
 };
 

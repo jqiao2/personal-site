@@ -6,7 +6,7 @@ import { json, apiError } from '../../../../lib/http';
 export const prerender = false;
 
 // PATCH /api/films/logs/123  (owner) — edit rating/review/date/flags.
-// DELETE /api/films/logs/123 (owner) — remove a watch (tags cascade).
+// DELETE /api/films/logs/123 (owner) — soft-delete (sets deleted_at).
 
 export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
@@ -40,6 +40,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 		.from('logs')
 		.update(patch)
 		.eq('id', id)
+		.is('deleted_at', null) // can't edit a soft-deleted log
 		.select('id')
 		.maybeSingle();
 	if (error) return apiError(error.message, 500);
@@ -52,10 +53,13 @@ export const DELETE: APIRoute = async ({ params, cookies }) => {
 	const id = Number.parseInt(params.id ?? '', 10);
 	if (!Number.isInteger(id) || id <= 0) return apiError('invalid log id', 400);
 
+	// Soft delete: stamp deleted_at instead of removing the row. The `is null`
+	// guard makes a repeat delete a no-op (404) rather than re-stamping.
 	const { data, error } = await supabaseAdmin
 		.from('logs')
-		.delete()
+		.update({ deleted_at: new Date().toISOString() })
 		.eq('id', id)
+		.is('deleted_at', null)
 		.select('id')
 		.maybeSingle();
 	if (error) return apiError(error.message, 500);

@@ -1,0 +1,88 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import { requireOwner } from '../../lib/auth';
+
+export const prerender = false;
+
+// Already logged in? Skip straight to the form.
+if (await requireOwner(Astro.cookies)) return Astro.redirect('/films/new');
+---
+
+<Layout title="Owner login">
+	<h1>Owner login</h1>
+	<p class="hint">Log in to add films to the diary.</p>
+
+	<form id="loginform">
+		<input
+			type="password"
+			id="password"
+			placeholder="Password"
+			autocomplete="current-password"
+			required
+		/>
+		<button type="submit">Log in</button>
+		<p id="err" class="err" hidden>Incorrect password.</p>
+	</form>
+</Layout>
+
+<style>
+	.hint {
+		opacity: 0.7;
+		margin-bottom: 1.5rem;
+	}
+	form {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		align-items: center;
+		max-width: 360px;
+	}
+	input {
+		flex: 1;
+		min-width: 180px;
+		padding: 0.55rem 0.7rem;
+		font-size: 1rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--bg);
+		color: var(--fg);
+	}
+	button {
+		padding: 0.55rem 1.1rem;
+		font-size: 1rem;
+		border: 1px solid var(--border);
+		border-radius: 6px;
+		background: var(--fg);
+		color: var(--bg);
+		cursor: pointer;
+	}
+	.err {
+		flex-basis: 100%;
+		margin: 0;
+		color: #e0405e;
+		font-size: 0.9rem;
+	}
+</style>
+
+<script>
+	const form = document.getElementById('loginform') as HTMLFormElement;
+	const pw = document.getElementById('password') as HTMLInputElement;
+	const err = document.getElementById('err') as HTMLParagraphElement;
+
+	form.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		err.hidden = true;
+		const res = await fetch('/api/auth/login', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ password: pw.value }),
+		});
+		if (res.ok) {
+			const params = new URLSearchParams(window.location.search);
+			window.location.href = params.get('redirect') || '/films/new';
+		} else {
+			err.hidden = false;
+			pw.select();
+		}
+	});
+</script>
