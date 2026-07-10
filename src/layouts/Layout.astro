@@ -26,8 +26,27 @@ const { title } = Astro.props;
 			<slot />
 		</main>
 		<style>
+			:root {
+				color-scheme: light dark;
+				--bg: #fff;
+				--fg: #111;
+				--border: #ddd;
+			}
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #111;
+					--fg: #eee;
+					--border: #333;
+				}
+			}
+			body {
+				font-family: system-ui, sans-serif;
+				background: var(--bg);
+				color: var(--fg);
+				margin: 0;
+			}
 			header {
-				border-bottom: 1px solid #ddd;
+				border-bottom: 1px solid var(--border);
 				padding: 1rem 2rem;
 			}
 			nav {
@@ -38,7 +57,7 @@ const { title } = Astro.props;
 			}
 			nav a {
 				text-decoration: none;
-				color: #111;
+				color: var(--fg);
 				font-weight: 500;
 			}
 			nav a:hover {
@@ -48,10 +67,6 @@ const { title } = Astro.props;
 				max-width: 800px;
 				margin: 0 auto;
 				padding: 2rem;
-			}
-			body {
-				font-family: system-ui, sans-serif;
-				color: #111;
 			}
 		</style>
 	</body>

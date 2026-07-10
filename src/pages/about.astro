@@ -1,5 +1,111 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+const experience = [
+	{
+		company: 'Brigit.com, Payments Team',
+		role: 'Software Engineer',
+		location: 'New York, NY',
+		dates: 'Oct 2025 -- Present',
+		bullets: [
+			'Designed and shipped a Redis caching layer across three bank tables, cutting endpoint <strong>P95 latency by 85%</strong> (163ms to 24.6ms) and eliminating a production bottleneck during peak subscription processing (480 requests/s)',
+			'Integrated Worldpay as a second ACH payment processor from the ground up -- batch XML handling, SFTP file delivery, return/NOC handling, and account funding -- adding processor redundancy to a stack previously dependent on a single vendor; currently processing <strong>$250k/month</strong> in a phased rollout',
+			'Created Claude AI coding agents automating the design doc to scoped Jira tickets to draft PR workflow with human approval at every step; adopted across multiple engineering teams and in active refinement',
+		],
+	},
+	{
+		company: 'Qualcomm Inc., Camera Striping Team',
+		role: 'Camera Architect/Software Engineer',
+		location: 'San Diego, CA',
+		dates: 'Apr 2023 -- Sep 2025',
+		bullets: [
+			'Led camera core software/hardware compatibility efforts with a focus on image quality and performance, enabling critical camera features such as AI category mapping, demosaicing, and lens shading correction',
+			'Designed striping library <strong>C APIs</strong> for mobile and automotive chipsets, collaborating with upstream and downstream teams and responding to external customer needs',
+			'Developed and maintained a <strong>Python-based</strong> regression testing framework for <strong>10+</strong> camera pipeline flows across legacy and upcoming chipsets -- reduced developer regression efforts by <strong>30%</strong>',
+		],
+	},
+	{
+		company: 'Meta Platforms Inc., Video Search Product Experience',
+		role: 'Software Engineer',
+		location: 'Bellevue, WA',
+		dates: 'Apr 2022 -- Nov 2022',
+		bullets: [
+			'Built a more efficient distribution method of trending content on search surface; led to <strong>18% decrease in TTRC</strong> and 7% increase in user engagement on targeted surfaces',
+			'Diagnosed legacy pagination issues with adopted surfaces, saving over <strong>$150k in gCPU costs</strong>',
+			'Worked closely with ML ranking team to integrate new lists to explore surface',
+		],
+	},
+	{
+		company: 'Amazon.com, Payment Products',
+		role: 'Software Development Engineer',
+		location: 'Seattle, WA',
+		dates: 'Feb 2021 -- Mar 2022',
+		bullets: [
+			'Designed and implemented an organization-wide user verification service, allows flexibility between various verification methods (OTP, CAPTCHA, etc) and reduces engineer onboarding efforts by <strong>50%</strong>',
+			'Integrated Arkose Labs fraud prevention into US CBCC Java application to mitigate fraud attacks; led to <strong>70%</strong> drop in monthly fraud rate and lowest monthly fraud rate to-date',
+			'Led weekly technical discussions between external development team (Arkose Labs) and Amazon',
+			'Joined in full-time capacity following successful internship during Summer 2020 with the same team',
+		],
+	},
+	{
+		company: 'Amazon Web Services, Core Network',
+		role: 'Software Development Engineer Intern',
+		location: 'Cupertino, CA',
+		dates: 'May 2019 -- Aug 2019',
+		bullets: [
+			'Automated data extraction, transformation, and loading on link failure data from <strong>AWS DynamoDB</strong> to <strong>Redshift</strong> through S3 and Lambdas; pipeline handled <strong>200,000+</strong> entries per week',
+		],
+	},
+	{
+		company: 'Berkeley Institute for Data Science',
+		role: 'Undergraduate Researcher',
+		location: 'Berkeley, CA',
+		dates: 'Aug 2018 -- May 2019',
+		bullets: [
+			'Developed and tested a DeepMedic/ScaleNet convolutional neural network variant for brain tumor segmentation using multimodal MRI scans',
+			'Submitted and presented abstract at the 2019 International MICCAI BraTS Challenge',
+		],
+	},
+	{
+		company: 'Vivo Communication Technology Co, Facial Recognition Team',
+		role: 'Software Engineering Intern',
+		location: 'San Diego, CA',
+		dates: 'Jun 2018 -- Aug 2018',
+		bullets: [
+			'Developed and trained layers and hyperparameters for a facial ID "liveness" detection CNN; improved from original deterministic algorithm by 40%',
+			'Utilized TensorFlow for network development and Docker to streamline workflow',
+		],
+	},
+	{
+		company: 'UC Berkeley, Machine Learning for Atlas of Archaeological Sites',
+		role: 'Undergraduate Researcher',
+		location: 'Berkeley, CA',
+		dates: 'Jan 2018 -- Aug 2018',
+		bullets: [
+			"Built an NLP-pipeline to parse 12,000+ location and dates from thousands of archaeological site article PDFs using Stanford's CoreNLP machine learning library",
+		],
+	},
+];
+
+const education = {
+	school: 'University of California, Berkeley',
+	degree: 'BS, Electrical Engineering and Computer Science',
+	location: 'Berkeley, CA',
+	dates: 'Dec 2020',
+	details: '3.845/4.0 GPA, Honors',
+};
+
+const skills = {
+	languages: ['Python', 'Java', 'C', 'PHP', 'C++'],
+	tools: ['Git', 'PostgreSQL', 'Redis', 'AWS', 'GCS', 'Kubernetes', 'Claude', 'Spark', 'OpenCV'],
+};
+
+const projects = [
+	{ name: 'AOSLO Computational Retinal Tracking under Latency Constraints', tech: 'C++' },
+	{ name: 'Ray-Based Pathtracing Engine', tech: 'C++' },
+	{ name: 'Designing a Robust Image Classifier', tech: 'Python, PyTorch, NumPy' },
+	{ name: 'PintOS Operating System', tech: 'C' },
+];
 ---
 
 <Layout title="About">
@@ -7,16 +113,93 @@ import Layout from '../layouts/Layout.astro';
 
 	<section>
 		<h2>Experience</h2>
-		<p><em>Add your work history here — company, title, dates, and a couple of bullet points per role.</em></p>
-	</section>
-
-	<section>
-		<h2>Skills</h2>
-		<p><em>Add languages, frameworks, and tools here.</em></p>
+		{
+			experience.map((job) => (
+				<article class="entry">
+					<div class="entry-header">
+						<h3>{job.company}</h3>
+						<span class="dates">{job.dates}</span>
+					</div>
+					<p class="role">
+						{job.role} &middot; {job.location}
+					</p>
+					<ul>
+						{job.bullets.map((bullet) => (
+							<li set:html={bullet} />
+						))}
+					</ul>
+				</article>
+			))
+		}
 	</section>
 
 	<section>
 		<h2>Education</h2>
-		<p><em>Add degrees, schools, and dates here.</em></p>
+		<article class="entry">
+			<div class="entry-header">
+				<h3>{education.school}</h3>
+				<span class="dates">{education.dates}</span>
+			</div>
+			<p class="role">
+				{education.degree} &middot; {education.location}
+			</p>
+			<p>{education.details}</p>
+		</article>
 	</section>
+
+	<section>
+		<h2>Skills</h2>
+		<p><strong>Languages:</strong> {skills.languages.join(', ')}</p>
+		<p><strong>Tools:</strong> {skills.tools.join(', ')}</p>
+	</section>
+
+	<section>
+		<h2>Projects</h2>
+		<ul>
+			{
+				projects.map((project) => (
+					<li>
+						{project.name} <span class="tech">({project.tech})</span>
+					</li>
+				))
+			}
+		</ul>
+	</section>
+
+	<style>
+		section {
+			margin-bottom: 2.5rem;
+		}
+		h2 {
+			border-bottom: 1px solid var(--border);
+			padding-bottom: 0.25rem;
+		}
+		.entry {
+			margin-bottom: 1.5rem;
+		}
+		.entry-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			gap: 1rem;
+			flex-wrap: wrap;
+		}
+		.entry-header h3 {
+			margin: 0;
+		}
+		.dates {
+			white-space: nowrap;
+			opacity: 0.75;
+			font-size: 0.9rem;
+		}
+		.role {
+			margin: 0.15rem 0 0.5rem;
+			font-style: italic;
+			opacity: 0.85;
+		}
+		.tech {
+			opacity: 0.75;
+			font-size: 0.9rem;
+		}
+	</style>
 </Layout>
