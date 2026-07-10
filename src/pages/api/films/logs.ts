@@ -23,7 +23,7 @@ export const GET: APIRoute = async ({ url }) => {
 };
 
 // POST /api/films/logs  (owner only)
-// Body: { tmdbId, watchedDate?, rating?, reviewText?, rewatch?, liked?, tags? }
+// Body: { tmdbId, watchedDate?, rating?, reviewText?, rewatched?, liked?, tags? }
 export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
@@ -48,7 +48,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			watchedDate: asDateString(body.watchedDate),
 			rating,
 			reviewText: asText(body.reviewText),
-			rewatch: Boolean(body.rewatch),
+			rewatched: Boolean(body.rewatched),
 			liked: Boolean(body.liked),
 			tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
 		});

@@ -31,7 +31,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	}
 	if ('reviewText' in body) patch.review_text = textOrNull(body.reviewText);
 	if ('watchedDate' in body) patch.watched_date = dateOrNull(body.watchedDate);
-	if ('rewatch' in body) patch.rewatch = Boolean(body.rewatch);
+	if ('rewatched' in body) patch.rewatched = Boolean(body.rewatched);
 	if ('liked' in body) patch.liked = Boolean(body.liked);
 
 	if (Object.keys(patch).length === 0) return apiError('no updatable fields provided', 400);

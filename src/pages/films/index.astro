@@ -31,7 +31,7 @@ const logs = await listLogs();
 								<span class="card__sub">
 									<StarRating rating={log.rating} />
 									{log.liked && <span class="heart" title="Liked">♥</span>}
-									{log.rewatch && <span class="rewatch" title="Rewatch">↻</span>}
+									{log.rewatched && <span class="rewatch" title="Rewatch">↻</span>}
 								</span>
 								{log.watched_date && (
 									<span class="card__date">{formatWatchedDate(log.watched_date)}</span>

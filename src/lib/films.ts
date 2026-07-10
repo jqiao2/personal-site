@@ -74,7 +74,7 @@ export interface CreateLogInput {
 	watchedDate?: string | null; // "YYYY-MM-DD"
 	rating?: number | null; // 0.5–5.0 in half-steps
 	reviewText?: string | null;
-	rewatch?: boolean;
+	rewatched?: boolean;
 	liked?: boolean;
 	tags?: string[];
 }
@@ -90,7 +90,7 @@ export async function createLog(input: CreateLogInput): Promise<{ id: number }> 
 			watched_date: input.watchedDate ?? null,
 			rating: input.rating ?? null,
 			review_text: input.reviewText ?? null,
-			rewatch: input.rewatch ?? false,
+			rewatched: input.rewatched ?? false,
 			liked: input.liked ?? false,
 		})
 		.select('id')
@@ -137,7 +137,7 @@ export interface LogListItem {
 	watched_date: string | null;
 	rating: number | null;
 	review_text: string | null;
-	rewatch: boolean;
+	rewatched: boolean;
 	liked: boolean;
 	created_at: string;
 	tmdb_id: number;
@@ -153,7 +153,7 @@ export interface LogDetail {
 	watched_date: string | null;
 	rating: number | null;
 	review_text: string | null;
-	rewatch: boolean;
+	rewatched: boolean;
 	liked: boolean;
 	created_at: string;
 	movie: {
@@ -184,7 +184,7 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 	const { data, error } = await supabasePublic
 		.from('logs')
 		.select(
-			'id, watched_date, rating, review_text, rewatch, liked, created_at, ' +
+			'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
 				'movies(tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime), ' +
 				'log_tags(tags(name))',
 		)
@@ -198,7 +198,7 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		watched_date: string | null;
 		rating: number | null;
 		review_text: string | null;
-		rewatch: boolean;
+		rewatched: boolean;
 		liked: boolean;
 		created_at: string;
 		movies: LogDetail['movie'];
@@ -209,7 +209,7 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		watched_date: row.watched_date,
 		rating: row.rating,
 		review_text: row.review_text,
-		rewatch: row.rewatch,
+		rewatched: row.rewatched,
 		liked: row.liked,
 		created_at: row.created_at,
 		movie: row.movies,

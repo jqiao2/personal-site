@@ -40,7 +40,7 @@ const watched = formatWatchedDate(log.watched_date);
 			<div class="stats">
 				<StarRating rating={log.rating} />
 				{log.liked && <span class="heart" title="Liked">♥ Liked</span>}
-				{log.rewatch && <span class="badge">↻ Rewatch</span>}
+				{log.rewatched && <span class="badge">↻ Rewatch</span>}
 				{watched && <span class="watched">Watched {watched}</span>}
 			</div>
 

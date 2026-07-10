@@ -24,6 +24,10 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 
+# supabase CLI scratch (keeps migrations/ tracked, ignores local link state)
+supabase/.temp/
+supabase/.branches/
+
 # local claude code settings
 .claude/settings.local.json
 

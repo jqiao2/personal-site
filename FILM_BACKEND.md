@@ -9,9 +9,9 @@ everyone can read.
 - **Astro API routes** (`src/pages/api/**`, server-rendered via the Vercel
   adapter) proxy TMDB and handle writes. The TMDB key and Supabase service-role
   key stay server-side.
-- **Supabase Postgres** (`supabase/migrations/0001_film_log.sql`) owns *your
-  relationship* to a movie (logs, ratings, watchlist). Movie metadata is a
-  lightweight cache refreshed from TMDB on demand.
+- **Supabase Postgres** (`supabase/migrations/`) owns *your relationship* to a
+  movie (logs, ratings, watchlist, watched). Movie metadata is a lightweight
+  cache refreshed from TMDB on demand.
 - **Owner auth** is one password + a signed cookie (`src/lib/auth.ts`). No
   Supabase Auth needed for a single user.
 
@@ -19,10 +19,41 @@ everyone can read.
 
 1. `cp .env.example .env` and fill in all values (TMDB key, Supabase URL + both
    keys, an admin password, and a random `SESSION_SECRET`).
-2. Apply the schema: run `supabase/migrations/0001_film_log.sql` in the Supabase
-   SQL editor, or `supabase db push` with the CLI.
+2. Apply the schema — see [Migrations](#migrations) below.
 3. `npm run dev` (local) or deploy to Vercel with the same env vars set in the
    project settings.
+
+## Migrations
+
+SQL lives in `supabase/migrations/`, applied in filename order (`0001_…`,
+`0002_…`, …). Prefer the CLI over pasting into the SQL editor so migration
+history stays in sync.
+
+**One-time CLI setup** (the repo isn't linked yet):
+
+```bash
+npx supabase init                       # creates supabase/config.toml
+npx supabase link --project-ref <ref>   # <ref> = the subdomain in SUPABASE_URL
+```
+
+**Apply all pending migrations** (this is the "run everything on command" step):
+
+```bash
+npx supabase db push
+```
+
+**Gotcha — migrations applied by hand:** `db push` records what it has run in
+`supabase_migrations.schema_migrations`. Any migration you ran manually in the
+SQL editor isn't recorded, so a push would try to re-run it and fail (renames
+and `create policy` aren't idempotent). Mark those as already applied first:
+
+```bash
+npx supabase migration list                        # local vs remote status
+npx supabase migration repair --status applied 0001 0002
+```
+
+New migration → new `000N_name.sql` file → `db push`. Keep the numeric prefixes
+monotonic.
 
 ## Endpoints
 
@@ -52,7 +83,7 @@ Reads are public; writes require the owner cookie (log in first).
   "watchedDate": "2026-07-10",
   "rating": 4.5,
   "reviewText": "Still holds up.",
-  "rewatch": true,
+  "rewatched": true,
   "liked": true,
   "tags": ["sci-fi", "rewatch-night"]
 }
