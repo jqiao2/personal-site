@@ -68,9 +68,9 @@ Reads are public; writes require the owner cookie (log in first).
 | POST | `/api/auth/login` `{password}` | – | Set session cookie |
 | POST | `/api/auth/logout` | – | Clear session cookie |
 | GET | `/api/films/logs?limit=&offset=` | – | List watches (newest first) |
-| POST | `/api/films/logs` | owner | Create a watch |
-| PATCH | `/api/films/logs/:id` | owner | Edit a watch |
-| DELETE | `/api/films/logs/:id` | owner | Delete a watch |
+| POST | `/api/films/logs` | owner | Log a film — marks watched; adds a diary log only if there's content |
+| PATCH | `/api/films/logs/:id` | owner | Edit a diary log |
+| DELETE | `/api/films/logs/:id` | owner | Soft-delete a diary log (sets `deleted_at`) |
 | GET | `/api/films/watchlist` | – | List watchlist |
 | POST | `/api/films/watchlist` `{tmdbId}` | owner | Add to watchlist |
 | DELETE | `/api/films/watchlist?tmdbId=` | owner | Remove from watchlist |
@@ -90,7 +90,10 @@ Reads are public; writes require the owner cookie (log in first).
 ```
 
 Only `tmdbId` is required. `rating` is 0.5–5.0 in half-steps. Logging a movie
-auto-caches its TMDB metadata into the `movies` table.
+auto-caches its TMDB metadata into the `movies` table and marks it watched (a
+row in `watched`). A **bare `{tmdbId}`** with no rating/like/rewatch/review/tags
+only marks it watched — no diary log is created. The response is
+`{ watchedOnly, logId }` (`logId` is null when only watched was recorded).
 
 ## Notes / gotchas
 
@@ -101,4 +104,8 @@ auto-caches its TMDB metadata into the `movies` table.
 - **Rate limits** are generous (~50 req/s) but debounce search keystrokes so a
   fast typist doesn't fan out one request per character.
 - The `logs_with_movie` view flattens a log + its movie + tag names for easy
-  frontend rendering.
+  frontend rendering, and excludes soft-deleted rows (`deleted_at is null`), so
+  it's a safe read model for the diary list.
+- **Soft-delete:** DELETE stamps `logs.deleted_at` rather than removing the row.
+  Reads exclude deleted rows (the view for lists; an explicit filter in
+  `getLogById`), and PATCH won't edit a deleted log.

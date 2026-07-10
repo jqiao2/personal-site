@@ -213,53 +213,23 @@ export interface LogDetail {
 	tags: string[];
 }
 
-interface RawListRow {
-	id: number;
-	watched_date: string | null;
-	rating: number | null;
-	review_text: string | null;
-	rewatched: boolean;
-	liked: boolean;
-	created_at: string;
-	movies: { tmdb_id: number; title: string; release_year: number | null; poster_path: string | null };
-	log_tags: { tags: { name: string } }[];
-}
-
-function mapListRow(r: RawListRow): LogListItem {
-	return {
-		id: r.id,
-		watched_date: r.watched_date,
-		rating: r.rating,
-		review_text: r.review_text,
-		rewatched: r.rewatched,
-		liked: r.liked,
-		created_at: r.created_at,
-		tmdb_id: r.movies.tmdb_id,
-		title: r.movies.title,
-		release_year: r.movies.release_year,
-		poster_path: r.movies.poster_path,
-		tags: (r.log_tags ?? []).map((lt) => lt.tags.name).sort(),
-	};
-}
-
 /**
- * Logged watches, newest first, excluding soft-deleted rows. Queried from the
- * base tables (not the logs_with_movie view) so we can filter `deleted_at`.
+ * Logged watches, newest first. The logs_with_movie view already excludes
+ * soft-deleted rows (migration 0005) and aggregates tags, so this is a plain
+ * select.
  */
 export async function listLogs(limit = 1000, offset = 0): Promise<LogListItem[]> {
 	const { data, error } = await supabasePublic
-		.from('logs')
+		.from('logs_with_movie')
 		.select(
 			'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
-				'movies(tmdb_id, title, release_year, poster_path), ' +
-				'log_tags(tags(name))',
+				'tmdb_id, title, release_year, poster_path, tags',
 		)
-		.is('deleted_at', null)
 		.order('watched_date', { ascending: false, nullsFirst: false })
 		.order('created_at', { ascending: false })
 		.range(offset, offset + limit - 1);
 	if (error) throw new Error(`listLogs failed: ${error.message}`);
-	return ((data ?? []) as unknown as RawListRow[]).map(mapListRow);
+	return (data ?? []) as unknown as LogListItem[];
 }
 
 /** One watch by id, with its movie and tags. Null if it doesn't exist. */
