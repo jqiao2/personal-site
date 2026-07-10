@@ -31,5 +31,8 @@ supabase/.branches/
 # local claude code settings
 .claude/settings.local.json
 
+# backfill script cache (TMDB resolution + report)
+scripts/.cache/
+
 .vercel
 .env*
