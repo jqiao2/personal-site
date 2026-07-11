@@ -26,7 +26,10 @@ const pct = rating != null ? (rating / 5) * 100 : 0;
 		line-height: 1;
 		white-space: nowrap;
 		font-size: 1rem;
-		letter-spacing: 0.1em;
+		/* No letter-spacing: browsers count the trailing gap in the text's
+		   measured width, which skews the fill's width:{pct}% math (most
+		   visible at the half-star mark, where the fill overshoots the true
+		   midpoint of that star). Zero gaps keeps the percentage exact. */
 	}
 	.stars__empty {
 		color: var(--border);

@@ -106,18 +106,19 @@ const today = new Date().toISOString().slice(0, 10);
 		border: 1px solid var(--border);
 		border-radius: 6px;
 	}
-	.results li {
+	/* Result rows are also built in JS — same :global reason as .sp-hits above. */
+	.results :global(li) {
 		display: flex;
 		gap: 0.6rem;
 		align-items: center;
 		padding: 0.4rem 0.5rem;
 		cursor: pointer;
 	}
-	.results li:hover,
-	.results li[aria-selected='true'] {
+	.results :global(li:hover),
+	.results :global(li[aria-selected='true']) {
 		background: color-mix(in srgb, var(--fg) 8%, transparent);
 	}
-	.results img {
+	.results :global(img) {
 		width: 34px;
 		height: 51px;
 		object-fit: cover;
@@ -125,7 +126,7 @@ const today = new Date().toISOString().slice(0, 10);
 		background: var(--border);
 		flex-shrink: 0;
 	}
-	.results .r-year {
+	.results :global(.r-year) {
 		opacity: 0.6;
 		margin-left: 0.35rem;
 	}
@@ -153,7 +154,9 @@ const today = new Date().toISOString().slice(0, 10);
 		display: inline-block;
 		line-height: 1;
 		font-size: 1.9rem;
-		letter-spacing: 0.15em;
+		/* No letter-spacing: the trailing gap gets counted in the text's
+		   measured width, which skews sp-fill's width:{pct}% math (fill
+		   overshoots the true midpoint of a half-star). Zero gaps keeps it exact. */
 		cursor: pointer;
 		user-select: none;
 	}
@@ -178,7 +181,9 @@ const today = new Date().toISOString().slice(0, 10);
 		inset: 0;
 		display: flex;
 	}
-	.sp-hits span {
+	/* Hotspots are created in JS, so they lack Astro's scope attribute —
+	   target them with :global so `flex: 1` actually applies (else width 0). */
+	.sp-hits :global(span) {
 		flex: 1;
 	}
 	.flags {
