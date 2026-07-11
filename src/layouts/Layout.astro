@@ -1,9 +1,10 @@
 ---
 interface Props {
 	title: string;
+	showTmdbFooter?: boolean;
 }
 
-const { title } = Astro.props;
+const { title, showTmdbFooter = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -26,12 +27,19 @@ const { title } = Astro.props;
 		<main>
 			<slot />
 		</main>
-		<footer>
-			<p>
-				This product uses the TMDB API but is not endorsed or certified by
-				<a href="https://www.themoviedb.org/" rel="noopener" target="_blank">TMDB</a>.
-			</p>
-		</footer>
+		{
+			showTmdbFooter && (
+				<footer>
+					<p>
+						This product uses the TMDB API but is not endorsed or certified by{" "}
+						<a href="https://www.themoviedb.org/" rel="noopener" target="_blank">
+							TMDB
+						</a>
+						.
+					</p>
+				</footer>
+			)
+		}
 		<style>
 			:root {
 				color-scheme: light dark;
