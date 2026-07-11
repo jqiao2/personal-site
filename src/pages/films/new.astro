@@ -35,6 +35,7 @@ const today = new Date().toISOString().slice(0, 10);
 				<span class="sp-hits" id="sp-hits"></span>
 			</span>
 			<button type="button" id="clear-rating" class="link" hidden>clear</button>
+			<button type="button" id="like" class="flagbtn" aria-pressed="false">♥ Like</button>
 		</div>
 
 		<!-- Watched date -->
@@ -43,7 +44,6 @@ const today = new Date().toISOString().slice(0, 10);
 
 		<!-- Flags -->
 		<div class="flags">
-			<button type="button" id="like" class="flagbtn" aria-pressed="false">♥ Like</button>
 			<label class="checkbox"><input type="checkbox" id="rewatch" /> Rewatch</label>
 		</div>
 
@@ -148,6 +148,9 @@ const today = new Date().toISOString().slice(0, 10);
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+	}
+	.rating-row #like {
+		margin-left: auto;
 	}
 	.starpicker {
 		position: relative;
