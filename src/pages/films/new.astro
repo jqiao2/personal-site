@@ -10,7 +10,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 const today = new Date().toISOString().slice(0, 10);
 ---
 
-<Layout title="Log a film">
+<Layout title="Log a film" showTmdbFooter>
 	<h1>Log a film</h1>
 
 	<form id="logform" autocomplete="off">

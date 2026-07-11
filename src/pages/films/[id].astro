@@ -21,7 +21,7 @@ const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
 const watched = formatWatchedDate(log.watched_date);
 ---
 
-<Layout title={`${movie.title} — Film diary`}>
+<Layout title={`${movie.title} — Film diary`} showTmdbFooter>
 	<p class="back"><a href="/films">← Film diary</a></p>
 
 	{backdrop && <div class="backdrop" style={`background-image:url(${backdrop})`} aria-hidden="true" />}
