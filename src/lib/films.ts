@@ -96,6 +96,13 @@ async function markWatched(movie: MovieRow, watchedDate: string | null): Promise
 	if (error) throw new Error(`mark watched failed: ${error.message}`);
 }
 
+/** Remove a movie from the watchlist. Idempotent no-op when it isn't on the list;
+ * logging/watching a film drops it here so "watched" and "to watch" stay disjoint. */
+async function removeFromWatchlist(movieId: number): Promise<void> {
+	const { error } = await supabaseAdmin.from('watchlist').delete().eq('movie_id', movieId);
+	if (error) throw new Error(`remove from watchlist failed: ${error.message}`);
+}
+
 /** Whether an entry carries anything beyond "I saw it" — i.e. worth a diary row. */
 function hasDiaryContent(input: CreateLogInput): boolean {
 	return (
@@ -121,6 +128,8 @@ export interface LogFilmResult {
 export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 	const movie = await ensureMovieCached(input.tmdbId);
 	await markWatched(movie, input.watchedDate ?? null);
+	// Once it's watched it no longer belongs on the "to watch" list.
+	await removeFromWatchlist(movie.id);
 
 	if (!hasDiaryContent(input)) {
 		return { movieId: movie.id, watchedOnly: true, logId: null };
@@ -416,4 +425,22 @@ export async function listWatchlist(limit = 4): Promise<WatchlistTile[]> {
 		.limit(limit);
 	if (error) throw new Error(`listWatchlist failed: ${error.message}`);
 	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
+}
+
+/** A full watchlist entry for the watchlist page — tile fields plus when it was added. */
+export interface WatchlistEntry extends WatchlistTile {
+	added_at: string;
+}
+
+/** The entire watchlist, most recently added first — powers /films/watchlist. */
+export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
+	const { data, error } = await supabasePublic
+		.from('watchlist')
+		.select('added_at, movies(tmdb_id, title, release_year, poster_path)')
+		.order('added_at', { ascending: false });
+	if (error) throw new Error(`listAllWatchlist failed: ${error.message}`);
+	return ((data ?? []) as unknown as { added_at: string; movies: WatchlistTile }[]).map((r) => ({
+		...r.movies,
+		added_at: r.added_at,
+	}));
 }
