@@ -1,0 +1,971 @@
+---
+import { getFilmByTmdbId, listLogsByMovie } from '../../../lib/films';
+import { getMovieDetails, imageUrl, type TmdbMovieDetails } from '../../../lib/tmdb';
+import { formatWatchedDate } from '../../../lib/format';
+import { requireOwner } from '../../../lib/auth';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const tmdbId = Number(Astro.params.tmdbId);
+const film = Number.isInteger(tmdbId) ? await getFilmByTmdbId(tmdbId) : null;
+
+if (!film) {
+	return new Response('Film not found', { status: 404 });
+}
+
+const { movie, watched } = film;
+const isOwner = await requireOwner(Astro.cookies);
+
+// Every diary entry for this film (newest first) → the "Your reviews" list.
+// A film can be watched with no logs at all (Letterboxd import), in which case
+// this is empty and the reviews section says so.
+const movieLogs = await listLogsByMovie(movie.id);
+
+// Director / cast / genres / community rating come from TMDB, not our cache row.
+// Degrade gracefully if TMDB is momentarily unavailable.
+let details: TmdbMovieDetails | null = null;
+try {
+	details = await getMovieDetails(movie.tmdb_id);
+} catch {
+	details = null;
+}
+
+const directors =
+	details?.credits?.crew.filter((c) => c.job === 'Director').map((c) => c.name) ?? [];
+const cast = details?.credits?.cast.slice(0, 5).map((c) => c.name) ?? [];
+const genres = details?.genres.map((g) => g.name) ?? [];
+const runtime = movie.runtime ?? details?.runtime ?? null;
+const hasCommunity = details != null && details.vote_count > 0;
+
+const backdrop = imageUrl(movie.backdrop_path, 'w780');
+const poster = imageUrl(movie.poster_path, 'w342');
+const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
+const today = new Date().toISOString().slice(0, 10);
+
+/** "4.5" → "★★★★½"; nulls render nothing. */
+function starText(r: number | null): string {
+	if (r == null) return '';
+	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+}
+
+/** Minutes → "2h 4m" / "48m". */
+function formatRuntime(min: number | null): string | null {
+	if (!min || min <= 0) return null;
+	const h = Math.floor(min / 60);
+	const m = min % 60;
+	return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+/** Watched date if set, otherwise the diary date (created_at). */
+function logDate(l: { watched_date: string | null; created_at: string }): string {
+	return (
+		formatWatchedDate(l.watched_date) ??
+		new Date(l.created_at).toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+		})
+	);
+}
+
+// "Your activity" reflects the FILM (from `watched`), not any single log.
+const yourRating = starText(watched?.rating ?? null);
+const yourWatched = watched?.first_watched
+	? formatWatchedDate(watched.first_watched.slice(0, 10))
+	: null;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{movie.title} — Jason's film log</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body data-tmdb-id={movie.tmdb_id}>
+		<div class="page">
+			<!-- Backdrop -->
+			<div class="backdrop" style={backdrop ? `background-image:url(${backdrop})` : undefined}>
+				<div class="backdrop__scrim"></div>
+				<div class="backdrop__bar">
+					<div class="wrap">
+						<a class="back" href="/films/watched">
+							<span class="back__arrow">←</span><span>Films watched</span>
+						</a>
+					</div>
+				</div>
+			</div>
+
+			<!-- Content -->
+			<div class="content">
+				<div class="wrap layout">
+					<!-- Left: poster + your activity -->
+					<aside class="col-left">
+						<div class="poster">
+							{poster && <img src={poster} alt={`${movie.title} poster`} />}
+							<div class="poster__title">
+								{movie.title}
+								{movie.release_year && <span class="poster__year">{movie.release_year}</span>}
+							</div>
+						</div>
+
+						{isOwner && (
+							<button type="button" class="btn-primary" id="open-composer">Log or review</button>
+						)}
+
+						<div class="activity">
+							<div class="activity__head">Your activity</div>
+							<div class="activity__row">
+								<span class="activity__key">Your rating</span>
+								<span class="stars">{yourRating || '—'}</span>
+							</div>
+							<div class="activity__row">
+								<span class="activity__key">Liked</span>
+								<span class="stars">{watched?.liked ? '♥' : '—'}</span>
+							</div>
+							<div class="activity__row">
+								<span class="activity__key">Watched</span>
+								<span class="activity__val">{yourWatched ?? '—'}</span>
+							</div>
+						</div>
+					</aside>
+
+					<!-- Right: details -->
+					<div class="col-right">
+						<h1>
+							{movie.title}
+							{movie.release_year && <span class="h1-year">{movie.release_year}</span>}
+						</h1>
+
+						{directors.length > 0 && (
+							<div class="directed">
+								Directed by <span class="directed__name">{directors.join(', ')}</span>
+							</div>
+						)}
+
+						<div class="meta">
+							{hasCommunity && (
+								<div class="meta__avg">
+									<span class="meta__avgnum">{details!.vote_average.toFixed(1)}</span>
+									<span class="stars">{starText(details!.vote_average / 2)}</span>
+								</div>
+							)}
+							{hasCommunity && (
+								<span class="meta__dim">{details!.vote_count.toLocaleString()} TMDB ratings</span>
+							)}
+							{hasCommunity && formatRuntime(runtime) && <span class="meta__dot">·</span>}
+							{formatRuntime(runtime) && <span class="meta__dim">{formatRuntime(runtime)}</span>}
+						</div>
+
+						{genres.length > 0 && (
+							<div class="genres">
+								{genres.map((g) => (
+									<span class="genre">{g}</span>
+								))}
+							</div>
+						)}
+
+						{movie.overview && <p class="synopsis">{movie.overview}</p>}
+
+						{cast.length > 0 && (
+							<section class="block">
+								<div class="block__head">Cast</div>
+								<div class="cast">
+									{cast.map((c) => (
+										<span class="cast__chip">{c}</span>
+									))}
+								</div>
+							</section>
+						)}
+
+						<section class="block">
+							<div class="block__head block__head--row">
+								<span>Your reviews</span>
+								<span class="block__count">{movieLogs.length} {movieLogs.length === 1 ? 'entry' : 'entries'}</span>
+							</div>
+							{movieLogs.length === 0 ? (
+								<p class="empty">No review yet — just marked watched.</p>
+							) : (
+								<div class="reviews">
+									{movieLogs.map((r) => (
+										<article class="review">
+											<div class="review__meta">
+												{r.rating != null && <span class="stars">{starText(r.rating)}</span>}
+												{r.liked && <span class="stars review__heart">♥</span>}
+												<span class="review__label">
+													{r.rewatched ? 'Rewatch' : 'Watched'} · {logDate(r)}
+												</span>
+											</div>
+											{r.review_text && <p class="review__text">{r.review_text}</p>}
+										</article>
+									))}
+								</div>
+							)}
+						</section>
+
+						<footer class="attribution">
+							Metadata from{' '}
+							<a href={tmdbUrl} rel="noopener" target="_blank">TMDB ↗</a>. This product uses the
+							TMDB API but is not endorsed or certified by TMDB.
+						</footer>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		{/* Review composer modal (owner only) */}
+		{isOwner && (
+			<div class="modal" id="composer" hidden>
+				<div class="modal__backdrop" id="composer-backdrop"></div>
+				<div class="modal__panel" role="dialog" aria-modal="true" aria-label="Log & review">
+					<div class="modal__head">
+						<span class="modal__title">Log &amp; review</span>
+						<button type="button" class="modal__close" id="composer-close" aria-label="Close">✕</button>
+					</div>
+
+					<div class="modal__body">
+						<div class="field-grid">
+							<div>
+								<label class="lbl">Film</label>
+								<div class="film-chip">
+									<div class="film-chip__poster">
+										{poster && <img src={poster} alt="" />}
+									</div>
+									<span class="film-chip__title">
+										{movie.title}
+										{movie.release_year && <span class="film-chip__year">{movie.release_year}</span>}
+									</span>
+								</div>
+							</div>
+							<div>
+								<label class="lbl" for="c-date">Watched</label>
+								<input type="date" id="c-date" value={today} />
+							</div>
+						</div>
+
+						<div>
+							<label class="lbl">Rating</label>
+							<div class="rating-row">
+								<div class="starpicker" id="starpicker">
+									<span data-val="1">★</span>
+									<span data-val="2">★</span>
+									<span data-val="3">★</span>
+									<span data-val="4">★</span>
+									<span data-val="5">★</span>
+								</div>
+								<span class="rating-label" id="rating-label">Not rated</span>
+							</div>
+						</div>
+
+						<div class="toggles">
+							<button type="button" class="toggle" id="c-like">♥ Like</button>
+							<button type="button" class="toggle" id="c-rewatch">↻ Rewatch</button>
+						</div>
+
+						<div>
+							<label class="lbl" for="c-review">Review</label>
+							<textarea id="c-review" rows="4" placeholder="Add your thoughts…"></textarea>
+						</div>
+					</div>
+
+					<div class="modal__foot">
+						<button type="button" class="btn-ghost" id="composer-cancel">Cancel</button>
+						<button type="button" class="btn-primary btn-primary--sm" id="composer-save">Save entry</button>
+						<span class="save-msg" id="save-msg"></span>
+					</div>
+				</div>
+			</div>
+		)}
+
+		<style>
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				background: #1c0d0e;
+				color: #f4e8d1;
+				font-family: 'Archivo', Arial, sans-serif;
+				-webkit-font-smoothing: antialiased;
+			}
+			a {
+				text-decoration: none;
+				color: #d9b45a;
+			}
+			.page {
+				min-height: 100vh;
+				background: #1c0d0e;
+			}
+			.wrap {
+				width: 100%;
+				max-width: 960px;
+				margin: 0 auto;
+				padding: 0 24px;
+			}
+
+			/* Backdrop */
+			.backdrop {
+				position: relative;
+				height: 360px;
+				background-color: #2c1518;
+				background-image: repeating-linear-gradient(135deg, #3a1c20 0 14px, #2c1518 14px 28px);
+				background-size: cover;
+				background-position: center;
+				overflow: hidden;
+			}
+			.backdrop__scrim {
+				position: absolute;
+				inset: 0;
+				background: linear-gradient(
+					180deg,
+					rgba(28, 13, 14, 0.35) 0%,
+					rgba(28, 13, 14, 0.72) 55%,
+					#1c0d0e 100%
+				);
+			}
+			.backdrop__bar {
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				padding: 24px 0;
+			}
+			.back {
+				display: inline-flex;
+				align-items: center;
+				gap: 9px;
+				font-size: 13px;
+				color: #e9d9c4;
+			}
+			.back:hover {
+				color: #fff;
+			}
+			.back__arrow {
+				font-size: 15px;
+			}
+
+			/* Content layout */
+			.content {
+				padding-bottom: 80px;
+			}
+			.layout {
+				margin-top: -150px;
+				position: relative;
+				display: grid;
+				grid-template-columns: 230px 1fr;
+				gap: 36px;
+				align-items: start;
+			}
+
+			/* Left column */
+			.col-left {
+				display: flex;
+				flex-direction: column;
+				gap: 18px;
+			}
+			.poster {
+				position: relative;
+				aspect-ratio: 2 / 3;
+				border-radius: 7px;
+				overflow: hidden;
+				background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+				border: 1px solid #4a2529;
+				box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.6);
+				display: flex;
+				align-items: flex-end;
+			}
+			.poster img {
+				position: absolute;
+				inset: 0;
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+			.poster__title {
+				position: relative;
+				padding: 14px;
+				font-family: 'Newsreader', serif;
+				font-size: 18px;
+				color: #f2e5cd;
+				line-height: 1.2;
+			}
+			.poster img ~ .poster__title {
+				/* Hidden when a real poster is present. */
+				display: none;
+			}
+			.poster__year {
+				color: #b0917f;
+				font-style: italic;
+				font-size: 15px;
+				margin-left: 4px;
+			}
+
+			.activity {
+				background: #2a1214;
+				border: 1px solid #4a2529;
+				border-radius: 10px;
+				padding: 16px 16px 18px;
+			}
+			.activity__head {
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 1.4px;
+				color: #8a6f63;
+				margin-bottom: 12px;
+			}
+			.activity__row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				margin-bottom: 10px;
+			}
+			.activity__row:last-child {
+				margin-bottom: 0;
+			}
+			.activity__key {
+				font-size: 12px;
+				color: #a2857a;
+			}
+			.activity__val {
+				font-size: 13px;
+				color: #e9d9c4;
+			}
+			.stars {
+				color: #d9b45a;
+				font-size: 15px;
+				letter-spacing: 1px;
+				white-space: nowrap;
+			}
+
+			.btn-primary {
+				width: 100%;
+				font-size: 14px;
+				font-weight: 700;
+				color: #2a1214;
+				background: #d9b45a;
+				border: none;
+				border-radius: 9px;
+				padding: 12px;
+				cursor: pointer;
+				font-family: 'Archivo', sans-serif;
+			}
+			.btn-primary:hover {
+				background: #f0d488;
+			}
+			.btn-primary--sm {
+				width: auto;
+				border-radius: 8px;
+				padding: 10px 22px;
+			}
+
+			/* Right column */
+			.col-right {
+				padding-top: 150px;
+			}
+			h1 {
+				font-family: 'Newsreader', serif;
+				font-weight: 500;
+				font-size: 46px;
+				color: #f4e8d1;
+				letter-spacing: -0.5px;
+				line-height: 1.02;
+				margin: 0;
+			}
+			.h1-year {
+				color: #a2857a;
+				font-style: italic;
+				font-weight: 400;
+				font-size: 32px;
+				margin-left: 8px;
+			}
+			.directed {
+				font-size: 14px;
+				color: #c2a99a;
+				margin-top: 10px;
+			}
+			.directed__name {
+				color: #f2e5cd;
+				font-weight: 600;
+			}
+			.meta {
+				display: flex;
+				gap: 22px;
+				align-items: center;
+				margin-top: 18px;
+				flex-wrap: wrap;
+			}
+			.meta__avg {
+				display: flex;
+				align-items: baseline;
+				gap: 8px;
+			}
+			.meta__avgnum {
+				font-family: 'Newsreader', serif;
+				font-size: 30px;
+				color: #d9b45a;
+			}
+			.meta__dim {
+				font-size: 12px;
+				color: #8a6f63;
+			}
+			.meta__dot {
+				font-size: 12px;
+				color: #8a6f63;
+			}
+			.genres {
+				display: flex;
+				gap: 8px;
+				flex-wrap: wrap;
+				margin-top: 20px;
+			}
+			.genre {
+				font-size: 12px;
+				color: #ddc9b4;
+				border: 1px solid #4a2529;
+				border-radius: 20px;
+				padding: 5px 13px;
+				background: #241012;
+			}
+			.synopsis {
+				font-size: 15px;
+				color: #d8c6ad;
+				line-height: 1.65;
+				margin-top: 22px;
+				max-width: 560px;
+			}
+			.block {
+				margin-top: 28px;
+			}
+			.block__head {
+				font-family: 'Newsreader', serif;
+				font-style: italic;
+				font-size: 17px;
+				color: #ecdcbd;
+				padding-bottom: 9px;
+				border-bottom: 1px solid #402226;
+				margin-bottom: 12px;
+			}
+			.block__head--row {
+				display: flex;
+				align-items: baseline;
+				justify-content: space-between;
+			}
+			.block__count {
+				font-family: 'Archivo', sans-serif;
+				font-style: normal;
+				font-size: 12px;
+				color: #8a6f63;
+			}
+			.cast {
+				display: flex;
+				gap: 8px;
+				flex-wrap: wrap;
+			}
+			.cast__chip {
+				font-size: 13px;
+				color: #e9d9c4;
+				background: #241012;
+				border: 1px solid #4a2529;
+				border-radius: 6px;
+				padding: 7px 12px;
+			}
+			.reviews {
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+			}
+			.review {
+				border-left: 2px solid #4a2529;
+				padding-left: 16px;
+			}
+			.review__meta {
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				margin-bottom: 9px;
+			}
+			.review__heart {
+				font-size: 13px;
+			}
+			.review__label {
+				font-size: 12px;
+				color: #8a6f63;
+			}
+			.review__text {
+				font-family: 'Newsreader', serif;
+				font-size: 16px;
+				color: #e6d8c3;
+				line-height: 1.6;
+				font-style: italic;
+				max-width: 560px;
+				margin: 0;
+			}
+			.empty {
+				font-size: 14px;
+				color: #8a6f63;
+				margin: 0;
+			}
+			.attribution {
+				margin-top: 40px;
+				padding-top: 16px;
+				border-top: 1px solid #402226;
+				font-size: 11px;
+				color: #6f584e;
+				max-width: 560px;
+				line-height: 1.5;
+			}
+			.attribution a {
+				color: #8a6f63;
+			}
+
+			/* Composer modal */
+			.modal {
+				position: fixed;
+				inset: 0;
+				z-index: 50;
+				display: flex;
+				align-items: flex-start;
+				justify-content: center;
+				padding: 56px 24px;
+			}
+			.modal[hidden] {
+				display: none;
+			}
+			.modal__backdrop {
+				position: absolute;
+				inset: 0;
+				background: rgba(10, 4, 5, 0.72);
+				backdrop-filter: blur(3px);
+			}
+			.modal__panel {
+				position: relative;
+				width: 100%;
+				max-width: 560px;
+				background: #241012;
+				border: 1px solid #4a2529;
+				border-radius: 14px;
+				box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+				overflow: hidden;
+			}
+			.modal__head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 20px 24px;
+				border-bottom: 1px solid #402226;
+			}
+			.modal__title {
+				font-family: 'Newsreader', serif;
+				font-style: italic;
+				font-size: 22px;
+				color: #f4e8d1;
+			}
+			.modal__close {
+				width: 30px;
+				height: 30px;
+				border: 1px solid #4a2529;
+				background: transparent;
+				color: #c2a99a;
+				border-radius: 7px;
+				cursor: pointer;
+				font-size: 14px;
+				line-height: 1;
+			}
+			.modal__close:hover {
+				background: #402226;
+				color: #f4e8d1;
+			}
+			.modal__body {
+				padding: 22px 24px 26px;
+				display: flex;
+				flex-direction: column;
+				gap: 20px;
+			}
+			.field-grid {
+				display: grid;
+				grid-template-columns: 1fr 150px;
+				gap: 12px;
+				align-items: end;
+			}
+			.lbl {
+				display: block;
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 1.4px;
+				color: #8a6f63;
+				margin-bottom: 7px;
+			}
+			.film-chip {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				background: #1c0d0e;
+				border: 1px solid #4a2529;
+				border-radius: 8px;
+				padding: 9px 12px;
+			}
+			.film-chip__poster {
+				width: 26px;
+				height: 39px;
+				border-radius: 3px;
+				overflow: hidden;
+				background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+				border: 1px solid #4a2529;
+				flex: none;
+			}
+			.film-chip__poster img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+			}
+			.film-chip__title {
+				font-family: 'Newsreader', serif;
+				font-size: 16px;
+				color: #f2e5cd;
+			}
+			.film-chip__year {
+				color: #b0917f;
+				font-style: italic;
+				font-size: 13px;
+				margin-left: 4px;
+			}
+			#c-date,
+			#c-review {
+				width: 100%;
+				background: #1c0d0e;
+				border: 1px solid #4a2529;
+				border-radius: 8px;
+				color: #f4e8d1;
+				font-family: 'Archivo', sans-serif;
+				outline: none;
+			}
+			#c-date {
+				padding: 10px 13px;
+				font-size: 13px;
+				color-scheme: dark;
+			}
+			#c-date:focus {
+				border-color: #d9b45a;
+			}
+			#c-review {
+				padding: 12px 13px;
+				font-family: 'Newsreader', serif;
+				font-size: 14px;
+				color: #f2e5cd;
+				line-height: 1.5;
+				resize: vertical;
+			}
+			#c-review:focus {
+				border-color: #d9b45a;
+			}
+			.rating-row {
+				display: flex;
+				align-items: center;
+				gap: 14px;
+			}
+			.starpicker {
+				display: flex;
+				gap: 3px;
+			}
+			.starpicker span {
+				cursor: pointer;
+				font-size: 26px;
+				line-height: 1;
+				transition: color 0.1s;
+				color: #4a2529;
+			}
+			.starpicker span.on {
+				color: #d9b45a;
+			}
+			.rating-label {
+				font-size: 13px;
+				color: #a2857a;
+			}
+			.toggles {
+				display: flex;
+				gap: 10px;
+			}
+			.toggle {
+				font-size: 13px;
+				font-weight: 600;
+				border-radius: 20px;
+				padding: 9px 16px;
+				cursor: pointer;
+				font-family: 'Archivo', sans-serif;
+				background: transparent;
+				color: #ddc9b4;
+				border: 1px solid #4a2529;
+			}
+			.toggle.on {
+				background: #d9b45a;
+				color: #2a1214;
+				border-color: #d9b45a;
+			}
+			.modal__foot {
+				display: flex;
+				align-items: center;
+				justify-content: flex-end;
+				gap: 12px;
+				padding: 16px 24px;
+				border-top: 1px solid #402226;
+				background: #1f0e10;
+			}
+			.btn-ghost {
+				font-size: 14px;
+				font-weight: 600;
+				color: #ddc9b4;
+				background: transparent;
+				border: 1px solid #4a2529;
+				border-radius: 8px;
+				padding: 10px 20px;
+				cursor: pointer;
+				font-family: 'Archivo', sans-serif;
+			}
+			.btn-ghost:hover {
+				border-color: #a2857a;
+				color: #f4e8d1;
+			}
+			.save-msg {
+				font-size: 13px;
+				color: #a2857a;
+				margin-right: auto;
+			}
+			.save-msg.error {
+				color: #e0736f;
+			}
+
+			@media (max-width: 720px) {
+				.layout {
+					grid-template-columns: 1fr;
+					margin-top: -110px;
+					gap: 24px;
+				}
+				.col-left {
+					max-width: 200px;
+				}
+				.col-right {
+					padding-top: 0;
+				}
+				h1 {
+					font-size: 34px;
+				}
+				.h1-year {
+					font-size: 24px;
+				}
+				.field-grid {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+
+		<script>
+			// Owner-only composer. Astro hoists this script regardless of the page's
+			// isOwner state, so bail out when the modal isn't in the DOM (non-owner).
+			const open = document.getElementById('open-composer');
+			const modal = document.getElementById('composer') as HTMLDivElement | null;
+
+			if (open && modal) {
+				const tmdbId = Number(document.body.dataset.tmdbId);
+				const close = document.getElementById('composer-close');
+				const cancel = document.getElementById('composer-cancel');
+				const backdrop = document.getElementById('composer-backdrop');
+				const save = document.getElementById('composer-save') as HTMLButtonElement;
+				const msg = document.getElementById('save-msg') as HTMLSpanElement;
+				const dateInput = document.getElementById('c-date') as HTMLInputElement;
+				const reviewInput = document.getElementById('c-review') as HTMLTextAreaElement;
+				const likeBtn = document.getElementById('c-like') as HTMLButtonElement;
+				const rewatchBtn = document.getElementById('c-rewatch') as HTMLButtonElement;
+				const picker = document.getElementById('starpicker') as HTMLDivElement;
+				const ratingLabel = document.getElementById('rating-label') as HTMLSpanElement;
+
+				let rating = 0;
+				let liked = false;
+				let rewatch = false;
+				const LABELS = ['Not rated', '1 star', '2 stars', '3 stars', '4 stars', '5 stars'];
+				const stars = Array.from(picker.querySelectorAll('span'));
+
+				const paint = (active: number) => {
+					stars.forEach((s) => {
+						const v = Number((s as HTMLElement).dataset.val);
+						s.classList.toggle('on', v <= active);
+					});
+				};
+				stars.forEach((s) => {
+					const v = Number((s as HTMLElement).dataset.val);
+					s.addEventListener('mouseenter', () => paint(v));
+					s.addEventListener('click', () => {
+						rating = v;
+						ratingLabel.textContent = LABELS[v];
+						paint(v);
+					});
+				});
+				picker.addEventListener('mouseleave', () => paint(rating));
+
+				likeBtn.addEventListener('click', () => {
+					liked = !liked;
+					likeBtn.classList.toggle('on', liked);
+				});
+				rewatchBtn.addEventListener('click', () => {
+					rewatch = !rewatch;
+					rewatchBtn.classList.toggle('on', rewatch);
+				});
+
+				const closeModal = () => {
+					modal.hidden = true;
+				};
+				open.addEventListener('click', () => {
+					modal.hidden = false;
+				});
+				close?.addEventListener('click', closeModal);
+				cancel?.addEventListener('click', closeModal);
+				backdrop?.addEventListener('click', closeModal);
+				document.addEventListener('keydown', (e) => {
+					if (e.key === 'Escape' && !modal.hidden) closeModal();
+				});
+
+				save.addEventListener('click', async () => {
+					save.disabled = true;
+					msg.className = 'save-msg';
+					msg.textContent = 'Saving…';
+					try {
+						const res = await fetch('/api/films/logs', {
+							method: 'POST',
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify({
+								tmdbId,
+								watchedDate: dateInput.value || null,
+								rating: rating || null,
+								reviewText: reviewInput.value,
+								rewatched: rewatch,
+								liked,
+							}),
+						});
+						if (res.status === 401) {
+							window.location.href = '/films/login?redirect=' + window.location.pathname;
+							return;
+						}
+						const data = await res.json();
+						if (!res.ok) throw new Error(data.error || 'Save failed');
+						// Stay on the film page — it now shows the new entry.
+						window.location.reload();
+					} catch (err) {
+						msg.className = 'save-msg error';
+						msg.textContent = err instanceof Error ? err.message : 'Save failed';
+						save.disabled = false;
+					}
+				});
+			}
+		</script>
+	</body>
+</html>

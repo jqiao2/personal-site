@@ -30,7 +30,7 @@ interface Row {
 	title: string;
 	year: number | null;
 	poster: string | null;
-	logId: number;
+	tmdbId: number;
 	stars: string;
 	review: string | null;
 	liked: boolean;
@@ -56,7 +56,7 @@ for (const log of logs) {
 		title: log.title,
 		year: log.release_year,
 		poster: imageUrl(log.poster_path, 'w154'),
-		logId: log.id,
+		tmdbId: log.tmdb_id,
 		stars: starText(log.rating),
 		review: log.review_text,
 		liked: log.liked,
@@ -103,7 +103,7 @@ const today = new Date().toISOString().slice(0, 10);
 					<section class="month">
 						<div class="month__label">{m.label}</div>
 						{m.items.map((f) => (
-							<a class="row" href={`/films/${f.logId}`}>
+							<a class="row" href={`/films/movie/${f.tmdbId}`}>
 								<div class="row__date">
 									<div class="row__day">{f.day || '·'}</div>
 									<div class="row__wd">{f.weekday}</div>

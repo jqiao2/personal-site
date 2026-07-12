@@ -414,7 +414,7 @@ const today = new Date().toISOString().slice(0, 10);
 			}
 			const data = await res.json();
 			if (!res.ok) throw new Error(data.error || 'Save failed');
-			window.location.href = data.logId ? `/films/${data.logId}` : '/films';
+			window.location.href = `/films/movie/${tmdbId}`;
 		} catch (err) {
 			msg.className = 'msg error';
 			msg.textContent = err instanceof Error ? err.message : 'Save failed';

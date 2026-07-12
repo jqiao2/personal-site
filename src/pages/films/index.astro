@@ -52,9 +52,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 				<div class="side__rule"></div>
 				<nav class="side__nav">
-					<div class="navrow">
+					<a class="navrow navrow--link" href="/films/watched">
 						<span>Films watched</span><span class="navrow__n">{num(stats.watched)}</span>
-					</div>
+					</a>
 					<a class="navrow navrow--link" href="/films/diary">
 						<span>Diary</span><span class="navrow__n">{num(stats.diary)}</span>
 					</a>
@@ -80,7 +80,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 						{favorites.length > 0 ? (
 							<div class="grid4">
 								{favorites.map((f) => (
-									<a class="tile" href={f.logId ? `/films/${f.logId}` : '#'}>
+									<a class="tile" href={`/films/movie/${f.tmdb_id}`}>
 										{imageUrl(f.poster_path, 'w342') && (
 											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
 										)}
@@ -104,7 +104,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 						</div>
 						<div class="grid4">
 							{recent.map((f) => (
-								<a class="tile-wrap" href={`/films/${f.id}`}>
+								<a class="tile-wrap" href={`/films/movie/${f.tmdb_id}`}>
 									<div class="tile">
 										{imageUrl(f.poster_path, 'w342') && (
 											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />

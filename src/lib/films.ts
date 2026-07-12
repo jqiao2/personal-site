@@ -308,6 +308,54 @@ export async function listLogsByMovie(movieId: number): Promise<MovieLog[]> {
 	return (data ?? []) as MovieLog[];
 }
 
+/** Film-level "watched" facts (owned by the Letterboxd import), for a film page. */
+export interface WatchedActivity {
+	rating: number | null;
+	liked: boolean;
+	first_watched: string;
+}
+
+/** A film page keyed by TMDB id: the cached movie plus its film-level watched row. */
+export interface FilmByTmdb {
+	movie: {
+		id: number;
+		tmdb_id: number;
+		title: string;
+		release_year: number | null;
+		poster_path: string | null;
+		backdrop_path: string | null;
+		overview: string | null;
+		runtime: number | null;
+	};
+	/** Null when the film is cached but not (yet) marked watched. */
+	watched: WatchedActivity | null;
+}
+
+/**
+ * One film by TMDB id, with its film-level watched row (rating / liked / first
+ * watched). Powers the tmdb-keyed film page reached from the "All films" grid —
+ * unlike the log-keyed detail page, this resolves for films that were marked
+ * watched but never got a diary entry. Null if the movie isn't cached.
+ */
+export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
+	const { data, error } = await supabasePublic
+		.from('movies')
+		.select(
+			'id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime, ' +
+				'watched(rating, liked, first_watched)',
+		)
+		.eq('tmdb_id', tmdbId)
+		.maybeSingle();
+	if (error) throw new Error(`getFilmByTmdbId failed: ${error.message}`);
+	if (!data) return null;
+
+	const { watched, ...movie } = data as unknown as FilmByTmdb['movie'] & {
+		watched: WatchedActivity[] | WatchedActivity | null;
+	};
+	const w = Array.isArray(watched) ? (watched[0] ?? null) : (watched ?? null);
+	return { movie, watched: w };
+}
+
 // --- Aggregates for the film-log overview ("Jason's film log") ---
 
 /** Sidebar counts + this-year total + the all-time ratings histogram. */
@@ -486,6 +534,40 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 		...r.movies,
 		added_at: r.added_at,
 	}));
+}
+
+/** A watched-film poster tile for the "All films" browse grid. */
+export interface WatchedFilm {
+	tmdb_id: number;
+	title: string;
+	release_year: number | null;
+	poster_path: string | null;
+	/** First time the film was marked watched — the "Recent" sort key. */
+	first_watched: string;
+}
+
+/**
+ * Every distinct film marked watched, most-recently-watched first. Powers the
+ * "All films" grid at /films/watched. Search and sort (recent / year) happen
+ * client-side, so this is a single flat read.
+ */
+export async function listAllWatched(): Promise<WatchedFilm[]> {
+	// PostgREST caps a single response at 1,000 rows, and the collection is larger,
+	// so page through it explicitly.
+	const PAGE = 1000;
+	const out: WatchedFilm[] = [];
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('watched')
+			.select('first_watched, movies!inner(tmdb_id, title, release_year, poster_path)')
+			.order('first_watched', { ascending: false })
+			.range(offset, offset + PAGE - 1);
+		if (error) throw new Error(`listAllWatched failed: ${error.message}`);
+		const rows = (data ?? []) as unknown as { first_watched: string; movies: WatchlistTile }[];
+		for (const r of rows) out.push({ ...r.movies, first_watched: r.first_watched });
+		if (rows.length < PAGE) break;
+	}
+	return out;
 }
 
 // --- Favorites (migration 0006) ---

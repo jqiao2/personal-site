@@ -1,0 +1,329 @@
+---
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import { listAllWatched } from '../../lib/films';
+import { imageUrl } from '../../lib/tmdb';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const films = await listAllWatched();
+const num = (n: number) => n.toLocaleString('en-US');
+---
+
+<FilmLayout title="Films watched — Jason's film log">
+	<div class="page">
+		<div class="wrap">
+			<header class="topbar">
+				<a class="back" href="/films">
+					<span class="back__arrow">←</span><span>Jason's film log</span>
+				</a>
+				<span class="topbar__tag">Films watched</span>
+			</header>
+
+			<div class="titleblock">
+				<div>
+					<h1>All films</h1>
+					<div class="sub">
+						<span class="sub__n">{num(films.length)}</span> films watched · showing
+						<span class="sub__n" id="shown">{num(films.length)}</span>
+					</div>
+				</div>
+			</div>
+
+			<div class="filterbar">
+				<input
+					type="search"
+					id="search"
+					placeholder="Search films…"
+					autocomplete="off"
+					aria-label="Search films"
+				/>
+				<div class="sortby">
+					<span class="sortby__label">Sort</span>
+					<button type="button" class="pill pill--on" data-sort="recent">Recent</button>
+					<button type="button" class="pill" data-sort="year">Year</button>
+				</div>
+			</div>
+
+			<div class="grid" id="grid">
+				{films.map((f, i) => {
+					const poster = imageUrl(f.poster_path, 'w342');
+					return (
+						<a
+							class={poster ? 'tile' : 'tile tile--noimg'}
+							href={`/films/movie/${f.tmdb_id}`}
+							data-title={f.title.toLowerCase()}
+							data-year={f.release_year ?? 0}
+							data-order={i}
+						>
+							{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" />}
+							<div class="tile__overlay">
+								<div class="tile__title">{f.title}</div>
+								<div class="tile__year">{f.release_year}</div>
+							</div>
+						</a>
+					);
+				})}
+			</div>
+
+			<p class="empty" id="empty" hidden>No films match “<span id="empty-q"></span>”</p>
+		</div>
+	</div>
+
+	<style>
+		.page {
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 1000px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 34px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+
+		.titleblock {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			margin-bottom: 26px;
+			flex-wrap: wrap;
+			gap: 16px;
+		}
+		h1 {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 52px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.sub {
+			font-size: 13px;
+			color: #a2857a;
+			margin-top: 10px;
+		}
+		.sub__n {
+			color: #d9b45a;
+			font-weight: 600;
+		}
+
+		.filterbar {
+			display: flex;
+			gap: 12px;
+			align-items: center;
+			margin-bottom: 30px;
+			flex-wrap: wrap;
+		}
+		#search {
+			flex: 1;
+			min-width: 220px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 11px 14px;
+			color: #f4e8d1;
+			font-size: 14px;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		#search::placeholder {
+			color: #8a6f63;
+		}
+		#search:focus {
+			border-color: #d9b45a;
+		}
+		.sortby {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.sortby__label {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+		}
+		.pill {
+			font-size: 12.5px;
+			padding: 7px 13px;
+			border-radius: 20px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			border: 1px solid #4a2529;
+			background: transparent;
+			color: #ddc9b4;
+		}
+		.pill:hover {
+			border-color: #a2857a;
+		}
+		.pill--on {
+			background: #d9b45a;
+			color: #2a1214;
+			font-weight: 600;
+			border-color: #d9b45a;
+		}
+
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(6, 1fr);
+			gap: 18px;
+		}
+		.tile {
+			position: relative;
+			aspect-ratio: 2 / 3;
+			border-radius: 5px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+			border: 1px solid #4a2529;
+			transition: border-color 0.12s;
+		}
+		.tile:hover {
+			border-color: #d9b45a;
+		}
+		.tile img {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.tile__overlay {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			padding: 12px;
+			background: rgba(18, 8, 9, 0.82);
+			opacity: 0;
+			transition: opacity 0.18s ease;
+		}
+		.tile:hover .tile__overlay {
+			opacity: 1;
+		}
+		/* Films with no poster: keep the caption visible over the striped tile. */
+		.tile--noimg .tile__overlay {
+			opacity: 1;
+			background: transparent;
+		}
+		.tile__title {
+			font-family: 'Newsreader', serif;
+			font-size: 16px;
+			font-weight: 500;
+			color: #f4e8d1;
+			line-height: 1.15;
+		}
+		.tile__year {
+			font-family: 'Archivo', sans-serif;
+			font-size: 11px;
+			letter-spacing: 1.4px;
+			text-transform: uppercase;
+			color: #d9b45a;
+			margin-top: 5px;
+		}
+
+		.empty {
+			padding: 48px 0;
+			text-align: center;
+			color: #8a6f63;
+			font-size: 15px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+		}
+		.empty[hidden] {
+			display: none;
+		}
+
+		@media (max-width: 860px) {
+			.grid {
+				grid-template-columns: repeat(4, 1fr);
+			}
+		}
+		@media (max-width: 560px) {
+			h1 {
+				font-size: 40px;
+			}
+			.grid {
+				grid-template-columns: repeat(3, 1fr);
+			}
+		}
+	</style>
+
+	<script>
+		const grid = document.getElementById('grid');
+		if (grid) {
+			const tiles = Array.from(grid.children) as HTMLElement[];
+			const search = document.getElementById('search') as HTMLInputElement;
+			const shown = document.getElementById('shown')!;
+			const empty = document.getElementById('empty')!;
+			const emptyQ = document.getElementById('empty-q')!;
+			const pills = Array.from(document.querySelectorAll<HTMLButtonElement>('.pill'));
+
+			let sort = 'recent';
+			const fmt = (n: number) => n.toLocaleString('en-US');
+
+			// Sort in place by reordering DOM nodes; "recent" is the server order.
+			function applySort() {
+				const sorted = [...tiles].sort((a, b) => {
+					if (sort === 'year') {
+						const diff = Number(b.dataset.year) - Number(a.dataset.year);
+						if (diff !== 0) return diff;
+					}
+					return Number(a.dataset.order) - Number(b.dataset.order);
+				});
+				for (const t of sorted) grid!.appendChild(t);
+			}
+
+			function applyFilter() {
+				const q = search.value.trim().toLowerCase();
+				let count = 0;
+				for (const t of tiles) {
+					const match = !q || t.dataset.title!.includes(q);
+					t.hidden = !match;
+					if (match) count++;
+				}
+				shown.textContent = fmt(count);
+				emptyQ.textContent = search.value.trim();
+				empty.hidden = count > 0 || !q;
+			}
+
+			search.addEventListener('input', applyFilter);
+			for (const pill of pills) {
+				pill.addEventListener('click', () => {
+					if (pill.dataset.sort === sort) return;
+					sort = pill.dataset.sort!;
+					for (const p of pills) p.classList.toggle('pill--on', p === pill);
+					applySort();
+				});
+			}
+		}
+	</script>
+</FilmLayout>
