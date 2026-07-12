@@ -36,6 +36,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 <FilmLayout title="Jason's film log">
 	<div class="page">
 		<div class="card">
+			<!-- Site nav -->
+			<nav class="tabs">
+				<a class="tabs__link" href="/">Home</a>
+				<a class="tabs__link" href="/about">About</a>
+				<a class="tabs__link" href="/projects">Projects</a>
+				<a class="tabs__link tabs__link--active" href="/films" aria-current="page">Films</a>
+			</nav>
+
+			<div class="card__body">
 			<!-- Sidebar -->
 			<aside class="side">
 				<div class="brand">Jason's<br />film log</div>
@@ -157,6 +166,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 					</section>
 				)}
 			</main>
+			</div>
 		</div>
 	</div>
 
@@ -174,6 +184,39 @@ const num = (n: number) => n.toLocaleString('en-US');
 			overflow: hidden;
 			box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.5);
 			display: flex;
+			flex-direction: column;
+		}
+		.card__body {
+			display: flex;
+		}
+
+		/* Site nav */
+		.tabs {
+			display: flex;
+			align-items: stretch;
+			gap: 2px;
+			padding: 0 28px;
+			background: #20100f;
+			border-bottom: 1px solid #4a2529;
+		}
+		.tabs__link {
+			font-size: 13px;
+			letter-spacing: 0.4px;
+			color: #c2a99a;
+			padding: 16px 16px 14px;
+			border-bottom: 2px solid transparent;
+			transition: color 0.12s;
+		}
+		.tabs__link:hover {
+			color: #f4e8d1;
+		}
+		.tabs__link--active {
+			color: #f4e8d1;
+			font-weight: 600;
+			border-bottom-color: #d9b45a;
+		}
+		.tabs__link--active:hover {
+			color: #fff3df;
 		}
 
 		/* Sidebar */
@@ -385,7 +428,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 
 		@media (max-width: 720px) {
-			.card {
+			.card__body {
 				flex-direction: column;
 			}
 			.side {
