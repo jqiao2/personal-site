@@ -1,139 +1,385 @@
 ---
-import Layout from '../../layouts/Layout.astro';
-import FilmPoster from '../../components/FilmPoster.astro';
-import StarRating from '../../components/StarRating.astro';
-import { listLogs } from '../../lib/films';
-import { formatWatchedDate } from '../../lib/format';
-import { requireOwner } from '../../lib/auth';
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import { getFilmLogStats, listFavorites, listWatchlist, listLogs } from '../../lib/films';
+import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
-const logs = await listLogs();
-const isOwner = await requireOwner(Astro.cookies);
+const [stats, favorites, watchlist, recent] = await Promise.all([
+	getFilmLogStats(),
+	listFavorites(4),
+	listWatchlist(4),
+	listLogs(4),
+]);
+
+/** "4.5" → "★★★★½"; nulls render nothing. */
+function starText(r: number | null): string {
+	if (r == null) return '';
+	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+}
+
+/** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8". */
+function shortDate(date: string | null): string {
+	if (!date) return '';
+	const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+	if (!y || !m || !d) return '';
+	return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const histMax = Math.max(...stats.histogram, 1);
+const num = (n: number) => n.toLocaleString('en-US');
 ---
 
-<Layout title="Film diary" showTmdbFooter>
-	<div class="page-head">
-		<h1>Film diary</h1>
-		{
-			isOwner ? (
-				<a class="log-btn" href="/films/new">+ Log a film</a>
-			) : (
-				<a class="login-link" href="/films/login">Owner login</a>
-			)
-		}
+<FilmLayout title="Jason's film log">
+	<div class="page">
+		<div class="card">
+			<!-- Sidebar -->
+			<aside class="side">
+				<div class="brand">Jason's<br />film log</div>
+				<div class="brand__sub">{stats.thisYear} films this year</div>
+
+				<div class="side__rule"></div>
+				<nav class="side__nav">
+					<div class="navrow">
+						<span>Films watched</span><span class="navrow__n">{num(stats.watched)}</span>
+					</div>
+					<a class="navrow navrow--link" href="/films/diary">
+						<span>Diary</span><span class="navrow__n">{num(stats.diary)}</span>
+					</a>
+					<div class="navrow">
+						<span>Watchlist</span><span class="navrow__n">{num(stats.watchlist)}</span>
+					</div>
+					<div class="navrow navrow--last">
+						<span>Liked films</span><span class="navrow__n">{num(stats.liked)}</span>
+					</div>
+				</nav>
+			</aside>
+
+			<!-- Main -->
+			<main class="main">
+				{favorites.length > 0 && (
+					<section>
+						<div class="sec-head">
+							<span class="sec-head__title">Favorite films</span>
+						</div>
+						<div class="grid4">
+							{favorites.map((f) => (
+								<a class="tile" href={f.logId ? `/films/${f.logId}` : '#'}>
+									{imageUrl(f.poster_path, 'w342') && (
+										<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+									)}
+									<div class="tile__cap">
+										{f.title} <span class="tile__year">{f.release_year}</span>
+									</div>
+								</a>
+							))}
+						</div>
+					</section>
+				)}
+
+				{recent.length > 0 && (
+					<section>
+						<div class="sec-head">
+							<span class="sec-head__title">Recent from diary</span>
+							<a class="sec-head__link" href="/films/diary">See more →</a>
+						</div>
+						<div class="grid4">
+							{recent.map((f) => (
+								<a class="tile-wrap" href={`/films/${f.id}`}>
+									<div class="tile">
+										{imageUrl(f.poster_path, 'w342') && (
+											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+										)}
+										<div class="tile__cap">
+											{f.title} <span class="tile__year">{f.release_year}</span>
+										</div>
+									</div>
+									<div class="tile__meta">
+										<span class="stars">{starText(f.rating)}</span>
+										<span class="tile__date">{shortDate(f.watched_date ?? f.created_at)}</span>
+									</div>
+								</a>
+							))}
+						</div>
+					</section>
+				)}
+
+				{stats.ratedTotal > 0 && (
+					<section>
+						<div class="sec-head">
+							<span class="sec-head__title">Ratings</span>
+							<span class="sec-head__meta">
+								{num(stats.ratedTotal)} rated · <span class="hl">{stats.ratedAvg}</span> avg
+							</span>
+						</div>
+						<div class="hist">
+							{stats.histogram.map((c) => (
+								<div class="hist__col" title={`${num(c)}`}>
+									<div class="hist__bar" style={`height:${Math.round((c / histMax) * 100)}%`}></div>
+								</div>
+							))}
+						</div>
+						<div class="hist__axis">
+							<span>½★</span>
+							<span>★★★★★</span>
+						</div>
+					</section>
+				)}
+
+				{watchlist.length > 0 && (
+					<section>
+						<div class="sec-head">
+							<span class="sec-head__title">Recently added to watchlist</span>
+						</div>
+						<div class="grid4">
+							{watchlist.map((f) => (
+								<div class="tile tile--dim">
+									{imageUrl(f.poster_path, 'w342') && (
+										<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+									)}
+									<div class="tile__cap tile__cap--dim">
+										{f.title} <span class="tile__year">{f.release_year}</span>
+									</div>
+								</div>
+							))}
+						</div>
+					</section>
+				)}
+			</main>
+		</div>
 	</div>
 
-	{
-		logs.length === 0 ? (
-			<p class="empty">No films logged yet.</p>
-		) : (
-			<ul class="grid">
-				{logs.map((log) => (
-					<li>
-						<a class="card" href={`/films/${log.id}`}>
-							<FilmPoster posterPath={log.poster_path} title={log.title} />
-							<div class="card__meta">
-								<span class="card__title">
-									{log.title}
-									{log.release_year && <span class="card__year">{log.release_year}</span>}
-								</span>
-								<span class="card__sub">
-									<StarRating rating={log.rating} />
-									{log.liked && <span class="heart" title="Liked">♥</span>}
-									{log.rewatched && <span class="rewatch" title="Rewatch">↻</span>}
-								</span>
-								{log.watched_date && (
-									<span class="card__date">{formatWatchedDate(log.watched_date)}</span>
-								)}
-							</div>
-						</a>
-					</li>
-				))}
-			</ul>
-		)
-	}
-</Layout>
+	<style>
+		.page {
+			display: flex;
+			justify-content: center;
+			padding: 40px 24px 64px;
+		}
+		.card {
+			width: 100%;
+			max-width: 1080px;
+			background: #2a1214;
+			border-radius: 8px;
+			overflow: hidden;
+			box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.5);
+			display: flex;
+		}
 
-<style>
-	.page-head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 1.5rem;
-	}
-	.page-head h1 {
-		margin: 0;
-	}
-	.log-btn {
-		flex-shrink: 0;
-		padding: 0.45rem 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: 6px;
-		text-decoration: none;
-		color: inherit;
-		font-size: 0.9rem;
-		font-weight: 500;
-	}
-	.log-btn:hover {
-		background: color-mix(in srgb, var(--fg) 8%, transparent);
-	}
-	.login-link {
-		flex-shrink: 0;
-		color: inherit;
-		opacity: 0.55;
-		font-size: 0.85rem;
-	}
-	.empty {
-		opacity: 0.7;
-	}
-	.grid {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-		gap: 1.25rem;
-	}
-	.card {
-		display: block;
-		text-decoration: none;
-		color: inherit;
-	}
-	.card:hover .card__title {
-		text-decoration: underline;
-	}
-	.card__meta {
-		margin-top: 0.5rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-	.card__title {
-		font-weight: 600;
-		font-size: 0.95rem;
-		line-height: 1.25;
-	}
-	.card__year {
-		font-weight: 400;
-		opacity: 0.6;
-		margin-left: 0.35rem;
-	}
-	.card__sub {
-		display: flex;
-		align-items: center;
-		gap: 0.4rem;
-	}
-	.heart {
-		color: #e0405e;
-	}
-	.rewatch {
-		opacity: 0.7;
-	}
-	.card__date {
-		font-size: 0.8rem;
-		opacity: 0.6;
-	}
-</style>
+		/* Sidebar */
+		.side {
+			width: 288px;
+			flex: none;
+			background: #331619;
+			border-right: 1px solid #4a2529;
+			padding: 36px 28px;
+			display: flex;
+			flex-direction: column;
+		}
+		.brand {
+			font-family: 'Newsreader', serif;
+			font-size: 29px;
+			font-weight: 500;
+			color: #f4e8d1;
+			letter-spacing: -0.3px;
+			line-height: 1.05;
+		}
+		.brand__sub {
+			margin-top: 8px;
+			font-size: 13px;
+			color: #d9b45a;
+			font-weight: 600;
+		}
+		.side__rule {
+			height: 1px;
+			background: #4a2529;
+			margin: 26px 0 8px;
+		}
+		.side__nav {
+			display: flex;
+			flex-direction: column;
+		}
+		.navrow {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 11px 0;
+			font-size: 14px;
+			color: #ddc9b4;
+			border-bottom: 1px solid #402226;
+		}
+		.navrow--last {
+			border-bottom: none;
+		}
+		.navrow--link {
+			cursor: pointer;
+		}
+		.navrow--link:hover {
+			color: #fff3df;
+		}
+		.navrow__n {
+			color: #a2857a;
+			font-size: 13px;
+		}
+
+		/* Main */
+		.main {
+			flex: 1;
+			min-width: 0;
+			padding: 38px 40px 44px;
+			display: flex;
+			flex-direction: column;
+			gap: 38px;
+		}
+		.sec-head {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			border-bottom: 1px solid #4a2529;
+			padding-bottom: 9px;
+			margin-bottom: 16px;
+			gap: 12px;
+		}
+		.sec-head__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 19px;
+			color: #ecdcbd;
+		}
+		.sec-head__link {
+			font-size: 12px;
+			color: #d9b45a;
+			font-weight: 600;
+			letter-spacing: 0.3px;
+			white-space: nowrap;
+		}
+		.sec-head__link:hover {
+			color: #f0d488;
+		}
+		.sec-head__meta {
+			font-size: 12px;
+			color: #a2857a;
+			white-space: nowrap;
+		}
+		.sec-head__meta .hl {
+			color: #d9b45a;
+			font-weight: 600;
+		}
+
+		.grid4 {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 16px;
+		}
+		.tile-wrap {
+			display: block;
+			color: inherit;
+		}
+		.tile {
+			position: relative;
+			aspect-ratio: 2 / 3;
+			border-radius: 5px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+			border: 1px solid #4a2529;
+			display: flex;
+			align-items: flex-end;
+			transition: border-color 0.12s;
+		}
+		.tile--dim {
+			opacity: 0.9;
+		}
+		.tile:hover {
+			border-color: #d9b45a;
+		}
+		.tile--dim:hover {
+			opacity: 1;
+		}
+		.tile img {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.tile__cap {
+			position: relative;
+			padding: 11px;
+			font-family: 'Newsreader', serif;
+			font-size: 14px;
+			font-weight: 500;
+			color: #f2e5cd;
+			line-height: 1.2;
+		}
+		.tile__cap--dim {
+			color: #d8c6ad;
+		}
+		.tile img ~ .tile__cap {
+			display: none;
+		}
+		.tile__year {
+			color: #b0917f;
+			font-style: italic;
+		}
+		.tile__meta {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-top: 9px;
+		}
+		.stars {
+			color: #d9b45a;
+			font-size: 13px;
+			letter-spacing: 0.5px;
+			white-space: nowrap;
+		}
+		.tile__date {
+			color: #a2857a;
+			font-size: 12px;
+		}
+
+		/* Histogram */
+		.hist {
+			display: flex;
+			align-items: flex-end;
+			gap: 6px;
+			height: 104px;
+		}
+		.hist__col {
+			flex: 1;
+			height: 100%;
+			display: flex;
+			align-items: flex-end;
+		}
+		.hist__bar {
+			width: 100%;
+			min-height: 3px;
+			background: #d9b45a;
+			border-radius: 2px 2px 0 0;
+		}
+		.hist__axis {
+			display: flex;
+			justify-content: space-between;
+			margin-top: 8px;
+			font-size: 13px;
+			color: #d9b45a;
+		}
+
+		@media (max-width: 720px) {
+			.card {
+				flex-direction: column;
+			}
+			.side {
+				width: 100%;
+				border-right: none;
+				border-bottom: 1px solid #4a2529;
+			}
+			.main {
+				padding: 28px 22px 34px;
+			}
+			.grid4 {
+				grid-template-columns: repeat(2, 1fr);
+			}
+		}
+	</style>
+</FilmLayout>

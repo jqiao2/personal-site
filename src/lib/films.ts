@@ -298,3 +298,122 @@ export async function listLogsByMovie(movieId: number): Promise<MovieLog[]> {
 	if (error) throw new Error(`listLogsByMovie failed: ${error.message}`);
 	return (data ?? []) as MovieLog[];
 }
+
+// --- Aggregates for the film-log overview ("Jason's film log") ---
+
+/** Sidebar counts + this-year total + the all-time ratings histogram. */
+export interface FilmLogStats {
+	/** distinct films marked watched */
+	watched: number;
+	/** live diary entries */
+	diary: number;
+	watchlist: number;
+	/** films liked (film-level) */
+	liked: number;
+	/** films first watched in the current calendar year */
+	thisYear: number;
+	/** 10 buckets, index 0 = ½★ … index 9 = 5★ */
+	histogram: number[];
+	ratedTotal: number;
+	ratedAvg: string;
+}
+
+export async function getFilmLogStats(): Promise<FilmLogStats> {
+	const year = new Date().getFullYear();
+	const head = { count: 'exact' as const, head: true };
+	const [watched, diary, watchlist, liked, thisYear, ratings] = await Promise.all([
+		supabasePublic.from('watched').select('*', head),
+		supabasePublic.from('logs_with_movie').select('*', head),
+		supabasePublic.from('watchlist').select('*', head),
+		supabasePublic.from('watched').select('*', head).eq('liked', true),
+		supabasePublic.from('watched').select('*', head).gte('first_watched', `${year}-01-01`),
+		supabasePublic.from('watched').select('rating').not('rating', 'is', null),
+	]);
+
+	const histogram = new Array(10).fill(0);
+	let ratedTotal = 0;
+	let weighted = 0;
+	for (const row of (ratings.data ?? []) as { rating: number }[]) {
+		const idx = Math.round(row.rating * 2) - 1; // 0.5→0 … 5.0→9
+		if (idx >= 0 && idx < 10) {
+			histogram[idx]++;
+			ratedTotal++;
+			weighted += row.rating;
+		}
+	}
+
+	return {
+		watched: watched.count ?? 0,
+		diary: diary.count ?? 0,
+		watchlist: watchlist.count ?? 0,
+		liked: liked.count ?? 0,
+		thisYear: thisYear.count ?? 0,
+		histogram,
+		ratedTotal,
+		ratedAvg: ratedTotal ? (weighted / ratedTotal).toFixed(1) : '—',
+	};
+}
+
+/** A poster tile on the overview (favorites / recent diary). */
+export interface FilmTile {
+	logId: number | null;
+	tmdb_id: number;
+	title: string;
+	release_year: number | null;
+	poster_path: string | null;
+	rating: number | null;
+	watched_date: string | null;
+}
+
+/**
+ * "Favorite films" — there's no favorites table, so we derive them from your
+ * five-star liked diary entries (most recent first, one tile per film).
+ */
+export async function listFavorites(limit = 4): Promise<FilmTile[]> {
+	const { data, error } = await supabasePublic
+		.from('logs_with_movie')
+		.select('id, tmdb_id, title, release_year, poster_path, rating, watched_date')
+		.eq('liked', true)
+		.eq('rating', 5)
+		.order('watched_date', { ascending: false, nullsFirst: false })
+		.limit(limit * 6);
+	if (error) throw new Error(`listFavorites failed: ${error.message}`);
+
+	const seen = new Set<number>();
+	const out: FilmTile[] = [];
+	for (const r of (data ?? []) as Record<string, unknown>[]) {
+		const tmdbId = r.tmdb_id as number;
+		if (seen.has(tmdbId)) continue;
+		seen.add(tmdbId);
+		out.push({
+			logId: r.id as number,
+			tmdb_id: tmdbId,
+			title: r.title as string,
+			release_year: r.release_year as number | null,
+			poster_path: r.poster_path as string | null,
+			rating: r.rating as number | null,
+			watched_date: r.watched_date as string | null,
+		});
+		if (out.length >= limit) break;
+	}
+	return out;
+}
+
+/** A watchlist poster tile on the overview. */
+export interface WatchlistTile {
+	tmdb_id: number;
+	title: string;
+	release_year: number | null;
+	poster_path: string | null;
+}
+
+/** Most recently added watchlist films. */
+export async function listWatchlist(limit = 4): Promise<WatchlistTile[]> {
+	const { data, error } = await supabasePublic
+		.from('watchlist')
+		.select('added_at, movies(tmdb_id, title, release_year, poster_path)')
+		.order('added_at', { ascending: false })
+		.limit(limit);
+	if (error) throw new Error(`listWatchlist failed: ${error.message}`);
+	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
+}

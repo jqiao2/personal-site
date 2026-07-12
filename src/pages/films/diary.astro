@@ -1,0 +1,873 @@
+---
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import { listLogs, getFilmLogStats } from '../../lib/films';
+import { requireOwner } from '../../lib/auth';
+import { imageUrl } from '../../lib/tmdb';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const [logs, stats, isOwner] = await Promise.all([
+	listLogs(120),
+	getFilmLogStats(),
+	requireOwner(Astro.cookies),
+]);
+
+function parseDate(date: string | null): Date | null {
+	if (!date) return null;
+	const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+	if (!y || !m || !d) return null;
+	return new Date(y, m - 1, d);
+}
+function starText(r: number | null): string {
+	if (r == null) return '';
+	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+}
+
+interface Row {
+	day: number;
+	weekday: string;
+	title: string;
+	year: number | null;
+	poster: string | null;
+	logId: number;
+	stars: string;
+	review: string | null;
+	liked: boolean;
+	rewatched: boolean;
+}
+
+// Group logs into months, preserving the (newest-first) order.
+const months: { label: string; items: Row[] }[] = [];
+const byLabel = new Map<string, Row[]>();
+for (const log of logs) {
+	const dt = parseDate(log.watched_date) ?? parseDate(log.created_at);
+	const label = dt
+		? dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+		: 'Undated';
+	if (!byLabel.has(label)) {
+		const items: Row[] = [];
+		byLabel.set(label, items);
+		months.push({ label, items });
+	}
+	byLabel.get(label)!.push({
+		day: dt ? dt.getDate() : 0,
+		weekday: dt ? dt.toLocaleDateString('en-US', { weekday: 'short' }) : '',
+		title: log.title,
+		year: log.release_year,
+		poster: imageUrl(log.poster_path, 'w154'),
+		logId: log.id,
+		stars: starText(log.rating),
+		review: log.review_text,
+		liked: log.liked,
+		rewatched: log.rewatched,
+	});
+}
+const num = (n: number) => n.toLocaleString('en-US');
+const today = new Date().toISOString().slice(0, 10);
+---
+
+<FilmLayout title="Film diary — Jason's film log">
+	<div class="page">
+		<div class="wrap">
+			<header class="topbar">
+				<a class="back" href="/films">
+					<span class="back__arrow">←</span><span>Jason's film log</span>
+				</a>
+				<span class="topbar__tag">Diary</span>
+			</header>
+
+			<div class="titleblock">
+				<div class="titleblock__left">
+					<h1>Film diary</h1>
+					{isOwner && (
+						<button type="button" class="log-btn" id="open-composer">+ Log film</button>
+					)}
+				</div>
+				<div class="titleblock__stats">
+					<div class="stat">
+						<div class="stat__n">{num(stats.diary)}</div>
+						<div class="stat__l">films logged</div>
+					</div>
+					<div class="stat">
+						<div class="stat__n">{num(stats.thisYear)}</div>
+						<div class="stat__l">this year</div>
+					</div>
+				</div>
+			</div>
+
+			{months.length === 0 ? (
+				<p class="empty">No films logged yet.</p>
+			) : (
+				months.map((m) => (
+					<section class="month">
+						<div class="month__label">{m.label}</div>
+						{m.items.map((f) => (
+							<a class="row" href={`/films/${f.logId}`}>
+								<div class="row__date">
+									<div class="row__day">{f.day || '·'}</div>
+									<div class="row__wd">{f.weekday}</div>
+								</div>
+								<div class="row__poster">
+									{f.poster && <img src={f.poster} alt="" loading="lazy" />}
+								</div>
+								<div class="row__body">
+									<div class="row__title">
+										{f.title} <span class="row__year">{f.year}</span>
+									</div>
+									{f.review && <div class="row__review">{f.review}</div>}
+								</div>
+								<div class="row__meta">
+									<span class="row__stars">{f.stars}</span>
+									{f.liked && <span class="row__like">♥</span>}
+									{f.rewatched && <span class="row__rewatch">↻</span>}
+								</div>
+							</a>
+						))}
+					</section>
+				))
+			)}
+		</div>
+	</div>
+
+	{isOwner && (
+		<div class="modal" id="composer" hidden>
+			<div class="modal__backdrop" id="composer-backdrop"></div>
+			<div class="modal__panel" role="dialog" aria-modal="true" aria-label="Log a film">
+				<div class="modal__head">
+					<span class="modal__title">Log a film</span>
+					<button type="button" class="modal__close" id="composer-close" aria-label="Close">✕</button>
+				</div>
+
+				<div class="modal__body">
+					<div class="field-grid">
+						<div>
+							<label class="lbl" for="c-q">Film</label>
+							<div class="search" id="c-search">
+								<input type="text" id="c-q" placeholder="Search a film…" autocomplete="off" />
+								<ul class="results" id="c-results" hidden></ul>
+							</div>
+							<div class="selected" id="c-selected" hidden>
+								<img id="c-sel-poster" alt="" width="26" height="39" />
+								<span id="c-sel-title"></span>
+								<button type="button" class="link" id="c-change">change</button>
+							</div>
+						</div>
+						<div>
+							<label class="lbl" for="c-date">Watched</label>
+							<input type="date" id="c-date" value={today} />
+						</div>
+					</div>
+
+					<div>
+						<label class="lbl">Rating</label>
+						<div class="rating-row">
+							<span class="starpicker" id="starpicker">
+								<span class="sp-empty">★★★★★</span>
+								<span class="sp-fill" id="sp-fill"></span>
+								<span class="sp-hits" id="sp-hits"></span>
+							</span>
+							<span class="rating-label" id="rating-label">Not rated</span>
+						</div>
+					</div>
+
+					<div class="toggles">
+						<button type="button" class="toggle" id="c-like">♥ Like</button>
+						<button type="button" class="toggle" id="c-rewatch">↻ Rewatch</button>
+					</div>
+
+					<div>
+						<label class="lbl" for="c-review">Review</label>
+						<textarea id="c-review" rows="4" placeholder="Add your thoughts…"></textarea>
+					</div>
+				</div>
+
+				<div class="modal__foot">
+					<span class="save-msg" id="save-msg"></span>
+					<button type="button" class="btn-ghost" id="composer-cancel">Cancel</button>
+					<button type="button" class="btn-save" id="composer-save" disabled>Log film</button>
+				</div>
+			</div>
+		</div>
+	)}
+
+	<style>
+		.page {
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 900px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 34px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+
+		.titleblock {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			margin-bottom: 38px;
+			flex-wrap: wrap;
+			gap: 14px;
+		}
+		.titleblock__left {
+			display: flex;
+			align-items: center;
+			gap: 20px;
+		}
+		h1 {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 52px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.log-btn {
+			font-size: 13px;
+			font-weight: 700;
+			color: #2a1214;
+			background: #d9b45a;
+			border: none;
+			border-radius: 8px;
+			padding: 10px 18px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.log-btn:hover {
+			background: #f0d488;
+		}
+		.titleblock__stats {
+			display: flex;
+			gap: 26px;
+		}
+		.stat__n {
+			font-family: 'Newsreader', serif;
+			font-size: 26px;
+			color: #d9b45a;
+		}
+		.stat__l {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+			margin-top: 2px;
+		}
+		.empty {
+			color: #8a6f63;
+		}
+
+		.month {
+			margin-bottom: 40px;
+		}
+		.month__label {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 20px;
+			color: #ecdcbd;
+			padding-bottom: 10px;
+			border-bottom: 1px solid #402226;
+			margin-bottom: 6px;
+		}
+		.row {
+			display: grid;
+			grid-template-columns: 56px 46px 1fr auto;
+			gap: 18px;
+			align-items: center;
+			padding: 14px 10px;
+			border-bottom: 1px solid #351a1d;
+			border-radius: 6px;
+			color: inherit;
+		}
+		.row:hover {
+			background: #331619;
+		}
+		.row__date {
+			text-align: center;
+		}
+		.row__day {
+			font-family: 'Newsreader', serif;
+			font-size: 28px;
+			color: #f4e8d1;
+			line-height: 1;
+		}
+		.row__wd {
+			font-size: 10.5px;
+			text-transform: uppercase;
+			letter-spacing: 1px;
+			color: #8a6f63;
+			margin-top: 3px;
+		}
+		.row__poster {
+			width: 46px;
+			height: 69px;
+			border-radius: 4px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 8px, #2c1518 8px 16px);
+			border: 1px solid #4a2529;
+		}
+		.row__poster img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.row__body {
+			min-width: 0;
+		}
+		.row__title {
+			font-family: 'Newsreader', serif;
+			font-size: 18px;
+			color: #f2e5cd;
+			line-height: 1.2;
+		}
+		.row__year {
+			color: #b0917f;
+			font-style: italic;
+			font-size: 15px;
+		}
+		.row__review {
+			font-size: 13px;
+			color: #a2857a;
+			margin-top: 5px;
+			line-height: 1.4;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			-webkit-box-orient: vertical;
+			overflow: hidden;
+		}
+		.row__meta {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			justify-content: flex-end;
+		}
+		.row__stars {
+			color: #d9b45a;
+			font-size: 15px;
+			letter-spacing: 1px;
+			white-space: nowrap;
+		}
+		.row__like {
+			font-size: 15px;
+			color: #d9b45a;
+		}
+		.row__rewatch {
+			font-size: 14px;
+			color: #7a5a52;
+		}
+
+		/* Composer modal */
+		.modal {
+			position: fixed;
+			inset: 0;
+			z-index: 50;
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			padding: 56px 24px;
+		}
+		.modal[hidden] {
+			display: none;
+		}
+		.modal__backdrop {
+			position: absolute;
+			inset: 0;
+			background: rgba(10, 4, 5, 0.72);
+			backdrop-filter: blur(3px);
+		}
+		.modal__panel {
+			position: relative;
+			width: 100%;
+			max-width: 560px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 14px;
+			box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+			overflow: hidden;
+		}
+		.modal__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 20px 24px;
+			border-bottom: 1px solid #402226;
+		}
+		.modal__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 22px;
+			color: #f4e8d1;
+		}
+		.modal__close {
+			width: 30px;
+			height: 30px;
+			border: 1px solid #4a2529;
+			background: transparent;
+			color: #c2a99a;
+			border-radius: 7px;
+			cursor: pointer;
+			font-size: 14px;
+			line-height: 1;
+		}
+		.modal__close:hover {
+			background: #402226;
+			color: #f4e8d1;
+		}
+		.modal__body {
+			padding: 22px 24px 26px;
+			display: flex;
+			flex-direction: column;
+			gap: 20px;
+		}
+		.field-grid {
+			display: grid;
+			grid-template-columns: 1fr 150px;
+			gap: 12px;
+			align-items: start;
+		}
+		.lbl {
+			display: block;
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+			margin-bottom: 7px;
+		}
+		.search {
+			position: relative;
+		}
+		#c-q,
+		#c-date,
+		#c-review {
+			width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			color: #f4e8d1;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		#c-q {
+			padding: 11px 13px;
+			font-size: 14px;
+		}
+		#c-date {
+			padding: 10px 13px;
+			font-size: 13px;
+			color-scheme: dark;
+		}
+		#c-q:focus,
+		#c-date:focus,
+		#c-review:focus {
+			border-color: #d9b45a;
+		}
+		#c-review {
+			padding: 12px 13px;
+			font-family: 'Newsreader', serif;
+			font-size: 14px;
+			color: #f2e5cd;
+			line-height: 1.5;
+			resize: vertical;
+		}
+		.results {
+			list-style: none;
+			margin: 6px 0 0;
+			padding: 0;
+			position: absolute;
+			z-index: 10;
+			width: 100%;
+			max-height: 280px;
+			overflow-y: auto;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+		}
+		.results :global(li) {
+			display: flex;
+			gap: 10px;
+			align-items: center;
+			padding: 7px 9px;
+			cursor: pointer;
+			color: #e9d9c4;
+			font-size: 13px;
+		}
+		.results :global(li:hover) {
+			background: #331619;
+		}
+		.results :global(img) {
+			width: 30px;
+			height: 45px;
+			object-fit: cover;
+			border-radius: 3px;
+			background: #4a2529;
+			flex-shrink: 0;
+		}
+		.results :global(.r-year) {
+			color: #a2857a;
+			margin-left: 6px;
+		}
+		.selected {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			margin-top: 9px;
+			font-family: 'Newsreader', serif;
+			font-size: 15px;
+			color: #f2e5cd;
+		}
+		.selected img {
+			object-fit: cover;
+			border-radius: 3px;
+			background: #4a2529;
+		}
+		.link {
+			background: none;
+			border: none;
+			color: #a2857a;
+			cursor: pointer;
+			font-size: 12px;
+			text-decoration: underline;
+			font-family: 'Archivo', sans-serif;
+			padding: 0;
+		}
+		.link:hover {
+			color: #f4e8d1;
+		}
+		.rating-row {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+		}
+		.starpicker {
+			position: relative;
+			display: inline-block;
+			line-height: 1;
+			font-size: 26px;
+			cursor: pointer;
+			user-select: none;
+		}
+		.sp-empty {
+			color: #4a2529;
+		}
+		.sp-fill {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 0;
+			overflow: hidden;
+			white-space: nowrap;
+			color: #d9b45a;
+			pointer-events: none;
+		}
+		.sp-fill::before {
+			content: '★★★★★';
+		}
+		.sp-hits {
+			position: absolute;
+			inset: 0;
+			display: flex;
+		}
+		.sp-hits :global(span) {
+			flex: 1;
+		}
+		.rating-label {
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.toggles {
+			display: flex;
+			gap: 10px;
+		}
+		.toggle {
+			font-size: 13px;
+			font-weight: 600;
+			border-radius: 20px;
+			padding: 9px 16px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			background: transparent;
+			color: #ddc9b4;
+			border: 1px solid #4a2529;
+		}
+		.toggle.on {
+			background: #d9b45a;
+			color: #2a1214;
+			border-color: #d9b45a;
+		}
+		.modal__foot {
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+			gap: 12px;
+			padding: 16px 24px;
+			border-top: 1px solid #402226;
+			background: #1f0e10;
+		}
+		.btn-ghost {
+			font-size: 14px;
+			font-weight: 600;
+			color: #ddc9b4;
+			background: transparent;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 10px 20px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.btn-ghost:hover {
+			border-color: #a2857a;
+			color: #f4e8d1;
+		}
+		.btn-save {
+			font-size: 14px;
+			font-weight: 700;
+			border: none;
+			border-radius: 8px;
+			padding: 10px 22px;
+			font-family: 'Archivo', sans-serif;
+			background: #d9b45a;
+			color: #2a1214;
+			cursor: pointer;
+		}
+		.btn-save:disabled {
+			background: #4a2529;
+			color: #8a6f63;
+			cursor: not-allowed;
+		}
+		.save-msg {
+			font-size: 13px;
+			color: #a2857a;
+			margin-right: auto;
+		}
+		.save-msg.error {
+			color: #e0736f;
+		}
+
+		@media (max-width: 640px) {
+			h1 {
+				font-size: 40px;
+			}
+			.row {
+				grid-template-columns: 44px 40px 1fr auto;
+				gap: 12px;
+			}
+			.field-grid {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+
+	<script>
+		// Owner-only composer. Astro always hoists this script; bail out when the
+		// modal isn't in the DOM (non-owner viewing the diary).
+		const openBtn = document.getElementById('open-composer');
+		const modal = document.getElementById('composer') as HTMLDivElement | null;
+
+		if (openBtn && modal) {
+			const IMG = 'https://image.tmdb.org/t/p/w92';
+			const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+			const close = $('composer-close');
+			const cancel = $('composer-cancel');
+			const backdrop = $('composer-backdrop');
+			const save = $<HTMLButtonElement>('composer-save');
+			const msg = $<HTMLSpanElement>('save-msg');
+			const q = $<HTMLInputElement>('c-q');
+			const results = $<HTMLUListElement>('c-results');
+			const searchWrap = $('c-search');
+			const selected = $('c-selected');
+			const selPoster = $<HTMLImageElement>('c-sel-poster');
+			const selTitle = $<HTMLSpanElement>('c-sel-title');
+			const change = $('c-change');
+			const dateInput = $<HTMLInputElement>('c-date');
+			const reviewInput = $<HTMLTextAreaElement>('c-review');
+			const likeBtn = $<HTMLButtonElement>('c-like');
+			const rewatchBtn = $<HTMLButtonElement>('c-rewatch');
+			const fill = $<HTMLSpanElement>('sp-fill');
+			const hits = $<HTMLSpanElement>('sp-hits');
+			const ratingLabel = $<HTMLSpanElement>('rating-label');
+
+			let tmdbId: number | null = null;
+			let rating: number | null = null;
+			let liked = false;
+			let rewatch = false;
+
+			// --- TMDB search (debounced) ---
+			let timer: number | undefined;
+			q.addEventListener('input', () => {
+				window.clearTimeout(timer);
+				const query = q.value.trim();
+				if (!query) return hideResults();
+				timer = window.setTimeout(() => runSearch(query), 300);
+			});
+			async function runSearch(query: string) {
+				try {
+					const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+					if (!res.ok) return hideResults();
+					const data = await res.json();
+					renderResults(data.results ?? []);
+				} catch {
+					hideResults();
+				}
+			}
+			function renderResults(items: any[]) {
+				results.textContent = '';
+				if (!items.length) return hideResults();
+				for (const m of items.slice(0, 8)) {
+					const li = document.createElement('li');
+					const img = document.createElement('img');
+					if (m.poster_path) img.src = IMG + m.poster_path;
+					img.alt = '';
+					const label = document.createElement('span');
+					label.textContent = m.title;
+					if (m.release_date) {
+						const yr = document.createElement('span');
+						yr.className = 'r-year';
+						yr.textContent = m.release_date.slice(0, 4);
+						label.appendChild(yr);
+					}
+					li.append(img, label);
+					li.addEventListener('click', () => selectMovie(m));
+					results.appendChild(li);
+				}
+				results.hidden = false;
+			}
+			function hideResults() {
+				results.hidden = true;
+				results.textContent = '';
+			}
+			function selectMovie(m: any) {
+				tmdbId = m.id;
+				selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+				if (m.poster_path) {
+					selPoster.src = IMG + m.poster_path;
+					selPoster.hidden = false;
+				} else {
+					selPoster.removeAttribute('src');
+					selPoster.hidden = true;
+				}
+				hideResults();
+				searchWrap.hidden = true;
+				selected.hidden = false;
+				save.disabled = false;
+			}
+			change.addEventListener('click', () => {
+				tmdbId = null;
+				selected.hidden = true;
+				searchWrap.hidden = false;
+				save.disabled = true;
+				q.value = '';
+				q.focus();
+			});
+			document.addEventListener('click', (e) => {
+				if (!searchWrap.contains(e.target as Node)) hideResults();
+			});
+
+			// --- Half-star picker (10 hotspots over 5 stars) ---
+			const setFill = (value: number) => {
+				fill.style.width = `${(value / 5) * 100}%`;
+			};
+			const labelFor = (v: number) =>
+				v === 0 ? 'Not rated' : `${Math.floor(v)}${v % 1 ? '½' : ''}★`;
+			for (let i = 1; i <= 10; i++) {
+				const hit = document.createElement('span');
+				const value = i / 2;
+				hit.addEventListener('mousemove', () => {
+					setFill(value);
+					ratingLabel.textContent = labelFor(value);
+				});
+				hit.addEventListener('click', () => {
+					rating = value;
+					setFill(value);
+					ratingLabel.textContent = labelFor(value);
+				});
+				hits.appendChild(hit);
+			}
+			hits.addEventListener('mouseleave', () => {
+				setFill(rating ?? 0);
+				ratingLabel.textContent = labelFor(rating ?? 0);
+			});
+
+			likeBtn.addEventListener('click', () => {
+				liked = !liked;
+				likeBtn.classList.toggle('on', liked);
+			});
+			rewatchBtn.addEventListener('click', () => {
+				rewatch = !rewatch;
+				rewatchBtn.classList.toggle('on', rewatch);
+			});
+
+			const closeModal = () => {
+				modal.hidden = true;
+			};
+			openBtn.addEventListener('click', () => {
+				modal.hidden = false;
+			});
+			close.addEventListener('click', closeModal);
+			cancel.addEventListener('click', closeModal);
+			backdrop.addEventListener('click', closeModal);
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape' && !modal.hidden) closeModal();
+			});
+
+			save.addEventListener('click', async () => {
+				if (!tmdbId) return;
+				save.disabled = true;
+				msg.className = 'save-msg';
+				msg.textContent = 'Saving…';
+				try {
+					const res = await fetch('/api/films/logs', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({
+							tmdbId,
+							watchedDate: dateInput.value || null,
+							rating,
+							reviewText: reviewInput.value,
+							rewatched: rewatch,
+							liked,
+						}),
+					});
+					if (res.status === 401) {
+						window.location.href = '/films/login?redirect=/films/diary';
+						return;
+					}
+					const data = await res.json();
+					if (!res.ok) throw new Error(data.error || 'Save failed');
+					window.location.reload();
+				} catch (err) {
+					msg.className = 'save-msg error';
+					msg.textContent = err instanceof Error ? err.message : 'Save failed';
+					save.disabled = false;
+				}
+			});
+		}
+	</script>
+</FilmLayout>
