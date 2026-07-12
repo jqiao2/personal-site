@@ -376,20 +376,34 @@ export interface FilmTile {
 
 /**
  * "Favorite films" — the (≤4) watched films flagged `favorite` (migration 0006),
- * most-recently-watched first. Each tile links to the film's latest diary entry
- * when one exists. Returns [] (and warns) if the column isn't there yet, so the
- * overview keeps rendering before the migration is applied.
+ * in your chosen order (`favorite_rank`, migration 0007; newest-watched as a
+ * fallback). Each tile links to the film's latest diary entry when one exists.
+ * Returns [] (and warns) if the columns aren't there yet, so the overview keeps
+ * rendering before the migrations are applied.
  */
 export async function listFavorites(limit = 4): Promise<FilmTile[]> {
 	try {
-		const { data, error } = await supabasePublic
+		// Prefer the user-defined order; fall back to newest-watched if favorite_rank
+		// (0007) isn't there yet.
+		let { data, error } = await supabasePublic
 			.from('watched')
 			.select(
-				'movie_id, rating, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)',
+				'movie_id, rating, first_watched, favorite_rank, movies!inner(tmdb_id, title, release_year, poster_path)',
 			)
 			.eq('favorite', true)
+			.order('favorite_rank', { ascending: true, nullsFirst: false })
 			.order('first_watched', { ascending: false })
 			.limit(limit);
+		if (error) {
+			({ data, error } = await supabasePublic
+				.from('watched')
+				.select(
+					'movie_id, rating, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)',
+				)
+				.eq('favorite', true)
+				.order('first_watched', { ascending: false })
+				.limit(limit));
+		}
 		if (error) throw error;
 
 		const rows = (data ?? []) as unknown as {
@@ -527,14 +541,61 @@ export async function setFavorite(tmdbId: number, favorite: boolean): Promise<vo
 	if (w.favorite === favorite) return; // already in the desired state
 
 	if (favorite) {
-		const { count, error: cErr } = await supabaseAdmin
+		// Cap at four; append to the end of the current order.
+		const { data: favs, error: cErr } = await supabaseAdmin
 			.from('watched')
-			.select('*', { count: 'exact', head: true })
+			.select('favorite_rank')
 			.eq('favorite', true);
 		if (cErr) throw new Error(cErr.message);
-		if ((count ?? 0) >= 4) throw new FavoritesFullError();
+		if ((favs?.length ?? 0) >= 4) throw new FavoritesFullError();
+		const nextRank =
+			(favs ?? []).reduce((m, r) => Math.max(m, (r.favorite_rank as number) ?? -1), -1) + 1;
+		const { error } = await supabaseAdmin
+			.from('watched')
+			.update({ favorite: true, favorite_rank: nextRank })
+			.eq('id', w.id);
+		if (error) throw new Error(error.message);
+	} else {
+		const { error } = await supabaseAdmin
+			.from('watched')
+			.update({ favorite: false, favorite_rank: null })
+			.eq('id', w.id);
+		if (error) throw new Error(error.message);
+	}
+}
+
+/**
+ * Persist a new favorites order (from drag-and-drop). `orderedTmdbIds` is the full
+ * favorites list in display order; each gets favorite_rank = its index. Ids that
+ * aren't currently favorites are ignored, so a stale client can't create phantoms.
+ */
+export async function reorderFavorites(orderedTmdbIds: number[]): Promise<void> {
+	const { data, error } = await supabaseAdmin
+		.from('watched')
+		.select('id, movies!inner(tmdb_id)')
+		.eq('favorite', true);
+	if (error) throw new Error(error.message);
+
+	const idByTmdb = new Map<number, number>();
+	for (const r of (data ?? []) as unknown as { id: number; movies: { tmdb_id: number } }[]) {
+		idByTmdb.set(r.movies.tmdb_id, r.id);
 	}
 
-	const { error } = await supabaseAdmin.from('watched').update({ favorite }).eq('id', w.id);
-	if (error) throw new Error(error.message);
+	let rank = 0;
+	const updates: Promise<void>[] = [];
+	for (const tmdbId of orderedTmdbIds) {
+		const watchedId = idByTmdb.get(tmdbId);
+		if (watchedId == null) continue;
+		const at = rank++;
+		updates.push(
+			supabaseAdmin
+				.from('watched')
+				.update({ favorite_rank: at })
+				.eq('id', watchedId)
+				.then(({ error: uErr }) => {
+					if (uErr) throw new Error(uErr.message);
+				}),
+		);
+	}
+	await Promise.all(updates);
 }
