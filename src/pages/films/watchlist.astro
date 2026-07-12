@@ -21,6 +21,12 @@ function shortDate(date: string | null): string {
 }
 
 const num = (n: number) => n.toLocaleString('en-US');
+
+/** YTS search URL for a film, e.g. "bridge of spies 2015" → …/browse-movies/bridge%20of%20spies%202015/all/all/0/latest/0/all */
+function ytsUrl(title: string, year: number | null): string {
+	const query = year ? `${title} ${year}` : title;
+	return `https://yts.gg/browse-movies/${encodeURIComponent(query.toLowerCase())}/all/all/0/latest/0/all`;
+}
 ---
 
 <FilmLayout title="Watchlist — Jason's film log">
@@ -60,14 +66,25 @@ const num = (n: number) => n.toLocaleString('en-US');
 						{isOwner && (
 							<button type="button" class="remove" aria-label={`Remove ${f.title} from watchlist`}>✕</button>
 						)}
-						<div class="tile">
-							{imageUrl(f.poster_path, 'w342') && (
-								<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
-							)}
-							<div class="tile__cap">
-								{f.title} <span class="tile__year">{f.release_year}</span>
+						{isOwner ? (
+							<a class="tile" href={ytsUrl(f.title, f.release_year)} target="_blank" rel="noopener noreferrer">
+								{imageUrl(f.poster_path, 'w342') && (
+									<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+								)}
+								<div class="tile__cap">
+									{f.title} <span class="tile__year">{f.release_year}</span>
+								</div>
+							</a>
+						) : (
+							<div class="tile">
+								{imageUrl(f.poster_path, 'w342') && (
+									<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+								)}
+								<div class="tile__cap">
+									{f.title} <span class="tile__year">{f.release_year}</span>
+								</div>
 							</div>
-						</div>
+						)}
 						<div class="item__added">Added {shortDate(f.added_at)}</div>
 					</div>
 				))}
@@ -253,6 +270,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.tile {
 			position: relative;
+			color: inherit;
 			aspect-ratio: 2 / 3;
 			border-radius: 5px;
 			overflow: hidden;
