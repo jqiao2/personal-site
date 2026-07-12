@@ -9,12 +9,15 @@ export const prerender = false;
 
 const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Astro.cookies)]);
 
-/** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8". */
+/** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8", or "Aug 30, 2025" when it's not the current year. */
+const currentYear = new Date().getFullYear();
 function shortDate(date: string | null): string {
 	if (!date) return '';
 	const [y, m, d] = date.slice(0, 10).split('-').map(Number);
 	if (!y || !m || !d) return '';
-	return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
+	if (y !== currentYear) opts.year = 'numeric';
+	return new Date(y, m - 1, d).toLocaleDateString('en-US', opts);
 }
 
 const num = (n: number) => n.toLocaleString('en-US');
