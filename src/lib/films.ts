@@ -202,6 +202,7 @@ export interface LogDetail {
 	liked: boolean;
 	created_at: string;
 	movie: {
+		id: number;
 		tmdb_id: number;
 		title: string;
 		release_year: number | null;
@@ -211,6 +212,17 @@ export interface LogDetail {
 		runtime: number | null;
 	};
 	tags: string[];
+}
+
+/** A diary log for one movie, as shown in the film page's "Your reviews" list. */
+export interface MovieLog {
+	id: number;
+	watched_date: string | null;
+	rating: number | null;
+	review_text: string | null;
+	rewatched: boolean;
+	liked: boolean;
+	created_at: string;
 }
 
 /**
@@ -238,7 +250,7 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		.from('logs')
 		.select(
 			'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
-				'movies(tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime), ' +
+				'movies(id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime), ' +
 				'log_tags(tags(name))',
 		)
 		.eq('id', id)
@@ -269,4 +281,20 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		movie: row.movies,
 		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
 	};
+}
+
+/**
+ * Every diary log for one movie (by internal movie id), newest first. Powers the
+ * "Your reviews" list on a film page. Soft-deleted rows are excluded.
+ */
+export async function listLogsByMovie(movieId: number): Promise<MovieLog[]> {
+	const { data, error } = await supabasePublic
+		.from('logs')
+		.select('id, watched_date, rating, review_text, rewatched, liked, created_at')
+		.eq('movie_id', movieId)
+		.is('deleted_at', null)
+		.order('watched_date', { ascending: false, nullsFirst: false })
+		.order('created_at', { ascending: false });
+	if (error) throw new Error(`listLogsByMovie failed: ${error.message}`);
+	return (data ?? []) as MovieLog[];
 }

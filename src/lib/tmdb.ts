@@ -72,6 +72,8 @@ export interface TmdbMovieDetails {
 	backdrop_path: string | null;
 	overview: string;
 	runtime: number | null;
+	vote_average: number;
+	vote_count: number;
 	genres: { id: number; name: string }[];
 	credits?: {
 		cast: { id: number; name: string; character: string; profile_path: string | null }[];
