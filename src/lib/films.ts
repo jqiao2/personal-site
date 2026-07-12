@@ -375,37 +375,66 @@ export interface FilmTile {
 }
 
 /**
- * "Favorite films" — there's no favorites table, so we derive them from your
- * five-star liked diary entries (most recent first, one tile per film).
+ * "Favorite films" — the (≤4) watched films flagged `favorite` (migration 0006),
+ * most-recently-watched first. Each tile links to the film's latest diary entry
+ * when one exists. Returns [] (and warns) if the column isn't there yet, so the
+ * overview keeps rendering before the migration is applied.
  */
 export async function listFavorites(limit = 4): Promise<FilmTile[]> {
-	const { data, error } = await supabasePublic
-		.from('logs_with_movie')
-		.select('id, tmdb_id, title, release_year, poster_path, rating, watched_date')
-		.eq('liked', true)
-		.eq('rating', 5)
-		.order('watched_date', { ascending: false, nullsFirst: false })
-		.limit(limit * 6);
-	if (error) throw new Error(`listFavorites failed: ${error.message}`);
+	try {
+		const { data, error } = await supabasePublic
+			.from('watched')
+			.select(
+				'movie_id, rating, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)',
+			)
+			.eq('favorite', true)
+			.order('first_watched', { ascending: false })
+			.limit(limit);
+		if (error) throw error;
 
-	const seen = new Set<number>();
-	const out: FilmTile[] = [];
-	for (const r of (data ?? []) as Record<string, unknown>[]) {
-		const tmdbId = r.tmdb_id as number;
-		if (seen.has(tmdbId)) continue;
-		seen.add(tmdbId);
-		out.push({
-			logId: r.id as number,
-			tmdb_id: tmdbId,
-			title: r.title as string,
-			release_year: r.release_year as number | null,
-			poster_path: r.poster_path as string | null,
-			rating: r.rating as number | null,
-			watched_date: r.watched_date as string | null,
-		});
-		if (out.length >= limit) break;
+		const rows = (data ?? []) as unknown as {
+			movie_id: number;
+			rating: number | null;
+			movies: { tmdb_id: number; title: string; release_year: number | null; poster_path: string | null };
+		}[];
+		if (rows.length === 0) return [];
+
+		// Resolve a detail-page target (latest live log) per favorite movie.
+		const logByMovie = await latestLogIdByMovie(rows.map((r) => r.movie_id));
+		return rows.map((r) => ({
+			logId: logByMovie.get(r.movie_id) ?? null,
+			tmdb_id: r.movies.tmdb_id,
+			title: r.movies.title,
+			release_year: r.movies.release_year,
+			poster_path: r.movies.poster_path,
+			rating: r.rating,
+			watched_date: null,
+		}));
+	} catch (e) {
+		console.warn(
+			'listFavorites: favorites unavailable (has migration 0006 been applied?):',
+			e instanceof Error ? e.message : e,
+		);
+		return [];
 	}
-	return out;
+}
+
+/** movie_id → its most recent live (non-deleted) log id, for the given movies. */
+async function latestLogIdByMovie(movieIds: number[]): Promise<Map<number, number>> {
+	const map = new Map<number, number>();
+	if (movieIds.length === 0) return map;
+	const { data, error } = await supabasePublic
+		.from('logs')
+		.select('id, movie_id')
+		.in('movie_id', movieIds)
+		.is('deleted_at', null)
+		.order('watched_date', { ascending: false, nullsFirst: false })
+		.order('created_at', { ascending: false });
+	if (error) throw new Error(`latestLogIdByMovie failed: ${error.message}`);
+	for (const row of (data ?? []) as { id: number; movie_id: number }[]) {
+		if (!map.has(row.movie_id)) map.set(row.movie_id, row.id);
+	}
+	return map;
 }
 
 /** A watchlist poster tile on the overview. */
@@ -443,4 +472,69 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 		...r.movies,
 		added_at: r.added_at,
 	}));
+}
+
+// --- Favorites (migration 0006) ---
+
+/**
+ * Search your WATCHED films by title — favorites can only be chosen from films
+ * you've actually seen. Case-insensitive substring match, most-recently-watched
+ * first. (Does not touch the `favorite` column, so it works pre-migration.)
+ */
+export async function searchWatchedMovies(query: string, limit = 12): Promise<WatchlistTile[]> {
+	const q = query.trim();
+	if (!q) return [];
+	const { data, error } = await supabasePublic
+		.from('watched')
+		.select('first_watched, movies!inner(tmdb_id, title, release_year, poster_path)')
+		.ilike('movies.title', `%${q}%`)
+		.order('first_watched', { ascending: false })
+		.limit(limit);
+	if (error) throw new Error(`searchWatchedMovies failed: ${error.message}`);
+	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
+}
+
+/** Thrown when adding a favorite would exceed the cap of four. */
+export class FavoritesFullError extends Error {
+	constructor() {
+		super('You can feature at most 4 favorite films.');
+		this.name = 'FavoritesFullError';
+	}
+}
+
+/**
+ * Flag / unflag a watched film as a favorite. The film must already be in
+ * `watched` (you can only favorite something you've seen). The 4-favorite cap is
+ * checked here for a friendly error; the DB trigger (migration 0006) is the hard
+ * guarantee. Idempotent — setting the current value is a no-op.
+ */
+export async function setFavorite(tmdbId: number, favorite: boolean): Promise<void> {
+	const { data: movie, error: mErr } = await supabaseAdmin
+		.from('movies')
+		.select('id')
+		.eq('tmdb_id', tmdbId)
+		.maybeSingle();
+	if (mErr) throw new Error(mErr.message);
+	if (!movie) throw new Error('film not found');
+
+	const { data: w, error: wErr } = await supabaseAdmin
+		.from('watched')
+		.select('id, favorite')
+		.eq('movie_id', movie.id)
+		.maybeSingle();
+	if (wErr) throw new Error(wErr.message);
+	if (!w) throw new Error('you can only favorite a film you have watched');
+	if (w.favorite === favorite) return; // already in the desired state
+
+	if (favorite) {
+		const { count, error: cErr } = await supabaseAdmin
+			.from('watched')
+			.select('*', { count: 'exact', head: true })
+			.eq('favorite', true);
+		if (cErr) throw new Error(cErr.message);
+		if ((count ?? 0) >= 4) throw new FavoritesFullError();
+	}
+
+	const { error } = await supabaseAdmin.from('watched').update({ favorite }).eq('id', w.id);
+	if (error) throw new Error(error.message);
 }

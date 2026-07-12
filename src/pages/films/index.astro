@@ -1,16 +1,18 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import { getFilmLogStats, listFavorites, listWatchlist, listLogs } from '../../lib/films';
+import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
-const [stats, favorites, watchlist, recent] = await Promise.all([
+const [stats, favorites, watchlist, recent, isOwner] = await Promise.all([
 	getFilmLogStats(),
 	listFavorites(4),
 	listWatchlist(4),
 	listLogs(4),
+	requireOwner(Astro.cookies),
 ]);
 
 /** "4.5" → "★★★★½"; nulls render nothing. */
@@ -58,23 +60,30 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 			<!-- Main -->
 			<main class="main">
-				{favorites.length > 0 && (
+				{(favorites.length > 0 || isOwner) && (
 					<section>
 						<div class="sec-head">
 							<span class="sec-head__title">Favorite films</span>
+							{isOwner && (
+								<a class="sec-head__link" href="/films/favorites">Edit favorites</a>
+							)}
 						</div>
-						<div class="grid4">
-							{favorites.map((f) => (
-								<a class="tile" href={f.logId ? `/films/${f.logId}` : '#'}>
-									{imageUrl(f.poster_path, 'w342') && (
-										<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
-									)}
-									<div class="tile__cap">
-										{f.title} <span class="tile__year">{f.release_year}</span>
-									</div>
-								</a>
-							))}
-						</div>
+						{favorites.length > 0 ? (
+							<div class="grid4">
+								{favorites.map((f) => (
+									<a class="tile" href={f.logId ? `/films/${f.logId}` : '#'}>
+										{imageUrl(f.poster_path, 'w342') && (
+											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+										)}
+										<div class="tile__cap">
+											{f.title} <span class="tile__year">{f.release_year}</span>
+										</div>
+									</a>
+								))}
+							</div>
+						) : (
+							<p class="fav-empty">No favorites yet — <a href="/films/favorites">choose up to four</a>.</p>
+						)}
 					</section>
 				)}
 
@@ -256,6 +265,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.sec-head__link:hover {
 			color: #f0d488;
+		}
+		.fav-empty {
+			margin: 0;
+			padding: 6px 0 2px;
+			font-size: 14px;
+			color: #8a6f63;
+		}
+		.fav-empty a {
+			color: #d9b45a;
 		}
 		.sec-head__meta {
 			font-size: 12px;

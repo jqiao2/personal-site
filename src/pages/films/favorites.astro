@@ -1,0 +1,524 @@
+---
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import { listFavorites } from '../../lib/films';
+import { requireOwner } from '../../lib/auth';
+import { imageUrl } from '../../lib/tmdb';
+
+// Owner-only editor. Bounce to login (preserving intent) if not authenticated.
+export const prerender = false;
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect('/films/login?redirect=/films/favorites');
+}
+
+const favorites = await listFavorites();
+---
+
+<FilmLayout title="Edit favorites — Jason's film log">
+	<div class="page">
+		<div class="wrap">
+			<header class="topbar">
+				<a class="back" href="/films">
+					<span class="back__arrow">←</span><span>Jason's film log</span>
+				</a>
+				<span class="topbar__tag">Edit favorites</span>
+			</header>
+
+			<div class="titleblock">
+				<h1>Favorite films</h1>
+				<p class="subtitle">
+					Feature up to four films on your profile. They're picked from films you've
+					watched.
+				</p>
+			</div>
+
+			<div class="sec-head">
+				<span class="sec-head__title">Your favorites</span>
+				<span class="sec-head__count"><span id="fav-count">{favorites.length}</span> / 4</span>
+			</div>
+
+			<p class="empty" id="fav-empty" hidden={favorites.length > 0}>
+				No favorites yet — add some below.
+			</p>
+
+			<div class="fav-list" id="fav-list">
+				{favorites.map((f, i) => (
+					<div class="fav" data-tmdb-id={f.tmdb_id}>
+						<div class="fav__num">{i + 1}</div>
+						<div class="fav__poster">
+							{imageUrl(f.poster_path, 'w154') && (
+								<img src={imageUrl(f.poster_path, 'w154')} alt="" loading="lazy" />
+							)}
+						</div>
+						<div class="fav__title">
+							{f.title} <span class="fav__year">{f.release_year}</span>
+						</div>
+						<button type="button" class="fav__remove" aria-label="Remove">✕</button>
+					</div>
+				))}
+			</div>
+
+			<div class="sec-head sec-head--add">
+				<span class="sec-head__title">Add a film</span>
+				<span class="atmax" id="atmax-note" hidden={favorites.length < 4}>
+					Remove one to add another
+				</span>
+			</div>
+
+			<input
+				type="text"
+				id="fav-search"
+				class="search-input"
+				placeholder="Search your films…"
+				autocomplete="off"
+			/>
+			<p class="hint" id="search-hint">Start typing to search your watched films.</p>
+
+			<div class="suggestions" id="suggestions"></div>
+
+			<div class="actions">
+				<span class="save-msg" id="save-msg"></span>
+				<a class="btn-done" href="/films">Done</a>
+			</div>
+		</div>
+	</div>
+
+	<style>
+		.page {
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 720px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 32px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+		.titleblock {
+			margin-bottom: 28px;
+		}
+		h1 {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 44px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.subtitle {
+			font-size: 13.5px;
+			color: #a2857a;
+			margin: 10px 0 0;
+			max-width: 460px;
+			line-height: 1.5;
+		}
+		.sec-head {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			border-bottom: 1px solid #402226;
+			padding-bottom: 9px;
+			margin-bottom: 8px;
+		}
+		.sec-head--add {
+			margin-top: 36px;
+			margin-bottom: 16px;
+		}
+		.sec-head__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 18px;
+			color: #ecdcbd;
+		}
+		.sec-head__count {
+			font-size: 12px;
+			color: #d9b45a;
+			font-weight: 600;
+		}
+		.atmax {
+			font-size: 12px;
+			color: #c96a5f;
+		}
+		.empty {
+			padding: 26px 0;
+			color: #8a6f63;
+			font-size: 14px;
+			font-style: italic;
+			margin: 0;
+		}
+
+		.fav-list {
+			display: flex;
+			flex-direction: column;
+		}
+		.fav {
+			display: grid;
+			grid-template-columns: 34px 44px 1fr auto;
+			gap: 16px;
+			align-items: center;
+			padding: 12px 8px;
+			border-bottom: 1px solid #351a1d;
+		}
+		.fav__num {
+			font-family: 'Newsreader', serif;
+			font-size: 24px;
+			color: #d9b45a;
+			text-align: center;
+		}
+		.fav__poster {
+			width: 44px;
+			height: 66px;
+			border-radius: 4px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 8px, #2c1518 8px 16px);
+			border: 1px solid #4a2529;
+		}
+		.fav__poster img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.fav__title {
+			font-family: 'Newsreader', serif;
+			font-size: 17px;
+			color: #f2e5cd;
+			line-height: 1.2;
+		}
+		.fav__year {
+			color: #b0917f;
+			font-style: italic;
+			font-size: 14px;
+		}
+		.fav__remove {
+			width: 30px;
+			height: 30px;
+			border: 1px solid #5c2a2a;
+			background: transparent;
+			color: #c96a5f;
+			border-radius: 6px;
+			cursor: pointer;
+			font-size: 14px;
+			line-height: 1;
+		}
+		.fav__remove:hover {
+			background: #5c2a2a;
+			color: #ffd9cf;
+		}
+
+		.search-input {
+			width: 100%;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 12px 14px;
+			color: #f4e8d1;
+			font-size: 14px;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		.search-input:focus {
+			border-color: #d9b45a;
+		}
+		.search-input::placeholder {
+			color: #8a6f63;
+		}
+		.hint {
+			font-size: 12.5px;
+			color: #6f584e;
+			margin: 10px 2px 0;
+		}
+		.suggestions {
+			display: grid;
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
+			margin-top: 18px;
+		}
+		.sug {
+			display: flex;
+			align-items: center;
+			gap: 11px;
+			padding: 9px 12px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 9px;
+			cursor: pointer;
+			text-align: left;
+			font-family: 'Archivo', sans-serif;
+		}
+		.sug:hover:not(:disabled) {
+			border-color: #d9b45a;
+		}
+		.sug:disabled {
+			cursor: not-allowed;
+			opacity: 0.45;
+		}
+		.sug__poster {
+			width: 34px;
+			height: 51px;
+			border-radius: 3px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+			border: 1px solid #4a2529;
+			flex: none;
+		}
+		.sug__poster img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.sug__body {
+			flex: 1;
+			min-width: 0;
+		}
+		.sug__title {
+			font-family: 'Newsreader', serif;
+			font-size: 15px;
+			color: #f2e5cd;
+			line-height: 1.2;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.sug__year {
+			font-size: 12px;
+			color: #b0917f;
+			font-style: italic;
+			margin-top: 2px;
+		}
+		.sug__add {
+			color: #d9b45a;
+			font-size: 13px;
+			font-weight: 600;
+			flex: none;
+		}
+		.actions {
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+			gap: 14px;
+			border-top: 1px solid #4a2529;
+			padding-top: 22px;
+			margin-top: 40px;
+		}
+		.save-msg {
+			font-size: 13px;
+			color: #a2857a;
+			margin-right: auto;
+		}
+		.save-msg.error {
+			color: #c96a5f;
+		}
+		.btn-done {
+			font-size: 14px;
+			font-weight: 700;
+			color: #2a1214;
+			background: #d9b45a;
+			border-radius: 8px;
+			padding: 11px 26px;
+		}
+		.btn-done:hover {
+			background: #f0d488;
+			color: #2a1214;
+		}
+
+		@media (max-width: 560px) {
+			h1 {
+				font-size: 36px;
+			}
+			.suggestions {
+				grid-template-columns: 1fr;
+			}
+		}
+	</style>
+
+	<script>
+		const IMG = 'https://image.tmdb.org/t/p/w154';
+		const MAX = 4;
+		const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+		const search = $<HTMLInputElement>('fav-search');
+		const suggestions = $<HTMLDivElement>('suggestions');
+		const favList = $<HTMLDivElement>('fav-list');
+		const favCount = $<HTMLSpanElement>('fav-count');
+		const favEmpty = $<HTMLParagraphElement>('fav-empty');
+		const atmaxNote = $<HTMLSpanElement>('atmax-note');
+		const hint = $<HTMLParagraphElement>('search-hint');
+		const msg = $<HTMLSpanElement>('save-msg');
+
+		interface Tile {
+			tmdb_id: number;
+			title: string;
+			release_year: number | null;
+			poster_path: string | null;
+		}
+		let favIds = new Set<number>(
+			[...favList.querySelectorAll<HTMLElement>('.fav')].map((el) => Number(el.dataset.tmdbId)),
+		);
+		let lastResults: Tile[] = [];
+
+		function posterEl(cls: string, path: string | null): string {
+			return path
+				? `<div class="${cls}"><img src="${IMG}${path}" alt="" loading="lazy"></div>`
+				: `<div class="${cls}"></div>`;
+		}
+		function esc(s: string): string {
+			return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+		}
+
+		function flash(text: string, error = false) {
+			msg.textContent = text;
+			msg.className = error ? 'save-msg error' : 'save-msg';
+		}
+
+		function renderFavorites(list: (Tile & { rating?: number | null })[]) {
+			favIds = new Set(list.map((f) => f.tmdb_id));
+			favCount.textContent = String(list.length);
+			favEmpty.hidden = list.length > 0;
+			atmaxNote.hidden = list.length < MAX;
+			favList.innerHTML = list
+				.map(
+					(f, i) => `
+				<div class="fav" data-tmdb-id="${f.tmdb_id}">
+					<div class="fav__num">${i + 1}</div>
+					${posterEl('fav__poster', f.poster_path)}
+					<div class="fav__title">${esc(f.title)} <span class="fav__year">${f.release_year ?? ''}</span></div>
+					<button type="button" class="fav__remove" aria-label="Remove">&#10005;</button>
+				</div>`,
+				)
+				.join('');
+			renderSuggestions(lastResults); // reflect new max / membership state
+		}
+
+		function renderSuggestions(items: Tile[]) {
+			lastResults = items;
+			const atMax = favIds.size >= MAX;
+			const shown = items.filter((m) => !favIds.has(m.tmdb_id));
+			if (!search.value.trim()) {
+				suggestions.innerHTML = '';
+				return;
+			}
+			if (shown.length === 0) {
+				suggestions.innerHTML = `<p class="hint" style="grid-column:1/-1;margin:0;">No matching watched films.</p>`;
+				return;
+			}
+			suggestions.innerHTML = shown
+				.map(
+					(m) => `
+				<button type="button" class="sug" data-tmdb-id="${m.tmdb_id}" ${atMax ? 'disabled' : ''}>
+					${posterEl('sug__poster', m.poster_path)}
+					<div class="sug__body">
+						<div class="sug__title">${esc(m.title)}</div>
+						<div class="sug__year">${m.release_year ?? ''}</div>
+					</div>
+					<span class="sug__add">${atMax ? '' : '+ Add'}</span>
+				</button>`,
+				)
+				.join('');
+		}
+
+		async function refreshFavorites() {
+			const res = await fetch('/api/films/favorites');
+			if (!res.ok) return;
+			const data = await res.json();
+			renderFavorites(data.favorites ?? []);
+		}
+
+		// --- search (debounced) ---
+		let timer: number | undefined;
+		search.addEventListener('input', () => {
+			window.clearTimeout(timer);
+			const q = search.value.trim();
+			hint.hidden = q.length > 0;
+			if (!q) {
+				suggestions.innerHTML = '';
+				return;
+			}
+			timer = window.setTimeout(() => runSearch(q), 300);
+		});
+		async function runSearch(q: string) {
+			try {
+				const res = await fetch(`/api/films/watched?query=${encodeURIComponent(q)}`);
+				if (!res.ok) return;
+				const data = await res.json();
+				renderSuggestions(data.results ?? []);
+			} catch {
+				/* ignore */
+			}
+		}
+
+		// --- add / remove (event delegation) ---
+		suggestions.addEventListener('click', async (e) => {
+			const btn = (e.target as HTMLElement).closest('.sug') as HTMLButtonElement | null;
+			if (!btn || btn.disabled) return;
+			const tmdbId = Number(btn.dataset.tmdbId);
+			btn.disabled = true;
+			flash('Saving…');
+			try {
+				const res = await fetch('/api/films/favorites', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ tmdbId }),
+				});
+				if (res.status === 401) return void (window.location.href = '/films/login?redirect=/films/favorites');
+				const data = await res.json().catch(() => ({}));
+				if (!res.ok) {
+					flash(data.error || 'Failed to add', true);
+					btn.disabled = false;
+					return;
+				}
+				flash('Saved');
+				await refreshFavorites();
+			} catch {
+				flash('Failed to add', true);
+				btn.disabled = false;
+			}
+		});
+
+		favList.addEventListener('click', async (e) => {
+			const btn = (e.target as HTMLElement).closest('.fav__remove');
+			if (!btn) return;
+			const row = btn.closest('.fav') as HTMLElement;
+			const tmdbId = Number(row.dataset.tmdbId);
+			flash('Saving…');
+			try {
+				const res = await fetch(`/api/films/favorites?tmdbId=${tmdbId}`, { method: 'DELETE' });
+				if (res.status === 401) return void (window.location.href = '/films/login?redirect=/films/favorites');
+				if (!res.ok) {
+					const data = await res.json().catch(() => ({}));
+					flash(data.error || 'Failed to remove', true);
+					return;
+				}
+				flash('Saved');
+				await refreshFavorites();
+			} catch {
+				flash('Failed to remove', true);
+			}
+		});
+	</script>
+</FilmLayout>
