@@ -357,6 +357,10 @@ export interface FilmByTmdb {
 		backdrop_path: string | null;
 		overview: string | null;
 		runtime: number | null;
+		/** Genre + credit facts cached from TMDB (migration 0008); [] until backfilled. */
+		genres: string[];
+		directors: string[];
+		actors: string[];
 	};
 	/** Null when the film is cached but not (yet) marked watched. */
 	watched: WatchedActivity | null;
@@ -364,27 +368,46 @@ export interface FilmByTmdb {
 
 /**
  * One film by TMDB id, with its film-level watched row (rating / liked / first
- * watched). Powers the tmdb-keyed film page reached from the "All films" grid —
- * unlike the log-keyed detail page, this resolves for films that were marked
- * watched but never got a diary entry. Null if the movie isn't cached.
+ * watched) and the cached genre/credit facts. Powers the tmdb-keyed film page
+ * reached from the "All films" grid — unlike the log-keyed detail page, this
+ * resolves for films that were marked watched but never got a diary entry. Null
+ * if the movie isn't cached. Selects the credit columns leniently so it keeps
+ * working if migration 0008 hasn't been applied.
  */
 export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
-	const { data, error } = await supabasePublic
+	const BASE = 'id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime';
+	const withFacts = `${BASE}, genres, directors, actors, watched(rating, liked, first_watched)`;
+	const baseOnly = `${BASE}, watched(rating, liked, first_watched)`;
+
+	let { data, error } = await supabasePublic
 		.from('movies')
-		.select(
-			'id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime, ' +
-				'watched(rating, liked, first_watched)',
-		)
+		.select(withFacts)
 		.eq('tmdb_id', tmdbId)
 		.maybeSingle();
+	if (error && isMissingCreditColumn(error)) {
+		({ data, error } = await supabasePublic
+			.from('movies')
+			.select(baseOnly)
+			.eq('tmdb_id', tmdbId)
+			.maybeSingle());
+	}
 	if (error) throw new Error(`getFilmByTmdbId failed: ${error.message}`);
 	if (!data) return null;
 
-	const { watched, ...movie } = data as unknown as FilmByTmdb['movie'] & {
+	const { watched, genres, directors, actors, ...rest } = data as unknown as Omit<
+		FilmByTmdb['movie'],
+		'genres' | 'directors' | 'actors'
+	> & {
+		genres?: string[] | null;
+		directors?: string[] | null;
+		actors?: string[] | null;
 		watched: WatchedActivity[] | WatchedActivity | null;
 	};
 	const w = Array.isArray(watched) ? (watched[0] ?? null) : (watched ?? null);
-	return { movie, watched: w };
+	return {
+		movie: { ...rest, genres: genres ?? [], directors: directors ?? [], actors: actors ?? [] },
+		watched: w,
+	};
 }
 
 // --- Aggregates for the film-log overview ("Jason's film log") ---

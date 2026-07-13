@@ -1,6 +1,6 @@
 ---
 import { getFilmByTmdbId, listLogsByMovie } from '../../../lib/films';
-import { getMovieDetails, imageUrl, type TmdbMovieDetails } from '../../../lib/tmdb';
+import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 
@@ -22,21 +22,12 @@ const isOwner = await requireOwner(Astro.cookies);
 // this is empty and the reviews section says so.
 const movieLogs = await listLogsByMovie(movie.id);
 
-// Director / cast / genres / community rating come from TMDB, not our cache row.
-// Degrade gracefully if TMDB is momentarily unavailable.
-let details: TmdbMovieDetails | null = null;
-try {
-	details = await getMovieDetails(movie.tmdb_id);
-} catch {
-	details = null;
-}
-
-const directors =
-	details?.credits?.crew.filter((c) => c.job === 'Director').map((c) => c.name) ?? [];
-const cast = details?.credits?.cast.slice(0, 5).map((c) => c.name) ?? [];
-const genres = details?.genres.map((g) => g.name) ?? [];
-const runtime = movie.runtime ?? details?.runtime ?? null;
-const hasCommunity = details != null && details.vote_count > 0;
+// Director / cast / genres come from our cache row (migration 0008 backfill),
+// so the page renders without a live TMDB call.
+const directors = movie.directors;
+const cast = movie.actors.slice(0, 5);
+const genres = movie.genres;
+const runtime = movie.runtime;
 
 const backdrop = imageUrl(movie.backdrop_path, 'w780');
 const poster = imageUrl(movie.poster_path, 'w342');
@@ -150,19 +141,11 @@ const yourWatched = watched?.first_watched
 							</div>
 						)}
 
-						<div class="meta">
-							{hasCommunity && (
-								<div class="meta__avg">
-									<span class="meta__avgnum">{details!.vote_average.toFixed(1)}</span>
-									<span class="stars">{starText(details!.vote_average / 2)}</span>
-								</div>
-							)}
-							{hasCommunity && (
-								<span class="meta__dim">{details!.vote_count.toLocaleString()} TMDB ratings</span>
-							)}
-							{hasCommunity && formatRuntime(runtime) && <span class="meta__dot">·</span>}
-							{formatRuntime(runtime) && <span class="meta__dim">{formatRuntime(runtime)}</span>}
-						</div>
+						{formatRuntime(runtime) && (
+							<div class="meta">
+								<span class="meta__dim">{formatRuntime(runtime)}</span>
+							</div>
+						)}
 
 						{genres.length > 0 && (
 							<div class="genres">
@@ -505,21 +488,7 @@ const yourWatched = watched?.first_watched
 				margin-top: 18px;
 				flex-wrap: wrap;
 			}
-			.meta__avg {
-				display: flex;
-				align-items: baseline;
-				gap: 8px;
-			}
-			.meta__avgnum {
-				font-family: 'Newsreader', serif;
-				font-size: 30px;
-				color: #d9b45a;
-			}
 			.meta__dim {
-				font-size: 12px;
-				color: #8a6f63;
-			}
-			.meta__dot {
 				font-size: 12px;
 				color: #8a6f63;
 			}
