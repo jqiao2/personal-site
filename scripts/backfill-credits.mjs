@@ -47,7 +47,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function fetchDetails(tmdbId) {
 	const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
 	url.searchParams.set('api_key', TMDB_KEY);
-	url.searchParams.set('append_to_response', 'credits');
+	url.searchParams.set('append_to_response', 'credits,release_dates');
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const res = await fetch(url, { headers: { accept: 'application/json' } });
 		if (res.status === 429) {
@@ -78,6 +78,30 @@ function uniq(names) {
 	return out;
 }
 
+/** Fallback ISO-639-1 → English name (mirror of LANGUAGE_NAMES in src/lib/tmdb.ts). */
+const LANGUAGE_NAMES = {
+	en: 'English', ja: 'Japanese', fr: 'French', ko: 'Korean', zh: 'Chinese',
+	cn: 'Cantonese', es: 'Spanish', it: 'Italian', de: 'German', ru: 'Russian',
+	hi: 'Hindi', pt: 'Portuguese', sv: 'Swedish', da: 'Danish', no: 'Norwegian',
+	fi: 'Finnish', nl: 'Dutch', pl: 'Polish', tr: 'Turkish', ar: 'Arabic',
+	fa: 'Persian', th: 'Thai', vi: 'Vietnamese', id: 'Indonesian', he: 'Hebrew',
+	cs: 'Czech', hu: 'Hungarian', el: 'Greek', ro: 'Romanian', uk: 'Ukrainian',
+	ta: 'Tamil', te: 'Telugu', bn: 'Bengali', ml: 'Malayalam', mr: 'Marathi',
+};
+
+function originalLanguageName(d) {
+	const code = d.original_language;
+	if (!code) return null;
+	const spoken = (d.spoken_languages ?? []).find((l) => l.iso_639_1 === code);
+	return spoken?.english_name || spoken?.name || LANGUAGE_NAMES[code] || code.toUpperCase();
+}
+
+function usCertification(d) {
+	const us = (d.release_dates?.results ?? []).find((r) => r.iso_3166_1 === 'US');
+	const cert = (us?.release_dates ?? []).map((r) => (r.certification || '').trim()).find((c) => c);
+	return cert || null;
+}
+
 /** Mirror of extractCreditFacts() in src/lib/tmdb.ts (kept in sync by hand). */
 function extractFacts(d) {
 	return {
@@ -86,6 +110,8 @@ function extractFacts(d) {
 		countries: uniq((d.production_countries ?? []).map((c) => c.name)),
 		directors: uniq((d.credits?.crew ?? []).filter((c) => c.job === 'Director').map((c) => c.name)),
 		actors: uniq((d.credits?.cast ?? []).slice(0, TOP_CAST).map((c) => c.name)),
+		original_language: originalLanguageName(d),
+		mpa_rating: usCertification(d),
 	};
 }
 

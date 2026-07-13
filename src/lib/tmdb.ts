@@ -74,6 +74,8 @@ export interface TmdbMovieDetails {
 	runtime: number | null;
 	vote_average: number;
 	vote_count: number;
+	/** TMDB's original-language ISO-639-1 code, e.g. "en", "ja". */
+	original_language?: string;
 	genres: { id: number; name: string }[];
 	spoken_languages?: { english_name?: string; iso_639_1: string; name: string }[];
 	production_countries?: { iso_3166_1: string; name: string }[];
@@ -81,21 +83,56 @@ export interface TmdbMovieDetails {
 		cast: { id: number; name: string; character: string; profile_path: string | null }[];
 		crew: { id: number; name: string; job: string }[];
 	};
+	release_dates?: {
+		results: { iso_3166_1: string; release_dates: { certification: string; type: number }[] }[];
+	};
 	videos?: { results: { key: string; site: string; type: string; name: string }[] };
 	similar?: { results: TmdbSearchResult[] };
 }
 
-/** Genre + credit name-lists denormalized onto the movie cache row (migration 0008). */
+/** Genre + credit facts denormalized onto the movie cache row (migrations 0008 + 0009). */
 export interface MovieCreditFacts {
 	genres: string[];
 	languages: string[];
 	countries: string[];
 	directors: string[];
 	actors: string[];
+	/** Original language as an English name, e.g. "Japanese" (null if unknown). */
+	originalLanguage: string | null;
+	/** US content rating, e.g. "PG-13" (null when TMDB has no US certification). */
+	mpaRating: string | null;
 }
 
 /** How many billed cast members to keep per film for the "top actors" aggregate. */
 const TOP_CAST = 10;
+
+/** Fallback ISO-639-1 → English name for common languages not present in spoken_languages. */
+const LANGUAGE_NAMES: Record<string, string> = {
+	en: 'English', ja: 'Japanese', fr: 'French', ko: 'Korean', zh: 'Chinese',
+	cn: 'Cantonese', es: 'Spanish', it: 'Italian', de: 'German', ru: 'Russian',
+	hi: 'Hindi', pt: 'Portuguese', sv: 'Swedish', da: 'Danish', no: 'Norwegian',
+	fi: 'Finnish', nl: 'Dutch', pl: 'Polish', tr: 'Turkish', ar: 'Arabic',
+	fa: 'Persian', th: 'Thai', vi: 'Vietnamese', id: 'Indonesian', he: 'Hebrew',
+	cs: 'Czech', hu: 'Hungarian', el: 'Greek', ro: 'Romanian', uk: 'Ukrainian',
+	ta: 'Tamil', te: 'Telugu', bn: 'Bengali', ml: 'Malayalam', mr: 'Marathi',
+};
+
+/** Resolve TMDB's original_language code to an English name, using the film's own
+ * spoken_languages first (most accurate) and a common-language fallback map. */
+function originalLanguageName(d: TmdbMovieDetails): string | null {
+	const code = d.original_language;
+	if (!code) return null;
+	const spoken = (d.spoken_languages ?? []).find((l) => l.iso_639_1 === code);
+	const name = spoken?.english_name || spoken?.name || LANGUAGE_NAMES[code];
+	return name ?? code.toUpperCase();
+}
+
+/** The US content rating from TMDB release_dates: first non-empty US certification. */
+function usCertification(d: TmdbMovieDetails): string | null {
+	const us = (d.release_dates?.results ?? []).find((r) => r.iso_3166_1 === 'US');
+	const cert = (us?.release_dates ?? []).map((r) => r.certification?.trim()).find((c) => c);
+	return cert || null;
+}
 
 /**
  * Pull the flat name-lists the Stats page aggregates over out of a full TMDB
@@ -122,6 +159,8 @@ export function extractCreditFacts(d: TmdbMovieDetails): MovieCreditFacts {
 		countries: uniq((d.production_countries ?? []).map((c) => c.name)),
 		directors: uniq((d.credits?.crew ?? []).filter((c) => c.job === 'Director').map((c) => c.name)),
 		actors: uniq((d.credits?.cast ?? []).slice(0, TOP_CAST).map((c) => c.name)),
+		originalLanguage: originalLanguageName(d),
+		mpaRating: usCertification(d),
 	};
 }
 
@@ -141,10 +180,10 @@ export function searchMovies(query: string, page = 1) {
 	});
 }
 
-/** Full details + cast + trailers + similar in ONE request (append_to_response). */
+/** Full details + cast + trailers + similar + release certs in ONE request. */
 export function getMovieDetails(tmdbId: number) {
 	return tmdbGet<TmdbMovieDetails>(`/movie/${tmdbId}`, {
-		append_to_response: 'credits,videos,similar',
+		append_to_response: 'credits,videos,similar,release_dates',
 	});
 }
 

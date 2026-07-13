@@ -61,6 +61,8 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		countries: facts.countries,
 		directors: facts.directors,
 		actors: facts.actors,
+		original_language: facts.originalLanguage,
+		mpa_rating: facts.mpaRating,
 		credits_synced_at: now,
 	};
 	const upsert = (payload: typeof base | typeof withFacts) =>
@@ -361,8 +363,11 @@ export interface FilmByTmdb {
 		genres: string[];
 		directors: string[];
 		actors: string[];
-		languages: string[];
 		countries: string[];
+		/** Original language as an English name (migration 0009); null until backfilled. */
+		original_language: string | null;
+		/** US content rating, e.g. "PG-13" (migration 0009); null when none. */
+		mpa_rating: string | null;
 	};
 	/** Null when the film is cached but not (yet) marked watched. */
 	watched: WatchedActivity | null;
@@ -373,40 +378,44 @@ export interface FilmByTmdb {
  * watched) and the cached genre/credit facts. Powers the tmdb-keyed film page
  * reached from the "All films" grid — unlike the log-keyed detail page, this
  * resolves for films that were marked watched but never got a diary entry. Null
- * if the movie isn't cached. Selects the credit columns leniently so it keeps
- * working if migration 0008 hasn't been applied.
+ * if the movie isn't cached. Selects the credit columns leniently, stepping down
+ * through migration tiers (0009 → 0008 → base) so it keeps working whichever
+ * migrations have been applied.
  */
 export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
 	const BASE = 'id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime';
-	const withFacts = `${BASE}, genres, directors, actors, languages, countries, watched(rating, liked, first_watched)`;
-	const baseOnly = `${BASE}, watched(rating, liked, first_watched)`;
+	const W = 'watched(rating, liked, first_watched)';
+	const tiers = [
+		`${BASE}, genres, directors, actors, countries, original_language, mpa_rating, ${W}`, // 0008+0009
+		`${BASE}, genres, directors, actors, countries, ${W}`, // 0008 only
+		`${BASE}, ${W}`, // pre-0008
+	];
 
-	let { data, error } = await supabasePublic
-		.from('movies')
-		.select(withFacts)
-		.eq('tmdb_id', tmdbId)
-		.maybeSingle();
-	if (error && isMissingCreditColumn(error)) {
-		({ data, error } = await supabasePublic
-			.from('movies')
-			.select(baseOnly)
-			.eq('tmdb_id', tmdbId)
-			.maybeSingle());
+	let data: unknown = null;
+	let lastError: { code?: string; message?: string } | null = null;
+	for (const cols of tiers) {
+		const res = await supabasePublic.from('movies').select(cols).eq('tmdb_id', tmdbId).maybeSingle();
+		if (!res.error) {
+			data = res.data;
+			lastError = null;
+			break;
+		}
+		lastError = res.error;
+		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
 	}
-	if (error) throw new Error(`getFilmByTmdbId failed: ${error.message}`);
+	if (lastError) throw new Error(`getFilmByTmdbId failed: ${lastError.message}`);
 	if (!data) return null;
 
-	const { watched, genres, directors, actors, languages, countries, ...rest } = data as unknown as Omit<
-		FilmByTmdb['movie'],
-		'genres' | 'directors' | 'actors' | 'languages' | 'countries'
-	> & {
-		genres?: string[] | null;
-		directors?: string[] | null;
-		actors?: string[] | null;
-		languages?: string[] | null;
-		countries?: string[] | null;
-		watched: WatchedActivity[] | WatchedActivity | null;
-	};
+	const { watched, genres, directors, actors, countries, original_language, mpa_rating, ...rest } =
+		data as Omit<FilmByTmdb['movie'], 'genres' | 'directors' | 'actors' | 'countries' | 'original_language' | 'mpa_rating'> & {
+			genres?: string[] | null;
+			directors?: string[] | null;
+			actors?: string[] | null;
+			countries?: string[] | null;
+			original_language?: string | null;
+			mpa_rating?: string | null;
+			watched: WatchedActivity[] | WatchedActivity | null;
+		};
 	const w = Array.isArray(watched) ? (watched[0] ?? null) : (watched ?? null);
 	return {
 		movie: {
@@ -414,8 +423,9 @@ export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null
 			genres: genres ?? [],
 			directors: directors ?? [],
 			actors: actors ?? [],
-			languages: languages ?? [],
 			countries: countries ?? [],
+			original_language: original_language ?? null,
+			mpa_rating: mpa_rating ?? null,
 		},
 		watched: w,
 	};
@@ -818,36 +828,38 @@ interface WatchedFacts {
 	release_year: number | null;
 	runtime: number | null;
 	genres: string[];
-	languages: string[];
 	countries: string[];
 	directors: string[];
 	actors: string[];
+	/** Original language (migration 0009), the "Languages" breakdown key; null if unsynced. */
+	originalLanguage: string | null;
 }
 
 /**
  * Load every watched film with its movie facts (paged past the 1,000-row cap).
- * Before migration 0008 the genre/credit columns don't exist; in that case we
- * retry with just the base columns so the Stats page still renders its
- * DB-backed sections (metrics, per-week, release-year, ratings) — the credit
- * sections simply come back empty until the columns land and are backfilled.
+ * Steps down through migration tiers (0009 → 0008 → base) so the Stats page keeps
+ * rendering whichever migrations are applied: before a tier lands, the sections
+ * that depend on its columns simply come back empty until the backfill runs.
  */
 async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 	const PAGE = 1000;
-	const FACT_COLS =
-		'movies!inner(release_year, runtime, genres, languages, countries, directors, actors)';
-	const BASE_COLS = 'movies!inner(release_year, runtime)';
-	let cols = FACT_COLS;
+	const tiers = [
+		'movies!inner(release_year, runtime, genres, countries, directors, actors, original_language)', // 0009
+		'movies!inner(release_year, runtime, genres, countries, directors, actors)', // 0008
+		'movies!inner(release_year, runtime)', // pre-0008
+	];
+	let tier = 0;
 	const out: WatchedFacts[] = [];
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabasePublic
 			.from('watched')
-			.select(`first_watched, rating, ${cols}`)
+			.select(`first_watched, rating, ${tiers[tier]}`)
 			.order('first_watched', { ascending: false })
 			.range(offset, offset + PAGE - 1);
 		if (error) {
-			// Columns not there yet: drop to the base set and restart from the top.
-			if (cols === FACT_COLS && isMissingCreditColumn(error)) {
-				cols = BASE_COLS;
+			// Columns not there yet: drop to the next tier and restart from the top.
+			if (tier < tiers.length - 1 && isMissingCreditColumn(error)) {
+				tier++;
 				offset = -PAGE; // next loop iteration resumes at offset 0
 				out.length = 0;
 				continue;
@@ -861,10 +873,10 @@ async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 				release_year: number | null;
 				runtime: number | null;
 				genres?: string[] | null;
-				languages?: string[] | null;
 				countries?: string[] | null;
 				directors?: string[] | null;
 				actors?: string[] | null;
+				original_language?: string | null;
 			};
 		}[];
 		for (const r of rows) {
@@ -874,10 +886,10 @@ async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 				release_year: r.movies.release_year,
 				runtime: r.movies.runtime,
 				genres: r.movies.genres ?? [],
-				languages: r.movies.languages ?? [],
 				countries: r.movies.countries ?? [],
 				directors: r.movies.directors ?? [],
 				actors: r.movies.actors ?? [],
+				originalLanguage: r.movies.original_language ?? null,
 			});
 		}
 		if (rows.length < PAGE) break;
@@ -1065,7 +1077,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		ratingAvg,
 		ratedTotal,
 		genres: rankCounts(rows, (r) => r.genres),
-		languages: rankCounts(rows, (r) => r.languages),
+		languages: rankCounts(rows, (r) => (r.originalLanguage ? [r.originalLanguage] : [])),
 		countries: rankCounts(rows, (r) => r.countries),
 		directors: rankPeople(rows, (r) => r.directors),
 		actors: rankPeople(rows, (r) => r.actors),
