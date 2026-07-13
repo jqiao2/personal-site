@@ -1,0 +1,561 @@
+---
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import { getFilmStats } from '../../lib/films';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+// Timespan comes from ?year=… (a calendar year or "all"); anything else falls
+// back to all-time inside getFilmStats.
+const yearParam = Astro.url.searchParams.get('year');
+const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
+const stats = await getFilmStats(scope);
+
+/** "4.5" → "★★★★½"; null renders nothing. */
+function starText(r: number | null): string {
+	if (r == null) return '';
+	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+}
+
+const href = (key: number | 'all') => (key === 'all' ? '/films/stats' : `/films/stats?year=${key}`);
+
+// Bar-chart maxima (for relative heights/widths).
+const weekMax = Math.max(1, ...stats.weeks.map((w) => w.count));
+const byYearMax = Math.max(1, ...stats.byYear.map((d) => d.count));
+const ratingMax = Math.max(1, ...stats.ratings);
+const genreMax = Math.max(1, ...stats.genres.map((g) => g.count));
+const langMax = Math.max(1, ...stats.languages.map((g) => g.count));
+const countryMax = Math.max(1, ...stats.countries.map((g) => g.count));
+
+const ratingLabels = Array.from({ length: 10 }, (_, i) => starText((i + 1) * 0.5));
+
+const columns: { title: string; items: typeof stats.genres; max: number }[] = [
+	{ title: 'Most-watched genres', items: stats.genres, max: genreMax },
+	{ title: 'Languages', items: stats.languages, max: langMax },
+	{ title: 'Countries', items: stats.countries, max: countryMax },
+];
+const people: { title: string; items: typeof stats.directors }[] = [
+	{ title: 'Top directors', items: stats.directors },
+	{ title: 'Top actors', items: stats.actors },
+];
+---
+
+<FilmLayout title="Stats — Jason's film log">
+	<div class="page">
+		<div class="wrap">
+			<!-- Top bar -->
+			<header class="topbar">
+				<a class="back" href="/films">
+					<span class="back__arrow">←</span><span>Jason's film log</span>
+				</a>
+				<span class="topbar__tag">Stats</span>
+			</header>
+
+			<!-- Title + year picker -->
+			<div class="titleblock">
+				<h1>Stats</h1>
+				<details class="picker">
+					<summary>
+						<span>{stats.selectedLabel}</span>
+						<span class="picker__caret">▾</span>
+					</summary>
+					<div class="picker__menu">
+						{stats.yearOptions.map((o) => {
+							const on = o.label === stats.selectedLabel;
+							return (
+								<a class={on ? 'picker__row picker__row--on' : 'picker__row'} href={href(o.key)}>
+									<span class="picker__check">{on ? '✓' : ''}</span>
+									<span class="picker__label">{o.label}</span>
+									<span class="picker__count">{o.count}</span>
+								</a>
+							);
+						})}
+					</div>
+				</details>
+			</div>
+
+			<!-- Metric cards -->
+			<div class="metrics">
+				{stats.metrics.map((m) => (
+					<div class="metric">
+						<div class="metric__value">{m.value}</div>
+						<div class="metric__label">{m.label}</div>
+					</div>
+				))}
+			</div>
+
+			<!-- Films watched per week (year scope) -->
+			{stats.showWeeks && (
+				<section class="block">
+					<div class="block__head">
+						<div class="block__title">Films watched per week</div>
+						<div class="block__meta">{stats.weekSpan} · avg <span class="hl">{stats.weekAvg}</span>/wk</div>
+					</div>
+					<div class="bars bars--tall">
+						{stats.weeks.map((w) => (
+							<div class="bars__slot" title={w.title}>
+								<div
+									class="bar"
+									style={`height:${Math.round((w.count / weekMax) * 100)}%;${w.count === 0 ? 'background:#402226;' : ''}`}
+								></div>
+							</div>
+						))}
+					</div>
+					<div class="axis">
+						{stats.weekLabels.map((l) => <span>{l}</span>)}
+					</div>
+				</section>
+			)}
+
+			<!-- Films by release year (all-time scope) -->
+			{stats.showByYear && stats.byYear.length > 0 && (
+				<section class="block">
+					<div class="block__title block__title--solo">Films by release year</div>
+					<div class="bars">
+						{stats.byYear.map((d) => (
+							<div class="bars__slot" title={d.title}>
+								<div class="bar bar--thin" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}></div>
+							</div>
+						))}
+					</div>
+					<div class="axis">
+						{stats.byYearLabels.map((l) => <span>{l}</span>)}
+					</div>
+				</section>
+			)}
+
+			<!-- Genres / languages / countries -->
+			<div class="triple">
+				{columns.map((col) => (
+					<div>
+						<div class="block__title block__title--solo">{col.title}</div>
+						<div class="ranked">
+							{col.items.length > 0 ? (
+								col.items.map((g) => (
+									<div class="ranked__row">
+										<span class="ranked__name">{g.name}</span>
+										<div class="ranked__track">
+											<div class="ranked__fill" style={`width:${Math.round((g.count / col.max) * 100)}%`}></div>
+										</div>
+										<span class="ranked__count">{g.count}</span>
+									</div>
+								))
+							) : (
+								<p class="empty">No data yet.</p>
+							)}
+						</div>
+					</div>
+				))}
+			</div>
+
+			<!-- Ratings distribution -->
+			{stats.ratedTotal > 0 && (
+				<section class="block">
+					<div class="block__head">
+						<div class="block__title">Ratings distribution</div>
+						<div class="block__meta">avg <span class="hl">{stats.ratingAvg}</span></div>
+					</div>
+					<div class="ratings">
+						<div class="bars bars--ratings">
+							{stats.ratings.map((c, i) => (
+								<div class="bars__slot" title={`${((i + 1) * 0.5).toFixed(1)} · ${c} films`}>
+									<div class="bar" style={`height:${Math.round((c / ratingMax) * 100)}%`}></div>
+								</div>
+							))}
+						</div>
+						<div class="ratings__axis">
+							{ratingLabels.map((l) => <span>{l}</span>)}
+						</div>
+					</div>
+				</section>
+			)}
+
+			<!-- Top directors / actors -->
+			{people.map((p) => (
+				p.items.length > 0 && (
+					<section class="people">
+						<div class="block__title block__title--solo people__title">{p.title}</div>
+						{p.items.map((person, i) => (
+							<div class="person">
+								<span class="person__rank">{i + 1}</span>
+								<span class="person__name">{person.name}</span>
+								<span class="person__stars">{starText(person.rating)}</span>
+								<span class="person__count">{person.count} films</span>
+							</div>
+						))}
+					</section>
+				)
+			))}
+		</div>
+	</div>
+
+	<style>
+		.page {
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 960px;
+		}
+
+		/* Top bar */
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 34px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+
+		/* Title + picker */
+		.titleblock {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			margin-bottom: 34px;
+			flex-wrap: wrap;
+			gap: 14px;
+		}
+		.titleblock h1 {
+			margin: 0;
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 52px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1;
+		}
+
+		.picker {
+			position: relative;
+		}
+		.picker summary {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			font-size: 13px;
+			color: #f4e8d1;
+			background: #2a1214;
+			border: 1px solid #4a2529;
+			border-radius: 9px;
+			padding: 9px 14px;
+			cursor: pointer;
+			min-width: 150px;
+			justify-content: space-between;
+			list-style: none;
+		}
+		.picker summary::-webkit-details-marker {
+			display: none;
+		}
+		.picker summary:hover {
+			border-color: #d9b45a;
+		}
+		.picker__caret {
+			font-size: 10px;
+			color: #a2857a;
+		}
+		.picker[open] .picker__caret {
+			transform: rotate(180deg);
+		}
+		.picker__menu {
+			position: absolute;
+			right: 0;
+			top: calc(100% + 8px);
+			background: #20100f;
+			border: 1px solid #4a2529;
+			border-radius: 10px;
+			padding: 6px;
+			min-width: 210px;
+			z-index: 30;
+			box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+		}
+		.picker__row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			padding: 8px 10px;
+			border-radius: 7px;
+			color: #e9d9c4;
+		}
+		.picker__row:hover {
+			background: #2a1a15;
+		}
+		.picker__row--on {
+			background: #33211a;
+		}
+		.picker__check {
+			width: 16px;
+			color: #d9b45a;
+			font-size: 12px;
+		}
+		.picker__label {
+			flex: 1;
+			font-size: 13px;
+		}
+		.picker__count {
+			font-size: 11.5px;
+			color: #8a6f63;
+		}
+
+		/* Metric cards */
+		.metrics {
+			display: grid;
+			grid-template-columns: repeat(4, 1fr);
+			gap: 14px;
+			margin-bottom: 44px;
+		}
+		.metric {
+			background: #2a1214;
+			border: 1px solid #4a2529;
+			border-radius: 10px;
+			padding: 20px 18px;
+		}
+		.metric__value {
+			font-family: 'Newsreader', serif;
+			font-size: 36px;
+			color: #d9b45a;
+			line-height: 1;
+		}
+		.metric__label {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #a2857a;
+			margin-top: 8px;
+		}
+
+		/* Section shell */
+		.block {
+			margin-bottom: 46px;
+		}
+		.block__head {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			padding-bottom: 10px;
+			border-bottom: 1px solid #402226;
+			margin-bottom: 18px;
+		}
+		.block__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 20px;
+			color: #ecdcbd;
+		}
+		.block__title--solo {
+			padding-bottom: 10px;
+			border-bottom: 1px solid #402226;
+			margin-bottom: 16px;
+		}
+		.block__meta {
+			font-size: 12px;
+			color: #a2857a;
+		}
+		.hl {
+			color: #d9b45a;
+			font-weight: 600;
+		}
+
+		/* Vertical bar charts */
+		.bars {
+			display: flex;
+			align-items: flex-end;
+			gap: 1px;
+			height: 132px;
+		}
+		.bars--tall {
+			height: 140px;
+		}
+		.bars__slot {
+			flex: 1;
+			height: 100%;
+			display: flex;
+			align-items: flex-end;
+		}
+		.bar {
+			width: 100%;
+			min-height: 3px;
+			background: #d9b45a;
+			border-radius: 2px 2px 0 0;
+		}
+		.bar--thin {
+			min-height: 2px;
+			border-radius: 1px 1px 0 0;
+		}
+		.bars--tall .bars__slot:hover .bar,
+		.bars--ratings .bars__slot:hover .bar {
+			background: #f4e8d1;
+		}
+		.axis {
+			display: flex;
+			justify-content: space-between;
+			margin-top: 8px;
+			font-size: 9.5px;
+			color: #8a6f63;
+		}
+
+		/* Ratings (narrower, centred) */
+		.ratings {
+			width: 66%;
+			margin: 0 auto;
+		}
+		.bars--ratings {
+			gap: 8px;
+			height: 130px;
+		}
+		.bars--ratings .bar {
+			border-radius: 3px 3px 0 0;
+		}
+		.ratings__axis {
+			display: flex;
+			gap: 8px;
+			margin-top: 8px;
+		}
+		.ratings__axis span {
+			flex: 1;
+			text-align: center;
+			font-size: 10px;
+			color: #8a6f63;
+		}
+
+		/* Genres / languages / countries */
+		.triple {
+			display: grid;
+			grid-template-columns: repeat(3, 1fr);
+			gap: 32px;
+			margin-bottom: 46px;
+		}
+		.ranked {
+			display: flex;
+			flex-direction: column;
+			gap: 13px;
+		}
+		.ranked__row {
+			display: grid;
+			grid-template-columns: 78px 1fr 34px;
+			gap: 10px;
+			align-items: center;
+		}
+		.ranked__name {
+			font-size: 13px;
+			color: #f2e5cd;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.ranked__track {
+			height: 9px;
+			background: #351a1d;
+			border-radius: 5px;
+			overflow: hidden;
+		}
+		.ranked__fill {
+			height: 100%;
+			background: #d9b45a;
+			border-radius: 5px;
+		}
+		.ranked__count {
+			font-size: 12px;
+			color: #a2857a;
+			text-align: right;
+		}
+		.empty {
+			margin: 0;
+			font-size: 13px;
+			color: #8a6f63;
+		}
+
+		/* Top directors / actors */
+		.people {
+			margin-bottom: 8px;
+		}
+		.people + .people {
+			margin-top: 38px;
+		}
+		.people__title {
+			margin-bottom: 6px;
+		}
+		.person {
+			display: grid;
+			grid-template-columns: 32px 1fr auto auto;
+			gap: 18px;
+			align-items: center;
+			padding: 13px 8px;
+			border-bottom: 1px solid #351a1d;
+		}
+		.person__rank {
+			font-family: 'Newsreader', serif;
+			font-size: 20px;
+			color: #8a6f63;
+			text-align: center;
+		}
+		.person__name {
+			font-family: 'Newsreader', serif;
+			font-size: 18px;
+			color: #f2e5cd;
+		}
+		.person__stars {
+			color: #d9b45a;
+			font-size: 13px;
+			letter-spacing: 1px;
+			white-space: nowrap;
+		}
+		.person__count {
+			font-size: 13px;
+			color: #a2857a;
+			min-width: 70px;
+			text-align: right;
+		}
+
+		@media (max-width: 720px) {
+			.metrics {
+				grid-template-columns: repeat(2, 1fr);
+			}
+			.triple {
+				grid-template-columns: 1fr;
+				gap: 26px;
+			}
+			.ratings {
+				width: 100%;
+			}
+			.titleblock h1 {
+				font-size: 40px;
+			}
+		}
+	</style>
+
+	<script>
+		// Close the year picker when clicking outside it (native <details> only
+		// toggles on the summary).
+		const picker = document.querySelector('.picker');
+		if (picker) {
+			document.addEventListener('mousedown', (e) => {
+				if (picker.hasAttribute('open') && !picker.contains(e.target as Node)) {
+					picker.removeAttribute('open');
+				}
+			});
+		}
+	</script>
+</FilmLayout>

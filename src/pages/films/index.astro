@@ -61,9 +61,12 @@ const num = (n: number) => n.toLocaleString('en-US');
 					<a class="navrow navrow--link" href="/films/watchlist">
 						<span>Watchlist</span><span class="navrow__n">{num(stats.watchlist)}</span>
 					</a>
-					<div class="navrow navrow--last">
+					<div class="navrow">
 						<span>Liked films</span><span class="navrow__n">{num(stats.liked)}</span>
 					</div>
+					<a class="navrow navrow--link navrow--last" href="/films/stats">
+						<span>Stats</span><span class="navrow__n">→</span>
+					</a>
 				</nav>
 			</aside>
 

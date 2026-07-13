@@ -75,12 +75,54 @@ export interface TmdbMovieDetails {
 	vote_average: number;
 	vote_count: number;
 	genres: { id: number; name: string }[];
+	spoken_languages?: { english_name?: string; iso_639_1: string; name: string }[];
+	production_countries?: { iso_3166_1: string; name: string }[];
 	credits?: {
 		cast: { id: number; name: string; character: string; profile_path: string | null }[];
 		crew: { id: number; name: string; job: string }[];
 	};
 	videos?: { results: { key: string; site: string; type: string; name: string }[] };
 	similar?: { results: TmdbSearchResult[] };
+}
+
+/** Genre + credit name-lists denormalized onto the movie cache row (migration 0008). */
+export interface MovieCreditFacts {
+	genres: string[];
+	languages: string[];
+	countries: string[];
+	directors: string[];
+	actors: string[];
+}
+
+/** How many billed cast members to keep per film for the "top actors" aggregate. */
+const TOP_CAST = 10;
+
+/**
+ * Pull the flat name-lists the Stats page aggregates over out of a full TMDB
+ * details+credits response. Cast is kept in billing order (TMDB returns it sorted
+ * by `order`), truncated to the top {@link TOP_CAST}. De-duplicates within a film
+ * (e.g. an actor credited twice) while preserving order.
+ */
+export function extractCreditFacts(d: TmdbMovieDetails): MovieCreditFacts {
+	const uniq = (names: (string | null | undefined)[]): string[] => {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const raw of names) {
+			const name = raw?.trim();
+			if (name && !seen.has(name)) {
+				seen.add(name);
+				out.push(name);
+			}
+		}
+		return out;
+	};
+	return {
+		genres: uniq((d.genres ?? []).map((g) => g.name)),
+		languages: uniq((d.spoken_languages ?? []).map((l) => l.english_name || l.name)),
+		countries: uniq((d.production_countries ?? []).map((c) => c.name)),
+		directors: uniq((d.credits?.crew ?? []).filter((c) => c.job === 'Director').map((c) => c.name)),
+		actors: uniq((d.credits?.cast ?? []).slice(0, TOP_CAST).map((c) => c.name)),
+	};
 }
 
 export interface TmdbPage<T> {

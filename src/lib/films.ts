@@ -2,7 +2,7 @@
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
-import { getMovieDetails, releaseYear } from './tmdb';
+import { extractCreditFacts, getMovieDetails, releaseYear } from './tmdb';
 
 /** How long a cached movie row is considered fresh before we re-sync from TMDB. */
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -19,26 +19,57 @@ export interface MovieRow {
 	last_synced_at: string;
 }
 
+/**
+ * Whether a PostgREST error is "this column doesn't exist yet" — i.e. migration
+ * 0008 (the genre/credit columns) hasn't been applied. Lets the movie cache and
+ * Stats read degrade gracefully instead of hard-failing before the migration.
+ */
+function isMissingCreditColumn(err: { code?: string; message?: string } | null): boolean {
+	if (!err) return false;
+	const msg = (err.message ?? '').toLowerCase();
+	return (
+		err.code === '42703' || // undefined_column
+		err.code === 'PGRST204' || // column not found in schema cache
+		(msg.includes('column') && msg.includes('does not exist')) ||
+		msg.includes('schema cache')
+	);
+}
+
 /** Fetch fresh details from TMDB and upsert the lightweight cache row. */
 async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const d = await getMovieDetails(tmdbId);
-	const { data, error } = await supabaseAdmin
-		.from('movies')
-		.upsert(
-			{
-				tmdb_id: d.id,
-				title: d.title,
-				release_year: releaseYear(d.release_date),
-				poster_path: d.poster_path,
-				backdrop_path: d.backdrop_path,
-				overview: d.overview,
-				runtime: d.runtime,
-				last_synced_at: new Date().toISOString(),
-			},
-			{ onConflict: 'tmdb_id' },
-		)
-		.select()
-		.single();
+	const facts = extractCreditFacts(d);
+	const now = new Date().toISOString();
+	const base = {
+		tmdb_id: d.id,
+		title: d.title,
+		release_year: releaseYear(d.release_date),
+		poster_path: d.poster_path,
+		backdrop_path: d.backdrop_path,
+		overview: d.overview,
+		runtime: d.runtime,
+		last_synced_at: now,
+	};
+	// Genre + credit facts for the Stats page (migration 0008). The backfill fills
+	// these in bulk for existing films; this keeps them fresh for anything logged
+	// from now on. If 0008 hasn't been applied yet, fall back to the base columns
+	// so caching a movie still works.
+	const withFacts = {
+		...base,
+		genres: facts.genres,
+		languages: facts.languages,
+		countries: facts.countries,
+		directors: facts.directors,
+		actors: facts.actors,
+		credits_synced_at: now,
+	};
+	const upsert = (payload: typeof base | typeof withFacts) =>
+		supabaseAdmin.from('movies').upsert(payload, { onConflict: 'tmdb_id' }).select().single();
+
+	let { data, error } = await upsert(withFacts);
+	if (error && isMissingCreditColumn(error)) {
+		({ data, error } = await upsert(base));
+	}
 	if (error) throw new Error(`upsert movie ${tmdbId} failed: ${error.message}`);
 	return data as MovieRow;
 }
@@ -680,4 +711,329 @@ export async function reorderFavorites(orderedTmdbIds: number[]): Promise<void> 
 		);
 	}
 	await Promise.all(updates);
+}
+
+// --- Stats page aggregates (migration 0008 credit/genre facts) ---
+
+/** A ranked name + film count (genres / languages / countries). */
+export interface RankedCount {
+	name: string;
+	count: number;
+}
+
+/** A ranked person with film count and average star rating of their films. */
+export interface PersonStat {
+	name: string;
+	count: number;
+	/** Mean rating across that person's films in scope; null if none are rated. */
+	rating: number | null;
+}
+
+/** A labelled bar in a histogram. */
+export interface HistBar {
+	count: number;
+	/** Tooltip text — e.g. "2024 · 132 films" or "Mar 3–9, 2024 · 2 films". */
+	title: string;
+}
+
+/** One selectable timespan for the year picker. */
+export interface YearOption {
+	/** Calendar year, or 'all' for the all-time view. */
+	key: number | 'all';
+	label: string;
+	/** Films watched in that year ('' for the all-time row). */
+	count: string;
+}
+
+/** Everything the Stats page renders for one selected timespan. */
+export interface FilmStats {
+	scope: number | 'all';
+	/** Picker options: "All time" plus each year with a meaningful sample (>10 films). */
+	yearOptions: YearOption[];
+	selectedLabel: string;
+	metrics: { value: string; label: string }[];
+
+	/** Films watched per week of the selected year (year scope only). */
+	showWeeks: boolean;
+	weeks: HistBar[];
+	weekLabels: string[];
+	weekSpan: string;
+	weekAvg: string;
+
+	/** Films watched, bucketed by their release year (all-time scope only). */
+	showByYear: boolean;
+	byYear: HistBar[];
+	byYearLabels: string[];
+
+	/** Ratings distribution, 10 buckets (index 0 = ½★ … 9 = 5★). */
+	ratings: number[];
+	ratingAvg: string;
+	ratedTotal: number;
+
+	genres: RankedCount[];
+	languages: RankedCount[];
+	countries: RankedCount[];
+	directors: PersonStat[];
+	actors: PersonStat[];
+}
+
+/** A watched film flattened with the movie facts the Stats page aggregates over. */
+interface WatchedFacts {
+	first_watched: string;
+	rating: number | null;
+	release_year: number | null;
+	runtime: number | null;
+	genres: string[];
+	languages: string[];
+	countries: string[];
+	directors: string[];
+	actors: string[];
+}
+
+/**
+ * Load every watched film with its movie facts (paged past the 1,000-row cap).
+ * Before migration 0008 the genre/credit columns don't exist; in that case we
+ * retry with just the base columns so the Stats page still renders its
+ * DB-backed sections (metrics, per-week, release-year, ratings) — the credit
+ * sections simply come back empty until the columns land and are backfilled.
+ */
+async function loadWatchedFacts(): Promise<WatchedFacts[]> {
+	const PAGE = 1000;
+	const FACT_COLS =
+		'movies!inner(release_year, runtime, genres, languages, countries, directors, actors)';
+	const BASE_COLS = 'movies!inner(release_year, runtime)';
+	let cols = FACT_COLS;
+	const out: WatchedFacts[] = [];
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('watched')
+			.select(`first_watched, rating, ${cols}`)
+			.order('first_watched', { ascending: false })
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			// Columns not there yet: drop to the base set and restart from the top.
+			if (cols === FACT_COLS && isMissingCreditColumn(error)) {
+				cols = BASE_COLS;
+				offset = -PAGE; // next loop iteration resumes at offset 0
+				out.length = 0;
+				continue;
+			}
+			throw new Error(`loadWatchedFacts failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as unknown as {
+			first_watched: string;
+			rating: number | null;
+			movies: {
+				release_year: number | null;
+				runtime: number | null;
+				genres?: string[] | null;
+				languages?: string[] | null;
+				countries?: string[] | null;
+				directors?: string[] | null;
+				actors?: string[] | null;
+			};
+		}[];
+		for (const r of rows) {
+			out.push({
+				first_watched: r.first_watched,
+				rating: r.rating,
+				release_year: r.movies.release_year,
+				runtime: r.movies.runtime,
+				genres: r.movies.genres ?? [],
+				languages: r.movies.languages ?? [],
+				countries: r.movies.countries ?? [],
+				directors: r.movies.directors ?? [],
+				actors: r.movies.actors ?? [],
+			});
+		}
+		if (rows.length < PAGE) break;
+	}
+	return out;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Tally a name→count map from each film's list, most-common first, top `limit`. */
+function rankCounts(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], limit = 7): RankedCount[] {
+	const counts = new Map<string, number>();
+	for (const r of rows) {
+		for (const name of pick(r)) counts.set(name, (counts.get(name) ?? 0) + 1);
+	}
+	return [...counts.entries()]
+		.map(([name, count]) => ({ name, count }))
+		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+		.slice(0, limit);
+}
+
+/** Rank people by film count, carrying each person's average film rating. */
+function rankPeople(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], limit = 6): PersonStat[] {
+	const agg = new Map<string, { count: number; ratingSum: number; rated: number }>();
+	for (const r of rows) {
+		for (const name of pick(r)) {
+			const a = agg.get(name) ?? { count: 0, ratingSum: 0, rated: 0 };
+			a.count++;
+			if (r.rating != null) {
+				a.ratingSum += r.rating;
+				a.rated++;
+			}
+			agg.set(name, a);
+		}
+	}
+	return [...agg.entries()]
+		.map(([name, a]) => ({
+			name,
+			count: a.count,
+			rating: a.rated ? a.ratingSum / a.rated : null,
+		}))
+		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+		.slice(0, limit);
+}
+
+/** Year (local) of an ISO timestamp. */
+function yearOf(iso: string): number {
+	return new Date(iso).getFullYear();
+}
+
+/**
+ * Aggregate the film-log Stats for one timespan. `scope` is a calendar year or
+ * 'all'. Reads every watched film once and computes in-process, so a whole page
+ * (metrics, histograms, ranked lists) is one DB round-trip. Genre/credit lists
+ * come from the movie facts backfilled in migration 0008 — films whose facts
+ * aren't synced yet simply contribute nothing to those sections.
+ */
+export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmStats> {
+	const all = await loadWatchedFacts();
+
+	// Picker options: years with a meaningful sample, newest first.
+	const perYear = new Map<number, number>();
+	for (const r of all) perYear.set(yearOf(r.first_watched), (perYear.get(yearOf(r.first_watched)) ?? 0) + 1);
+	const eligibleYears = [...perYear.entries()]
+		.filter(([, c]) => c > 10)
+		.map(([y]) => y)
+		.sort((a, b) => b - a);
+	const yearOptions: YearOption[] = [
+		{ key: 'all', label: 'All time', count: '' },
+		...eligibleYears.map((y) => ({ key: y, label: String(y), count: `${perYear.get(y)} films` })),
+	];
+
+	// Fall back to all-time if asked for a year outside the eligible set.
+	const isAll = scope === 'all' || !eligibleYears.includes(scope as number);
+	const selected: number | 'all' = isAll ? 'all' : (scope as number);
+	const rows = isAll ? all : all.filter((r) => yearOf(r.first_watched) === selected);
+
+	// Metrics.
+	const filmsWatched = rows.length;
+	const hours = Math.round(rows.reduce((a, r) => a + (r.runtime ?? 0), 0) / 60);
+	const rated = rows.filter((r) => r.rating != null) as (WatchedFacts & { rating: number })[];
+	const avgRating = rated.length ? rated.reduce((a, r) => a + r.rating, 0) / rated.length : 0;
+	const num = (n: number) => n.toLocaleString('en-US');
+	const thisYear = new Date().getFullYear();
+	const thisYearCount = all.filter((r) => yearOf(r.first_watched) === thisYear).length;
+	const metrics = isAll
+		? [
+				{ value: num(filmsWatched), label: 'Films watched' },
+				{ value: num(hours), label: 'Hours' },
+				{ value: num(thisYearCount), label: 'This year' },
+				{ value: rated.length ? avgRating.toFixed(1) : '—', label: 'Avg rating' },
+			]
+		: [
+				{ value: num(filmsWatched), label: 'Films watched' },
+				{ value: num(hours), label: 'Hours' },
+				{ value: (filmsWatched / 52).toFixed(1), label: 'Films / week' },
+				{ value: rated.length ? avgRating.toFixed(1) : '—', label: 'Avg rating' },
+			];
+
+	// Films watched per week (year scope): 7-day bins across the calendar year.
+	let weeks: HistBar[] = [];
+	let weekLabels: string[] = [];
+	let weekSpan = '';
+	let weekAvg = '0';
+	if (!isAll) {
+		const year = selected as number;
+		const yearStart = new Date(year, 0, 1);
+		const bins: number[] = [];
+		const ranges: { start: Date; end: Date }[] = [];
+		for (let d = new Date(yearStart); d.getFullYear() === year; d.setDate(d.getDate() + 7)) {
+			const start = new Date(d);
+			const end = new Date(d);
+			end.setDate(end.getDate() + 6);
+			if (end.getFullYear() > year) end.setTime(new Date(year, 11, 31).getTime());
+			ranges.push({ start, end });
+			bins.push(0);
+		}
+		for (const r of rows) {
+			const days = Math.floor((new Date(r.first_watched).getTime() - yearStart.getTime()) / 86400000);
+			const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(days / 7)));
+			bins[idx]++;
+		}
+		const fmtRange = (s: Date, e: Date) => {
+			const a = `${MONTHS[s.getMonth()]} ${s.getDate()}`;
+			const b = s.getMonth() === e.getMonth() ? `${e.getDate()}` : `${MONTHS[e.getMonth()]} ${e.getDate()}`;
+			return `${a}–${b}, ${e.getFullYear()}`;
+		};
+		weeks = bins.map((c, i) => ({
+			count: c,
+			title: `${fmtRange(ranges[i].start, ranges[i].end)} · ${c} ${c === 1 ? 'film' : 'films'}`,
+		}));
+		weekLabels = ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov'];
+		weekSpan = `${year} · week by week`;
+		weekAvg = (bins.reduce((a, b) => a + b, 0) / (bins.length || 1)).toFixed(1);
+	}
+
+	// Films by release year (all-time scope): one bar per year, earliest → now.
+	let byYear: HistBar[] = [];
+	let byYearLabels: string[] = [];
+	if (isAll) {
+		const releaseYears = rows.map((r) => r.release_year).filter((y): y is number => y != null);
+		if (releaseYears.length) {
+			const min = Math.min(...releaseYears);
+			const max = Math.max(...releaseYears, thisYear);
+			const perRelease = new Map<number, number>();
+			for (const y of releaseYears) perRelease.set(y, (perRelease.get(y) ?? 0) + 1);
+			for (let y = min; y <= max; y++) {
+				const c = perRelease.get(y) ?? 0;
+				byYear.push({ count: c, title: `${y} · ${c} ${c === 1 ? 'film' : 'films'}` });
+			}
+			// ~6 evenly spaced year labels across the span.
+			const span = max - min;
+			byYearLabels = Array.from({ length: 6 }, (_, i) => String(Math.round(min + (span * i) / 5)));
+		}
+	}
+
+	// Ratings distribution (0.5 … 5.0 → 10 buckets).
+	const ratings = new Array(10).fill(0);
+	let ratedTotal = 0;
+	let ratingWeighted = 0;
+	for (const r of rated) {
+		const idx = Math.round(r.rating * 2) - 1;
+		if (idx >= 0 && idx < 10) {
+			ratings[idx]++;
+			ratedTotal++;
+			ratingWeighted += r.rating;
+		}
+	}
+	const ratingAvg = ratedTotal ? (ratingWeighted / ratedTotal).toFixed(1) : '—';
+
+	return {
+		scope: selected,
+		yearOptions,
+		selectedLabel: isAll ? 'All time' : String(selected),
+		metrics,
+		showWeeks: !isAll,
+		weeks,
+		weekLabels,
+		weekSpan,
+		weekAvg,
+		showByYear: isAll,
+		byYear,
+		byYearLabels,
+		ratings,
+		ratingAvg,
+		ratedTotal,
+		genres: rankCounts(rows, (r) => r.genres),
+		languages: rankCounts(rows, (r) => r.languages),
+		countries: rankCounts(rows, (r) => r.countries),
+		directors: rankPeople(rows, (r) => r.directors),
+		actors: rankPeople(rows, (r) => r.actors),
+	};
 }
