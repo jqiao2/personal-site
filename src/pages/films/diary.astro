@@ -139,6 +139,17 @@ const today = new Date().toISOString().slice(0, 10);
 					<button type="button" class="modal__close" id="composer-close" aria-label="Close">✕</button>
 				</div>
 
+				<div class="discard" id="discard" hidden>
+					<div class="discard__box">
+						<div class="discard__title">Discard this entry?</div>
+						<div class="discard__msg">Your entry has unsaved changes.</div>
+						<div class="discard__actions">
+							<button type="button" class="btn-ghost" id="discard-keep">Keep editing</button>
+							<button type="button" class="btn-discard" id="discard-confirm">Discard</button>
+						</div>
+					</div>
+				</div>
+
 				<div class="modal__body">
 					<div class="field-grid">
 						<div>
@@ -148,10 +159,18 @@ const today = new Date().toISOString().slice(0, 10);
 								<ul class="results" id="c-results" hidden></ul>
 							</div>
 							<div class="selected" id="c-selected" hidden>
-								<img id="c-sel-poster" alt="" width="26" height="39" />
-								<span id="c-sel-title"></span>
-								<button type="button" class="link" id="c-change">change</button>
+								<div class="selected__poster">
+									<img id="c-sel-poster" alt="" />
+								</div>
+								<div class="selected__info">
+									<div class="selected__title">
+										<span id="c-sel-title"></span>
+										<span class="selected__year" id="c-sel-year"></span>
+									</div>
+								</div>
+								<button type="button" class="selected__change" id="c-change">Change</button>
 							</div>
+							<div class="prior-hint" id="c-prior" hidden></div>
 						</div>
 						<div>
 							<label class="lbl" for="c-date">Watched</label>
@@ -537,29 +556,123 @@ const today = new Date().toISOString().slice(0, 10);
 		.selected {
 			display: flex;
 			align-items: center;
-			gap: 10px;
-			margin-top: 9px;
-			font-family: 'Newsreader', serif;
-			font-size: 15px;
-			color: #f2e5cd;
+			gap: 12px;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 8px 10px;
 		}
-		.selected img {
+		.selected__poster {
+			width: 38px;
+			height: 57px;
+			flex: none;
+			border-radius: 4px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+			border: 1px solid #4a2529;
+		}
+		.selected__poster img {
+			width: 100%;
+			height: 100%;
 			object-fit: cover;
-			border-radius: 3px;
-			background: #4a2529;
 		}
-		.link {
-			background: none;
-			border: none;
-			color: #a2857a;
-			cursor: pointer;
+		.selected__info {
+			flex: 1;
+			min-width: 0;
+		}
+		.selected__title {
+			font-family: 'Newsreader', serif;
+			font-size: 16px;
+			color: #f2e5cd;
+			line-height: 1.2;
+		}
+		.selected__year {
+			color: #b0917f;
+			font-style: italic;
+			font-size: 14px;
+		}
+		.selected__change {
+			flex: none;
 			font-size: 12px;
-			text-decoration: underline;
+			font-weight: 600;
+			color: #ddc9b4;
+			background: transparent;
+			border: 1px solid #4a2529;
+			border-radius: 7px;
+			padding: 7px 13px;
+			cursor: pointer;
 			font-family: 'Archivo', sans-serif;
-			padding: 0;
 		}
-		.link:hover {
+		.selected__change:hover {
+			border-color: #d9b45a;
 			color: #f4e8d1;
+		}
+		.prior-hint {
+			margin-top: 9px;
+			font-size: 12px;
+			color: #d9b45a;
+			line-height: 1.4;
+		}
+		.prior-hint[hidden] {
+			display: none;
+		}
+
+		/* Discard confirmation overlay (covers the composer panel) */
+		.discard {
+			position: absolute;
+			inset: 0;
+			z-index: 20;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 28px;
+			border-radius: 14px;
+			background: rgba(15, 6, 7, 0.88);
+			backdrop-filter: blur(2px);
+		}
+		.discard[hidden] {
+			display: none;
+		}
+		.discard__box {
+			width: 100%;
+			max-width: 360px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 12px;
+			padding: 24px;
+			text-align: center;
+		}
+		.discard__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 21px;
+			color: #f4e8d1;
+			margin-bottom: 8px;
+		}
+		.discard__msg {
+			font-size: 13px;
+			color: #a2857a;
+			line-height: 1.5;
+			margin-bottom: 22px;
+		}
+		.discard__actions {
+			display: flex;
+			gap: 10px;
+			justify-content: center;
+		}
+		.btn-discard {
+			font-size: 13px;
+			font-weight: 700;
+			color: #2a1214;
+			background: #d9865a;
+			border: none;
+			border-radius: 8px;
+			padding: 9px 18px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.btn-discard:hover {
+			background: #e89b70;
 		}
 		.rating-row {
 			display: flex;
@@ -705,6 +818,8 @@ const today = new Date().toISOString().slice(0, 10);
 			const selected = $('c-selected');
 			const selPoster = $<HTMLImageElement>('c-sel-poster');
 			const selTitle = $<HTMLSpanElement>('c-sel-title');
+			const selYear = $<HTMLSpanElement>('c-sel-year');
+			const priorHint = $<HTMLDivElement>('c-prior');
 			const change = $('c-change');
 			const dateInput = $<HTMLInputElement>('c-date');
 			const reviewInput = $<HTMLTextAreaElement>('c-review');
@@ -713,6 +828,10 @@ const today = new Date().toISOString().slice(0, 10);
 			const fill = $<HTMLSpanElement>('sp-fill');
 			const hits = $<HTMLSpanElement>('sp-hits');
 			const ratingLabel = $<HTMLSpanElement>('rating-label');
+			const discard = $<HTMLDivElement>('discard');
+			const discardKeep = $('discard-keep');
+			const discardConfirm = $('discard-confirm');
+			const defaultDate = dateInput.value;
 
 			let tmdbId: number | null = null;
 			let rating: number | null = null;
@@ -765,7 +884,8 @@ const today = new Date().toISOString().slice(0, 10);
 			}
 			function selectMovie(m: any) {
 				tmdbId = m.id;
-				selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+				selTitle.textContent = m.title;
+				selYear.textContent = m.release_date ? m.release_date.slice(0, 4) : '';
 				if (m.poster_path) {
 					selPoster.src = IMG + m.poster_path;
 					selPoster.hidden = false;
@@ -777,6 +897,50 @@ const today = new Date().toISOString().slice(0, 10);
 				searchWrap.hidden = true;
 				selected.hidden = false;
 				save.disabled = false;
+				// A film's rating/like/rewatch is film-specific — start each entry
+				// clean, then let the prior-watch lookup suggest a rewatch.
+				resetEntryFields();
+				loadPrior(m.id);
+			}
+			// Clear rating / like / rewatch / prior hint, keeping film + date + review.
+			function resetEntryFields() {
+				rating = null;
+				setFill(0);
+				ratingLabel.textContent = 'Not rated';
+				liked = false;
+				likeBtn.classList.remove('on');
+				rewatch = false;
+				rewatchBtn.classList.remove('on');
+				priorHint.hidden = true;
+				priorHint.textContent = '';
+			}
+			// Look up whether this film was watched before; if so, suggest a rewatch
+			// and pre-fill the previous rating/like. Guarded against a stale response
+			// when the user switches films mid-request.
+			async function loadPrior(id: number) {
+				try {
+					const res = await fetch(`/api/films/prior-watch?tmdbId=${id}`);
+					if (!res.ok) return;
+					const prior = await res.json();
+					if (tmdbId !== id || !prior.watched) return;
+					rewatch = true;
+					rewatchBtn.classList.add('on');
+					if (prior.rating != null) {
+						rating = prior.rating;
+						setFill(rating);
+						ratingLabel.textContent = labelFor(rating);
+					}
+					liked = Boolean(prior.liked);
+					likeBtn.classList.toggle('on', liked);
+					const n = prior.logCount;
+					priorHint.textContent =
+						n > 0
+							? `Logged ${n} time${n === 1 ? '' : 's'} before — marked as a rewatch.`
+							: `You've watched this before — marked as a rewatch.`;
+					priorHint.hidden = false;
+				} catch {
+					/* network hiccup — leave the entry clean */
+				}
 			}
 			change.addEventListener('click', () => {
 				tmdbId = null;
@@ -784,6 +948,7 @@ const today = new Date().toISOString().slice(0, 10);
 				searchWrap.hidden = false;
 				save.disabled = true;
 				q.value = '';
+				resetEntryFields();
 				q.focus();
 			});
 			document.addEventListener('click', (e) => {
@@ -824,17 +989,61 @@ const today = new Date().toISOString().slice(0, 10);
 				rewatchBtn.classList.toggle('on', rewatch);
 			});
 
+			// The film selection is intentionally excluded from the dirty check —
+			// picking a film alone isn't "work worth confirming"; a rating, like,
+			// rewatch flag, or review text is.
+			const isDirty = () =>
+				(rating ?? 0) > 0 ||
+				liked ||
+				rewatch ||
+				reviewInput.value.trim().length > 0;
+
+			const resetForm = () => {
+				tmdbId = null;
+				rating = null;
+				liked = false;
+				rewatch = false;
+				q.value = '';
+				reviewInput.value = '';
+				dateInput.value = defaultDate;
+				likeBtn.classList.remove('on');
+				rewatchBtn.classList.remove('on');
+				selected.hidden = true;
+				searchWrap.hidden = false;
+				save.disabled = true;
+				setFill(0);
+				ratingLabel.textContent = 'Not rated';
+				priorHint.hidden = true;
+				priorHint.textContent = '';
+				msg.className = 'save-msg';
+				msg.textContent = '';
+				hideResults();
+			};
+
 			const closeModal = () => {
 				modal.hidden = true;
+				discard.hidden = true;
+				resetForm();
 			};
+			const attemptClose = () => {
+				if (isDirty()) discard.hidden = false;
+				else closeModal();
+			};
+
 			openBtn.addEventListener('click', () => {
 				modal.hidden = false;
 			});
-			close.addEventListener('click', closeModal);
-			cancel.addEventListener('click', closeModal);
-			backdrop.addEventListener('click', closeModal);
+			close.addEventListener('click', attemptClose);
+			cancel.addEventListener('click', attemptClose);
+			backdrop.addEventListener('click', attemptClose);
+			discardKeep.addEventListener('click', () => {
+				discard.hidden = true;
+			});
+			discardConfirm.addEventListener('click', closeModal);
 			document.addEventListener('keydown', (e) => {
-				if (e.key === 'Escape' && !modal.hidden) closeModal();
+				if (e.key !== 'Escape' || modal.hidden) return;
+				if (!discard.hidden) discard.hidden = true;
+				else attemptClose();
 			});
 
 			save.addEventListener('click', async () => {

@@ -341,6 +341,49 @@ export async function listLogsByMovie(movieId: number): Promise<MovieLog[]> {
 	return (data ?? []) as MovieLog[];
 }
 
+/**
+ * Prior-watch summary for a TMDB id, used by the diary composer to auto-suggest
+ * a rewatch and pre-fill the previous rating/like when logging a film you've
+ * already seen. `watched` is true when there's any diary log OR a film-level
+ * `watched` row (imported films that never got a dated diary entry). The rating
+ * and liked values come from the most recent diary log, falling back to the
+ * film-level row. Returns the not-watched default for films not in the cache.
+ */
+export interface PriorWatch {
+	watched: boolean;
+	logCount: number;
+	rating: number | null;
+	liked: boolean;
+}
+
+export async function getPriorWatch(tmdbId: number): Promise<PriorWatch> {
+	const NONE: PriorWatch = { watched: false, logCount: 0, rating: null, liked: false };
+
+	const { data: movie, error } = await supabasePublic
+		.from('movies')
+		.select('id, watched(rating, liked, first_watched)')
+		.eq('tmdb_id', tmdbId)
+		.maybeSingle();
+	if (error) throw new Error(`getPriorWatch failed: ${error.message}`);
+	if (!movie) return NONE;
+
+	const row = movie as unknown as {
+		id: number;
+		watched: WatchedActivity[] | WatchedActivity | null;
+	};
+	const filmWatched = Array.isArray(row.watched) ? (row.watched[0] ?? null) : (row.watched ?? null);
+	const logs = await listLogsByMovie(row.id);
+	const mostRecent = logs[0] ?? null;
+
+	if (logs.length === 0 && !filmWatched) return NONE;
+	return {
+		watched: true,
+		logCount: logs.length,
+		rating: mostRecent?.rating ?? filmWatched?.rating ?? null,
+		liked: mostRecent?.liked ?? filmWatched?.liked ?? false,
+	};
+}
+
 /** Film-level "watched" facts (owned by the Letterboxd import), for a film page. */
 export interface WatchedActivity {
 	rating: number | null;
