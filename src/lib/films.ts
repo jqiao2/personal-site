@@ -361,6 +361,8 @@ export interface FilmByTmdb {
 		genres: string[];
 		directors: string[];
 		actors: string[];
+		languages: string[];
+		countries: string[];
 	};
 	/** Null when the film is cached but not (yet) marked watched. */
 	watched: WatchedActivity | null;
@@ -376,7 +378,7 @@ export interface FilmByTmdb {
  */
 export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
 	const BASE = 'id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime';
-	const withFacts = `${BASE}, genres, directors, actors, watched(rating, liked, first_watched)`;
+	const withFacts = `${BASE}, genres, directors, actors, languages, countries, watched(rating, liked, first_watched)`;
 	const baseOnly = `${BASE}, watched(rating, liked, first_watched)`;
 
 	let { data, error } = await supabasePublic
@@ -394,18 +396,27 @@ export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null
 	if (error) throw new Error(`getFilmByTmdbId failed: ${error.message}`);
 	if (!data) return null;
 
-	const { watched, genres, directors, actors, ...rest } = data as unknown as Omit<
+	const { watched, genres, directors, actors, languages, countries, ...rest } = data as unknown as Omit<
 		FilmByTmdb['movie'],
-		'genres' | 'directors' | 'actors'
+		'genres' | 'directors' | 'actors' | 'languages' | 'countries'
 	> & {
 		genres?: string[] | null;
 		directors?: string[] | null;
 		actors?: string[] | null;
+		languages?: string[] | null;
+		countries?: string[] | null;
 		watched: WatchedActivity[] | WatchedActivity | null;
 	};
 	const w = Array.isArray(watched) ? (watched[0] ?? null) : (watched ?? null);
 	return {
-		movie: { ...rest, genres: genres ?? [], directors: directors ?? [], actors: actors ?? [] },
+		movie: {
+			...rest,
+			genres: genres ?? [],
+			directors: directors ?? [],
+			actors: actors ?? [],
+			languages: languages ?? [],
+			countries: countries ?? [],
+		},
 		watched: w,
 	};
 }

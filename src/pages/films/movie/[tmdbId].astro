@@ -22,12 +22,17 @@ const isOwner = await requireOwner(Astro.cookies);
 // this is empty and the reviews section says so.
 const movieLogs = await listLogsByMovie(movie.id);
 
-// Director / cast / genres come from our cache row (migration 0008 backfill),
-// so the page renders without a live TMDB call.
+// Director / cast / genres / language / country come from our cache row
+// (migration 0008 backfill), so the page renders without a live TMDB call.
 const directors = movie.directors;
 const cast = movie.actors.slice(0, 5);
 const genres = movie.genres;
 const runtime = movie.runtime;
+// Primary language + country for the meta row (first entry; films can list several).
+const country = movie.countries[0] ?? null;
+const language = movie.languages[0] ?? null;
+// The runtime · country · language row, with only the facts we actually have.
+const metaItems = [formatRuntime(runtime), country, language].filter(Boolean) as string[];
 
 const backdrop = imageUrl(movie.backdrop_path, 'w780');
 const poster = imageUrl(movie.poster_path, 'w342');
@@ -141,9 +146,14 @@ const yourWatched = watched?.first_watched
 							</div>
 						)}
 
-						{formatRuntime(runtime) && (
+						{metaItems.length > 0 && (
 							<div class="meta">
-								<span class="meta__dim">{formatRuntime(runtime)}</span>
+								{metaItems.map((item, i) => (
+									<>
+										{i > 0 && <span class="meta__dot">·</span>}
+										<span class="meta__dim">{item}</span>
+									</>
+								))}
 							</div>
 						)}
 
@@ -489,6 +499,10 @@ const yourWatched = watched?.first_watched
 				flex-wrap: wrap;
 			}
 			.meta__dim {
+				font-size: 12px;
+				color: #8a6f63;
+			}
+			.meta__dot {
 				font-size: 12px;
 				color: #8a6f63;
 			}
