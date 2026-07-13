@@ -50,6 +50,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			rewatched: Boolean(body.rewatched),
 			liked: Boolean(body.liked),
 			tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
+			medium: asText(body.medium),
+			venue: asText(body.venue),
+			format: asText(body.format),
 		});
 		return json(result, 201);
 	} catch (e) {

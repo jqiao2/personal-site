@@ -1,0 +1,376 @@
+---
+import FilmLayout from '../../../layouts/FilmLayout.astro';
+import { getDiaryEntry } from '../../../lib/films';
+import { imageUrl } from '../../../lib/tmdb';
+import { formatWatchedDate, mediumLabel } from '../../../lib/format';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const id = Number(Astro.params.id);
+const entry = Number.isInteger(id) ? await getDiaryEntry(id) : null;
+
+if (!entry) {
+	return new Response('Diary entry not found', { status: 404 });
+}
+
+function starText(r: number | null): string {
+	if (r == null) return '';
+	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+}
+
+const { movie } = entry;
+const poster = imageUrl(movie.poster_path, 'w342');
+const watched =
+	formatWatchedDate(entry.watched_date) ?? formatWatchedDate(entry.created_at.slice(0, 10));
+const medium = mediumLabel(entry.medium);
+const venue = entry.theater
+	? [entry.theater.name, entry.theater.city].filter(Boolean).join(', ')
+	: null;
+const inTheater = entry.medium === 'theater';
+const filmHref = `/films/movie/${movie.tmdb_id}`;
+---
+
+<FilmLayout title={`${movie.title} — diary entry`}>
+	<div class="page">
+		<div class="wrap">
+			<header class="topbar">
+				<a class="back" href="/films/diary">
+					<span class="back__arrow">←</span><span>Film diary</span>
+				</a>
+				<span class="topbar__tag">Diary entry</span>
+			</header>
+
+			<div class="entry">
+				<!-- poster sidebar -->
+				<div class="side">
+					<a class="poster" href={filmHref}>
+						{poster && <img src={poster} alt={`${movie.title} poster`} />}
+						<div class="poster__title">
+							{movie.title}
+							{movie.release_year && <span class="poster__year">{movie.release_year}</span>}
+						</div>
+					</a>
+
+					{medium && (
+						<div class="how">
+							<div class="how__label">Medium</div>
+							<div class="how__medium">{medium}</div>
+							{inTheater && (venue || entry.format) && (
+								<div class="how__theater">
+									{venue && (
+										<div>
+											<div class="how__sub">Venue</div>
+											<div class="how__venue">{venue}</div>
+										</div>
+									)}
+									{entry.format && (
+										<div>
+											<div class="how__sub">Format</div>
+											<span class="how__format">{entry.format}</span>
+										</div>
+									)}
+								</div>
+							)}
+						</div>
+					)}
+				</div>
+
+				<!-- details -->
+				<div class="details">
+					{watched && <div class="watched">Watched {watched}</div>}
+					<a class="titlelink" href={filmHref}>
+						<h1>
+							{movie.title}
+							{movie.release_year && <span class="year">{movie.release_year}</span>}
+						</h1>
+					</a>
+					{movie.directors.length > 0 && (
+						<div class="director">
+							Directed by <span class="director__name">{movie.directors.join(', ')}</span>
+						</div>
+					)}
+
+					<div class="flags">
+						{entry.rating != null && <span class="stars">{starText(entry.rating)}</span>}
+						{entry.liked && (
+							<span class="flag"><span class="flag__icon">♥</span> Liked</span>
+						)}
+						{entry.rewatched && (
+							<span class="flag"><span class="flag__icon">↻</span> Rewatch</span>
+						)}
+					</div>
+
+					{entry.review_text && (
+						<div class="review">
+							<div class="review__label">Review</div>
+							<p class="review__body">{entry.review_text}</p>
+						</div>
+					)}
+
+					{entry.tags.length > 0 && (
+						<div class="tags">
+							{entry.tags.map((t) => (
+								<span class="tag">{t}</span>
+							))}
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<style>
+		.page {
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 90px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 760px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 40px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+
+		.entry {
+			display: grid;
+			grid-template-columns: 150px 1fr;
+			gap: 34px;
+			align-items: start;
+		}
+		.side {
+			display: flex;
+			flex-direction: column;
+			gap: 16px;
+		}
+		.poster {
+			display: block;
+			position: relative;
+			aspect-ratio: 2 / 3;
+			border-radius: 7px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+			border: 1px solid #4a2529;
+			box-shadow: 0 20px 40px -14px rgba(0, 0, 0, 0.55);
+		}
+		.poster:hover {
+			border-color: #d9b45a;
+		}
+		.poster img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.poster__title {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			align-items: flex-end;
+			padding: 12px;
+			font-family: 'Newsreader', serif;
+			font-size: 15px;
+			color: #f2e5cd;
+			line-height: 1.2;
+		}
+		/* Hidden when a real poster image is present. */
+		.poster img ~ .poster__title {
+			display: none;
+		}
+		.poster__year {
+			color: #b0917f;
+			font-style: italic;
+			font-size: 13px;
+			margin-left: 4px;
+		}
+
+		.how {
+			background: #2a1214;
+			border: 1px solid #4a2529;
+			border-radius: 10px;
+			padding: 15px 15px 16px;
+		}
+		.how__label,
+		.how__sub {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+		}
+		.how__label {
+			margin-bottom: 12px;
+		}
+		.how__medium {
+			font-family: 'Newsreader', serif;
+			font-size: 19px;
+			color: #f4e8d1;
+			line-height: 1.1;
+		}
+		.how__theater {
+			margin-top: 12px;
+			padding-top: 12px;
+			border-top: 1px solid #402226;
+			display: flex;
+			flex-direction: column;
+			gap: 12px;
+		}
+		.how__sub {
+			letter-spacing: 1px;
+			margin-bottom: 3px;
+		}
+		.how__venue {
+			font-size: 13px;
+			color: #e9d9c4;
+			line-height: 1.35;
+		}
+		.how__format {
+			display: inline-block;
+			font-size: 11px;
+			font-weight: 700;
+			letter-spacing: 0.5px;
+			color: #ddc9b4;
+			border: 1.5px solid #6b4a42;
+			border-radius: 3px;
+			padding: 2px 8px;
+			margin-top: 2px;
+		}
+
+		.watched {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 15px;
+			color: #c2a99a;
+			margin-bottom: 6px;
+		}
+		.titlelink {
+			color: inherit;
+		}
+		.titlelink:hover h1 {
+			color: #f0d488;
+		}
+		h1 {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 40px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1.04;
+			margin: 0;
+		}
+		.year {
+			color: #a2857a;
+			font-style: italic;
+			font-weight: 400;
+			font-size: 28px;
+			margin-left: 6px;
+		}
+		.director {
+			font-size: 14px;
+			color: #c2a99a;
+			margin-top: 8px;
+		}
+		.director__name {
+			color: #f2e5cd;
+			font-weight: 600;
+		}
+
+		.flags {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			margin-top: 18px;
+			flex-wrap: wrap;
+		}
+		.stars {
+			color: #d9b45a;
+			font-size: 20px;
+			letter-spacing: 2px;
+		}
+		.flag {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			font-size: 12px;
+			color: #e9d9c4;
+		}
+		.flag__icon {
+			color: #d9b45a;
+			font-size: 15px;
+		}
+
+		.review {
+			margin-top: 24px;
+		}
+		.review__label {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 18px;
+			color: #ecdcbd;
+			padding-bottom: 10px;
+			border-bottom: 1px solid #402226;
+			margin-bottom: 16px;
+		}
+		.review__body {
+			font-family: 'Newsreader', serif;
+			font-size: 18px;
+			color: #e6d8c3;
+			line-height: 1.7;
+			font-style: italic;
+			margin: 0;
+			white-space: pre-wrap;
+		}
+
+		.tags {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+			margin-top: 22px;
+		}
+		.tag {
+			font-size: 12px;
+			color: #ddc9b4;
+			border: 1px solid #4a2529;
+			border-radius: 20px;
+			padding: 5px 13px;
+			background: #241012;
+		}
+
+		@media (max-width: 640px) {
+			.entry {
+				grid-template-columns: 110px 1fr;
+				gap: 20px;
+			}
+			h1 {
+				font-size: 32px;
+			}
+			.year {
+				font-size: 22px;
+			}
+		}
+	</style>
+</FilmLayout>

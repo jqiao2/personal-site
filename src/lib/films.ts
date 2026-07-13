@@ -110,6 +110,12 @@ export interface CreateLogInput {
 	rewatched?: boolean;
 	liked?: boolean;
 	tags?: string[];
+	/** How it was watched: 'theater' | 'tv' | 'computer' | 'plane' | free text. */
+	medium?: string | null;
+	/** Theater as a single "Name, City" string (theater medium only). */
+	venue?: string | null;
+	/** Presentation format name, e.g. "IMAX 70mm" (theater medium only). */
+	format?: string | null;
 }
 
 /** Upsert the film-level "watched" record (mark the movie seen). Decision A: does
@@ -143,8 +149,45 @@ function hasDiaryContent(input: CreateLogInput): boolean {
 		input.liked === true ||
 		input.rewatched === true ||
 		(typeof input.reviewText === 'string' && input.reviewText.trim().length > 0) ||
+		(typeof input.medium === 'string' && input.medium.trim().length > 0) ||
 		(Array.isArray(input.tags) && input.tags.some((t) => t.trim().length > 0))
 	);
+}
+
+/** Split a "Name, City" venue string into its parts (city = text after the last comma). */
+export function parseVenue(venue: string): { name: string; city: string | null } {
+	const s = venue.trim();
+	const i = s.lastIndexOf(',');
+	if (i === -1) return { name: s, city: null };
+	const name = s.slice(0, i).trim();
+	const city = s.slice(i + 1).trim() || null;
+	return { name: name || s, city };
+}
+
+/** Upsert a theater by (name, city) and return its id. */
+async function resolveTheaterId(venue: string): Promise<number | null> {
+	const { name, city } = parseVenue(venue);
+	if (!name) return null;
+	const { data, error } = await supabaseAdmin
+		.from('theaters')
+		.upsert({ name, city }, { onConflict: 'name,city' })
+		.select('id')
+		.single();
+	if (error) throw new Error(`resolve theater failed: ${error.message}`);
+	return (data as { id: number }).id;
+}
+
+/** Upsert a format by name and return its id. */
+async function resolveFormatId(format: string): Promise<number | null> {
+	const name = format.trim();
+	if (!name) return null;
+	const { data, error } = await supabaseAdmin
+		.from('formats')
+		.upsert({ name }, { onConflict: 'name' })
+		.select('id')
+		.single();
+	if (error) throw new Error(`resolve format failed: ${error.message}`);
+	return (data as { id: number }).id;
 }
 
 export interface LogFilmResult {
@@ -168,6 +211,12 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 		return { movieId: movie.id, watchedOnly: true, logId: null };
 	}
 
+	// Resolve how it was watched. theater/format only apply to theater viewings.
+	const medium = input.medium?.trim().toLowerCase() || null;
+	const inTheater = medium === 'theater';
+	const theaterId = inTheater && input.venue?.trim() ? await resolveTheaterId(input.venue) : null;
+	const formatId = inTheater && input.format?.trim() ? await resolveFormatId(input.format) : null;
+
 	const today = new Date().toISOString().slice(0, 10);
 	const { data: log, error } = await supabaseAdmin
 		.from('logs')
@@ -179,6 +228,9 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 			review_text: input.reviewText ?? null,
 			rewatched: input.rewatched ?? false,
 			liked: input.liked ?? false,
+			medium,
+			theater_id: theaterId,
+			format_id: formatId,
 		})
 		.select('id')
 		.single();
@@ -321,6 +373,139 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		liked: row.liked,
 		created_at: row.created_at,
 		movie: row.movies,
+		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
+	};
+}
+
+/**
+ * Theater names as "Name, City" strings, for the composer's venue autocomplete.
+ * Returns [] (not an error) before migration 0010 creates the table.
+ */
+export async function listTheaterNames(): Promise<string[]> {
+	const { data, error } = await supabasePublic
+		.from('theaters')
+		.select('name, city')
+		.order('name', { ascending: true });
+	if (error) {
+		if (isMissingCreditColumn(error)) return [];
+		// Missing table (relation does not exist) also degrades to empty.
+		if (error.code === '42P01' || (error.message ?? '').includes('does not exist')) return [];
+		throw new Error(`listTheaterNames failed: ${error.message}`);
+	}
+	return ((data ?? []) as { name: string; city: string | null }[]).map((t) =>
+		[t.name, t.city].filter(Boolean).join(', '),
+	);
+}
+
+/** A single diary entry with everything the Diary Entry page renders. */
+export interface DiaryEntry {
+	id: number;
+	watched_date: string | null;
+	rating: number | null;
+	review_text: string | null;
+	rewatched: boolean;
+	liked: boolean;
+	created_at: string;
+	/** How it was watched: 'theater' | 'tv' | 'computer' | 'plane' | free text | null. */
+	medium: string | null;
+	/** Set only for theater viewings. */
+	theater: { name: string; city: string | null } | null;
+	/** Presentation format name (e.g. "IMAX 70mm"); theater viewings only. */
+	format: string | null;
+	movie: {
+		tmdb_id: number;
+		title: string;
+		release_year: number | null;
+		poster_path: string | null;
+		backdrop_path: string | null;
+		directors: string[];
+	};
+	tags: string[];
+}
+
+/**
+ * One diary entry by log id, with its movie, director, medium, theater and format
+ * — the read model for /films/diary/[id]. Steps down gracefully if migration 0010
+ * (medium/theater/format) or 0008 (directors) isn't applied yet, so the page keeps
+ * rendering with whatever columns exist. Null if the log doesn't exist / is deleted.
+ */
+export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
+	const BASE =
+		'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
+		'log_tags(tags(name))';
+	const MOVIE_FULL = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path, directors)';
+	const MOVIE_BASE = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path)';
+	const HOW = 'medium, theaters(name, city), formats(name)';
+	const tiers = [
+		`${BASE}, ${HOW}, ${MOVIE_FULL}`, // 0010 + 0008
+		`${BASE}, ${MOVIE_FULL}`, // 0008 only (no medium/theater/format)
+		`${BASE}, ${MOVIE_BASE}`, // pre-0008
+	];
+
+	let data: unknown = null;
+	let lastError: { code?: string; message?: string } | null = null;
+	for (const cols of tiers) {
+		const res = await supabasePublic
+			.from('logs')
+			.select(cols)
+			.eq('id', id)
+			.is('deleted_at', null)
+			.maybeSingle();
+		if (!res.error) {
+			data = res.data;
+			lastError = null;
+			break;
+		}
+		lastError = res.error;
+		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
+	}
+	if (lastError) throw new Error(`getDiaryEntry failed: ${lastError.message}`);
+	if (!data) return null;
+
+	const row = data as {
+		id: number;
+		watched_date: string | null;
+		rating: number | null;
+		review_text: string | null;
+		rewatched: boolean;
+		liked: boolean;
+		created_at: string;
+		medium?: string | null;
+		theaters?: { name: string; city: string | null } | { name: string; city: string | null }[] | null;
+		formats?: { name: string } | { name: string }[] | null;
+		movies: {
+			tmdb_id: number;
+			title: string;
+			release_year: number | null;
+			poster_path: string | null;
+			backdrop_path: string | null;
+			directors?: string[] | null;
+		};
+		log_tags: { tags: { name: string } }[];
+	};
+	const one = <T>(v: T | T[] | null | undefined): T | null =>
+		Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+	const theater = one(row.theaters);
+	const format = one(row.formats);
+	return {
+		id: row.id,
+		watched_date: row.watched_date,
+		rating: row.rating,
+		review_text: row.review_text,
+		rewatched: row.rewatched,
+		liked: row.liked,
+		created_at: row.created_at,
+		medium: row.medium ?? null,
+		theater: theater ? { name: theater.name, city: theater.city } : null,
+		format: format ? format.name : null,
+		movie: {
+			tmdb_id: row.movies.tmdb_id,
+			title: row.movies.title,
+			release_year: row.movies.release_year,
+			poster_path: row.movies.poster_path,
+			backdrop_path: row.movies.backdrop_path,
+			directors: row.movies.directors ?? [],
+		},
 		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
 	};
 }

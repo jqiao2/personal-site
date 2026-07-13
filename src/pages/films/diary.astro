@@ -1,6 +1,6 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
-import { listLogs, getFilmLogStats } from '../../lib/films';
+import { listLogs, getFilmLogStats, listTheaterNames } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
 
@@ -12,6 +12,21 @@ const [logs, stats, isOwner] = await Promise.all([
 	getFilmLogStats(),
 	requireOwner(Astro.cookies),
 ]);
+
+// Composer autocomplete (owner only): known theaters + canonical formats.
+const venueOptions = isOwner ? await listTheaterNames() : [];
+const formatOptions = [
+	'Digital',
+	'35mm',
+	'70mm',
+	'IMAX',
+	'IMAX 70mm',
+	'IMAX 3D',
+	'3D',
+	'Dolby Cinema',
+	'VistaVision',
+	'DCP',
+];
 
 function parseDate(date: string | null): Date | null {
 	if (!date) return null;
@@ -25,6 +40,7 @@ function starText(r: number | null): string {
 }
 
 interface Row {
+	logId: number;
 	day: number;
 	weekday: string;
 	title: string;
@@ -51,6 +67,7 @@ for (const log of logs) {
 		months.push({ label, items });
 	}
 	byLabel.get(label)!.push({
+		logId: log.id,
 		day: dt ? dt.getDate() : 0,
 		weekday: dt ? dt.toLocaleDateString('en-US', { weekday: 'short' }) : '',
 		title: log.title,
@@ -103,7 +120,7 @@ const today = new Date().toISOString().slice(0, 10);
 					<section class="month">
 						<div class="month__label">{m.label}</div>
 						{m.items.map((f) => (
-							<a class="row" href={`/films/movie/${f.tmdbId}`}>
+							<a class="row" href={`/films/diary/${f.logId}`}>
 								<div class="row__date">
 									<div class="row__day">{f.day || '·'}</div>
 									<div class="row__wd">{f.weekday}</div>
@@ -193,6 +210,41 @@ const today = new Date().toISOString().slice(0, 10);
 					<div class="toggles">
 						<button type="button" class="toggle" id="c-like">♥ Like</button>
 						<button type="button" class="toggle" id="c-rewatch">↻ Rewatch</button>
+					</div>
+
+					<div>
+						<label class="lbl">Medium</label>
+						<div class="mediums" id="c-mediums">
+							<button type="button" class="toggle" data-medium="theater">Theater</button>
+							<button type="button" class="toggle" data-medium="tv">TV</button>
+							<button type="button" class="toggle" data-medium="computer">Computer</button>
+							<button type="button" class="toggle" data-medium="plane">Airplane</button>
+							<button type="button" class="toggle" data-medium="other">Other…</button>
+						</div>
+						<div class="theater-fields" id="c-theater-fields" hidden>
+							<div>
+								<label class="lbl" for="c-venue">Theater</label>
+								<input type="text" id="c-venue" list="venue-options" placeholder="e.g. Metrograph, NYC" autocomplete="off" />
+								<datalist id="venue-options">
+									{venueOptions.map((v) => (
+										<option value={v}></option>
+									))}
+								</datalist>
+							</div>
+							<div>
+								<label class="lbl" for="c-format">Format</label>
+								<input type="text" id="c-format" list="format-options" placeholder="e.g. 35mm, IMAX, 70mm" autocomplete="off" />
+								<datalist id="format-options">
+									{formatOptions.map((f) => (
+										<option value={f}></option>
+									))}
+								</datalist>
+							</div>
+						</div>
+						<div class="other-field" id="c-other-field" hidden>
+							<label class="lbl" for="c-other">Other medium</label>
+							<input type="text" id="c-other" placeholder="e.g. projector, phone, drive-in…" autocomplete="off" />
+						</div>
 					</div>
 
 					<div>
@@ -735,6 +787,42 @@ const today = new Date().toISOString().slice(0, 10);
 			color: #2a1214;
 			border-color: #d9b45a;
 		}
+		.mediums {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.theater-fields {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			margin-top: 12px;
+		}
+		.theater-fields[hidden],
+		.other-field[hidden] {
+			display: none;
+		}
+		.other-field {
+			margin-top: 12px;
+		}
+		#c-venue,
+		#c-format,
+		#c-other {
+			width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			color: #f4e8d1;
+			font-family: 'Archivo', sans-serif;
+			font-size: 14px;
+			padding: 11px 13px;
+			outline: none;
+		}
+		#c-venue:focus,
+		#c-format:focus,
+		#c-other:focus {
+			border-color: #d9b45a;
+		}
 		.modal__foot {
 			display: flex;
 			align-items: center;
@@ -831,12 +919,22 @@ const today = new Date().toISOString().slice(0, 10);
 			const discard = $<HTMLDivElement>('discard');
 			const discardKeep = $('discard-keep');
 			const discardConfirm = $('discard-confirm');
+			const mediums = $<HTMLDivElement>('c-mediums');
+			const theaterFields = $<HTMLDivElement>('c-theater-fields');
+			const otherField = $<HTMLDivElement>('c-other-field');
+			const venueInput = $<HTMLInputElement>('c-venue');
+			const formatInput = $<HTMLInputElement>('c-format');
+			const otherInput = $<HTMLInputElement>('c-other');
+			const mediumBtns = Array.from(
+				mediums.querySelectorAll<HTMLButtonElement>('button[data-medium]'),
+			);
 			const defaultDate = dateInput.value;
 
 			let tmdbId: number | null = null;
 			let rating: number | null = null;
 			let liked = false;
 			let rewatch = false;
+			let medium: string | null = null; // 'theater'|'tv'|'computer'|'plane'|'other'|null
 
 			// --- TMDB search (debounced) ---
 			let timer: number | undefined;
@@ -989,6 +1087,20 @@ const today = new Date().toISOString().slice(0, 10);
 				rewatchBtn.classList.toggle('on', rewatch);
 			});
 
+			// --- Medium picker (single-select; click active to deselect) ---
+			function renderMedium() {
+				for (const b of mediumBtns) b.classList.toggle('on', b.dataset.medium === medium);
+				theaterFields.hidden = medium !== 'theater';
+				otherField.hidden = medium !== 'other';
+			}
+			for (const b of mediumBtns) {
+				b.addEventListener('click', () => {
+					const m = b.dataset.medium ?? null;
+					medium = medium === m ? null : m;
+					renderMedium();
+				});
+			}
+
 			// The film selection is intentionally excluded from the dirty check —
 			// picking a film alone isn't "work worth confirming"; a rating, like,
 			// rewatch flag, or review text is.
@@ -996,6 +1108,7 @@ const today = new Date().toISOString().slice(0, 10);
 				(rating ?? 0) > 0 ||
 				liked ||
 				rewatch ||
+				medium != null ||
 				reviewInput.value.trim().length > 0;
 
 			const resetForm = () => {
@@ -1003,11 +1116,16 @@ const today = new Date().toISOString().slice(0, 10);
 				rating = null;
 				liked = false;
 				rewatch = false;
+				medium = null;
 				q.value = '';
 				reviewInput.value = '';
+				venueInput.value = '';
+				formatInput.value = '';
+				otherInput.value = '';
 				dateInput.value = defaultDate;
 				likeBtn.classList.remove('on');
 				rewatchBtn.classList.remove('on');
+				renderMedium();
 				selected.hidden = true;
 				searchWrap.hidden = false;
 				save.disabled = true;
@@ -1052,6 +1170,9 @@ const today = new Date().toISOString().slice(0, 10);
 				msg.className = 'save-msg';
 				msg.textContent = 'Saving…';
 				try {
+					// medium: 'other' sends the free-text value; theater carries venue+format.
+					const outMedium =
+						medium === 'other' ? otherInput.value.trim() || null : medium;
 					const res = await fetch('/api/films/logs', {
 						method: 'POST',
 						headers: { 'content-type': 'application/json' },
@@ -1062,6 +1183,9 @@ const today = new Date().toISOString().slice(0, 10);
 							reviewText: reviewInput.value,
 							rewatched: rewatch,
 							liked,
+							medium: outMedium,
+							venue: medium === 'theater' ? venueInput.value.trim() || null : null,
+							format: medium === 'theater' ? formatInput.value.trim() || null : null,
 						}),
 					});
 					if (res.status === 401) {

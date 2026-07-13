@@ -85,15 +85,27 @@ Reads are public; writes require the owner cookie (log in first).
   "reviewText": "Still holds up.",
   "rewatched": true,
   "liked": true,
-  "tags": ["sci-fi", "rewatch-night"]
+  "tags": ["sci-fi", "rewatch-night"],
+  "medium": "theater",
+  "venue": "AMC Lincoln Square 13, New York, NY",
+  "format": "IMAX 70mm"
 }
 ```
 
 Only `tmdbId` is required. `rating` is 0.5–5.0 in half-steps. Logging a movie
 auto-caches its TMDB metadata into the `movies` table and marks it watched (a
-row in `watched`). A **bare `{tmdbId}`** with no rating/like/rewatch/review/tags
+row in `watched`). A **bare `{tmdbId}`** with no rating/like/rewatch/review/tags/medium
 only marks it watched — no diary log is created. The response is
 `{ watchedOnly, logId }` (`logId` is null when only watched was recorded).
+
+**How it was watched (migration 0010):** `medium` is one of `theater`, `tv`,
+`computer`, `plane`, `bike`, or any free text (the composer's "Other…"). `venue`
+and `format` apply **only** when `medium` is `theater` — `venue` is a single
+"Name, City" string upserted into the `theaters` lookup (city = text after the
+last comma); `format` upserts into `formats` (e.g. `IMAX 70mm`). Non-theater
+viewings leave `theater_id`/`format_id` null. Historical medium/theater/format
+lived in diary tags and was migrated out by `scripts/backfill-medium.mjs`. The
+diary-entry page (`/films/diary/[id]`) renders these as the "How I watched" card.
 
 ## Notes / gotchas
 
