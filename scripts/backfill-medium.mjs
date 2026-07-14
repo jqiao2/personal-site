@@ -134,8 +134,10 @@ async function main() {
 				usedTheaters.set(venueKey(venue), venue);
 			}
 			const fmts = formatTags.map((t) => FORMATS[t.name]);
-			format = canonFormat(fmts);
-			if (format) usedFormats.add(format);
+			// A theater screening with no special format tag defaults to "Digital"
+			// (a standard digital projection).
+			format = canonFormat(fmts) ?? 'Digital';
+			usedFormats.add(format);
 			// consume the "theater" tag + venue tags + format tags
 			for (const t of tagEntries) {
 				if (t.name === 'theater' || THEATERS[t.name] || FORMATS[t.name]) consume.push(t.id);

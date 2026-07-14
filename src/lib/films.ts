@@ -211,11 +211,13 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 		return { movieId: movie.id, watchedOnly: true, logId: null };
 	}
 
-	// Resolve how it was watched. theater/format only apply to theater viewings.
+	// Resolve how it was watched. theater/format only apply to theater viewings;
+	// a theater screening with no format given defaults to "Digital".
 	const medium = input.medium?.trim().toLowerCase() || null;
 	const inTheater = medium === 'theater';
 	const theaterId = inTheater && input.venue?.trim() ? await resolveTheaterId(input.venue) : null;
-	const formatId = inTheater && input.format?.trim() ? await resolveFormatId(input.format) : null;
+	const formatName = inTheater ? input.format?.trim() || 'Digital' : null;
+	const formatId = formatName ? await resolveFormatId(formatName) : null;
 
 	const today = new Date().toISOString().slice(0, 10);
 	const { data: log, error } = await supabaseAdmin
