@@ -970,5 +970,20 @@ const yourWatched = watched?.first_watched
 				});
 			}
 		</script>
+		<script>
+			// "Back" links go to the actual previous page when you arrived from within
+			// the site; the href stays a fallback for direct loads / new tabs / external
+			// referrers (where history.back() would leave the site).
+			for (const a of document.querySelectorAll('a.back')) {
+				a.addEventListener('click', (e) => {
+					const ref = document.referrer;
+					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+					if (history.length > 1 && sameOrigin) {
+						e.preventDefault();
+						history.back();
+					}
+				});
+			}
+		</script>
 	</body>
 </html>
