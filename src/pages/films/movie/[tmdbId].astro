@@ -66,11 +66,20 @@ function logDate(l: { watched_date: string | null; created_at: string }): string
 	);
 }
 
-// "Your activity" reflects the FILM (from `watched`), not any single log.
-const yourRating = starText(watched?.rating ?? null);
+// "Your activity" reflects your current relationship to the film: the most recent
+// diary entry's rating/like (composer logs intentionally don't touch the
+// film-level `watched` row — see logFilm), falling back to the film-level values
+// from the Letterboxd import when there are no diary logs. Watched date stays the
+// first-watched stat, falling back to the latest log's date.
+const latestLog = movieLogs[0] ?? null;
+const activityRating = latestLog?.rating ?? watched?.rating ?? null;
+const activityLiked = latestLog?.liked ?? watched?.liked ?? false;
+const yourRating = starText(activityRating);
 const yourWatched = watched?.first_watched
 	? formatWatchedDate(watched.first_watched.slice(0, 10))
-	: null;
+	: latestLog
+		? logDate(latestLog)
+		: null;
 ---
 
 <html lang="en">
@@ -125,7 +134,7 @@ const yourWatched = watched?.first_watched
 							</div>
 							<div class="activity__row">
 								<span class="activity__key">Liked</span>
-								<span class="stars">{watched?.liked ? '♥' : '—'}</span>
+								<span class="stars">{activityLiked ? '♥' : '—'}</span>
 							</div>
 							<div class="activity__row">
 								<span class="activity__key">Watched</span>

@@ -107,7 +107,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 						</div>
 						<div class="grid4">
 							{recent.map((f) => (
-								<a class="tile-wrap" href={`/films/movie/${f.tmdb_id}`}>
+								<a class="tile-wrap" href={`/films/diary/${f.id}`}>
 									<div class="tile">
 										{imageUrl(f.poster_path, 'w342') && (
 											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
