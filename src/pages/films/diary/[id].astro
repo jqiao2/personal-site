@@ -1,6 +1,7 @@
 ---
 import FilmLayout from '../../../layouts/FilmLayout.astro';
-import { getDiaryEntry } from '../../../lib/films';
+import { getDiaryEntry, listTheaterNames, listTags } from '../../../lib/films';
+import { requireOwner } from '../../../lib/auth';
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, mediumLabel } from '../../../lib/format';
 
@@ -8,7 +9,10 @@ import { formatWatchedDate, mediumLabel } from '../../../lib/format';
 export const prerender = false;
 
 const id = Number(Astro.params.id);
-const entry = Number.isInteger(id) ? await getDiaryEntry(id) : null;
+const [entry, isOwner] = await Promise.all([
+	Number.isInteger(id) ? getDiaryEntry(id) : Promise.resolve(null),
+	requireOwner(Astro.cookies),
+]);
 
 if (!entry) {
 	return new Response('Diary entry not found', { status: 404 });
@@ -21,6 +25,7 @@ function starText(r: number | null): string {
 
 const { movie } = entry;
 const poster = imageUrl(movie.poster_path, 'w342');
+const posterThumb = imageUrl(movie.poster_path, 'w92');
 const watched =
 	formatWatchedDate(entry.watched_date) ?? formatWatchedDate(entry.created_at.slice(0, 10));
 const medium = mediumLabel(entry.medium);
@@ -29,6 +34,47 @@ const venue = entry.theater
 	: null;
 const inTheater = entry.medium === 'theater';
 const filmHref = `/films/movie/${movie.tmdb_id}`;
+
+// Editor scaffolding (owner only): autocomplete options + the entry's current
+// values, serialized for the client-side editor to seed its form.
+const CANONICAL_MEDIA = ['theater', 'tv', 'computer', 'plane'];
+const [venueOptions, tagOptions] = isOwner
+	? await Promise.all([listTheaterNames(), listTags()])
+	: [[], []];
+const formatOptions = [
+	'Digital',
+	'35mm',
+	'70mm',
+	'IMAX',
+	'IMAX 70mm',
+	'IMAX 3D',
+	'3D',
+	'Dolby Cinema',
+	'VistaVision',
+	'DCP',
+];
+// A stored medium that isn't one of the canonical keys is a free-text "other".
+const mediumKey = entry.medium
+	? CANONICAL_MEDIA.includes(entry.medium)
+		? entry.medium
+		: 'other'
+	: null;
+const editorInitial = {
+	logId: entry.id,
+	tmdbId: movie.tmdb_id,
+	date: entry.watched_date ?? '',
+	rating: entry.rating,
+	liked: entry.liked,
+	rewatch: entry.rewatched,
+	medium: mediumKey,
+	otherMedium: mediumKey === 'other' ? entry.medium : '',
+	venue: venue ?? '',
+	format: entry.format ?? '',
+	review: entry.review_text ?? '',
+	tags: entry.tags,
+};
+// Escape "<" so a review containing "</script>" can't break out of the JSON tag.
+const editorInitialJson = JSON.stringify(editorInitial).replace(/</g, '\\u003c');
 ---
 
 <FilmLayout title={`${movie.title} — diary entry`}>
@@ -78,7 +124,14 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 
 				<!-- details -->
 				<div class="details">
-					{watched && <div class="watched">Watched {watched}</div>}
+					{isOwner ? (
+						<div class="details__top">
+							{watched && <div class="watched">Watched {watched}</div>}
+							<button type="button" class="edit-btn" id="open-editor">Edit entry</button>
+						</div>
+					) : (
+						watched && <div class="watched">Watched {watched}</div>
+					)}
 					<a class="titlelink" href={filmHref}>
 						<h1>
 							{movie.title}
@@ -119,6 +172,132 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 			</div>
 		</div>
 	</div>
+
+	{isOwner && (
+		<div class="modal" id="editor" hidden>
+			<div class="modal__backdrop" id="editor-backdrop"></div>
+			<div class="modal__panel" role="dialog" aria-modal="true" aria-label="Edit entry">
+				<div class="modal__head">
+					<span class="modal__title">Edit entry</span>
+					<button type="button" class="modal__close" id="editor-close" aria-label="Close">✕</button>
+				</div>
+
+				<div class="discard" id="discard" hidden>
+					<div class="discard__box">
+						<div class="discard__title">Discard changes?</div>
+						<div class="discard__msg">You have unsaved edits to this entry.</div>
+						<div class="discard__actions">
+							<button type="button" class="btn-ghost" id="discard-keep">Keep editing</button>
+							<button type="button" class="btn-discard" id="discard-confirm">Discard</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="modal__body">
+					<div class="field-grid">
+						<div>
+							<label class="lbl">Film</label>
+							<div class="selected selected--static">
+								<div class="selected__poster">
+									{posterThumb && <img src={posterThumb} alt="" />}
+								</div>
+								<div class="selected__info">
+									<div class="selected__title">
+										{movie.title}
+										{movie.release_year && (
+											<span class="selected__year">{movie.release_year}</span>
+										)}
+									</div>
+								</div>
+							</div>
+						</div>
+						<div>
+							<label class="lbl" for="e-date">Watched</label>
+							<input type="date" id="e-date" />
+						</div>
+					</div>
+
+					<div>
+						<label class="lbl">Rating</label>
+						<div class="rating-row">
+							<span class="starpicker" id="e-starpicker">
+								<span class="sp-empty">★★★★★</span>
+								<span class="sp-fill" id="e-sp-fill"></span>
+								<span class="sp-hits" id="e-sp-hits"></span>
+							</span>
+							<span class="rating-label" id="e-rating-label">Not rated</span>
+						</div>
+					</div>
+
+					<div class="toggles">
+						<button type="button" class="toggle" id="e-like">♥ Like</button>
+						<button type="button" class="toggle" id="e-rewatch">↻ Rewatch</button>
+					</div>
+
+					<div>
+						<label class="lbl">Medium</label>
+						<div class="mediums" id="e-mediums">
+							<button type="button" class="toggle" data-medium="theater">Theater</button>
+							<button type="button" class="toggle" data-medium="tv">TV</button>
+							<button type="button" class="toggle" data-medium="computer">Computer</button>
+							<button type="button" class="toggle" data-medium="plane">Airplane</button>
+							<button type="button" class="toggle" data-medium="other">Other…</button>
+						</div>
+						<div class="theater-fields" id="e-theater-fields" hidden>
+							<div>
+								<label class="lbl" for="e-venue">Theater</label>
+								<input type="text" id="e-venue" list="e-venue-options" placeholder="e.g. Metrograph, NYC" autocomplete="off" />
+								<datalist id="e-venue-options">
+									{venueOptions.map((v) => (
+										<option value={v}></option>
+									))}
+								</datalist>
+							</div>
+							<div>
+								<label class="lbl" for="e-format">Format</label>
+								<input type="text" id="e-format" list="e-format-options" placeholder="e.g. 35mm, IMAX, 70mm" autocomplete="off" />
+								<datalist id="e-format-options">
+									{formatOptions.map((f) => (
+										<option value={f}></option>
+									))}
+								</datalist>
+							</div>
+						</div>
+						<div class="other-field" id="e-other-field" hidden>
+							<label class="lbl" for="e-other">Other medium</label>
+							<input type="text" id="e-other" placeholder="e.g. projector, phone, drive-in…" autocomplete="off" />
+						</div>
+					</div>
+
+					<div>
+						<label class="lbl" for="e-review">Review</label>
+						<textarea id="e-review" rows="4" placeholder="Add your thoughts…"></textarea>
+					</div>
+
+					<div class="tags-field">
+						<label class="lbl" for="e-tag-input">Tags</label>
+						<input type="text" id="e-tag-input" placeholder="Type a tag, press Enter…" autocomplete="off" />
+						<datalist id="e-tag-options">
+							{tagOptions.map((t) => (
+								<option value={t}></option>
+							))}
+						</datalist>
+						<ul class="tag-suggest" id="e-tag-suggest" hidden></ul>
+						<div class="tag-chips" id="e-tag-chips" hidden></div>
+					</div>
+				</div>
+
+				<div class="modal__foot editor__foot">
+					<button type="button" class="btn-delete" id="editor-delete">Delete entry</button>
+					<div class="editor__foot-right">
+						<span class="save-msg" id="editor-msg"></span>
+						<button type="button" class="btn-save" id="editor-save">Save changes</button>
+					</div>
+				</div>
+			</div>
+		</div>
+		<script type="application/json" id="editor-initial" set:html={editorInitialJson}></script>
+	)}
 
 	<style>
 		.page {
@@ -260,6 +439,32 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 			margin-top: 2px;
 		}
 
+		.details__top {
+			display: flex;
+			align-items: flex-start;
+			justify-content: space-between;
+			gap: 16px;
+			margin-bottom: 6px;
+		}
+		.details__top .watched {
+			margin-bottom: 0;
+		}
+		.edit-btn {
+			flex: none;
+			font-size: 12px;
+			font-weight: 600;
+			color: #ddc9b4;
+			background: transparent;
+			border: 1px solid #4a2529;
+			border-radius: 7px;
+			padding: 7px 14px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.edit-btn:hover {
+			border-color: #d9b45a;
+			color: #f4e8d1;
+		}
 		.watched {
 			font-family: 'Newsreader', serif;
 			font-style: italic;
@@ -360,6 +565,449 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 			background: #241012;
 		}
 
+		/* --- Edit modal --- */
+		.modal {
+			position: fixed;
+			inset: 0;
+			z-index: 50;
+			display: flex;
+			align-items: flex-start;
+			justify-content: center;
+			padding: 56px 24px;
+		}
+		.modal[hidden] {
+			display: none;
+		}
+		.modal__backdrop {
+			position: absolute;
+			inset: 0;
+			background: rgba(10, 4, 5, 0.72);
+			backdrop-filter: blur(3px);
+		}
+		.modal__panel {
+			position: relative;
+			width: 100%;
+			max-width: 560px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 14px;
+			box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+			overflow: hidden;
+		}
+		.modal__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 20px 24px;
+			border-bottom: 1px solid #402226;
+		}
+		.modal__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 22px;
+			color: #f4e8d1;
+		}
+		.modal__close {
+			width: 30px;
+			height: 30px;
+			border: 1px solid #4a2529;
+			background: transparent;
+			color: #c2a99a;
+			border-radius: 7px;
+			cursor: pointer;
+			font-size: 14px;
+			line-height: 1;
+		}
+		.modal__close:hover {
+			background: #402226;
+			color: #f4e8d1;
+		}
+		.modal__body {
+			padding: 22px 24px 26px;
+			display: flex;
+			flex-direction: column;
+			gap: 20px;
+		}
+		.field-grid {
+			display: grid;
+			grid-template-columns: 1fr 150px;
+			gap: 12px;
+			align-items: start;
+		}
+		.lbl {
+			display: block;
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+			margin-bottom: 7px;
+		}
+		#e-date,
+		#e-review {
+			width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			color: #f4e8d1;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		#e-date {
+			padding: 10px 13px;
+			font-size: 13px;
+			color-scheme: dark;
+		}
+		#e-review {
+			padding: 12px 13px;
+			font-family: 'Newsreader', serif;
+			font-size: 14px;
+			color: #f2e5cd;
+			line-height: 1.5;
+			resize: vertical;
+		}
+		#e-date:focus,
+		#e-review:focus {
+			border-color: #d9b45a;
+		}
+		.selected {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 8px 10px;
+		}
+		.selected__poster {
+			width: 38px;
+			height: 57px;
+			flex: none;
+			border-radius: 4px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+			border: 1px solid #4a2529;
+		}
+		.selected__poster img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.selected__info {
+			flex: 1;
+			min-width: 0;
+		}
+		.selected__title {
+			font-family: 'Newsreader', serif;
+			font-size: 16px;
+			color: #f2e5cd;
+			line-height: 1.2;
+		}
+		.selected__year {
+			color: #b0917f;
+			font-style: italic;
+			font-size: 14px;
+		}
+
+		.rating-row {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+		}
+		.starpicker {
+			position: relative;
+			display: inline-block;
+			line-height: 1;
+			font-size: 26px;
+			cursor: pointer;
+			user-select: none;
+		}
+		.sp-empty {
+			color: #4a2529;
+		}
+		.sp-fill {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 0;
+			overflow: hidden;
+			white-space: nowrap;
+			color: #d9b45a;
+			pointer-events: none;
+		}
+		.sp-fill::before {
+			content: '★★★★★';
+		}
+		.sp-hits {
+			position: absolute;
+			inset: 0;
+			display: flex;
+		}
+		.sp-hits :global(span) {
+			flex: 1;
+		}
+		.rating-label {
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.toggles {
+			display: flex;
+			gap: 10px;
+		}
+		.toggle {
+			font-size: 13px;
+			font-weight: 600;
+			border-radius: 20px;
+			padding: 9px 16px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			background: transparent;
+			color: #ddc9b4;
+			border: 1px solid #4a2529;
+		}
+		.toggle.on {
+			background: #d9b45a;
+			color: #2a1214;
+			border-color: #d9b45a;
+		}
+		.mediums {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.theater-fields {
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			gap: 12px;
+			margin-top: 12px;
+		}
+		.theater-fields[hidden],
+		.other-field[hidden] {
+			display: none;
+		}
+		.other-field {
+			margin-top: 12px;
+		}
+		#e-venue,
+		#e-format,
+		#e-other,
+		#e-tag-input {
+			width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			color: #f4e8d1;
+			font-family: 'Archivo', sans-serif;
+			font-size: 14px;
+			padding: 11px 13px;
+			outline: none;
+		}
+		#e-venue:focus,
+		#e-format:focus,
+		#e-other:focus,
+		#e-tag-input:focus {
+			border-color: #d9b45a;
+		}
+
+		/* Tags field: input + autocomplete dropdown (opens upward) + chips */
+		.tags-field {
+			position: relative;
+		}
+		.tag-suggest {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			position: absolute;
+			bottom: 100%;
+			left: 0;
+			right: 0;
+			margin-bottom: 6px;
+			z-index: 10;
+			max-height: 200px;
+			overflow-y: auto;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
+		}
+		.tag-suggest[hidden] {
+			display: none;
+		}
+		.tag-suggest :global(li) {
+			padding: 9px 13px;
+			cursor: pointer;
+			font-size: 14px;
+			color: #f2e5cd;
+			border-bottom: 1px solid #351a1d;
+		}
+		.tag-suggest :global(li:last-child) {
+			border-bottom: none;
+		}
+		.tag-suggest :global(li:hover),
+		.tag-suggest :global(li.active) {
+			background: #331619;
+		}
+		.tag-chips {
+			display: flex;
+			gap: 7px;
+			flex-wrap: wrap;
+			margin-top: 10px;
+		}
+		.tag-chips[hidden] {
+			display: none;
+		}
+		.tag-chips :global(.tag-chip) {
+			display: inline-flex;
+			align-items: center;
+			gap: 7px;
+			font-size: 12px;
+			color: #ddc9b4;
+			border: 1px solid #4a2529;
+			border-radius: 20px;
+			padding: 4px 8px 4px 12px;
+			background: #241012;
+		}
+		.tag-chips :global(.tag-chip button) {
+			background: none;
+			border: none;
+			cursor: pointer;
+			color: #a2857a;
+			font-size: 13px;
+			line-height: 1;
+			padding: 0;
+			font-family: 'Archivo', sans-serif;
+		}
+		.tag-chips :global(.tag-chip button:hover) {
+			color: #f4e8d1;
+		}
+
+		.modal__foot {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 16px 24px;
+			border-top: 1px solid #402226;
+			background: #1f0e10;
+		}
+		.editor__foot {
+			justify-content: space-between;
+		}
+		.editor__foot-right {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+		.save-msg {
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.save-msg.error {
+			color: #e0736f;
+		}
+		.btn-save {
+			font-size: 14px;
+			font-weight: 700;
+			border: none;
+			border-radius: 8px;
+			padding: 10px 22px;
+			font-family: 'Archivo', sans-serif;
+			background: #d9b45a;
+			color: #2a1214;
+			cursor: pointer;
+		}
+		.btn-save:disabled {
+			background: #4a2529;
+			color: #8a6f63;
+			cursor: not-allowed;
+		}
+		.btn-delete {
+			font-size: 14px;
+			font-weight: 600;
+			color: #e89b70;
+			background: transparent;
+			border: 1px solid #6b3a30;
+			border-radius: 8px;
+			padding: 10px 20px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.btn-delete:hover {
+			border-color: #d9865a;
+			background: #331619;
+		}
+
+		/* Discard confirmation overlay (covers the editor panel) */
+		.discard {
+			position: absolute;
+			inset: 0;
+			z-index: 20;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 28px;
+			border-radius: 14px;
+			background: rgba(15, 6, 7, 0.88);
+			backdrop-filter: blur(2px);
+		}
+		.discard[hidden] {
+			display: none;
+		}
+		.discard__box {
+			width: 100%;
+			max-width: 360px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 12px;
+			padding: 24px;
+			text-align: center;
+		}
+		.discard__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 21px;
+			color: #f4e8d1;
+			margin-bottom: 8px;
+		}
+		.discard__msg {
+			font-size: 13px;
+			color: #a2857a;
+			line-height: 1.5;
+			margin-bottom: 22px;
+		}
+		.discard__actions {
+			display: flex;
+			gap: 10px;
+			justify-content: center;
+		}
+		.btn-ghost {
+			font-size: 13px;
+			font-weight: 600;
+			color: #ddc9b4;
+			background: transparent;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 9px 18px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.btn-ghost:hover {
+			border-color: #a2857a;
+			color: #f4e8d1;
+		}
+		.btn-discard {
+			font-size: 13px;
+			font-weight: 700;
+			color: #2a1214;
+			background: #d9865a;
+			border: none;
+			border-radius: 8px;
+			padding: 9px 18px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.btn-discard:hover {
+			background: #e89b70;
+		}
+
 		@media (max-width: 640px) {
 			.entry {
 				grid-template-columns: 110px 1fr;
@@ -371,6 +1019,368 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 			.year {
 				font-size: 22px;
 			}
+			.field-grid {
+				grid-template-columns: 1fr;
+			}
 		}
 	</style>
+
+	<script>
+		// Owner-only edit modal. Astro always hoists this script; bail out when the
+		// modal isn't in the DOM (non-owner viewing the entry).
+		const openBtn = document.getElementById('open-editor');
+		const modal = document.getElementById('editor') as HTMLDivElement | null;
+		const initialEl = document.getElementById('editor-initial');
+
+		if (openBtn && modal && initialEl) {
+			interface Initial {
+				logId: number;
+				tmdbId: number;
+				date: string;
+				rating: number | null;
+				liked: boolean;
+				rewatch: boolean;
+				medium: string | null;
+				otherMedium: string;
+				venue: string;
+				format: string;
+				review: string;
+				tags: string[];
+			}
+			const init = JSON.parse(initialEl.textContent || '{}') as Initial;
+			const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+			const close = $('editor-close');
+			const backdrop = $('editor-backdrop');
+			const save = $<HTMLButtonElement>('editor-save');
+			const del = $<HTMLButtonElement>('editor-delete');
+			const msg = $<HTMLSpanElement>('editor-msg');
+			const dateInput = $<HTMLInputElement>('e-date');
+			const reviewInput = $<HTMLTextAreaElement>('e-review');
+			const likeBtn = $<HTMLButtonElement>('e-like');
+			const rewatchBtn = $<HTMLButtonElement>('e-rewatch');
+			const fill = $<HTMLSpanElement>('e-sp-fill');
+			const hits = $<HTMLSpanElement>('e-sp-hits');
+			const ratingLabel = $<HTMLSpanElement>('e-rating-label');
+			const discard = $<HTMLDivElement>('discard');
+			const discardKeep = $('discard-keep');
+			const discardConfirm = $('discard-confirm');
+			const mediums = $<HTMLDivElement>('e-mediums');
+			const theaterFields = $<HTMLDivElement>('e-theater-fields');
+			const otherField = $<HTMLDivElement>('e-other-field');
+			const venueInput = $<HTMLInputElement>('e-venue');
+			const formatInput = $<HTMLInputElement>('e-format');
+			const otherInput = $<HTMLInputElement>('e-other');
+			const tagInput = $<HTMLInputElement>('e-tag-input');
+			const tagSuggest = $<HTMLUListElement>('e-tag-suggest');
+			const tagChipsBox = $<HTMLDivElement>('e-tag-chips');
+			const tagOptions = Array.from(
+				document.querySelectorAll<HTMLOptionElement>('#e-tag-options option'),
+			).map((o) => o.value);
+			const mediumBtns = Array.from(
+				mediums.querySelectorAll<HTMLButtonElement>('button[data-medium]'),
+			);
+
+			let rating: number | null = init.rating;
+			let liked = init.liked;
+			let rewatch = init.rewatch;
+			let medium: string | null = init.medium; // canonical key | 'other' | null
+			let tags: string[] = [];
+
+			// --- Half-star picker (10 hotspots over 5 stars) ---
+			const setFill = (value: number) => {
+				fill.style.width = `${(value / 5) * 100}%`;
+			};
+			const labelFor = (v: number) =>
+				v === 0 ? 'Not rated' : `${Math.floor(v)}${v % 1 ? '½' : ''}★`;
+			for (let i = 1; i <= 10; i++) {
+				const hit = document.createElement('span');
+				const value = i / 2;
+				hit.addEventListener('mousemove', () => {
+					setFill(value);
+					ratingLabel.textContent = labelFor(value);
+				});
+				hit.addEventListener('click', () => {
+					rating = value;
+					setFill(value);
+					ratingLabel.textContent = labelFor(value);
+				});
+				hits.appendChild(hit);
+			}
+			hits.addEventListener('mouseleave', () => {
+				setFill(rating ?? 0);
+				ratingLabel.textContent = labelFor(rating ?? 0);
+			});
+
+			likeBtn.addEventListener('click', () => {
+				liked = !liked;
+				likeBtn.classList.toggle('on', liked);
+			});
+			rewatchBtn.addEventListener('click', () => {
+				rewatch = !rewatch;
+				rewatchBtn.classList.toggle('on', rewatch);
+			});
+
+			// --- Medium picker (single-select; click active to deselect) ---
+			function renderMedium() {
+				for (const b of mediumBtns) b.classList.toggle('on', b.dataset.medium === medium);
+				theaterFields.hidden = medium !== 'theater';
+				otherField.hidden = medium !== 'other';
+			}
+			for (const b of mediumBtns) {
+				b.addEventListener('click', () => {
+					const m = b.dataset.medium ?? null;
+					medium = medium === m ? null : m;
+					renderMedium();
+				});
+			}
+
+			// --- Tags (chips + autocomplete over known tags) ---
+			let tagActive = -1;
+			function renderChips() {
+				tagChipsBox.textContent = '';
+				tags.forEach((t, i) => {
+					const chip = document.createElement('span');
+					chip.className = 'tag-chip';
+					chip.append(t);
+					const x = document.createElement('button');
+					x.type = 'button';
+					x.setAttribute('aria-label', `Remove ${t}`);
+					x.textContent = '✕';
+					x.addEventListener('click', () => removeTag(i));
+					chip.appendChild(x);
+					tagChipsBox.appendChild(chip);
+				});
+				tagChipsBox.hidden = tags.length === 0;
+			}
+			function removeTag(i: number) {
+				tags.splice(i, 1);
+				renderChips();
+				renderTagSuggest();
+			}
+			function commitTag(raw: string) {
+				const name = raw.trim();
+				if (name && !tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+				tagInput.value = '';
+				renderChips();
+				renderTagSuggest();
+			}
+			function tagCandidates(): string[] {
+				const token = tagInput.value.trim().toLowerCase();
+				const used = new Set(tags.map((t) => t.toLowerCase()));
+				return tagOptions
+					.filter((t) => !used.has(t.toLowerCase()))
+					.filter((t) => !token || t.toLowerCase().includes(token))
+					.slice(0, 6);
+			}
+			function renderTagSuggest() {
+				const items = tagCandidates();
+				tagSuggest.textContent = '';
+				tagActive = -1;
+				if (!items.length) {
+					tagSuggest.hidden = true;
+					return;
+				}
+				for (const t of items) {
+					const li = document.createElement('li');
+					li.textContent = t;
+					li.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						commitTag(t);
+					});
+					tagSuggest.appendChild(li);
+				}
+				tagSuggest.hidden = false;
+			}
+			tagInput.addEventListener('input', renderTagSuggest);
+			tagInput.addEventListener('focus', renderTagSuggest);
+			tagInput.addEventListener('blur', () => {
+				tagSuggest.hidden = true;
+			});
+			tagInput.addEventListener('keydown', (e) => {
+				const lis = Array.from(tagSuggest.querySelectorAll('li'));
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					if (tagActive >= 0 && lis[tagActive]) commitTag(lis[tagActive].textContent || '');
+					else commitTag(tagInput.value);
+				} else if (e.key === 'ArrowDown' && lis.length) {
+					e.preventDefault();
+					tagActive = (tagActive + 1) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
+				} else if (e.key === 'ArrowUp' && lis.length) {
+					e.preventDefault();
+					tagActive = (tagActive - 1 + lis.length) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
+				} else if (e.key === 'Backspace' && !tagInput.value && tags.length) {
+					removeTag(tags.length - 1);
+				}
+			});
+
+			// Seed every field from the persisted entry. Also the reset target when
+			// the user discards their edits.
+			function seedForm() {
+				dateInput.value = init.date;
+				rating = init.rating;
+				setFill(rating ?? 0);
+				ratingLabel.textContent = labelFor(rating ?? 0);
+				liked = init.liked;
+				likeBtn.classList.toggle('on', liked);
+				rewatch = init.rewatch;
+				rewatchBtn.classList.toggle('on', rewatch);
+				medium = init.medium;
+				venueInput.value = init.venue;
+				formatInput.value = init.format;
+				otherInput.value = init.otherMedium;
+				renderMedium();
+				reviewInput.value = init.review;
+				tags = [...init.tags];
+				tagInput.value = '';
+				renderChips();
+				tagSuggest.hidden = true;
+				msg.className = 'save-msg';
+				msg.textContent = '';
+			}
+
+			// A JSON snapshot of the form, normalized so hidden fields don't count —
+			// used for the dirty check on close.
+			const snap = (v: {
+				date: string;
+				rating: number | null;
+				liked: boolean;
+				rewatch: boolean;
+				medium: string | null;
+				otherMedium: string;
+				venue: string;
+				format: string;
+				review: string;
+				tags: string[];
+			}) =>
+				JSON.stringify({
+					date: v.date,
+					rating: v.rating,
+					liked: v.liked,
+					rewatch: v.rewatch,
+					medium: v.medium,
+					otherMedium: v.medium === 'other' ? v.otherMedium.trim() : '',
+					venue: v.medium === 'theater' ? v.venue.trim() : '',
+					format: v.medium === 'theater' ? v.format.trim() : '',
+					review: v.review.trim(),
+					tags: [...v.tags].sort(),
+				});
+			const initialSnap = snap({
+				date: init.date,
+				rating: init.rating,
+				liked: init.liked,
+				rewatch: init.rewatch,
+				medium: init.medium,
+				otherMedium: init.otherMedium,
+				venue: init.venue,
+				format: init.format,
+				review: init.review,
+				tags: init.tags,
+			});
+			const isDirty = () =>
+				snap({
+					date: dateInput.value,
+					rating,
+					liked,
+					rewatch,
+					medium,
+					otherMedium: otherInput.value,
+					venue: venueInput.value,
+					format: formatInput.value,
+					review: reviewInput.value,
+					tags,
+				}) !== initialSnap;
+
+			const openModal = () => {
+				seedForm();
+				discard.hidden = true;
+				modal.hidden = false;
+			};
+			const closeModal = () => {
+				modal.hidden = true;
+				discard.hidden = true;
+			};
+			const attemptClose = () => {
+				if (isDirty()) discard.hidden = false;
+				else closeModal();
+			};
+
+			openBtn.addEventListener('click', openModal);
+			close.addEventListener('click', attemptClose);
+			backdrop.addEventListener('click', attemptClose);
+			discardKeep.addEventListener('click', () => {
+				discard.hidden = true;
+			});
+			discardConfirm.addEventListener('click', closeModal);
+			document.addEventListener('keydown', (e) => {
+				if (e.key !== 'Escape' || modal.hidden) return;
+				if (!discard.hidden) discard.hidden = true;
+				else attemptClose();
+			});
+
+			save.addEventListener('click', async () => {
+				save.disabled = true;
+				msg.className = 'save-msg';
+				msg.textContent = 'Saving…';
+				try {
+					// 'other' sends its free-text value as the medium; theater carries venue+format.
+					const outMedium =
+						medium === 'other' ? otherInput.value.trim() || null : medium;
+					const res = await fetch(`/api/films/logs/${init.logId}`, {
+						method: 'PATCH',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({
+							watchedDate: dateInput.value || null,
+							rating,
+							reviewText: reviewInput.value,
+							rewatched: rewatch,
+							liked,
+							tags,
+							medium: outMedium,
+							venue: medium === 'theater' ? venueInput.value.trim() || null : null,
+							format: medium === 'theater' ? formatInput.value.trim() || null : null,
+						}),
+					});
+					if (res.status === 401) {
+						window.location.href = `/films/login?redirect=/films/diary/${init.logId}`;
+						return;
+					}
+					const data = await res.json();
+					if (!res.ok) throw new Error(data.error || 'Save failed');
+					window.location.reload();
+				} catch (err) {
+					msg.className = 'save-msg error';
+					msg.textContent = err instanceof Error ? err.message : 'Save failed';
+					save.disabled = false;
+				}
+			});
+
+			del.addEventListener('click', async () => {
+				if (!window.confirm('Delete this diary entry? This cannot be undone.')) return;
+				del.disabled = true;
+				save.disabled = true;
+				msg.className = 'save-msg';
+				msg.textContent = 'Deleting…';
+				try {
+					const res = await fetch(`/api/films/logs/${init.logId}`, { method: 'DELETE' });
+					if (res.status === 401) {
+						window.location.href = `/films/login?redirect=/films/diary/${init.logId}`;
+						return;
+					}
+					if (!res.ok) {
+						const data = await res.json().catch(() => ({}));
+						throw new Error(data.error || 'Delete failed');
+					}
+					window.location.href = '/films/diary';
+				} catch (err) {
+					msg.className = 'save-msg error';
+					msg.textContent = err instanceof Error ? err.message : 'Delete failed';
+					del.disabled = false;
+					save.disabled = false;
+				}
+			});
+		}
+	</script>
 </FilmLayout>

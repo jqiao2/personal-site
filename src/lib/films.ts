@@ -118,6 +118,24 @@ export interface CreateLogInput {
 	format?: string | null;
 }
 
+/** Fields an edit can change on an existing diary log. Only the keys present are
+ * applied; `tags`, when present, replaces the whole tag set. */
+export interface UpdateLogInput {
+	rating?: number | null;
+	reviewText?: string | null;
+	watchedDate?: string | null;
+	rewatched?: boolean;
+	liked?: boolean;
+	/** Canonical medium ('theater' | 'tv' | …) or free text; null clears it. */
+	medium?: string | null;
+	/** Theater as "Name, City" (theater medium only). */
+	venue?: string | null;
+	/** Presentation format (theater medium only). */
+	format?: string | null;
+	/** Full replacement set of tag names. */
+	tags?: string[];
+}
+
 /** Upsert the film-level "watched" record (mark the movie seen). Decision A: does
  * NOT touch film-level rating/liked — those are owned by the Letterboxd import.
  * Idempotent via the movie_id unique constraint: re-logging keeps the original
@@ -270,6 +288,65 @@ async function attachTags(logId: number, names: string[]): Promise<void> {
 	if (linkErr) throw new Error(`link tags failed: ${linkErr.message}`);
 }
 
+/** Replace a log's entire tag set: drop the existing links, attach the new names. */
+async function replaceTags(logId: number, names: string[] | undefined): Promise<void> {
+	const { error } = await supabaseAdmin.from('log_tags').delete().eq('log_id', logId);
+	if (error) throw new Error(`clear tags failed: ${error.message}`);
+	const norm = normalizeTags(names);
+	if (norm.length > 0) await attachTags(logId, norm);
+}
+
+/**
+ * Edit an existing (non-deleted) diary log. Applies only the provided fields.
+ * `medium` follows the same rules as logging: a theater viewing resolves a
+ * theater + format (defaulting to "Digital"), any other medium clears both.
+ * `tags`, when provided, replaces the log's whole tag set. Returns false when the
+ * log doesn't exist or is soft-deleted.
+ */
+export async function updateLog(id: number, input: UpdateLogInput): Promise<boolean> {
+	const patch: Record<string, unknown> = {};
+	if ('rating' in input) patch.rating = input.rating ?? null;
+	if ('reviewText' in input) patch.review_text = input.reviewText ?? null;
+	if ('watchedDate' in input) patch.watched_date = input.watchedDate ?? null;
+	if ('rewatched' in input) patch.rewatched = input.rewatched ?? false;
+	if ('liked' in input) patch.liked = input.liked ?? false;
+	if ('medium' in input) {
+		const medium = input.medium?.trim() ? input.medium.trim().toLowerCase() : null;
+		const inTheater = medium === 'theater';
+		const theaterId = inTheater && input.venue?.trim() ? await resolveTheaterId(input.venue) : null;
+		const formatName = inTheater ? input.format?.trim() || 'Digital' : null;
+		const formatId = formatName ? await resolveFormatId(formatName) : null;
+		patch.medium = medium;
+		patch.theater_id = theaterId;
+		patch.format_id = formatId;
+	}
+
+	// The row must exist (and be live) before we touch columns or tags.
+	if (Object.keys(patch).length > 0) {
+		const { data, error } = await supabaseAdmin
+			.from('logs')
+			.update(patch)
+			.eq('id', id)
+			.is('deleted_at', null)
+			.select('id')
+			.maybeSingle();
+		if (error) throw new Error(`updateLog failed: ${error.message}`);
+		if (!data) return false;
+	} else if ('tags' in input) {
+		const { data, error } = await supabaseAdmin
+			.from('logs')
+			.select('id')
+			.eq('id', id)
+			.is('deleted_at', null)
+			.maybeSingle();
+		if (error) throw new Error(`updateLog failed: ${error.message}`);
+		if (!data) return false;
+	}
+
+	if ('tags' in input) await replaceTags(id, input.tags);
+	return true;
+}
+
 // --- Reads (public, via anon key + RLS public-read policies) ---
 
 /** A watch as shown in the diary list — movie fields flattened, tags collapsed. */
@@ -397,6 +474,22 @@ export async function listTheaterNames(): Promise<string[]> {
 	return ((data ?? []) as { name: string; city: string | null }[]).map((t) =>
 		[t.name, t.city].filter(Boolean).join(', '),
 	);
+}
+
+/**
+ * Distinct tag names, alphabetical — for the composer/editor tag autocomplete.
+ * Returns [] (not an error) before the tags table exists.
+ */
+export async function listTags(): Promise<string[]> {
+	const { data, error } = await supabasePublic
+		.from('tags')
+		.select('name')
+		.order('name', { ascending: true });
+	if (error) {
+		if (error.code === '42P01' || (error.message ?? '').includes('does not exist')) return [];
+		throw new Error(`listTags failed: ${error.message}`);
+	}
+	return ((data ?? []) as { name: string }[]).map((t) => t.name);
 }
 
 /** A single diary entry with everything the Diary Entry page renders. */

@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { updateLog, type UpdateLogInput } from '../../../../lib/films';
 import { requireOwner } from '../../../../lib/auth';
 import { json, apiError } from '../../../../lib/http';
 
 export const prerender = false;
 
-// PATCH /api/films/logs/123  (owner) — edit rating/review/date/flags.
+// PATCH /api/films/logs/123  (owner) — edit rating/review/date/flags/medium/tags.
 // DELETE /api/films/logs/123 (owner) — soft-delete (sets deleted_at).
 
 export const PATCH: APIRoute = async ({ params, request, cookies }) => {
@@ -21,31 +22,37 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	}
 
 	// Only apply fields that were actually provided.
-	const patch: Record<string, unknown> = {};
+	const input: UpdateLogInput = {};
 	if ('rating' in body) {
 		const rating = body.rating == null ? null : Number(body.rating);
 		if (rating != null && !(rating >= 0.5 && rating <= 5 && Number.isInteger(rating * 2))) {
 			return apiError('rating must be between 0.5 and 5.0 in 0.5 steps', 400);
 		}
-		patch.rating = rating;
+		input.rating = rating;
 	}
-	if ('reviewText' in body) patch.review_text = textOrNull(body.reviewText);
-	if ('watchedDate' in body) patch.watched_date = dateOrNull(body.watchedDate);
-	if ('rewatched' in body) patch.rewatched = Boolean(body.rewatched);
-	if ('liked' in body) patch.liked = Boolean(body.liked);
+	if ('reviewText' in body) input.reviewText = textOrNull(body.reviewText);
+	if ('watchedDate' in body) input.watchedDate = dateOrNull(body.watchedDate);
+	if ('rewatched' in body) input.rewatched = Boolean(body.rewatched);
+	if ('liked' in body) input.liked = Boolean(body.liked);
+	// Medium carries its theater venue/format; they only apply to theater viewings.
+	if ('medium' in body) {
+		input.medium = textOrNull(body.medium);
+		input.venue = textOrNull(body.venue);
+		input.format = textOrNull(body.format);
+	}
+	if ('tags' in body) {
+		input.tags = Array.isArray(body.tags) ? body.tags.map(String) : [];
+	}
 
-	if (Object.keys(patch).length === 0) return apiError('no updatable fields provided', 400);
+	if (Object.keys(input).length === 0) return apiError('no updatable fields provided', 400);
 
-	const { data, error } = await supabaseAdmin
-		.from('logs')
-		.update(patch)
-		.eq('id', id)
-		.is('deleted_at', null) // can't edit a soft-deleted log
-		.select('id')
-		.maybeSingle();
-	if (error) return apiError(error.message, 500);
-	if (!data) return apiError('log not found', 404);
-	return json({ ok: true });
+	try {
+		const ok = await updateLog(id, input);
+		if (!ok) return apiError('log not found', 404);
+		return json({ ok: true });
+	} catch (e) {
+		return apiError(e instanceof Error ? e.message : 'update failed', 500);
+	}
 };
 
 export const DELETE: APIRoute = async ({ params, cookies }) => {

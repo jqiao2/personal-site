@@ -1,6 +1,6 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
-import { listLogs, getFilmLogStats, listTheaterNames } from '../../lib/films';
+import { listLogs, getFilmLogStats, listTheaterNames, listTags } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
 
@@ -13,8 +13,10 @@ const [logs, stats, isOwner] = await Promise.all([
 	requireOwner(Astro.cookies),
 ]);
 
-// Composer autocomplete (owner only): known theaters + canonical formats.
-const venueOptions = isOwner ? await listTheaterNames() : [];
+// Composer autocomplete (owner only): known theaters, canonical formats, tags.
+const [venueOptions, tagOptions] = isOwner
+	? await Promise.all([listTheaterNames(), listTags()])
+	: [[], []];
 const formatOptions = [
 	'Digital',
 	'35mm',
@@ -250,6 +252,23 @@ const today = new Date().toISOString().slice(0, 10);
 					<div>
 						<label class="lbl" for="c-review">Review</label>
 						<textarea id="c-review" rows="4" placeholder="Add your thoughts…"></textarea>
+					</div>
+
+					<div class="tags-field">
+						<label class="lbl" for="c-tag-input">Tags</label>
+						<input
+							type="text"
+							id="c-tag-input"
+							placeholder="Type a tag, press Enter…"
+							autocomplete="off"
+						/>
+						<datalist id="tag-options">
+							{tagOptions.map((t) => (
+								<option value={t}></option>
+							))}
+						</datalist>
+						<ul class="tag-suggest" id="c-tag-suggest" hidden></ul>
+						<div class="tag-chips" id="c-tag-chips" hidden></div>
 					</div>
 				</div>
 
@@ -823,6 +842,92 @@ const today = new Date().toISOString().slice(0, 10);
 		#c-other:focus {
 			border-color: #d9b45a;
 		}
+
+		/* Tags field: input + autocomplete dropdown (opens upward) + chips */
+		.tags-field {
+			position: relative;
+		}
+		#c-tag-input {
+			width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			color: #f4e8d1;
+			font-family: 'Archivo', sans-serif;
+			font-size: 14px;
+			padding: 11px 13px;
+			outline: none;
+		}
+		#c-tag-input:focus {
+			border-color: #d9b45a;
+		}
+		.tag-suggest {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			position: absolute;
+			bottom: 100%;
+			left: 0;
+			right: 0;
+			margin-bottom: 6px;
+			z-index: 10;
+			max-height: 200px;
+			overflow-y: auto;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
+		}
+		.tag-suggest[hidden] {
+			display: none;
+		}
+		.tag-suggest :global(li) {
+			padding: 9px 13px;
+			cursor: pointer;
+			font-size: 14px;
+			color: #f2e5cd;
+			border-bottom: 1px solid #351a1d;
+		}
+		.tag-suggest :global(li:last-child) {
+			border-bottom: none;
+		}
+		.tag-suggest :global(li:hover),
+		.tag-suggest :global(li.active) {
+			background: #331619;
+		}
+		.tag-chips {
+			display: flex;
+			gap: 7px;
+			flex-wrap: wrap;
+			margin-top: 10px;
+		}
+		.tag-chips[hidden] {
+			display: none;
+		}
+		.tag-chips :global(.tag-chip) {
+			display: inline-flex;
+			align-items: center;
+			gap: 7px;
+			font-size: 12px;
+			color: #ddc9b4;
+			border: 1px solid #4a2529;
+			border-radius: 20px;
+			padding: 4px 8px 4px 12px;
+			background: #241012;
+		}
+		.tag-chips :global(.tag-chip button) {
+			background: none;
+			border: none;
+			cursor: pointer;
+			color: #a2857a;
+			font-size: 13px;
+			line-height: 1;
+			padding: 0;
+			font-family: 'Archivo', sans-serif;
+		}
+		.tag-chips :global(.tag-chip button:hover) {
+			color: #f4e8d1;
+		}
 		.modal__foot {
 			display: flex;
 			align-items: center;
@@ -925,6 +1030,12 @@ const today = new Date().toISOString().slice(0, 10);
 			const venueInput = $<HTMLInputElement>('c-venue');
 			const formatInput = $<HTMLInputElement>('c-format');
 			const otherInput = $<HTMLInputElement>('c-other');
+			const tagInput = $<HTMLInputElement>('c-tag-input');
+			const tagSuggest = $<HTMLUListElement>('c-tag-suggest');
+			const tagChipsBox = $<HTMLDivElement>('c-tag-chips');
+			const tagOptions = Array.from(
+				document.querySelectorAll<HTMLOptionElement>('#tag-options option'),
+			).map((o) => o.value);
 			const mediumBtns = Array.from(
 				mediums.querySelectorAll<HTMLButtonElement>('button[data-medium]'),
 			);
@@ -935,6 +1046,7 @@ const today = new Date().toISOString().slice(0, 10);
 			let liked = false;
 			let rewatch = false;
 			let medium: string | null = null; // 'theater'|'tv'|'computer'|'plane'|'other'|null
+			let tags: string[] = [];
 
 			// --- TMDB search (debounced) ---
 			let timer: number | undefined;
@@ -1101,6 +1213,87 @@ const today = new Date().toISOString().slice(0, 10);
 				});
 			}
 
+			// --- Tags (chips + autocomplete over known tags) ---
+			let tagActive = -1; // keyboard-highlighted suggestion, -1 = none
+			function renderChips() {
+				tagChipsBox.textContent = '';
+				tags.forEach((t, i) => {
+					const chip = document.createElement('span');
+					chip.className = 'tag-chip';
+					chip.append(t);
+					const x = document.createElement('button');
+					x.type = 'button';
+					x.setAttribute('aria-label', `Remove ${t}`);
+					x.textContent = '✕';
+					x.addEventListener('click', () => removeTag(i));
+					chip.appendChild(x);
+					tagChipsBox.appendChild(chip);
+				});
+				tagChipsBox.hidden = tags.length === 0;
+			}
+			function removeTag(i: number) {
+				tags.splice(i, 1);
+				renderChips();
+				renderTagSuggest();
+			}
+			function commitTag(raw: string) {
+				const name = raw.trim();
+				if (name && !tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+				tagInput.value = '';
+				renderChips();
+				renderTagSuggest();
+			}
+			function tagCandidates(): string[] {
+				const token = tagInput.value.trim().toLowerCase();
+				const used = new Set(tags.map((t) => t.toLowerCase()));
+				return tagOptions
+					.filter((t) => !used.has(t.toLowerCase()))
+					.filter((t) => !token || t.toLowerCase().includes(token))
+					.slice(0, 6);
+			}
+			function renderTagSuggest() {
+				const items = tagCandidates();
+				tagSuggest.textContent = '';
+				tagActive = -1;
+				if (!items.length) {
+					tagSuggest.hidden = true;
+					return;
+				}
+				for (const t of items) {
+					const li = document.createElement('li');
+					li.textContent = t;
+					li.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						commitTag(t);
+					});
+					tagSuggest.appendChild(li);
+				}
+				tagSuggest.hidden = false;
+			}
+			tagInput.addEventListener('input', renderTagSuggest);
+			tagInput.addEventListener('focus', renderTagSuggest);
+			tagInput.addEventListener('blur', () => {
+				tagSuggest.hidden = true;
+			});
+			tagInput.addEventListener('keydown', (e) => {
+				const lis = Array.from(tagSuggest.querySelectorAll('li'));
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					if (tagActive >= 0 && lis[tagActive]) commitTag(lis[tagActive].textContent || '');
+					else commitTag(tagInput.value);
+				} else if (e.key === 'ArrowDown' && lis.length) {
+					e.preventDefault();
+					tagActive = (tagActive + 1) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
+				} else if (e.key === 'ArrowUp' && lis.length) {
+					e.preventDefault();
+					tagActive = (tagActive - 1 + lis.length) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
+				} else if (e.key === 'Backspace' && !tagInput.value && tags.length) {
+					removeTag(tags.length - 1);
+				}
+			});
+
 			// The film selection is intentionally excluded from the dirty check —
 			// picking a film alone isn't "work worth confirming"; a rating, like,
 			// rewatch flag, or review text is.
@@ -1109,6 +1302,7 @@ const today = new Date().toISOString().slice(0, 10);
 				liked ||
 				rewatch ||
 				medium != null ||
+				tags.length > 0 ||
 				reviewInput.value.trim().length > 0;
 
 			const resetForm = () => {
@@ -1117,11 +1311,15 @@ const today = new Date().toISOString().slice(0, 10);
 				liked = false;
 				rewatch = false;
 				medium = null;
+				tags = [];
 				q.value = '';
 				reviewInput.value = '';
 				venueInput.value = '';
 				formatInput.value = '';
 				otherInput.value = '';
+				tagInput.value = '';
+				renderChips();
+				tagSuggest.hidden = true;
 				dateInput.value = defaultDate;
 				likeBtn.classList.remove('on');
 				rewatchBtn.classList.remove('on');
@@ -1183,6 +1381,7 @@ const today = new Date().toISOString().slice(0, 10);
 							reviewText: reviewInput.value,
 							rewatched: rewatch,
 							liked,
+							tags,
 							medium: outMedium,
 							venue: medium === 'theater' ? venueInput.value.trim() || null : null,
 							format: medium === 'theater' ? formatInput.value.trim() || null : null,
