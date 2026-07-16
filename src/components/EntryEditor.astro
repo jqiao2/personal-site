@@ -27,12 +27,14 @@ export interface EntryEditorInitial {
 	format: string;
 	review: string;
 	tags: string[];
+	friends: string[];
 }
 
 interface Props {
 	mode: 'select' | 'edit';
 	venueOptions: string[];
 	tagOptions: string[];
+	friendOptions: string[];
 	/** Where to send the user after a 401, and back to after saving. */
 	redirect: string;
 	/** edit mode only. */
@@ -45,6 +47,7 @@ const {
 	mode,
 	venueOptions,
 	tagOptions,
+	friendOptions,
 	redirect,
 	logId = null,
 	film = null,
@@ -73,6 +76,7 @@ const config = {
 	venueOptions,
 	formatOptions: FORMAT_OPTIONS,
 	tagOptions,
+	friendOptions,
 	initial,
 	film,
 };
@@ -213,16 +217,28 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 					</div>
 				</div>
 
+				<div class="chips-field">
+					<label class="lbl" for="ee-friend-input">Watched with</label>
+					<input
+						type="text"
+						id="ee-friend-input"
+						placeholder="Tag a friend, press Enter…"
+						autocomplete="off"
+					/>
+					<ul class="chips-suggest" id="ee-friend-suggest" hidden></ul>
+					<div class="chips-box" id="ee-friend-chips" hidden></div>
+				</div>
+
 				<div>
 					<label class="lbl" for="ee-review">Review</label>
 					<textarea id="ee-review" rows="4" placeholder="Add your thoughts…"></textarea>
 				</div>
 
-				<div class="tags-field">
+				<div class="chips-field">
 					<label class="lbl" for="ee-tag-input">Tags</label>
 					<input type="text" id="ee-tag-input" placeholder="Type a tag, press Enter…" autocomplete="off" />
-					<ul class="tag-suggest" id="ee-tag-suggest" hidden></ul>
-					<div class="tag-chips" id="ee-tag-chips" hidden></div>
+					<ul class="chips-suggest" id="ee-tag-suggest" hidden></ul>
+					<div class="chips-box" id="ee-tag-chips" hidden></div>
 				</div>
 			</div>
 		</div>
@@ -366,7 +382,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 	#ee-venue,
 	#ee-format,
 	#ee-other,
-	#ee-tag-input {
+	#ee-tag-input,
+	#ee-friend-input {
 		width: 100%;
 		background: #1c0d0e;
 		border: 1px solid #4a2529;
@@ -382,7 +399,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 	#ee-venue:focus,
 	#ee-format:focus,
 	#ee-other:focus,
-	#ee-tag-input:focus {
+	#ee-tag-input:focus,
+	#ee-friend-input:focus {
 		border-color: #d9b45a;
 	}
 	#ee-review {
@@ -734,11 +752,11 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		background: #331619;
 	}
 
-	/* Tags: input + autocomplete (opens upward) + chips */
-	.tags-field {
+	/* Chip fields (tags, watched-with): input + autocomplete (opens upward) + chips */
+	.chips-field {
 		position: relative;
 	}
-	.tag-suggest {
+	.chips-suggest {
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -755,33 +773,33 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		border-radius: 8px;
 		box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
 	}
-	.tag-suggest[hidden] {
+	.chips-suggest[hidden] {
 		display: none;
 	}
-	.tag-suggest :global(li) {
+	.chips-suggest :global(li) {
 		padding: 9px 13px;
 		cursor: pointer;
 		font-size: 14px;
 		color: #f2e5cd;
 		border-bottom: 1px solid #351a1d;
 	}
-	.tag-suggest :global(li:last-child) {
+	.chips-suggest :global(li:last-child) {
 		border-bottom: none;
 	}
-	.tag-suggest :global(li:hover),
-	.tag-suggest :global(li.active) {
+	.chips-suggest :global(li:hover),
+	.chips-suggest :global(li.active) {
 		background: #331619;
 	}
-	.tag-chips {
+	.chips-box {
 		display: flex;
 		gap: 7px;
 		flex-wrap: wrap;
 		margin-top: 10px;
 	}
-	.tag-chips[hidden] {
+	.chips-box[hidden] {
 		display: none;
 	}
-	.tag-chips :global(.tag-chip) {
+	.chips-box :global(.chip) {
 		display: inline-flex;
 		align-items: center;
 		gap: 7px;
@@ -792,7 +810,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		padding: 4px 8px 4px 12px;
 		background: #241012;
 	}
-	.tag-chips :global(.tag-chip button) {
+	.chips-box :global(.chip button) {
 		background: none;
 		border: none;
 		cursor: pointer;
@@ -802,7 +820,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		padding: 0;
 		font-family: 'Archivo', sans-serif;
 	}
-	.tag-chips :global(.tag-chip button:hover) {
+	.chips-box :global(.chip button:hover) {
 		color: #f4e8d1;
 	}
 
@@ -970,6 +988,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			format: string;
 			review: string;
 			tags: string[];
+			friends: string[];
 		}
 		interface Config {
 			mode: 'select' | 'edit';
@@ -979,6 +998,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			venueOptions: string[];
 			formatOptions: string[];
 			tagOptions: string[];
+			friendOptions: string[];
 			initial: Initial | null;
 			film: Film | null;
 		}
@@ -1038,6 +1058,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		const tagInput = $<HTMLInputElement>('ee-tag-input');
 		const tagSuggest = $<HTMLUListElement>('ee-tag-suggest');
 		const tagChipsBox = $<HTMLDivElement>('ee-tag-chips');
+		const friendInput = $<HTMLInputElement>('ee-friend-input');
+		const friendSuggest = $<HTMLUListElement>('ee-friend-suggest');
+		const friendChipsBox = $<HTMLDivElement>('ee-friend-chips');
 		const mediumBtns = Array.from(mediums.querySelectorAll<HTMLButtonElement>('button[data-medium]'));
 
 		const isEdit = cfg.mode === 'edit';
@@ -1051,7 +1074,6 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		let liked = false;
 		let rewatch = false;
 		let medium: string | null = null; // 'theater'|'tv'|'computer'|'plane'|'other'|null
-		let tags: string[] = [];
 
 		// ---- Calendar ----
 		const MONTHS = [
@@ -1359,86 +1381,124 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		wireSuggest(venueInput, venueSuggest, cfg.venueOptions);
 		wireSuggest(formatInput, formatSuggest, cfg.formatOptions);
 
-		// ---- Tags (chips + autocomplete over known tags) ----
-		let tagActive = -1;
-		function renderChips() {
-			tagChipsBox.textContent = '';
-			tags.forEach((t, i) => {
-				const chip = document.createElement('span');
-				chip.className = 'tag-chip';
-				chip.append(t);
-				const x = document.createElement('button');
-				x.type = 'button';
-				x.setAttribute('aria-label', `Remove ${t}`);
-				x.textContent = '✕';
-				x.addEventListener('click', () => removeTag(i));
-				chip.appendChild(x);
-				tagChipsBox.appendChild(chip);
-			});
-			tagChipsBox.hidden = tags.length === 0;
+		// ---- Chip fields: free-text values as removable chips, with autocomplete over
+		// the names already in the database. Tags and "watched with" are the same
+		// interaction, so they share one implementation.
+		interface ChipField {
+			get(): string[];
+			set(values: string[]): void;
+			hideSuggest(): void;
 		}
-		function removeTag(i: number) {
-			tags.splice(i, 1);
-			renderChips();
-			renderTagSuggest();
-		}
-		function commitTag(raw: string) {
-			const name = raw.trim();
-			if (name && !tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
-			tagInput.value = '';
-			renderChips();
-			renderTagSuggest();
-		}
-		function tagCandidates(): string[] {
-			const token = tagInput.value.trim().toLowerCase();
-			const used = new Set(tags.map((t) => t.toLowerCase()));
-			return cfg.tagOptions
-				.filter((t) => !used.has(t.toLowerCase()))
-				.filter((t) => !token || t.toLowerCase().includes(token))
-				.slice(0, 6);
-		}
-		function renderTagSuggest() {
-			const items = tagCandidates();
-			tagSuggest.textContent = '';
-			tagActive = -1;
-			if (!items.length) {
-				tagSuggest.hidden = true;
-				return;
-			}
-			for (const t of items) {
-				const li = document.createElement('li');
-				li.textContent = t;
-				li.addEventListener('mousedown', (e) => {
-					e.preventDefault();
-					commitTag(t);
+		function wireChips(
+			input: HTMLInputElement,
+			suggest: HTMLUListElement,
+			chipsBox: HTMLDivElement,
+			options: string[],
+			removeLabel: (name: string) => string,
+		): ChipField {
+			let values: string[] = [];
+			let active = -1;
+
+			function renderChips() {
+				chipsBox.textContent = '';
+				values.forEach((v, i) => {
+					const chip = document.createElement('span');
+					chip.className = 'chip';
+					chip.append(v);
+					const x = document.createElement('button');
+					x.type = 'button';
+					x.setAttribute('aria-label', removeLabel(v));
+					x.textContent = '✕';
+					x.addEventListener('click', () => remove(i));
+					chip.appendChild(x);
+					chipsBox.appendChild(chip);
 				});
-				tagSuggest.appendChild(li);
+				chipsBox.hidden = values.length === 0;
 			}
-			tagSuggest.hidden = false;
+			function remove(i: number) {
+				values.splice(i, 1);
+				renderChips();
+				renderSuggest();
+			}
+			function commit(raw: string) {
+				const name = raw.trim();
+				if (name && !values.some((v) => v.toLowerCase() === name.toLowerCase())) values.push(name);
+				input.value = '';
+				renderChips();
+				renderSuggest();
+			}
+			function candidates(): string[] {
+				const token = input.value.trim().toLowerCase();
+				const used = new Set(values.map((v) => v.toLowerCase()));
+				return options
+					.filter((o) => !used.has(o.toLowerCase()))
+					.filter((o) => !token || o.toLowerCase().includes(token))
+					.slice(0, 6);
+			}
+			function renderSuggest() {
+				const items = candidates();
+				suggest.textContent = '';
+				active = -1;
+				if (!items.length) {
+					suggest.hidden = true;
+					return;
+				}
+				for (const o of items) {
+					const li = document.createElement('li');
+					li.textContent = o;
+					li.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						commit(o);
+					});
+					suggest.appendChild(li);
+				}
+				suggest.hidden = false;
+			}
+
+			input.addEventListener('input', renderSuggest);
+			input.addEventListener('focus', renderSuggest);
+			input.addEventListener('blur', () => {
+				suggest.hidden = true;
+			});
+			input.addEventListener('keydown', (e) => {
+				const lis = Array.from(suggest.querySelectorAll('li'));
+				if (e.key === 'Enter') {
+					e.preventDefault();
+					if (active >= 0 && lis[active]) commit(lis[active].textContent || '');
+					else commit(input.value);
+				} else if (e.key === 'ArrowDown' && lis.length) {
+					e.preventDefault();
+					active = (active + 1) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === active));
+				} else if (e.key === 'ArrowUp' && lis.length) {
+					e.preventDefault();
+					active = (active - 1 + lis.length) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === active));
+				} else if (e.key === 'Backspace' && !input.value && values.length) {
+					remove(values.length - 1);
+				}
+			});
+
+			return {
+				get: () => values,
+				set: (next) => {
+					values = [...next];
+					renderChips();
+				},
+				hideSuggest: () => {
+					suggest.hidden = true;
+				},
+			};
 		}
-		tagInput.addEventListener('input', renderTagSuggest);
-		tagInput.addEventListener('focus', renderTagSuggest);
-		tagInput.addEventListener('blur', () => {
-			tagSuggest.hidden = true;
-		});
-		tagInput.addEventListener('keydown', (e) => {
-			const lis = Array.from(tagSuggest.querySelectorAll('li'));
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				if (tagActive >= 0 && lis[tagActive]) commitTag(lis[tagActive].textContent || '');
-				else commitTag(tagInput.value);
-			} else if (e.key === 'ArrowDown' && lis.length) {
-				e.preventDefault();
-				tagActive = (tagActive + 1) % lis.length;
-				lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
-			} else if (e.key === 'ArrowUp' && lis.length) {
-				e.preventDefault();
-				tagActive = (tagActive - 1 + lis.length) % lis.length;
-				lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
-			} else if (e.key === 'Backspace' && !tagInput.value && tags.length) {
-				removeTag(tags.length - 1);
-			}
-		});
+
+		const tagField = wireChips(tagInput, tagSuggest, tagChipsBox, cfg.tagOptions, (t) => `Remove ${t}`);
+		const friendField = wireChips(
+			friendInput,
+			friendSuggest,
+			friendChipsBox,
+			cfg.friendOptions,
+			(f) => `Remove ${f}`,
+		);
 
 		// ---- Mode presentation (select ⇄ log) ----
 		function renderMode() {
@@ -1464,12 +1524,13 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 				venue: medium === 'theater' ? venueInput.value.trim() : '',
 				format: medium === 'theater' ? formatInput.value.trim() : '',
 				review: reviewInput.value.trim(),
-				tags: [...tags].sort(),
+				tags: [...tagField.get()].sort(),
+				friends: [...friendField.get()].sort(),
 			});
 		let cleanSnap = '';
 		// In log/select mode the film selection is intentionally excluded from the
 		// dirty check — picking a film alone isn't "work worth confirming"; a
-		// rating, like, rewatch flag, medium, tag, or review is.
+		// rating, like, rewatch flag, medium, tag, friend, or review is.
 		const isDirty = () => snap() !== cleanSnap;
 
 		// Seed every field from the config. Also the reset target when the user
@@ -1482,22 +1543,24 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			liked = init?.liked ?? false;
 			rewatch = init?.rewatch ?? false;
 			medium = init?.medium ?? null;
-			tags = init ? [...init.tags] : [];
+			tagField.set(init?.tags ?? []);
+			friendField.set(init?.friends ?? []);
 			venueInput.value = init?.venue ?? '';
 			formatInput.value = init?.format ?? '';
 			otherInput.value = init?.otherMedium ?? '';
 			reviewInput.value = init?.review ?? '';
 			tagInput.value = '';
+			friendInput.value = '';
 
 			setFill(rating ?? 0);
 			ratingLabel.textContent = labelFor(rating ?? 0);
 			likeBtn.classList.toggle('on', liked);
 			rewatchBtn.classList.toggle('on', rewatch);
 			renderMedium();
-			renderChips();
 			renderDateLabel();
 			renderMode();
-			tagSuggest.hidden = true;
+			tagField.hideSuggest();
+			friendField.hideSuggest();
 			venueSuggest.hidden = true;
 			formatSuggest.hidden = true;
 			closeCal();
@@ -1569,7 +1632,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			reviewText: reviewInput.value,
 			rewatched: rewatch,
 			liked,
-			tags,
+			tags: tagField.get(),
+			friends: friendField.get(),
 			medium: medium === 'other' ? otherInput.value.trim() || null : medium,
 			venue: medium === 'theater' ? venueInput.value.trim() || null : null,
 			format: medium === 'theater' ? formatInput.value.trim() || null : null,

@@ -1,7 +1,7 @@
 ---
 import FilmLayout from '../../../layouts/FilmLayout.astro';
 import EntryEditor from '../../../components/EntryEditor.astro';
-import { getDiaryEntry, listTheaterNames, listTags } from '../../../lib/films';
+import { getDiaryEntry, listTheaterNames, listTags, listFriends } from '../../../lib/films';
 import { requireOwner } from '../../../lib/auth';
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, mediumLabel } from '../../../lib/format';
@@ -39,9 +39,9 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 // Editor scaffolding (owner only): autocomplete options + the entry's current
 // values, which the modal seeds its form from.
 const CANONICAL_MEDIA = ['theater', 'tv', 'computer', 'plane'];
-const [venueOptions, tagOptions] = isOwner
-	? await Promise.all([listTheaterNames(), listTags()])
-	: [[], []];
+const [venueOptions, tagOptions, friendOptions] = isOwner
+	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
+	: [[], [], []];
 // A stored medium that isn't one of the canonical keys is a free-text "other".
 const mediumKey = entry.medium
 	? CANONICAL_MEDIA.includes(entry.medium)
@@ -65,6 +65,7 @@ const editorInitial = {
 	format: entry.format ?? '',
 	review: entry.review_text ?? '',
 	tags: entry.tags,
+	friends: entry.friends,
 };
 ---
 
@@ -159,6 +160,12 @@ const editorInitial = {
 							))}
 						</div>
 					)}
+
+					{entry.friends.length > 0 && (
+						<div class="friends">
+							Watched with <span class="friends__names">{entry.friends.join(', ')}</span>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>
@@ -172,6 +179,7 @@ const editorInitial = {
 			initial={editorInitial}
 			venueOptions={venueOptions}
 			tagOptions={tagOptions}
+			friendOptions={friendOptions}
 			redirect={`/films/diary/${entry.id}`}
 		/>
 	)}
@@ -440,6 +448,15 @@ const editorInitial = {
 			border-radius: 20px;
 			padding: 5px 13px;
 			background: #241012;
+		}
+
+		.friends {
+			margin-top: 20px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.friends__names {
+			color: #e9d9c4;
 		}
 
 		@media (max-width: 640px) {

@@ -8,6 +8,7 @@ import {
 	listLogs,
 	listTheaterNames,
 	listTags,
+	listFriends,
 } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
@@ -23,10 +24,10 @@ const [stats, favorites, watchlist, recent, isOwner] = await Promise.all([
 	requireOwner(Astro.cookies),
 ]);
 
-// Composer autocomplete (owner only): known theaters and tags.
-const [venueOptions, tagOptions] = isOwner
-	? await Promise.all([listTheaterNames(), listTags()])
-	: [[], []];
+// Composer autocomplete (owner only): known theaters, tags and friends.
+const [venueOptions, tagOptions, friendOptions] = isOwner
+	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
+	: [[], [], []];
 
 /** "4.5" → "★★★★½"; nulls render nothing. */
 function starText(r: number | null): string {
@@ -196,6 +197,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			mode="select"
 			venueOptions={venueOptions}
 			tagOptions={tagOptions}
+			friendOptions={friendOptions}
 			redirect="/films"
 		/>
 	) : (

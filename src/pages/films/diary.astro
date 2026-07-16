@@ -1,7 +1,7 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import EntryEditor from '../../components/EntryEditor.astro';
-import { listLogs, getFilmLogStats, listTheaterNames, listTags } from '../../lib/films';
+import { listLogs, getFilmLogStats, listTheaterNames, listTags, listFriends } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
 
@@ -21,10 +21,10 @@ const [logs, stats, isOwner] = await Promise.all([
 // A short first page means we already have everything — no sentinel, no fetching.
 const hasMore = logs.length === BATCH;
 
-// Composer autocomplete (owner only): known theaters and tags.
-const [venueOptions, tagOptions] = isOwner
-	? await Promise.all([listTheaterNames(), listTags()])
-	: [[], []];
+// Composer autocomplete (owner only): known theaters, tags and friends.
+const [venueOptions, tagOptions, friendOptions] = isOwner
+	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
+	: [[], [], []];
 
 function parseDate(date: string | null): Date | null {
 	if (!date) return null;
@@ -159,6 +159,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			mode="select"
 			venueOptions={venueOptions}
 			tagOptions={tagOptions}
+			friendOptions={friendOptions}
 			redirect="/films/diary"
 		/>
 	)}

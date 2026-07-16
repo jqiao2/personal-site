@@ -6,7 +6,7 @@ import { json, apiError } from '../../../../lib/http';
 
 export const prerender = false;
 
-// PATCH /api/films/logs/123  (owner) — edit rating/review/date/flags/medium/tags.
+// PATCH /api/films/logs/123  (owner) — edit rating/review/date/flags/medium/tags/friends.
 // DELETE /api/films/logs/123 (owner) — soft-delete (sets deleted_at).
 
 export const PATCH: APIRoute = async ({ params, request, cookies }) => {
@@ -42,6 +42,9 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	}
 	if ('tags' in body) {
 		input.tags = Array.isArray(body.tags) ? body.tags.map(String) : [];
+	}
+	if ('friends' in body) {
+		input.friends = Array.isArray(body.friends) ? body.friends.map(String) : [];
 	}
 
 	if (Object.keys(input).length === 0) return apiError('no updatable fields provided', 400);

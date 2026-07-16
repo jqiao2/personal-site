@@ -110,6 +110,8 @@ export interface CreateLogInput {
 	rewatched?: boolean;
 	liked?: boolean;
 	tags?: string[];
+	/** Names of the people watched with. */
+	friends?: string[];
 	/** How it was watched: 'theater' | 'tv' | 'computer' | 'plane' | free text. */
 	medium?: string | null;
 	/** Theater as a single "Name, City" string (theater medium only). */
@@ -119,7 +121,7 @@ export interface CreateLogInput {
 }
 
 /** Fields an edit can change on an existing diary log. Only the keys present are
- * applied; `tags`, when present, replaces the whole tag set. */
+ * applied; `tags` / `friends`, when present, replace the whole set. */
 export interface UpdateLogInput {
 	rating?: number | null;
 	reviewText?: string | null;
@@ -134,6 +136,8 @@ export interface UpdateLogInput {
 	format?: string | null;
 	/** Full replacement set of tag names. */
 	tags?: string[];
+	/** Full replacement set of friend names. */
+	friends?: string[];
 }
 
 /** Upsert the film-level "watched" record (mark the movie seen). Decision A: does
@@ -168,7 +172,8 @@ function hasDiaryContent(input: CreateLogInput): boolean {
 		input.rewatched === true ||
 		(typeof input.reviewText === 'string' && input.reviewText.trim().length > 0) ||
 		(typeof input.medium === 'string' && input.medium.trim().length > 0) ||
-		(Array.isArray(input.tags) && input.tags.some((t) => t.trim().length > 0))
+		(Array.isArray(input.tags) && input.tags.some((t) => t.trim().length > 0)) ||
+		(Array.isArray(input.friends) && input.friends.some((f) => f.trim().length > 0))
 	);
 }
 
@@ -259,6 +264,9 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 	const tags = normalizeTags(input.tags);
 	if (tags.length > 0) await attachTags(log.id, tags);
 
+	const friends = normalizeFriends(input.friends);
+	if (friends.length > 0) await attachFriends(log.id, friends);
+
 	return { movieId: movie.id, watchedOnly: false, logId: log.id as number };
 }
 
@@ -297,11 +305,73 @@ async function replaceTags(logId: number, names: string[] | undefined): Promise<
 }
 
 /**
+ * Trim and de-duplicate friend names. Unlike tags these keep the casing they were
+ * typed in — they're people's names — so duplicates are collapsed case-insensitively
+ * while the first spelling wins.
+ */
+function normalizeFriends(friends: string[] | undefined): string[] {
+	if (!friends) return [];
+	const byKey = new Map<string, string>();
+	for (const raw of friends) {
+		const name = raw.trim();
+		if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), name);
+	}
+	return [...byKey.values()];
+}
+
+/**
+ * Resolve friend names to ids, creating rows for the ones we haven't seen before.
+ * Tags can upsert straight on `name` because they're already lowercased; friends
+ * keep their typed casing, so an existing "Mia Tanaka" is matched case-insensitively
+ * here rather than inserting a second row for "mia tanaka".
+ */
+async function resolveFriendIds(names: string[]): Promise<number[]> {
+	const { data: existing, error: readErr } = await supabaseAdmin.from('friends').select('id, name');
+	if (readErr) throw new Error(`lookup friends failed: ${readErr.message}`);
+
+	const idByKey = new Map<string, number>();
+	for (const f of (existing ?? []) as { id: number; name: string }[]) {
+		idByKey.set(f.name.trim().toLowerCase(), f.id);
+	}
+
+	const missing = names.filter((n) => !idByKey.has(n.toLowerCase()));
+	if (missing.length > 0) {
+		const { data: inserted, error: insErr } = await supabaseAdmin
+			.from('friends')
+			.insert(missing.map((name) => ({ name })))
+			.select('id, name');
+		if (insErr) throw new Error(`create friends failed: ${insErr.message}`);
+		for (const f of (inserted ?? []) as { id: number; name: string }[]) {
+			idByKey.set(f.name.trim().toLowerCase(), f.id);
+		}
+	}
+
+	return names.map((n) => idByKey.get(n.toLowerCase())!).filter((id) => id != null);
+}
+
+/** Link friend names to a log, creating any that don't exist yet. */
+async function attachFriends(logId: number, names: string[]): Promise<void> {
+	const ids = await resolveFriendIds(names);
+	if (ids.length === 0) return;
+	const links = ids.map((friend_id) => ({ log_id: logId, friend_id }));
+	const { error } = await supabaseAdmin.from('log_friends').insert(links);
+	if (error) throw new Error(`link friends failed: ${error.message}`);
+}
+
+/** Replace a log's entire friend set: drop the existing links, attach the new names. */
+async function replaceFriends(logId: number, names: string[] | undefined): Promise<void> {
+	const { error } = await supabaseAdmin.from('log_friends').delete().eq('log_id', logId);
+	if (error) throw new Error(`clear friends failed: ${error.message}`);
+	const norm = normalizeFriends(names);
+	if (norm.length > 0) await attachFriends(logId, norm);
+}
+
+/**
  * Edit an existing (non-deleted) diary log. Applies only the provided fields.
  * `medium` follows the same rules as logging: a theater viewing resolves a
  * theater + format (defaulting to "Digital"), any other medium clears both.
- * `tags`, when provided, replaces the log's whole tag set. Returns false when the
- * log doesn't exist or is soft-deleted.
+ * `tags` / `friends`, when provided, replace the log's whole set. Returns false
+ * when the log doesn't exist or is soft-deleted.
  */
 export async function updateLog(id: number, input: UpdateLogInput): Promise<boolean> {
 	const patch: Record<string, unknown> = {};
@@ -321,7 +391,7 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 		patch.format_id = formatId;
 	}
 
-	// The row must exist (and be live) before we touch columns or tags.
+	// The row must exist (and be live) before we touch columns, tags or friends.
 	if (Object.keys(patch).length > 0) {
 		const { data, error } = await supabaseAdmin
 			.from('logs')
@@ -332,7 +402,7 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 			.maybeSingle();
 		if (error) throw new Error(`updateLog failed: ${error.message}`);
 		if (!data) return false;
-	} else if ('tags' in input) {
+	} else if ('tags' in input || 'friends' in input) {
 		const { data, error } = await supabaseAdmin
 			.from('logs')
 			.select('id')
@@ -344,6 +414,7 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 	}
 
 	if ('tags' in input) await replaceTags(id, input.tags);
+	if ('friends' in input) await replaceFriends(id, input.friends);
 	return true;
 }
 
@@ -402,6 +473,11 @@ export interface MovieLog {
  * Logged watches, newest first. The logs_with_movie view already excludes
  * soft-deleted rows (migration 0005) and aggregates tags, so this is a plain
  * select.
+ *
+ * `id` breaks ties last so the total order is deterministic. Without it, logs
+ * sharing a watched_date *and* a created_at (the Letterboxd import stamps a whole
+ * batch with one timestamp) can order differently between two paged queries, which
+ * makes the diary's infinite scroll serve one row twice and drop another.
  */
 export async function listLogs(limit = 1000, offset = 0): Promise<LogListItem[]> {
 	const { data, error } = await supabasePublic
@@ -412,6 +488,7 @@ export async function listLogs(limit = 1000, offset = 0): Promise<LogListItem[]>
 		)
 		.order('watched_date', { ascending: false, nullsFirst: false })
 		.order('created_at', { ascending: false })
+		.order('id', { ascending: false })
 		.range(offset, offset + limit - 1);
 	if (error) throw new Error(`listLogs failed: ${error.message}`);
 	return (data ?? []) as unknown as LogListItem[];
@@ -486,10 +563,62 @@ export async function listTags(): Promise<string[]> {
 		.select('name')
 		.order('name', { ascending: true });
 	if (error) {
-		if (error.code === '42P01' || (error.message ?? '').includes('does not exist')) return [];
+		if (isMissingRelation(error)) return [];
 		throw new Error(`listTags failed: ${error.message}`);
 	}
 	return ((data ?? []) as { name: string }[]).map((t) => t.name);
+}
+
+/**
+ * Whether a PostgREST error is "this table/relationship isn't there yet" — i.e. a
+ * migration hasn't been applied. Lets friends (migration 0013) degrade to empty
+ * instead of breaking the pages that read them.
+ */
+function isMissingRelation(err: { code?: string; message?: string } | null): boolean {
+	if (!err) return false;
+	const msg = (err.message ?? '').toLowerCase();
+	return (
+		err.code === '42P01' || // undefined_table
+		err.code === 'PGRST200' || // no such relationship in the schema cache
+		msg.includes('does not exist') ||
+		msg.includes('schema cache')
+	);
+}
+
+/**
+ * Friend names, alphabetical — for the composer/editor "watched with" autocomplete.
+ * Returns [] (not an error) before migration 0013 creates the table.
+ */
+export async function listFriends(): Promise<string[]> {
+	const { data, error } = await supabasePublic
+		.from('friends')
+		.select('name')
+		.order('name', { ascending: true });
+	if (error) {
+		if (isMissingRelation(error)) return [];
+		throw new Error(`listFriends failed: ${error.message}`);
+	}
+	return ((data ?? []) as { name: string }[]).map((f) => f.name);
+}
+
+/**
+ * The people a log was watched with, alphabetical. Read on its own rather than
+ * embedded in getDiaryEntry's select so it can degrade to [] before migration 0013
+ * without adding another dimension to that query's migration-tier fallbacks.
+ */
+async function listFriendsForLog(logId: number): Promise<string[]> {
+	const { data, error } = await supabasePublic
+		.from('log_friends')
+		.select('friends(name)')
+		.eq('log_id', logId);
+	if (error) {
+		if (isMissingRelation(error)) return [];
+		throw new Error(`listFriendsForLog failed: ${error.message}`);
+	}
+	return ((data ?? []) as unknown as { friends: { name: string } | null }[])
+		.map((lf) => lf.friends?.name)
+		.filter((n): n is string => Boolean(n))
+		.sort((a, b) => a.localeCompare(b));
 }
 
 /** A single diary entry with everything the Diary Entry page renders. */
@@ -516,6 +645,8 @@ export interface DiaryEntry {
 		directors: string[];
 	};
 	tags: string[];
+	/** People this film was watched with; [] when watched alone. */
+	friends: string[];
 }
 
 /**
@@ -582,6 +713,7 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 		Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 	const theater = one(row.theaters);
 	const format = one(row.formats);
+	const friends = await listFriendsForLog(row.id);
 	return {
 		id: row.id,
 		watched_date: row.watched_date,
@@ -602,6 +734,7 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 			directors: row.movies.directors ?? [],
 		},
 		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
+		friends,
 	};
 }
 

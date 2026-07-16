@@ -21,8 +21,8 @@ export const GET: APIRoute = async ({ url }) => {
 
 // POST /api/films/logs  (owner only) — "log a film".
 // Always marks the film watched; creates a dated diary log only when the entry
-// has content (rating/like/rewatch/review/tags). Returns { watchedOnly, logId }.
-// Body: { tmdbId, watchedDate?, rating?, reviewText?, rewatched?, liked?, tags? }
+// has content (rating/like/rewatch/review/tags/friends). Returns { watchedOnly, logId }.
+// Body: { tmdbId, watchedDate?, rating?, reviewText?, rewatched?, liked?, tags?, friends? }
 export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
@@ -50,6 +50,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			rewatched: Boolean(body.rewatched),
 			liked: Boolean(body.liked),
 			tags: Array.isArray(body.tags) ? body.tags.map(String) : undefined,
+			friends: Array.isArray(body.friends) ? body.friends.map(String) : undefined,
 			medium: asText(body.medium),
 			venue: asText(body.venue),
 			format: asText(body.format),
