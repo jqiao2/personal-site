@@ -1,0 +1,1637 @@
+---
+// Shared diary entry modal. Pages open it in one of two modes:
+//   select — film picker only ("What did you watch?"). Picking a film promotes
+//            the modal to `log` in place: the full entry form.
+//   edit   — amend an existing entry; the film is locked.
+//
+// `log` is therefore a runtime state rather than an entry point — logging always
+// starts by asking which film.
+//
+// Pages render their own trigger; any element carrying [data-open-entry-editor]
+// opens the modal. Server data reaches the client through the JSON config tag.
+export interface EntryEditorFilm {
+	tmdbId: number;
+	title: string;
+	year: number | null;
+	poster: string | null;
+}
+
+export interface EntryEditorInitial {
+	date: string;
+	rating: number | null;
+	liked: boolean;
+	rewatch: boolean;
+	medium: string | null;
+	otherMedium: string;
+	venue: string;
+	format: string;
+	review: string;
+	tags: string[];
+}
+
+interface Props {
+	mode: 'select' | 'edit';
+	venueOptions: string[];
+	tagOptions: string[];
+	/** Where to send the user after a 401, and back to after saving. */
+	redirect: string;
+	/** edit mode only. */
+	logId?: number | null;
+	film?: EntryEditorFilm | null;
+	initial?: EntryEditorInitial | null;
+}
+
+const {
+	mode,
+	venueOptions,
+	tagOptions,
+	redirect,
+	logId = null,
+	film = null,
+	initial = null,
+} = Astro.props;
+
+const FORMAT_OPTIONS = [
+	'Digital',
+	'35mm',
+	'70mm',
+	'IMAX',
+	'IMAX 70mm',
+	'IMAX 3D',
+	'3D',
+	'Dolby Cinema',
+	'VistaVision',
+	'DCP',
+];
+
+const today = new Date().toISOString().slice(0, 10);
+const config = {
+	mode,
+	logId,
+	redirect,
+	today,
+	venueOptions,
+	formatOptions: FORMAT_OPTIONS,
+	tagOptions,
+	initial,
+	film,
+};
+// Escape "<" so a review containing "</script>" can't break out of the JSON tag.
+const configJson = JSON.stringify(config).replace(/</g, '\\u003c');
+
+const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
+---
+
+<div class="modal" id="ee-modal" hidden>
+	<div class="modal__backdrop" id="ee-backdrop"></div>
+	<div class="modal__panel" id="ee-panel" role="dialog" aria-modal="true" aria-labelledby="ee-title">
+		<div class="modal__head">
+			<span class="modal__title" id="ee-title">{headTitle}</span>
+			<button type="button" class="modal__close" id="ee-close" aria-label="Close">✕</button>
+		</div>
+
+		<div class="discard" id="ee-discard" hidden>
+			<div class="discard__box">
+				<div class="discard__title" id="ee-discard-title">
+					{mode === 'edit' ? 'Discard changes?' : 'Discard this entry?'}
+				</div>
+				<div class="discard__msg" id="ee-discard-msg">
+					{
+						mode === 'edit'
+							? 'You have unsaved edits to this entry.'
+							: 'Your entry has unsaved changes.'
+					}
+				</div>
+				<div class="discard__actions">
+					<button type="button" class="btn-ghost" id="ee-discard-keep">Keep editing</button>
+					<button type="button" class="btn-discard" id="ee-discard-confirm">Discard</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="modal__body">
+			<div class="field-grid" id="ee-film-row">
+				<div class="film-field">
+					<label class="lbl" for="ee-q">Film</label>
+
+					{
+						mode === 'edit' && film ? (
+							<div class="selected selected--locked">
+								<div class="selected__poster">{film.poster && <img src={film.poster} alt="" />}</div>
+								<div class="selected__info">
+									<div class="selected__title">
+										{film.title}
+										{film.year && <span class="selected__year">{film.year}</span>}
+									</div>
+								</div>
+							</div>
+						) : (
+							<>
+								<div class="search" id="ee-search">
+									<input type="text" id="ee-q" placeholder="Search a film…" autocomplete="off" />
+									<ul class="results" id="ee-results" hidden />
+								</div>
+								<div class="selected" id="ee-selected" hidden>
+									<div class="selected__poster">
+										<img id="ee-sel-poster" alt="" />
+									</div>
+									<div class="selected__info">
+										<div class="selected__title">
+											<span id="ee-sel-title" />
+											<span class="selected__year" id="ee-sel-year" />
+										</div>
+									</div>
+									<button type="button" class="selected__change" id="ee-change">
+										Change
+									</button>
+								</div>
+								<div class="prior-hint" id="ee-prior" hidden />
+							</>
+						)
+					}
+				</div>
+
+				<div class="date-field" id="ee-date-field">
+					<label class="lbl" for="ee-date">Watched</label>
+					<button type="button" class="datebtn" id="ee-date" aria-haspopup="dialog">Select a date</button>
+					<div class="cal" id="ee-cal" role="dialog" aria-label="Choose a date" hidden>
+						<div class="cal__head">
+							<button type="button" class="cal__nav" id="ee-cal-prev" aria-label="Previous month">‹</button>
+							<span class="cal__month" id="ee-cal-month"></span>
+							<button type="button" class="cal__nav" id="ee-cal-next" aria-label="Next month">›</button>
+						</div>
+						<div class="cal__wd">
+							<span>Su</span><span>Mo</span><span>Tu</span><span>We</span><span>Th</span><span>Fr</span
+							><span>Sa</span>
+						</div>
+						<div class="cal__grid" id="ee-cal-grid"></div>
+					</div>
+				</div>
+			</div>
+
+			<div class="full-form" id="ee-full">
+				<div>
+					<label class="lbl">Rating</label>
+					<div class="rating-row">
+						<span class="starpicker" id="ee-starpicker">
+							<span class="sp-empty">★★★★★</span>
+							<span class="sp-fill" id="ee-sp-fill"></span>
+							<span class="sp-hits" id="ee-sp-hits"></span>
+						</span>
+						<span class="rating-label" id="ee-rating-label">Not rated</span>
+						<div class="toggles">
+							<button type="button" class="toggle" id="ee-like">♥ Like</button>
+							<button type="button" class="toggle" id="ee-rewatch">↻ Rewatch</button>
+						</div>
+					</div>
+				</div>
+
+				<div>
+					<label class="lbl">Medium</label>
+					<div class="mediums" id="ee-mediums">
+						<button type="button" class="toggle" data-medium="theater">Theater</button>
+						<button type="button" class="toggle" data-medium="tv">TV</button>
+						<button type="button" class="toggle" data-medium="computer">Computer</button>
+						<button type="button" class="toggle" data-medium="plane">Airplane</button>
+						<button type="button" class="toggle" data-medium="other">Other…</button>
+					</div>
+					<div class="theater-fields" id="ee-theater-fields" hidden>
+						<div class="suggest-field">
+							<label class="lbl" for="ee-venue">Theater</label>
+							<input type="text" id="ee-venue" placeholder="e.g. Metrograph, NYC" autocomplete="off" />
+							<ul class="suggest" id="ee-venue-suggest" hidden></ul>
+						</div>
+						<div class="suggest-field">
+							<label class="lbl" for="ee-format">Format</label>
+							<input type="text" id="ee-format" placeholder="e.g. 35mm, IMAX, 70mm" autocomplete="off" />
+							<ul class="suggest" id="ee-format-suggest" hidden></ul>
+						</div>
+					</div>
+					<div class="other-field" id="ee-other-field" hidden>
+						<label class="lbl" for="ee-other">Other medium</label>
+						<input type="text" id="ee-other" placeholder="e.g. projector, phone, drive-in…" autocomplete="off" />
+					</div>
+				</div>
+
+				<div>
+					<label class="lbl" for="ee-review">Review</label>
+					<textarea id="ee-review" rows="4" placeholder="Add your thoughts…"></textarea>
+				</div>
+
+				<div class="tags-field">
+					<label class="lbl" for="ee-tag-input">Tags</label>
+					<input type="text" id="ee-tag-input" placeholder="Type a tag, press Enter…" autocomplete="off" />
+					<ul class="tag-suggest" id="ee-tag-suggest" hidden></ul>
+					<div class="tag-chips" id="ee-tag-chips" hidden></div>
+				</div>
+			</div>
+		</div>
+
+		<div class="modal__foot">
+			<button type="button" class={mode === 'edit' ? 'btn-delete' : 'btn-ghost'} id="ee-left">
+				{mode === 'edit' ? 'Delete entry' : 'Cancel'}
+			</button>
+			<span class="save-msg" id="ee-msg"></span>
+			<button type="button" class="btn-save" id="ee-save" hidden={mode === 'select'}>
+				{mode === 'edit' ? 'Save changes' : 'Log film'}
+			</button>
+		</div>
+	</div>
+</div>
+
+<script type="application/json" id="ee-config" set:html={configJson} />
+
+<style>
+	.modal {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		padding: 56px 24px;
+	}
+	.modal[hidden] {
+		display: none;
+	}
+	.modal__backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(10, 4, 5, 0.72);
+		backdrop-filter: blur(3px);
+	}
+	.modal__panel {
+		position: relative;
+		width: 100%;
+		max-width: 560px;
+		max-height: calc(100vh - 112px);
+		display: flex;
+		flex-direction: column;
+		background: #241012;
+		border: 1px solid #4a2529;
+		border-radius: 14px;
+		box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+		overflow: hidden;
+	}
+	.modal__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 20px 24px;
+		border-bottom: 1px solid #402226;
+		flex: none;
+	}
+	.modal__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 22px;
+		color: #f4e8d1;
+	}
+	.modal__close {
+		width: 30px;
+		height: 30px;
+		border: 1px solid #4a2529;
+		background: transparent;
+		color: #c2a99a;
+		border-radius: 7px;
+		cursor: pointer;
+		font-size: 14px;
+		line-height: 1;
+	}
+	.modal__close:hover {
+		background: #402226;
+		color: #f4e8d1;
+	}
+	.modal__body {
+		padding: 22px 24px 26px;
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+	}
+	/* select mode is a short, content-height panel with nothing to scroll, so the
+	   search dropdown is free to overhang it rather than be clipped by the
+	   scroll container. */
+	.modal__panel--picker,
+	.modal__panel--picker .modal__body {
+		overflow: visible;
+	}
+	.full-form {
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+	.full-form[hidden] {
+		display: none;
+	}
+
+	.field-grid {
+		display: grid;
+		grid-template-columns: 1fr 150px;
+		gap: 12px;
+		align-items: start;
+	}
+	/* select mode: film picker only, no date column */
+	.field-grid--solo {
+		display: block;
+	}
+	.film-field {
+		position: relative;
+	}
+	.date-field {
+		position: relative;
+	}
+	.date-field[hidden] {
+		display: none;
+	}
+	.lbl {
+		display: block;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.4px;
+		color: #8a6f63;
+		margin-bottom: 7px;
+	}
+	.search {
+		position: relative;
+	}
+	.search[hidden] {
+		display: none;
+	}
+
+	#ee-q,
+	#ee-review,
+	#ee-venue,
+	#ee-format,
+	#ee-other,
+	#ee-tag-input {
+		width: 100%;
+		background: #1c0d0e;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		color: #f4e8d1;
+		font-family: 'Archivo', sans-serif;
+		font-size: 14px;
+		padding: 11px 13px;
+		outline: none;
+	}
+	#ee-q:focus,
+	#ee-review:focus,
+	#ee-venue:focus,
+	#ee-format:focus,
+	#ee-other:focus,
+	#ee-tag-input:focus {
+		border-color: #d9b45a;
+	}
+	#ee-review {
+		padding: 12px 13px;
+		font-family: 'Newsreader', serif;
+		color: #f2e5cd;
+		line-height: 1.5;
+		resize: vertical;
+	}
+
+	/* Date button + calendar popover */
+	.datebtn {
+		width: 100%;
+		text-align: left;
+		background: #1c0d0e;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		padding: 10px 13px;
+		color: #f4e8d1;
+		font-size: 13px;
+		font-family: 'Archivo', sans-serif;
+		cursor: pointer;
+		outline: none;
+	}
+	.datebtn:hover,
+	.datebtn:focus {
+		border-color: #d9b45a;
+	}
+	.cal {
+		position: absolute;
+		top: 100%;
+		right: 0;
+		margin-top: 6px;
+		width: 252px;
+		background: #241012;
+		border: 1px solid #4a2529;
+		border-radius: 10px;
+		box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.7);
+		z-index: 20;
+		padding: 12px;
+	}
+	.cal[hidden] {
+		display: none;
+	}
+	.cal__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+	}
+	.cal__nav {
+		width: 26px;
+		height: 26px;
+		border: 1px solid #4a2529;
+		background: transparent;
+		color: #c2a99a;
+		border-radius: 6px;
+		cursor: pointer;
+		font-size: 14px;
+		line-height: 1;
+	}
+	.cal__nav:hover {
+		background: #402226;
+		color: #f4e8d1;
+	}
+	.cal__month {
+		font-family: 'Newsreader', serif;
+		font-size: 15px;
+		color: #f4e8d1;
+	}
+	.cal__wd {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 2px;
+		margin-bottom: 4px;
+	}
+	.cal__wd span {
+		text-align: center;
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: #8a6f63;
+		padding: 4px 0;
+	}
+	.cal__grid {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 2px;
+	}
+	.cal__grid :global(button) {
+		text-align: center;
+		font-size: 13px;
+		padding: 7px 0;
+		border: none;
+		background: transparent;
+		border-radius: 6px;
+		cursor: pointer;
+		color: #e9d9c4;
+		font-family: 'Archivo', sans-serif;
+	}
+	.cal__grid :global(button:hover) {
+		background: #402226;
+	}
+	.cal__grid :global(button.on) {
+		background: #d9b45a;
+		color: #2a1214;
+		font-weight: 700;
+	}
+	.cal__grid :global(span) {
+		padding: 7px 0;
+	}
+
+	/* TMDB search results */
+	.results {
+		list-style: none;
+		margin: 6px 0 0;
+		padding: 0;
+		position: absolute;
+		z-index: 10;
+		width: 100%;
+		max-height: 280px;
+		overflow-y: auto;
+		background: #1c0d0e;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+	}
+	.results[hidden] {
+		display: none;
+	}
+	.results :global(li) {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		padding: 7px 9px;
+		cursor: pointer;
+		color: #e9d9c4;
+		font-size: 13px;
+	}
+	.results :global(li:hover) {
+		background: #331619;
+	}
+	.results :global(img) {
+		width: 30px;
+		height: 45px;
+		object-fit: cover;
+		border-radius: 3px;
+		background: #4a2529;
+		flex-shrink: 0;
+	}
+	.results :global(.r-year) {
+		color: #a2857a;
+		margin-left: 6px;
+	}
+	.results :global(.r-watched) {
+		margin-left: auto;
+		font-size: 10px;
+		text-transform: uppercase;
+		letter-spacing: 1px;
+		color: #d9b45a;
+		white-space: nowrap;
+	}
+
+	.selected {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		background: #1c0d0e;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		padding: 8px 10px;
+	}
+	.selected[hidden] {
+		display: none;
+	}
+	.selected__poster {
+		width: 38px;
+		height: 57px;
+		flex: none;
+		border-radius: 4px;
+		overflow: hidden;
+		background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+		border: 1px solid #4a2529;
+	}
+	.selected__poster img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.selected__info {
+		flex: 1;
+		min-width: 0;
+	}
+	.selected__title {
+		font-family: 'Newsreader', serif;
+		font-size: 16px;
+		color: #f2e5cd;
+		line-height: 1.2;
+	}
+	.selected__year {
+		color: #b0917f;
+		font-style: italic;
+		font-size: 14px;
+		margin-left: 4px;
+	}
+	.selected__change {
+		flex: none;
+		font-size: 12px;
+		font-weight: 600;
+		color: #ddc9b4;
+		background: transparent;
+		border: 1px solid #4a2529;
+		border-radius: 7px;
+		padding: 7px 13px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.selected__change:hover {
+		border-color: #d9b45a;
+		color: #f4e8d1;
+	}
+	.prior-hint {
+		margin-top: 9px;
+		font-size: 12px;
+		color: #d9b45a;
+		line-height: 1.4;
+	}
+	.prior-hint[hidden] {
+		display: none;
+	}
+
+	/* Rating */
+	.rating-row {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		flex-wrap: wrap;
+	}
+	.starpicker {
+		position: relative;
+		display: inline-block;
+		line-height: 1;
+		font-size: 26px;
+		cursor: pointer;
+		user-select: none;
+	}
+	.sp-empty {
+		color: #4a2529;
+	}
+	.sp-fill {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		color: #d9b45a;
+		pointer-events: none;
+	}
+	.sp-fill::before {
+		content: '★★★★★';
+	}
+	.sp-hits {
+		position: absolute;
+		inset: 0;
+		display: flex;
+	}
+	.sp-hits :global(span) {
+		flex: 1;
+	}
+	.rating-label {
+		font-size: 13px;
+		color: #a2857a;
+	}
+	.toggles {
+		display: flex;
+		gap: 10px;
+		margin-left: auto;
+	}
+	.toggle {
+		font-size: 13px;
+		font-weight: 600;
+		border-radius: 20px;
+		padding: 9px 16px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		background: transparent;
+		color: #ddc9b4;
+		border: 1px solid #4a2529;
+	}
+	.toggle.on {
+		background: #d9b45a;
+		color: #2a1214;
+		border-color: #d9b45a;
+	}
+	.mediums {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.theater-fields {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+		margin-top: 12px;
+	}
+	.theater-fields[hidden],
+	.other-field[hidden] {
+		display: none;
+	}
+	.other-field {
+		margin-top: 12px;
+	}
+
+	/* Venue / format autocomplete (opens downward) */
+	.suggest-field {
+		position: relative;
+	}
+	.suggest {
+		list-style: none;
+		margin: 6px 0 0;
+		padding: 0;
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		z-index: 10;
+		max-height: 200px;
+		overflow-y: auto;
+		background: #241012;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.7);
+	}
+	.suggest[hidden] {
+		display: none;
+	}
+	.suggest :global(li) {
+		padding: 9px 13px;
+		cursor: pointer;
+		font-size: 14px;
+		color: #f2e5cd;
+		border-bottom: 1px solid #351a1d;
+	}
+	.suggest :global(li:last-child) {
+		border-bottom: none;
+	}
+	.suggest :global(li:hover),
+	.suggest :global(li.active) {
+		background: #331619;
+	}
+
+	/* Tags: input + autocomplete (opens upward) + chips */
+	.tags-field {
+		position: relative;
+	}
+	.tag-suggest {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		position: absolute;
+		bottom: 100%;
+		left: 0;
+		right: 0;
+		margin-bottom: 6px;
+		z-index: 10;
+		max-height: 200px;
+		overflow-y: auto;
+		background: #241012;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
+	}
+	.tag-suggest[hidden] {
+		display: none;
+	}
+	.tag-suggest :global(li) {
+		padding: 9px 13px;
+		cursor: pointer;
+		font-size: 14px;
+		color: #f2e5cd;
+		border-bottom: 1px solid #351a1d;
+	}
+	.tag-suggest :global(li:last-child) {
+		border-bottom: none;
+	}
+	.tag-suggest :global(li:hover),
+	.tag-suggest :global(li.active) {
+		background: #331619;
+	}
+	.tag-chips {
+		display: flex;
+		gap: 7px;
+		flex-wrap: wrap;
+		margin-top: 10px;
+	}
+	.tag-chips[hidden] {
+		display: none;
+	}
+	.tag-chips :global(.tag-chip) {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 12px;
+		color: #ddc9b4;
+		border: 1px solid #4a2529;
+		border-radius: 20px;
+		padding: 4px 8px 4px 12px;
+		background: #241012;
+	}
+	.tag-chips :global(.tag-chip button) {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: #a2857a;
+		font-size: 13px;
+		line-height: 1;
+		padding: 0;
+		font-family: 'Archivo', sans-serif;
+	}
+	.tag-chips :global(.tag-chip button:hover) {
+		color: #f4e8d1;
+	}
+
+	/* Footer */
+	.modal__foot {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		padding: 16px 24px;
+		border-top: 1px solid #402226;
+		background: #1f0e10;
+		flex: none;
+		/* Rounds itself rather than relying on the panel to clip it, which the
+		   picker variant can't do. */
+		border-radius: 0 0 13px 13px;
+	}
+	.save-msg {
+		font-size: 13px;
+		color: #a2857a;
+		margin-left: auto;
+	}
+	.save-msg.error {
+		color: #e0736f;
+	}
+	.btn-ghost {
+		font-size: 14px;
+		font-weight: 600;
+		color: #ddc9b4;
+		background: transparent;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		padding: 10px 20px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-ghost:hover {
+		border-color: #a2857a;
+		color: #f4e8d1;
+	}
+	.btn-save {
+		font-size: 14px;
+		font-weight: 700;
+		border: none;
+		border-radius: 8px;
+		padding: 10px 22px;
+		font-family: 'Archivo', sans-serif;
+		background: #d9b45a;
+		color: #2a1214;
+		cursor: pointer;
+	}
+	.btn-save:disabled {
+		background: #4a2529;
+		color: #8a6f63;
+		cursor: not-allowed;
+	}
+	.btn-save[hidden] {
+		display: none;
+	}
+	.btn-delete {
+		font-size: 14px;
+		font-weight: 600;
+		color: #e89b70;
+		background: transparent;
+		border: 1px solid #6b3a30;
+		border-radius: 8px;
+		padding: 10px 20px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-delete:hover {
+		border-color: #d9865a;
+		background: #331619;
+	}
+
+	/* Discard confirmation overlay (covers the panel) */
+	.discard {
+		position: absolute;
+		inset: 0;
+		z-index: 30;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 28px;
+		border-radius: 14px;
+		background: rgba(15, 6, 7, 0.88);
+		backdrop-filter: blur(2px);
+	}
+	.discard[hidden] {
+		display: none;
+	}
+	.discard__box {
+		width: 100%;
+		max-width: 360px;
+		background: #241012;
+		border: 1px solid #4a2529;
+		border-radius: 12px;
+		padding: 24px;
+		text-align: center;
+	}
+	.discard__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 21px;
+		color: #f4e8d1;
+		margin-bottom: 8px;
+	}
+	.discard__msg {
+		font-size: 13px;
+		color: #a2857a;
+		line-height: 1.5;
+		margin-bottom: 22px;
+	}
+	.discard__actions {
+		display: flex;
+		gap: 10px;
+		justify-content: center;
+	}
+	.btn-discard {
+		font-size: 13px;
+		font-weight: 700;
+		color: #2a1214;
+		background: #d9865a;
+		border: none;
+		border-radius: 8px;
+		padding: 9px 18px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-discard:hover {
+		background: #e89b70;
+	}
+
+	@media (max-width: 640px) {
+		.field-grid {
+			grid-template-columns: 1fr;
+		}
+		.cal {
+			right: auto;
+			left: 0;
+		}
+	}
+</style>
+
+<script>
+	// Owner-only. Astro always hoists this script; bail out when the modal isn't
+	// in the DOM (a non-owner viewing the page).
+	const modal = document.getElementById('ee-modal') as HTMLDivElement | null;
+	const configEl = document.getElementById('ee-config');
+
+	if (modal && configEl) {
+		interface Film {
+			tmdbId: number;
+			title: string;
+			year: number | null;
+			poster: string | null;
+		}
+		interface Initial {
+			date: string;
+			rating: number | null;
+			liked: boolean;
+			rewatch: boolean;
+			medium: string | null;
+			otherMedium: string;
+			venue: string;
+			format: string;
+			review: string;
+			tags: string[];
+		}
+		interface Config {
+			mode: 'select' | 'edit';
+			logId: number | null;
+			redirect: string;
+			today: string;
+			venueOptions: string[];
+			formatOptions: string[];
+			tagOptions: string[];
+			initial: Initial | null;
+			film: Film | null;
+		}
+
+		const cfg = JSON.parse(configEl.textContent || '{}') as Config;
+		const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+		const IMG = 'https://image.tmdb.org/t/p/w92';
+
+		const backdrop = $('ee-backdrop');
+		const panel = $<HTMLDivElement>('ee-panel');
+		const closeBtn = $('ee-close');
+		const titleEl = $<HTMLSpanElement>('ee-title');
+		const leftBtn = $<HTMLButtonElement>('ee-left');
+		const save = $<HTMLButtonElement>('ee-save');
+		const msg = $<HTMLSpanElement>('ee-msg');
+		const fullForm = $<HTMLDivElement>('ee-full');
+		const filmRow = $<HTMLDivElement>('ee-film-row');
+		const dateField = $<HTMLDivElement>('ee-date-field');
+		const discard = $<HTMLDivElement>('ee-discard');
+		const discardTitle = $<HTMLDivElement>('ee-discard-title');
+		const discardMsg = $<HTMLDivElement>('ee-discard-msg');
+		const discardKeep = $('ee-discard-keep');
+		const discardConfirm = $('ee-discard-confirm');
+
+		// Film picker (absent in edit mode, where the film is locked).
+		const q = $<HTMLInputElement>('ee-q');
+		const results = $<HTMLUListElement>('ee-results');
+		const searchWrap = $('ee-search');
+		const selected = $('ee-selected');
+		const selPoster = $<HTMLImageElement>('ee-sel-poster');
+		const selTitle = $<HTMLSpanElement>('ee-sel-title');
+		const selYear = $<HTMLSpanElement>('ee-sel-year');
+		const priorHint = $<HTMLDivElement>('ee-prior');
+		const change = $('ee-change');
+
+		const dateBtn = $<HTMLButtonElement>('ee-date');
+		const cal = $<HTMLDivElement>('ee-cal');
+		const calGrid = $<HTMLDivElement>('ee-cal-grid');
+		const calMonth = $<HTMLSpanElement>('ee-cal-month');
+		const calPrev = $('ee-cal-prev');
+		const calNext = $('ee-cal-next');
+
+		const reviewInput = $<HTMLTextAreaElement>('ee-review');
+		const likeBtn = $<HTMLButtonElement>('ee-like');
+		const rewatchBtn = $<HTMLButtonElement>('ee-rewatch');
+		const fill = $<HTMLSpanElement>('ee-sp-fill');
+		const hits = $<HTMLSpanElement>('ee-sp-hits');
+		const ratingLabel = $<HTMLSpanElement>('ee-rating-label');
+		const mediums = $<HTMLDivElement>('ee-mediums');
+		const theaterFields = $<HTMLDivElement>('ee-theater-fields');
+		const otherField = $<HTMLDivElement>('ee-other-field');
+		const venueInput = $<HTMLInputElement>('ee-venue');
+		const formatInput = $<HTMLInputElement>('ee-format');
+		const otherInput = $<HTMLInputElement>('ee-other');
+		const venueSuggest = $<HTMLUListElement>('ee-venue-suggest');
+		const formatSuggest = $<HTMLUListElement>('ee-format-suggest');
+		const tagInput = $<HTMLInputElement>('ee-tag-input');
+		const tagSuggest = $<HTMLUListElement>('ee-tag-suggest');
+		const tagChipsBox = $<HTMLDivElement>('ee-tag-chips');
+		const mediumBtns = Array.from(mediums.querySelectorAll<HTMLButtonElement>('button[data-medium]'));
+
+		const isEdit = cfg.mode === 'edit';
+		// `select` promotes itself to `log` once a film is chosen, so this is state,
+		// not a constant.
+		let mode: 'log' | 'edit' | 'select' = cfg.mode;
+
+		let tmdbId: number | null = isEdit ? (cfg.film?.tmdbId ?? null) : null;
+		let date: string = cfg.initial?.date || cfg.today;
+		let rating: number | null = null;
+		let liked = false;
+		let rewatch = false;
+		let medium: string | null = null; // 'theater'|'tv'|'computer'|'plane'|'other'|null
+		let tags: string[] = [];
+
+		// ---- Calendar ----
+		const MONTHS = [
+			'January', 'February', 'March', 'April', 'May', 'June',
+			'July', 'August', 'September', 'October', 'November', 'December',
+		];
+		const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+		let calY = 0;
+		let calM = 0;
+
+		const parseIso = (iso: string): [number, number, number] | null => {
+			const p = iso.split('-').map(Number);
+			return p.length === 3 && p.every(Number.isInteger) ? [p[0], p[1], p[2]] : null;
+		};
+		const toIso = (y: number, m: number, d: number) =>
+			`${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+
+		function renderDateLabel() {
+			const p = parseIso(date);
+			if (!p) {
+				dateBtn.textContent = 'Select a date';
+				return;
+			}
+			const dt = new Date(p[0], p[1] - 1, p[2]);
+			dateBtn.textContent = `${WEEKDAYS[dt.getDay()]}, ${MONTHS[p[1] - 1].slice(0, 3)} ${p[2]}, ${p[0]}`;
+		}
+		function renderCal() {
+			calMonth.textContent = `${MONTHS[calM]} ${calY}`;
+			calGrid.textContent = '';
+			const lead = new Date(calY, calM, 1).getDay();
+			const days = new Date(calY, calM + 1, 0).getDate();
+			for (let i = 0; i < lead; i++) calGrid.appendChild(document.createElement('span'));
+			for (let d = 1; d <= days; d++) {
+				const iso = toIso(calY, calM, d);
+				const b = document.createElement('button');
+				b.type = 'button';
+				b.textContent = String(d);
+				if (iso === date) b.classList.add('on');
+				b.addEventListener('click', () => {
+					date = iso;
+					renderDateLabel();
+					closeCal();
+				});
+				calGrid.appendChild(b);
+			}
+		}
+		function openCal() {
+			const p = parseIso(date) ?? parseIso(cfg.today)!;
+			calY = p[0];
+			calM = p[1] - 1;
+			renderCal();
+			cal.hidden = false;
+		}
+		function closeCal() {
+			cal.hidden = true;
+		}
+		dateBtn.addEventListener('click', () => (cal.hidden ? openCal() : closeCal()));
+		calPrev.addEventListener('click', () => {
+			if (--calM < 0) {
+				calM = 11;
+				calY--;
+			}
+			renderCal();
+		});
+		calNext.addEventListener('click', () => {
+			if (++calM > 11) {
+				calM = 0;
+				calY++;
+			}
+			renderCal();
+		});
+		document.addEventListener('click', (e) => {
+			const t = e.target as Node;
+			if (!cal.hidden && !cal.contains(t) && !dateBtn.contains(t)) closeCal();
+		});
+
+		// ---- TMDB search (log / select modes) ----
+		if (q) {
+			let timer: number | undefined;
+			q.addEventListener('input', () => {
+				window.clearTimeout(timer);
+				const query = q.value.trim();
+				if (!query) return hideResults();
+				timer = window.setTimeout(() => runSearch(query), 300);
+			});
+			q.addEventListener('focus', () => {
+				const query = q.value.trim();
+				if (query) runSearch(query);
+			});
+			document.addEventListener('click', (e) => {
+				if (!searchWrap.contains(e.target as Node)) hideResults();
+			});
+			change.addEventListener('click', () => {
+				tmdbId = null;
+				selected.hidden = true;
+				searchWrap.hidden = false;
+				save.disabled = true;
+				q.value = '';
+				resetEntryFields();
+				q.focus();
+			});
+		}
+		async function runSearch(query: string) {
+			try {
+				const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+				if (!res.ok) return hideResults();
+				const data = await res.json();
+				renderResults(data.results ?? []);
+			} catch {
+				hideResults();
+			}
+		}
+		function renderResults(items: any[]) {
+			results.textContent = '';
+			if (!items.length) return hideResults();
+			for (const m of items.slice(0, 8)) {
+				const li = document.createElement('li');
+				const img = document.createElement('img');
+				if (m.poster_path) img.src = IMG + m.poster_path;
+				img.alt = '';
+				const label = document.createElement('span');
+				label.textContent = m.title;
+				if (m.release_date) {
+					const yr = document.createElement('span');
+					yr.className = 'r-year';
+					yr.textContent = m.release_date.slice(0, 4);
+					label.appendChild(yr);
+				}
+				li.append(img, label);
+				li.addEventListener('click', () => selectMovie(m));
+				results.appendChild(li);
+			}
+			results.hidden = false;
+		}
+		function hideResults() {
+			results.hidden = true;
+			results.textContent = '';
+		}
+		function selectMovie(m: any) {
+			tmdbId = m.id;
+			selTitle.textContent = m.title;
+			selYear.textContent = m.release_date ? m.release_date.slice(0, 4) : '';
+			if (m.poster_path) {
+				selPoster.src = IMG + m.poster_path;
+				selPoster.hidden = false;
+			} else {
+				selPoster.removeAttribute('src');
+				selPoster.hidden = true;
+			}
+			hideResults();
+			searchWrap.hidden = true;
+			selected.hidden = false;
+			save.disabled = false;
+			// Picking a film in `select` mode is what turns it into a log entry.
+			if (mode === 'select') {
+				mode = 'log';
+				renderMode();
+			}
+			// A film's rating/like/rewatch is film-specific — start each entry clean,
+			// then let the prior-watch lookup suggest a rewatch.
+			resetEntryFields();
+			loadPrior(m.id);
+		}
+		// Clear rating / like / rewatch / prior hint, keeping film + date + review.
+		function resetEntryFields() {
+			rating = null;
+			setFill(0);
+			ratingLabel.textContent = 'Not rated';
+			liked = false;
+			likeBtn.classList.remove('on');
+			rewatch = false;
+			rewatchBtn.classList.remove('on');
+			priorHint.hidden = true;
+			priorHint.textContent = '';
+		}
+		// Look up whether this film was watched before; if so, suggest a rewatch and
+		// pre-fill the previous rating/like. Guarded against a stale response when
+		// the user switches films mid-request.
+		async function loadPrior(id: number) {
+			try {
+				const res = await fetch(`/api/films/prior-watch?tmdbId=${id}`);
+				if (!res.ok) return;
+				const prior = await res.json();
+				if (tmdbId !== id || !prior.watched) return;
+				rewatch = true;
+				rewatchBtn.classList.add('on');
+				if (prior.rating != null) {
+					rating = prior.rating;
+					setFill(rating);
+					ratingLabel.textContent = labelFor(rating);
+				}
+				liked = Boolean(prior.liked);
+				likeBtn.classList.toggle('on', liked);
+				const n = prior.logCount;
+				priorHint.textContent =
+					n > 0
+						? `Logged ${n} time${n === 1 ? '' : 's'} before — marked as a rewatch.`
+						: `You've watched this before — marked as a rewatch.`;
+				priorHint.hidden = false;
+			} catch {
+				/* network hiccup — leave the entry clean */
+			}
+		}
+
+		// ---- Half-star picker (10 hotspots over 5 stars) ----
+		const setFill = (value: number) => {
+			fill.style.width = `${(value / 5) * 100}%`;
+		};
+		const labelFor = (v: number) => (v === 0 ? 'Not rated' : `${Math.floor(v)}${v % 1 ? '½' : ''}★`);
+		for (let i = 1; i <= 10; i++) {
+			const hit = document.createElement('span');
+			const value = i / 2;
+			hit.addEventListener('mousemove', () => {
+				setFill(value);
+				ratingLabel.textContent = labelFor(value);
+			});
+			hit.addEventListener('click', () => {
+				rating = value;
+				setFill(value);
+				ratingLabel.textContent = labelFor(value);
+			});
+			hits.appendChild(hit);
+		}
+		hits.addEventListener('mouseleave', () => {
+			setFill(rating ?? 0);
+			ratingLabel.textContent = labelFor(rating ?? 0);
+		});
+
+		likeBtn.addEventListener('click', () => {
+			liked = !liked;
+			likeBtn.classList.toggle('on', liked);
+		});
+		rewatchBtn.addEventListener('click', () => {
+			rewatch = !rewatch;
+			rewatchBtn.classList.toggle('on', rewatch);
+		});
+
+		// ---- Medium picker (single-select; click active to deselect) ----
+		function renderMedium() {
+			for (const b of mediumBtns) b.classList.toggle('on', b.dataset.medium === medium);
+			theaterFields.hidden = medium !== 'theater';
+			otherField.hidden = medium !== 'other';
+		}
+		for (const b of mediumBtns) {
+			b.addEventListener('click', () => {
+				const m = b.dataset.medium ?? null;
+				medium = medium === m ? null : m;
+				renderMedium();
+			});
+		}
+
+		// ---- Free-text autocomplete shared by venue + format ----
+		function wireSuggest(input: HTMLInputElement, list: HTMLUListElement, options: string[]) {
+			let active = -1;
+			const candidates = () => {
+				const token = input.value.trim().toLowerCase();
+				return options
+					.filter((o) => o.toLowerCase() !== token)
+					.filter((o) => !token || o.toLowerCase().includes(token))
+					.slice(0, 6);
+			};
+			const render = () => {
+				const items = candidates();
+				list.textContent = '';
+				active = -1;
+				if (!items.length) {
+					list.hidden = true;
+					return;
+				}
+				for (const o of items) {
+					const li = document.createElement('li');
+					li.textContent = o;
+					li.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						input.value = o;
+						list.hidden = true;
+					});
+					list.appendChild(li);
+				}
+				list.hidden = false;
+			};
+			input.addEventListener('input', render);
+			input.addEventListener('focus', render);
+			input.addEventListener('blur', () => {
+				list.hidden = true;
+			});
+			input.addEventListener('keydown', (e) => {
+				const lis = Array.from(list.querySelectorAll('li'));
+				if (!lis.length) return;
+				if (e.key === 'Enter' && active >= 0) {
+					e.preventDefault();
+					input.value = lis[active].textContent || '';
+					list.hidden = true;
+				} else if (e.key === 'ArrowDown') {
+					e.preventDefault();
+					active = (active + 1) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === active));
+				} else if (e.key === 'ArrowUp') {
+					e.preventDefault();
+					active = (active - 1 + lis.length) % lis.length;
+					lis.forEach((li, i) => li.classList.toggle('active', i === active));
+				}
+			});
+		}
+		wireSuggest(venueInput, venueSuggest, cfg.venueOptions);
+		wireSuggest(formatInput, formatSuggest, cfg.formatOptions);
+
+		// ---- Tags (chips + autocomplete over known tags) ----
+		let tagActive = -1;
+		function renderChips() {
+			tagChipsBox.textContent = '';
+			tags.forEach((t, i) => {
+				const chip = document.createElement('span');
+				chip.className = 'tag-chip';
+				chip.append(t);
+				const x = document.createElement('button');
+				x.type = 'button';
+				x.setAttribute('aria-label', `Remove ${t}`);
+				x.textContent = '✕';
+				x.addEventListener('click', () => removeTag(i));
+				chip.appendChild(x);
+				tagChipsBox.appendChild(chip);
+			});
+			tagChipsBox.hidden = tags.length === 0;
+		}
+		function removeTag(i: number) {
+			tags.splice(i, 1);
+			renderChips();
+			renderTagSuggest();
+		}
+		function commitTag(raw: string) {
+			const name = raw.trim();
+			if (name && !tags.some((t) => t.toLowerCase() === name.toLowerCase())) tags.push(name);
+			tagInput.value = '';
+			renderChips();
+			renderTagSuggest();
+		}
+		function tagCandidates(): string[] {
+			const token = tagInput.value.trim().toLowerCase();
+			const used = new Set(tags.map((t) => t.toLowerCase()));
+			return cfg.tagOptions
+				.filter((t) => !used.has(t.toLowerCase()))
+				.filter((t) => !token || t.toLowerCase().includes(token))
+				.slice(0, 6);
+		}
+		function renderTagSuggest() {
+			const items = tagCandidates();
+			tagSuggest.textContent = '';
+			tagActive = -1;
+			if (!items.length) {
+				tagSuggest.hidden = true;
+				return;
+			}
+			for (const t of items) {
+				const li = document.createElement('li');
+				li.textContent = t;
+				li.addEventListener('mousedown', (e) => {
+					e.preventDefault();
+					commitTag(t);
+				});
+				tagSuggest.appendChild(li);
+			}
+			tagSuggest.hidden = false;
+		}
+		tagInput.addEventListener('input', renderTagSuggest);
+		tagInput.addEventListener('focus', renderTagSuggest);
+		tagInput.addEventListener('blur', () => {
+			tagSuggest.hidden = true;
+		});
+		tagInput.addEventListener('keydown', (e) => {
+			const lis = Array.from(tagSuggest.querySelectorAll('li'));
+			if (e.key === 'Enter') {
+				e.preventDefault();
+				if (tagActive >= 0 && lis[tagActive]) commitTag(lis[tagActive].textContent || '');
+				else commitTag(tagInput.value);
+			} else if (e.key === 'ArrowDown' && lis.length) {
+				e.preventDefault();
+				tagActive = (tagActive + 1) % lis.length;
+				lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
+			} else if (e.key === 'ArrowUp' && lis.length) {
+				e.preventDefault();
+				tagActive = (tagActive - 1 + lis.length) % lis.length;
+				lis.forEach((li, i) => li.classList.toggle('active', i === tagActive));
+			} else if (e.key === 'Backspace' && !tagInput.value && tags.length) {
+				removeTag(tags.length - 1);
+			}
+		});
+
+		// ---- Mode presentation (select ⇄ log) ----
+		function renderMode() {
+			const select = mode === 'select';
+			titleEl.textContent = isEdit ? 'Edit entry' : select ? 'What did you watch?' : 'Log a film';
+			fullForm.hidden = select;
+			dateField.hidden = select;
+			filmRow.classList.toggle('field-grid--solo', select);
+			panel.classList.toggle('modal__panel--picker', select);
+			save.hidden = select;
+		}
+
+		// ---- Dirty tracking ----
+		// A JSON snapshot of the form, normalized so hidden fields don't count.
+		const snap = () =>
+			JSON.stringify({
+				date,
+				rating,
+				liked,
+				rewatch,
+				medium,
+				otherMedium: medium === 'other' ? otherInput.value.trim() : '',
+				venue: medium === 'theater' ? venueInput.value.trim() : '',
+				format: medium === 'theater' ? formatInput.value.trim() : '',
+				review: reviewInput.value.trim(),
+				tags: [...tags].sort(),
+			});
+		let cleanSnap = '';
+		// In log/select mode the film selection is intentionally excluded from the
+		// dirty check — picking a film alone isn't "work worth confirming"; a
+		// rating, like, rewatch flag, medium, tag, or review is.
+		const isDirty = () => snap() !== cleanSnap;
+
+		// Seed every field from the config. Also the reset target when the user
+		// discards their edits (edit mode) or closes the composer (log mode).
+		function seedForm() {
+			const init = cfg.initial;
+			mode = cfg.mode;
+			date = init?.date || cfg.today;
+			rating = init?.rating ?? null;
+			liked = init?.liked ?? false;
+			rewatch = init?.rewatch ?? false;
+			medium = init?.medium ?? null;
+			tags = init ? [...init.tags] : [];
+			venueInput.value = init?.venue ?? '';
+			formatInput.value = init?.format ?? '';
+			otherInput.value = init?.otherMedium ?? '';
+			reviewInput.value = init?.review ?? '';
+			tagInput.value = '';
+
+			setFill(rating ?? 0);
+			ratingLabel.textContent = labelFor(rating ?? 0);
+			likeBtn.classList.toggle('on', liked);
+			rewatchBtn.classList.toggle('on', rewatch);
+			renderMedium();
+			renderChips();
+			renderDateLabel();
+			renderMode();
+			tagSuggest.hidden = true;
+			venueSuggest.hidden = true;
+			formatSuggest.hidden = true;
+			closeCal();
+			msg.className = 'save-msg';
+			msg.textContent = '';
+
+			if (!isEdit) {
+				tmdbId = null;
+				q.value = '';
+				selected.hidden = true;
+				searchWrap.hidden = false;
+				priorHint.hidden = true;
+				priorHint.textContent = '';
+				hideResults();
+			}
+			save.disabled = !isEdit && tmdbId == null;
+			cleanSnap = snap();
+		}
+
+		// ---- Open / close ----
+		const lockScroll = (on: boolean) => {
+			document.body.style.overflow = on ? 'hidden' : '';
+		};
+		const openModal = () => {
+			seedForm();
+			discard.hidden = true;
+			modal.hidden = false;
+			lockScroll(true);
+			if (!isEdit) q.focus();
+		};
+		const closeModal = () => {
+			modal.hidden = true;
+			discard.hidden = true;
+			lockScroll(false);
+		};
+		const attemptClose = () => {
+			if (isDirty()) {
+				discardTitle.textContent = isEdit ? 'Discard changes?' : 'Discard this entry?';
+				discardMsg.textContent = isEdit
+					? 'You have unsaved edits to this entry.'
+					: 'Your entry has unsaved changes.';
+				discard.hidden = false;
+			} else {
+				closeModal();
+			}
+		};
+
+		for (const el of document.querySelectorAll('[data-open-entry-editor]')) {
+			el.addEventListener('click', openModal);
+		}
+		closeBtn.addEventListener('click', attemptClose);
+		backdrop.addEventListener('click', attemptClose);
+		discardKeep.addEventListener('click', () => {
+			discard.hidden = true;
+		});
+		discardConfirm.addEventListener('click', closeModal);
+		document.addEventListener('keydown', (e) => {
+			if (e.key !== 'Escape' || modal.hidden) return;
+			if (!discard.hidden) discard.hidden = true;
+			else if (!cal.hidden) closeCal();
+			else attemptClose();
+		});
+
+		// ---- Save / delete ----
+		// 'other' sends its free-text value as the medium; theater carries venue+format.
+		const payload = () => ({
+			watchedDate: date || null,
+			rating,
+			reviewText: reviewInput.value,
+			rewatched: rewatch,
+			liked,
+			tags,
+			medium: medium === 'other' ? otherInput.value.trim() || null : medium,
+			venue: medium === 'theater' ? venueInput.value.trim() || null : null,
+			format: medium === 'theater' ? formatInput.value.trim() || null : null,
+		});
+		const loginRedirect = () => {
+			window.location.href = `/films/login?redirect=${encodeURIComponent(cfg.redirect)}`;
+		};
+
+		save.addEventListener('click', async () => {
+			if (!isEdit && !tmdbId) return;
+			save.disabled = true;
+			msg.className = 'save-msg';
+			msg.textContent = 'Saving…';
+			try {
+				const res = isEdit
+					? await fetch(`/api/films/logs/${cfg.logId}`, {
+							method: 'PATCH',
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify(payload()),
+						})
+					: await fetch('/api/films/logs', {
+							method: 'POST',
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify({ tmdbId, ...payload() }),
+						});
+				if (res.status === 401) return loginRedirect();
+				const data = await res.json();
+				if (!res.ok) throw new Error(data.error || 'Save failed');
+				// The page renders from the DB, so a reload is the refresh.
+				window.location.reload();
+			} catch (err) {
+				msg.className = 'save-msg error';
+				msg.textContent = err instanceof Error ? err.message : 'Save failed';
+				save.disabled = false;
+			}
+		});
+
+		// Left footer button: "Delete entry" in edit mode, "Cancel" otherwise.
+		if (isEdit) {
+			leftBtn.addEventListener('click', async () => {
+				if (!window.confirm('Delete this diary entry? This cannot be undone.')) return;
+				leftBtn.disabled = true;
+				save.disabled = true;
+				msg.className = 'save-msg';
+				msg.textContent = 'Deleting…';
+				try {
+					const res = await fetch(`/api/films/logs/${cfg.logId}`, { method: 'DELETE' });
+					if (res.status === 401) return loginRedirect();
+					if (!res.ok) {
+						const data = await res.json().catch(() => ({}));
+						throw new Error(data.error || 'Delete failed');
+					}
+					window.location.href = '/films/diary';
+				} catch (err) {
+					msg.className = 'save-msg error';
+					msg.textContent = err instanceof Error ? err.message : 'Delete failed';
+					leftBtn.disabled = false;
+					save.disabled = false;
+				}
+			});
+		} else {
+			leftBtn.addEventListener('click', attemptClose);
+		}
+	}
+</script>
