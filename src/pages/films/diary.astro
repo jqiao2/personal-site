@@ -8,11 +8,18 @@ import { imageUrl } from '../../lib/tmdb';
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
+/** Logs per page. The first batch is server-rendered; the rest are fetched from
+ * /api/films/logs as you scroll (that route caps `limit` at 100). */
+const BATCH = 100;
+
 const [logs, stats, isOwner] = await Promise.all([
-	listLogs(120),
+	listLogs(BATCH),
 	getFilmLogStats(),
 	requireOwner(Astro.cookies),
 ]);
+
+// A short first page means we already have everything — no sentinel, no fetching.
+const hasMore = logs.length === BATCH;
 
 // Composer autocomplete (owner only): known theaters and tags.
 const [venueOptions, tagOptions] = isOwner
@@ -103,11 +110,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 				</div>
 			</div>
 
-			{months.length === 0 ? (
-				<p class="empty">No films logged yet.</p>
-			) : (
-				months.map((m) => (
-					<section class="month">
+			{months.length === 0 && <p class="empty">No films logged yet.</p>}
+
+			<div id="months">
+				{months.map((m) => (
+					<section class="month" data-month={m.label}>
 						<div class="month__label">{m.label}</div>
 						{m.items.map((f) => (
 							<a class="row" href={`/films/diary/${f.logId}`}>
@@ -132,8 +139,18 @@ const num = (n: number) => n.toLocaleString('en-US');
 							</a>
 						))}
 					</section>
-				))
+				))}
+			</div>
+
+			{hasMore && (
+				<div id="sentinel" data-batch={BATCH} data-offset={logs.length}>
+					<span class="sentinel__spinner" aria-hidden="true"></span>
+					<span class="sentinel__text">Loading more…</span>
+				</div>
 			)}
+			<p id="load-error" class="load-error" hidden>
+				Couldn't load more entries. <button type="button" id="retry">Retry</button>
+			</p>
 		</div>
 	</div>
 
@@ -339,6 +356,51 @@ const num = (n: number) => n.toLocaleString('en-US');
 			color: #7a5a52;
 		}
 
+		#sentinel {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 18px 0 40px;
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+		}
+		.sentinel__spinner {
+			width: 12px;
+			height: 12px;
+			border: 2px solid #4a2529;
+			border-top-color: #d9b45a;
+			border-radius: 50%;
+			animation: spin 0.7s linear infinite;
+		}
+		@keyframes spin {
+			to {
+				transform: rotate(360deg);
+			}
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.sentinel__spinner {
+				animation: none;
+			}
+		}
+		.load-error {
+			padding: 18px 0 40px;
+			text-align: center;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.load-error button {
+			font: inherit;
+			color: #d9b45a;
+			background: none;
+			border: none;
+			padding: 0;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+
 		@media (max-width: 640px) {
 			h1 {
 				font-size: 40px;
@@ -349,4 +411,160 @@ const num = (n: number) => n.toLocaleString('en-US');
 			}
 		}
 	</style>
+
+	<script>
+		interface DiaryLog {
+			id: number;
+			watched_date: string | null;
+			created_at: string;
+			rating: number | null;
+			review_text: string | null;
+			rewatched: boolean;
+			liked: boolean;
+			title: string;
+			release_year: number | null;
+			poster_path: string | null;
+		}
+
+		const sentinel = document.getElementById('sentinel');
+		const months = document.getElementById('months');
+
+		if (sentinel && months) {
+			const errorBox = document.getElementById('load-error')!;
+			const retry = document.getElementById('retry')!;
+			const BATCH = Number(sentinel.dataset.batch);
+
+			let offset = Number(sentinel.dataset.offset);
+			let loading = false;
+			let done = false;
+
+			// Mirrors the server-side row rendering above — same markup, same date and
+			// star formatting, so an appended batch is indistinguishable from the first.
+			function parseDate(date: string | null): Date | null {
+				if (!date) return null;
+				const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+				if (!y || !m || !d) return null;
+				return new Date(y, m - 1, d);
+			}
+			function starText(r: number | null): string {
+				if (r == null) return '';
+				return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+			}
+			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
+			// so every node we build has to carry it or it renders unstyled. Read the
+			// name off a server-rendered element rather than hard-coding the hash, which
+			// changes whenever this file does.
+			const scopeAttr = Array.from(months.attributes)
+				.map((a) => a.name)
+				.find((n) => n.startsWith('data-astro-cid-'));
+
+			function el(tag: string, className?: string, text?: string): HTMLElement {
+				const node = document.createElement(tag);
+				if (scopeAttr) node.setAttribute(scopeAttr, '');
+				if (className) node.className = className;
+				if (text != null) node.textContent = text;
+				return node;
+			}
+
+			function buildRow(log: DiaryLog): HTMLAnchorElement {
+				const dt = parseDate(log.watched_date) ?? parseDate(log.created_at);
+
+				const row = el('a', 'row') as HTMLAnchorElement;
+				row.href = `/films/diary/${log.id}`;
+
+				const date = el('div', 'row__date');
+				date.append(
+					el('div', 'row__day', dt ? String(dt.getDate()) : '·'),
+					el('div', 'row__wd', dt ? dt.toLocaleDateString('en-US', { weekday: 'short' }) : ''),
+				);
+
+				const poster = el('div', 'row__poster');
+				if (log.poster_path) {
+					const img = el('img') as HTMLImageElement;
+					img.src = `https://image.tmdb.org/t/p/w154${log.poster_path}`;
+					img.alt = '';
+					img.loading = 'lazy';
+					poster.append(img);
+				}
+
+				const body = el('div', 'row__body');
+				const title = el('div', 'row__title', `${log.title} `);
+				title.append(el('span', 'row__year', log.release_year == null ? '' : String(log.release_year)));
+				body.append(title);
+				if (log.review_text) body.append(el('div', 'row__review', log.review_text));
+
+				const meta = el('div', 'row__meta');
+				meta.append(el('span', 'row__stars', starText(log.rating)));
+				if (log.liked) meta.append(el('span', 'row__like', '♥'));
+				if (log.rewatched) meta.append(el('span', 'row__rewatch', '↻'));
+
+				row.append(date, poster, body, meta);
+				return row;
+			}
+
+			/** Append a batch, continuing the trailing month section when the label matches. */
+			function render(logs: DiaryLog[]) {
+				for (const log of logs) {
+					const dt = parseDate(log.watched_date) ?? parseDate(log.created_at);
+					const label = dt
+						? dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+						: 'Undated';
+
+					let section = months!.lastElementChild as HTMLElement | null;
+					if (!section || section.dataset.month !== label) {
+						section = el('section', 'month');
+						section.dataset.month = label;
+						section.append(el('div', 'month__label', label));
+						months!.append(section);
+					}
+					section.append(buildRow(log));
+				}
+			}
+
+			function finish() {
+				done = true;
+				observer.disconnect();
+				sentinel!.remove();
+			}
+
+			async function loadMore() {
+				if (loading || done) return;
+				loading = true;
+				errorBox.hidden = true;
+				try {
+					const res = await fetch(`/api/films/logs?limit=${BATCH}&offset=${offset}`);
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					const { logs } = (await res.json()) as { logs: DiaryLog[] };
+					render(logs);
+					offset += logs.length;
+					// A short batch is the last one.
+					if (logs.length < BATCH) {
+						finish();
+					} else {
+						// The observer only fires on a crossing, so re-observe to re-check the
+						// sentinel: a batch too short to push it out of view still loads on.
+						observer.unobserve(sentinel!);
+						observer.observe(sentinel!);
+					}
+				} catch (e) {
+					// Leave the observer parked so a failure can't hot-loop the API; the
+					// retry button is the way back.
+					console.error('diary: failed to load more logs', e);
+					errorBox.hidden = false;
+				} finally {
+					loading = false;
+				}
+			}
+
+			// Start fetching a screenful early so scrolling stays continuous.
+			const observer = new IntersectionObserver(
+				(entries) => {
+					if (entries.some((entry) => entry.isIntersecting)) loadMore();
+				},
+				{ rootMargin: '600px' },
+			);
+			observer.observe(sentinel);
+			retry.addEventListener('click', loadMore);
+		}
+	</script>
 </FilmLayout>
