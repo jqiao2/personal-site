@@ -1079,28 +1079,78 @@ export interface WatchedFilm {
 	first_watched: string | null;
 }
 
+/** Sort orders the "All films" grid offers. */
+export type WatchedSort = 'recent' | 'year';
+
+/** Which slice of the watched collection to read. */
+export interface WatchedQuery {
+	/** Case-insensitive title substring; '' matches everything. */
+	q?: string;
+	sort?: WatchedSort;
+	limit?: number;
+	offset?: number;
+}
+
+export interface WatchedPage {
+	films: WatchedFilm[];
+	/** Films matching `q` across every page — not just the ones returned here. */
+	total: number;
+}
+
+/** Whether a sort name is one we support; anything else falls back to 'recent'. */
+export function isWatchedSort(v: unknown): v is WatchedSort {
+	return v === 'recent' || v === 'year';
+}
+
 /**
- * Every distinct film marked watched, most-recently-watched first. Powers the
- * "All films" grid at /films/watched. Search and sort (recent / year) happen
- * client-side, so this is a single flat read.
+ * One page of watched films for the "All films" grid at /films/watched.
+ *
+ * Filtering and sorting are done here rather than in the browser: the page only
+ * ever holds a slice, so a client-side filter would search whatever happened to
+ * be loaded instead of the whole collection.
+ *
+ * `id` breaks ties last so the total order is deterministic. Both sorts have huge
+ * tie groups — every Letterboxd-imported film has a null first_watched, and a
+ * release year is shared by dozens of films — and without a unique tiebreaker
+ * Postgres may order tied rows differently between two paged queries, which shows
+ * up as a film appearing twice while another never loads.
  */
-export async function listAllWatched(): Promise<WatchedFilm[]> {
-	// PostgREST caps a single response at 1,000 rows, and the collection is larger,
-	// so page through it explicitly.
-	const PAGE = 1000;
-	const out: WatchedFilm[] = [];
-	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
-			.from('watched')
-			.select('first_watched, movies!inner(tmdb_id, title, release_year, poster_path)')
-			.order('first_watched', { ascending: false, nullsFirst: false })
-			.range(offset, offset + PAGE - 1);
-		if (error) throw new Error(`listAllWatched failed: ${error.message}`);
-		const rows = (data ?? []) as unknown as { first_watched: string | null; movies: WatchlistTile }[];
-		for (const r of rows) out.push({ ...r.movies, first_watched: r.first_watched });
-		if (rows.length < PAGE) break;
+export async function listWatchedPage({
+	q = '',
+	sort = 'recent',
+	limit = 100,
+	offset = 0,
+}: WatchedQuery = {}): Promise<WatchedPage> {
+	let req = supabasePublic
+		.from('watched')
+		.select('id, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)', {
+			count: 'exact',
+		});
+
+	const term = q.trim();
+	// Escape the LIKE wildcards so a literal % or _ in a title search stays literal.
+	if (term) req = req.ilike('movies.title', `%${term.replace(/[%_]/g, '\\$&')}%`);
+
+	// "Year" is year-descending with the recent order inside each year; "Recent" is
+	// newest-watched first. Undated/yearless films sort last either way.
+	// Note the movies(release_year) spelling: it orders the watched rows by the
+	// joined column. The `referencedTable` option instead sorts rows *within* each
+	// embed, which for a to-one join is a silent no-op that leaves the order as-is.
+	if (sort === 'year') {
+		req = req.order('movies(release_year)', { ascending: false, nullsFirst: false });
 	}
-	return out;
+	req = req
+		.order('first_watched', { ascending: false, nullsFirst: false })
+		.order('id', { ascending: false });
+
+	const { data, error, count } = await req.range(offset, offset + limit - 1);
+	if (error) throw new Error(`listWatchedPage failed: ${error.message}`);
+
+	const films = ((data ?? []) as unknown as {
+		first_watched: string | null;
+		movies: WatchlistTile;
+	}[]).map((r) => ({ ...r.movies, first_watched: r.first_watched }));
+	return { films, total: count ?? 0 };
 }
 
 // --- Favorites (migration 0006) ---
@@ -1111,16 +1161,9 @@ export async function listAllWatched(): Promise<WatchedFilm[]> {
  * first. (Does not touch the `favorite` column, so it works pre-migration.)
  */
 export async function searchWatchedMovies(query: string, limit = 12): Promise<WatchlistTile[]> {
-	const q = query.trim();
-	if (!q) return [];
-	const { data, error } = await supabasePublic
-		.from('watched')
-		.select('first_watched, movies!inner(tmdb_id, title, release_year, poster_path)')
-		.ilike('movies.title', `%${q}%`)
-		.order('first_watched', { ascending: false, nullsFirst: false })
-		.limit(limit);
-	if (error) throw new Error(`searchWatchedMovies failed: ${error.message}`);
-	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
+	if (!query.trim()) return [];
+	const { films } = await listWatchedPage({ q: query, sort: 'recent', limit });
+	return films.map(({ first_watched: _first, ...tile }) => tile);
 }
 
 /** Thrown when adding a favorite would exceed the cap of four. */

@@ -1,12 +1,19 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
-import { listAllWatched } from '../../lib/films';
+import { listWatchedPage } from '../../lib/films';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
-const films = await listAllWatched();
+/** Films per page. The first batch is server-rendered; the rest are fetched from
+ * /api/films/watched/list as you scroll (that route caps `limit` at 100). */
+const BATCH = 100;
+
+// The default view: newest-watched first, unfiltered. Search and sort re-query
+// from the server, so this is only the starting slice.
+const { films, total } = await listWatchedPage({ limit: BATCH });
+const hasMore = total > films.length;
 const num = (n: number) => n.toLocaleString('en-US');
 ---
 
@@ -24,8 +31,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 				<div>
 					<h1>All films</h1>
 					<div class="sub">
-						<span class="sub__n">{num(films.length)}</span> films watched · showing
-						<span class="sub__n" id="shown">{num(films.length)}</span>
+						<span class="sub__n">{num(total)}</span> films watched · showing
+						<span class="sub__n" id="shown">{num(total)}</span>
 					</div>
 				</div>
 			</div>
@@ -46,16 +53,10 @@ const num = (n: number) => n.toLocaleString('en-US');
 			</div>
 
 			<div class="grid" id="grid">
-				{films.map((f, i) => {
+				{films.map((f) => {
 					const poster = imageUrl(f.poster_path, 'w342');
 					return (
-						<a
-							class={poster ? 'tile' : 'tile tile--noimg'}
-							href={`/films/movie/${f.tmdb_id}`}
-							data-title={f.title.toLowerCase()}
-							data-year={f.release_year ?? 0}
-							data-order={i}
-						>
+						<a class={poster ? 'tile' : 'tile tile--noimg'} href={`/films/movie/${f.tmdb_id}`}>
 							{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" />}
 							<div class="tile__overlay">
 								<div class="tile__title">{f.title}</div>
@@ -67,6 +68,14 @@ const num = (n: number) => n.toLocaleString('en-US');
 			</div>
 
 			<p class="empty" id="empty" hidden>No films match “<span id="empty-q"></span>”</p>
+
+			<div id="sentinel" data-batch={BATCH} hidden={!hasMore}>
+				<span class="sentinel__spinner" aria-hidden="true"></span>
+				<span class="sentinel__text">Loading more…</span>
+			</div>
+			<p id="load-error" class="load-error" hidden>
+				Couldn't load more films. <button type="button" id="retry">Retry</button>
+			</p>
 		</div>
 	</div>
 
@@ -262,6 +271,57 @@ const num = (n: number) => n.toLocaleString('en-US');
 			display: none;
 		}
 
+		#sentinel {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 10px;
+			padding: 28px 0 8px;
+			font-size: 12px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+		}
+		#sentinel[hidden] {
+			display: none;
+		}
+		.sentinel__spinner {
+			width: 12px;
+			height: 12px;
+			border: 2px solid #4a2529;
+			border-top-color: #d9b45a;
+			border-radius: 50%;
+			animation: spin 0.7s linear infinite;
+		}
+		@keyframes spin {
+			to {
+				transform: rotate(360deg);
+			}
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.sentinel__spinner {
+				animation: none;
+			}
+		}
+		.load-error {
+			padding: 24px 0;
+			text-align: center;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.load-error[hidden] {
+			display: none;
+		}
+		.load-error button {
+			font: inherit;
+			color: #d9b45a;
+			background: none;
+			border: none;
+			padding: 0;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+
 		@media (max-width: 860px) {
 			.grid {
 				grid-template-columns: repeat(4, 1fr);
@@ -278,52 +338,158 @@ const num = (n: number) => n.toLocaleString('en-US');
 	</style>
 
 	<script>
+		interface WatchedFilm {
+			tmdb_id: number;
+			title: string;
+			release_year: number | null;
+			poster_path: string | null;
+		}
+
 		const grid = document.getElementById('grid');
-		if (grid) {
-			const tiles = Array.from(grid.children) as HTMLElement[];
+		const sentinel = document.getElementById('sentinel');
+
+		if (grid && sentinel) {
 			const search = document.getElementById('search') as HTMLInputElement;
 			const shown = document.getElementById('shown')!;
 			const empty = document.getElementById('empty')!;
 			const emptyQ = document.getElementById('empty-q')!;
+			const errorBox = document.getElementById('load-error')!;
+			const retry = document.getElementById('retry')!;
 			const pills = Array.from(document.querySelectorAll<HTMLButtonElement>('.pill'));
+			const BATCH = Number(sentinel.dataset.batch);
 
+			// Search and sort re-query the server rather than filtering the DOM: the grid
+			// only holds the pages loaded so far, so filtering here would search a slice
+			// instead of the whole collection.
 			let sort = 'recent';
+			let q = '';
+			let offset = grid.childElementCount;
+			let loading = false;
+			// The server hides the sentinel when the first page is already everything.
+			let done = sentinel.hidden;
+			// Identifies the newest request; a response from an older one is discarded so
+			// fast typing can't let a stale batch land after the one it superseded.
+			let seq = 0;
+			// Whether the failed request was a reset, so Retry repeats it in the same mode
+			// rather than appending a fresh query's page onto the previous query's grid.
+			let retryReset = false;
+
 			const fmt = (n: number) => n.toLocaleString('en-US');
 
-			// Sort in place by reordering DOM nodes; "recent" is the server order.
-			function applySort() {
-				const sorted = [...tiles].sort((a, b) => {
-					if (sort === 'year') {
-						const diff = Number(b.dataset.year) - Number(a.dataset.year);
-						if (diff !== 0) return diff;
-					}
-					return Number(a.dataset.order) - Number(b.dataset.order);
-				});
-				for (const t of sorted) grid!.appendChild(t);
+			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
+			// so every node we build has to carry it or it renders unstyled. Read the name
+			// off a server-rendered element rather than hard-coding the hash, which
+			// changes whenever this file does.
+			const scopeAttr = Array.from(grid.attributes)
+				.map((a) => a.name)
+				.find((n) => n.startsWith('data-astro-cid-'));
+
+			function el(tag: string, className?: string, text?: string): HTMLElement {
+				const node = document.createElement(tag);
+				if (scopeAttr) node.setAttribute(scopeAttr, '');
+				if (className) node.className = className;
+				if (text != null) node.textContent = text;
+				return node;
 			}
 
-			function applyFilter() {
-				const q = search.value.trim().toLowerCase();
-				let count = 0;
-				for (const t of tiles) {
-					const match = !q || t.dataset.title!.includes(q);
-					t.hidden = !match;
-					if (match) count++;
+			// Mirrors the server-rendered tile markup above.
+			function buildTile(f: WatchedFilm): HTMLAnchorElement {
+				const tile = el('a', f.poster_path ? 'tile' : 'tile tile--noimg') as HTMLAnchorElement;
+				tile.href = `/films/movie/${f.tmdb_id}`;
+				if (f.poster_path) {
+					const img = el('img') as HTMLImageElement;
+					img.src = `https://image.tmdb.org/t/p/w342${f.poster_path}`;
+					img.alt = `${f.title} poster`;
+					img.loading = 'lazy';
+					tile.append(img);
 				}
-				shown.textContent = fmt(count);
-				emptyQ.textContent = search.value.trim();
-				empty.hidden = count > 0 || !q;
+				const overlay = el('div', 'tile__overlay');
+				overlay.append(
+					el('div', 'tile__title', f.title),
+					el('div', 'tile__year', f.release_year == null ? '' : String(f.release_year)),
+				);
+				tile.append(overlay);
+				return tile;
 			}
 
-			search.addEventListener('input', applyFilter);
+			// The observer only fires on a crossing, so re-arm it after every load: a batch
+			// too short to push the sentinel out of view still loads the next one.
+			function armSentinel() {
+				observer.unobserve(sentinel!);
+				sentinel!.hidden = done;
+				if (!done) observer.observe(sentinel!);
+			}
+
+			/** `reset` restarts from offset 0 for a new query/sort, replacing the grid. */
+			async function load(reset = false) {
+				if (!reset && (loading || done)) return;
+				const mySeq = ++seq;
+				loading = true;
+				errorBox.hidden = true;
+				const from = reset ? 0 : offset;
+				try {
+					const url =
+						`/api/films/watched/list?limit=${BATCH}&offset=${from}` +
+						`&sort=${encodeURIComponent(sort)}&q=${encodeURIComponent(q)}`;
+					const res = await fetch(url);
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					const { films, total } = (await res.json()) as { films: WatchedFilm[]; total: number };
+					if (mySeq !== seq) return; // superseded by a newer query
+
+					if (reset) {
+						grid!.replaceChildren();
+						offset = 0;
+					}
+					for (const f of films) grid!.append(buildTile(f));
+					offset += films.length;
+
+					shown.textContent = fmt(total);
+					emptyQ.textContent = q;
+					empty.hidden = total > 0 || !q;
+					done = offset >= total || films.length < BATCH;
+					armSentinel();
+				} catch (e) {
+					if (mySeq !== seq) return;
+					// Leave the observer parked so a failure can't hot-loop the API; the
+					// retry button is the way back.
+					console.error('watched: failed to load films', e);
+					retryReset = reset;
+					errorBox.hidden = false;
+				} finally {
+					if (mySeq === seq) loading = false;
+				}
+			}
+
+			// Start fetching a screenful early so scrolling stays continuous.
+			const observer = new IntersectionObserver(
+				(entries) => {
+					if (entries.some((entry) => entry.isIntersecting)) load();
+				},
+				{ rootMargin: '600px' },
+			);
+			armSentinel();
+
+			let debounce = 0;
+			search.addEventListener('input', () => {
+				window.clearTimeout(debounce);
+				debounce = window.setTimeout(() => {
+					const next = search.value.trim();
+					if (next === q) return;
+					q = next;
+					load(true);
+				}, 250);
+			});
+
 			for (const pill of pills) {
 				pill.addEventListener('click', () => {
 					if (pill.dataset.sort === sort) return;
 					sort = pill.dataset.sort!;
 					for (const p of pills) p.classList.toggle('pill--on', p === pill);
-					applySort();
+					load(true);
 				});
 			}
+
+			retry.addEventListener('click', () => load(retryReset));
 		}
 	</script>
 </FilmLayout>
