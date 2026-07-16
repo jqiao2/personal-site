@@ -397,6 +397,15 @@ async function main() {
 	// --- Phase 4: watched (one row per movie) ---
 	// first_watched = earliest known date: the watched.csv add-date and any diary
 	// viewing date for that film. Aggregate per movie_id (dedupe collisions).
+	//
+	// CAUTION: `r.Date` from watched.csv is the day the film was ADDED to the
+	// watched list, not the day it was seen — for a back-catalogue film those are
+	// years apart. Migrations 0011/0012 nulled the 499 rows whose date came only
+	// from that column (56 films "watched" on 2021-09-15, etc.). The upsert below
+	// overwrites first_watched, so re-running this script AS-IS restores every one
+	// of those bogus dates. Before any re-run, either drop `r.Date` from the
+	// candidates on the addWatched call below (leaving diary dates as the only
+	// source) or re-apply 0012 afterwards.
 	const watchedAgg = new Map(); // movie_id -> { first, rating, liked, tmdb_url }
 	const addWatched = (key, dateCandidates, tmdbUrl) => {
 		const mid = movieIdFor(key);

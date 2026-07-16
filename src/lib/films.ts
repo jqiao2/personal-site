@@ -668,7 +668,8 @@ export async function getPriorWatch(tmdbId: number): Promise<PriorWatch> {
 export interface WatchedActivity {
 	rating: number | null;
 	liked: boolean;
-	first_watched: string;
+	/** Null when the first watch is unknown (Letterboxd-imported films — see migration 0011). */
+	first_watched: string | null;
 }
 
 /** A film page keyed by TMDB id: the cached movie plus its film-level watched row. */
@@ -838,7 +839,7 @@ export async function listFavorites(limit = 4): Promise<FilmTile[]> {
 			)
 			.eq('favorite', true)
 			.order('favorite_rank', { ascending: true, nullsFirst: false })
-			.order('first_watched', { ascending: false })
+			.order('first_watched', { ascending: false, nullsFirst: false })
 			.limit(limit);
 		if (error) {
 			({ data, error } = await supabasePublic
@@ -847,7 +848,7 @@ export async function listFavorites(limit = 4): Promise<FilmTile[]> {
 					'movie_id, rating, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)',
 				)
 				.eq('favorite', true)
-				.order('first_watched', { ascending: false })
+				.order('first_watched', { ascending: false, nullsFirst: false })
 				.limit(limit));
 		}
 		if (error) throw error;
@@ -940,8 +941,9 @@ export interface WatchedFilm {
 	title: string;
 	release_year: number | null;
 	poster_path: string | null;
-	/** First time the film was marked watched — the "Recent" sort key. */
-	first_watched: string;
+	/** First time the film was marked watched — the "Recent" sort key. Null when
+	 * unknown (Letterboxd-imported films, migration 0011); those sort last. */
+	first_watched: string | null;
 }
 
 /**
@@ -958,10 +960,10 @@ export async function listAllWatched(): Promise<WatchedFilm[]> {
 		const { data, error } = await supabasePublic
 			.from('watched')
 			.select('first_watched, movies!inner(tmdb_id, title, release_year, poster_path)')
-			.order('first_watched', { ascending: false })
+			.order('first_watched', { ascending: false, nullsFirst: false })
 			.range(offset, offset + PAGE - 1);
 		if (error) throw new Error(`listAllWatched failed: ${error.message}`);
-		const rows = (data ?? []) as unknown as { first_watched: string; movies: WatchlistTile }[];
+		const rows = (data ?? []) as unknown as { first_watched: string | null; movies: WatchlistTile }[];
 		for (const r of rows) out.push({ ...r.movies, first_watched: r.first_watched });
 		if (rows.length < PAGE) break;
 	}
@@ -982,7 +984,7 @@ export async function searchWatchedMovies(query: string, limit = 12): Promise<Wa
 		.from('watched')
 		.select('first_watched, movies!inner(tmdb_id, title, release_year, poster_path)')
 		.ilike('movies.title', `%${q}%`)
-		.order('first_watched', { ascending: false })
+		.order('first_watched', { ascending: false, nullsFirst: false })
 		.limit(limit);
 	if (error) throw new Error(`searchWatchedMovies failed: ${error.message}`);
 	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
@@ -1146,7 +1148,9 @@ export interface FilmStats {
 
 /** A watched film flattened with the movie facts the Stats page aggregates over. */
 interface WatchedFacts {
-	first_watched: string;
+	/** Null when the first watch is unknown (migration 0011) — such films count in
+	 * all-time totals but can't be attributed to any calendar year. */
+	first_watched: string | null;
 	rating: number | null;
 	release_year: number | null;
 	runtime: number | null;
@@ -1177,7 +1181,7 @@ async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 		const { data, error } = await supabasePublic
 			.from('watched')
 			.select(`first_watched, rating, ${tiers[tier]}`)
-			.order('first_watched', { ascending: false })
+			.order('first_watched', { ascending: false, nullsFirst: false })
 			.range(offset, offset + PAGE - 1);
 		if (error) {
 			// Columns not there yet: drop to the next tier and restart from the top.
@@ -1190,7 +1194,7 @@ async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 			throw new Error(`loadWatchedFacts failed: ${error.message}`);
 		}
 		const rows = (data ?? []) as unknown as {
-			first_watched: string;
+			first_watched: string | null;
 			rating: number | null;
 			movies: {
 				release_year: number | null;
@@ -1258,9 +1262,9 @@ function rankPeople(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], l
 		.slice(0, limit);
 }
 
-/** Year (local) of an ISO timestamp. */
-function yearOf(iso: string): number {
-	return new Date(iso).getFullYear();
+/** Year (local) of an ISO timestamp; null when the timestamp is unknown. */
+function yearOf(iso: string | null): number | null {
+	return iso ? new Date(iso).getFullYear() : null;
 }
 
 /**
@@ -1273,9 +1277,13 @@ function yearOf(iso: string): number {
 export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmStats> {
 	const all = await loadWatchedFacts();
 
-	// Picker options: years with a meaningful sample, newest first.
+	// Picker options: years with a meaningful sample, newest first. Undated films
+	// (unknown first watch) belong to no year, so they only reach the 'all' scope.
 	const perYear = new Map<number, number>();
-	for (const r of all) perYear.set(yearOf(r.first_watched), (perYear.get(yearOf(r.first_watched)) ?? 0) + 1);
+	for (const r of all) {
+		const y = yearOf(r.first_watched);
+		if (y != null) perYear.set(y, (perYear.get(y) ?? 0) + 1);
+	}
 	const eligibleYears = [...perYear.entries()]
 		.filter(([, c]) => c > 10)
 		.map(([y]) => y)
@@ -1297,7 +1305,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	const avgRating = rated.length ? rated.reduce((a, r) => a + r.rating, 0) / rated.length : 0;
 	const num = (n: number) => n.toLocaleString('en-US');
 	const thisYear = new Date().getFullYear();
-	const thisYearCount = all.filter((r) => yearOf(r.first_watched) === thisYear).length;
+	const thisYearCount = perYear.get(thisYear) ?? 0;
 	const metrics = isAll
 		? [
 				{ value: num(filmsWatched), label: 'Films watched' },
@@ -1331,6 +1339,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 			bins.push(0);
 		}
 		for (const r of rows) {
+			if (!r.first_watched) continue; // year scope already excludes these; keeps the cast honest
 			const days = Math.floor((new Date(r.first_watched).getTime() - yearStart.getTime()) / 86400000);
 			const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(days / 7)));
 			bins[idx]++;
