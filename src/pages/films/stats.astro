@@ -551,6 +551,16 @@ const people: { title: string; items: typeof stats.directors }[] = [
 					picker.removeAttribute('open');
 				}
 			});
+
+			// Switching year replaces the history entry rather than pushing one, so
+			// Back leaves the stats page instead of retracing year selections.
+			picker.querySelectorAll<HTMLAnchorElement>('.picker__row').forEach((row) => {
+				row.addEventListener('click', (e) => {
+					if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+					e.preventDefault();
+					window.location.replace(row.href);
+				});
+			});
 		}
 	</script>
 </FilmLayout>
