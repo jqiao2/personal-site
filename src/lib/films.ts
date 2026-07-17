@@ -1082,6 +1082,9 @@ export interface WatchedFilm {
 /** Sort orders the "All films" grid offers. */
 export type WatchedSort = 'recent' | 'year';
 
+/** Whether every selected value must match, or just one of them. */
+export type MatchMode = 'any' | 'all';
+
 /** Which slice of the watched collection to read. */
 export interface WatchedQuery {
 	/** Case-insensitive title substring; '' matches everything. */
@@ -1089,6 +1092,32 @@ export interface WatchedQuery {
 	sort?: WatchedSort;
 	limit?: number;
 	offset?: number;
+
+	// --- Film-level filters (columns on `watched` / `movies`) ---
+	/** Inclusive star bounds. Unrated films fall outside any bound, so a narrowed
+	 * range drops them. Omit both for "any rating". */
+	ratingMin?: number;
+	ratingMax?: number;
+	/** Only films with no rating at all. Overrides ratingMin/ratingMax. */
+	unratedOnly?: boolean;
+	/** Only films liked at the film level. */
+	liked?: boolean;
+	/** Release decades as their first year, e.g. [1990, 2020]. Matches any of them. */
+	decades?: number[];
+
+	// --- Log-level filters (true when ANY of the film's diary entries match) ---
+	/** Only films with at least one rewatch entry. */
+	rewatched?: boolean;
+	/** Matches films carrying any of these tags. */
+	tags?: string[];
+	friends?: string[];
+	friendMode?: MatchMode;
+	mediums?: string[];
+	/** Theaters as "Name, City" — the same spelling listTheaterNames returns. */
+	venues?: string[];
+	formats?: string[];
+	/** Applied across mediums+venues+formats together, as the design's one toggle. */
+	whereMode?: MatchMode;
 }
 
 export interface WatchedPage {
@@ -1100,6 +1129,231 @@ export interface WatchedPage {
 /** Whether a sort name is one we support; anything else falls back to 'recent'. */
 export function isWatchedSort(v: unknown): v is WatchedSort {
 	return v === 'recent' || v === 'year';
+}
+
+/** Whether a match-mode name is one we support; anything else falls back to 'any'. */
+export function isMatchMode(v: unknown): v is MatchMode {
+	return v === 'any' || v === 'all';
+}
+
+/**
+ * The log-level facts about one film, unioned across all of its diary entries.
+ *
+ * The grid has one tile per *film* but tags, friends, medium, theater and format
+ * all live on a *viewing*. Collapsing them per film is what lets a film-level
+ * filter mean "any of my watches of this film matched" — so a film seen twice, at
+ * the Angelika and then on a plane, answers to both.
+ */
+interface FilmLogDims {
+	rewatched: boolean;
+	tags: Set<string>;
+	friends: Set<string>;
+	mediums: Set<string>;
+	/** "Name, City" — the spelling used by chips, the API and listTheaterNames. */
+	venues: Set<string>;
+	formats: Set<string>;
+}
+
+function emptyDims(): FilmLogDims {
+	return {
+		rewatched: false,
+		tags: new Set(),
+		friends: new Set(),
+		mediums: new Set(),
+		venues: new Set(),
+		formats: new Set(),
+	};
+}
+
+/**
+ * Every live diary entry's filterable dimensions, folded into one entry per film.
+ *
+ * Read whole rather than pushed into the `watched` query because the filters span
+ * four join tables with any/all semantics that PostgREST can't express in a single
+ * request. The diary is a few hundred rows — small enough that one read plus an
+ * in-process fold is cheaper than the query gymnastics, and it keeps the any/all
+ * rules in plain TypeScript where they're legible. Revisit if the diary reaches
+ * five figures.
+ *
+ * Degrades to an empty map before migrations 0010/0013 add the columns it reads,
+ * which turns every log-level filter into a no-match rather than an error.
+ */
+async function loadFilmLogDims(): Promise<Map<number, FilmLogDims>> {
+	const byMovie = new Map<number, FilmLogDims>();
+	const { data, error } = await supabasePublic
+		.from('logs')
+		.select(
+			'movie_id, rewatched, medium, theaters(name, city), formats(name), ' +
+				'log_tags(tags(name)), log_friends(friends(name))',
+		)
+		.is('deleted_at', null);
+	if (error) {
+		if (isMissingRelation(error) || isMissingCreditColumn(error)) return byMovie;
+		throw new Error(`loadFilmLogDims failed: ${error.message}`);
+	}
+
+	const one = <T>(v: T | T[] | null | undefined): T | null =>
+		Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
+
+	for (const row of (data ?? []) as unknown as {
+		movie_id: number;
+		rewatched: boolean | null;
+		medium: string | null;
+		theaters: { name: string; city: string | null } | { name: string; city: string | null }[] | null;
+		formats: { name: string } | { name: string }[] | null;
+		log_tags: { tags: { name: string } | null }[] | null;
+		log_friends: { friends: { name: string } | null }[] | null;
+	}[]) {
+		let dims = byMovie.get(row.movie_id);
+		if (!dims) {
+			dims = emptyDims();
+			byMovie.set(row.movie_id, dims);
+		}
+		if (row.rewatched) dims.rewatched = true;
+		if (row.medium?.trim()) dims.mediums.add(row.medium.trim().toLowerCase());
+		const theater = one(row.theaters);
+		if (theater) dims.venues.add([theater.name, theater.city].filter(Boolean).join(', '));
+		const format = one(row.formats);
+		if (format) dims.formats.add(format.name);
+		for (const lt of row.log_tags ?? []) if (lt.tags) dims.tags.add(lt.tags.name);
+		for (const lf of row.log_friends ?? []) if (lf.friends) dims.friends.add(lf.friends.name);
+	}
+	return byMovie;
+}
+
+/** True when `selected` is satisfied by `have` under the given mode. Empty = no filter. */
+function matches(selected: string[], have: Set<string>, mode: MatchMode): boolean {
+	if (selected.length === 0) return true;
+	return mode === 'all' ? selected.every((v) => have.has(v)) : selected.some((v) => have.has(v));
+}
+
+/** Whether the query constrains anything that lives on a diary entry. */
+function hasLogFilters(q: WatchedQuery): boolean {
+	return Boolean(
+		q.rewatched ||
+			q.tags?.length ||
+			q.friends?.length ||
+			q.mediums?.length ||
+			q.venues?.length ||
+			q.formats?.length,
+	);
+}
+
+/**
+ * The movie ids whose diary entries satisfy the query's log-level filters, or null
+ * when it has none (i.e. "don't constrain by movie id at all" — distinct from an
+ * empty array, which means nothing matched).
+ */
+async function movieIdsMatchingLogFilters(q: WatchedQuery): Promise<number[] | null> {
+	if (!hasLogFilters(q)) return null;
+	const dimsByMovie = await loadFilmLogDims();
+	const friendMode = q.friendMode ?? 'any';
+	const whereMode = q.whereMode ?? 'any';
+
+	const ids: number[] = [];
+	for (const [movieId, dims] of dimsByMovie) {
+		if (q.rewatched && !dims.rewatched) continue;
+		// Tags are always "any of these" — the design gives them no all/any toggle.
+		if (!matches(q.tags ?? [], dims.tags, 'any')) continue;
+		if (!matches(q.friends ?? [], dims.friends, friendMode)) continue;
+		// Medium, theater and format share one toggle and are matched as a single
+		// pool, mirroring the design's combined "Medium · theater · format" control.
+		const where = [...(q.mediums ?? []), ...(q.venues ?? []), ...(q.formats ?? [])];
+		const have = new Set([...dims.mediums, ...dims.venues, ...dims.formats]);
+		if (!matches(where, have, whereMode)) continue;
+		ids.push(movieId);
+	}
+	return ids;
+}
+
+/** The chip values offered by the filter panel, derived from what's actually there. */
+export interface WatchedFacets {
+	/** Release decades as their first year, ascending. */
+	decades: number[];
+	tags: string[];
+	friends: string[];
+	/** Canonical medium values ('theater', 'tv', …), alphabetical. */
+	mediums: string[];
+	/** Theaters: `value` is "Name, City", `label` is the shortest unambiguous name. */
+	venues: { value: string; label: string }[];
+	formats: string[];
+}
+
+/**
+ * Every value the filter chips can offer, read from the collection itself so a chip
+ * can never match zero films. Tags/friends/mediums/venues/formats come from live
+ * diary entries rather than the lookup tables, which also hold values stranded on
+ * soft-deleted logs.
+ */
+export async function listWatchedFacets(): Promise<WatchedFacets> {
+	const [dimsByMovie, years, theaterNames] = await Promise.all([
+		loadFilmLogDims(),
+		listWatchedReleaseYears(),
+		theaterNameByValue(),
+	]);
+
+	const union = (pick: (d: FilmLogDims) => Set<string>): string[] => {
+		const out = new Set<string>();
+		for (const dims of dimsByMovie.values()) for (const v of pick(dims)) out.add(v);
+		return [...out].sort((a, b) => a.localeCompare(b));
+	};
+
+	const decades = [...new Set(years.map((y) => Math.floor(y / 10) * 10))].sort((a, b) => a - b);
+
+	// Label a theater by its name alone, falling back to the full "Name, City" when
+	// two venues share a name — chips stay short without becoming ambiguous. The name
+	// comes from the column, not from re-splitting the joined value: cities are
+	// stored with their state ("New York, NY"), so the comma isn't a reliable seam.
+	const venueValues = union((d) => d.venues);
+	const nameCounts = new Map<string, number>();
+	for (const v of venueValues) {
+		const name = theaterNames.get(v) ?? v;
+		nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+	}
+	const venues = venueValues.map((value) => {
+		const name = theaterNames.get(value) ?? value;
+		return { value, label: (nameCounts.get(name) ?? 0) > 1 ? value : name };
+	});
+
+	return {
+		decades,
+		tags: union((d) => d.tags),
+		friends: union((d) => d.friends),
+		mediums: union((d) => d.mediums),
+		venues,
+		formats: union((d) => d.formats),
+	};
+}
+
+/** "Name, City" → the bare theater name, for shortening the venue chip labels. */
+async function theaterNameByValue(): Promise<Map<string, string>> {
+	const out = new Map<string, string>();
+	const { data, error } = await supabasePublic.from('theaters').select('name, city');
+	if (error) {
+		if (isMissingRelation(error)) return out;
+		throw new Error(`theaterNameByValue failed: ${error.message}`);
+	}
+	for (const t of (data ?? []) as { name: string; city: string | null }[]) {
+		out.set([t.name, t.city].filter(Boolean).join(', '), t.name);
+	}
+	return out;
+}
+
+/** Release years of every watched film (with one), for the decade chips. */
+async function listWatchedReleaseYears(): Promise<number[]> {
+	const PAGE = 1000;
+	const out: number[] = [];
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('watched')
+			.select('movies!inner(release_year)')
+			.range(offset, offset + PAGE - 1);
+		if (error) throw new Error(`listWatchedReleaseYears failed: ${error.message}`);
+		const rows = (data ?? []) as unknown as { movies: { release_year: number | null } }[];
+		for (const r of rows) if (r.movies.release_year != null) out.push(r.movies.release_year);
+		if (rows.length < PAGE) break;
+	}
+	return out;
 }
 
 /**
@@ -1115,21 +1369,45 @@ export function isWatchedSort(v: unknown): v is WatchedSort {
  * Postgres may order tied rows differently between two paged queries, which shows
  * up as a film appearing twice while another never loads.
  */
-export async function listWatchedPage({
-	q = '',
-	sort = 'recent',
-	limit = 100,
-	offset = 0,
-}: WatchedQuery = {}): Promise<WatchedPage> {
+export async function listWatchedPage(query: WatchedQuery = {}): Promise<WatchedPage> {
+	const { q = '', sort = 'recent', limit = 100, offset = 0 } = query;
+
+	// Resolve the diary-side filters first: they narrow to a set of movie ids the
+	// film-level query can be constrained by. An empty (not null) set means nothing
+	// matched, and no film-level query could rescue it.
+	const logMovieIds = await movieIdsMatchingLogFilters(query);
+	if (logMovieIds?.length === 0) return { films: [], total: 0 };
+
 	let req = supabasePublic
 		.from('watched')
 		.select('id, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)', {
 			count: 'exact',
 		});
 
+	if (logMovieIds) req = req.in('movie_id', logMovieIds);
+
 	const term = q.trim();
 	// Escape the LIKE wildcards so a literal % or _ in a title search stays literal.
 	if (term) req = req.ilike('movies.title', `%${term.replace(/[%_]/g, '\\$&')}%`);
+
+	// Rating. Postgres comparisons are false for NULL, so a narrowed range already
+	// drops unrated films — no explicit `not is null` needed.
+	if (query.unratedOnly) {
+		req = req.is('rating', null);
+	} else {
+		if (query.ratingMin != null) req = req.gte('rating', query.ratingMin);
+		if (query.ratingMax != null) req = req.lte('rating', query.ratingMax);
+	}
+	if (query.liked) req = req.eq('liked', true);
+
+	// Decades OR together as year ranges against the joined movie row. `!inner`
+	// above is what makes a filter on the embed exclude the parent watched row.
+	if (query.decades?.length) {
+		const ranges = query.decades
+			.map((d) => `and(release_year.gte.${d},release_year.lte.${d + 9})`)
+			.join(',');
+		req = req.or(ranges, { referencedTable: 'movies' });
+	}
 
 	// "Year" is year-descending with the recent order inside each year; "Recent" is
 	// newest-watched first. Undated/yearless films sort last either way.

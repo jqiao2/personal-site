@@ -1,6 +1,7 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
-import { listWatchedPage } from '../../lib/films';
+import { listWatchedFacets, listWatchedPage } from '../../lib/films';
+import { mediumLabel } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -10,9 +11,17 @@ export const prerender = false;
  * /api/films/watched/list as you scroll (that route caps `limit` at 100). */
 const BATCH = 100;
 
-// The default view: newest-watched first, unfiltered. Search and sort re-query
-// from the server, so this is only the starting slice.
-const { films, total } = await listWatchedPage({ limit: BATCH });
+/** How many chips a group shows before collapsing behind "+N other…". Tags and
+ * friends follow the design; theaters get one too because there are 19 of them
+ * and their names are long enough to swamp the panel. */
+const CHIP_LIMIT = { tags: 7, friends: 4, venues: 6 };
+
+// The default view: newest-watched first, unfiltered. Search, sort and every
+// filter re-query from the server, so this is only the starting slice.
+const [{ films, total }, facets] = await Promise.all([
+	listWatchedPage({ limit: BATCH }),
+	listWatchedFacets(),
+]);
 const hasMore = total > films.length;
 const num = (n: number) => n.toLocaleString('en-US');
 ---
@@ -45,10 +54,175 @@ const num = (n: number) => n.toLocaleString('en-US');
 					autocomplete="off"
 					aria-label="Search films"
 				/>
+				<button
+					type="button"
+					id="filters-toggle"
+					class="pill pill--btn"
+					aria-expanded="false"
+					aria-controls="filters"
+				>
+					Filters<span id="filters-count"></span>
+				</button>
 				<div class="sortby">
 					<span class="sortby__label">Sort</span>
 					<button type="button" class="pill pill--on" data-sort="recent">Recent</button>
 					<button type="button" class="pill" data-sort="year">Year</button>
+				</div>
+			</div>
+
+			<div class="panel" id="filters" hidden>
+				<div class="panel__head">
+					<span class="panel__title">Filter films</span>
+					<button type="button" id="clear-all" class="clear" hidden>Clear all</button>
+				</div>
+
+				<div class="panel__grid">
+					<section>
+						<h2 class="grp">Rating</h2>
+						<div class="rating">
+							<div class="range" id="range">
+								<div class="range__track"></div>
+								<div class="range__fill" id="range-fill"></div>
+								<input type="range" id="rmin" min="0.5" max="5" step="0.5" value="0.5" aria-label="Minimum rating" />
+								<input type="range" id="rmax" min="0.5" max="5" step="0.5" value="5" aria-label="Maximum rating" />
+								<div class="range__ends">
+									<span id="rmin-stars">½</span><span id="rmax-stars">★★★★★</span>
+								</div>
+							</div>
+							<button type="button" class="chip" data-flag="unrated" aria-pressed="false">Unrated only</button>
+						</div>
+					</section>
+
+					<section>
+						<h2 class="grp">Activity</h2>
+						<div class="chips chips--gap">
+							<button type="button" class="chip" data-flag="liked" aria-pressed="false">♥ Liked</button>
+							<button type="button" class="chip" data-flag="rewatched" aria-pressed="false">↻ Rewatched</button>
+						</div>
+						<h2 class="grp">Decade</h2>
+						<div class="chips">
+							{facets.decades.map((d) => (
+								<button type="button" class="chip" data-filter="decade" data-value={String(d)} aria-pressed="false">
+									{d}s
+								</button>
+							))}
+						</div>
+					</section>
+
+					<section>
+						<h2 class="grp">Tags</h2>
+						{facets.tags.length === 0 ? (
+							<p class="grp__none">No tags yet</p>
+						) : (
+							<div class="chips">
+								{facets.tags.map((t, i) => (
+									<button
+										type="button"
+										class="chip"
+										data-filter="tag"
+										data-value={t}
+										aria-pressed="false"
+										hidden={i >= CHIP_LIMIT.tags}
+									>
+										{t}
+									</button>
+								))}
+								{facets.tags.length > CHIP_LIMIT.tags && (
+									<button type="button" class="chip chip--more">
+										+{facets.tags.length - CHIP_LIMIT.tags} other…
+									</button>
+								)}
+							</div>
+						)}
+					</section>
+
+					<section>
+						<div class="grp__row">
+							<h2 class="grp">Watched with</h2>
+							<div class="modes" data-mode="friendmode">
+								<button type="button" class="mode mode--on" data-value="any">Any</button>
+								<button type="button" class="mode" data-value="all">All</button>
+							</div>
+						</div>
+						{facets.friends.length === 0 ? (
+							<p class="grp__none">No one tagged yet</p>
+						) : (
+							<div class="chips">
+								{facets.friends.map((f, i) => (
+									<button
+										type="button"
+										class="chip"
+										data-filter="friend"
+										data-value={f}
+										aria-pressed="false"
+										hidden={i >= CHIP_LIMIT.friends}
+									>
+										{f}
+									</button>
+								))}
+								{facets.friends.length > CHIP_LIMIT.friends && (
+									<button type="button" class="chip chip--more">
+										+{facets.friends.length - CHIP_LIMIT.friends} other…
+									</button>
+								)}
+							</div>
+						)}
+					</section>
+
+					<section class="panel__wide">
+						<div class="grp__row">
+							<h2 class="grp">Medium · theater · format</h2>
+							<div class="modes" data-mode="wheremode">
+								<button type="button" class="mode mode--on" data-value="any">Any</button>
+								<button type="button" class="mode" data-value="all">All</button>
+							</div>
+						</div>
+						<div class="where">
+							<div class="where__row">
+								<span class="where__label">Medium</span>
+								<div class="chips">
+									{facets.mediums.map((m) => (
+										<button type="button" class="chip" data-filter="medium" data-value={m} aria-pressed="false">
+											{mediumLabel(m)}
+										</button>
+									))}
+								</div>
+							</div>
+							<div class="where__row">
+								<span class="where__label">Theater</span>
+								<div class="chips">
+									{facets.venues.map((v, i) => (
+										<button
+											type="button"
+											class="chip"
+											data-filter="venue"
+											data-value={v.value}
+											title={v.value}
+											aria-pressed="false"
+											hidden={i >= CHIP_LIMIT.venues}
+										>
+											{v.label}
+										</button>
+									))}
+									{facets.venues.length > CHIP_LIMIT.venues && (
+										<button type="button" class="chip chip--more">
+											+{facets.venues.length - CHIP_LIMIT.venues} other…
+										</button>
+									)}
+								</div>
+							</div>
+							<div class="where__row">
+								<span class="where__label">Format</span>
+								<div class="chips">
+									{facets.formats.map((f) => (
+										<button type="button" class="chip" data-filter="format" data-value={f} aria-pressed="false">
+											{f}
+										</button>
+									))}
+								</div>
+							</div>
+						</div>
+					</section>
 				</div>
 			</div>
 
@@ -67,7 +241,10 @@ const num = (n: number) => n.toLocaleString('en-US');
 				})}
 			</div>
 
-			<p class="empty" id="empty" hidden>No films match “<span id="empty-q"></span>”</p>
+			<p class="empty" id="empty" hidden>
+				<span id="empty-by-query">No films match “<span id="empty-q"></span>”</span>
+				<span id="empty-by-filters" hidden>No films match these filters</span>
+			</p>
 
 			<div id="sentinel" data-batch={BATCH} hidden={!hasMore}>
 				<span class="sentinel__spinner" aria-hidden="true"></span>
@@ -148,7 +325,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			display: flex;
 			gap: 12px;
 			align-items: center;
-			margin-bottom: 30px;
+			margin-bottom: 14px;
 			flex-wrap: wrap;
 		}
 		#search {
@@ -199,11 +376,252 @@ const num = (n: number) => n.toLocaleString('en-US');
 			font-weight: 600;
 			border-color: #d9b45a;
 		}
+		.pill--btn {
+			padding: 10px 16px;
+			border-radius: 8px;
+		}
+
+		/* --- Filter panel --- */
+		.panel {
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 12px;
+			padding: 24px 26px;
+			margin-bottom: 26px;
+		}
+		.panel[hidden] {
+			display: none;
+		}
+		.panel__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 20px;
+		}
+		.panel__title {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #8a6f63;
+		}
+		.clear {
+			font-size: 12px;
+			font-weight: 600;
+			color: #d9b45a;
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			padding: 0;
+		}
+		.clear:hover {
+			color: #f0d488;
+		}
+		.clear[hidden] {
+			display: none;
+		}
+		.panel__grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 26px 40px;
+		}
+		.panel__wide {
+			grid-column: 1 / -1;
+		}
+		.grp {
+			font-size: 11px;
+			font-weight: 400;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+			margin: 0 0 12px;
+		}
+		/* A second heading inside a section (Activity → Decade) needs the gap back. */
+		.chips + .grp {
+			margin-top: 16px;
+		}
+		.grp__row {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+		.grp__row .grp {
+			margin-bottom: 0;
+		}
+		.grp__none {
+			font-size: 13px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+			color: #8a6f63;
+			margin: 0;
+		}
+		.chips {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.chip {
+			font-size: 12.5px;
+			padding: 7px 13px;
+			border-radius: 20px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			border: 1px solid #4a2529;
+			background: transparent;
+			color: #ddc9b4;
+		}
+		.chip:hover {
+			border-color: #a2857a;
+		}
+		.chip[aria-pressed='true'] {
+			background: #d9b45a;
+			color: #2a1214;
+			font-weight: 600;
+			border-color: #d9b45a;
+		}
+		.chip[hidden] {
+			display: none;
+		}
+		.chip--more {
+			background: transparent;
+			color: #a2857a;
+			border-style: dashed;
+		}
+
+		/* Dual-thumb rating range: two native sliders stacked on one track, so
+		   keyboard and screen-reader support come for free. The inputs ignore
+		   pointer events except on their thumbs, which lets whichever thumb is
+		   under the cursor take the drag even though the boxes fully overlap. */
+		.rating {
+			display: flex;
+			align-items: center;
+			gap: 18px;
+		}
+		.rating--off .range {
+			opacity: 0.35;
+		}
+		.range {
+			flex: 1;
+			max-width: 260px;
+			position: relative;
+			height: 32px;
+		}
+		.range__track,
+		.range__fill {
+			position: absolute;
+			top: 14px;
+			height: 4px;
+			border-radius: 2px;
+			pointer-events: none;
+		}
+		.range__track {
+			left: 0;
+			right: 0;
+			background: #402226;
+		}
+		.range__fill {
+			background: #d9b45a;
+		}
+		.range input[type='range'] {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 32px;
+			margin: 0;
+			background: none;
+			appearance: none;
+			-webkit-appearance: none;
+			pointer-events: none;
+		}
+		.range input[type='range']:focus-visible {
+			outline: none;
+		}
+		.range input[type='range']::-webkit-slider-thumb {
+			appearance: none;
+			-webkit-appearance: none;
+			pointer-events: auto;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #f0d488;
+			border: 2px solid #241012;
+			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+			cursor: pointer;
+		}
+		.range input[type='range']::-moz-range-thumb {
+			pointer-events: auto;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #f0d488;
+			border: 2px solid #241012;
+			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+			cursor: pointer;
+		}
+		.range input[type='range']:focus-visible::-webkit-slider-thumb {
+			outline: 2px solid #f0d488;
+			outline-offset: 2px;
+		}
+		.range input[type='range']:focus-visible::-moz-range-thumb {
+			outline: 2px solid #f0d488;
+			outline-offset: 2px;
+		}
+		.range__ends {
+			position: absolute;
+			top: 30px;
+			left: 0;
+			right: 0;
+			display: flex;
+			justify-content: space-between;
+			font-size: 13px;
+			color: #d9b45a;
+			pointer-events: none;
+		}
+
+		.where {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.where__row {
+			display: flex;
+			align-items: baseline;
+			gap: 8px;
+		}
+		.where__label {
+			font-size: 12px;
+			color: #8a6f63;
+			width: 60px;
+			flex: none;
+		}
+		.modes {
+			display: flex;
+			border: 1px solid #4a2529;
+			border-radius: 14px;
+			overflow: hidden;
+		}
+		.mode {
+			font-size: 11px;
+			font-weight: 600;
+			padding: 5px 11px;
+			border: none;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			background: transparent;
+			color: #a2857a;
+		}
+		.mode--on {
+			background: #d9b45a;
+			color: #2a1214;
+		}
 
 		.grid {
 			display: grid;
 			grid-template-columns: repeat(6, 1fr);
 			gap: 18px;
+			margin-top: 16px;
 		}
 		.tile {
 			position: relative;
@@ -326,6 +744,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 			.grid {
 				grid-template-columns: repeat(4, 1fr);
 			}
+			.panel__grid {
+				grid-template-columns: minmax(0, 1fr);
+			}
 		}
 		@media (max-width: 560px) {
 			h1 {
@@ -333,6 +754,21 @@ const num = (n: number) => n.toLocaleString('en-US');
 			}
 			.grid {
 				grid-template-columns: repeat(3, 1fr);
+			}
+			.panel {
+				padding: 20px 16px;
+			}
+			/* The slider needs its own line once "Unrated only" can't sit beside it. */
+			.rating {
+				flex-wrap: wrap;
+				gap: 12px;
+			}
+			.range {
+				max-width: none;
+			}
+			.where__row {
+				flex-direction: column;
+				align-items: stretch;
 			}
 		}
 	</style>
@@ -353,14 +789,16 @@ const num = (n: number) => n.toLocaleString('en-US');
 			const shown = document.getElementById('shown')!;
 			const empty = document.getElementById('empty')!;
 			const emptyQ = document.getElementById('empty-q')!;
+			const emptyByQuery = document.getElementById('empty-by-query')!;
+			const emptyByFilters = document.getElementById('empty-by-filters')!;
 			const errorBox = document.getElementById('load-error')!;
 			const retry = document.getElementById('retry')!;
-			const pills = Array.from(document.querySelectorAll<HTMLButtonElement>('.pill'));
+			const pills = Array.from(document.querySelectorAll<HTMLButtonElement>('.pill[data-sort]'));
 			const BATCH = Number(sentinel.dataset.batch);
 
-			// Search and sort re-query the server rather than filtering the DOM: the grid
-			// only holds the pages loaded so far, so filtering here would search a slice
-			// instead of the whole collection.
+			// Search, sort and the filters all re-query the server rather than filtering
+			// the DOM: the grid only holds the pages loaded so far, so filtering here
+			// would search a slice instead of the whole collection.
 			let sort = 'recent';
 			let q = '';
 			let offset = grid.childElementCount;
@@ -375,6 +813,62 @@ const num = (n: number) => n.toLocaleString('en-US');
 			let retryReset = false;
 
 			const fmt = (n: number) => n.toLocaleString('en-US');
+
+			// --- Filter state ---------------------------------------------------
+			// Mirrors the API's params. The multi-value sets hold the chips' raw
+			// data-value (a theater's full "Name, City"), never the shortened label.
+			const RATING_FLOOR = 0.5;
+			const RATING_CEIL = 5;
+			const sets = {
+				decade: new Set<string>(),
+				tag: new Set<string>(),
+				friend: new Set<string>(),
+				medium: new Set<string>(),
+				venue: new Set<string>(),
+				format: new Set<string>(),
+			};
+			type SetKey = keyof typeof sets;
+			const flags = { liked: false, rewatched: false, unrated: false };
+			const modes = { friendmode: 'any', wheremode: 'any' };
+			let rMin = RATING_FLOOR;
+			let rMax = RATING_CEIL;
+
+			/** Whether the rating control narrows anything. */
+			const ratingActive = () =>
+				flags.unrated || rMin > RATING_FLOOR || rMax < RATING_CEIL;
+
+			/** Number of active filters — the count on the Filters button. The rating
+			 * range counts once however many stars it spans. */
+			function activeCount(): number {
+				let n = (ratingActive() ? 1 : 0) + (flags.liked ? 1 : 0) + (flags.rewatched ? 1 : 0);
+				for (const s of Object.values(sets)) n += s.size;
+				return n;
+			}
+
+			function buildQuery(from: number): string {
+				const p = new URLSearchParams();
+				p.set('limit', String(BATCH));
+				p.set('offset', String(from));
+				p.set('sort', sort);
+				if (q) p.set('q', q);
+				if (flags.unrated) p.set('unrated', '1');
+				else {
+					// Omit a bound at its extreme so the server can tell "any rating"
+					// from a range that happens to reach the end.
+					if (rMin > RATING_FLOOR) p.set('rmin', String(rMin));
+					if (rMax < RATING_CEIL) p.set('rmax', String(rMax));
+				}
+				if (flags.liked) p.set('liked', '1');
+				if (flags.rewatched) p.set('rewatched', '1');
+				for (const [key, values] of Object.entries(sets)) {
+					for (const v of values) p.append(key, v);
+				}
+				if (sets.friend.size) p.set('friendmode', modes.friendmode);
+				if (sets.medium.size || sets.venue.size || sets.format.size) {
+					p.set('wheremode', modes.wheremode);
+				}
+				return p.toString();
+			}
 
 			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
 			// so every node we build has to carry it or it renders unstyled. Read the name
@@ -428,10 +922,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				errorBox.hidden = true;
 				const from = reset ? 0 : offset;
 				try {
-					const url =
-						`/api/films/watched/list?limit=${BATCH}&offset=${from}` +
-						`&sort=${encodeURIComponent(sort)}&q=${encodeURIComponent(q)}`;
-					const res = await fetch(url);
+					const res = await fetch(`/api/films/watched/list?${buildQuery(from)}`);
 					if (!res.ok) throw new Error(`HTTP ${res.status}`);
 					const { films, total } = (await res.json()) as { films: WatchedFilm[]; total: number };
 					if (mySeq !== seq) return; // superseded by a newer query
@@ -444,8 +935,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 					offset += films.length;
 
 					shown.textContent = fmt(total);
+					// Quote the search term when it's the only thing narrowing; once a
+					// filter is on too, the term alone no longer explains the emptiness.
+					const onlyQuery = q !== '' && activeCount() === 0;
 					emptyQ.textContent = q;
-					empty.hidden = total > 0 || !q;
+					emptyByQuery.hidden = !onlyQuery;
+					emptyByFilters.hidden = onlyQuery;
+					empty.hidden = total > 0 || (!q && activeCount() === 0);
 					done = offset >= total || films.length < BATCH;
 					armSentinel();
 				} catch (e) {
@@ -490,6 +986,155 @@ const num = (n: number) => n.toLocaleString('en-US');
 			}
 
 			retry.addEventListener('click', () => load(retryReset));
+
+			// --- Filter panel ---------------------------------------------------
+			const panel = document.getElementById('filters')!;
+			const toggle = document.getElementById('filters-toggle')!;
+			const countBadge = document.getElementById('filters-count')!;
+			const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
+			const filterChips = Array.from(
+				panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'),
+			);
+			const flagChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-flag]'));
+			const rminInput = document.getElementById('rmin') as HTMLInputElement;
+			const rmaxInput = document.getElementById('rmax') as HTMLInputElement;
+			const rangeFill = document.getElementById('range-fill')!;
+			const rminStars = document.getElementById('rmin-stars')!;
+			const rmaxStars = document.getElementById('rmax-stars')!;
+			const ratingBox = document.querySelector('.rating')!;
+
+			/** "★★★½" for 3.5. Matches the star text used elsewhere in the log. */
+			function starText(r: number): string {
+				return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
+			}
+
+			/** Reflect state that isn't owned by the control the user just touched. */
+			function syncChrome() {
+				const n = activeCount();
+				countBadge.textContent = n ? ` · ${n}` : '';
+				toggle.classList.toggle('pill--on', panel.hidden === false || n > 0);
+				clearAll.hidden = n === 0;
+
+				const pct = (v: number) =>
+					((v - RATING_FLOOR) / (RATING_CEIL - RATING_FLOOR)) * 100;
+				rangeFill.style.left = `${pct(rMin)}%`;
+				rangeFill.style.width = `${pct(rMax) - pct(rMin)}%`;
+				rminStars.textContent = starText(rMin);
+				rmaxStars.textContent = starText(rMax);
+				// The two inputs cover the same box, so where the thumbs overlap the
+				// later one in the DOM (max) swallows the drag. Raise min once it's past
+				// the midpoint, which is the only place the two can meet.
+				const overlapping = rMin > (RATING_FLOOR + RATING_CEIL) / 2;
+				rminInput.style.zIndex = overlapping ? '2' : '1';
+				rmaxInput.style.zIndex = overlapping ? '1' : '2';
+				// "Unrated only" and a star range are mutually exclusive; dim the one
+				// that isn't in play rather than hiding it.
+				ratingBox.classList.toggle('rating--off', flags.unrated);
+			}
+
+			function applyFilters() {
+				syncChrome();
+				load(true);
+			}
+
+			toggle.addEventListener('click', () => {
+				panel.hidden = !panel.hidden;
+				toggle.setAttribute('aria-expanded', String(!panel.hidden));
+				syncChrome();
+			});
+
+			for (const chip of filterChips) {
+				chip.addEventListener('click', () => {
+					const key = chip.dataset.filter as SetKey;
+					const value = chip.dataset.value!;
+					const on = !sets[key].has(value);
+					if (on) sets[key].add(value);
+					else sets[key].delete(value);
+					chip.setAttribute('aria-pressed', String(on));
+					applyFilters();
+				});
+			}
+
+			for (const chip of flagChips) {
+				chip.addEventListener('click', () => {
+					const key = chip.dataset.flag as keyof typeof flags;
+					flags[key] = !flags[key];
+					chip.setAttribute('aria-pressed', String(flags[key]));
+					// Turning on "Unrated only" resets the star range it overrides, so
+					// clearing it later doesn't restore a range the user can't see.
+					if (key === 'unrated' && flags.unrated) setRange(RATING_FLOOR, RATING_CEIL);
+					applyFilters();
+				});
+			}
+
+			// "+N other…" reveals the rest of a chip group and then removes itself:
+			// collapsing again would have to hide chips the user may have just picked.
+			for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
+				more.addEventListener('click', () => {
+					for (const sibling of Array.from(more.parentElement!.children)) {
+						(sibling as HTMLElement).hidden = false;
+					}
+					more.remove();
+				});
+			}
+
+			for (const group of Array.from(panel.querySelectorAll<HTMLElement>('.modes'))) {
+				const key = group.dataset.mode as keyof typeof modes;
+				const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('.mode'));
+				for (const button of buttons) {
+					button.addEventListener('click', () => {
+						if (modes[key] === button.dataset.value) return;
+						modes[key] = button.dataset.value!;
+						for (const b of buttons) b.classList.toggle('mode--on', b === button);
+						// A mode toggle only changes results once something is selected.
+						const relevant =
+							key === 'friendmode'
+								? sets.friend.size > 0
+								: sets.medium.size + sets.venue.size + sets.format.size > 0;
+						if (relevant) applyFilters();
+					});
+				}
+			}
+
+			/** Move both thumbs, keeping min ≤ max and the inputs in step. */
+			function setRange(min: number, max: number) {
+				rMin = Math.min(min, max);
+				rMax = Math.max(min, max);
+				rminInput.value = String(rMin);
+				rmaxInput.value = String(rMax);
+			}
+
+			for (const input of [rminInput, rmaxInput]) {
+				input.addEventListener('input', () => {
+					// The thumbs share a track, so each one pushes rather than crosses.
+					const min = Number(rminInput.value);
+					const max = Number(rmaxInput.value);
+					if (input === rminInput) setRange(Math.min(min, max), max);
+					else setRange(min, Math.max(min, max));
+					// Dragging a star range is a choice to filter by stars.
+					if (flags.unrated) {
+						flags.unrated = false;
+						const chip = panel.querySelector<HTMLButtonElement>('.chip[data-flag="unrated"]')!;
+						chip.setAttribute('aria-pressed', 'false');
+					}
+					syncChrome();
+				});
+				// Re-query on release rather than per half-star: a drag across the track
+				// would otherwise fire ten requests.
+				input.addEventListener('change', applyFilters);
+			}
+
+			clearAll.addEventListener('click', () => {
+				for (const s of Object.values(sets)) s.clear();
+				for (const chip of [...filterChips, ...flagChips]) {
+					chip.setAttribute('aria-pressed', 'false');
+				}
+				flags.liked = flags.rewatched = flags.unrated = false;
+				setRange(RATING_FLOOR, RATING_CEIL);
+				applyFilters();
+			});
+
+			syncChrome();
 		}
 	</script>
 </FilmLayout>
