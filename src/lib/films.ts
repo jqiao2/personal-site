@@ -140,10 +140,10 @@ export interface UpdateLogInput {
 	friends?: string[];
 }
 
-/** Upsert the film-level "watched" record (mark the movie seen). Decision A: does
- * NOT touch film-level rating/liked — those are owned by the Letterboxd import.
- * Idempotent via the movie_id unique constraint: re-logging keeps the original
- * first_watched. */
+/** Upsert the film-level "watched" record (mark the movie seen). Never touches
+ * rating/liked — a bare "I saw it" carries no opinion, and syncFilmRating owns
+ * those. Idempotent via the movie_id unique constraint: re-logging keeps the
+ * original first_watched. */
 async function markWatched(movie: MovieRow, watchedDate: string | null): Promise<void> {
 	const firstWatched = watchedDate ? `${watchedDate}T00:00:00Z` : new Date().toISOString();
 	const { error } = await supabaseAdmin.from('watched').upsert(
@@ -155,6 +155,48 @@ async function markWatched(movie: MovieRow, watchedDate: string | null): Promise
 		{ onConflict: 'movie_id', ignoreDuplicates: true },
 	);
 	if (error) throw new Error(`mark watched failed: ${error.message}`);
+}
+
+/**
+ * Push a viewing's rating/like up to the film-level `watched` row.
+ *
+ * Two columns hold a rating and both are real (migration 0003): `watched.rating`
+ * is what you think of the FILM, `logs.rating` is what you thought that night.
+ * ~500 imported films have only the former — they never got a dated entry — so
+ * logs can't stand alone. The newest viewing is the newest opinion, so it owns
+ * the film-level value.
+ *
+ * Only ever writes the fields an entry actually carries: an unrated log must not
+ * blank a film's rating, and ~74 films rate the film differently from their last
+ * log (a later re-rate on Letterboxd). Likewise `liked` only ever goes true —
+ * a rewatch you didn't tick shouldn't unlike the film.
+ */
+async function syncFilmRating(
+	movieId: number,
+	patch: { rating?: number; liked?: true },
+): Promise<void> {
+	if (Object.keys(patch).length === 0) return;
+	const { error } = await supabaseAdmin.from('watched').update(patch).eq('movie_id', movieId);
+	if (error) throw new Error(`sync film rating failed: ${error.message}`);
+}
+
+/**
+ * Whether `logId` is the film's most recent rated viewing — the entry whose rating
+ * stands as the film-level opinion. Undated logs sort last; newest id breaks ties.
+ * Editing an older entry's rating is editing history, and leaves the film alone.
+ */
+async function isNewestRatedLog(movieId: number, logId: number): Promise<boolean> {
+	const { data, error } = await supabaseAdmin
+		.from('logs')
+		.select('id')
+		.eq('movie_id', movieId)
+		.is('deleted_at', null)
+		.not('rating', 'is', null)
+		.order('watched_date', { ascending: false, nullsFirst: false })
+		.order('id', { ascending: false })
+		.limit(1);
+	if (error) throw new Error(`newest rated log lookup failed: ${error.message}`);
+	return data?.[0]?.id === logId;
 }
 
 /** Remove a movie from the watchlist. Idempotent no-op when it isn't on the list;
@@ -266,6 +308,13 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 
 	const friends = normalizeFriends(input.friends);
 	if (friends.length > 0) await attachFriends(log.id, friends);
+
+	// A new entry is the newest opinion of the film, so it sets the film-level
+	// rating/like the grid, stats and favorites all read.
+	await syncFilmRating(movie.id, {
+		...(input.rating != null ? { rating: input.rating } : {}),
+		...(input.liked ? { liked: true as const } : {}),
+	});
 
 	return { movieId: movie.id, watchedOnly: false, logId: log.id as number };
 }
@@ -398,10 +447,18 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 			.update(patch)
 			.eq('id', id)
 			.is('deleted_at', null)
-			.select('id')
+			.select('id, movie_id')
 			.maybeSingle();
 		if (error) throw new Error(`updateLog failed: ${error.message}`);
 		if (!data) return false;
+
+		// Re-rating the film's latest viewing is re-rating the film. Guarded on the
+		// rating actually being in the patch: editing an old entry's tags must not
+		// drag the film-level rating down to that night's score.
+		if ('rating' in input && input.rating != null && (await isNewestRatedLog(data.movie_id, id))) {
+			await syncFilmRating(data.movie_id, { rating: input.rating });
+		}
+		if (input.liked) await syncFilmRating(data.movie_id, { liked: true });
 	} else if ('tags' in input || 'friends' in input) {
 		const { data, error } = await supabaseAdmin
 			.from('logs')
