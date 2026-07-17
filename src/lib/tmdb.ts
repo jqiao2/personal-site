@@ -208,3 +208,9 @@ export function releaseYear(releaseDate: string | null | undefined): number | nu
 	const year = Number.parseInt(releaseDate.slice(0, 4), 10);
 	return Number.isNaN(year) ? null : year;
 }
+
+/** A TMDB release_date as a "YYYY-MM-DD" date, or null. TMDB sends "" — not null
+ * — for films with no known date, which Postgres rejects for a `date` column. */
+export function releaseDate(date: string | null | undefined): string | null {
+	return /^\d{4}-\d{2}-\d{2}$/.test(date ?? '') ? (date as string) : null;
+}

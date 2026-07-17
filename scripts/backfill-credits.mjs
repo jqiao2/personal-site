@@ -1,15 +1,19 @@
 // One-time (resumable) backfill of TMDB genre + credit facts onto the `movies`
-// cache, powering the Stats page.
+// cache, powering the Stats page and the Watchlist's genre filter.
 //
-// For every film in `watched`, fetch TMDB details+credits and fill the columns
-// added in migration 0008: genres, languages (spoken), countries (production),
-// directors (crew job=Director) and actors (top ~10 billed). `credits_synced_at`
-// is stamped on success so re-runs skip already-done films — the script is safe
-// to stop and resume, and only the first run makes the ~1.2k TMDB calls.
+// For every film in `watched` or `watchlist`, fetch TMDB details+credits and fill
+// the columns added in migration 0008: genres, languages (spoken), countries
+// (production), directors (crew job=Director) and actors (top ~10 billed), plus
+// the full release_date from 0014. `credits_synced_at` is stamped on success so
+// re-runs skip already-done films — the script is safe to stop and resume.
+//
+// A film is due when it has never been synced, or when it predates a column added
+// since its last sync (release_date, 0014) and so would still be null. That makes
+// adding a column a matter of running this again, with no --force needed.
 //
 // Usage (env supplies SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TMDB_API_KEY):
 //   node --env-file=.env scripts/backfill-credits.mjs [options]
-//     --force        Re-fetch every watched film, even if already synced
+//     --force        Re-fetch every film, even if already synced
 //     --dry-run      Fetch + report, but write nothing to the DB
 //     --limit=<n>    Only process the first n films (smoke test)
 //
@@ -102,9 +106,15 @@ function usCertification(d) {
 	return cert || null;
 }
 
+/** TMDB sends "" — not null — for an unknown date, which Postgres rejects. */
+function releaseDate(d) {
+	return /^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null;
+}
+
 /** Mirror of extractCreditFacts() in src/lib/tmdb.ts (kept in sync by hand). */
 function extractFacts(d) {
 	return {
+		release_date: releaseDate(d),
 		genres: uniq((d.genres ?? []).map((g) => g.name)),
 		languages: uniq((d.spoken_languages ?? []).map((l) => l.english_name || l.name)),
 		countries: uniq((d.production_countries ?? []).map((c) => c.name)),
@@ -115,17 +125,19 @@ function extractFacts(d) {
 	};
 }
 
-/** Every watched film's movie row (paged past PostgREST's 1000-row cap). */
-async function loadWatchedMovies() {
+const COLUMNS = 'id, tmdb_id, title, credits_synced_at, release_date';
+
+/** One relation's movie rows, paged past PostgREST's 1000-row cap. */
+async function loadMoviesVia(table, orderBy) {
 	const PAGE = 1000;
 	const out = [];
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabase
-			.from('watched')
-			.select('movies!inner(id, tmdb_id, title, credits_synced_at)')
-			.order('first_watched', { ascending: false })
+			.from(table)
+			.select(`movies!inner(${COLUMNS})`)
+			.order(orderBy, { ascending: false })
 			.range(offset, offset + PAGE - 1);
-		if (error) throw new Error(`load watched failed: ${error.message}`);
+		if (error) throw new Error(`load ${table} failed: ${error.message}`);
 		const rows = (data ?? []).map((r) => r.movies);
 		out.push(...rows);
 		if (rows.length < PAGE) break;
@@ -133,19 +145,43 @@ async function loadWatchedMovies() {
 	return out;
 }
 
+/** Every film the site aggregates or filters over: watched ∪ watchlist. A film can
+ * be in both (watchlisted, then watched without being removed), so de-dupe by id. */
+async function loadMovies() {
+	const [watched, watchlist] = await Promise.all([
+		loadMoviesVia('watched', 'first_watched'),
+		loadMoviesVia('watchlist', 'added_at'),
+	]);
+	const byId = new Map();
+	for (const m of [...watched, ...watchlist]) byId.set(m.id, m);
+	return { movies: [...byId.values()], watched: watched.length, watchlist: watchlist.length };
+}
+
+/** Whether a film still needs a TMDB fetch: never synced, or synced before a
+ * column it would fill existed (release_date, migration 0014).
+ *
+ * The release_date test re-fetches the handful of films TMDB has no date for on
+ * every run, since a null there is indistinguishable from "not yet fetched". They
+ * cost a few calls and converge to the same (null) value, which beats carrying a
+ * per-column sync stamp just to skip them. */
+function needsSync(m) {
+	return !m.credits_synced_at || m.release_date == null;
+}
+
 async function main() {
-	console.log(`Loading watched films${DRY_RUN ? ' (dry run)' : ''}…`);
-	const all = await loadWatchedMovies();
-	const todo = (FORCE ? all : all.filter((m) => !m.credits_synced_at)).slice(
+	console.log(`Loading watched + watchlist films${DRY_RUN ? ' (dry run)' : ''}…`);
+	const { movies: all, watched, watchlist } = await loadMovies();
+	const todo = (FORCE ? all : all.filter(needsSync)).slice(
 		0,
 		Number.isFinite(LIMIT) ? LIMIT : all.length,
 	);
 	console.log(
-		`${all.length} watched films; ${todo.length} to sync${FORCE ? ' (forced)' : ''}` +
+		`${all.length} films (${watched} watched, ${watchlist} watchlisted); ` +
+			`${todo.length} to sync${FORCE ? ' (forced)' : ''}` +
 			(Number.isFinite(LIMIT) ? ` (limited to ${LIMIT})` : ''),
 	);
 	if (todo.length === 0) {
-		console.log('Nothing to do — all watched films already have credits.');
+		console.log('Nothing to do — every film already has credits.');
 		return;
 	}
 

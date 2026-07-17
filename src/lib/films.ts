@@ -2,7 +2,7 @@
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
-import { extractCreditFacts, getMovieDetails, releaseYear } from './tmdb';
+import { extractCreditFacts, getMovieDetails, releaseDate, releaseYear } from './tmdb';
 
 /** How long a cached movie row is considered fresh before we re-sync from TMDB. */
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -50,12 +50,14 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		runtime: d.runtime,
 		last_synced_at: now,
 	};
-	// Genre + credit facts for the Stats page (migration 0008). The backfill fills
-	// these in bulk for existing films; this keeps them fresh for anything logged
-	// from now on. If 0008 hasn't been applied yet, fall back to the base columns
-	// so caching a movie still works.
+	// Genre + credit facts for the Stats page (migration 0008) and the full release
+	// date the Watchlist's upcoming badge needs (0014). The backfill fills these in
+	// bulk for existing films; this keeps them fresh for anything logged from now
+	// on. If those migrations haven't been applied yet, fall back to the base
+	// columns so caching a movie still works.
 	const withFacts = {
 		...base,
+		release_date: releaseDate(d.release_date),
 		genres: facts.genres,
 		languages: facts.languages,
 		countries: facts.countries,
@@ -1107,20 +1109,30 @@ export async function listWatchlist(limit = 4): Promise<WatchlistTile[]> {
 	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
 }
 
-/** A full watchlist entry for the watchlist page — tile fields plus when it was added. */
+/** A full watchlist entry for the watchlist page — tile fields plus when it was
+ * added and the facts its filters read. */
 export interface WatchlistEntry extends WatchlistTile {
 	added_at: string;
+	/** Cached TMDB genres (migration 0008); [] when never synced. */
+	genres: string[];
+	/** Full release date, "YYYY-MM-DD" (0014). Null when TMDB has no date — which
+	 * for a watchlist is usually an announced film with nothing but a title. */
+	release_date: string | null;
 }
 
-/** The entire watchlist, most recently added first — powers /films/watchlist. */
+/** The entire watchlist, most recently added first — powers /films/watchlist.
+ * Unpaged: the page filters and sorts the whole list in the browser, so it has to
+ * ship all of it. Fine at a few hundred films; revisit if it reaches thousands. */
 export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 	const { data, error } = await supabasePublic
 		.from('watchlist')
-		.select('added_at, movies(tmdb_id, title, release_year, poster_path)')
+		.select('added_at, movies(tmdb_id, title, release_year, release_date, poster_path, genres)')
 		.order('added_at', { ascending: false });
 	if (error) throw new Error(`listAllWatchlist failed: ${error.message}`);
-	return ((data ?? []) as unknown as { added_at: string; movies: WatchlistTile }[]).map((r) => ({
+	type Row = { added_at: string; movies: WatchlistEntry & { genres: string[] | null } };
+	return ((data ?? []) as unknown as Row[]).map((r) => ({
 		...r.movies,
+		genres: r.movies.genres ?? [],
 		added_at: r.added_at,
 	}));
 }

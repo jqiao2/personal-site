@@ -7,7 +7,17 @@ import { imageUrl } from '../../lib/tmdb';
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
+/** How many genre chips show before collapsing behind "+N other…". TMDB has 19
+ * movie genres and the watchlist spans nearly all of them, which is more than the
+ * panel's column can hold. */
+const GENRE_CHIP_LIMIT = 8;
+
 const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Astro.cookies)]);
+
+// The whole watchlist ships to the browser, which does the filtering and sorting
+// from data attributes on the tiles. Unlike the "All films" grid — which pages
+// through ~1.5k watched films and so has to re-query the server — a few hundred
+// entries all fit in the DOM, and searching a slice would be a bug.
 
 /** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8", or "Aug 30, 2025" when it's not the current year. */
 const currentYear = new Date().getFullYear();
@@ -27,6 +37,31 @@ function ytsUrl(title: string, year: number | null): string {
 	const query = year ? `${title} ${year}` : title;
 	return `https://yts.gg/browse-movies/${encodeURIComponent(query.toLowerCase())}/all/all/0/latest/0/all`;
 }
+
+// A film is upcoming when its release date is still ahead of us. This needs the
+// full date, not release_year: for most of a year, "released in 2026" and "out in
+// 2026" are different claims. Films TMDB has no date for (announced, no schedule
+// yet) aren't badged — unknown isn't the same as future.
+const today = new Date().toISOString().slice(0, 10);
+const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.release_date > today;
+
+/** Genres present on the watchlist, most common first — matches the chip order the
+ * "All films" filters use. */
+const genreCounts = new Map<string, number>();
+for (const f of films) {
+	for (const g of f.genres) genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
+}
+const genres = [...genreCounts.keys()].sort((a, b) => genreCounts.get(b)! - genreCounts.get(a)!);
+
+// End stops for the release-date slider, as a decade's first year. It needs two
+// distinct decades to be worth drawing. Films with no release_year at all sit
+// outside every decade and drop out once the slider is narrowed.
+const decades = [...new Set(films.map((f) => f.release_year).filter((y): y is number => y != null))]
+	.map((y) => Math.floor(y / 10) * 10)
+	.sort((a, b) => a - b);
+const decLo = decades[0] ?? null;
+const decHi = decades[decades.length - 1] ?? null;
+const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 ---
 
 <FilmLayout title="Watchlist — Jason's film log">
@@ -40,55 +75,161 @@ function ytsUrl(title: string, year: number | null): string {
 			</header>
 
 			<div class="titleblock">
-				<div class="titleblock__left">
+				<div>
 					<div class="titleblock__head">
 						<h1>Watchlist</h1>
-						{isOwner && (
-							<button type="button" class="add-btn" id="open-composer">+ Add film</button>
-						)}
+						{isOwner && <button type="button" class="add-btn" id="open-composer">+ Add film</button>}
 					</div>
 					<div class="sub">
-						<span class="sub__n" id="wl-count">{num(films.length)}</span>
-						<span id="wl-noun">{films.length === 1 ? ' film' : ' films'}</span> · the next screening awaits
+						<span class="sub__n" id="wl-count">{num(films.length)}</span>{' '}
+						<span id="wl-noun">{films.length === 1 ? 'film' : 'films'}</span> to watch · showing{' '}
+						<span class="sub__n" id="shown">{num(films.length)}</span>
 					</div>
-				</div>
-				<div class="sortby">
-					<span class="sortby__label">Sort by</span>
-					<span class="sortby__pill">Recently added ▾</span>
 				</div>
 			</div>
 
-			<p class="empty" id="empty" hidden={films.length > 0}>Nothing on the watchlist yet.</p>
+			<div class="filterbar">
+				<input
+					type="search"
+					id="search"
+					placeholder="Search watchlist…"
+					autocomplete="off"
+					aria-label="Search watchlist"
+				/>
+				<button
+					type="button"
+					id="filters-toggle"
+					class="pill pill--btn"
+					aria-expanded="false"
+					aria-controls="filters"
+				>
+					Filters<span id="filters-count"></span>
+				</button>
+				<div class="sortby">
+					<span class="sortby__label">Sort</span>
+					<button type="button" class="pill pill--on" data-sort="added">Recently added</button>
+					<button type="button" class="pill" data-sort="year">Release date</button>
+					<button type="button" class="pill" data-sort="shuffle">⇄ Shuffle</button>
+				</div>
+			</div>
 
-			<div class="grid" id="grid">
-				{films.map((f) => (
-					<div class="item" data-tmdb-id={f.tmdb_id}>
-						{isOwner && (
-							<button type="button" class="remove" aria-label={`Remove ${f.title} from watchlist`}>✕</button>
-						)}
-						{isOwner ? (
-							<a class="tile" href={ytsUrl(f.title, f.release_year)} target="_blank" rel="noopener noreferrer">
-								{imageUrl(f.poster_path, 'w342') && (
-									<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
-								)}
-								<div class="tile__cap">
-									{f.title} <span class="tile__year">{f.release_year}</span>
-								</div>
-							</a>
-						) : (
-							<div class="tile">
-								{imageUrl(f.poster_path, 'w342') && (
-									<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
-								)}
-								<div class="tile__cap">
-									{f.title} <span class="tile__year">{f.release_year}</span>
+			<div class="panel" id="filters" hidden>
+				<div class="panel__head">
+					<span class="panel__title">Filter watchlist</span>
+					<button type="button" id="clear-all" class="clear" hidden>Clear all</button>
+				</div>
+
+				<div class="panel__grid">
+					<section>
+						<h2 class="grp">
+							Release date <span class="grp__note">· includes upcoming</span>
+						</h2>
+						{hasDecadeRange ? (
+							<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
+								<div class="range__track"></div>
+								<div class="range__fill" id="drange-fill"></div>
+								<input
+									type="range"
+									id="dmin"
+									min={decLo}
+									max={decHi}
+									step="10"
+									value={decLo}
+									aria-label="Earliest release decade"
+								/>
+								<input
+									type="range"
+									id="dmax"
+									min={decLo}
+									max={decHi}
+									step="10"
+									value={decHi}
+									aria-label="Latest release decade"
+								/>
+								<div class="range__ends">
+									<span id="dmin-label">{decLo}s</span><span id="dmax-label">{decHi}s</span>
 								</div>
 							</div>
+						) : (
+							<p class="grp__none">Not enough range to filter</p>
 						)}
-						<div class="item__added">Added {shortDate(f.added_at)}</div>
-					</div>
-				))}
+					</section>
+
+					<section>
+						<h2 class="grp">Genre</h2>
+						{genres.length === 0 ? (
+							<p class="grp__none">No genres yet</p>
+						) : (
+							<div class="chips">
+								{genres.map((g, i) => (
+									<button
+										type="button"
+										class="chip"
+										data-filter="genre"
+										data-value={g}
+										aria-pressed="false"
+										hidden={i >= GENRE_CHIP_LIMIT}
+									>
+										{g}
+									</button>
+								))}
+								{genres.length > GENRE_CHIP_LIMIT && (
+									<button type="button" class="chip chip--more">
+										+{genres.length - GENRE_CHIP_LIMIT} other…
+									</button>
+								)}
+							</div>
+						)}
+					</section>
+				</div>
 			</div>
+
+			<div class="grid" id="grid">
+				{films.map((f, i) => {
+					const poster = imageUrl(f.poster_path, 'w342');
+					const upcoming = isUpcoming(f);
+					const added = shortDate(f.added_at);
+					// The owner's tiles link out to YTS; a visitor's aren't links at all.
+					const Tag = isOwner ? 'a' : 'div';
+					return (
+						<div
+							class="item"
+							data-tmdb-id={f.tmdb_id}
+							data-order={i}
+							data-title={f.title.toLowerCase()}
+							data-year={f.release_year ?? ''}
+							data-genres={f.genres.join('|')}
+						>
+							{isOwner && (
+								<button type="button" class="remove" aria-label={`Remove ${f.title} from watchlist`}>
+									✕
+								</button>
+							)}
+							<Tag
+								class={poster ? 'tile' : 'tile tile--noimg'}
+								{...(isOwner
+									? { href: ytsUrl(f.title, f.release_year), target: '_blank', rel: 'noopener noreferrer' }
+									: {})}
+							>
+								{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" />}
+								{upcoming && <span class="badge">Upcoming</span>}
+								<div class="tile__overlay">
+									<div class="tile__title">{f.title}</div>
+									<div class="tile__year">{f.release_year}</div>
+									<div class="tile__genre">{f.genres[0]}</div>
+									{added && <div class="tile__added">Added {added}</div>}
+								</div>
+							</Tag>
+						</div>
+					);
+				})}
+			</div>
+
+			<p class="empty" id="empty" hidden={films.length > 0}>
+				<span id="empty-none" hidden={films.length > 0}>Nothing on the watchlist yet.</span>
+				<span id="empty-by-query" hidden>No films match “<span id="empty-q"></span>”</span>
+				<span id="empty-by-filters" hidden>No films match these filters</span>
+			</p>
 		</div>
 	</div>
 
@@ -131,7 +272,7 @@ function ytsUrl(title: string, year: number | null): string {
 		}
 		.wrap {
 			width: 100%;
-			max-width: 960px;
+			max-width: 1000px;
 		}
 		.topbar {
 			display: flex;
@@ -165,7 +306,7 @@ function ytsUrl(title: string, year: number | null): string {
 			display: flex;
 			align-items: flex-end;
 			justify-content: space-between;
-			margin-bottom: 36px;
+			margin-bottom: 26px;
 			flex-wrap: wrap;
 			gap: 16px;
 		}
@@ -207,6 +348,32 @@ function ytsUrl(title: string, year: number | null): string {
 			color: #d9b45a;
 			font-weight: 600;
 		}
+
+		.filterbar {
+			display: flex;
+			gap: 12px;
+			align-items: center;
+			margin-bottom: 14px;
+			flex-wrap: wrap;
+		}
+		#search {
+			flex: 1;
+			min-width: 220px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 11px 14px;
+			color: #f4e8d1;
+			font-size: 14px;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		#search::placeholder {
+			color: #8a6f63;
+		}
+		#search:focus {
+			border-color: #d9b45a;
+		}
 		.sortby {
 			display: flex;
 			align-items: center;
@@ -218,22 +385,225 @@ function ytsUrl(title: string, year: number | null): string {
 			letter-spacing: 1.4px;
 			color: #8a6f63;
 		}
-		.sortby__pill {
-			font-size: 13px;
-			color: #f2e5cd;
-			border: 1px solid #4a2529;
+		.pill {
+			font-size: 12.5px;
+			padding: 7px 13px;
 			border-radius: 20px;
-			padding: 7px 14px;
-			background: #331619;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			border: 1px solid #4a2529;
+			background: transparent;
+			color: #ddc9b4;
+		}
+		.pill:hover {
+			border-color: #a2857a;
+		}
+		.pill--on {
+			background: #d9b45a;
+			color: #2a1214;
+			font-weight: 600;
+			border-color: #d9b45a;
+		}
+		.pill--btn {
+			padding: 10px 16px;
+			border-radius: 8px;
+		}
+
+		/* --- Filter panel --- */
+		.panel {
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 12px;
+			padding: 24px 26px;
+			margin-bottom: 26px;
+		}
+		.panel[hidden] {
+			display: none;
+		}
+		.panel__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 20px;
+		}
+		.panel__title {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #8a6f63;
+		}
+		.clear {
+			font-size: 12px;
+			font-weight: 600;
+			color: #d9b45a;
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			padding: 0;
+		}
+		.clear:hover {
+			color: #f0d488;
+		}
+		.clear[hidden] {
+			display: none;
+		}
+		.panel__grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 26px 40px;
+		}
+		.grp {
+			font-size: 11px;
+			font-weight: 400;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a6f63;
+			margin: 0 0 12px;
+		}
+		.grp__note {
+			letter-spacing: 0.4px;
+			text-transform: none;
+			color: #6f5850;
+		}
+		.grp__none {
+			font-size: 13px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+			color: #8a6f63;
+			margin: 0;
+		}
+		.chips {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.chip {
+			font-size: 12.5px;
+			padding: 7px 13px;
+			border-radius: 20px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			border: 1px solid #4a2529;
+			background: transparent;
+			color: #ddc9b4;
+		}
+		.chip:hover {
+			border-color: #a2857a;
+		}
+		.chip[aria-pressed='true'] {
+			background: #d9b45a;
+			color: #2a1214;
+			font-weight: 600;
+			border-color: #d9b45a;
+		}
+		.chip[hidden] {
+			display: none;
+		}
+		.chip--more {
+			background: transparent;
+			color: #a2857a;
+			border-style: dashed;
+		}
+
+		/* Dual-thumb release-date range: two native sliders stacked on one track, so
+		   keyboard and screen-reader support come for free. The inputs ignore pointer
+		   events except on their thumbs, which lets whichever thumb is under the
+		   cursor take the drag even though the boxes fully overlap. Mirrors the
+		   "All films" grid's sliders. */
+		.range {
+			max-width: 260px;
+			position: relative;
+			height: 32px;
+		}
+		.range__track,
+		.range__fill {
+			position: absolute;
+			top: 14px;
+			height: 4px;
+			border-radius: 2px;
+			pointer-events: none;
+		}
+		.range__track {
+			left: 0;
+			right: 0;
+			background: #402226;
+		}
+		.range__fill {
+			background: #d9b45a;
+		}
+		.range input[type='range'] {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 32px;
+			margin: 0;
+			background: none;
+			appearance: none;
+			-webkit-appearance: none;
+			pointer-events: none;
+		}
+		.range input[type='range']:focus-visible {
+			outline: none;
+		}
+		.range input[type='range']::-webkit-slider-thumb {
+			appearance: none;
+			-webkit-appearance: none;
+			pointer-events: auto;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #f0d488;
+			border: 2px solid #241012;
+			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+			cursor: pointer;
+		}
+		.range input[type='range']::-moz-range-thumb {
+			pointer-events: auto;
+			width: 16px;
+			height: 16px;
+			border-radius: 50%;
+			background: #f0d488;
+			border: 2px solid #241012;
+			box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+			cursor: pointer;
+		}
+		.range input[type='range']:focus-visible::-webkit-slider-thumb {
+			outline: 2px solid #f0d488;
+			outline-offset: 2px;
+		}
+		.range input[type='range']:focus-visible::-moz-range-thumb {
+			outline: 2px solid #f0d488;
+			outline-offset: 2px;
+		}
+		.range__ends {
+			position: absolute;
+			top: 30px;
+			left: 0;
+			right: 0;
+			display: flex;
+			justify-content: space-between;
+			font-size: 13px;
+			color: #d9b45a;
+			pointer-events: none;
+		}
+		/* The end labels are positioned out of flow, so reserve the room they occupy. */
+		.range--dec {
+			margin-bottom: 20px;
 		}
 
 		.grid {
 			display: grid;
 			grid-template-columns: repeat(6, 1fr);
 			gap: 18px;
+			margin-top: 16px;
 		}
 		.item {
 			position: relative;
+		}
+		.item[hidden] {
+			display: none;
 		}
 		.remove {
 			position: absolute;
@@ -270,14 +640,13 @@ function ytsUrl(title: string, year: number | null): string {
 		}
 		.tile {
 			position: relative;
+			display: block;
 			color: inherit;
 			aspect-ratio: 2 / 3;
 			border-radius: 5px;
 			overflow: hidden;
 			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
 			border: 1px solid #4a2529;
-			display: flex;
-			align-items: flex-end;
 			transition: border-color 0.12s;
 		}
 		.item:hover .tile {
@@ -290,31 +659,75 @@ function ytsUrl(title: string, year: number | null): string {
 			height: 100%;
 			object-fit: cover;
 		}
-		.tile__cap {
-			position: relative;
-			padding: 10px;
-			font-family: 'Newsreader', serif;
-			font-size: 13px;
-			font-weight: 500;
-			color: #f2e5cd;
-			line-height: 1.2;
+		.badge {
+			position: absolute;
+			top: 8px;
+			left: 8px;
+			z-index: 1;
+			font-size: 9.5px;
+			font-weight: 700;
+			letter-spacing: 1px;
+			text-transform: uppercase;
+			color: #2a1214;
+			background: #d9b45a;
+			border-radius: 3px;
+			padding: 3px 6px;
 		}
-		.tile img ~ .tile__cap {
-			display: none;
+		.tile__overlay {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			padding: 12px;
+			background: rgba(18, 8, 9, 0.82);
+			opacity: 0;
+			transition: opacity 0.18s ease;
+		}
+		.item:hover .tile__overlay {
+			opacity: 1;
+		}
+		/* Films with no poster: keep the caption visible over the striped tile. */
+		.tile--noimg .tile__overlay {
+			opacity: 1;
+			background: transparent;
+		}
+		.tile__title {
+			font-family: 'Newsreader', serif;
+			font-size: 16px;
+			font-weight: 500;
+			color: #f4e8d1;
+			line-height: 1.15;
 		}
 		.tile__year {
-			color: #b0917f;
-			font-style: italic;
+			font-family: 'Archivo', sans-serif;
+			font-size: 11px;
+			letter-spacing: 1.4px;
+			text-transform: uppercase;
+			color: #d9b45a;
+			margin-top: 5px;
 		}
-		.item__added {
+		.tile__genre {
+			font-size: 12px;
+			color: #a2857a;
+			margin-top: 4px;
+		}
+		.tile__added {
 			font-size: 11px;
 			color: #8a6f63;
-			margin-top: 6px;
+			margin-top: 3px;
 		}
+
 		.empty {
+			padding: 48px 0;
+			text-align: center;
 			color: #8a6f63;
+			font-size: 15px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
 		}
-		.empty[hidden] {
+		.empty[hidden],
+		.empty span[hidden] {
 			display: none;
 		}
 
@@ -520,6 +933,9 @@ function ytsUrl(title: string, year: number | null): string {
 			.grid {
 				grid-template-columns: repeat(4, 1fr);
 			}
+			.panel__grid {
+				grid-template-columns: minmax(0, 1fr);
+			}
 		}
 		@media (max-width: 560px) {
 			h1 {
@@ -528,49 +944,352 @@ function ytsUrl(title: string, year: number | null): string {
 			.grid {
 				grid-template-columns: repeat(3, 1fr);
 			}
+			.panel {
+				padding: 20px 16px;
+			}
+			.range {
+				max-width: none;
+			}
 		}
 	</style>
 
 	<script>
-		// Owner-only controls. Astro always hoists this script; bail out cleanly when
-		// the owner-only elements aren't in the DOM (a visitor viewing the page).
-		const REDIRECT = '/films/login?redirect=/films/watchlist';
-
-		// --- Remove a film from the watchlist ---
+		// --- Browse: search, sort and filter ---------------------------------
+		// The whole watchlist is server-rendered, so all of this reorders and hides
+		// tiles already in the DOM — no re-querying. Each tile carries the facts the
+		// filters read as data attributes.
 		const grid = document.getElementById('grid');
-		grid?.addEventListener('click', async (e) => {
-			const btn = (e.target as HTMLElement).closest('.remove') as HTMLButtonElement | null;
-			if (!btn) return;
-			const item = btn.closest('.item') as HTMLElement;
-			const tmdbId = item.dataset.tmdbId;
-			if (!tmdbId) return;
-			btn.disabled = true;
-			try {
-				const res = await fetch(`/api/films/watchlist?tmdbId=${tmdbId}`, { method: 'DELETE' });
-				if (res.status === 401) {
-					window.location.href = REDIRECT;
-					return;
-				}
-				if (!res.ok) throw new Error();
-				item.remove();
-				updateCount(-1);
-			} catch {
-				btn.disabled = false;
-			}
-		});
 
-		function updateCount(delta: number) {
-			const countEl = document.getElementById('wl-count');
-			const nounEl = document.getElementById('wl-noun');
-			const empty = document.getElementById('empty');
-			if (!countEl) return;
-			const n = Math.max(0, Number(countEl.textContent?.replace(/,/g, '') || '0') + delta);
-			countEl.textContent = n.toLocaleString('en-US');
-			if (nounEl) nounEl.textContent = n === 1 ? ' film' : ' films';
-			if (empty) empty.hidden = n > 0;
+		if (grid) {
+			const search = document.getElementById('search') as HTMLInputElement;
+			const shown = document.getElementById('shown')!;
+			const empty = document.getElementById('empty')!;
+			const emptyNone = document.getElementById('empty-none')!;
+			const emptyQ = document.getElementById('empty-q')!;
+			const emptyByQuery = document.getElementById('empty-by-query')!;
+			const emptyByFilters = document.getElementById('empty-by-filters')!;
+			const pills = Array.from(document.querySelectorAll<HTMLButtonElement>('.pill[data-sort]'));
+			const panel = document.getElementById('filters')!;
+			const toggle = document.getElementById('filters-toggle')!;
+			const countBadge = document.getElementById('filters-count')!;
+			const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
+			const genreChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'));
+			const drange = document.getElementById('drange');
+			const dminInput = document.getElementById('dmin') as HTMLInputElement | null;
+			const dmaxInput = document.getElementById('dmax') as HTMLInputElement | null;
+			const drangeFill = document.getElementById('drange-fill');
+			const dminLabel = document.getElementById('dmin-label');
+			const dmaxLabel = document.getElementById('dmax-label');
+
+			const fmt = (n: number) => n.toLocaleString('en-US');
+
+			/** A tile's facts, read off its data attributes once. */
+			interface Item {
+				el: HTMLElement;
+				title: string;
+				/** Decade's first year, or null when the film has no release year — such
+				 * a film can't satisfy any decade range, so a narrowed slider drops it. */
+				decade: number | null;
+				year: number | null;
+				genres: string[];
+				/** Position in the server's added_at-descending order. */
+				order: number;
+			}
+
+			const items: Item[] = Array.from(grid.querySelectorAll<HTMLElement>('.item')).map((el) => {
+				const year = el.dataset.year ? Number(el.dataset.year) : null;
+				return {
+					el,
+					title: el.dataset.title ?? '',
+					year,
+					decade: year == null ? null : Math.floor(year / 10) * 10,
+					genres: el.dataset.genres ? el.dataset.genres.split('|') : [],
+					order: Number(el.dataset.order),
+				};
+			});
+
+			// --- Filter state ---
+			let sort = 'added';
+			let q = '';
+			const selectedGenres = new Set<string>();
+			// Re-rolled on every press of Shuffle. Held so that re-filtering keeps the
+			// order you're looking at instead of reshuffling under you.
+			let shuffleSeed = 1;
+
+			const DEC_LO = drange ? Number(drange.dataset.lo) : 0;
+			const DEC_HI = drange ? Number(drange.dataset.hi) : 0;
+			let dMin = DEC_LO;
+			let dMax = DEC_HI;
+
+			/** Whether the release-date range narrows anything. */
+			const decadeActive = () => Boolean(drange) && (dMin > DEC_LO || dMax < DEC_HI);
+
+			/** Number of active filters — the count on the Filters button. The
+			 * release-date range counts once however many decades it spans. */
+			const activeCount = () => (decadeActive() ? 1 : 0) + selectedGenres.size;
+
+			/** A cheap deterministic hash, so a shuffle holds still while you filter
+			 * and each press of Shuffle deals a different order. */
+			function shuffleRank(item: Item): number {
+				let h = shuffleSeed;
+				for (const ch of item.title) h = (h * 31 + ch.charCodeAt(0)) % 100000;
+				return h;
+			}
+
+			function matches(item: Item): boolean {
+				if (q && !item.title.includes(q)) return false;
+				if (selectedGenres.size && !item.genres.some((g) => selectedGenres.has(g))) return false;
+				if (decadeActive() && (item.decade == null || item.decade < dMin || item.decade > dMax)) {
+					return false;
+				}
+				return true;
+			}
+
+			function apply() {
+				const visible = items.filter(matches);
+				const shownSet = new Set(visible);
+				for (const item of items) item.el.hidden = !shownSet.has(item);
+
+				const ordered = visible.slice();
+				if (sort === 'shuffle') ordered.sort((a, b) => shuffleRank(a) - shuffleRank(b));
+				// Newest release first, with undated films last — they'd otherwise sort
+				// as year 0 and bury the top of the list.
+				else if (sort === 'year') {
+					ordered.sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity));
+				} else ordered.sort((a, b) => a.order - b.order);
+
+				// One reflow rather than one per tile. Hidden tiles stay put; they're
+				// display:none, so where they sit doesn't matter until they're shown.
+				const frag = document.createDocumentFragment();
+				for (const item of ordered) frag.append(item.el);
+				grid!.prepend(frag);
+
+				shown.textContent = fmt(visible.length);
+				// Quote the search term when it's the only thing narrowing; once a filter
+				// is on too, the term alone no longer explains the emptiness.
+				const onlyQuery = q !== '' && activeCount() === 0;
+				emptyQ.textContent = q;
+				emptyNone.hidden = items.length > 0;
+				emptyByQuery.hidden = !onlyQuery || items.length === 0;
+				emptyByFilters.hidden = onlyQuery || items.length === 0;
+				empty.hidden = visible.length > 0;
+
+				syncChrome();
+				writeUrl();
+			}
+
+			/** Reflect state that isn't owned by the control the user just touched. */
+			function syncChrome() {
+				const n = activeCount();
+				countBadge.textContent = n ? ` · ${n}` : '';
+				toggle.classList.toggle('pill--on', panel.hidden === false || n > 0);
+				clearAll.hidden = n === 0;
+
+				if (drange && drangeFill && dminLabel && dmaxLabel) {
+					const pct = (v: number) => ((v - DEC_LO) / (DEC_HI - DEC_LO)) * 100;
+					drangeFill.style.left = `${pct(dMin)}%`;
+					drangeFill.style.width = `${pct(dMax) - pct(dMin)}%`;
+					dminLabel.textContent = `${dMin}s`;
+					dmaxLabel.textContent = `${dMax}s`;
+					// The two inputs cover the same box, so where the thumbs overlap the
+					// later one in the DOM (max) swallows the drag. Raise min once it's
+					// past the midpoint, which is the only place the two can meet.
+					const overlapping = dMin > (DEC_LO + DEC_HI) / 2;
+					dminInput!.style.zIndex = overlapping ? '2' : '1';
+					dmaxInput!.style.zIndex = overlapping ? '1' : '2';
+				}
+			}
+
+			toggle.addEventListener('click', () => {
+				panel.hidden = !panel.hidden;
+				toggle.setAttribute('aria-expanded', String(!panel.hidden));
+				syncChrome();
+			});
+
+			let debounce = 0;
+			search.addEventListener('input', () => {
+				window.clearTimeout(debounce);
+				debounce = window.setTimeout(() => {
+					const next = search.value.trim().toLowerCase();
+					if (next === q) return;
+					q = next;
+					apply();
+				}, 150);
+			});
+
+			for (const pill of pills) {
+				pill.addEventListener('click', () => {
+					// Shuffle is the one sort that does something when it's already on:
+					// pressing it again deals a new order.
+					if (pill.dataset.sort === sort && sort !== 'shuffle') return;
+					sort = pill.dataset.sort!;
+					if (sort === 'shuffle') shuffleSeed = 1 + Math.floor(Math.random() * 99998);
+					for (const p of pills) p.classList.toggle('pill--on', p === pill);
+					apply();
+				});
+			}
+
+			for (const chip of genreChips) {
+				chip.addEventListener('click', () => {
+					const value = chip.dataset.value!;
+					const on = !selectedGenres.has(value);
+					if (on) selectedGenres.add(value);
+					else selectedGenres.delete(value);
+					chip.setAttribute('aria-pressed', String(on));
+					apply();
+				});
+			}
+
+			// "+N other…" reveals the rest of the group and then removes itself:
+			// collapsing again would have to hide chips the user may have just picked.
+			for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
+				more.addEventListener('click', () => {
+					for (const sibling of Array.from(more.parentElement!.children)) {
+						(sibling as HTMLElement).hidden = false;
+					}
+					more.remove();
+				});
+			}
+
+			/** Move both thumbs, keeping min ≤ max and the inputs in step. */
+			function setDecades(min: number, max: number) {
+				dMin = Math.min(min, max);
+				dMax = Math.max(min, max);
+				dminInput!.value = String(dMin);
+				dmaxInput!.value = String(dMax);
+			}
+
+			if (dminInput && dmaxInput) {
+				for (const input of [dminInput, dmaxInput]) {
+					input.addEventListener('input', () => {
+						// The thumbs share a track, so each one pushes rather than crosses.
+						const min = Number(dminInput.value);
+						const max = Number(dmaxInput.value);
+						if (input === dminInput) setDecades(Math.min(min, max), max);
+						else setDecades(min, Math.max(min, max));
+						apply();
+					});
+				}
+			}
+
+			clearAll.addEventListener('click', () => {
+				selectedGenres.clear();
+				for (const chip of genreChips) chip.setAttribute('aria-pressed', 'false');
+				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
+				apply();
+			});
+
+			// --- URL state ------------------------------------------------------
+			// The filters live in the query string so a narrowed grid is linkable and
+			// survives a reload. Always replaceState, never pushState: a chip press is
+			// not a navigation, and stacking one entry per press would leave Back
+			// walking the filter history instead of returning to wherever you came
+			// from. Mirrors the "All films" grid's param names.
+			function writeUrl() {
+				const p = new URLSearchParams();
+				if (q) p.set('q', q);
+				// The shuffle seed stays out: it's re-rolled on load anyway, and a link
+				// that promised one order but dealt another would be worse than neither.
+				if (sort !== 'added') p.set('sort', sort);
+				if (decadeActive()) {
+					p.set('dmin', String(dMin));
+					p.set('dmax', String(dMax));
+				}
+				for (const g of selectedGenres) p.append('genre', g);
+				const qs = p.toString();
+				const url = location.pathname + (qs ? `?${qs}` : '');
+				if (url !== location.pathname + location.search) history.replaceState(null, '', url);
+			}
+
+			/** Re-label "+N other…" once restoring reveals chips from past the cut. */
+			function syncMore() {
+				for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
+					const hidden = Array.from(more.parentElement!.children).filter(
+						(c) => (c as HTMLElement).hidden,
+					).length;
+					if (hidden === 0) more.remove();
+					else more.textContent = `+${hidden} other…`;
+				}
+			}
+
+			const snap = (raw: string | null, lo: number, hi: number, step: number, fallback: number) => {
+				const n = Number(raw);
+				if (raw == null || !Number.isFinite(n)) return fallback;
+				return Math.min(hi, Math.max(lo, Math.round(n / step) * step));
+			};
+
+			/** Restore filters from the query string. Returns whether any were applied. */
+			function readUrl(): boolean {
+				const p = new URLSearchParams(location.search);
+				if ([...p.keys()].length === 0) return false;
+
+				q = p.get('q')?.trim().toLowerCase() ?? '';
+				search.value = q;
+				const urlSort = p.get('sort');
+				if (urlSort === 'added' || urlSort === 'year' || urlSort === 'shuffle') {
+					sort = urlSort;
+					if (sort === 'shuffle') shuffleSeed = 1 + Math.floor(Math.random() * 99998);
+					for (const pill of pills) pill.classList.toggle('pill--on', pill.dataset.sort === sort);
+				}
+				if (dminInput && dmaxInput) {
+					setDecades(
+						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
+						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
+					);
+				}
+
+				// Drive the set from the chips rather than straight off the params, so a
+				// stale or hand-typed value can't end up selected with no control to
+				// clear it — and a restored chip from past the cut gets revealed.
+				const wanted = new Set(p.getAll('genre'));
+				for (const chip of genreChips) {
+					if (!wanted.has(chip.dataset.value!)) continue;
+					selectedGenres.add(chip.dataset.value!);
+					chip.setAttribute('aria-pressed', 'true');
+					chip.hidden = false;
+				}
+				syncMore();
+
+				return q !== '' || sort !== 'added' || activeCount() > 0;
+			}
+
+			// The server rendered the full list in added order, so a URL carrying
+			// filters has to re-apply before the grid matches what it claims to show.
+			if (readUrl()) apply();
+			else syncChrome();
+
+			// --- Remove a film from the watchlist (owner only) ---
+			grid.addEventListener('click', async (e) => {
+				const btn = (e.target as HTMLElement).closest('.remove') as HTMLButtonElement | null;
+				if (!btn) return;
+				const el = btn.closest('.item') as HTMLElement;
+				const tmdbId = el.dataset.tmdbId;
+				if (!tmdbId) return;
+				btn.disabled = true;
+				try {
+					const res = await fetch(`/api/films/watchlist?tmdbId=${tmdbId}`, { method: 'DELETE' });
+					if (res.status === 401) {
+						window.location.href = '/films/login?redirect=/films/watchlist';
+						return;
+					}
+					if (!res.ok) throw new Error();
+					el.remove();
+					const i = items.findIndex((item) => item.el === el);
+					if (i !== -1) items.splice(i, 1);
+					const countEl = document.getElementById('wl-count')!;
+					const nounEl = document.getElementById('wl-noun')!;
+					countEl.textContent = fmt(items.length);
+					nounEl.textContent = items.length === 1 ? 'film' : 'films';
+					apply();
+				} catch {
+					btn.disabled = false;
+				}
+			});
 		}
 
-		// --- Add a film to the watchlist (search overlay) ---
+		// --- Add a film to the watchlist (search overlay, owner only) ---------
+		// Astro always hoists this script; bail out cleanly when the owner-only
+		// elements aren't in the DOM (a visitor viewing the page).
 		const openBtn = document.getElementById('open-composer');
 		const modal = document.getElementById('composer') as HTMLDivElement | null;
 
@@ -692,7 +1411,7 @@ function ytsUrl(title: string, year: number | null): string {
 						body: JSON.stringify({ tmdbId }),
 					});
 					if (res.status === 401) {
-						window.location.href = REDIRECT;
+						window.location.href = '/films/login?redirect=/films/watchlist';
 						return;
 					}
 					const data = await res.json().catch(() => ({}));
