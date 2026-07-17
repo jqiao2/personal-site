@@ -11,6 +11,7 @@ import {
 	listFriends,
 } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
+import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -28,12 +29,6 @@ const [stats, favorites, watchlist, recent, isOwner] = await Promise.all([
 const [venueOptions, tagOptions, friendOptions] = isOwner
 	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
 	: [[], [], []];
-
-/** "4.5" → "★★★★½"; nulls render nothing. */
-function starText(r: number | null): string {
-	if (r == null) return '';
-	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
-}
 
 /** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8". */
 function shortDate(date: string | null): string {
@@ -136,7 +131,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 										</div>
 									</div>
 									<div class="tile__meta">
-										<span class="stars">{starText(f.rating)}</span>
+										<span class="stars">{starText(f.rating) ?? ''}</span>
 										<span class="tile__date">{shortDate(f.watched_date ?? f.created_at)}</span>
 									</div>
 								</a>

@@ -3,6 +3,7 @@ import FilmLayout from '../../layouts/FilmLayout.astro';
 import EntryEditor from '../../components/EntryEditor.astro';
 import { listLogs, getFilmLogStats, listTheaterNames, listTags, listFriends } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
+import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -32,11 +33,6 @@ function parseDate(date: string | null): Date | null {
 	if (!y || !m || !d) return null;
 	return new Date(y, m - 1, d);
 }
-function starText(r: number | null): string {
-	if (r == null) return '';
-	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
-}
-
 interface Row {
 	logId: number;
 	day: number;
@@ -72,7 +68,7 @@ for (const log of logs) {
 		year: log.release_year,
 		poster: imageUrl(log.poster_path, 'w154'),
 		tmdbId: log.tmdb_id,
-		stars: starText(log.rating),
+		stars: starText(log.rating) ?? '',
 		review: log.review_text,
 		liked: log.liked,
 		rewatched: log.rewatched,
@@ -414,6 +410,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 	</style>
 
 	<script>
+		import { starText } from '../../lib/format';
+
 		interface DiaryLog {
 			id: number;
 			watched_date: string | null;
@@ -446,10 +444,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 				const [y, m, d] = date.slice(0, 10).split('-').map(Number);
 				if (!y || !m || !d) return null;
 				return new Date(y, m - 1, d);
-			}
-			function starText(r: number | null): string {
-				if (r == null) return '';
-				return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
 			}
 			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
 			// so every node we build has to carry it or it renders unstyled. Read the
@@ -495,7 +489,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				if (log.review_text) body.append(el('div', 'row__review', log.review_text));
 
 				const meta = el('div', 'row__meta');
-				meta.append(el('span', 'row__stars', starText(log.rating)));
+				meta.append(el('span', 'row__stars', starText(log.rating) ?? ''));
 				if (log.liked) meta.append(el('span', 'row__like', '♥'));
 				if (log.rewatched) meta.append(el('span', 'row__rewatch', '↻'));
 

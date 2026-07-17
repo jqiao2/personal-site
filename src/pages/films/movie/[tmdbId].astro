@@ -1,7 +1,7 @@
 ---
 import { getFilmByTmdbId, listLogsByMovie } from '../../../lib/films';
 import { imageUrl } from '../../../lib/tmdb';
-import { formatWatchedDate } from '../../../lib/format';
+import { formatWatchedDate, starText } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 
 // Rendered on demand — reflects the live database.
@@ -40,12 +40,6 @@ const poster = imageUrl(movie.poster_path, 'w342');
 const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
 const today = new Date().toISOString().slice(0, 10);
 
-/** "4.5" → "★★★★½"; nulls render nothing. */
-function starText(r: number | null): string {
-	if (r == null) return '';
-	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
-}
-
 /** Minutes → "2h 4m" / "48m". */
 function formatRuntime(min: number | null): string | null {
 	if (!min || min <= 0) return null;
@@ -74,7 +68,7 @@ function logDate(l: { watched_date: string | null; created_at: string }): string
 const latestLog = movieLogs[0] ?? null;
 const activityRating = latestLog?.rating ?? watched?.rating ?? null;
 const activityLiked = latestLog?.liked ?? watched?.liked ?? false;
-const yourRating = starText(activityRating);
+const yourRating = starText(activityRating) ?? '';
 const yourWatched = watched?.first_watched
 	? formatWatchedDate(watched.first_watched.slice(0, 10))
 	: latestLog

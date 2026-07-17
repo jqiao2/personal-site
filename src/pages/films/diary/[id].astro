@@ -4,7 +4,7 @@ import EntryEditor from '../../../components/EntryEditor.astro';
 import { getDiaryEntry, listTheaterNames, listTags, listFriends } from '../../../lib/films';
 import { requireOwner } from '../../../lib/auth';
 import { imageUrl } from '../../../lib/tmdb';
-import { formatWatchedDate, mediumLabel } from '../../../lib/format';
+import { formatWatchedDate, mediumLabel, starText } from '../../../lib/format';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -17,11 +17,6 @@ const [entry, isOwner] = await Promise.all([
 
 if (!entry) {
 	return new Response('Diary entry not found', { status: 404 });
-}
-
-function starText(r: number | null): string {
-	if (r == null) return '';
-	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
 }
 
 const { movie } = entry;

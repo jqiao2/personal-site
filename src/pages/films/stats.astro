@@ -1,6 +1,7 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import { getFilmStats } from '../../lib/films';
+import { starText } from '../../lib/format';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -10,12 +11,6 @@ export const prerender = false;
 const yearParam = Astro.url.searchParams.get('year');
 const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
 const stats = await getFilmStats(scope);
-
-/** "4.5" → "★★★★½"; null renders nothing. */
-function starText(r: number | null): string {
-	if (r == null) return '';
-	return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
-}
 
 const href = (key: number | 'all') => (key === 'all' ? '/films/stats' : `/films/stats?year=${key}`);
 
@@ -27,7 +22,7 @@ const genreMax = Math.max(1, ...stats.genres.map((g) => g.count));
 const langMax = Math.max(1, ...stats.languages.map((g) => g.count));
 const countryMax = Math.max(1, ...stats.countries.map((g) => g.count));
 
-const ratingLabels = Array.from({ length: 10 }, (_, i) => starText((i + 1) * 0.5));
+const ratingLabels = Array.from({ length: 10 }, (_, i) => starText((i + 1) * 0.5) ?? '');
 
 const columns: { title: string; items: typeof stats.genres; max: number }[] = [
 	{ title: 'Most-watched genres', items: stats.genres, max: genreMax },
@@ -179,7 +174,7 @@ const people: { title: string; items: typeof stats.directors }[] = [
 							<div class="person">
 								<span class="person__rank">{i + 1}</span>
 								<span class="person__name">{person.name}</span>
-								<span class="person__stars">{starText(person.rating)}</span>
+								<span class="person__stars">{starText(person.rating) ?? ''}</span>
 								<span class="person__count">{person.count} films</span>
 							</div>
 						))}
