@@ -2,6 +2,7 @@
 import FilmLayout from '../../../layouts/FilmLayout.astro';
 import EntryEditor from '../../../components/EntryEditor.astro';
 import { getDiaryEntry, listTheaterNames, listTags, listFriends } from '../../../lib/films';
+import { toEditorInitial } from '../../../lib/entry-editor';
 import { requireOwner } from '../../../lib/auth';
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, mediumLabel, starText } from '../../../lib/format';
@@ -33,35 +34,16 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 
 // Editor scaffolding (owner only): autocomplete options + the entry's current
 // values, which the modal seeds its form from.
-const CANONICAL_MEDIA = ['theater', 'tv', 'computer', 'plane'];
 const [venueOptions, tagOptions, friendOptions] = isOwner
 	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
 	: [[], [], []];
-// A stored medium that isn't one of the canonical keys is a free-text "other".
-const mediumKey = entry.medium
-	? CANONICAL_MEDIA.includes(entry.medium)
-		? entry.medium
-		: 'other'
-	: null;
 const editorFilm = {
 	tmdbId: movie.tmdb_id,
 	title: movie.title,
 	year: movie.release_year,
 	poster: posterThumb,
 };
-const editorInitial = {
-	date: entry.watched_date ?? '',
-	rating: entry.rating,
-	liked: entry.liked,
-	rewatch: entry.rewatched,
-	medium: mediumKey,
-	otherMedium: mediumKey === 'other' ? (entry.medium ?? '') : '',
-	venue: venue ?? '',
-	format: entry.format ?? '',
-	review: entry.review_text ?? '',
-	tags: entry.tags,
-	friends: entry.friends,
-};
+const editorInitial = toEditorInitial(entry);
 ---
 
 <FilmLayout title={`${movie.title} — diary entry`}>

@@ -1,46 +1,40 @@
 ---
-// Shared diary entry modal. Pages open it in one of two modes:
+// Shared diary entry modal. Pages open it in one of three modes:
 //   select — film picker only ("What did you watch?"). Picking a film promotes
 //            the modal to `log` in place: the full entry form.
+//   log    — a new entry for a film that's already known, so the picker is
+//            skipped and the film locked (the film page logs this way).
 //   edit   — amend an existing entry; the film is locked.
 //
-// `log` is therefore a runtime state rather than an entry point — logging always
-// starts by asking which film.
+// `mode` is the entry point for the page's own trigger, but not a constant:
+// `select` promotes itself to `log` once a film is picked, and any trigger
+// carrying [data-entry-editor-log-id] opens the modal in `edit` on that entry.
+// One editor can therefore serve a page's log button *and* a list of reviews,
+// which is what the film page needs.
 //
 // Pages render their own trigger; any element carrying [data-open-entry-editor]
 // opens the modal. Server data reaches the client through the JSON config tag.
-export interface EntryEditorFilm {
-	tmdbId: number;
-	title: string;
-	year: number | null;
-	poster: string | null;
-}
-
-export interface EntryEditorInitial {
-	date: string;
-	rating: number | null;
-	liked: boolean;
-	rewatch: boolean;
-	medium: string | null;
-	otherMedium: string;
-	venue: string;
-	format: string;
-	review: string;
-	tags: string[];
-	friends: string[];
-}
+import type { EntryEditorEntry, EntryEditorFilm, EntryEditorInitial } from '../lib/entry-editor';
 
 interface Props {
-	mode: 'select' | 'edit';
+	mode: 'select' | 'log' | 'edit';
 	venueOptions: string[];
 	tagOptions: string[];
 	friendOptions: string[];
 	/** Where to send the user after a 401, and back to after saving. */
 	redirect: string;
-	/** edit mode only. */
+	/** Where to go once an entry is deleted. */
+	deleteRedirect?: string;
+	/** The entry the page's own trigger edits. edit mode only. */
 	logId?: number | null;
+	/** The film every entry here is about. Omit to show the film picker. */
 	film?: EntryEditorFilm | null;
 	initial?: EntryEditorInitial | null;
+	/**
+	 * Entries a [data-entry-editor-log-id] trigger can reopen the editor on, over
+	 * and above the page's own. Keyed by log id at runtime.
+	 */
+	entries?: EntryEditorEntry[];
 }
 
 const {
@@ -49,9 +43,11 @@ const {
 	tagOptions,
 	friendOptions,
 	redirect,
+	deleteRedirect = '/films/diary',
 	logId = null,
 	film = null,
 	initial = null,
+	entries = [],
 } = Astro.props;
 
 const FORMAT_OPTIONS = [
@@ -72,6 +68,7 @@ const config = {
 	mode,
 	logId,
 	redirect,
+	deleteRedirect,
 	today,
 	venueOptions,
 	formatOptions: FORMAT_OPTIONS,
@@ -79,11 +76,14 @@ const config = {
 	friendOptions,
 	initial,
 	film,
+	entries,
 };
 // Escape "<" so a review containing "</script>" can't break out of the JSON tag.
 const configJson = JSON.stringify(config).replace(/</g, '\\u003c');
 
-const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
+// The picker only exists when the page didn't name the film.
+const hasPicker = !film;
+const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film' : 'What did you watch?';
 ---
 
 <div class="modal" id="ee-modal" hidden>
@@ -116,10 +116,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		<div class="modal__body">
 			<div class="field-grid" id="ee-film-row">
 				<div class="film-field">
-					<label class="lbl" for="ee-q">Film</label>
+					<label class="lbl" for={hasPicker ? 'ee-q' : undefined}>Film</label>
 
 					{
-						mode === 'edit' && film ? (
+						film ? (
 							<div class="selected selected--locked">
 								<div class="selected__poster">{film.poster && <img src={film.poster} alt="" />}</div>
 								<div class="selected__info">
@@ -149,10 +149,12 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 										Change
 									</button>
 								</div>
-								<div class="prior-hint" id="ee-prior" hidden />
 							</>
 						)
 					}
+
+					{/* The prior-watch prefill only speaks to new entries, never an edit. */}
+					{mode !== 'edit' && <div class="prior-hint" id="ee-prior" hidden />}
 				</div>
 
 				<div class="date-field" id="ee-date-field">
@@ -991,9 +993,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			friends: string[];
 		}
 		interface Config {
-			mode: 'select' | 'edit';
+			mode: 'select' | 'log' | 'edit';
 			logId: number | null;
 			redirect: string;
+			deleteRedirect: string;
 			today: string;
 			venueOptions: string[];
 			formatOptions: string[];
@@ -1001,6 +1004,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			friendOptions: string[];
 			initial: Initial | null;
 			film: Film | null;
+			entries: { logId: number; initial: Initial }[];
 		}
 
 		const cfg = JSON.parse(configEl.textContent || '{}') as Config;
@@ -1063,12 +1067,19 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		const friendChipsBox = $<HTMLDivElement>('ee-friend-chips');
 		const mediumBtns = Array.from(mediums.querySelectorAll<HTMLButtonElement>('button[data-medium]'));
 
-		const isEdit = cfg.mode === 'edit';
-		// `select` promotes itself to `log` once a film is chosen, so this is state,
-		// not a constant.
-		let mode: 'log' | 'edit' | 'select' = cfg.mode;
+		// The picker exists only when the page didn't name the film; when it did, the
+		// film is fixed for every entry this editor opens.
+		const hasPicker = !cfg.film;
+		const seeds = new Map(cfg.entries.map((e) => [e.logId, e.initial]));
 
-		let tmdbId: number | null = isEdit ? (cfg.film?.tmdbId ?? null) : null;
+		// Which entry the editor is on. All three change per open: the page's own
+		// trigger uses cfg, an [data-entry-editor-log-id] trigger uses its entry, and
+		// `select` promotes itself to `log` once a film is chosen.
+		let mode: 'select' | 'log' | 'edit' = cfg.mode;
+		let logId: number | null = cfg.logId;
+		let seed: Initial | null = cfg.initial;
+
+		let tmdbId: number | null = cfg.film?.tmdbId ?? null;
 		let date: string = cfg.initial?.date || cfg.today;
 		let rating: number | null = null;
 		let liked = false;
@@ -1246,6 +1257,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			likeBtn.classList.remove('on');
 			rewatch = false;
 			rewatchBtn.classList.remove('on');
+			clearPriorHint();
+		}
+		function clearPriorHint() {
+			if (!priorHint) return;
 			priorHint.hidden = true;
 			priorHint.textContent = '';
 		}
@@ -1267,14 +1282,21 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 				}
 				liked = Boolean(prior.liked);
 				likeBtn.classList.toggle('on', liked);
-				const n = prior.logCount;
-				priorHint.textContent =
-					n > 0
-						? `Logged ${n} time${n === 1 ? '' : 's'} before — marked as a rewatch.`
-						: `You've watched this before — marked as a rewatch.`;
-				priorHint.hidden = false;
+				if (priorHint) {
+					const n = prior.logCount;
+					priorHint.textContent =
+						n > 0
+							? `Logged ${n} time${n === 1 ? '' : 's'} before — marked as a rewatch.`
+							: `You've watched this before — marked as a rewatch.`;
+					priorHint.hidden = false;
+				}
 			} catch {
 				/* network hiccup — leave the entry clean */
+			} finally {
+				// What this filled in is a suggestion, not the user's work: it's the
+				// baseline the discard prompt measures against, not an unsaved edit.
+				// Skipped for a stale response, which changed nothing.
+				if (tmdbId === id) cleanSnap = snap();
 			}
 		}
 
@@ -1500,15 +1522,20 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			(f) => `Remove ${f}`,
 		);
 
-		// ---- Mode presentation (select ⇄ log) ----
+		// ---- Mode presentation (select ⇄ log ⇄ edit) ----
 		function renderMode() {
 			const select = mode === 'select';
-			titleEl.textContent = isEdit ? 'Edit entry' : select ? 'What did you watch?' : 'Log a film';
+			const edit = mode === 'edit';
+			titleEl.textContent = edit ? 'Edit entry' : select ? 'What did you watch?' : 'Log a film';
 			fullForm.hidden = select;
 			dateField.hidden = select;
 			filmRow.classList.toggle('field-grid--solo', select);
 			panel.classList.toggle('modal__panel--picker', select);
 			save.hidden = select;
+			save.textContent = edit ? 'Save changes' : 'Log film';
+			leftBtn.textContent = edit ? 'Delete entry' : 'Cancel';
+			leftBtn.classList.toggle('btn-delete', edit);
+			leftBtn.classList.toggle('btn-ghost', !edit);
 		}
 
 		// ---- Dirty tracking ----
@@ -1533,11 +1560,11 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		// rating, like, rewatch flag, medium, tag, friend, or review is.
 		const isDirty = () => snap() !== cleanSnap;
 
-		// Seed every field from the config. Also the reset target when the user
-		// discards their edits (edit mode) or closes the composer (log mode).
+		// Seed every field from the entry currently being opened. Also the reset
+		// target when the user discards their edits (edit mode) or closes the
+		// composer (log mode).
 		function seedForm() {
-			const init = cfg.initial;
-			mode = cfg.mode;
+			const init = seed;
 			date = init?.date || cfg.today;
 			rating = init?.rating ?? null;
 			liked = init?.liked ?? false;
@@ -1567,16 +1594,16 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			msg.className = 'save-msg';
 			msg.textContent = '';
 
-			if (!isEdit) {
+			clearPriorHint();
+			if (hasPicker) {
 				tmdbId = null;
 				q.value = '';
 				selected.hidden = true;
 				searchWrap.hidden = false;
-				priorHint.hidden = true;
-				priorHint.textContent = '';
 				hideResults();
 			}
-			save.disabled = !isEdit && tmdbId == null;
+			// A locked film is always answered; a picker starts with no film to save.
+			save.disabled = tmdbId == null;
 			cleanSnap = snap();
 		}
 
@@ -1584,12 +1611,28 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		const lockScroll = (on: boolean) => {
 			document.body.style.overflow = on ? 'hidden' : '';
 		};
-		const openModal = () => {
+		// A trigger naming a log opens that entry for editing; any other trigger is
+		// the page's own, and opens whatever the page configured.
+		const openModal = (trigger: Element) => {
+			const named = Number((trigger as HTMLElement).dataset.entryEditorLogId);
+			const namedSeed = seeds.get(named);
+			if (namedSeed) {
+				mode = 'edit';
+				logId = named;
+				seed = namedSeed;
+			} else {
+				mode = cfg.mode;
+				logId = cfg.logId;
+				seed = cfg.initial;
+			}
 			seedForm();
 			discard.hidden = true;
 			modal.hidden = false;
 			lockScroll(true);
-			if (!isEdit) q.focus();
+			if (hasPicker) q.focus();
+			// A locked film never passes through the picker, so this is where its
+			// prior-watch prefill happens instead.
+			if (mode === 'log' && tmdbId != null) void loadPrior(tmdbId);
 		};
 		const closeModal = () => {
 			modal.hidden = true;
@@ -1598,8 +1641,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		};
 		const attemptClose = () => {
 			if (isDirty()) {
-				discardTitle.textContent = isEdit ? 'Discard changes?' : 'Discard this entry?';
-				discardMsg.textContent = isEdit
+				const edit = mode === 'edit';
+				discardTitle.textContent = edit ? 'Discard changes?' : 'Discard this entry?';
+				discardMsg.textContent = edit
 					? 'You have unsaved edits to this entry.'
 					: 'Your entry has unsaved changes.';
 				discard.hidden = false;
@@ -1609,7 +1653,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		};
 
 		for (const el of document.querySelectorAll('[data-open-entry-editor]')) {
-			el.addEventListener('click', openModal);
+			el.addEventListener('click', () => openModal(el));
 		}
 		closeBtn.addEventListener('click', attemptClose);
 		backdrop.addEventListener('click', attemptClose);
@@ -1643,22 +1687,23 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 		};
 
 		save.addEventListener('click', async () => {
-			if (!isEdit && !tmdbId) return;
+			if (mode !== 'edit' && !tmdbId) return;
 			save.disabled = true;
 			msg.className = 'save-msg';
 			msg.textContent = 'Saving…';
 			try {
-				const res = isEdit
-					? await fetch(`/api/films/logs/${cfg.logId}`, {
-							method: 'PATCH',
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify(payload()),
-						})
-					: await fetch('/api/films/logs', {
-							method: 'POST',
-							headers: { 'content-type': 'application/json' },
-							body: JSON.stringify({ tmdbId, ...payload() }),
-						});
+				const res =
+					mode === 'edit'
+						? await fetch(`/api/films/logs/${logId}`, {
+								method: 'PATCH',
+								headers: { 'content-type': 'application/json' },
+								body: JSON.stringify(payload()),
+							})
+						: await fetch('/api/films/logs', {
+								method: 'POST',
+								headers: { 'content-type': 'application/json' },
+								body: JSON.stringify({ tmdbId, ...payload() }),
+							});
 				if (res.status === 401) return loginRedirect();
 				const data = await res.json();
 				if (!res.ok) throw new Error(data.error || 'Save failed');
@@ -1671,31 +1716,32 @@ const headTitle = mode === 'edit' ? 'Edit entry' : 'What did you watch?';
 			}
 		});
 
-		// Left footer button: "Delete entry" in edit mode, "Cancel" otherwise.
-		if (isEdit) {
-			leftBtn.addEventListener('click', async () => {
-				if (!window.confirm('Delete this diary entry? This cannot be undone.')) return;
-				leftBtn.disabled = true;
-				save.disabled = true;
-				msg.className = 'save-msg';
-				msg.textContent = 'Deleting…';
-				try {
-					const res = await fetch(`/api/films/logs/${cfg.logId}`, { method: 'DELETE' });
-					if (res.status === 401) return loginRedirect();
-					if (!res.ok) {
-						const data = await res.json().catch(() => ({}));
-						throw new Error(data.error || 'Delete failed');
-					}
-					window.location.href = '/films/diary';
-				} catch (err) {
-					msg.className = 'save-msg error';
-					msg.textContent = err instanceof Error ? err.message : 'Delete failed';
-					leftBtn.disabled = false;
-					save.disabled = false;
+		async function deleteEntry() {
+			if (!window.confirm('Delete this diary entry? This cannot be undone.')) return;
+			leftBtn.disabled = true;
+			save.disabled = true;
+			msg.className = 'save-msg';
+			msg.textContent = 'Deleting…';
+			try {
+				const res = await fetch(`/api/films/logs/${logId}`, { method: 'DELETE' });
+				if (res.status === 401) return loginRedirect();
+				if (!res.ok) {
+					const data = await res.json().catch(() => ({}));
+					throw new Error(data.error || 'Delete failed');
 				}
-			});
-		} else {
-			leftBtn.addEventListener('click', attemptClose);
+				window.location.href = cfg.deleteRedirect;
+			} catch (err) {
+				msg.className = 'save-msg error';
+				msg.textContent = err instanceof Error ? err.message : 'Delete failed';
+				leftBtn.disabled = false;
+				save.disabled = false;
+			}
 		}
+
+		// Left footer button: "Delete entry" on an existing entry, "Cancel" on a new one.
+		leftBtn.addEventListener('click', () => {
+			if (mode === 'edit') void deleteEntry();
+			else attemptClose();
+		});
 	}
 </script>

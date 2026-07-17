@@ -661,23 +661,45 @@ export async function listFriends(): Promise<string[]> {
 }
 
 /**
- * The people a log was watched with, alphabetical. Read on its own rather than
- * embedded in getDiaryEntry's select so it can degrade to [] before migration 0013
- * without adding another dimension to that query's migration-tier fallbacks.
+ * The people each of several logs was watched with, alphabetical, keyed by log
+ * id — logs watched alone are absent rather than mapped to []. Read on its own
+ * rather than embedded in the callers' selects so it can degrade to no friends
+ * before migration 0013 without adding another dimension to their migration-tier
+ * fallbacks.
  */
-async function listFriendsForLog(logId: number): Promise<string[]> {
+async function listFriendsForLogs(logIds: number[]): Promise<Map<number, string[]>> {
+	const byLog = new Map<number, string[]>();
+	if (logIds.length === 0) return byLog;
 	const { data, error } = await supabasePublic
 		.from('log_friends')
-		.select('friends(name)')
-		.eq('log_id', logId);
+		.select('log_id, friends(name)')
+		.in('log_id', logIds);
 	if (error) {
-		if (isMissingRelation(error)) return [];
-		throw new Error(`listFriendsForLog failed: ${error.message}`);
+		if (isMissingRelation(error)) return byLog;
+		throw new Error(`listFriendsForLogs failed: ${error.message}`);
 	}
-	return ((data ?? []) as unknown as { friends: { name: string } | null }[])
-		.map((lf) => lf.friends?.name)
-		.filter((n): n is string => Boolean(n))
-		.sort((a, b) => a.localeCompare(b));
+	for (const lf of (data ?? []) as unknown as {
+		log_id: number;
+		friends: { name: string } | null;
+	}[]) {
+		const name = lf.friends?.name;
+		if (!name) continue;
+		const names = byLog.get(lf.log_id);
+		if (names) names.push(name);
+		else byLog.set(lf.log_id, [name]);
+	}
+	for (const names of byLog.values()) names.sort((a, b) => a.localeCompare(b));
+	return byLog;
+}
+
+/** The people one log was watched with, alphabetical; [] when watched alone. */
+async function listFriendsForLog(logId: number): Promise<string[]> {
+	return (await listFriendsForLogs([logId])).get(logId) ?? [];
+}
+
+/** A PostgREST embed is an object or an array depending on the relationship. */
+function embedOne<T>(v: T | T[] | null | undefined): T | null {
+	return Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
 }
 
 /** A single diary entry with everything the Diary Entry page renders. */
@@ -768,10 +790,8 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 		};
 		log_tags: { tags: { name: string } }[];
 	};
-	const one = <T>(v: T | T[] | null | undefined): T | null =>
-		Array.isArray(v) ? (v[0] ?? null) : (v ?? null);
-	const theater = one(row.theaters);
-	const format = one(row.formats);
+	const theater = embedOne(row.theaters);
+	const format = embedOne(row.formats);
 	const friends = await listFriendsForLog(row.id);
 	return {
 		id: row.id,
@@ -811,6 +831,91 @@ export async function listLogsByMovie(movieId: number): Promise<MovieLog[]> {
 		.order('created_at', { ascending: false });
 	if (error) throw new Error(`listLogsByMovie failed: ${error.message}`);
 	return (data ?? []) as MovieLog[];
+}
+
+/**
+ * A diary log for one movie, with everything a film page renders in "Your
+ * reviews" *and* everything its Entry Editor seeds from when you edit one.
+ */
+export interface MovieEntry extends MovieLog {
+	/** How it was watched: 'theater' | 'tv' | 'computer' | 'plane' | free text | null. */
+	medium: string | null;
+	/** Set only for theater viewings. */
+	theater: { name: string; city: string | null } | null;
+	/** Presentation format name (e.g. "IMAX 70mm"); theater viewings only. */
+	format: string | null;
+	tags: string[];
+	/** People this film was watched with; [] when watched alone. */
+	friends: string[];
+}
+
+/**
+ * Every diary log for one movie, newest first, with the medium/tags/friends its
+ * editor needs — the read model for /films/movie/[tmdbId]. Steps down gracefully
+ * if migration 0010 (medium/theater/format) isn't applied yet, mirroring
+ * getDiaryEntry, so the page keeps rendering with whatever columns exist.
+ *
+ * listLogsByMovie stays the lean read for callers that only need the ratings.
+ */
+export async function listMovieEntries(movieId: number): Promise<MovieEntry[]> {
+	const BASE =
+		'id, watched_date, rating, review_text, rewatched, liked, created_at, log_tags(tags(name))';
+	const HOW = 'medium, theaters(name, city), formats(name)';
+	const tiers = [`${BASE}, ${HOW}`, BASE];
+
+	let data: unknown = null;
+	let lastError: { code?: string; message?: string } | null = null;
+	for (const cols of tiers) {
+		const res = await supabasePublic
+			.from('logs')
+			.select(cols)
+			.eq('movie_id', movieId)
+			.is('deleted_at', null)
+			.order('watched_date', { ascending: false, nullsFirst: false })
+			.order('created_at', { ascending: false });
+		if (!res.error) {
+			data = res.data;
+			lastError = null;
+			break;
+		}
+		lastError = res.error;
+		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
+	}
+	if (lastError) throw new Error(`listMovieEntries failed: ${lastError.message}`);
+
+	const rows = (data ?? []) as {
+		id: number;
+		watched_date: string | null;
+		rating: number | null;
+		review_text: string | null;
+		rewatched: boolean;
+		liked: boolean;
+		created_at: string;
+		medium?: string | null;
+		theaters?: { name: string; city: string | null } | { name: string; city: string | null }[] | null;
+		formats?: { name: string } | { name: string }[] | null;
+		log_tags: { tags: { name: string } }[];
+	}[];
+
+	const friendsByLog = await listFriendsForLogs(rows.map((r) => r.id));
+	return rows.map((row) => {
+		const theater = embedOne(row.theaters);
+		const format = embedOne(row.formats);
+		return {
+			id: row.id,
+			watched_date: row.watched_date,
+			rating: row.rating,
+			review_text: row.review_text,
+			rewatched: row.rewatched,
+			liked: row.liked,
+			created_at: row.created_at,
+			medium: row.medium ?? null,
+			theater: theater ? { name: theater.name, city: theater.city } : null,
+			format: format ? format.name : null,
+			tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
+			friends: friendsByLog.get(row.id) ?? [],
+		};
+	});
 }
 
 /**
