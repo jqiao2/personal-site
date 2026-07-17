@@ -3,6 +3,7 @@ import FilmLayout from '../../layouts/FilmLayout.astro';
 import { listAllWatchlist } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
+import { ytsUrl } from '../../lib/format';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -31,12 +32,6 @@ function shortDate(date: string | null): string {
 }
 
 const num = (n: number) => n.toLocaleString('en-US');
-
-/** YTS search URL for a film, e.g. "bridge of spies 2015" → …/browse-movies/bridge%20of%20spies%202015/all/all/0/latest/0/all */
-function ytsUrl(title: string, year: number | null): string {
-	const query = year ? `${title} ${year}` : title;
-	return `https://yts.gg/browse-movies/${encodeURIComponent(query.toLowerCase())}/all/all/0/latest/0/all`;
-}
 
 // A film is upcoming when its release date is still ahead of us. This needs the
 // full date, not release_year: for most of a year, "released in 2026" and "out in

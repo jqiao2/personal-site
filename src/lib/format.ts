@@ -38,3 +38,9 @@ export function mediumLabel(medium: string | null | undefined): string | null {
 	if (!key) return null;
 	return MEDIUM_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
+
+/** YTS search URL for a film, e.g. "bridge of spies 2015" → …/browse-movies/bridge%20of%20spies%202015/all/all/0/latest/0/all */
+export function ytsUrl(title: string, year: number | null): string {
+	const query = year ? `${title} ${year}` : title;
+	return `https://yts.gg/browse-movies/${encodeURIComponent(query.toLowerCase())}/all/all/0/latest/0/all`;
+}
