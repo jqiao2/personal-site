@@ -1,7 +1,7 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import { listWatchedFacets, listWatchedPage } from '../../lib/films';
-import { mediumLabel } from '../../lib/format';
+import { mediumLabel, starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -24,6 +24,12 @@ const [{ films, total }, facets] = await Promise.all([
 ]);
 const hasMore = total > films.length;
 const num = (n: number) => n.toLocaleString('en-US');
+
+// End stops for the release-date slider. It needs two distinct decades to be worth
+// drawing — with everything in one decade there's nothing to narrow to.
+const decLo = facets.decades[0] ?? null;
+const decHi = facets.decades[facets.decades.length - 1] ?? null;
+const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 ---
 
 <FilmLayout title="Films watched — Jason's film log">
@@ -66,7 +72,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				<div class="sortby">
 					<span class="sortby__label">Sort</span>
 					<button type="button" class="pill pill--on" data-sort="recent">Recent</button>
-					<button type="button" class="pill" data-sort="year">Year</button>
+					<button type="button" class="pill" data-sort="year">Release date</button>
 				</div>
 			</div>
 
@@ -99,14 +105,36 @@ const num = (n: number) => n.toLocaleString('en-US');
 							<button type="button" class="chip" data-flag="liked" aria-pressed="false">♥ Liked</button>
 							<button type="button" class="chip" data-flag="rewatched" aria-pressed="false">↻ Rewatched</button>
 						</div>
-						<h2 class="grp">Decade</h2>
-						<div class="chips">
-							{facets.decades.map((d) => (
-								<button type="button" class="chip" data-filter="decade" data-value={String(d)} aria-pressed="false">
-									{d}s
-								</button>
-							))}
-						</div>
+						{hasDecadeRange && (
+							<>
+								<h2 class="grp">Release date</h2>
+								<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
+									<div class="range__track"></div>
+									<div class="range__fill" id="drange-fill"></div>
+									<input
+										type="range"
+										id="dmin"
+										min={decLo}
+										max={decHi}
+										step="10"
+										value={decLo}
+										aria-label="Earliest release decade"
+									/>
+									<input
+										type="range"
+										id="dmax"
+										min={decLo}
+										max={decHi}
+										step="10"
+										value={decHi}
+										aria-label="Latest release decade"
+									/>
+									<div class="range__ends">
+										<span id="dmin-label">{decLo}s</span><span id="dmax-label">{decHi}s</span>
+									</div>
+								</div>
+							</>
+						)}
 					</section>
 
 					<section>
@@ -235,6 +263,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 							<div class="tile__overlay">
 								<div class="tile__title">{f.title}</div>
 								<div class="tile__year">{f.release_year}</div>
+								<div class="tile__stars">{starText(f.rating) ?? 'Unrated'}</div>
 							</div>
 						</a>
 					);
@@ -579,6 +608,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 			color: #d9b45a;
 			pointer-events: none;
 		}
+		/* The release-date slider reuses the rating track. Its end labels are
+		   positioned out of flow, so reserve the room they occupy. */
+		.range--dec {
+			margin-bottom: 20px;
+		}
 
 		.where {
 			display: flex;
@@ -675,6 +709,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 			text-transform: uppercase;
 			color: #d9b45a;
 			margin-top: 5px;
+		}
+		.tile__stars {
+			font-size: 12px;
+			color: #d9b45a;
+			margin-top: 4px;
 		}
 
 		.empty {
@@ -774,11 +813,14 @@ const num = (n: number) => n.toLocaleString('en-US');
 	</style>
 
 	<script>
+		import { starText } from '../../lib/format';
+
 		interface WatchedFilm {
 			tmdb_id: number;
 			title: string;
 			release_year: number | null;
 			poster_path: string | null;
+			rating: number | null;
 		}
 
 		const grid = document.getElementById('grid');
@@ -820,7 +862,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			const RATING_FLOOR = 0.5;
 			const RATING_CEIL = 5;
 			const sets = {
-				decade: new Set<string>(),
 				tag: new Set<string>(),
 				friend: new Set<string>(),
 				medium: new Set<string>(),
@@ -833,14 +874,30 @@ const num = (n: number) => n.toLocaleString('en-US');
 			let rMin = RATING_FLOOR;
 			let rMax = RATING_CEIL;
 
+			// Release-date bounds, as a decade's first year. The slider is only drawn
+			// when the collection spans more than one decade; without it these stay at
+			// the ends and the filter never engages.
+			const drange = document.getElementById('drange');
+			const DEC_LO = drange ? Number(drange.dataset.lo) : 0;
+			const DEC_HI = drange ? Number(drange.dataset.hi) : 0;
+			let dMin = DEC_LO;
+			let dMax = DEC_HI;
+
 			/** Whether the rating control narrows anything. */
 			const ratingActive = () =>
 				flags.unrated || rMin > RATING_FLOOR || rMax < RATING_CEIL;
 
+			/** Whether the release-date range narrows anything. */
+			const decadeActive = () => Boolean(drange) && (dMin > DEC_LO || dMax < DEC_HI);
+
 			/** Number of active filters — the count on the Filters button. The rating
-			 * range counts once however many stars it spans. */
+			 * and release-date ranges each count once however many steps they span. */
 			function activeCount(): number {
-				let n = (ratingActive() ? 1 : 0) + (flags.liked ? 1 : 0) + (flags.rewatched ? 1 : 0);
+				let n =
+					(ratingActive() ? 1 : 0) +
+					(decadeActive() ? 1 : 0) +
+					(flags.liked ? 1 : 0) +
+					(flags.rewatched ? 1 : 0);
 				for (const s of Object.values(sets)) n += s.size;
 				return n;
 			}
@@ -860,6 +917,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 				}
 				if (flags.liked) p.set('liked', '1');
 				if (flags.rewatched) p.set('rewatched', '1');
+				// The API matches a list of decades, not a span, so send every decade the
+				// slider covers. At most a dozen — the collection doesn't predate film.
+				if (decadeActive()) {
+					for (let d = dMin; d <= dMax; d += 10) p.append('decade', String(d));
+				}
 				for (const [key, values] of Object.entries(sets)) {
 					for (const v of values) p.append(key, v);
 				}
@@ -901,6 +963,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				overlay.append(
 					el('div', 'tile__title', f.title),
 					el('div', 'tile__year', f.release_year == null ? '' : String(f.release_year)),
+					el('div', 'tile__stars', starText(f.rating) ?? 'Unrated'),
 				);
 				tile.append(overlay);
 				return tile;
@@ -917,6 +980,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 			/** `reset` restarts from offset 0 for a new query/sort, replacing the grid. */
 			async function load(reset = false) {
 				if (!reset && (loading || done)) return;
+				// Every re-query is a filter change; paging isn't, and offset stays out
+				// of the URL so a shared link opens at the top.
+				if (reset) writeUrl();
 				const mySeq = ++seq;
 				loading = true;
 				errorBox.hidden = true;
@@ -1002,11 +1068,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 			const rminStars = document.getElementById('rmin-stars')!;
 			const rmaxStars = document.getElementById('rmax-stars')!;
 			const ratingBox = document.querySelector('.rating')!;
-
-			/** "★★★½" for 3.5. Matches the star text used elsewhere in the log. */
-			function starText(r: number): string {
-				return '★'.repeat(Math.floor(r)) + (r % 1 >= 0.5 ? '½' : '');
-			}
+			const dminInput = document.getElementById('dmin') as HTMLInputElement | null;
+			const dmaxInput = document.getElementById('dmax') as HTMLInputElement | null;
+			const drangeFill = document.getElementById('drange-fill');
+			const dminLabel = document.getElementById('dmin-label');
+			const dmaxLabel = document.getElementById('dmax-label');
 
 			/** Reflect state that isn't owned by the control the user just touched. */
 			function syncChrome() {
@@ -1030,6 +1096,17 @@ const num = (n: number) => n.toLocaleString('en-US');
 				// "Unrated only" and a star range are mutually exclusive; dim the one
 				// that isn't in play rather than hiding it.
 				ratingBox.classList.toggle('rating--off', flags.unrated);
+
+				if (drange && drangeFill && dminLabel && dmaxLabel) {
+					const dpct = (v: number) => ((v - DEC_LO) / (DEC_HI - DEC_LO)) * 100;
+					drangeFill.style.left = `${dpct(dMin)}%`;
+					drangeFill.style.width = `${dpct(dMax) - dpct(dMin)}%`;
+					dminLabel.textContent = `${dMin}s`;
+					dmaxLabel.textContent = `${dMax}s`;
+					const dOverlap = dMin > (DEC_LO + DEC_HI) / 2;
+					dminInput!.style.zIndex = dOverlap ? '2' : '1';
+					dmaxInput!.style.zIndex = dOverlap ? '1' : '2';
+				}
 			}
 
 			function applyFilters() {
@@ -1124,6 +1201,27 @@ const num = (n: number) => n.toLocaleString('en-US');
 				input.addEventListener('change', applyFilters);
 			}
 
+			/** Move both release-date thumbs, keeping min ≤ max. */
+			function setDecades(min: number, max: number) {
+				dMin = Math.min(min, max);
+				dMax = Math.max(min, max);
+				dminInput!.value = String(dMin);
+				dmaxInput!.value = String(dMax);
+			}
+
+			if (dminInput && dmaxInput) {
+				for (const input of [dminInput, dmaxInput]) {
+					input.addEventListener('input', () => {
+						const min = Number(dminInput.value);
+						const max = Number(dmaxInput.value);
+						if (input === dminInput) setDecades(Math.min(min, max), max);
+						else setDecades(min, Math.max(min, max));
+						syncChrome();
+					});
+					input.addEventListener('change', applyFilters);
+				}
+			}
+
 			clearAll.addEventListener('click', () => {
 				for (const s of Object.values(sets)) s.clear();
 				for (const chip of [...filterChips, ...flagChips]) {
@@ -1131,10 +1229,125 @@ const num = (n: number) => n.toLocaleString('en-US');
 				}
 				flags.liked = flags.rewatched = flags.unrated = false;
 				setRange(RATING_FLOOR, RATING_CEIL);
+				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
 				applyFilters();
 			});
 
+			// --- URL state ------------------------------------------------------
+			// The filters live in the query string so a narrowed grid is linkable and
+			// survives a reload. Always replaceState, never pushState: a chip press is
+			// not a navigation, and stacking one entry per press would leave Back
+			// walking the filter history instead of returning to wherever you came
+			// from. This mirrors the API's param names, minus paging.
+			const URL_SETS: SetKey[] = ['tag', 'friend', 'medium', 'venue', 'format'];
+
+			function writeUrl() {
+				const p = new URLSearchParams();
+				if (q) p.set('q', q);
+				if (sort !== 'recent') p.set('sort', sort);
+				if (flags.unrated) p.set('unrated', '1');
+				else {
+					if (rMin > RATING_FLOOR) p.set('rmin', String(rMin));
+					if (rMax < RATING_CEIL) p.set('rmax', String(rMax));
+				}
+				if (flags.liked) p.set('liked', '1');
+				if (flags.rewatched) p.set('rewatched', '1');
+				// A span, not the expanded decade list buildQuery sends — the URL is read
+				// by people.
+				if (decadeActive()) {
+					p.set('dmin', String(dMin));
+					p.set('dmax', String(dMax));
+				}
+				for (const key of URL_SETS) for (const v of sets[key]) p.append(key, v);
+				if (sets.friend.size) p.set('friendmode', modes.friendmode);
+				if (sets.medium.size || sets.venue.size || sets.format.size) {
+					p.set('wheremode', modes.wheremode);
+				}
+				const qs = p.toString();
+				const url = location.pathname + (qs ? `?${qs}` : '');
+				if (url !== location.pathname + location.search) history.replaceState(null, '', url);
+			}
+
+			/** Re-label "+N other…" once restoring reveals chips from past the cut. */
+			function syncMore() {
+				for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
+					const hidden = Array.from(more.parentElement!.children).filter(
+						(c) => (c as HTMLElement).hidden,
+					).length;
+					if (hidden === 0) more.remove();
+					else more.textContent = `+${hidden} other…`;
+				}
+			}
+
+			const snap = (raw: string | null, lo: number, hi: number, step: number, fallback: number) => {
+				const n = Number(raw);
+				if (raw == null || !Number.isFinite(n)) return fallback;
+				return Math.min(hi, Math.max(lo, Math.round(n / step) * step));
+			};
+
+			/** Restore filters from the query string. Returns whether any were applied. */
+			function readUrl(): boolean {
+				const p = new URLSearchParams(location.search);
+				if ([...p.keys()].length === 0) return false;
+
+				q = p.get('q')?.trim() ?? '';
+				search.value = q;
+				const urlSort = p.get('sort');
+				if (urlSort === 'recent' || urlSort === 'year') {
+					sort = urlSort;
+					for (const pill of pills) pill.classList.toggle('pill--on', pill.dataset.sort === sort);
+				}
+
+				flags.unrated = p.get('unrated') === '1';
+				flags.liked = p.get('liked') === '1';
+				flags.rewatched = p.get('rewatched') === '1';
+				for (const chip of flagChips) {
+					chip.setAttribute('aria-pressed', String(flags[chip.dataset.flag as keyof typeof flags]));
+				}
+				if (!flags.unrated) {
+					setRange(
+						snap(p.get('rmin'), RATING_FLOOR, RATING_CEIL, 0.5, RATING_FLOOR),
+						snap(p.get('rmax'), RATING_FLOOR, RATING_CEIL, 0.5, RATING_CEIL),
+					);
+				}
+				if (dminInput && dmaxInput) {
+					setDecades(
+						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
+						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
+					);
+				}
+
+				// Drive the sets from the chips rather than straight off the params, so a
+				// stale or hand-typed value can't end up selected with no control to
+				// clear it — and a restored chip from past its group's cut gets revealed.
+				const wanted = new Map(URL_SETS.map((key) => [key, new Set(p.getAll(key))]));
+				for (const chip of filterChips) {
+					const key = chip.dataset.filter as SetKey;
+					if (!wanted.get(key)?.has(chip.dataset.value!)) continue;
+					sets[key].add(chip.dataset.value!);
+					chip.setAttribute('aria-pressed', 'true');
+					chip.hidden = false;
+				}
+				syncMore();
+
+				for (const key of ['friendmode', 'wheremode'] as const) {
+					const mode = p.get(key);
+					if (mode !== 'any' && mode !== 'all') continue;
+					modes[key] = mode;
+					const group = panel.querySelector<HTMLElement>(`.modes[data-mode="${key}"]`);
+					for (const b of Array.from(group?.querySelectorAll<HTMLButtonElement>('.mode') ?? [])) {
+						b.classList.toggle('mode--on', b.dataset.value === mode);
+					}
+				}
+
+				return q !== '' || sort !== 'recent' || activeCount() > 0;
+			}
+
+			// The server rendered the unfiltered first page, so a URL carrying filters
+			// has to re-query before the grid matches what it claims to show.
+			const restored = readUrl();
 			syncChrome();
+			if (restored) load(true);
 		}
 	</script>
 </FilmLayout>

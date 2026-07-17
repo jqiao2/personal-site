@@ -1077,6 +1077,8 @@ export interface WatchedFilm {
 	/** First time the film was marked watched — the "Recent" sort key. Null when
 	 * unknown (Letterboxd-imported films, migration 0011); those sort last. */
 	first_watched: string | null;
+	/** Film-level stars, 0.5–5.0 in half-steps; null when never rated. */
+	rating: number | null;
 }
 
 /** Sort orders the "All films" grid offers. */
@@ -1266,13 +1268,17 @@ async function movieIdsMatchingLogFilters(q: WatchedQuery): Promise<number[] | n
 	return ids;
 }
 
-/** The chip values offered by the filter panel, derived from what's actually there. */
+/**
+ * The chip values offered by the filter panel, derived from what's actually there.
+ * Every list but `decades` is ordered by how many films carry the value, most
+ * first, ties alphabetical.
+ */
 export interface WatchedFacets {
-	/** Release decades as their first year, ascending. */
+	/** Release decades as their first year, ascending — the slider's end stops. */
 	decades: number[];
 	tags: string[];
 	friends: string[];
-	/** Canonical medium values ('theater', 'tv', …), alphabetical. */
+	/** Canonical medium values ('theater', 'tv', …). */
 	mediums: string[];
 	/** Theaters: `value` is "Name, City", `label` is the shortest unambiguous name. */
 	venues: { value: string; label: string }[];
@@ -1292,10 +1298,17 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 		theaterNameByValue(),
 	]);
 
-	const union = (pick: (d: FilmLogDims) => Set<string>): string[] => {
-		const out = new Set<string>();
-		for (const dims of dimsByMovie.values()) for (const v of pick(dims)) out.add(v);
-		return [...out].sort((a, b) => a.localeCompare(b));
+	// Most-used first, ties alphabetical. The order is what the panel's collapse
+	// limits cut against, so frequency is what keeps "+N other…" hiding the long
+	// tail rather than an arbitrary alphabetical slice.
+	const byFrequency = (pick: (d: FilmLogDims) => Set<string>): string[] => {
+		const counts = new Map<string, number>();
+		for (const dims of dimsByMovie.values()) {
+			for (const v of pick(dims)) counts.set(v, (counts.get(v) ?? 0) + 1);
+		}
+		return [...counts.keys()].sort(
+			(a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b),
+		);
 	};
 
 	const decades = [...new Set(years.map((y) => Math.floor(y / 10) * 10))].sort((a, b) => a - b);
@@ -1304,7 +1317,7 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 	// two venues share a name — chips stay short without becoming ambiguous. The name
 	// comes from the column, not from re-splitting the joined value: cities are
 	// stored with their state ("New York, NY"), so the comma isn't a reliable seam.
-	const venueValues = union((d) => d.venues);
+	const venueValues = byFrequency((d) => d.venues);
 	const nameCounts = new Map<string, number>();
 	for (const v of venueValues) {
 		const name = theaterNames.get(v) ?? v;
@@ -1317,11 +1330,11 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 
 	return {
 		decades,
-		tags: union((d) => d.tags),
-		friends: union((d) => d.friends),
-		mediums: union((d) => d.mediums),
+		tags: byFrequency((d) => d.tags),
+		friends: byFrequency((d) => d.friends),
+		mediums: byFrequency((d) => d.mediums),
 		venues,
-		formats: union((d) => d.formats),
+		formats: byFrequency((d) => d.formats),
 	};
 }
 
@@ -1380,7 +1393,7 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 
 	let req = supabasePublic
 		.from('watched')
-		.select('id, first_watched, movies!inner(tmdb_id, title, release_year, poster_path)', {
+		.select('id, first_watched, rating, movies!inner(tmdb_id, title, release_year, poster_path)', {
 			count: 'exact',
 		});
 
@@ -1426,8 +1439,9 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 
 	const films = ((data ?? []) as unknown as {
 		first_watched: string | null;
+		rating: number | null;
 		movies: WatchlistTile;
-	}[]).map((r) => ({ ...r.movies, first_watched: r.first_watched }));
+	}[]).map((r) => ({ ...r.movies, first_watched: r.first_watched, rating: r.rating }));
 	return { films, total: count ?? 0 };
 }
 

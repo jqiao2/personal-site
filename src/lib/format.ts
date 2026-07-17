@@ -22,6 +22,15 @@ const MEDIUM_LABELS: Record<string, string> = {
 	ipad: 'iPad',
 };
 
+/**
+ * Half-star rating as text, e.g. 3.5 → "★★★½" and 0.5 → "½". Null for anything
+ * unrated, so callers pick their own wording for the absence.
+ */
+export function starText(rating: number | null | undefined): string | null {
+	if (!rating) return null;
+	return '★'.repeat(Math.floor(rating)) + (rating % 1 >= 0.5 ? '½' : '');
+}
+
 /** Human label for a stored medium value (e.g. "plane" → "Airplane"). */
 export function mediumLabel(medium: string | null | undefined): string | null {
 	if (!medium) return null;
