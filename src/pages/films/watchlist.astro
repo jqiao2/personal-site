@@ -20,17 +20,6 @@ const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Ast
 // through ~1.5k watched films and so has to re-query the server — a few hundred
 // entries all fit in the DOM, and searching a slice would be a bug.
 
-/** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8", or "Aug 30, 2025" when it's not the current year. */
-const currentYear = new Date().getFullYear();
-function shortDate(date: string | null): string {
-	if (!date) return '';
-	const [y, m, d] = date.slice(0, 10).split('-').map(Number);
-	if (!y || !m || !d) return '';
-	const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' };
-	if (y !== currentYear) opts.year = 'numeric';
-	return new Date(y, m - 1, d).toLocaleDateString('en-US', opts);
-}
-
 const num = (n: number) => n.toLocaleString('en-US');
 
 // A film is upcoming when its release date is still ahead of us. This needs the
@@ -183,7 +172,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				{films.map((f, i) => {
 					const poster = imageUrl(f.poster_path, 'w342');
 					const upcoming = isUpcoming(f);
-					const added = shortDate(f.added_at);
 					// The owner's tiles link out to YTS; a visitor's aren't links at all.
 					const Tag = isOwner ? 'a' : 'div';
 					return (
@@ -211,8 +199,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 								<div class="tile__overlay">
 									<div class="tile__title">{f.title}</div>
 									<div class="tile__year">{f.release_year}</div>
-									<div class="tile__genre">{f.genres[0]}</div>
-									{added && <div class="tile__added">Added {added}</div>}
 								</div>
 							</Tag>
 						</div>
@@ -701,16 +687,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			text-transform: uppercase;
 			color: #d9b45a;
 			margin-top: 5px;
-		}
-		.tile__genre {
-			font-size: 12px;
-			color: #a2857a;
-			margin-top: 4px;
-		}
-		.tile__added {
-			font-size: 11px;
-			color: #8a6f63;
-			margin-top: 3px;
 		}
 
 		.empty {
