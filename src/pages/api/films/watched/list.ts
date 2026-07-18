@@ -8,6 +8,7 @@ export const prerender = false;
 //   &rmin=&rmax=&unrated=1&liked=1&rewatched=1
 //   &decade=1990&decade=2000&tag=…&friend=…&friendmode=any|all
 //   &medium=…&venue=…&format=…&wheremode=any|all
+//   &director=…&actor=…
 // → { films, total } — one page of the "All films" grid, filtered and sorted
 // server-side so paging covers the whole collection rather than what's loaded.
 // Multi-value filters repeat their key rather than using a delimiter: theater
@@ -37,6 +38,8 @@ export const GET: APIRoute = async ({ url }) => {
 			liked: p.get('liked') === '1',
 			rewatched: p.get('rewatched') === '1',
 			decades: p.getAll('decade').map(Number).filter(Number.isFinite),
+			directors: p.getAll('director'),
+			actors: p.getAll('actor'),
 			tags: p.getAll('tag'),
 			friends: p.getAll('friend'),
 			friendMode: isMatchMode(p.get('friendmode')) ? p.get('friendmode')! : 'any',

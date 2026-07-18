@@ -197,6 +197,42 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						)}
 					</section>
 
+					{(facets.directors.length > 0 || facets.actors.length > 0) && (
+						<section class="panel__wide">
+							<div class="grp__row">
+								<h2 class="grp">People</h2>
+								<input
+									type="search"
+									id="people-search"
+									class="people-search"
+									placeholder="Search directors & cast…"
+									autocomplete="off"
+									aria-label="Search directors and cast"
+								/>
+							</div>
+							<div class="where">
+								<div class="where__row">
+									<span class="where__label">Director</span>
+									<div class="chips" data-people="director">
+										<span class="people-none" hidden>No matches</span>
+									</div>
+								</div>
+								<div class="where__row">
+									<span class="where__label">Cast</span>
+									<div class="chips" data-people="actor">
+										<span class="people-none" hidden>No matches</span>
+									</div>
+								</div>
+							</div>
+							<script
+								is:inline
+								type="application/json"
+								data-people-names
+								set:html={JSON.stringify({ directors: facets.directors, actors: facets.actors })}
+							/>
+						</section>
+					)}
+
 					<section class="panel__wide">
 						<div class="grp__row">
 							<h2 class="grp">Medium · theater · format</h2>
@@ -630,6 +666,35 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			width: 60px;
 			flex: none;
 		}
+
+		/* People filter: a chip-scoped search that sits beside the "People" heading. */
+		.people-search {
+			width: 220px;
+			max-width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 14px;
+			padding: 5px 12px;
+			color: #f4e8d1;
+			font-size: 12px;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		.people-search::placeholder {
+			color: #8a6f63;
+		}
+		.people-search:focus {
+			border-color: #d9b45a;
+		}
+		.people-none {
+			font-size: 12px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+			color: #8a6f63;
+		}
+		.people-none[hidden] {
+			display: none;
+		}
 		.modes {
 			display: flex;
 			border: 1px solid #4a2529;
@@ -867,6 +932,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				medium: new Set<string>(),
 				venue: new Set<string>(),
 				format: new Set<string>(),
+				director: new Set<string>(),
+				actor: new Set<string>(),
 			};
 			type SetKey = keyof typeof sets;
 			const flags = { liked: false, rewatched: false, unrated: false };
@@ -1120,6 +1187,91 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				syncChrome();
 			});
 
+			// --- People (director / cast) ---------------------------------------
+			// The credit lists run to thousands of names, so — unlike the other groups —
+			// these chips aren't all shipped in the DOM. Each row shows the top few by
+			// frequency and the search box builds matching chips on demand from the JSON
+			// payload. The picks live in sets.director / sets.actor, so buildQuery, the
+			// URL and the active-filter count read them the same as any other group.
+			type PeopleKind = 'director' | 'actor';
+			const PEOPLE_TOP = 12; // default quick chips per row, before searching
+			const PEOPLE_MAX = 40; // most chips one search shows at once
+			const peopleSearch = document.getElementById('people-search') as HTMLInputElement | null;
+			const peopleNames: Record<PeopleKind, string[]> = { director: [], actor: [] };
+			const namesEl = panel.querySelector('script[data-people-names]');
+			if (namesEl?.textContent) {
+				try {
+					const parsed = JSON.parse(namesEl.textContent) as {
+						directors?: string[];
+						actors?: string[];
+					};
+					peopleNames.director = parsed.directors ?? [];
+					peopleNames.actor = parsed.actors ?? [];
+				} catch (e) {
+					console.error('watched: could not parse people names', e);
+				}
+			}
+
+			interface PeopleRow {
+				kind: PeopleKind;
+				host: HTMLElement;
+				none: HTMLElement;
+			}
+			const peopleRows: PeopleRow[] = Array.from(
+				panel.querySelectorAll<HTMLElement>('.chips[data-people]'),
+			).map((host) => ({
+				kind: host.dataset.people as PeopleKind,
+				host,
+				none: host.querySelector<HTMLElement>('.people-none')!,
+			}));
+			let peopleQ = '';
+
+			function makePeopleChip(kind: PeopleKind, name: string): HTMLButtonElement {
+				const chip = el('button', 'chip') as HTMLButtonElement;
+				chip.type = 'button';
+				chip.dataset.filter = kind;
+				chip.dataset.value = name;
+				chip.setAttribute('aria-pressed', String(sets[kind].has(name)));
+				chip.textContent = name;
+				chip.addEventListener('click', () => {
+					if (sets[kind].has(name)) sets[kind].delete(name);
+					else sets[kind].add(name);
+					chip.setAttribute('aria-pressed', String(sets[kind].has(name)));
+					applyFilters();
+				});
+				return chip;
+			}
+
+			function renderPeopleRow(row: PeopleRow) {
+				const selected = sets[row.kind];
+				let names: string[];
+				if (peopleQ) {
+					names = peopleNames[row.kind]
+						.filter((n) => n.toLowerCase().includes(peopleQ))
+						.slice(0, PEOPLE_MAX);
+					// Keep picked names on screen even when they don't match the search, so
+					// they can be seen and cleared without retyping.
+					for (const s of selected) if (!names.includes(s)) names.unshift(s);
+				} else {
+					// Default view: the most-frequent few, plus any pick reaching past them.
+					names = peopleNames[row.kind].slice(0, PEOPLE_TOP);
+					for (const s of selected) if (!names.includes(s)) names.push(s);
+				}
+				const chips = names.map((n) => makePeopleChip(row.kind, n));
+				row.host.replaceChildren(...chips, row.none);
+				// "No matches" shows only when a search turned up nothing to display.
+				row.none.hidden = !(peopleQ !== '' && chips.length === 0);
+			}
+
+			function renderPeople() {
+				for (const row of peopleRows) renderPeopleRow(row);
+			}
+
+			peopleSearch?.addEventListener('input', () => {
+				peopleQ = peopleSearch.value.trim().toLowerCase();
+				renderPeople();
+			});
+
 			for (const chip of filterChips) {
 				chip.addEventListener('click', () => {
 					const key = chip.dataset.filter as SetKey;
@@ -1230,6 +1382,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				flags.liked = flags.rewatched = flags.unrated = false;
 				setRange(RATING_FLOOR, RATING_CEIL);
 				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
+				// Deselecting the People chips lets their rows collapse back to the limit.
+				renderPeople();
 				applyFilters();
 			});
 
@@ -1239,7 +1393,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			// not a navigation, and stacking one entry per press would leave Back
 			// walking the filter history instead of returning to wherever you came
 			// from. This mirrors the API's param names, minus paging.
-			const URL_SETS: SetKey[] = ['tag', 'friend', 'medium', 'venue', 'format'];
+			const URL_SETS: SetKey[] = ['tag', 'friend', 'medium', 'venue', 'format', 'director', 'actor'];
 
 			function writeUrl() {
 				const p = new URLSearchParams();
@@ -1330,6 +1484,14 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				}
 				syncMore();
 
+				// People chips aren't shipped in the DOM, so restore their picks straight
+				// into the sets — validated against the known names so a stale or hand-typed
+				// value can't select with no chip to clear it. renderPeople() draws them.
+				for (const kind of ['director', 'actor'] as const) {
+					const known = new Set(peopleNames[kind]);
+					for (const v of p.getAll(kind)) if (known.has(v)) sets[kind].add(v);
+				}
+
 				for (const key of ['friendmode', 'wheremode'] as const) {
 					const mode = p.get(key);
 					if (mode !== 'any' && mode !== 'all') continue;
@@ -1347,6 +1509,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			// has to re-query before the grid matches what it claims to show.
 			const restored = readUrl();
 			syncChrome();
+			// Draw the People chips — the top few plus any names restored from the URL.
+			renderPeople();
 			if (restored) load(true);
 		}
 	</script>

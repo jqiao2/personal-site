@@ -1280,6 +1280,10 @@ export interface WatchedQuery {
 	liked?: boolean;
 	/** Release decades as their first year, e.g. [1990, 2020]. Matches any of them. */
 	decades?: number[];
+	/** Matches films directed by any of these people (cached `movies.directors`). */
+	directors?: string[];
+	/** Matches films whose top-billed cast (`movies.actors`) includes any of these. */
+	actors?: string[];
 
 	// --- Log-level filters (true when ANY of the film's diary entries match) ---
 	/** Only films with at least one rewatch entry. */
@@ -1457,6 +1461,10 @@ export interface WatchedFacets {
 	/** Theaters: `value` is "Name, City", `label` is the shortest unambiguous name. */
 	venues: { value: string; label: string }[];
 	formats: string[];
+	/** Directors of watched films, most films first — the "People → Director" chips. */
+	directors: string[];
+	/** Top-billed cast of watched films, most films first — the "People → Cast" chips. */
+	actors: string[];
 }
 
 /**
@@ -1466,10 +1474,11 @@ export interface WatchedFacets {
  * soft-deleted logs.
  */
 export async function listWatchedFacets(): Promise<WatchedFacets> {
-	const [dimsByMovie, years, theaterNames] = await Promise.all([
+	const [dimsByMovie, years, theaterNames, credits] = await Promise.all([
 		loadFilmLogDims(),
 		listWatchedReleaseYears(),
 		theaterNameByValue(),
+		watchedCreditFrequency(),
 	]);
 
 	// Most-used first, ties alphabetical. The order is what the panel's collapse
@@ -1509,7 +1518,47 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 		mediums: byFrequency((d) => d.mediums),
 		venues,
 		formats: byFrequency((d) => d.formats),
+		directors: credits.directors,
+		actors: credits.actors,
 	};
+}
+
+/**
+ * Directors and top-billed cast across all watched films, each ranked by how many
+ * films carry them (most first, ties alphabetical) — the "People" filter chips.
+ *
+ * Read film-level from the cached `movies` credit arrays (migration 0008), not the
+ * diary, so a film seen once still offers its whole cast. Degrades to empty lists
+ * before the credit columns exist, which simply hides the People section rather
+ * than erroring — matching how every other facet steps down pre-migration.
+ */
+async function watchedCreditFrequency(): Promise<{ directors: string[]; actors: string[] }> {
+	const PAGE = 1000;
+	const dirCounts = new Map<string, number>();
+	const actCounts = new Map<string, number>();
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('watched')
+			.select('movies!inner(directors, actors)')
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isMissingCreditColumn(error) || isMissingRelation(error)) {
+				return { directors: [], actors: [] };
+			}
+			throw new Error(`watchedCreditFrequency failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as unknown as {
+			movies: { directors: string[] | null; actors: string[] | null };
+		}[];
+		for (const r of rows) {
+			for (const d of r.movies.directors ?? []) if (d) dirCounts.set(d, (dirCounts.get(d) ?? 0) + 1);
+			for (const a of r.movies.actors ?? []) if (a) actCounts.set(a, (actCounts.get(a) ?? 0) + 1);
+		}
+		if (rows.length < PAGE) break;
+	}
+	const rank = (counts: Map<string, number>): string[] =>
+		[...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
+	return { directors: rank(dirCounts), actors: rank(actCounts) };
 }
 
 /** "Name, City" → the bare theater name, for shortening the venue chip labels. */
@@ -1541,6 +1590,17 @@ async function listWatchedReleaseYears(): Promise<number[]> {
 		if (rows.length < PAGE) break;
 	}
 	return out;
+}
+
+/**
+ * A Postgres `text[]` array literal with every element double-quoted and escaped —
+ * for the `ov`/`cs` filters, whose values PostgREST passes through verbatim. Quoting
+ * each element keeps names with commas, spaces or braces (a "{" in a title) from
+ * being misread as array syntax.
+ */
+function pgTextArray(values: string[]): string {
+	const escaped = values.map((v) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+	return `{${escaped.join(',')}}`;
 }
 
 /**
@@ -1594,6 +1654,18 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 			.map((d) => `and(release_year.gte.${d},release_year.lte.${d + 9})`)
 			.join(',');
 		req = req.or(ranges, { referencedTable: 'movies' });
+	}
+
+	// Director / cast: film-level array columns on the joined movie. `ov` (overlap)
+	// keeps a film whose credit list shares any selected name — the design's "any"
+	// semantics. Director and cast AND together (two filters), so picking one of each
+	// narrows to films matching both. Built as a quoted Postgres array literal so
+	// names with commas or punctuation survive the round-trip.
+	if (query.directors?.length) {
+		req = req.filter('movies.directors', 'ov', pgTextArray(query.directors));
+	}
+	if (query.actors?.length) {
+		req = req.filter('movies.actors', 'ov', pgTextArray(query.actors));
 	}
 
 	// "Year" is year-descending with the recent order inside each year; "Recent" is
