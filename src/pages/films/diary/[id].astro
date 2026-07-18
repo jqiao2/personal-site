@@ -32,6 +32,14 @@ const venue = entry.theater
 const inTheater = entry.medium === 'theater';
 const filmHref = `/films/movie/${movie.tmdb_id}`;
 
+// Every fact on the entry links to the "All films" grid pre-filtered by it, so a
+// director, tag or theater is one click from everything else you've watched that
+// shares it. The keys and values mirror what /films/watched reads from the URL:
+// `medium` is the raw canonical value (not its label), `venue` the full
+// "Name, City", the rest are the names as stored.
+const filterHref = (key: string, value: string) =>
+	`/films/watched?${key}=${encodeURIComponent(value)}`;
+
 // Editor scaffolding (owner only): autocomplete options + the entry's current
 // values, which the modal seeds its form from.
 const [venueOptions, tagOptions, friendOptions] = isOwner
@@ -70,19 +78,19 @@ const editorInitial = toEditorInitial(entry);
 					{medium && (
 						<div class="how">
 							<div class="how__label">Medium</div>
-							<div class="how__medium">{medium}</div>
+							<a class="how__medium" href={filterHref('medium', entry.medium ?? '')}>{medium}</a>
 							{inTheater && (venue || entry.format) && (
 								<div class="how__theater">
 									{venue && (
 										<div>
 											<div class="how__sub">Venue</div>
-											<div class="how__venue">{venue}</div>
+											<a class="how__venue" href={filterHref('venue', venue)}>{venue}</a>
 										</div>
 									)}
 									{entry.format && (
 										<div>
 											<div class="how__sub">Format</div>
-											<span class="how__format">{entry.format}</span>
+											<a class="how__format" href={filterHref('format', entry.format)}>{entry.format}</a>
 										</div>
 									)}
 								</div>
@@ -109,7 +117,13 @@ const editorInitial = toEditorInitial(entry);
 					</a>
 					{movie.directors.length > 0 && (
 						<div class="director">
-							Directed by <span class="director__name">{movie.directors.join(', ')}</span>
+							Directed by{' '}
+							{movie.directors.map((d, i) => (
+								<>
+									{i > 0 && ', '}
+									<a class="director__name" href={filterHref('director', d)}>{d}</a>
+								</>
+							))}
 						</div>
 					)}
 
@@ -133,14 +147,20 @@ const editorInitial = toEditorInitial(entry);
 					{entry.tags.length > 0 && (
 						<div class="tags">
 							{entry.tags.map((t) => (
-								<span class="tag">{t}</span>
+								<a class="tag" href={filterHref('tag', t)}>{t}</a>
 							))}
 						</div>
 					)}
 
 					{entry.friends.length > 0 && (
 						<div class="friends">
-							Watched with <span class="friends__names">{entry.friends.join(', ')}</span>
+							Watched with{' '}
+							{entry.friends.map((f, i) => (
+								<>
+									{i > 0 && ', '}
+									<a class="friends__name" href={filterHref('friend', f)}>{f}</a>
+								</>
+							))}
 						</div>
 					)}
 				</div>
@@ -267,10 +287,14 @@ const editorInitial = toEditorInitial(entry);
 			margin-bottom: 12px;
 		}
 		.how__medium {
+			display: inline-block;
 			font-family: 'Newsreader', serif;
 			font-size: 19px;
 			color: #f4e8d1;
 			line-height: 1.1;
+		}
+		.how__medium:hover {
+			color: #f0d488;
 		}
 		.how__theater {
 			margin-top: 12px;
@@ -285,9 +309,13 @@ const editorInitial = toEditorInitial(entry);
 			margin-bottom: 3px;
 		}
 		.how__venue {
+			display: inline-block;
 			font-size: 13px;
 			color: #e9d9c4;
 			line-height: 1.35;
+		}
+		.how__venue:hover {
+			color: #f0d488;
 		}
 		.how__format {
 			display: inline-block;
@@ -299,6 +327,10 @@ const editorInitial = toEditorInitial(entry);
 			border-radius: 3px;
 			padding: 2px 8px;
 			margin-top: 2px;
+		}
+		.how__format:hover {
+			color: #f0d488;
+			border-color: #d9b45a;
 		}
 
 		.details__top {
@@ -365,6 +397,9 @@ const editorInitial = toEditorInitial(entry);
 			color: #f2e5cd;
 			font-weight: 600;
 		}
+		.director__name:hover {
+			color: #f0d488;
+		}
 
 		.flags {
 			display: flex;
@@ -426,14 +461,21 @@ const editorInitial = toEditorInitial(entry);
 			padding: 5px 13px;
 			background: #241012;
 		}
+		.tag:hover {
+			color: #f0d488;
+			border-color: #d9b45a;
+		}
 
 		.friends {
 			margin-top: 20px;
 			font-size: 13px;
 			color: #a2857a;
 		}
-		.friends__names {
+		.friends__name {
 			color: #e9d9c4;
+		}
+		.friends__name:hover {
+			color: #f0d488;
 		}
 
 		@media (max-width: 640px) {

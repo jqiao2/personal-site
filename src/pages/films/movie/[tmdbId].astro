@@ -49,6 +49,13 @@ const poster = imageUrl(movie.poster_path, 'w342');
 const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
 const filmHref = `/films/movie/${movie.tmdb_id}`;
 
+// The director and each cast member link to the "All films" grid pre-filtered to
+// them, so this film's people are one click from everything else you've watched
+// with them. `director` / `actor` are the URL params /films/watched reads, and the
+// names match the cached credit facets its chips are built from.
+const filterHref = (key: string, value: string) =>
+	`/films/watched?${key}=${encodeURIComponent(value)}`;
+
 /** Minutes → "2h 4m" / "48m". */
 function formatRuntime(min: number | null): string | null {
 	if (!min || min <= 0) return null;
@@ -174,7 +181,13 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 
 						{directors.length > 0 && (
 							<div class="directed">
-								Directed by <span class="directed__name">{directors.join(', ')}</span>
+								Directed by{' '}
+								{directors.map((d, i) => (
+									<>
+										{i > 0 && ', '}
+										<a class="directed__name" href={filterHref('director', d)}>{d}</a>
+									</>
+								))}
 							</div>
 						)}
 
@@ -205,7 +218,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 								<div class="block__head">Cast</div>
 								<div class="cast">
 									{cast.map((c) => (
-										<span class="cast__chip">{c}</span>
+										<a class="cast__chip" href={filterHref('actor', c)}>{c}</a>
 									))}
 								</div>
 							</section>
@@ -479,6 +492,9 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				color: #f2e5cd;
 				font-weight: 600;
 			}
+			.directed__name:hover {
+				color: #f0d488;
+			}
 			.meta {
 				display: flex;
 				gap: 22px;
@@ -560,6 +576,10 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				border: 1px solid #4a2529;
 				border-radius: 6px;
 				padding: 7px 12px;
+			}
+			.cast__chip:hover {
+				color: #f0d488;
+				border-color: #d9b45a;
 			}
 			.reviews {
 				display: flex;
