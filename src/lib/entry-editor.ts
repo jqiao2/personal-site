@@ -1,0 +1,72 @@
+// Shapes for the shared diary Entry Editor modal, plus the mapping from a stored
+// log to the values its form seeds from. Both the film page and the diary entry
+// page open the editor on an existing entry, so the mapping lives here rather
+// than being copied into each of them.
+
+/** The film an entry is about. Supplying one to the editor locks its picker. */
+export interface EntryEditorFilm {
+	tmdbId: number;
+	title: string;
+	year: number | null;
+	poster: string | null;
+}
+
+/** The editor form's values, as the page hands them over. */
+export interface EntryEditorInitial {
+	date: string;
+	rating: number | null;
+	liked: boolean;
+	rewatch: boolean;
+	medium: string | null;
+	otherMedium: string;
+	venue: string;
+	format: string;
+	review: string;
+	tags: string[];
+	friends: string[];
+}
+
+/** An existing entry the editor can be reopened on, with the log it will PATCH. */
+export interface EntryEditorEntry {
+	logId: number;
+	initial: EntryEditorInitial;
+}
+
+/** The mediums the editor offers as buttons; anything else is a free-text "other". */
+const CANONICAL_MEDIA = ['theater', 'tv', 'computer', 'plane'];
+
+/** The parts of a stored log the editor seeds from. */
+export interface StoredEntry {
+	watched_date: string | null;
+	rating: number | null;
+	review_text: string | null;
+	rewatched: boolean;
+	liked: boolean;
+	medium: string | null;
+	theater: { name: string; city: string | null } | null;
+	format: string | null;
+	tags: string[];
+	friends: string[];
+}
+
+/** A stored log → the editor form's initial values. */
+export function toEditorInitial(entry: StoredEntry): EntryEditorInitial {
+	const mediumKey = entry.medium
+		? CANONICAL_MEDIA.includes(entry.medium)
+			? entry.medium
+			: 'other'
+		: null;
+	return {
+		date: entry.watched_date ?? '',
+		rating: entry.rating,
+		liked: entry.liked,
+		rewatch: entry.rewatched,
+		medium: mediumKey,
+		otherMedium: mediumKey === 'other' ? (entry.medium ?? '') : '',
+		venue: entry.theater ? [entry.theater.name, entry.theater.city].filter(Boolean).join(', ') : '',
+		format: entry.format ?? '',
+		review: entry.review_text ?? '',
+		tags: entry.tags,
+		friends: entry.friends,
+	};
+}
