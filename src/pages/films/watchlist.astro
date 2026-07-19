@@ -29,6 +29,10 @@ const num = (n: number) => n.toLocaleString('en-US');
 const today = new Date().toISOString().slice(0, 10);
 const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.release_date > today;
 
+// Whether the watchlist holds anything still ahead of us. The "Include upcoming"
+// toggle is only worth drawing when there's something for it to exclude.
+const hasUpcoming = films.some(isUpcoming);
+
 /** Genres present on the watchlist, most common first — matches the chip order the
  * "All films" filters use. */
 const genreCounts = new Map<string, number>();
@@ -105,9 +109,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 				<div class="panel__grid">
 					<section>
-						<h2 class="grp">
-							Release date <span class="grp__note">· includes upcoming</span>
-						</h2>
+						<h2 class="grp">Release date</h2>
 						{hasDecadeRange ? (
 							<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
 								<div class="range__track"></div>
@@ -136,6 +138,13 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 							</div>
 						) : (
 							<p class="grp__none">Not enough range to filter</p>
+						)}
+						{hasUpcoming && (
+							<label class="toggle">
+								<input type="checkbox" id="upcoming-toggle" checked />
+								<span class="toggle__track"><span class="toggle__thumb"></span></span>
+								<span class="toggle__text">Include upcoming</span>
+							</label>
 						)}
 					</section>
 
@@ -182,6 +191,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 							data-title={f.title.toLowerCase()}
 							data-year={f.release_year ?? ''}
 							data-genres={f.genres.join('|')}
+							data-upcoming={upcoming ? '1' : ''}
 						>
 							{isOwner && (
 								<button type="button" class="remove" aria-label={`Remove ${f.title} from watchlist`}>
@@ -442,11 +452,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			color: #8a6f63;
 			margin: 0 0 12px;
 		}
-		.grp__note {
-			letter-spacing: 0.4px;
-			text-transform: none;
-			color: #6f5850;
-		}
 		.grp__none {
 			font-size: 13px;
 			font-style: italic;
@@ -572,6 +577,60 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 		/* The end labels are positioned out of flow, so reserve the room they occupy. */
 		.range--dec {
 			margin-bottom: 20px;
+		}
+
+		/* "Include upcoming" switch. A native checkbox drives it — the track and thumb
+		   are drawn from its :checked state, so keyboard and screen-reader support come
+		   for free. */
+		.toggle {
+			display: inline-flex;
+			align-items: center;
+			gap: 10px;
+			cursor: pointer;
+			user-select: none;
+		}
+		.toggle input {
+			position: absolute;
+			width: 1px;
+			height: 1px;
+			opacity: 0;
+			pointer-events: none;
+		}
+		.toggle__track {
+			position: relative;
+			flex-shrink: 0;
+			width: 34px;
+			height: 18px;
+			border-radius: 9px;
+			background: #402226;
+			border: 1px solid #4a2529;
+			transition: background 0.15s, border-color 0.15s;
+		}
+		.toggle__thumb {
+			position: absolute;
+			top: 2px;
+			left: 2px;
+			width: 12px;
+			height: 12px;
+			border-radius: 50%;
+			background: #8a6f63;
+			transition: transform 0.15s, background 0.15s;
+		}
+		.toggle input:checked + .toggle__track {
+			background: #d9b45a;
+			border-color: #d9b45a;
+		}
+		.toggle input:checked + .toggle__track .toggle__thumb {
+			transform: translateX(16px);
+			background: #2a1214;
+		}
+		.toggle input:focus-visible + .toggle__track {
+			outline: 2px solid #f0d488;
+			outline-offset: 2px;
+		}
+		.toggle__text {
+			font-size: 13px;
+			color: #ddc9b4;
 		}
 
 		.grid {
@@ -951,6 +1010,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			const drangeFill = document.getElementById('drange-fill');
 			const dminLabel = document.getElementById('dmin-label');
 			const dmaxLabel = document.getElementById('dmax-label');
+			const upcomingToggle = document.getElementById('upcoming-toggle') as HTMLInputElement | null;
 
 			const fmt = (n: number) => n.toLocaleString('en-US');
 
@@ -963,6 +1023,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				decade: number | null;
 				year: number | null;
 				genres: string[];
+				/** A release date still ahead of us. Governed by the "Include upcoming"
+				 * toggle, not the decade range — decade alone can't tell an upcoming
+				 * 2026 film from a released one that shares its decade. */
+				upcoming: boolean;
 				/** Position in the server's added_at-descending order. */
 				order: number;
 			}
@@ -975,6 +1039,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					year,
 					decade: year == null ? null : Math.floor(year / 10) * 10,
 					genres: el.dataset.genres ? el.dataset.genres.split('|') : [],
+					upcoming: el.dataset.upcoming === '1',
 					order: Number(el.dataset.order),
 				};
 			});
@@ -991,13 +1056,18 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			const DEC_HI = drange ? Number(drange.dataset.hi) : 0;
 			let dMin = DEC_LO;
 			let dMax = DEC_HI;
+			// The "Include upcoming" toggle. On by default, so the page opens on the
+			// full list the server rendered; when off, films with a future release date
+			// drop out whatever the decade range says.
+			let includeUpcoming = true;
 
 			/** Whether the release-date range narrows anything. */
 			const decadeActive = () => Boolean(drange) && (dMin > DEC_LO || dMax < DEC_HI);
 
 			/** Number of active filters — the count on the Filters button. The
 			 * release-date range counts once however many decades it spans. */
-			const activeCount = () => (decadeActive() ? 1 : 0) + selectedGenres.size;
+			const activeCount = () =>
+				(decadeActive() ? 1 : 0) + selectedGenres.size + (includeUpcoming ? 0 : 1);
 
 			/** A cheap deterministic hash, so a shuffle holds still while you filter
 			 * and each press of Shuffle deals a different order. */
@@ -1010,6 +1080,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			function matches(item: Item): boolean {
 				if (q && !item.title.includes(q)) return false;
 				if (selectedGenres.size && !item.genres.some((g) => selectedGenres.has(g))) return false;
+				if (!includeUpcoming && item.upcoming) return false;
 				if (decadeActive() && (item.decade == null || item.decade < dMin || item.decade > dMax)) {
 					return false;
 				}
@@ -1055,6 +1126,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				countBadge.textContent = n ? ` · ${n}` : '';
 				toggle.classList.toggle('pill--on', panel.hidden === false || n > 0);
 				clearAll.hidden = n === 0;
+				if (upcomingToggle) upcomingToggle.checked = includeUpcoming;
 
 				if (drange && drangeFill && dminLabel && dmaxLabel) {
 					const pct = (v: number) => ((v - DEC_LO) / (DEC_HI - DEC_LO)) * 100;
@@ -1143,10 +1215,18 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				}
 			}
 
+			if (upcomingToggle) {
+				upcomingToggle.addEventListener('change', () => {
+					includeUpcoming = upcomingToggle.checked;
+					apply();
+				});
+			}
+
 			clearAll.addEventListener('click', () => {
 				selectedGenres.clear();
 				for (const chip of genreChips) chip.setAttribute('aria-pressed', 'false');
 				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
+				includeUpcoming = true;
 				apply();
 			});
 
@@ -1167,6 +1247,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					p.set('dmax', String(dMax));
 				}
 				for (const g of selectedGenres) p.append('genre', g);
+				if (!includeUpcoming) p.set('upcoming', '0');
 				const qs = p.toString();
 				const url = location.pathname + (qs ? `?${qs}` : '');
 				if (url !== location.pathname + location.search) history.replaceState(null, '', url);
@@ -1207,6 +1288,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
 						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
 					);
+				}
+				if (upcomingToggle && p.get('upcoming') === '0') {
+					includeUpcoming = false;
+					upcomingToggle.checked = false;
 				}
 
 				// Drive the set from the chips rather than straight off the params, so a
