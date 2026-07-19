@@ -93,6 +93,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				>
 					Filters<span id="filters-count"></span>
 				</button>
+				{isOwner && (
+						<button type="button" id="open-wheel" class="wheel-open">◎ Spin the wheel</button>
+					)}
 				<div class="sortby">
 					<span class="sortby__label">Sort</span>
 					<button type="button" class="pill pill--on" data-sort="added">Recently added</button>
@@ -251,6 +254,37 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					<button type="button" class="btn-ghost" id="composer-cancel">Cancel</button>
 					<button type="button" class="btn-save" id="composer-save" disabled>Add film</button>
 				</div>
+			</div>
+		</div>
+	)}
+
+	{/* Spin the wheel — a random pick from the owner's current filtered set. Owner
+	    only, so the winner card always links out (to YTS), matching the tiles. */}
+	{isOwner && (
+		<div class="wheel" id="wheel" hidden>
+			<div class="wheel__backdrop" id="wheel-backdrop"></div>
+			<div class="wheel__panel" role="dialog" aria-modal="true" aria-label="Pick a film to watch">
+				<div class="wheel__head">
+					<span class="wheel__eyebrow">Pick for me</span>
+					<button type="button" class="wheel__close" id="wheel-close" aria-label="Close">✕</button>
+				</div>
+				<p class="wheel__sub">
+					Spinning <span class="wheel__n" id="wheel-count">0</span> films from your current filters
+				</p>
+
+				<div class="wheel__stage" id="wheel-stage" hidden>
+					<div class="wheel__pointer"></div>
+					<div class="wheel__disc" id="wheel-disc"></div>
+					<button type="button" class="wheel__hub" id="wheel-hub">Spin</button>
+					<canvas class="wheel__confetti" id="wheel-confetti" width="600" height="600" aria-hidden="true"></canvas>
+				</div>
+
+				<a class="wheel__winner" id="wheel-winner" hidden>
+					<div class="wheel__winner-eyebrow">Tonight you're watching</div>
+					<div class="wheel__winner-title" id="wheel-winner-title"></div>
+				</a>
+
+				<p class="wheel__empty" id="wheel-empty" hidden>No films match these filters</p>
 			</div>
 		</div>
 	)}
@@ -959,6 +993,233 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			color: #e0736f;
 		}
 
+		/* --- Spin the wheel --- */
+		.wheel-open {
+			font-size: 12.5px;
+			padding: 10px 16px;
+			border-radius: 8px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			border: 1px solid #6b4a42;
+			background: transparent;
+			color: #f0d488;
+		}
+		.wheel-open:hover {
+			border-color: #d9b45a;
+			background: #241012;
+		}
+
+		.wheel {
+			position: fixed;
+			inset: 0;
+			z-index: 50;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 24px;
+		}
+		.wheel[hidden] {
+			display: none;
+		}
+		.wheel__backdrop {
+			position: absolute;
+			inset: 0;
+			background: rgba(12, 6, 7, 0.86);
+			backdrop-filter: blur(3px);
+		}
+		.wheel__panel {
+			position: relative;
+			width: 80%;
+			max-width: 800px;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 16px;
+			padding: 30px 34px 34px;
+			box-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.8);
+		}
+		.wheel__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 6px;
+		}
+		.wheel__eyebrow {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #8a6f63;
+		}
+		.wheel__close {
+			font-size: 18px;
+			line-height: 1;
+			color: #a2857a;
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.wheel__close:hover {
+			color: #f4e8d1;
+		}
+		.wheel__sub {
+			font-family: 'Newsreader', serif;
+			font-size: 15px;
+			font-style: italic;
+			color: #c2a99a;
+			margin: 0 0 20px;
+		}
+		.wheel__n {
+			color: #d9b45a;
+		}
+
+		.wheel__stage {
+			position: relative;
+			width: 440px;
+			height: 440px;
+			margin: 0 auto;
+		}
+		.wheel__stage[hidden] {
+			display: none;
+		}
+		.wheel__pointer {
+			position: absolute;
+			top: -6px;
+			left: 50%;
+			transform: translateX(-50%);
+			z-index: 3;
+			width: 0;
+			height: 0;
+			border-left: 14px solid transparent;
+			border-right: 14px solid transparent;
+			border-top: 24px solid #f0d488;
+			filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.5));
+		}
+		.wheel__disc {
+			width: 440px;
+			height: 440px;
+			border-radius: 50%;
+			position: relative;
+			/* Keep labels inside the rim: with a very long list they can run past the
+			   disc, and border-radius + overflow clips them to the circle (the
+			   box-shadow rings render outside the box, unaffected). */
+			overflow: hidden;
+			transition: transform 6s cubic-bezier(0.12, 0.52, 0.22, 1);
+			box-shadow: 0 0 0 6px #241012, 0 0 0 8px #4a2529, 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+		}
+		/* One label per segment: a fixed-radius arm rotated to the segment's centre,
+		   with its text pinned to the outer end (rotation set inline in JS). These rules
+		   MUST be :global — the labels are built with createElement and never get
+		   Astro's scoped-style attribute, so a scoped selector would not match them. */
+		:global(.wheel__seg) {
+			position: absolute;
+			left: 50%;
+			top: 50%;
+			width: 210px;
+			height: 20px;
+			margin-top: -10px;
+			transform-origin: 0 50%;
+			display: flex;
+			align-items: center;
+			justify-content: flex-end;
+			padding-right: 6px;
+		}
+		:global(.wheel__seg span) {
+			font-family: 'Archivo', sans-serif;
+			font-size: 12px;
+			font-weight: 600;
+			line-height: 1;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			max-width: 180px;
+		}
+		.wheel__hub {
+			position: absolute;
+			top: 50%;
+			left: 50%;
+			transform: translate(-50%, -50%);
+			z-index: 2;
+			width: 104px;
+			height: 104px;
+			border-radius: 50%;
+			border: 3px solid #4a2529;
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 16px;
+			line-height: 1.1;
+			text-align: center;
+			padding: 6px;
+			cursor: pointer;
+			background: #d9b45a;
+			color: #2a1214;
+		}
+		.wheel__hub:hover {
+			background: #f0d488;
+		}
+		.wheel__hub:disabled {
+			background: #241012;
+			color: #8a6f63;
+			cursor: default;
+		}
+		.wheel__confetti {
+			position: absolute;
+			top: -70px;
+			left: 50%;
+			transform: translateX(-50%);
+			width: 600px;
+			height: 600px;
+			pointer-events: none;
+			z-index: 4;
+		}
+
+		.wheel__winner {
+			display: block;
+			text-align: center;
+			margin-top: 22px;
+			padding: 14px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 12px;
+		}
+		.wheel__winner[hidden] {
+			display: none;
+		}
+		a.wheel__winner[href]:hover {
+			border-color: #d9b45a;
+		}
+		.wheel__winner-eyebrow {
+			font-size: 10.5px;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #8a6f63;
+			margin-bottom: 6px;
+		}
+		.wheel__winner-title {
+			font-family: 'Newsreader', serif;
+			font-size: 26px;
+			color: #f4e8d1;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.wheel__empty {
+			padding: 40px 0;
+			text-align: center;
+			color: #8a6f63;
+			font-size: 15px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+			margin: 0;
+		}
+		.wheel__empty[hidden] {
+			display: none;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.wheel__disc {
+				transition-duration: 2s;
+			}
+		}
+
 		@media (max-width: 860px) {
 			.grid {
 				grid-template-columns: repeat(4, 1fr);
@@ -979,6 +1240,25 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			}
 			.range {
 				max-width: none;
+			}
+		}
+		/* The 440px wheel can't fit a phone; scale it down and reclaim the room the
+		   scale frees, since transform doesn't shrink the layout box. */
+		@media (max-width: 640px) {
+			.wheel__panel {
+				width: 100%;
+				padding: 26px 18px 28px;
+				display: flex;
+				flex-direction: column;
+			}
+			/* Centre the over-wide 440px stage before scaling: flex align-self
+			   centres it symmetrically, but only once its base `margin: 0 auto`
+			   is cleared — an auto margin would otherwise pin it left in flex. */
+			.wheel__stage {
+				align-self: center;
+				transform: scale(0.66);
+				transform-origin: top center;
+				margin: 0 0 -150px;
 			}
 		}
 	</style>
@@ -1341,6 +1621,323 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					btn.disabled = false;
 				}
 			});
+
+			// --- Spin the wheel: a random pick from the current filtered set ----
+			// Owner-only chrome (like the add/remove controls): the pool is the
+			// owner's currently-filtered watchlist, and the winner links out to the
+			// picked tile's YTS page. Absent from a visitor's DOM — wiring is guarded.
+			const wheelModal = document.getElementById('wheel')!;
+			const wheelBtn = document.getElementById('open-wheel')!;
+			const wheelBackdrop = document.getElementById('wheel-backdrop')!;
+			const wheelCloseBtn = document.getElementById('wheel-close')!;
+			const wheelCount = document.getElementById('wheel-count')!;
+			const wheelStage = document.getElementById('wheel-stage')!;
+			const wheelDisc = document.getElementById('wheel-disc')!;
+			const wheelHub = document.getElementById('wheel-hub') as HTMLButtonElement;
+			const wheelEmpty = document.getElementById('wheel-empty')!;
+			const wheelWinner = document.getElementById('wheel-winner') as HTMLAnchorElement;
+			const wheelWinnerTitle = document.getElementById('wheel-winner-title')!;
+			const confetti = document.getElementById('wheel-confetti') as HTMLCanvasElement;
+
+			/** A candidate on the wheel: display title, year and an optional link. */
+			interface Pick {
+				title: string;
+				year: number | null;
+				href: string | null;
+			}
+
+			// Four-tone wedge cycle: [background, label colour that reads on it].
+			// Richer than a plain gold/dark alternation, and with a long watchlist it
+			// aliases into a warm moiré sunburst — which is the point; you can't read
+			// hundreds of labels anyway, so the wheel just looks good spinning.
+			const WEDGES = [
+				['#d9b45a', '#2a1214'], // gold
+				['#3a1a1d', '#f0d488'], // dark maroon
+				['#a23b2e', '#f4e8d1'], // rust
+				['#e7c877', '#2a1214'], // pale gold
+			];
+			const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+			let pool: Pick[] = [];
+			let rotation = 0; // accumulated disc rotation, degrees — only ever grows
+			let spinning = false;
+			let spinTimer = 0;
+			let tickTimers: number[] = [];
+			let raf = 0;
+			// undefined = not yet created, null = creation failed (no Web Audio).
+			let audioCtx: AudioContext | null | undefined;
+
+			/** Coloured wedges as a conic-gradient, plus a rotated label per wedge
+			 *  while the list is short enough to read them. */
+			function buildDisc() {
+				const n = pool.length;
+				wheelDisc.textContent = '';
+				if (n === 0) {
+					wheelDisc.style.background = '#241012';
+					return;
+				}
+				const seg = 360 / n;
+				const stops = pool
+					.map(
+						(_, i) =>
+							`${WEDGES[i % WEDGES.length][0]} ${(i * seg).toFixed(3)}deg ${((i + 1) * seg).toFixed(3)}deg`,
+					)
+					.join(', ');
+				wheelDisc.style.background = `conic-gradient(${stops})`;
+
+				// Labels only while they stay legible. A radial label overlaps its
+				// neighbours well before the rim gap closes (its inner half sits where
+				// the wedges are narrowest), so past ~34 films they smear — and there
+				// we deliberately drop them: the wheel becomes the aliased sunburst,
+				// with the winner card naming the pick. Up to 34, shrink to fit.
+				const fontPx = n <= 20 ? 12 : n <= 34 ? 12 - ((n - 20) / 14) * 4 : 0;
+				if (fontPx < 7.9) return; // too many to read — coloured wedges only
+				// The text is right-aligned near the rim and reads inward. BAND is the
+				// radial room it has before the centre hub; we fit each whole title in
+				// it by shrinking the font (never truncating), so nothing is ever cut.
+				const BAND = 140;
+				const MIN_FONT = 6;
+
+				const frag = document.createDocumentFragment();
+				const spans: HTMLSpanElement[] = [];
+				pool.forEach((f, i) => {
+					const center = i * seg + seg / 2;
+					const wrap = document.createElement('div');
+					wrap.className = 'wheel__seg';
+					// The label arm points right at rotate(0); offset by −90° so its angle is read from the top; that keeps it
+					// centred on its wedge; on the left half (past 6 o'clock) that leaves it
+					// upside-down, so flip just the text 180° in place — the arm, and so the
+					// wedge it sits on, is unchanged.
+					wrap.style.transform = `rotate(${center - 90}deg)`;
+					const span = document.createElement('span');
+					span.textContent = f.title;
+					span.style.color = WEDGES[i % WEDGES.length][1];
+					span.style.fontSize = `${fontPx.toFixed(1)}px`;
+					span.style.maxWidth = `${BAND}px`;
+					if (center > 180) span.style.transform = 'rotate(180deg)';
+					wrap.appendChild(span);
+					spans.push(span);
+					frag.appendChild(wrap);
+				});
+				wheelDisc.appendChild(frag);
+
+				// One layout pass: any title wider than BAND at the base size is scaled
+				// down (to a legible floor) until the whole thing fits. Short titles keep
+				// the full size, so only the long ones shrink. Target a hair under BAND
+				// so font rounding can never leave a stray pixel to trip the ellipsis.
+				for (const span of spans) {
+					const natural = span.scrollWidth;
+					if (natural > BAND - 4) {
+						span.style.fontSize = `${Math.max(MIN_FONT, (fontPx * (BAND - 4)) / natural).toFixed(1)}px`;
+					}
+				}
+			}
+
+			function resetWinner() {
+				wheelWinner.hidden = true;
+				cancelAnimationFrame(raf);
+			}
+
+			function openWheel() {
+				pool = items.filter(matches).map((it) => ({
+					title: it.el.querySelector<HTMLElement>('.tile__title')?.textContent?.trim() ?? '',
+					year: it.year,
+					href: it.el.querySelector<HTMLAnchorElement>('a.tile')?.getAttribute('href') ?? null,
+				}));
+				wheelCount.textContent = fmt(pool.length);
+				// Snap back to the upright resting position (no animation) so the labels
+				// read cleanly every time it opens, not just the first time. buildDisc
+				// decides each label's flip in this same frame, so they line up.
+				rotation = 0;
+				wheelDisc.style.transition = 'none';
+				wheelDisc.style.transform = 'rotate(0deg)';
+				resetWinner();
+				wheelHub.disabled = false;
+				wheelHub.textContent = 'Spin';
+				wheelStage.hidden = pool.length === 0;
+				wheelEmpty.hidden = pool.length > 0;
+				// Reveal the modal BEFORE building the labels: buildDisc measures each
+				// title's width to shrink it to fit, and an element inside a hidden
+				// (display:none) subtree reports a width of 0. It all runs in one frame,
+				// so nothing flashes.
+				wheelModal.hidden = false;
+				buildDisc();
+			}
+
+			function closeWheel() {
+				wheelModal.hidden = true;
+				clearTimeout(spinTimer);
+				tickTimers.forEach((t) => clearTimeout(t));
+				tickTimers = [];
+				cancelAnimationFrame(raf);
+				spinning = false;
+			}
+
+			function showWinner(f: Pick) {
+				wheelWinnerTitle.textContent = f.year ? `${f.title} · ${f.year}` : f.title;
+				if (f.href) {
+					wheelWinner.href = f.href;
+					wheelWinner.target = '_blank';
+					wheelWinner.rel = 'noopener noreferrer';
+				} else {
+					wheelWinner.removeAttribute('href');
+					wheelWinner.removeAttribute('target');
+				}
+				wheelWinner.hidden = false;
+			}
+
+			function spin() {
+				if (!pool.length || spinning) return;
+				ensureAudio();
+				const n = pool.length;
+				const seg = 360 / n;
+				const i = Math.floor(Math.random() * n);
+				const center = i * seg + seg / 2;
+				const cur = rotation;
+				// Land wedge i under the top pointer after ≥4 full turns forward.
+				const target = cur - (cur % 360) + 360 * 4 + ((360 - center) % 360);
+				const dur = reduceMotion ? 2000 : 6000;
+				const delta = target - cur;
+
+				tickTimers.forEach((t) => clearTimeout(t));
+				tickTimers = [];
+				if (!reduceMotion) {
+					// One tick as each wedge boundary crosses the pointer. The cubic
+					// ease means the ticks bunch up fast then spread out as it slows.
+					const ticks = Math.floor(delta / seg);
+					for (let k = 1; k <= ticks; k++) {
+						const frac = (k * seg) / delta;
+						const t = 1 - Math.pow(1 - frac, 1 / 3);
+						tickTimers.push(window.setTimeout(() => playTick(300 + (1 - t) * 240), t * dur));
+					}
+				}
+
+				spinning = true;
+				rotation = target;
+				resetWinner();
+				wheelHub.disabled = true;
+				wheelHub.textContent = '…';
+				wheelDisc.style.transition = `transform ${dur / 1000}s cubic-bezier(0.12, 0.52, 0.22, 1)`;
+				wheelDisc.style.transform = `rotate(${target}deg)`;
+
+				clearTimeout(spinTimer);
+				spinTimer = window.setTimeout(() => {
+					spinning = false;
+					wheelHub.disabled = false;
+					wheelHub.textContent = 'Spin again';
+					showWinner(pool[i]);
+					playDing();
+					fireConfetti();
+				}, dur);
+			}
+
+			// --- Sound: a wooden tick per wedge, a two-note ding on the winner ---
+			function ensureAudio(): AudioContext | null {
+				if (audioCtx === undefined) {
+					try {
+						const Ctor =
+							window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+						audioCtx = Ctor ? new Ctor() : null;
+					} catch {
+						audioCtx = null;
+					}
+				}
+				if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+				return audioCtx;
+			}
+			function playTick(freq: number) {
+				const ac = ensureAudio();
+				if (!ac) return;
+				const t = ac.currentTime;
+				const o = ac.createOscillator();
+				const g = ac.createGain();
+				const lp = ac.createBiquadFilter();
+				lp.type = 'lowpass';
+				lp.frequency.value = 900;
+				lp.Q.value = 6;
+				o.type = 'triangle';
+				o.frequency.value = freq;
+				g.gain.setValueAtTime(0.0001, t);
+				g.gain.exponentialRampToValueAtTime(0.09, t + 0.005);
+				g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+				o.connect(lp).connect(g).connect(ac.destination);
+				o.start(t);
+				o.stop(t + 0.1);
+			}
+			function playDing() {
+				const ac = ensureAudio();
+				if (!ac) return;
+				const t = ac.currentTime;
+				[880, 1318.5].forEach((f, i) => {
+					const o = ac.createOscillator();
+					const g = ac.createGain();
+					o.type = 'triangle';
+					o.frequency.value = f;
+					const s = t + i * 0.11;
+					g.gain.setValueAtTime(0.0001, s);
+					g.gain.exponentialRampToValueAtTime(0.22, s + 0.01);
+					g.gain.exponentialRampToValueAtTime(0.0001, s + 0.5);
+					o.connect(g).connect(ac.destination);
+					o.start(s);
+					o.stop(s + 0.55);
+				});
+			}
+
+			function fireConfetti() {
+				if (reduceMotion) return;
+				const dpr = window.devicePixelRatio || 1;
+				confetti.width = 600 * dpr;
+				confetti.height = 600 * dpr;
+				const ctx = confetti.getContext('2d');
+				if (!ctx) return;
+				ctx.scale(dpr, dpr);
+				const colors = ['#d9b45a', '#f0d488', '#f4e8d1', '#a23b2e', '#e9d9c4'];
+				const parts = Array.from({ length: 150 }, () => ({
+					x: 300,
+					y: 290,
+					vx: (Math.random() - 0.5) * 13,
+					vy: -Math.random() * 15 - 5,
+					r: 3 + Math.random() * 5,
+					c: colors[(Math.random() * colors.length) | 0],
+					rot: Math.random() * 6.28,
+					vr: (Math.random() - 0.5) * 0.5,
+				}));
+				cancelAnimationFrame(raf);
+				const start = performance.now();
+				const step = (now: number) => {
+					const el = now - start;
+					ctx.clearRect(0, 0, 600, 600);
+					for (const p of parts) {
+						p.vy += 0.34;
+						p.vx *= 0.99;
+						p.x += p.vx;
+						p.y += p.vy;
+						p.rot += p.vr;
+						ctx.save();
+						ctx.translate(p.x, p.y);
+						ctx.rotate(p.rot);
+						ctx.globalAlpha = Math.max(0, 1 - el / 1600);
+						ctx.fillStyle = p.c;
+						ctx.fillRect(-p.r, -p.r * 0.5, p.r * 2, p.r);
+						ctx.restore();
+					}
+					if (el < 1700) raf = requestAnimationFrame(step);
+					else ctx.clearRect(0, 0, 600, 600);
+				};
+				raf = requestAnimationFrame(step);
+			}
+
+			// The wheel is owner-only chrome — a visitor's DOM has none of it, so wire
+			// it up only when it's actually present (everything above is just defs).
+			if (wheelBtn && wheelModal) {
+				wheelBtn.addEventListener('click', openWheel);
+				wheelCloseBtn.addEventListener('click', closeWheel);
+				wheelBackdrop.addEventListener('click', closeWheel);
+				wheelHub.addEventListener('click', spin);
+				document.addEventListener('keydown', (e) => {
+					if (e.key === 'Escape' && !wheelModal.hidden) closeWheel();
+				});
+			}
 		}
 
 		// --- Add a film to the watchlist (search overlay, owner only) ---------
