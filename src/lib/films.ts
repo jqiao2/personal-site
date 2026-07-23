@@ -2,7 +2,7 @@
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
-import { extractCreditFacts, getMovieDetails, releaseDate, releaseYear } from './tmdb';
+import { extractCreditFacts, getMovieDetails, preferredReleaseDate, releaseYear } from './tmdb';
 
 /** How long a cached movie row is considered fresh before we re-sync from TMDB. */
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -39,11 +39,15 @@ function isMissingCreditColumn(err: { code?: string; message?: string } | null):
 async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const d = await getMovieDetails(tmdbId);
 	const facts = extractCreditFacts(d);
+	// Prefer the US theatrical release over TMDB's earliest-anywhere release_date,
+	// and derive the year from that same date so the year and the full date can't
+	// disagree (a foreign premiere and the US run can straddle a New Year).
+	const releasedOn = preferredReleaseDate(d);
 	const now = new Date().toISOString();
 	const base = {
 		tmdb_id: d.id,
 		title: d.title,
-		release_year: releaseYear(d.release_date),
+		release_year: releaseYear(releasedOn),
 		poster_path: d.poster_path,
 		backdrop_path: d.backdrop_path,
 		overview: d.overview,
@@ -57,7 +61,7 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	// columns so caching a movie still works.
 	const withFacts = {
 		...base,
-		release_date: releaseDate(d.release_date),
+		release_date: releasedOn,
 		genres: facts.genres,
 		languages: facts.languages,
 		countries: facts.countries,
