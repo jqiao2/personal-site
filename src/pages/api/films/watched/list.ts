@@ -8,7 +8,8 @@ export const prerender = false;
 //   &rmin=&rmax=&unrated=1&liked=1&rewatched=1
 //   &decade=1990&decade=2000&tag=…&friend=…&friendmode=any|all
 //   &medium=…&venue=…&format=…&wheremode=any|all
-//   &director=…&actor=…
+//   &director=…&actor=…&genre=…&language=…&country=…
+//   &dymin=2019&dymax=2024
 // → { films, total } — one page of the "All films" grid, filtered and sorted
 // server-side so paging covers the whole collection rather than what's loaded.
 // Multi-value filters repeat their key rather than using a delimiter: theater
@@ -40,6 +41,11 @@ export const GET: APIRoute = async ({ url }) => {
 			decades: p.getAll('decade').map(Number).filter(Number.isFinite),
 			directors: p.getAll('director'),
 			actors: p.getAll('actor'),
+			genres: p.getAll('genre'),
+			languages: p.getAll('language'),
+			countries: p.getAll('country'),
+			diaryYearMin: yearBound(p.get('dymin')),
+			diaryYearMax: yearBound(p.get('dymax')),
 			tags: p.getAll('tag'),
 			friends: p.getAll('friend'),
 			friendMode: isMatchMode(p.get('friendmode')) ? p.get('friendmode')! : 'any',
@@ -53,6 +59,13 @@ export const GET: APIRoute = async ({ url }) => {
 		return apiError(e instanceof Error ? e.message : 'failed to list watched films', 500);
 	}
 };
+
+/** A diary-date year bound as an integer, or undefined if absent/invalid. */
+function yearBound(raw: string | null): number | undefined {
+	if (raw == null) return undefined;
+	const n = Number.parseInt(raw, 10);
+	return Number.isFinite(n) ? n : undefined;
+}
 
 /** A rating bound snapped to the half-star grid, or undefined if absent/invalid. */
 function starBound(raw: string | null): number | undefined {

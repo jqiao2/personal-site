@@ -13,8 +13,9 @@ const BATCH = 100;
 
 /** How many chips a group shows before collapsing behind "+N other…". Tags and
  * friends follow the design; theaters get one too because there are 19 of them
- * and their names are long enough to swamp the panel. */
-const CHIP_LIMIT = { tags: 7, friends: 4, venues: 6 };
+ * and their names are long enough to swamp the panel. Genre / language / country
+ * live in the Movie details drawer and each shows a healthy handful first. */
+const CHIP_LIMIT = { tags: 7, friends: 4, venues: 6, genres: 8, languages: 8, countries: 8 };
 
 // The default view: newest-watched first, unfiltered. Search, sort and every
 // filter re-query from the server, so this is only the starting slice.
@@ -30,6 +31,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 const decLo = facets.decades[0] ?? null;
 const decHi = facets.decades[facets.decades.length - 1] ?? null;
 const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
+
+// End stops for the diary-date slider — the span of calendar years the collection
+// was watched across. Like the decade slider, it's only worth drawing when there's
+// more than one year to narrow between.
+const dyLo = facets.diaryYearLo;
+const dyHi = facets.diaryYearHi;
+const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 ---
 
 <FilmLayout title="Films watched — Jason's film log">
@@ -105,37 +113,38 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 							<button type="button" class="chip" data-flag="liked" aria-pressed="false">♥ Liked</button>
 							<button type="button" class="chip" data-flag="rewatched" aria-pressed="false">↻ Rewatched</button>
 						</div>
-						{hasDecadeRange && (
-							<>
-								<h2 class="grp">Release date</h2>
-								<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
-									<div class="range__track"></div>
-									<div class="range__fill" id="drange-fill"></div>
-									<input
-										type="range"
-										id="dmin"
-										min={decLo}
-										max={decHi}
-										step="10"
-										value={decLo}
-										aria-label="Earliest release decade"
-									/>
-									<input
-										type="range"
-										id="dmax"
-										min={decLo}
-										max={decHi}
-										step="10"
-										value={decHi}
-										aria-label="Latest release decade"
-									/>
-									<div class="range__ends">
-										<span id="dmin-label">{decLo}s</span><span id="dmax-label">{decHi}s</span>
-									</div>
-								</div>
-							</>
-						)}
 					</section>
+
+					{hasDiaryRange && (
+						<section>
+							<h2 class="grp">Diary date</h2>
+							<div class="range range--dec" id="yrange" data-lo={dyLo} data-hi={dyHi}>
+								<div class="range__track"></div>
+								<div class="range__fill" id="yrange-fill"></div>
+								<input
+									type="range"
+									id="ymin"
+									min={dyLo}
+									max={dyHi}
+									step="1"
+									value={dyLo}
+									aria-label="Earliest diary year"
+								/>
+								<input
+									type="range"
+									id="ymax"
+									min={dyLo}
+									max={dyHi}
+									step="1"
+									value={dyHi}
+									aria-label="Latest diary year"
+								/>
+								<div class="range__ends">
+									<span id="ymin-label">{dyLo}</span><span id="ymax-label">{dyHi}</span>
+								</div>
+							</div>
+						</section>
+					)}
 
 					<section>
 						<h2 class="grp">Tags</h2>
@@ -197,42 +206,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						)}
 					</section>
 
-					{(facets.directors.length > 0 || facets.actors.length > 0) && (
-						<section class="panel__wide">
-							<div class="grp__row">
-								<h2 class="grp">People</h2>
-								<input
-									type="search"
-									id="people-search"
-									class="people-search"
-									placeholder="Search directors & cast…"
-									autocomplete="off"
-									aria-label="Search directors and cast"
-								/>
-							</div>
-							<div class="where">
-								<div class="where__row">
-									<span class="where__label">Director</span>
-									<div class="chips" data-people="director">
-										<span class="people-none" hidden>No matches</span>
-									</div>
-								</div>
-								<div class="where__row">
-									<span class="where__label">Cast</span>
-									<div class="chips" data-people="actor">
-										<span class="people-none" hidden>No matches</span>
-									</div>
-								</div>
-							</div>
-							<script
-								is:inline
-								type="application/json"
-								data-people-names
-								set:html={JSON.stringify({ directors: facets.directors, actors: facets.actors })}
-							/>
-						</section>
-					)}
-
 					<section class="panel__wide">
 						<div class="grp__row">
 							<h2 class="grp">Medium · theater · format</h2>
@@ -287,6 +260,166 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 							</div>
 						</div>
 					</section>
+				</div>
+
+				<div class="moviedetails">
+					<button
+						type="button"
+						id="md-toggle"
+						class="md__toggle"
+						aria-expanded="false"
+						aria-controls="md-body"
+					>
+						<span class="md__chevron" aria-hidden="true">▸</span>
+						<span class="md__label">Movie details</span>
+						<span class="md__count" id="md-count"></span>
+					</button>
+
+					<div class="md__body" id="md-body" hidden>
+						<div class="panel__grid">
+							{hasDecadeRange && (
+								<section>
+									<h2 class="grp">Release date</h2>
+									<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
+										<div class="range__track"></div>
+										<div class="range__fill" id="drange-fill"></div>
+										<input
+											type="range"
+											id="dmin"
+											min={decLo}
+											max={decHi}
+											step="10"
+											value={decLo}
+											aria-label="Earliest release decade"
+										/>
+										<input
+											type="range"
+											id="dmax"
+											min={decLo}
+											max={decHi}
+											step="10"
+											value={decHi}
+											aria-label="Latest release decade"
+										/>
+										<div class="range__ends">
+											<span id="dmin-label">{decLo}s</span><span id="dmax-label">{decHi}s</span>
+										</div>
+									</div>
+								</section>
+							)}
+
+							{facets.genres.length > 0 && (
+								<section>
+									<h2 class="grp">Genre</h2>
+									<div class="chips">
+										{facets.genres.map((g, i) => (
+											<button
+												type="button"
+												class="chip"
+												data-filter="genre"
+												data-value={g}
+												aria-pressed="false"
+												hidden={i >= CHIP_LIMIT.genres}
+											>
+												{g}
+											</button>
+										))}
+										{facets.genres.length > CHIP_LIMIT.genres && (
+											<button type="button" class="chip chip--more">
+												+{facets.genres.length - CHIP_LIMIT.genres} other…
+											</button>
+										)}
+									</div>
+								</section>
+							)}
+
+							{facets.languages.length > 0 && (
+								<section>
+									<h2 class="grp">Language</h2>
+									<div class="chips">
+										{facets.languages.map((l, i) => (
+											<button
+												type="button"
+												class="chip"
+												data-filter="language"
+												data-value={l}
+												aria-pressed="false"
+												hidden={i >= CHIP_LIMIT.languages}
+											>
+												{l}
+											</button>
+										))}
+										{facets.languages.length > CHIP_LIMIT.languages && (
+											<button type="button" class="chip chip--more">
+												+{facets.languages.length - CHIP_LIMIT.languages} other…
+											</button>
+										)}
+									</div>
+								</section>
+							)}
+
+							{facets.countries.length > 0 && (
+								<section>
+									<h2 class="grp">Country</h2>
+									<div class="chips">
+										{facets.countries.map((c, i) => (
+											<button
+												type="button"
+												class="chip"
+												data-filter="country"
+												data-value={c}
+												aria-pressed="false"
+												hidden={i >= CHIP_LIMIT.countries}
+											>
+												{c}
+											</button>
+										))}
+										{facets.countries.length > CHIP_LIMIT.countries && (
+											<button type="button" class="chip chip--more">
+												+{facets.countries.length - CHIP_LIMIT.countries} other…
+											</button>
+										)}
+									</div>
+								</section>
+							)}
+
+							{(facets.directors.length > 0 || facets.actors.length > 0) && (
+								<section class="panel__wide">
+									<div class="grp__row">
+										<h2 class="grp">People</h2>
+										<input
+											type="search"
+											id="people-search"
+											class="people-search"
+											placeholder="Search directors & cast…"
+											autocomplete="off"
+											aria-label="Search directors and cast"
+										/>
+									</div>
+									<div class="where">
+										<div class="where__row">
+											<span class="where__label">Director</span>
+											<div class="chips" data-people="director">
+												<span class="people-none" hidden>No matches</span>
+											</div>
+										</div>
+										<div class="where__row">
+											<span class="where__label">Cast</span>
+											<div class="chips" data-people="actor">
+												<span class="people-none" hidden>No matches</span>
+											</div>
+										</div>
+									</div>
+									<script
+										is:inline
+										type="application/json"
+										data-people-names
+										set:html={JSON.stringify({ directors: facets.directors, actors: facets.actors })}
+									/>
+								</section>
+							)}
+						</div>
+					</div>
 				</div>
 			</div>
 
@@ -531,6 +664,63 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 		}
 		.panel__wide {
 			grid-column: 1 / -1;
+		}
+
+		/* --- Movie details drawer --- */
+		/* An expandable section under the main filters holding the film-metadata
+		   filters (release date, genre, language, country, people) so they don't
+		   crowd the diary-side controls above. */
+		.moviedetails {
+			margin-top: 20px;
+			padding-top: 18px;
+			border-top: 1px solid #4a2529;
+		}
+		.md__toggle {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			background: transparent;
+			border: none;
+			cursor: pointer;
+			padding: 0;
+			font-family: 'Archivo', sans-serif;
+		}
+		.md__chevron {
+			font-size: 11px;
+			color: #8a6f63;
+			transition: transform 0.15s ease;
+		}
+		.md__toggle[aria-expanded='true'] .md__chevron {
+			transform: rotate(90deg);
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.md__chevron {
+				transition: none;
+			}
+		}
+		.md__label {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #8a6f63;
+		}
+		.md__toggle:hover .md__label,
+		.md__toggle:hover .md__chevron {
+			color: #a2857a;
+		}
+		.md__count {
+			font-size: 11px;
+			font-weight: 600;
+			color: #d9b45a;
+		}
+		.md__count:empty {
+			display: none;
+		}
+		.md__body {
+			margin-top: 18px;
+		}
+		.md__body[hidden] {
+			display: none;
 		}
 		.grp {
 			font-size: 11px;
@@ -976,6 +1166,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				format: new Set<string>(),
 				director: new Set<string>(),
 				actor: new Set<string>(),
+				genre: new Set<string>(),
+				language: new Set<string>(),
+				country: new Set<string>(),
 			};
 			type SetKey = keyof typeof sets;
 			const flags = { liked: false, rewatched: false, unrated: false };
@@ -992,6 +1185,16 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			let dMin = DEC_LO;
 			let dMax = DEC_HI;
 
+			// Diary-date bounds, as calendar years. Drawn only when the collection spans
+			// more than one year watched; without it these stay at the ends and the filter
+			// never engages. A film watched across several years matches whenever any of
+			// them lands in range, so one film can answer to more than one year.
+			const yrange = document.getElementById('yrange');
+			const YR_LO = yrange ? Number(yrange.dataset.lo) : 0;
+			const YR_HI = yrange ? Number(yrange.dataset.hi) : 0;
+			let yMin = YR_LO;
+			let yMax = YR_HI;
+
 			/** Whether the rating control narrows anything. */
 			const ratingActive = () =>
 				flags.unrated || rMin > RATING_FLOOR || rMax < RATING_CEIL;
@@ -999,12 +1202,30 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			/** Whether the release-date range narrows anything. */
 			const decadeActive = () => Boolean(drange) && (dMin > DEC_LO || dMax < DEC_HI);
 
-			/** Number of active filters — the count on the Filters button. The rating
-			 * and release-date ranges each count once however many steps they span. */
+			/** Whether the diary-date range narrows anything. */
+			const diaryActive = () => Boolean(yrange) && (yMin > YR_LO || yMax < YR_HI);
+
+			/** Active filters that live in the "Movie details" drawer — the count shown on
+			 * that section's own toggle. Release date, credits, genre, language, country. */
+			function movieActiveCount(): number {
+				return (
+					(decadeActive() ? 1 : 0) +
+					sets.director.size +
+					sets.actor.size +
+					sets.genre.size +
+					sets.language.size +
+					sets.country.size
+				);
+			}
+
+			/** Number of active filters — the count on the Filters button. The rating,
+			 * release-date and diary-date ranges each count once however many steps they
+			 * span. This is every filter, drawer ones included. */
 			function activeCount(): number {
 				let n =
 					(ratingActive() ? 1 : 0) +
 					(decadeActive() ? 1 : 0) +
+					(diaryActive() ? 1 : 0) +
 					(flags.liked ? 1 : 0) +
 					(flags.rewatched ? 1 : 0);
 				for (const s of Object.values(sets)) n += s.size;
@@ -1031,6 +1252,15 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				if (decadeActive()) {
 					for (let d = dMin; d <= dMax; d += 10) p.append('decade', String(d));
 				}
+				// Diary date is a true year span; the server keeps a film whose watch years
+				// intersect it. Send a bound only when it narrows, so the slider's extremes
+				// read as "any date".
+				if (diaryActive()) {
+					if (yMin > YR_LO) p.set('dymin', String(yMin));
+					if (yMax < YR_HI) p.set('dymax', String(yMax));
+				}
+				// sets.genre/language/country ride along here as `genre`/`language`/`country`
+				// — the same keys the API reads.
 				for (const [key, values] of Object.entries(sets)) {
 					for (const v of values) p.append(key, v);
 				}
@@ -1184,6 +1414,14 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			const drangeFill = document.getElementById('drange-fill');
 			const dminLabel = document.getElementById('dmin-label');
 			const dmaxLabel = document.getElementById('dmax-label');
+			const yminInput = document.getElementById('ymin') as HTMLInputElement | null;
+			const ymaxInput = document.getElementById('ymax') as HTMLInputElement | null;
+			const yrangeFill = document.getElementById('yrange-fill');
+			const yminLabel = document.getElementById('ymin-label');
+			const ymaxLabel = document.getElementById('ymax-label');
+			const mdToggle = document.getElementById('md-toggle')!;
+			const mdBody = document.getElementById('md-body')!;
+			const mdCount = document.getElementById('md-count')!;
 
 			/** Reflect state that isn't owned by the control the user just touched. */
 			function syncChrome() {
@@ -1218,6 +1456,23 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					dminInput!.style.zIndex = dOverlap ? '2' : '1';
 					dmaxInput!.style.zIndex = dOverlap ? '1' : '2';
 				}
+
+				if (yrange && yrangeFill && yminLabel && ymaxLabel) {
+					const ypct = (v: number) => ((v - YR_LO) / (YR_HI - YR_LO)) * 100;
+					yrangeFill.style.left = `${ypct(yMin)}%`;
+					yrangeFill.style.width = `${ypct(yMax) - ypct(yMin)}%`;
+					yminLabel.textContent = String(yMin);
+					ymaxLabel.textContent = String(yMax);
+					const yOverlap = yMin > (YR_LO + YR_HI) / 2;
+					yminInput!.style.zIndex = yOverlap ? '2' : '1';
+					ymaxInput!.style.zIndex = yOverlap ? '1' : '2';
+				}
+
+				// The drawer's own badge counts just its filters; the drawer springs open on
+				// its own when a restored URL lands a filter inside it, so its state isn't a
+				// reliable signal of whether anything within is active.
+				const mv = movieActiveCount();
+				mdCount.textContent = mv ? `· ${mv}` : '';
 
 				renderFilterInfo();
 			}
@@ -1311,6 +1566,28 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						em(`${dMin}s and ${dMax}s`);
 					}
 				}
+				if (sets.genre.size) {
+					lit(' in the ');
+					em(andList([...sets.genre]));
+					lit(sets.genre.size === 1 ? ' genre' : ' genres');
+				}
+				if (sets.language.size) {
+					lit(' in ');
+					em(andList([...sets.language]));
+				}
+				if (sets.country.size) {
+					lit(' from ');
+					em(andList([...sets.country]));
+				}
+				if (diaryActive()) {
+					if (yMin === yMax) {
+						lit(' logged in ');
+						em(String(yMin));
+					} else {
+						lit(' logged between ');
+						em(`${yMin} and ${yMax}`);
+					}
+				}
 				if (sets.friend.size) {
 					lit(' with ');
 					em(andList([...sets.friend], modes.friendmode === 'all' ? 'and' : 'or'));
@@ -1349,6 +1626,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				panel.hidden = !panel.hidden;
 				toggle.setAttribute('aria-expanded', String(!panel.hidden));
 				syncChrome();
+			});
+
+			// The Movie details drawer just shows/hides; nothing inside re-queries on open.
+			mdToggle.addEventListener('click', () => {
+				mdBody.hidden = !mdBody.hidden;
+				mdToggle.setAttribute('aria-expanded', String(!mdBody.hidden));
 			});
 
 			// --- People (director / cast) ---------------------------------------
@@ -1538,6 +1821,27 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				}
 			}
 
+			/** Move both diary-year thumbs, keeping min ≤ max. */
+			function setYears(min: number, max: number) {
+				yMin = Math.min(min, max);
+				yMax = Math.max(min, max);
+				yminInput!.value = String(yMin);
+				ymaxInput!.value = String(yMax);
+			}
+
+			if (yminInput && ymaxInput) {
+				for (const input of [yminInput, ymaxInput]) {
+					input.addEventListener('input', () => {
+						const min = Number(yminInput.value);
+						const max = Number(ymaxInput.value);
+						if (input === yminInput) setYears(Math.min(min, max), max);
+						else setYears(min, Math.max(min, max));
+						syncChrome();
+					});
+					input.addEventListener('change', applyFilters);
+				}
+			}
+
 			clearAll.addEventListener('click', () => {
 				for (const s of Object.values(sets)) s.clear();
 				for (const chip of [...filterChips, ...flagChips]) {
@@ -1546,6 +1850,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				flags.liked = flags.rewatched = flags.unrated = false;
 				setRange(RATING_FLOOR, RATING_CEIL);
 				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
+				if (yminInput && ymaxInput) setYears(YR_LO, YR_HI);
 				// Deselecting the People chips lets their rows collapse back to the limit.
 				renderPeople();
 				applyFilters();
@@ -1557,7 +1862,18 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			// not a navigation, and stacking one entry per press would leave Back
 			// walking the filter history instead of returning to wherever you came
 			// from. This mirrors the API's param names, minus paging.
-			const URL_SETS: SetKey[] = ['tag', 'friend', 'medium', 'venue', 'format', 'director', 'actor'];
+			const URL_SETS: SetKey[] = [
+				'tag',
+				'friend',
+				'medium',
+				'venue',
+				'format',
+				'director',
+				'actor',
+				'genre',
+				'language',
+				'country',
+			];
 
 			function writeUrl() {
 				const p = new URLSearchParams();
@@ -1575,6 +1891,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				if (decadeActive()) {
 					p.set('dmin', String(dMin));
 					p.set('dmax', String(dMax));
+				}
+				if (diaryActive()) {
+					p.set('dymin', String(yMin));
+					p.set('dymax', String(yMax));
 				}
 				for (const key of URL_SETS) for (const v of sets[key]) p.append(key, v);
 				if (sets.friend.size) p.set('friendmode', modes.friendmode);
@@ -1634,6 +1954,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
 					);
 				}
+				if (yminInput && ymaxInput) {
+					setYears(
+						snap(p.get('dymin'), YR_LO, YR_HI, 1, YR_LO),
+						snap(p.get('dymax'), YR_LO, YR_HI, 1, YR_HI),
+					);
+				}
 
 				// Drive the sets from the chips rather than straight off the params, so a
 				// stale or hand-typed value can't end up selected with no control to
@@ -1672,6 +1998,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			// The server rendered the unfiltered first page, so a URL carrying filters
 			// has to re-query before the grid matches what it claims to show.
 			const restored = readUrl();
+			// Reveal the Movie details drawer when a restored link lands a filter inside
+			// it, so its active filters aren't hidden behind a collapsed section.
+			if (movieActiveCount() > 0) {
+				mdBody.hidden = false;
+				mdToggle.setAttribute('aria-expanded', 'true');
+			}
 			syncChrome();
 			// Draw the People chips — the top few plus any names restored from the URL.
 			renderPeople();

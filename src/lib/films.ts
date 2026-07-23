@@ -1288,6 +1288,21 @@ export interface WatchedQuery {
 	directors?: string[];
 	/** Matches films whose top-billed cast (`movies.actors`) includes any of these. */
 	actors?: string[];
+	/** Matches films tagged with any of these TMDB genres (cached `movies.genres`). */
+	genres?: string[];
+	/** Matches films whose original language (`movies.original_language`) is any of these. */
+	languages?: string[];
+	/** Matches films from any of these production countries (cached `movies.countries`). */
+	countries?: string[];
+
+	// --- Diary-date filter (spans a film's viewings, not its release) ---
+	/** Inclusive calendar-year bounds on when the film was watched. A film watched
+	 * across several years matches whenever ANY of those years falls in range, so a
+	 * film seen in 2024 and 2026 answers to both. Read from each diary entry's
+	 * `watched_date`, plus the film-level `first_watched` for imported films with no
+	 * dated diary entry. Omit both for "any date". */
+	diaryYearMin?: number;
+	diaryYearMax?: number;
 
 	// --- Log-level filters (true when ANY of the film's diary entries match) ---
 	/** Only films with at least one rewatch entry. */
@@ -1458,6 +1473,10 @@ async function movieIdsMatchingLogFilters(q: WatchedQuery): Promise<number[] | n
 export interface WatchedFacets {
 	/** Release decades as their first year, ascending — the slider's end stops. */
 	decades: number[];
+	/** Earliest / latest calendar year the collection was watched — the diary-date
+	 * slider's end stops. Null when nothing carries a watch date. */
+	diaryYearLo: number | null;
+	diaryYearHi: number | null;
 	tags: string[];
 	friends: string[];
 	/** Canonical medium values ('theater', 'tv', …). */
@@ -1469,6 +1488,12 @@ export interface WatchedFacets {
 	directors: string[];
 	/** Top-billed cast of watched films, most films first — the "People → Cast" chips. */
 	actors: string[];
+	/** TMDB genres across watched films, most films first — the "Genre" chips. */
+	genres: string[];
+	/** Original languages across watched films, most films first — the "Language" chips. */
+	languages: string[];
+	/** Production countries across watched films, most films first — the "Country" chips. */
+	countries: string[];
 }
 
 /**
@@ -1478,12 +1503,21 @@ export interface WatchedFacets {
  * soft-deleted logs.
  */
 export async function listWatchedFacets(): Promise<WatchedFacets> {
-	const [dimsByMovie, years, theaterNames, credits] = await Promise.all([
+	const [dimsByMovie, years, theaterNames, credits, diaryYearsByMovie] = await Promise.all([
 		loadFilmLogDims(),
 		listWatchedReleaseYears(),
 		theaterNameByValue(),
-		watchedCreditFrequency(),
+		watchedFilmFacetFrequency(),
+		loadDiaryYearsByMovie(),
 	]);
+
+	// End stops for the diary-date slider: the earliest and latest calendar year
+	// anything in the collection was watched, across every film's viewings.
+	const diaryYears = new Set<number>();
+	for (const set of diaryYearsByMovie.values()) for (const y of set) diaryYears.add(y);
+	const diaryYearsAsc = [...diaryYears].sort((a, b) => a - b);
+	const diaryYearLo = diaryYearsAsc[0] ?? null;
+	const diaryYearHi = diaryYearsAsc[diaryYearsAsc.length - 1] ?? null;
 
 	// Most-used first, ties alphabetical. The order is what the panel's collapse
 	// limits cut against, so frequency is what keeps "+N other…" hiding the long
@@ -1517,6 +1551,8 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 
 	return {
 		decades,
+		diaryYearLo,
+		diaryYearHi,
 		tags: byFrequency((d) => d.tags),
 		friends: byFrequency((d) => d.friends),
 		mediums: byFrequency((d) => d.mediums),
@@ -1524,45 +1560,174 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 		formats: byFrequency((d) => d.formats),
 		directors: credits.directors,
 		actors: credits.actors,
+		genres: credits.genres,
+		languages: credits.languages,
+		countries: credits.countries,
 	};
 }
 
 /**
- * Directors and top-billed cast across all watched films, each ranked by how many
- * films carry them (most first, ties alphabetical) — the "People" filter chips.
+ * The film-level facet values across all watched films — directors, top-billed cast,
+ * genres, original languages and production countries — each ranked by how many films
+ * carry them (most first, ties alphabetical). These feed the People / Genre / Language
+ * / Country filter chips.
  *
- * Read film-level from the cached `movies` credit arrays (migration 0008), not the
- * diary, so a film seen once still offers its whole cast. Degrades to empty lists
- * before the credit columns exist, which simply hides the People section rather
- * than erroring — matching how every other facet steps down pre-migration.
+ * Read film-level from the cached `movies` credit arrays (migrations 0008/0009), not
+ * the diary, so a film seen once still offers its whole cast. Steps down through the
+ * migration tiers (0009 → 0008 → base) so it keeps working whichever migrations are
+ * applied: before a tier lands, the sections that depend on its columns simply come
+ * back empty rather than erroring — matching how every other facet degrades.
  */
-async function watchedCreditFrequency(): Promise<{ directors: string[]; actors: string[] }> {
+async function watchedFilmFacetFrequency(): Promise<{
+	directors: string[];
+	actors: string[];
+	genres: string[];
+	languages: string[];
+	countries: string[];
+}> {
 	const PAGE = 1000;
+	const tiers = [
+		'movies!inner(directors, actors, genres, countries, original_language)', // 0009
+		'movies!inner(directors, actors, genres, countries)', // 0008
+	];
 	const dirCounts = new Map<string, number>();
 	const actCounts = new Map<string, number>();
+	const genreCounts = new Map<string, number>();
+	const langCounts = new Map<string, number>();
+	const countryCounts = new Map<string, number>();
+	const bump = (counts: Map<string, number>, v: string | null | undefined) => {
+		if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+	};
+
+	let tier = 0;
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabasePublic
 			.from('watched')
-			.select('movies!inner(directors, actors)')
+			.select(tiers[tier])
 			.range(offset, offset + PAGE - 1);
 		if (error) {
-			if (isMissingCreditColumn(error) || isMissingRelation(error)) {
-				return { directors: [], actors: [] };
+			// original_language (0009) not there yet: drop a tier and restart from the top.
+			if (tier < tiers.length - 1 && isMissingCreditColumn(error)) {
+				tier++;
+				offset = -PAGE; // next iteration resumes at offset 0
+				for (const c of [dirCounts, actCounts, genreCounts, langCounts, countryCounts]) c.clear();
+				continue;
 			}
-			throw new Error(`watchedCreditFrequency failed: ${error.message}`);
+			if (isMissingCreditColumn(error) || isMissingRelation(error)) {
+				return { directors: [], actors: [], genres: [], languages: [], countries: [] };
+			}
+			throw new Error(`watchedFilmFacetFrequency failed: ${error.message}`);
 		}
 		const rows = (data ?? []) as unknown as {
-			movies: { directors: string[] | null; actors: string[] | null };
+			movies: {
+				directors: string[] | null;
+				actors: string[] | null;
+				genres: string[] | null;
+				countries: string[] | null;
+				original_language?: string | null;
+			};
 		}[];
 		for (const r of rows) {
-			for (const d of r.movies.directors ?? []) if (d) dirCounts.set(d, (dirCounts.get(d) ?? 0) + 1);
-			for (const a of r.movies.actors ?? []) if (a) actCounts.set(a, (actCounts.get(a) ?? 0) + 1);
+			for (const d of r.movies.directors ?? []) bump(dirCounts, d);
+			for (const a of r.movies.actors ?? []) bump(actCounts, a);
+			for (const g of r.movies.genres ?? []) bump(genreCounts, g);
+			for (const c of r.movies.countries ?? []) bump(countryCounts, c);
+			bump(langCounts, r.movies.original_language);
 		}
 		if (rows.length < PAGE) break;
 	}
 	const rank = (counts: Map<string, number>): string[] =>
 		[...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
-	return { directors: rank(dirCounts), actors: rank(actCounts) };
+	return {
+		directors: rank(dirCounts),
+		actors: rank(actCounts),
+		genres: rank(genreCounts),
+		languages: rank(langCounts),
+		countries: rank(countryCounts),
+	};
+}
+
+/**
+ * The set of calendar years each watched film was seen in, keyed by movie id — the
+ * data behind the diary-date filter. A film watched across several years maps to each
+ * of those years, which is what lets one film answer to more than one year in the
+ * slider (seen in 2024 and 2026 → matches both).
+ *
+ * Years come from every live diary entry's `watched_date`, plus the film-level
+ * `first_watched` so imported films with no dated diary entry still place on the
+ * timeline. Degrades to an empty map before the tables exist, turning the diary-date
+ * filter into a no-match rather than an error.
+ */
+async function loadDiaryYearsByMovie(): Promise<Map<number, Set<number>>> {
+	const byMovie = new Map<number, Set<number>>();
+	const add = (movieId: number, isoOrDate: string | null) => {
+		if (!isoOrDate) return;
+		const year = Number(isoOrDate.slice(0, 4));
+		if (!Number.isFinite(year)) return;
+		let set = byMovie.get(movieId);
+		if (!set) {
+			set = new Set();
+			byMovie.set(movieId, set);
+		}
+		set.add(year);
+	};
+
+	const PAGE = 1000;
+	// Dated diary entries — the primary source; one film contributes every year it
+	// was logged in.
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('logs')
+			.select('movie_id, watched_date')
+			.is('deleted_at', null)
+			.not('watched_date', 'is', null)
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isMissingRelation(error)) return byMovie;
+			throw new Error(`loadDiaryYearsByMovie (logs) failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as { movie_id: number; watched_date: string | null }[];
+		for (const r of rows) add(r.movie_id, r.watched_date);
+		if (rows.length < PAGE) break;
+	}
+	// Film-level first watch — covers imported films that never got a dated diary row.
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('watched')
+			.select('movie_id, first_watched')
+			.not('first_watched', 'is', null)
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isMissingRelation(error)) break;
+			throw new Error(`loadDiaryYearsByMovie (watched) failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as { movie_id: number; first_watched: string | null }[];
+		for (const r of rows) add(r.movie_id, r.first_watched);
+		if (rows.length < PAGE) break;
+	}
+	return byMovie;
+}
+
+/**
+ * The movie ids whose watch years intersect the query's diary-date range, or null when
+ * the query sets no diary-date bound (i.e. "don't constrain by date"). An empty array
+ * means nothing matched. A film is kept when ANY year it was watched falls in range.
+ */
+async function movieIdsMatchingDiaryYears(q: WatchedQuery): Promise<number[] | null> {
+	if (q.diaryYearMin == null && q.diaryYearMax == null) return null;
+	const lo = q.diaryYearMin ?? Number.NEGATIVE_INFINITY;
+	const hi = q.diaryYearMax ?? Number.POSITIVE_INFINITY;
+	const yearsByMovie = await loadDiaryYearsByMovie();
+	const ids: number[] = [];
+	for (const [movieId, years] of yearsByMovie) {
+		for (const y of years) {
+			if (y >= lo && y <= hi) {
+				ids.push(movieId);
+				break;
+			}
+		}
+	}
+	return ids;
 }
 
 /** "Name, City" → the bare theater name, for shortening the venue chip labels. */
@@ -1623,11 +1788,24 @@ function pgTextArray(values: string[]): string {
 export async function listWatchedPage(query: WatchedQuery = {}): Promise<WatchedPage> {
 	const { q = '', sort = 'recent', limit = 100, offset = 0 } = query;
 
-	// Resolve the diary-side filters first: they narrow to a set of movie ids the
+	// Resolve the diary-side filters first: they each narrow to a set of movie ids the
 	// film-level query can be constrained by. An empty (not null) set means nothing
-	// matched, and no film-level query could rescue it.
-	const logMovieIds = await movieIdsMatchingLogFilters(query);
-	if (logMovieIds?.length === 0) return { films: [], total: 0 };
+	// matched, and no film-level query could rescue it. The log-level filters (tags,
+	// friends, medium…) and the diary-date range are two independent id sets; when
+	// both are present the film has to be in both.
+	const [logMovieIds, diaryYearIds] = await Promise.all([
+		movieIdsMatchingLogFilters(query),
+		movieIdsMatchingDiaryYears(query),
+	]);
+	if (logMovieIds?.length === 0 || diaryYearIds?.length === 0) return { films: [], total: 0 };
+	let restrictIds: number[] | null;
+	if (logMovieIds && diaryYearIds) {
+		const keep = new Set(diaryYearIds);
+		restrictIds = logMovieIds.filter((id) => keep.has(id));
+		if (restrictIds.length === 0) return { films: [], total: 0 };
+	} else {
+		restrictIds = logMovieIds ?? diaryYearIds;
+	}
 
 	let req = supabasePublic
 		.from('watched')
@@ -1635,7 +1813,7 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 			count: 'exact',
 		});
 
-	if (logMovieIds) req = req.in('movie_id', logMovieIds);
+	if (restrictIds) req = req.in('movie_id', restrictIds);
 
 	const term = q.trim();
 	// Escape the LIKE wildcards so a literal % or _ in a title search stays literal.
@@ -1670,6 +1848,20 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 	}
 	if (query.actors?.length) {
 		req = req.filter('movies.actors', 'ov', pgTextArray(query.actors));
+	}
+
+	// Genre and country are film-level array columns matched like the credits above —
+	// `ov` (overlap) keeps a film sharing any selected value ("any" semantics). Language
+	// is a scalar (`original_language`), so it matches with `in`. Each is ANDed with the
+	// others, so picking a genre and a country narrows to films that are both.
+	if (query.genres?.length) {
+		req = req.filter('movies.genres', 'ov', pgTextArray(query.genres));
+	}
+	if (query.countries?.length) {
+		req = req.filter('movies.countries', 'ov', pgTextArray(query.countries));
+	}
+	if (query.languages?.length) {
+		req = req.in('movies.original_language', query.languages);
 	}
 
 	// "Year" is year-descending with the recent order inside each year; "Recent" is
