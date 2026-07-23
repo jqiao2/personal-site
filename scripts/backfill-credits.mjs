@@ -4,12 +4,18 @@
 // For every film in `watched` or `watchlist`, fetch TMDB details+credits and fill
 // the columns added in migration 0008: genres, languages (spoken), countries
 // (production), directors (crew job=Director) and actors (top ~10 billed), plus
-// the full release_date from 0014. `credits_synced_at` is stamped on success so
-// re-runs skip already-done films — the script is safe to stop and resume.
+// the release_date/release_year from 0014. `credits_synced_at` is stamped on
+// success so re-runs skip already-done films — the script is safe to stop/resume.
 //
-// A film is due when it has never been synced, or when it predates a column added
-// since its last sync (release_date, 0014) and so would still be null. That makes
-// adding a column a matter of running this again, with no --force needed.
+// release_date/release_year prefer the US theatrical release (see
+// preferredReleaseDate below), not TMDB's earliest-anywhere release_date. Because
+// that's a value change to columns that are already populated — not a newly-added
+// null column — re-deriving existing rows needs a one-time `--force` run; the
+// `needsSync` heuristic below only catches never-synced or still-null rows.
+//
+// A film is otherwise due when it has never been synced, or when it predates a
+// column added since its last sync (release_date, 0014) and so would still be
+// null. That makes adding a column a matter of running this again, no --force.
 //
 // Usage (env supplies SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TMDB_API_KEY):
 //   node --env-file=.env scripts/backfill-credits.mjs [options]
@@ -106,15 +112,48 @@ function usCertification(d) {
 	return cert || null;
 }
 
-/** TMDB sends "" — not null — for an unknown date, which Postgres rejects. */
-function releaseDate(d) {
+/** TMDB release_dates `type` codes (mirror of RELEASE_TYPE in src/lib/tmdb.ts). */
+const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3 };
+
+/** The "YYYY-MM-DD" of a per-country release_dates entry's ISO timestamp, or null. */
+function releaseDatesDay(iso) {
+	return /^\d{4}-\d{2}-\d{2}/.test(iso ?? '') ? iso.slice(0, 10) : null;
+}
+
+/** Mirror of preferredReleaseDate() in src/lib/tmdb.ts (kept in sync by hand):
+ * US theatrical → US limited → US premiere → earliest premiere anywhere → TMDB's
+ * top-level release_date. TMDB sends "" — not null — for an unknown date, which
+ * releaseDatesDay/the regex reject so Postgres gets null. */
+function preferredReleaseDate(d) {
+	const results = d.release_dates?.results ?? [];
+	const earliestOfType = (entries, type) =>
+		entries
+			.filter((e) => e.type === type)
+			.map((e) => releaseDatesDay(e.release_date))
+			.filter((day) => day != null)
+			.sort()[0] ?? null;
+
+	const us = results.find((r) => r.iso_3166_1 === 'US')?.release_dates ?? [];
+	const usDate =
+		earliestOfType(us, RELEASE_TYPE.THEATRICAL) ??
+		earliestOfType(us, RELEASE_TYPE.THEATRICAL_LIMITED) ??
+		earliestOfType(us, RELEASE_TYPE.PREMIERE);
+	if (usDate) return usDate;
+
+	const premiere = earliestOfType(results.flatMap((r) => r.release_dates), RELEASE_TYPE.PREMIERE);
+	if (premiere) return premiere;
+
 	return /^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null;
 }
 
-/** Mirror of extractCreditFacts() in src/lib/tmdb.ts (kept in sync by hand). */
+/** Mirror of extractCreditFacts() in src/lib/tmdb.ts (kept in sync by hand).
+ * release_year is derived from the same preferred date as release_date so the
+ * two never disagree. */
 function extractFacts(d) {
+	const releasedOn = preferredReleaseDate(d);
 	return {
-		release_date: releaseDate(d),
+		release_date: releasedOn,
+		release_year: releasedOn ? Number.parseInt(releasedOn.slice(0, 4), 10) : null,
 		genres: uniq((d.genres ?? []).map((g) => g.name)),
 		languages: uniq((d.spoken_languages ?? []).map((l) => l.english_name || l.name)),
 		countries: uniq((d.production_countries ?? []).map((c) => c.name)),

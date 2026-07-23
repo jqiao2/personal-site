@@ -84,7 +84,10 @@ export interface TmdbMovieDetails {
 		crew: { id: number; name: string; job: string }[];
 	};
 	release_dates?: {
-		results: { iso_3166_1: string; release_dates: { certification: string; type: number }[] }[];
+		results: {
+			iso_3166_1: string;
+			release_dates: { certification: string; release_date: string; type: number }[];
+		}[];
 	};
 	videos?: { results: { key: string; site: string; type: string; name: string }[] };
 	similar?: { results: TmdbSearchResult[] };
@@ -213,4 +216,64 @@ export function releaseYear(releaseDate: string | null | undefined): number | nu
  * — for films with no known date, which Postgres rejects for a `date` column. */
 export function releaseDate(date: string | null | undefined): string | null {
 	return /^\d{4}-\d{2}-\d{2}$/.test(date ?? '') ? (date as string) : null;
+}
+
+/**
+ * TMDB release_dates `type` codes. We only care about the theatrical/premiere end
+ * of the scale; digital/physical/TV releases (4/5/6) don't set a film's release.
+ * https://developer.themoviedb.org/reference/movie-release-dates
+ */
+const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3 } as const;
+
+/** The calendar-date portion ("YYYY-MM-DD") of a per-country release_dates entry.
+ * These carry a full ISO timestamp ("2023-07-21T00:00:00.000Z"); we keep the date
+ * TMDB literally stated rather than parsing it through a timezone (which could
+ * shift a midnight release onto the previous day). */
+function releaseDatesDay(iso: string | null | undefined): string | null {
+	return /^\d{4}-\d{2}-\d{2}/.test(iso ?? '') ? (iso as string).slice(0, 10) : null;
+}
+
+/**
+ * The film's canonical release date, preferring the US theatrical release.
+ *
+ * TMDB's top-level `release_date` is the earliest release *anywhere* — often a
+ * foreign festival premiere months before the film reached US audiences. For a
+ * US-centric film log the meaningful date is the US theatrical one, so we read the
+ * per-country release_dates (append_to_response=release_dates) and prefer, in order:
+ *   1. US theatrical            (type 3)
+ *   2. US theatrical (limited)  (type 2)
+ *   3. US premiere              (type 1)
+ *   4. earliest premiere anywhere — an international premiere (type 1)
+ * falling back to TMDB's top-level release_date only when none of those exist.
+ * Within a type the earliest date wins, so a later re-release can't override the
+ * original run. Returns "YYYY-MM-DD" or null when TMDB has no usable date.
+ */
+export function preferredReleaseDate(d: TmdbMovieDetails): string | null {
+	const results = d.release_dates?.results ?? [];
+	const earliestOfType = (
+		entries: { release_date: string; type: number }[],
+		type: number,
+	): string | null => {
+		const days = entries
+			.filter((e) => e.type === type)
+			.map((e) => releaseDatesDay(e.release_date))
+			.filter((day): day is string => day != null)
+			.sort();
+		return days[0] ?? null;
+	};
+
+	const us = results.find((r) => r.iso_3166_1 === 'US')?.release_dates ?? [];
+	const usDate =
+		earliestOfType(us, RELEASE_TYPE.THEATRICAL) ??
+		earliestOfType(us, RELEASE_TYPE.THEATRICAL_LIMITED) ??
+		earliestOfType(us, RELEASE_TYPE.PREMIERE);
+	if (usDate) return usDate;
+
+	const premiere = earliestOfType(
+		results.flatMap((r) => r.release_dates),
+		RELEASE_TYPE.PREMIERE,
+	);
+	if (premiere) return premiere;
+
+	return releaseDate(d.release_date);
 }
