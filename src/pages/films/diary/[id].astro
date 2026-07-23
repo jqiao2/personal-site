@@ -36,9 +36,10 @@ const filmHref = `/films/movie/${movie.tmdb_id}`;
 // director, tag or theater is one click from everything else you've watched that
 // shares it. The keys and values mirror what /films/watched reads from the URL:
 // `medium` is the raw canonical value (not its label), `venue` the full
-// "Name, City", the rest are the names as stored.
-const filterHref = (key: string, value: string) =>
-	`/films/watched?${key}=${encodeURIComponent(value)}`;
+// "Name, City", the rest are the names as stored. `sort=year` (used for the
+// director) orders that person's films by release date rather than recent.
+const filterHref = (key: string, value: string, sort?: 'year') =>
+	`/films/watched?${key}=${encodeURIComponent(value)}${sort ? `&sort=${sort}` : ''}`;
 
 // Editor scaffolding (owner only): autocomplete options + the entry's current
 // values, which the modal seeds its form from.
@@ -121,7 +122,7 @@ const editorInitial = toEditorInitial(entry);
 							{movie.directors.map((d, i) => (
 								<>
 									{i > 0 && ', '}
-									<a class="director__name" href={filterHref('director', d)}>{d}</a>
+									<a class="director__name" href={filterHref('director', d, 'year')}>{d}</a>
 								</>
 							))}
 						</div>
