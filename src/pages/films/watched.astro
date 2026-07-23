@@ -290,6 +290,11 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				</div>
 			</div>
 
+			<div class="filterinfo" id="filterinfo" hidden>
+				<span class="filterinfo__tag">Filter</span>
+				<p class="filterinfo__text" id="filterinfo-text"></p>
+			</div>
+
 			<div class="grid" id="grid">
 				{films.map((f) => {
 					const poster = imageUrl(f.poster_path, 'w342');
@@ -444,6 +449,40 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 		.pill--btn {
 			padding: 10px 16px;
 			border-radius: 8px;
+		}
+
+		/* --- Filter description panel --- */
+		.filterinfo {
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 12px;
+			padding: 15px 20px;
+			margin-bottom: 16px;
+			display: flex;
+			align-items: baseline;
+			gap: 16px;
+		}
+		.filterinfo[hidden] {
+			display: none;
+		}
+		.filterinfo__tag {
+			font-size: 10.5px;
+			text-transform: uppercase;
+			letter-spacing: 1.8px;
+			color: #8a6f63;
+			flex: none;
+		}
+		.filterinfo__text {
+			font-family: 'Newsreader', serif;
+			font-size: 16px;
+			line-height: 1.55;
+			margin: 0;
+			letter-spacing: 0.1px;
+			color: #c2a99a;
+		}
+		.filterinfo__text .finfo__em {
+			color: #f0d488;
+			font-weight: 600;
 		}
 
 		/* --- Filter panel --- */
@@ -878,7 +917,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 	</style>
 
 	<script>
-		import { starText } from '../../lib/format';
+		import { mediumLabel, starText } from '../../lib/format';
 
 		interface WatchedFilm {
 			tmdb_id: number;
@@ -894,6 +933,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 		if (grid && sentinel) {
 			const search = document.getElementById('search') as HTMLInputElement;
 			const shown = document.getElementById('shown')!;
+			// Latest server-reported match count, echoed into the filter sentence. The
+			// grid only ever holds a slice, so this comes from the response, not the DOM.
+			let shownTotal = Number((shown.textContent ?? '').replace(/[^0-9]/g, '')) || 0;
 			const empty = document.getElementById('empty')!;
 			const emptyQ = document.getElementById('empty-q')!;
 			const emptyByQuery = document.getElementById('empty-by-query')!;
@@ -1068,6 +1110,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					offset += films.length;
 
 					shown.textContent = fmt(total);
+					shownTotal = total;
+					renderFilterInfo();
 					// Quote the search term when it's the only thing narrowing; once a
 					// filter is on too, the term alone no longer explains the emptiness.
 					const onlyQuery = q !== '' && activeCount() === 0;
@@ -1174,6 +1218,133 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					dminInput!.style.zIndex = dOverlap ? '2' : '1';
 					dmaxInput!.style.zIndex = dOverlap ? '1' : '2';
 				}
+
+				renderFilterInfo();
+			}
+
+			// --- Filter description sentence ------------------------------------
+			// A plain-English summary of every active filter, e.g. "You have
+			// rewatched 3 criterion films directed by … rated between ★★★★ and
+			// ★★★★★ … with Maya or Dana seen at the Metrograph or in 70mm." It reads
+			// the same state buildQuery does, so it can never disagree with the grid.
+			const filterInfo = document.getElementById('filterinfo')!;
+			const filterInfoText = document.getElementById('filterinfo-text')!;
+
+			/** Join names as "a", "a and b", "a, b, and c" — conjunction configurable
+			 * so the any/all toggles can read "or" vs "and". */
+			function andList(items: string[], conj = 'and'): string {
+				if (items.length <= 1) return items.join('');
+				if (items.length === 2) return `${items[0]} ${conj} ${items[1]}`;
+				return `${items.slice(0, -1).join(', ')}, ${conj} ${items[items.length - 1]}`;
+			}
+
+			// A theater's short chip label, keyed by its raw "Name, City" value — the
+			// sentence says "at the Metrograph", not the full stored string.
+			const venueLabelByValue = new Map<string, string>();
+			for (const chip of Array.from(
+				panel.querySelectorAll<HTMLElement>('.chip[data-filter="venue"]'),
+			)) {
+				venueLabelByValue.set(chip.dataset.value!, (chip.textContent ?? '').trim());
+			}
+			// Each medium reads with its own natural preposition.
+			const MEDIUM_PHRASE: Record<string, string> = {
+				theater: 'in a theater',
+				tv: 'on TV',
+				computer: 'on a computer',
+				plane: 'on a plane',
+				tablet: 'on an iPad',
+				ipad: 'on an iPad',
+			};
+			const mediumPhrase = (v: string) => MEDIUM_PHRASE[v] ?? `on ${mediumLabel(v)}`;
+			const venuePhrase = (v: string) => {
+				const label = venueLabelByValue.get(v) ?? v;
+				// Names that already lead with "The" don't want a second article.
+				return /^the\s/i.test(label) ? `at ${label}` : `at the ${label}`;
+			};
+
+			/** Rebuild the filter sentence from current state and show/hide the panel. */
+			function renderFilterInfo() {
+				filterInfo.hidden = activeCount() === 0;
+				if (filterInfo.hidden) return;
+
+				const parts: { t: string; em: boolean }[] = [];
+				const lit = (t: string) => parts.push({ t, em: false });
+				const em = (t: string) => parts.push({ t, em: true });
+
+				lit(flags.rewatched ? 'You have rewatched ' : 'You have watched ');
+				em(fmt(shownTotal));
+				// Tags fill the design's "{genre(s)}" adjective slot.
+				if (sets.tag.size) {
+					lit(' ');
+					em(andList([...sets.tag]));
+				}
+				lit(shownTotal === 1 ? ' film' : ' films');
+				if (sets.director.size) {
+					lit(' directed by ');
+					em(andList([...sets.director]));
+				}
+				if (sets.actor.size) {
+					lit(' starring ');
+					em(andList([...sets.actor]));
+				}
+				if (flags.unrated) {
+					lit(' that are ');
+					em('unrated');
+				} else if (ratingActive()) {
+					if (rMin === rMax) {
+						lit(' rated ');
+						em(starText(rMin)!);
+					} else {
+						lit(' rated between ');
+						em(`${starText(rMin)} and ${starText(rMax)}`);
+					}
+				}
+				if (flags.liked) {
+					lit(' that you ');
+					em('liked');
+				}
+				if (decadeActive()) {
+					if (dMin === dMax) {
+						lit(' released in the ');
+						em(`${dMin}s`);
+					} else {
+						lit(' released between ');
+						em(`${dMin}s and ${dMax}s`);
+					}
+				}
+				if (sets.friend.size) {
+					lit(' with ');
+					em(andList([...sets.friend], modes.friendmode === 'all' ? 'and' : 'or'));
+				}
+				// Medium, theater and format share one any/all toggle, so they read as a
+				// single pool. Each carries its own preposition and is emphasized on its
+				// own, joined by the toggle's conjunction. A named theater already says
+				// "in a theater", so drop the redundant theater medium when a venue is set.
+				const mediums =
+					sets.venue.size > 0
+						? [...sets.medium].filter((m) => m !== 'theater')
+						: [...sets.medium];
+				const whereItems = [
+					...[...sets.venue].map(venuePhrase),
+					...[...sets.format].map((f) => `in ${f}`),
+					...mediums.map(mediumPhrase),
+				];
+				if (whereItems.length) {
+					const conj = modes.wheremode === 'all' ? 'and' : 'or';
+					lit(' seen ');
+					whereItems.forEach((item, i) => {
+						if (i > 0) {
+							const last = i === whereItems.length - 1;
+							lit(whereItems.length > 2 ? (last ? `, ${conj} ` : ', ') : ` ${conj} `);
+						}
+						em(item);
+					});
+				}
+				lit('.');
+
+				filterInfoText.replaceChildren(
+					...parts.map((p) => el('span', p.em ? 'finfo__em' : undefined, p.t)),
+				);
 			}
 
 			function applyFilters() {
