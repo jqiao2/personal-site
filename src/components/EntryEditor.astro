@@ -260,6 +260,16 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 <script type="application/json" id="ee-config" set:html={configJson} />
 
 <style>
+	/* Self-contained box model: the modal's full-width inputs assume border-box, but
+	   this component can't rely on the host page supplying a global reset — the film
+	   page (/films/movie/[tmdbId]) has only a scoped one, which doesn't reach here, so
+	   its inputs overflowed and forced horizontal scroll. Keep the reset local. */
+	.modal,
+	.modal *,
+	.modal *::before,
+	.modal *::after {
+		box-sizing: border-box;
+	}
 	.modal {
 		position: fixed;
 		inset: 0;
