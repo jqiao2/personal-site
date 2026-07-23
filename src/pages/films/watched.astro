@@ -1273,12 +1273,11 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 				lit(flags.rewatched ? 'You have rewatched ' : 'You have watched ');
 				em(fmt(shownTotal));
-				// Tags fill the design's "{genre(s)}" adjective slot.
+				lit(shownTotal === 1 ? ' film' : ' films');
 				if (sets.tag.size) {
-					lit(' ');
+					lit(' tagged ');
 					em(andList([...sets.tag]));
 				}
-				lit(shownTotal === 1 ? ' film' : ' films');
 				if (sets.director.size) {
 					lit(' directed by ');
 					em(andList([...sets.director]));
@@ -1316,12 +1315,13 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					lit(' with ');
 					em(andList([...sets.friend], modes.friendmode === 'all' ? 'and' : 'or'));
 				}
-				// Medium, theater and format share one any/all toggle, so they read as a
-				// single pool. Each carries its own preposition and is emphasized on its
-				// own, joined by the toggle's conjunction. A named theater already says
-				// "in a theater", so drop the redundant theater medium when a venue is set.
+				// Medium, theater and format each carry their own preposition and are
+				// emphasized on their own; the phrases simply stack ("at the Metrograph
+				// in IMAX 70mm"), no lead-in or connector. A named theater or a format
+				// both already imply a theater, so drop the redundant theater medium
+				// when either is set.
 				const mediums =
-					sets.venue.size > 0
+					sets.venue.size > 0 || sets.format.size > 0
 						? [...sets.medium].filter((m) => m !== 'theater')
 						: [...sets.medium];
 				const whereItems = [
@@ -1329,16 +1329,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					...[...sets.format].map((f) => `in ${f}`),
 					...mediums.map(mediumPhrase),
 				];
-				if (whereItems.length) {
-					const conj = modes.wheremode === 'all' ? 'and' : 'or';
-					lit(' seen ');
-					whereItems.forEach((item, i) => {
-						if (i > 0) {
-							const last = i === whereItems.length - 1;
-							lit(whereItems.length > 2 ? (last ? `, ${conj} ` : ', ') : ` ${conj} `);
-						}
-						em(item);
-					});
+				for (const item of whereItems) {
+					lit(' ');
+					em(item);
 				}
 				lit('.');
 
