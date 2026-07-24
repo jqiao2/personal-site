@@ -55,6 +55,32 @@ for (const trunk in trunkServices) {
   svcs.forEach((svc, i) => (serviceMeta[svc] = { trunk, o: i - (svcs.length - 1) / 2 }));
 }
 
+// Bridge gaps in a trunk's geometry graph so every service can follow the tracks
+// across small breaks in the source diagram (e.g. the A's Washington Heights tail,
+// N/Q over the Manhattan Bridge). Repeatedly joins the closest vertices of two
+// separate components while they are within maxD (keeps the 3 shuttles apart).
+function connectComponents(nodePt, nbr, maxD) {
+  for (let guard = 0; guard < 60; guard++) {
+    const seen = new Set(), comps = [];
+    for (const k in nodePt) {
+      if (seen.has(k)) continue;
+      const q = [k], c = []; seen.add(k);
+      while (q.length) { const x = q.shift(); c.push(x); (nbr[x] || []).forEach((y) => { if (!seen.has(y)) { seen.add(y); q.push(y); } }); }
+      comps.push(c);
+    }
+    if (comps.length <= 1) break;
+    let best = null;
+    for (let i = 0; i < comps.length; i++) for (let j = i + 1; j < comps.length; j++)
+      for (const a of comps[i]) for (const b of comps[j]) {
+        const A = nodePt[a], B = nodePt[b], d = Math.hypot(A[0] - B[0], A[1] - B[1]);
+        if (!best || d < best.d) best = { d, a, b };
+      }
+    if (!best || best.d > maxD) break;
+    (nbr[best.a] = nbr[best.a] || new Set()).add(best.b);
+    (nbr[best.b] = nbr[best.b] || new Set()).add(best.a);
+  }
+}
+
 async function queryLayer(id) {
   const url = `${BASE}/${id}/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
   const res = await fetch(url);
@@ -223,9 +249,10 @@ async function main() {
         svcSegs.push(s);
       }
 
-      // Bridge small residual gaps within this service (source geometry breaks a
-      // line across a real adjacency, e.g. A train 145<->155 St).
-      const BRIDGE_MAX = 34;
+      // Bridge residual gaps within this service where the source geometry breaks
+      // a line across a real adjacency the walk couldn't follow — the A's
+      // Washington Heights tail, the N/Q over the Manhattan Bridge, etc.
+      const BRIDGE_MAX = 100;
       for (let guard = 0; guard < 12; guard++) {
         const adj = {}, nodes = new Set();
         svcSegs.forEach((s) => { nodes.add(s.a); nodes.add(s.b); (adj[s.a] = adj[s.a] || []).push(s.b); (adj[s.b] = adj[s.b] || []).push(s.a); });
@@ -252,6 +279,48 @@ async function main() {
 
       SEGMENTS.push(...svcSegs);
     });
+  }
+
+  // --- Remove redundant triangle edges. A real service is tree-like, so a 3-cycle
+  //     means one edge is spurious: either an express skip (much longer than the
+  //     other two — drop the long one) or a wye cross-link (a roughly equilateral
+  //     triangle — drop the edge whose third vertex is least "between" its ends). ---
+  {
+    const pos = {}; STATIONS.forEach((s) => (pos[s.id] = s));
+    const D = (a, b) => Math.hypot(pos[a].x - pos[b].x, pos[a].y - pos[b].y);
+    const bySvc = {};
+    for (const sg of SEGMENTS) (bySvc[sg.svc] = bySvc[sg.svc] || []).push(sg);
+    const remove = new Set();
+    for (const svc in bySvc) {
+      for (let iter = 0; iter < 500; iter++) {
+        const adj = {}, edge = {};
+        for (const s of bySvc[svc]) {
+          if (remove.has(s)) continue;
+          (adj[s.a] = adj[s.a] || new Set()).add(s.b);
+          (adj[s.b] = adj[s.b] || new Set()).add(s.a);
+          edge[s.a + '|' + s.b] = s; edge[s.b + '|' + s.a] = s;
+        }
+        let tri = null;
+        for (const a in adj) {
+          const na = [...adj[a]];
+          for (let i = 0; i < na.length && !tri; i++) for (let j = i + 1; j < na.length; j++) if (adj[na[i]].has(na[j])) { tri = [a, na[i], na[j]]; break; }
+          if (tri) break;
+        }
+        if (!tri) break;
+        const [a, b, c] = tri;
+        const es = [[a, b], [b, c], [a, c]].map(([x, y]) => ({ x, y, d: D(x, y), seg: edge[x + '|' + y] })).sort((p, q) => p.d - q.d);
+        let rm;
+        if (es[2].d > 2 * es[1].d) rm = es[2];
+        else {
+          const dr = (e) => { const t = tri.find((v) => v !== e.x && v !== e.y); return (D(e.x, t) + D(t, e.y)) / (e.d || 1); };
+          rm = es.slice().sort((p, q) => dr(q) - dr(p))[0];
+        }
+        remove.add(rm.seg);
+      }
+    }
+    const kept = SEGMENTS.filter((s) => !remove.has(s));
+    console.log('removed', SEGMENTS.length - kept.length, 'redundant triangle edges');
+    SEGMENTS.length = 0; SEGMENTS.push(...kept);
   }
 
   // --- Pack parallel service lines per stretch so the services actually present

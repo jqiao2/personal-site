@@ -395,8 +395,13 @@ const nav = [
 			function save() { try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {} }
 			function setMsg(t) { if (t) { msgEl.textContent = t; msgEl.hidden = false; } else msgEl.hidden = true; }
 			// Orient a normal into a fixed half-plane so parallel offsets never flip
-			// sides between segments (diagonal reference avoids grid-aligned lines).
-			function hemi(nx, ny) { return nx + ny < 0 ? [-nx, -ny] : [nx, ny]; }
+			// sides between segments. Prefer the x-component (unstable only for exactly
+			// horizontal lines, handled by the y fallback); using nx+ny would be unstable
+			// for 45° diagonals like Broadway, collapsing express onto local lines.
+			function hemi(nx, ny) {
+				if (Math.abs(nx) > 1e-6) return nx < 0 ? [-nx, -ny] : [nx, ny];
+				return ny < 0 ? [-nx, -ny] : [nx, ny];
+			}
 
 			// ---- per-segment unit normals (zoom-independent), pts[0]↔a, pts[last]↔b ----
 			// Orient by PROPAGATION from the most axis-aligned vertex so the normal
@@ -451,30 +456,20 @@ const nav = [
 				addDir(sg.a, P[1][0] - P[0][0], P[1][1] - P[0][1]);
 				addDir(sg.b, P[L - 2][0] - P[L - 1][0], P[L - 2][1] - P[L - 1][1]);
 			});
-			// offset range of the lines actually meeting at each station (sized/centred
-			// from the packed per-segment offsets, so the pill length tracks the number
-			// of lines through it and stays centred on the bundle).
-			const oRange = {};
-			SEGMENTS.forEach((sg) => {
-				[sg.a, sg.b].forEach((id) => {
-					const r = oRange[id] || (oRange[id] = [Infinity, -Infinity]);
-					r[0] = Math.min(r[0], sg.o); r[1] = Math.max(r[1], sg.o);
-				});
-			});
+			// Pill length tracks how many lines run through the station — the number of
+			// services stopping there — so mega-transfers (Fulton St) and express stops
+			// (Queens Blvd) read larger. Centred on the station.
 			const stMeta = {};
 			STATIONS.forEach((s) => {
 				const c = cov[s.id] || { Sxx: 1, Sxy: 0, Syy: 0, cnt: 0 };
 				const ang = 0.5 * Math.atan2(2 * c.Sxy, c.Sxx - c.Syy); // principal (line) axis
-				let nx = -Math.sin(ang), ny = Math.cos(ang);
-				if (nx + ny < 0) { nx = -nx; ny = -ny; }
-				let deg = (Math.atan2(ny, nx) * 180) / Math.PI;
+				let deg = (Math.atan2(Math.cos(ang), -Math.sin(ang)) * 180) / Math.PI;
 				deg = Math.round(deg / 45) * 45; // snap pill to 45° increments
-				const r = oRange[s.id] || [0, 0];
 				stMeta[s.id] = {
 					nx: Math.cos((deg * Math.PI) / 180), ny: Math.sin((deg * Math.PI) / 180),
 					deg,
-					midOff: ((r[0] + r[1]) / 2) * SPACING,
-					len: (r[1] - r[0]) * SPACING + LINE_W_ON + PILL_PAD,
+					midOff: 0,
+					len: (s.svcs.length - 1) * SPACING + LINE_W_ON + PILL_PAD,
 					prio: c.cnt,
 				};
 			});
