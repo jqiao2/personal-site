@@ -394,14 +394,11 @@ const nav = [
 			}
 			function save() { try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {} }
 			function setMsg(t) { if (t) { msgEl.textContent = t; msgEl.hidden = false; } else msgEl.hidden = true; }
-			// Orient a normal into a fixed half-plane so parallel offsets never flip
-			// sides between segments. Prefer the x-component (unstable only for exactly
-			// horizontal lines, handled by the y fallback); using nx+ny would be unstable
-			// for 45° diagonals like Broadway, collapsing express onto local lines.
-			function hemi(nx, ny) {
-				if (Math.abs(nx) > 1e-6) return nx < 0 ? [-nx, -ny] : [nx, ny];
-				return ny < 0 ? [-nx, -ny] : [nx, ny];
-			}
+			// Orient a normal toward the north-east (screen +x is east, −y is north) so
+			// the low-index service sits on the south-west side and the high-index one on
+			// the north-east — i.e. 1/2/3 and 4/5/6 run west→east and south→north. The
+			// boundary is the SW–NE diagonal (few multi-line bundles run that way).
+			function hemi(nx, ny) { return nx - ny < 0 ? [-nx, -ny] : [nx, ny]; }
 
 			// ---- per-segment unit normals (zoom-independent), pts[0]↔a, pts[last]↔b ----
 			// Orient by PROPAGATION from the most axis-aligned vertex so the normal
@@ -419,7 +416,7 @@ const nav = [
 				}
 				// seed at the vertex whose normal sits furthest from the flip boundary
 				let seed = 0, bm = -1;
-				for (let i = 0; i < L; i++) { const m = Math.abs(raw[i][0] + raw[i][1]); if (m > bm) { bm = m; seed = i; } }
+				for (let i = 0; i < L; i++) { const m = Math.abs(raw[i][0] - raw[i][1]); if (m > bm) { bm = m; seed = i; } }
 				const N = new Array(L);
 				N[seed] = hemi(raw[seed][0], raw[seed][1]);
 				for (let i = seed + 1; i < L; i++) N[i] = raw[i][0] * N[i - 1][0] + raw[i][1] * N[i - 1][1] >= 0 ? raw[i] : [-raw[i][0], -raw[i][1]];
@@ -444,34 +441,39 @@ const nav = [
 				ends[1].sg._n[ends[1].i] = [sx, sy];
 			}
 
-			// ---- per-station marker geometry (orientation, span) + label priority ----
-			const cov = {}; // id -> {Sxx,Sxy,Syy,cnt}
-			function addDir(id, dx, dy) {
-				const l = Math.hypot(dx, dy) || 1, x = dx / l, y = dy / l;
-				const c = cov[id] || (cov[id] = { Sxx: 0, Sxy: 0, Syy: 0, cnt: 0 });
-				c.Sxx += x * x; c.Sxy += x * y; c.Syy += y * y; c.cnt++;
+			// ---- per-station markers + label priority ----
+			// Group the lines meeting a station into 45° direction buckets and give each
+			// bucket its own pill. A simple stop has one; a big crossing complex like
+			// Atlantic Av-Barclays Ctr gets a long diagonal pill for the 2/3/4/5/Q/B plus
+			// a shorter one across the R/N/D — matching how the diagram bends the marker.
+			const stDirs = {}; // id -> { bucketAngle -> Set(svc) }
+			const prio = {};
+			function addDir(id, dx, dy, svc) {
+				const l = Math.hypot(dx, dy) || 1;
+				let ang = (Math.atan2(dy / l, dx / l) * 180) / Math.PI;
+				ang = ((ang % 180) + 180) % 180; // a line's direction is unsigned
+				const b = (Math.round(ang / 45) * 45) % 180; // snap to 0/45/90/135
+				const m = stDirs[id] || (stDirs[id] = {});
+				(m[b] = m[b] || new Set()).add(svc);
+				prio[id] = (prio[id] || 0) + 1;
 			}
 			SEGMENTS.forEach((sg) => {
 				const P = sg.pts, L = P.length;
-				addDir(sg.a, P[1][0] - P[0][0], P[1][1] - P[0][1]);
-				addDir(sg.b, P[L - 2][0] - P[L - 1][0], P[L - 2][1] - P[L - 1][1]);
+				addDir(sg.a, P[1][0] - P[0][0], P[1][1] - P[0][1], sg.svc);
+				addDir(sg.b, P[L - 2][0] - P[L - 1][0], P[L - 2][1] - P[L - 1][1], sg.svc);
 			});
 			// Pill length tracks how many lines run through the station — the number of
 			// services stopping there — so mega-transfers (Fulton St) and express stops
 			// (Queens Blvd) read larger. Centred on the station.
 			const stMeta = {};
 			STATIONS.forEach((s) => {
-				const c = cov[s.id] || { Sxx: 1, Sxy: 0, Syy: 0, cnt: 0 };
-				const ang = 0.5 * Math.atan2(2 * c.Sxy, c.Sxx - c.Syy); // principal (line) axis
-				let deg = (Math.atan2(Math.cos(ang), -Math.sin(ang)) * 180) / Math.PI;
-				deg = Math.round(deg / 45) * 45; // snap pill to 45° increments
-				stMeta[s.id] = {
-					nx: Math.cos((deg * Math.PI) / 180), ny: Math.sin((deg * Math.PI) / 180),
-					deg,
-					midOff: 0,
-					len: (s.svcs.length - 1) * SPACING + LINE_W_ON + PILL_PAD,
-					prio: c.cnt,
-				};
+				const buckets = stDirs[s.id] || {};
+				const pills = Object.keys(buckets).map((b) => ({
+					deg: (Number(b) + 90) % 180, // the pill lies across its lines
+					len: (buckets[b].size - 1) * SPACING + LINE_W_ON + PILL_PAD,
+				}));
+				if (!pills.length) pills.push({ deg: 90, len: LINE_W_ON + PILL_PAD });
+				stMeta[s.id] = { pills, prio: prio[s.id] || 0 };
 			});
 			const stationsByPrio = [...STATIONS].sort((a, b) => stMeta[b.id].prio - stMeta[a.id].prio);
 
@@ -498,17 +500,19 @@ const nav = [
 			const pillEls = {};
 			const labelEls = {};
 			STATIONS.forEach((s) => {
-				const m = stMeta[s.id];
-				const rect = el('rect', {
-					x: (-m.len / 2).toFixed(2), y: (-PILL_TH / 2).toFixed(2),
-					width: m.len.toFixed(2), height: PILL_TH, rx: (PILL_TH / 2).toFixed(2),
-					'stroke-width': PILL_BORDER, 'vector-effect': 'non-scaling-stroke', style: 'cursor:pointer;',
+				const rects = stMeta[s.id].pills.map((p) => {
+					const rect = el('rect', {
+						x: (-p.len / 2).toFixed(2), y: (-PILL_TH / 2).toFixed(2),
+						width: p.len.toFixed(2), height: PILL_TH, rx: (PILL_TH / 2).toFixed(2),
+						'stroke-width': PILL_BORDER, 'vector-effect': 'non-scaling-stroke', style: 'cursor:pointer;',
+					});
+					const title = el('title', {});
+					rect.appendChild(title);
+					rect.addEventListener('click', () => stationClick(s.id));
+					gPills.appendChild(rect);
+					return { rect, title, p };
 				});
-				const title = el('title', {});
-				rect.appendChild(title);
-				rect.addEventListener('click', () => stationClick(s.id));
-				gPills.appendChild(rect);
-				pillEls[s.id] = { s, rect, title, m };
+				pillEls[s.id] = { s, rects };
 
 				const right = s.x >= W / 2;
 				const label = el('text', {
@@ -540,9 +544,10 @@ const nav = [
 					e.hit.setAttribute('stroke-width', hw);
 				}
 				STATIONS.forEach((s) => {
-					const m = stMeta[s.id];
-					const cx = s.x * k + m.midOff * curScale * m.nx, cy = s.y * k + m.midOff * curScale * m.ny;
-					pillEls[s.id].rect.setAttribute('transform', 'translate(' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ') rotate(' + m.deg + ') scale(' + curScale.toFixed(3) + ')');
+					const cx = (s.x * k).toFixed(1), cy = (s.y * k).toFixed(1), sf = curScale.toFixed(3);
+					pillEls[s.id].rects.forEach((r) =>
+						r.rect.setAttribute('transform', 'translate(' + cx + ' ' + cy + ') rotate(' + r.p.deg + ') scale(' + sf + ')')
+					);
 				});
 				drawLabels();
 			}
@@ -577,10 +582,13 @@ const nav = [
 				e.title.textContent = sg.svc + ' · ' + stById[sg.a].name + ' ↔ ' + stById[sg.b].name + (on ? ' — ridden' : '');
 			}
 			function renderPillMark(s) {
-				const e = pillEls[s.id], on = !!marks.st[s.id];
-				e.rect.setAttribute('fill', on ? '#26231f' : '#ffffff');
-				e.rect.setAttribute('stroke', on ? '#26231f' : '#7a7264');
-				e.title.textContent = s.name + ' (' + s.svcs.join(' ') + ')' + (on ? ' — visited' : '');
+				const on = !!marks.st[s.id];
+				const label = s.name + ' (' + s.svcs.join(' ') + ')' + (on ? ' — visited' : '');
+				pillEls[s.id].rects.forEach((r) => {
+					r.rect.setAttribute('fill', on ? '#26231f' : '#ffffff');
+					r.rect.setAttribute('stroke', on ? '#26231f' : '#7a7264');
+					r.title.textContent = label;
+				});
 			}
 			function renderAllMarks() {
 				SEGMENTS.forEach(renderSegMark);

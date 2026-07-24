@@ -140,6 +140,17 @@ async function main() {
   console.log('stations merged:', rawStations.length, '->', merged.length);
   rawStations.length = 0; rawStations.push(...merged);
 
+  // Second Ave Subway Phase 2 (Q north of 96 St, via 106/116/125 St) isn't open
+  // yet — drop the Q from those stops so nothing is drawn there.
+  for (const s of rawStations) {
+    if (s.svcs.includes('Q') && ['106 St', '116 St', '125 St'].includes(s.name)) {
+      s.svcs = s.svcs.filter((v) => v !== 'Q');
+      s.trunks = [...new Set(s.svcs.map((t) => tokenToTrunk[t]).filter(Boolean))];
+    }
+  }
+  const dropped = rawStations.filter((s) => !s.svcs.length).length;
+  if (dropped) { const kept = rawStations.filter((s) => s.svcs.length); rawStations.length = 0; rawStations.push(...kept); console.log('dropped', dropped, 'now-serviceless stations'); }
+
   // Fit content bbox into a portrait canvas, flipping Y so north is up.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const eat = (x, y) => { if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; };
@@ -219,11 +230,17 @@ async function main() {
       }
 
       // Walk from each station node to the nearest station in every direction.
+      // Cap the distance travelled: within a trunk each service uses only some
+      // branches, and without a cap a walk wanders down another service's branch
+      // (e.g. the D leaving Coney Island up the F's Culver line) and invents a
+      // phantom "adjacency" to a far-away station.
+      const MAX_WALK = 300;
+      const dist = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]);
       const segSeen = {};
       for (const startKey in stationAtNode) {
         const startId = stationAtNode[startKey];
         const stack = [];
-        for (const m of nbr[startKey] || []) stack.push({ node: m, prev: startKey, pts: [nodePt[startKey], nodePt[m]] });
+        for (const m of nbr[startKey] || []) stack.push({ node: m, prev: startKey, pts: [nodePt[startKey], nodePt[m]], len: dist(nodePt[startKey], nodePt[m]) });
         const visited = new Set([startKey]);
         let steps = 0;
         while (stack.length && steps++ < 8000) {
@@ -238,7 +255,11 @@ async function main() {
             if (!prev || cur.pts.length < prev.pts.length) segSeen[sid] = { id: sid, svc, o, color, a, b, pts: cur.pts };
             continue; // stop at the station; don't walk through it
           }
-          for (const w of nbr[cur.node] || []) if (w !== cur.prev && !visited.has(w)) stack.push({ node: w, prev: cur.node, pts: cur.pts.concat([nodePt[w]]) });
+          for (const w of nbr[cur.node] || []) {
+            if (w === cur.prev || visited.has(w)) continue;
+            const nlen = cur.len + dist(nodePt[cur.node], nodePt[w]);
+            if (nlen <= MAX_WALK) stack.push({ node: w, prev: cur.node, pts: cur.pts.concat([nodePt[w]]), len: nlen });
+          }
         }
       }
 
@@ -252,10 +273,12 @@ async function main() {
       // Bridge residual gaps within this service where the source geometry breaks
       // a line across a real adjacency the walk couldn't follow — the A's
       // Washington Heights tail, the N/Q over the Manhattan Bridge, etc.
-      const BRIDGE_MAX = 100;
-      for (let guard = 0; guard < 12; guard++) {
+      const BRIDGE_MAX = 260;
+      for (let guard = 0; guard < 30; guard++) {
         const adj = {}, nodes = new Set();
         svcSegs.forEach((s) => { nodes.add(s.a); nodes.add(s.b); (adj[s.a] = adj[s.a] || []).push(s.b); (adj[s.b] = adj[s.b] || []).push(s.a); });
+        // include stations with no segments yet, so isolated stops get connected
+        stationsOfSvc.forEach((s) => nodes.add(s.id));
         if (nodes.size < 2) break;
         const seen = new Set(), comps = [];
         for (const nn of nodes) {
@@ -309,8 +332,13 @@ async function main() {
         if (!tri) break;
         const [a, b, c] = tri;
         const es = [[a, b], [b, c], [a, c]].map(([x, y]) => ({ x, y, d: D(x, y), seg: edge[x + '|' + y] })).sort((p, q) => p.d - q.d);
+        // A vertex with no neighbours outside the triangle is a pure pass-through
+        // (a station the third edge skips): drop the edge that bypasses it.
+        const ext = (v) => [...adj[v]].filter((n) => n !== a && n !== b && n !== c).length;
+        const mid = tri.filter((v) => ext(v) === 0);
         let rm;
-        if (es[2].d > 2 * es[1].d) rm = es[2];
+        if (mid.length === 1) rm = es.find((e) => e.x !== mid[0] && e.y !== mid[0]);
+        else if (es[2].d > 2 * es[1].d) rm = es[2];
         else {
           const dr = (e) => { const t = tri.find((v) => v !== e.x && v !== e.y); return (D(e.x, t) + D(t, e.y)) / (e.d || 1); };
           rm = es.slice().sort((p, q) => dr(q) - dr(p))[0];
@@ -318,8 +346,22 @@ async function main() {
         remove.add(rm.seg);
       }
     }
+    const afterTri = remove.size;
+    // Minimum spanning tree per service: a real service is a tree, so any extra
+    // edge that closes a cycle is a redundant express-skip chord (e.g. D Grand St
+    // -> Coney Island, N Atlantic -> 86 St). Processing edges shortest-first keeps
+    // the local path and drops the long shortcuts.
+    for (const svc in bySvc) {
+      const segs = bySvc[svc].filter((s) => !remove.has(s)).map((s) => ({ s, w: D(s.a, s.b) })).sort((a, b) => a.w - b.w);
+      const parent = {};
+      const find = (x) => (parent[x] === undefined ? (parent[x] = x) : parent[x] === x ? x : (parent[x] = find(parent[x])));
+      for (const { s } of segs) {
+        if (find(s.a) === find(s.b)) remove.add(s);
+        else parent[find(s.a)] = find(s.b);
+      }
+    }
     const kept = SEGMENTS.filter((s) => !remove.has(s));
-    console.log('removed', SEGMENTS.length - kept.length, 'redundant triangle edges');
+    console.log('removed', afterTri, 'triangle +', remove.size - afterTri, 'redundant chord edges');
     SEGMENTS.length = 0; SEGMENTS.push(...kept);
   }
 
@@ -341,7 +383,29 @@ async function main() {
       for (const T of segs) if (T.svc !== S.svc && ptToPath(mid, T.pts) < EPS) present.add(T.svc);
       const arr = [...present].sort((a, b) => svcRank[a] - svcRank[b]);
       S.o = arr.indexOf(S.svc) - (arr.length - 1) / 2;
+      S._cnt = arr.length;
     }
+  }
+
+  // Realign lone runs: when a line branches off on its own (e.g. the 1 up Broadway
+  // north of 96 St, while 2/3 peel off to Lenox) it should keep the offset it had
+  // in the bundle and continue straight, not recentre onto the trunk centreline.
+  {
+    const bySvc = {};
+    for (const s of SEGMENTS) (bySvc[s.svc] = bySvc[s.svc] || []).push(s);
+    for (const svc in bySvc) {
+      const segs = bySvc[svc];
+      for (let iter = 0; iter < 300; iter++) {
+        let changed = false;
+        for (const s of segs) {
+          if (s._cnt !== 1 || s._done) continue;
+          const nb = segs.find((t) => t !== s && (t._cnt > 1 || t._done) && t.o !== s.o && (t.a === s.a || t.a === s.b || t.b === s.a || t.b === s.b));
+          if (nb) { s.o = nb.o; s._done = true; changed = true; }
+        }
+        if (!changed) break;
+      }
+    }
+    for (const s of SEGMENTS) { delete s._cnt; delete s._done; }
   }
 
   const SERVICES = SERVICE_ORDER
