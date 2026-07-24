@@ -6,7 +6,7 @@ export const prerender = false;
 
 // GET /api/films/watched/list?q=&sort=recent|year&limit=100&offset=0
 //   &rmin=&rmax=&unrated=1&liked=1&rewatched=1
-//   &decade=1990&decade=2000&tag=…&friend=…&friendmode=any|all
+//   &decade=1990&decade=2000&ryear=2019&tag=…&friend=…&friendmode=any|all
 //   &medium=…&venue=…&format=…&wheremode=any|all
 //   &director=…&actor=…&genre=…&language=…&country=…
 //   &dymin=2019&dymax=2024
@@ -39,6 +39,7 @@ export const GET: APIRoute = async ({ url }) => {
 			liked: p.get('liked') === '1',
 			rewatched: p.get('rewatched') === '1',
 			decades: p.getAll('decade').map(Number).filter(Number.isFinite),
+			releaseYears: p.getAll('ryear').map(Number).filter(Number.isFinite),
 			directors: p.getAll('director'),
 			actors: p.getAll('actor'),
 			genres: p.getAll('genre'),

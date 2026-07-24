@@ -308,6 +308,14 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 								</section>
 							)}
 
+							{/* Exact release years. No chips are shipped — the section is
+							    populated only when a Stats "Films by release year" deep-link
+							    arrives (?ryear=…), and stays hidden otherwise. */}
+							<section id="ryear-section" hidden>
+								<h2 class="grp">Release year</h2>
+								<div class="chips" id="ryears"></div>
+							</section>
+
 							{facets.genres.length > 0 && (
 								<section>
 									<h2 class="grp">Genre</h2>
@@ -664,6 +672,9 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 		}
 		.panel__wide {
 			grid-column: 1 / -1;
+		}
+		#ryear-section[hidden] {
+			display: none;
 		}
 
 		/* --- Movie details drawer --- */
@@ -1195,6 +1206,12 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			let yMin = YR_LO;
 			let yMax = YR_HI;
 
+			// Exact release years. Unlike every other filter these ship no chips in the
+			// panel — the set is populated only when a Stats "Films by release year"
+			// deep-link arrives (?ryear=…), and each selected year is drawn as a
+			// removable chip in the Movie details drawer's "Release year" section.
+			const releaseYears = new Set<number>();
+
 			/** Whether the rating control narrows anything. */
 			const ratingActive = () =>
 				flags.unrated || rMin > RATING_FLOOR || rMax < RATING_CEIL;
@@ -1210,6 +1227,7 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			function movieActiveCount(): number {
 				return (
 					(decadeActive() ? 1 : 0) +
+					releaseYears.size +
 					sets.director.size +
 					sets.actor.size +
 					sets.genre.size +
@@ -1227,7 +1245,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 					(decadeActive() ? 1 : 0) +
 					(diaryActive() ? 1 : 0) +
 					(flags.liked ? 1 : 0) +
-					(flags.rewatched ? 1 : 0);
+					(flags.rewatched ? 1 : 0) +
+					releaseYears.size;
 				for (const s of Object.values(sets)) n += s.size;
 				return n;
 			}
@@ -1252,6 +1271,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				if (decadeActive()) {
 					for (let d = dMin; d <= dMax; d += 10) p.append('decade', String(d));
 				}
+				// Exact release years, one param each — the API reads these as `ryear`.
+				for (const y of releaseYears) p.append('ryear', String(y));
 				// Diary date is a true year span; the server keeps a film whose watch years
 				// intersect it. Send a bound only when it narrows, so the slider's extremes
 				// read as "any date".
@@ -1422,6 +1443,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			const mdToggle = document.getElementById('md-toggle')!;
 			const mdBody = document.getElementById('md-body')!;
 			const mdCount = document.getElementById('md-count')!;
+			const ryearSection = document.getElementById('ryear-section')!;
+			const ryears = document.getElementById('ryears')!;
 
 			/** Reflect state that isn't owned by the control the user just touched. */
 			function syncChrome() {
@@ -1565,6 +1588,10 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 						lit(' released between ');
 						em(`${dMin}s and ${dMax}s`);
 					}
+				}
+				if (releaseYears.size) {
+					lit(' released in ');
+					em(andList([...releaseYears].sort((a, b) => a - b).map(String), 'or'));
 				}
 				if (sets.genre.size) {
 					lit(' in the ');
@@ -1719,6 +1746,29 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				renderPeople();
 			});
 
+			// --- Release year (deep-link only) ----------------------------------
+			// One removable chip per selected year, sorted ascending. The section hides
+			// itself when nothing is selected, since no year chips ship in the panel.
+			function makeReleaseYearChip(year: number): HTMLButtonElement {
+				const chip = el('button', 'chip') as HTMLButtonElement;
+				chip.type = 'button';
+				chip.setAttribute('aria-pressed', 'true');
+				chip.textContent = `${year} ✕`;
+				chip.setAttribute('aria-label', `Remove release year ${year}`);
+				chip.addEventListener('click', () => {
+					releaseYears.delete(year);
+					renderReleaseYears();
+					applyFilters();
+				});
+				return chip;
+			}
+
+			function renderReleaseYears() {
+				const years = [...releaseYears].sort((a, b) => a - b);
+				ryearSection.hidden = years.length === 0;
+				ryears.replaceChildren(...years.map(makeReleaseYearChip));
+			}
+
 			for (const chip of filterChips) {
 				chip.addEventListener('click', () => {
 					const key = chip.dataset.filter as SetKey;
@@ -1851,6 +1901,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				setRange(RATING_FLOOR, RATING_CEIL);
 				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
 				if (yminInput && ymaxInput) setYears(YR_LO, YR_HI);
+				releaseYears.clear();
+				renderReleaseYears();
 				// Deselecting the People chips lets their rows collapse back to the limit.
 				renderPeople();
 				applyFilters();
@@ -1892,6 +1944,7 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 					p.set('dmin', String(dMin));
 					p.set('dmax', String(dMax));
 				}
+				for (const y of releaseYears) p.append('ryear', String(y));
 				if (diaryActive()) {
 					p.set('dymin', String(yMin));
 					p.set('dymax', String(yMax));
@@ -1961,6 +2014,14 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 					);
 				}
 
+				// Exact release years arrive only via deep-link. Keep whole four-digit years
+				// in a sane range; renderReleaseYears() draws the removable chips.
+				const nowYear = new Date().getFullYear();
+				for (const raw of p.getAll('ryear')) {
+					const y = Number(raw);
+					if (Number.isInteger(y) && y >= 1870 && y <= nowYear + 5) releaseYears.add(y);
+				}
+
 				// Drive the sets from the chips rather than straight off the params, so a
 				// stale or hand-typed value can't end up selected with no control to
 				// clear it — and a restored chip from past its group's cut gets revealed.
@@ -2007,6 +2068,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			syncChrome();
 			// Draw the People chips — the top few plus any names restored from the URL.
 			renderPeople();
+			// Draw any release-year chips restored from a ?ryear=… deep-link.
+			renderReleaseYears();
 			if (restored) load(true);
 		}
 	</script>

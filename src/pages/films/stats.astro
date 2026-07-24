@@ -14,6 +14,20 @@ const stats = await getFilmStats(scope);
 
 const href = (key: number | 'all') => (key === 'all' ? '/films/stats' : `/films/stats?year=${key}`);
 
+// Deep-link a stat into the "All films" grid with the matching filter pre-applied.
+// When a calendar year is in scope, carry it as a diary-date bound so the grid is
+// narrowed to films watched that year — mirroring what the stat was counted over.
+const scopeYear = typeof stats.scope === 'number' ? stats.scope : null;
+const watchedHref = (params: Record<string, string | number>) => {
+	const p = new URLSearchParams();
+	for (const [k, v] of Object.entries(params)) p.set(k, String(v));
+	if (scopeYear != null) {
+		p.set('dymin', String(scopeYear));
+		p.set('dymax', String(scopeYear));
+	}
+	return `/films/watched?${p.toString()}`;
+};
+
 // Bar-chart maxima (for relative heights/widths).
 const weekMax = Math.max(1, ...stats.weeks.map((w) => w.count));
 const byYearMax = Math.max(1, ...stats.byYear.map((d) => d.count));
@@ -24,14 +38,14 @@ const countryMax = Math.max(1, ...stats.countries.map((g) => g.count));
 
 const ratingLabels = Array.from({ length: 10 }, (_, i) => starText((i + 1) * 0.5) ?? '');
 
-const columns: { title: string; items: typeof stats.genres; max: number }[] = [
-	{ title: 'Most-watched genres', items: stats.genres, max: genreMax },
-	{ title: 'Languages', items: stats.languages, max: langMax },
-	{ title: 'Countries', items: stats.countries, max: countryMax },
+const columns: { title: string; items: typeof stats.genres; max: number; param: string }[] = [
+	{ title: 'Most-watched genres', items: stats.genres, max: genreMax, param: 'genre' },
+	{ title: 'Languages', items: stats.languages, max: langMax, param: 'language' },
+	{ title: 'Countries', items: stats.countries, max: countryMax, param: 'country' },
 ];
-const people: { title: string; items: typeof stats.directors }[] = [
-	{ title: 'Top directors', items: stats.directors },
-	{ title: 'Top actors', items: stats.actors },
+const people: { title: string; items: typeof stats.directors; param: string }[] = [
+	{ title: 'Top directors', items: stats.directors, param: 'director' },
+	{ title: 'Top actors', items: stats.actors, param: 'actor' },
 ];
 ---
 
@@ -107,11 +121,17 @@ const people: { title: string; items: typeof stats.directors }[] = [
 				<section class="block">
 					<div class="block__title block__title--solo">Films by release year</div>
 					<div class="bars">
-						{stats.byYear.map((d) => (
-							<div class="bars__slot" title={d.title}>
-								<div class="bar bar--thin" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}></div>
-							</div>
-						))}
+						{stats.byYear.map((d) =>
+							d.count > 0 && d.year != null ? (
+								<a class="bars__slot bars__slot--link" href={watchedHref({ ryear: d.year })} title={d.title}>
+									<div class="bar bar--thin" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}></div>
+								</a>
+							) : (
+								<div class="bars__slot" title={d.title}>
+									<div class="bar bar--thin" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}></div>
+								</div>
+							),
+						)}
 					</div>
 					<div class="axis">
 						{stats.byYearLabels.map((l) => <span>{l}</span>)}
@@ -127,13 +147,13 @@ const people: { title: string; items: typeof stats.directors }[] = [
 						<div class="ranked">
 							{col.items.length > 0 ? (
 								col.items.map((g) => (
-									<div class="ranked__row">
+									<a class="ranked__row" href={watchedHref({ [col.param]: g.name })}>
 										<span class="ranked__name">{g.name}</span>
 										<div class="ranked__track">
 											<div class="ranked__fill" style={`width:${Math.round((g.count / col.max) * 100)}%`}></div>
 										</div>
 										<span class="ranked__count">{g.count}</span>
-									</div>
+									</a>
 								))
 							) : (
 								<p class="empty">No data yet.</p>
@@ -152,11 +172,17 @@ const people: { title: string; items: typeof stats.directors }[] = [
 					</div>
 					<div class="ratings">
 						<div class="bars bars--ratings">
-							{stats.ratings.map((c, i) => (
-								<div class="bars__slot" title={`${((i + 1) * 0.5).toFixed(1)} · ${c} films`}>
-									<div class="bar" style={`height:${Math.round((c / ratingMax) * 100)}%`}></div>
-								</div>
-							))}
+							{stats.ratings.map((c, i) => {
+								const stars = (i + 1) * 0.5;
+								const bar = <div class="bar" style={`height:${Math.round((c / ratingMax) * 100)}%`}></div>;
+								return c > 0 ? (
+									<a class="bars__slot" href={watchedHref({ rmin: stars, rmax: stars })} title={`${stars.toFixed(1)} · ${c} films`}>
+										{bar}
+									</a>
+								) : (
+									<div class="bars__slot" title={`${stars.toFixed(1)} · ${c} films`}>{bar}</div>
+								);
+							})}
 						</div>
 						<div class="ratings__axis">
 							{ratingLabels.map((l) => <span>{l}</span>)}
@@ -171,12 +197,12 @@ const people: { title: string; items: typeof stats.directors }[] = [
 					<section class="people">
 						<div class="block__title block__title--solo people__title">{p.title}</div>
 						{p.items.map((person, i) => (
-							<div class="person">
+							<a class="person" href={watchedHref({ [p.param]: person.name })}>
 								<span class="person__rank">{i + 1}</span>
 								<span class="person__name">{person.name}</span>
 								<span class="person__stars">{starText(person.rating) ?? ''}</span>
 								<span class="person__count">{person.count} films</span>
-							</div>
+							</a>
 						))}
 					</section>
 				)
@@ -522,6 +548,44 @@ const people: { title: string; items: typeof stats.directors }[] = [
 			color: #a2857a;
 			min-width: 70px;
 			text-align: right;
+		}
+
+		/* Clickable stats — each element links into the filtered "All films" grid. */
+		.bars__slot--link {
+			cursor: pointer;
+		}
+		.bars__slot--link:hover .bar {
+			background: #f4e8d1;
+		}
+		a.ranked__row {
+			text-decoration: none;
+			cursor: pointer;
+		}
+		a.ranked__row:hover .ranked__name {
+			color: #f4e8d1;
+		}
+		a.ranked__row:hover .ranked__fill {
+			background: #f0d488;
+		}
+		a.ranked__row:hover .ranked__count {
+			color: #d9b45a;
+		}
+		a.person {
+			text-decoration: none;
+			cursor: pointer;
+			border-radius: 6px;
+			transition: background 0.12s;
+		}
+		a.person:hover {
+			background: #2a1a15;
+		}
+		a.person:hover .person__name {
+			color: #f4e8d1;
+		}
+		@media (prefers-reduced-motion: reduce) {
+			a.person {
+				transition: none;
+			}
 		}
 
 		@media (max-width: 720px) {

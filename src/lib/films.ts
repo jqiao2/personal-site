@@ -1284,6 +1284,10 @@ export interface WatchedQuery {
 	liked?: boolean;
 	/** Release decades as their first year, e.g. [1990, 2020]. Matches any of them. */
 	decades?: number[];
+	/** Exact release years, e.g. [2019]. Matches any of them. Narrower than `decades`
+	 * — the Stats "Films by release year" bars link here. ANDs with `decades` when
+	 * both are set, though the UI only ever sends one. */
+	releaseYears?: number[];
 	/** Matches films directed by any of these people (cached `movies.directors`). */
 	directors?: string[];
 	/** Matches films whose top-billed cast (`movies.actors`) includes any of these. */
@@ -1838,6 +1842,13 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 		req = req.or(ranges, { referencedTable: 'movies' });
 	}
 
+	// Exact release years — a single year rather than a decade span (the Stats
+	// "Films by release year" bars deep-link here). ANDs with the decade filter
+	// above when both are present, though the UI only ever sends one.
+	if (query.releaseYears?.length) {
+		req = req.in('movies.release_year', query.releaseYears);
+	}
+
 	// Director / cast: film-level array columns on the joined movie. `ov` (overlap)
 	// keeps a film whose credit list shares any selected name — the design's "any"
 	// semantics. Director and cast AND together (two filters), so picking one of each
@@ -2013,6 +2024,9 @@ export interface HistBar {
 	count: number;
 	/** Tooltip text — e.g. "2024 · 132 films" or "Mar 3–9, 2024 · 2 films". */
 	title: string;
+	/** The release year this bar stands for — set only on the "Films by release
+	 * year" bars, so each can deep-link to that year's films. */
+	year?: number;
 }
 
 /** One selectable timespan for the year picker. */
@@ -2280,7 +2294,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 			for (const y of releaseYears) perRelease.set(y, (perRelease.get(y) ?? 0) + 1);
 			for (let y = min; y <= max; y++) {
 				const c = perRelease.get(y) ?? 0;
-				byYear.push({ count: c, title: `${y} · ${c} ${c === 1 ? 'film' : 'films'}` });
+				byYear.push({ count: c, year: y, title: `${y} · ${c} ${c === 1 ? 'film' : 'films'}` });
 			}
 			// ~6 evenly spaced year labels across the span.
 			const span = max - min;
