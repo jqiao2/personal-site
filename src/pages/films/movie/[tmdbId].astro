@@ -663,6 +663,13 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				font-style: italic;
 				max-width: 560px;
 				margin: 0;
+				/* Preview only — clamp to two lines so the list stays scannable; the
+				   full text lives on the diary entry page behind "View". */
+				display: -webkit-box;
+				-webkit-line-clamp: 2;
+				-webkit-box-orient: vertical;
+				overflow: hidden;
+				text-overflow: ellipsis;
 			}
 			.empty {
 				font-size: 14px;
