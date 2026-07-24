@@ -2058,17 +2058,16 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					const center = i * seg + seg / 2;
 					const wrap = document.createElement('div');
 					wrap.className = 'wheel__seg';
-					// The label arm points right at rotate(0); offset by −90° so its angle is read from the top; that keeps it
-					// centred on its wedge; on the left half (past 6 o'clock) that leaves it
-					// upside-down, so flip just the text 180° in place — the arm, and so the
-					// wedge it sits on, is unchanged.
+					// The label arm points right at rotate(0); offset by −90° so its angle is
+					// read from the top; that keeps it centred on its wedge. Every label reads
+					// inward along its own radius, so they all face the same direction radially
+					// — the bottom-half ones are not turned rightside-up.
 					wrap.style.transform = `rotate(${center - 90}deg)`;
 					const span = document.createElement('span');
 					span.textContent = f.title;
 					span.style.color = WEDGES[i % WEDGES.length][1];
 					span.style.fontSize = `${fontPx.toFixed(1)}px`;
 					span.style.maxWidth = `${BAND}px`;
-					if (center > 180) span.style.transform = 'rotate(180deg)';
 					wrap.appendChild(span);
 					spans.push(span);
 					frag.appendChild(wrap);
