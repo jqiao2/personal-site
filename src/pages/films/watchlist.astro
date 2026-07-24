@@ -8,10 +8,10 @@ import { ytsUrl } from '../../lib/format';
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
-/** How many genre chips show before collapsing behind "+N other…". TMDB has 19
- * movie genres and the watchlist spans nearly all of them, which is more than the
- * panel's column can hold. */
-const GENRE_CHIP_LIMIT = 8;
+/** How many chips a group shows before collapsing behind "+N other…". Genre and
+ * language each show a healthy handful; the People rows (director / cast) follow the
+ * "All films" pattern — a top-few-by-frequency default the search box expands. */
+const CHIP_LIMIT = { genres: 8, languages: 8 };
 
 const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Astro.cookies)]);
 
@@ -21,6 +21,10 @@ const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Ast
 // entries all fit in the DOM, and searching a slice would be a bug.
 
 const num = (n: number) => n.toLocaleString('en-US');
+
+/** "Added Jul 9" — the short date shown on a tile's hover overlay. */
+const addedLabel = (iso: string) =>
+	new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 // A film is upcoming when its release date is still ahead of us. This needs the
 // full date, not release_year: for most of a year, "released in 2026" and "out in
@@ -33,13 +37,20 @@ const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.re
 // toggle is only worth drawing when there's something for it to exclude.
 const hasUpcoming = films.some(isUpcoming);
 
-/** Genres present on the watchlist, most common first — matches the chip order the
- * "All films" filters use. */
-const genreCounts = new Map<string, number>();
-for (const f of films) {
-	for (const g of f.genres) genreCounts.set(g, (genreCounts.get(g) ?? 0) + 1);
+/** Facet values present on the watchlist, most common first, ties alphabetical —
+ * matches the chip order the "All films" filters use. Feeds the Genre / Language
+ * chips and the People (director / cast) rows. */
+function byFrequency(pick: (f: (typeof films)[number]) => Iterable<string>): string[] {
+	const counts = new Map<string, number>();
+	for (const f of films) {
+		for (const v of pick(f)) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+	}
+	return [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
 }
-const genres = [...genreCounts.keys()].sort((a, b) => genreCounts.get(b)! - genreCounts.get(a)!);
+const genres = byFrequency((f) => f.genres);
+const languages = byFrequency((f) => (f.language ? [f.language] : []));
+const directors = byFrequency((f) => f.directors);
+const actors = byFrequency((f) => f.actors);
 
 // End stops for the release-date slider, as a decade's first year. It needs two
 // distinct decades to be worth drawing. Films with no release_year at all sit
@@ -152,7 +163,15 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					</section>
 
 					<section>
-						<h2 class="grp">Genre</h2>
+						<div class="grp__row">
+							<h2 class="grp">Genre</h2>
+							{genres.length > 0 && (
+								<div class="modes" data-mode="genremode">
+									<button type="button" class="mode mode--on" data-value="any">Any</button>
+									<button type="button" class="mode" data-value="all">All</button>
+								</div>
+							)}
+						</div>
 						{genres.length === 0 ? (
 							<p class="grp__none">No genres yet</p>
 						) : (
@@ -164,19 +183,80 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 										data-filter="genre"
 										data-value={g}
 										aria-pressed="false"
-										hidden={i >= GENRE_CHIP_LIMIT}
+										hidden={i >= CHIP_LIMIT.genres}
 									>
 										{g}
 									</button>
 								))}
-								{genres.length > GENRE_CHIP_LIMIT && (
+								{genres.length > CHIP_LIMIT.genres && (
 									<button type="button" class="chip chip--more">
-										+{genres.length - GENRE_CHIP_LIMIT} other…
+										+{genres.length - CHIP_LIMIT.genres} other…
 									</button>
 								)}
 							</div>
 						)}
 					</section>
+
+					{languages.length > 0 && (
+						<section>
+							<h2 class="grp">Language</h2>
+							<div class="chips">
+								{languages.map((l, i) => (
+									<button
+										type="button"
+										class="chip"
+										data-filter="language"
+										data-value={l}
+										aria-pressed="false"
+										hidden={i >= CHIP_LIMIT.languages}
+									>
+										{l}
+									</button>
+								))}
+								{languages.length > CHIP_LIMIT.languages && (
+									<button type="button" class="chip chip--more">
+										+{languages.length - CHIP_LIMIT.languages} other…
+									</button>
+								)}
+							</div>
+						</section>
+					)}
+
+					{(directors.length > 0 || actors.length > 0) && (
+						<section class="panel__wide">
+							<div class="grp__row">
+								<h2 class="grp">People</h2>
+								<input
+									type="search"
+									id="people-search"
+									class="people-search"
+									placeholder="Search directors & cast…"
+									autocomplete="off"
+									aria-label="Search directors and cast"
+								/>
+							</div>
+							<div class="where">
+								<div class="where__row">
+									<span class="where__label">Director</span>
+									<div class="chips" data-people="director">
+										<span class="people-none" hidden>No matches</span>
+									</div>
+								</div>
+								<div class="where__row">
+									<span class="where__label">Cast</span>
+									<div class="chips" data-people="actor">
+										<span class="people-none" hidden>No matches</span>
+									</div>
+								</div>
+							</div>
+							<script
+								is:inline
+								type="application/json"
+								data-people-names
+								set:html={JSON.stringify({ directors, actors })}
+							/>
+						</section>
+					)}
 				</div>
 			</div>
 
@@ -194,6 +274,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 							data-title={f.title.toLowerCase()}
 							data-year={f.release_year ?? ''}
 							data-genres={f.genres.join('|')}
+							data-directors={f.directors.join('|')}
+							data-actors={f.actors.join('|')}
+							data-language={f.language ?? ''}
 							data-upcoming={upcoming ? '1' : ''}
 						>
 							{isOwner && (
@@ -212,6 +295,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 								<div class="tile__overlay">
 									<div class="tile__title">{f.title}</div>
 									<div class="tile__year">{f.release_year}</div>
+									{f.genres[0] && <div class="tile__genre">{f.genres[0]}</div>}
+									<div class="tile__added">Added {addedLabel(f.added_at)}</div>
 								</div>
 							</Tag>
 						</div>
@@ -478,6 +563,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			grid-template-columns: repeat(2, minmax(0, 1fr));
 			gap: 26px 40px;
 		}
+		.panel__wide {
+			grid-column: 1 / -1;
+		}
 		.grp {
 			font-size: 11px;
 			font-weight: 400;
@@ -492,6 +580,15 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			font-family: 'Newsreader', serif;
 			color: #8a6f63;
 			margin: 0;
+		}
+		.grp__row {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			margin-bottom: 12px;
+		}
+		.grp__row .grp {
+			margin-bottom: 0;
 		}
 		.chips {
 			display: flex;
@@ -524,6 +621,75 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			background: transparent;
 			color: #a2857a;
 			border-style: dashed;
+		}
+
+		/* Any/All mode toggle — mirrors the "All films" filter groups. */
+		.modes {
+			display: flex;
+			border: 1px solid #4a2529;
+			border-radius: 14px;
+			overflow: hidden;
+		}
+		.mode {
+			font-size: 11px;
+			font-weight: 600;
+			padding: 5px 11px;
+			border: none;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			background: transparent;
+			color: #a2857a;
+		}
+		.mode--on {
+			background: #d9b45a;
+			color: #2a1214;
+		}
+
+		/* Labelled chip rows (People → Director / Cast). */
+		.where {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.where__row {
+			display: flex;
+			align-items: baseline;
+			gap: 8px;
+		}
+		.where__label {
+			font-size: 12px;
+			color: #8a6f63;
+			width: 60px;
+			flex: none;
+		}
+
+		/* People filter: a chip-scoped search that sits beside the "People" heading. */
+		.people-search {
+			width: 220px;
+			max-width: 100%;
+			background: #1c0d0e;
+			border: 1px solid #4a2529;
+			border-radius: 14px;
+			padding: 5px 12px;
+			color: #f4e8d1;
+			font-size: 12px;
+			font-family: 'Archivo', sans-serif;
+			outline: none;
+		}
+		.people-search::placeholder {
+			color: #8a6f63;
+		}
+		.people-search:focus {
+			border-color: #d9b45a;
+		}
+		.people-none {
+			font-size: 12px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+			color: #8a6f63;
+		}
+		.people-none[hidden] {
+			display: none;
 		}
 
 		/* Dual-thumb release-date range: two native sliders stacked on one track, so
@@ -780,6 +946,16 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			text-transform: uppercase;
 			color: #d9b45a;
 			margin-top: 5px;
+		}
+		.tile__genre {
+			font-size: 12px;
+			color: #a2857a;
+			margin-top: 4px;
+		}
+		.tile__added {
+			font-size: 11px;
+			color: #8a6f63;
+			margin-top: 3px;
 		}
 
 		.empty {
@@ -1241,6 +1417,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			.range {
 				max-width: none;
 			}
+			.where__row {
+				flex-direction: column;
+				align-items: stretch;
+			}
 		}
 		/* The 440px wheel can't fit a phone; scale it down and reclaim the room the
 		   scale frees, since transform doesn't shrink the layout box. */
@@ -1283,7 +1463,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			const toggle = document.getElementById('filters-toggle')!;
 			const countBadge = document.getElementById('filters-count')!;
 			const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
-			const genreChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'));
+			// Genre + language chips, both server-rendered. Director/cast chips are
+			// built on demand (see People below) and wired as they're created.
+			const filterChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'));
+			const peopleSearch = document.getElementById('people-search') as HTMLInputElement | null;
 			const drange = document.getElementById('drange');
 			const dminInput = document.getElementById('dmin') as HTMLInputElement | null;
 			const dmaxInput = document.getElementById('dmax') as HTMLInputElement | null;
@@ -1303,6 +1486,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				decade: number | null;
 				year: number | null;
 				genres: string[];
+					directors: string[];
+					actors: string[];
+					/** Original language as an English name; '' when TMDB has none. */
+					language: string;
 				/** A release date still ahead of us. Governed by the "Include upcoming"
 				 * toggle, not the decade range — decade alone can't tell an upcoming
 				 * 2026 film from a released one that shares its decade. */
@@ -1319,6 +1506,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					year,
 					decade: year == null ? null : Math.floor(year / 10) * 10,
 					genres: el.dataset.genres ? el.dataset.genres.split('|') : [],
+						directors: el.dataset.directors ? el.dataset.directors.split('|') : [],
+						actors: el.dataset.actors ? el.dataset.actors.split('|') : [],
+						language: el.dataset.language ?? '',
 					upcoming: el.dataset.upcoming === '1',
 					order: Number(el.dataset.order),
 				};
@@ -1327,7 +1517,17 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			// --- Filter state ---
 			let sort = 'added';
 			let q = '';
-			const selectedGenres = new Set<string>();
+			// One set per chip group; director/cast join genre/language here so the
+			// filter loop, the URL and the active count all read them the same way.
+			const sets = {
+				genre: new Set<string>(),
+				language: new Set<string>(),
+				director: new Set<string>(),
+				actor: new Set<string>(),
+			};
+			type SetKey = keyof typeof sets;
+			// Genre is the one group with an any/all toggle, mirroring "All films".
+			let genreMode: 'any' | 'all' = 'any';
 			// Re-rolled on every press of Shuffle. Held so that re-filtering keeps the
 			// order you're looking at instead of reshuffling under you.
 			let shuffleSeed = 1;
@@ -1347,7 +1547,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			/** Number of active filters — the count on the Filters button. The
 			 * release-date range counts once however many decades it spans. */
 			const activeCount = () =>
-				(decadeActive() ? 1 : 0) + selectedGenres.size + (includeUpcoming ? 0 : 1);
+				(decadeActive() ? 1 : 0) +
+				sets.genre.size +
+				sets.language.size +
+				sets.director.size +
+				sets.actor.size +
+				(includeUpcoming ? 0 : 1);
 
 			/** A cheap deterministic hash, so a shuffle holds still while you filter
 			 * and each press of Shuffle deals a different order. */
@@ -1359,7 +1564,16 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 			function matches(item: Item): boolean {
 				if (q && !item.title.includes(q)) return false;
-				if (selectedGenres.size && !item.genres.some((g) => selectedGenres.has(g))) return false;
+				// Genre honours the any/all toggle; the other groups are always "any of".
+				if (sets.genre.size) {
+					const has = (g: string) => item.genres.includes(g);
+					if (genreMode === 'all' ? ![...sets.genre].every(has) : !item.genres.some((g) => sets.genre.has(g))) {
+						return false;
+					}
+				}
+				if (sets.language.size && !sets.language.has(item.language)) return false;
+				if (sets.director.size && !item.directors.some((d) => sets.director.has(d))) return false;
+				if (sets.actor.size && !item.actors.some((a) => sets.actor.has(a))) return false;
 				if (!includeUpcoming && item.upcoming) return false;
 				if (decadeActive() && (item.decade == null || item.decade < dMin || item.decade > dMax)) {
 					return false;
@@ -1452,16 +1666,122 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				});
 			}
 
-			for (const chip of genreChips) {
+			for (const chip of filterChips) {
 				chip.addEventListener('click', () => {
 					const value = chip.dataset.value!;
-					const on = !selectedGenres.has(value);
-					if (on) selectedGenres.add(value);
-					else selectedGenres.delete(value);
+					const key = chip.dataset.filter as SetKey;
+					const on = !sets[key].has(value);
+					if (on) sets[key].add(value);
+					else sets[key].delete(value);
 					chip.setAttribute('aria-pressed', String(on));
 					apply();
 				});
 			}
+
+			// Genre any/all toggle. A mode flip only changes results once genres are
+			// picked; only genre carries a toggle, but the wiring stays general.
+			for (const group of Array.from(panel.querySelectorAll<HTMLElement>('.modes'))) {
+				const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('.mode'));
+				for (const button of buttons) {
+					button.addEventListener('click', () => {
+						const value = button.dataset.value as 'any' | 'all';
+						if (genreMode === value) return;
+						genreMode = value;
+						for (const b of buttons) b.classList.toggle('mode--on', b === button);
+						if (sets.genre.size) apply();
+					});
+				}
+			}
+
+			// --- People (director / cast) ---------------------------------------
+			// Mirrors the "All films" People filter: each row shows the top few names
+			// by frequency and the search box reveals matches on demand. Picks live in
+			// sets.director / sets.actor, read the same as any other chip group.
+			type PeopleKind = 'director' | 'actor';
+			const PEOPLE_TOP_JS = 12; // quick chips per row before searching
+			const PEOPLE_MAX = 40; // most chips one search reveals
+			const peopleNames: Record<PeopleKind, string[]> = { director: [], actor: [] };
+			const namesEl = panel.querySelector('script[data-people-names]');
+			if (namesEl?.textContent) {
+				try {
+					const parsed = JSON.parse(namesEl.textContent) as {
+						directors?: string[];
+						actors?: string[];
+					};
+					peopleNames.director = parsed.directors ?? [];
+					peopleNames.actor = parsed.actors ?? [];
+				} catch (e) {
+					console.error('watchlist: could not parse people names', e);
+				}
+			}
+
+			interface PeopleRow {
+				kind: PeopleKind;
+				host: HTMLElement;
+				none: HTMLElement;
+			}
+			const peopleRows: PeopleRow[] = Array.from(
+				panel.querySelectorAll<HTMLElement>('.chips[data-people]'),
+			).map((host) => ({
+				kind: host.dataset.people as PeopleKind,
+				host,
+				none: host.querySelector<HTMLElement>('.people-none')!,
+			}));
+			let peopleQ = '';
+
+			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
+			// so a chip built here has to carry it or it renders unstyled. Read the name
+			// off a server-rendered chip rather than hard-coding the hash.
+			const scopeAttr = filterChips[0]
+				? Array.from(filterChips[0].attributes)
+						.map((a) => a.name)
+						.find((n) => n.startsWith('data-astro-cid-'))
+				: undefined;
+
+			function makePeopleChip(kind: PeopleKind, name: string): HTMLButtonElement {
+				const chip = document.createElement('button');
+				if (scopeAttr) chip.setAttribute(scopeAttr, '');
+				chip.className = 'chip';
+				chip.type = 'button';
+				chip.dataset.filter = kind;
+				chip.dataset.value = name;
+				chip.setAttribute('aria-pressed', String(sets[kind].has(name)));
+				chip.textContent = name;
+				chip.addEventListener('click', () => {
+					if (sets[kind].has(name)) sets[kind].delete(name);
+					else sets[kind].add(name);
+					chip.setAttribute('aria-pressed', String(sets[kind].has(name)));
+					apply();
+				});
+				return chip;
+			}
+
+			function renderPeopleRow(row: PeopleRow) {
+				const selected = sets[row.kind];
+				let names: string[];
+				if (peopleQ) {
+					names = peopleNames[row.kind]
+						.filter((n) => n.toLowerCase().includes(peopleQ))
+						.slice(0, PEOPLE_MAX);
+					// Keep picked names on screen even when they don't match the search.
+					for (const s of selected) if (!names.includes(s)) names.unshift(s);
+				} else {
+					names = peopleNames[row.kind].slice(0, PEOPLE_TOP_JS);
+					for (const s of selected) if (!names.includes(s)) names.push(s);
+				}
+				const chips = names.map((n) => makePeopleChip(row.kind, n));
+				row.host.replaceChildren(...chips, row.none);
+				row.none.hidden = !(peopleQ !== '' && chips.length === 0);
+			}
+
+			function renderPeople() {
+				for (const row of peopleRows) renderPeopleRow(row);
+			}
+
+			peopleSearch?.addEventListener('input', () => {
+				peopleQ = peopleSearch.value.trim().toLowerCase();
+				renderPeople();
+			});
 
 			// "+N other…" reveals the rest of the group and then removes itself:
 			// collapsing again would have to hide chips the user may have just picked.
@@ -1503,10 +1823,16 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			}
 
 			clearAll.addEventListener('click', () => {
-				selectedGenres.clear();
-				for (const chip of genreChips) chip.setAttribute('aria-pressed', 'false');
+				for (const s of Object.values(sets)) s.clear();
+				for (const chip of filterChips) chip.setAttribute('aria-pressed', 'false');
+				genreMode = 'any';
+				for (const b of Array.from(panel.querySelectorAll<HTMLButtonElement>('.mode'))) {
+					b.classList.toggle('mode--on', b.dataset.value === 'any');
+				}
 				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
 				includeUpcoming = true;
+				// Deselecting the People chips lets their rows collapse back to the top few.
+				renderPeople();
 				apply();
 			});
 
@@ -1526,7 +1852,11 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					p.set('dmin', String(dMin));
 					p.set('dmax', String(dMax));
 				}
-				for (const g of selectedGenres) p.append('genre', g);
+				// Set keys (genre/language/director/actor) double as the URL param names.
+				for (const [key, values] of Object.entries(sets)) {
+					for (const v of values) p.append(key, v);
+				}
+				if (sets.genre.size && genreMode === 'all') p.set('genremode', 'all');
 				if (!includeUpcoming) p.set('upcoming', '0');
 				const qs = p.toString();
 				const url = location.pathname + (qs ? `?${qs}` : '');
@@ -1574,24 +1904,48 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					upcomingToggle.checked = false;
 				}
 
-				// Drive the set from the chips rather than straight off the params, so a
-				// stale or hand-typed value can't end up selected with no control to
-				// clear it — and a restored chip from past the cut gets revealed.
-				const wanted = new Set(p.getAll('genre'));
-				for (const chip of genreChips) {
-					if (!wanted.has(chip.dataset.value!)) continue;
-					selectedGenres.add(chip.dataset.value!);
+				// Genre mode first, so a restored "all" is already in effect for the count.
+				if (p.get('genremode') === 'all') {
+					genreMode = 'all';
+					const modeGroup = panel.querySelector<HTMLElement>('.modes[data-mode="genremode"]');
+					for (const b of Array.from(modeGroup?.querySelectorAll<HTMLButtonElement>('.mode') ?? [])) {
+						b.classList.toggle('mode--on', b.dataset.value === 'all');
+					}
+				}
+
+				// Drive the genre/language sets from the chips rather than straight off the
+				// params, so a stale or hand-typed value can't end up selected with no
+				// control to clear it — and a restored chip from past the cut gets revealed.
+				const wanted: Partial<Record<SetKey, Set<string>>> = {
+					genre: new Set(p.getAll('genre')),
+					language: new Set(p.getAll('language')),
+				};
+				for (const chip of filterChips) {
+					const key = chip.dataset.filter as SetKey;
+					if (!wanted[key]?.has(chip.dataset.value!)) continue;
+					sets[key].add(chip.dataset.value!);
 					chip.setAttribute('aria-pressed', 'true');
 					chip.hidden = false;
 				}
 				syncMore();
+
+				// People chips aren't shipped in the DOM, so restore their picks straight
+				// into the sets — validated against the known names so a stale or hand-typed
+				// value can't select with no chip to clear it. renderPeople() draws them.
+				for (const kind of ['director', 'actor'] as const) {
+					const known = new Set(peopleNames[kind]);
+					for (const v of p.getAll(kind)) if (known.has(v)) sets[kind].add(v);
+				}
 
 				return q !== '' || sort !== 'added' || activeCount() > 0;
 			}
 
 			// The server rendered the full list in added order, so a URL carrying
 			// filters has to re-apply before the grid matches what it claims to show.
-			if (readUrl()) apply();
+			const restored = readUrl();
+				// Draw the People chips — the top few, plus any names restored from the URL.
+				renderPeople();
+				if (restored) apply();
 			else syncChrome();
 
 			// --- Remove a film from the watchlist (owner only) ---

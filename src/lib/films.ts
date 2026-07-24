@@ -1224,6 +1224,12 @@ export interface WatchlistEntry extends WatchlistTile {
 	added_at: string;
 	/** Cached TMDB genres (migration 0008); [] when never synced. */
 	genres: string[];
+	/** Directors (migration 0008); [] when never synced — the "People → Director" chips. */
+	directors: string[];
+	/** Top-billed cast (migration 0008); [] when never synced — the "People → Cast" chips. */
+	actors: string[];
+	/** Original language as an English name (migration 0009); null until backfilled. */
+	language: string | null;
 	/** Full release date, "YYYY-MM-DD" (0014). Null when TMDB has no date — which
 	 * for a watchlist is usually an announced film with nothing but a title. */
 	release_date: string | null;
@@ -1231,17 +1237,59 @@ export interface WatchlistEntry extends WatchlistTile {
 
 /** The entire watchlist, most recently added first — powers /films/watchlist.
  * Unpaged: the page filters and sorts the whole list in the browser, so it has to
- * ship all of it. Fine at a few hundred films; revisit if it reaches thousands. */
+ * ship all of it. Fine at a few hundred films; revisit if it reaches thousands.
+ *
+ * Selects the credit columns leniently, stepping down a tier when original_language
+ * (0009) isn't there yet, so the Language / People filters simply come back empty
+ * rather than erroring before the migration lands. */
 export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
-	const { data, error } = await supabasePublic
-		.from('watchlist')
-		.select('added_at, movies(tmdb_id, title, release_year, release_date, poster_path, genres)')
-		.order('added_at', { ascending: false });
-	if (error) throw new Error(`listAllWatchlist failed: ${error.message}`);
-	type Row = { added_at: string; movies: WatchlistEntry & { genres: string[] | null } };
+	const cols = (movie: string) => `added_at, ${movie}`;
+	const tiers = [
+		cols('movies(tmdb_id, title, release_year, release_date, poster_path, genres, directors, actors, original_language)'), // 0008 + 0009
+		cols('movies(tmdb_id, title, release_year, release_date, poster_path, genres, directors, actors)'), // 0008 only
+	];
+
+	let data: unknown = null;
+	let lastError: { code?: string; message?: string } | null = null;
+	for (const select of tiers) {
+		const res = await supabasePublic
+			.from('watchlist')
+			.select(select)
+			.order('added_at', { ascending: false });
+		if (!res.error) {
+			data = res.data;
+			lastError = null;
+			break;
+		}
+		lastError = res.error;
+		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
+	}
+	if (lastError) throw new Error(`listAllWatchlist failed: ${lastError.message}`);
+
+	type Row = {
+		added_at: string;
+		movies: {
+			tmdb_id: number;
+			title: string;
+			release_year: number | null;
+			release_date: string | null;
+			poster_path: string | null;
+			genres: string[] | null;
+			directors?: string[] | null;
+			actors?: string[] | null;
+			original_language?: string | null;
+		};
+	};
 	return ((data ?? []) as unknown as Row[]).map((r) => ({
-		...r.movies,
+		tmdb_id: r.movies.tmdb_id,
+		title: r.movies.title,
+		release_year: r.movies.release_year,
+		release_date: r.movies.release_date,
+		poster_path: r.movies.poster_path,
 		genres: r.movies.genres ?? [],
+		directors: r.movies.directors ?? [],
+		actors: r.movies.actors ?? [],
+		language: r.movies.original_language ?? null,
 		added_at: r.added_at,
 	}));
 }
