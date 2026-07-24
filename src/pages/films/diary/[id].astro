@@ -128,14 +128,6 @@ const editorInitial = toEditorInitial(entry);
 						</div>
 					)}
 
-					{movie.genres.length > 0 && (
-						<div class="genres">
-							{movie.genres.map((g) => (
-								<a class="genre" href={filterHref('genre', g)}>{g}</a>
-							))}
-						</div>
-					)}
-
 					<div class="flags">
 						{entry.rating != null && <span class="stars">{starText(entry.rating)}</span>}
 						{entry.liked && (
@@ -408,25 +400,6 @@ const editorInitial = toEditorInitial(entry);
 		}
 		.director__name:hover {
 			color: #f0d488;
-		}
-
-		.genres {
-			display: flex;
-			gap: 8px;
-			flex-wrap: wrap;
-			margin-top: 16px;
-		}
-		.genre {
-			font-size: 12px;
-			color: #ddc9b4;
-			border: 1px solid #4a2529;
-			border-radius: 20px;
-			padding: 5px 13px;
-			background: #241012;
-		}
-		.genre:hover {
-			color: #f0d488;
-			border-color: #d9b45a;
 		}
 
 		.flags {

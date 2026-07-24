@@ -728,8 +728,6 @@ export interface DiaryEntry {
 		poster_path: string | null;
 		backdrop_path: string | null;
 		directors: string[];
-		/** Cached TMDB genres (migration 0008); [] when never synced. */
-		genres: string[];
 	};
 	tags: string[];
 	/** People this film was watched with; [] when watched alone. */
@@ -746,7 +744,7 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 	const BASE =
 		'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
 		'log_tags(tags(name))';
-	const MOVIE_FULL = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path, directors, genres)';
+	const MOVIE_FULL = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path, directors)';
 	const MOVIE_BASE = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path)';
 	const HOW = 'medium, theaters(name, city), formats(name)';
 	const tiers = [
@@ -793,7 +791,6 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 			poster_path: string | null;
 			backdrop_path: string | null;
 			directors?: string[] | null;
-			genres?: string[] | null;
 		};
 		log_tags: { tags: { name: string } }[];
 	};
@@ -818,7 +815,6 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 			poster_path: row.movies.poster_path,
 			backdrop_path: row.movies.backdrop_path,
 			directors: row.movies.directors ?? [],
-			genres: row.movies.genres ?? [],
 		},
 		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
 		friends,
