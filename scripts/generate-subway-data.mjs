@@ -9,9 +9,14 @@
 //
 // The diagram's own schematic coordinates are scaled/flipped into a portrait
 // canvas (north up). It is intentionally NOT geographically accurate — it matches
-// the official diagram's placement. Track segments are reconstructed by building a
-// vertex graph per trunk line (merging coincident junction vertices), projecting
-// each station onto its nearest edge, splitting, then walking station-to-station.
+// the official diagram's placement.
+//
+// Each *service* (1, 2, 3, A, C, E, ...) gets its own set of track segments so it
+// can be toggled independently and drawn as its own parallel line within a trunk.
+// Segments are reconstructed by building a vertex graph per trunk (merging
+// coincident junction vertices), projecting that service's stations onto their
+// nearest edge, splitting, then walking station-to-station. Each service carries
+// an offset index `o` used at render time to fan the parallel lines apart.
 
 import fs from "node:fs";
 import path from "node:path";
@@ -21,27 +26,34 @@ const BASE =
   "https://services.arcgis.com/04HiymDgLlsbhaV4/arcgis/rest/services/NYC_Subway_Diagram_Updated_Layers/FeatureServer";
 const OUT = path.join(fileURLToPath(new URL(".", import.meta.url)), "..", "src", "scripts", "subway-data.js");
 
-// Trunk-line feature name -> group key; service token -> group key.
+// Trunk-line feature name -> trunk key; service token -> trunk key.
 const lineNameToKey = {
   "1,2,3": "123", "4,5,6": "456", "7": "7", "A,C,E": "ACE",
   "B,D,F,M": "BDFM", "G": "G", "J,Z": "JZ", "L": "L",
   "N,Q,R,W": "NQRW", "Shuttle": "S", "SIRR": "SIR", "IBX": "IBX",
 };
-const tokenToGroup = {
+const tokenToTrunk = {
   "1": "123", "2": "123", "3": "123", "4": "456", "5": "456", "6": "456",
   "7": "7", A: "ACE", C: "ACE", E: "ACE", B: "BDFM", D: "BDFM", F: "BDFM",
   M: "BDFM", G: "G", J: "JZ", Z: "JZ", L: "L", N: "NQRW", Q: "NQRW",
   R: "NQRW", W: "NQRW", S: "S", SIR: "SIR",
 };
-// Sidebar order + labels.
-const GROUP_META = [
-  { key: "123", label: "1 2 3" }, { key: "456", label: "4 5 6" },
-  { key: "7", label: "7" }, { key: "ACE", label: "A C E" },
-  { key: "BDFM", label: "B D F M" }, { key: "G", label: "G" },
-  { key: "JZ", label: "J Z" }, { key: "L", label: "L" },
-  { key: "NQRW", label: "N Q R W" }, { key: "S", label: "Shuttles" },
-  { key: "SIR", label: "Staten Island Ry" },
-];
+// Services per trunk, in the order they fan out (offset order).
+const trunkServices = {
+  "123": ["1", "2", "3"], "456": ["4", "5", "6"], "7": ["7"],
+  "ACE": ["A", "C", "E"], "BDFM": ["B", "D", "F", "M"], "G": ["G"],
+  "JZ": ["J", "Z"], "L": ["L"], "NQRW": ["N", "Q", "R", "W"],
+  "S": ["S"], "SIR": ["SIR"],
+};
+// Global service order for the summary / legend.
+const SERVICE_ORDER = ["1", "2", "3", "4", "5", "6", "7", "A", "C", "E", "B", "D", "F", "M", "G", "J", "Z", "L", "N", "Q", "R", "W", "S", "SIR"];
+
+// Offset index per service within its trunk (used to fan parallel lines apart).
+const serviceMeta = {};
+for (const trunk in trunkServices) {
+  const svcs = trunkServices[trunk];
+  svcs.forEach((svc, i) => (serviceMeta[svc] = { trunk, o: i - (svcs.length - 1) / 2 }));
+}
 
 async function queryLayer(id) {
   const url = `${BASE}/${id}/query?where=1%3D1&outFields=*&returnGeometry=true&f=json`;
@@ -69,11 +81,38 @@ async function main() {
     const a = f.attributes;
     if (a.agency !== "NYCT" || a.type !== "Station") continue;
     const tokens = String(a.services || "")
-      .replace(/NYCT-\s*/g, "").split(",").map((s) => s.trim()).filter(Boolean);
-    const groups = [...new Set(tokens.map((t) => tokenToGroup[t]).filter(Boolean))];
-    if (!groups.length) continue; // skip depots/yards tagged BX/BK/QN/SI
-    rawStations.push({ id: a.point_id, name: a.name, gx: f.geometry.x, gy: f.geometry.y, svcs: tokens, groups });
+      .replace(/NYCT-\s*/g, "").split(",").map((s) => s.trim()).filter(Boolean)
+      .filter((t) => tokenToTrunk[t]);
+    if (!tokens.length) continue; // skip depots/yards tagged BX/BK/QN/SI
+    const trunks = [...new Set(tokens.map((t) => tokenToTrunk[t]))];
+    rawStations.push({ id: a.point_id, name: a.name, gx: f.geometry.x, gy: f.geometry.y, svcs: tokens, trunks });
   }
+
+  // Rotate the diagram so the ACE 8th-Ave trunk (34 St-Penn Station -> 145 St)
+  // runs straight N/S. (This also lands the Queens Blvd E/F/M/R horizontal.)
+  const findSt = (nm, svc) => rawStations.find((s) => s.name === nm && s.svcs.includes(svc));
+  const penn = findSt('34 St-Penn Station', 'E'), n145 = findSt('145 St', 'A');
+  const ROT = penn && n145 ? Math.atan2(n145.gx - penn.gx, n145.gy - penn.gy) : 0;
+  const rot = (x, y) => [x * Math.cos(ROT) - y * Math.sin(ROT), x * Math.sin(ROT) + y * Math.cos(ROT)];
+  console.log('rotation:', ((ROT * 180) / Math.PI).toFixed(3), 'deg CCW');
+  for (const key in rawLines) rawLines[key] = rawLines[key].map((p) => p.map(([x, y]) => rot(x, y)));
+  for (const s of rawStations) { const [rx, ry] = rot(s.gx, s.gy); s.gx = rx; s.gy = ry; }
+
+  // Merge co-located station records — the diagram splits a single complex (e.g.
+  // 34 St-Herald Sq) into one point per line. Collapse points drawn on the same
+  // spot into a single station serving the union of their services.
+  const MERGE_DIST = 2;
+  const merged = [];
+  for (const s of rawStations) {
+    const hit = merged.find((m) => Math.hypot(m.gx - s.gx, m.gy - s.gy) < MERGE_DIST);
+    if (hit) {
+      hit.svcs = [...new Set([...hit.svcs, ...s.svcs])];
+      hit.trunks = [...new Set([...hit.trunks, ...s.trunks])];
+      if (s.name.length > hit.name.length) hit.name = s.name; // prefer the fuller label
+    } else merged.push({ ...s });
+  }
+  console.log('stations merged:', rawStations.length, '->', merged.length);
+  rawStations.length = 0; rawStations.push(...merged);
 
   // Fit content bbox into a portrait canvas, flipping Y so north is up.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -87,139 +126,173 @@ async function main() {
   const tx = (x) => +((x - minX) * scale + PAD).toFixed(1);
   const ty = (y) => +((maxY - y) * scale + PAD).toFixed(1);
 
-  const LINES = GROUP_META.map((g) => g.key).concat(["IBX"]).filter((k) => rawLines[k]).map((key) => ({
-    key, color: lineColor[key], paths: rawLines[key].map((p) => p.map(([x, y]) => [tx(x), ty(y)])),
-  }));
   const STATIONS = rawStations.map((s) => ({
-    id: s.id, name: s.name, x: tx(s.gx), y: ty(s.gy), svcs: s.svcs, groups: s.groups,
+    id: s.id, name: s.name, x: tx(s.gx), y: ty(s.gy), svcs: s.svcs, trunks: s.trunks,
   }));
+  const stById = {}; STATIONS.forEach((s) => (stById[s.id] = s));
 
-  // Reconstruct clickable track segments per trunk line.
+  // --- Reconstruct per-service track segments ---
   const SEGMENTS = [];
-  for (const g of GROUP_META) {
-    const paths = (rawLines[g.key] || []).map((p) => p.map(([x, y]) => [tx(x), ty(y)]));
+  for (const trunk in trunkServices) {
+    const paths = (rawLines[trunk] || []).map((p) => p.map(([x, y]) => [tx(x), ty(y)]));
     if (!paths.length) continue;
+    const color = lineColor[trunk];
+    const svcs = trunkServices[trunk];
+    const n = svcs.length;
 
-    // Vertex graph; node key = rounded coordinate so shared junction vertices merge.
-    const nodePt = {}, nbr = {};
+    // Base vertex graph for the trunk; node key = rounded coordinate so shared
+    // junction vertices merge.
+    const baseNodePt = {}, baseNbr = {};
     const vkey = (p) => p[0].toFixed(1) + "," + p[1].toFixed(1);
-    const addEdge = (a, b) => { if (a === b) return; (nbr[a] = nbr[a] || new Set()).add(b); (nbr[b] = nbr[b] || new Set()).add(a); };
     for (const p of paths) for (let i = 0; i < p.length - 1; i++) {
       const a = vkey(p[i]), b = vkey(p[i + 1]);
-      nodePt[a] = p[i]; nodePt[b] = p[i + 1]; addEdge(a, b);
+      baseNodePt[a] = p[i]; baseNodePt[b] = p[i + 1];
+      if (a !== b) { (baseNbr[a] = baseNbr[a] || new Set()).add(b); (baseNbr[b] = baseNbr[b] || new Set()).add(a); }
     }
 
-    // Project each station onto its nearest edge (handles under-sampled lines like SIR).
-    const groupStations = STATIONS.filter((s) => s.groups.includes(g.key));
-    const edges = [];
-    for (const a in nbr) for (const b of nbr[a]) if (a < b) edges.push([a, b]);
-    const onEdge = {};
-    for (const s of groupStations) {
-      let best = null;
-      for (const [a, b] of edges) {
-        const A = nodePt[a], B = nodePt[b];
-        const dx = B[0] - A[0], dy = B[1] - A[1], len2 = dx * dx + dy * dy || 1e-9;
-        let t = ((s.x - A[0]) * dx + (s.y - A[1]) * dy) / len2;
-        t = Math.max(0, Math.min(1, t));
-        const px = A[0] + t * dx, py = A[1] + t * dy;
-        const d = (s.x - px) ** 2 + (s.y - py) ** 2;
-        if (best === null || d < best.d) best = { d, a, b, t, px, py };
-      }
-      if (!best) continue;
-      (onEdge[best.a + "|" + best.b] = onEdge[best.a + "|" + best.b] || []).push({ t: best.t, id: s.id, px: best.px, py: best.py });
-    }
+    svcs.forEach((svc, si) => {
+      const o = si - (n - 1) / 2; // offset index, centered on 0
+      const stationsOfSvc = STATIONS.filter((s) => s.svcs.includes(svc));
+      if (stationsOfSvc.length < 2) return;
 
-    // Split each edge at its projected stations, inserting station nodes in order.
-    const stationAtNode = {};
-    for (const ek in onEdge) {
-      const [a, b] = ek.split("|");
-      nbr[a].delete(b); nbr[b].delete(a);
-      let prev = a;
-      for (const st of onEdge[ek].sort((x, y) => x.t - y.t)) {
-        const skey = "S" + st.id;
-        nodePt[skey] = [st.px, st.py]; stationAtNode[skey] = st.id; addEdge(prev, skey); prev = skey;
-      }
-      addEdge(prev, b);
-    }
+      // Clone the trunk graph for this service.
+      const nodePt = Object.assign({}, baseNodePt);
+      const nbr = {}; for (const k in baseNbr) nbr[k] = new Set(baseNbr[k]);
+      const addEdge = (a, b) => { if (a === b) return; (nbr[a] = nbr[a] || new Set()).add(b); (nbr[b] = nbr[b] || new Set()).add(a); };
 
-    // Walk from each station node to the nearest station in every direction.
-    const segSeen = {};
-    for (const startKey in stationAtNode) {
-      const startId = stationAtNode[startKey];
-      const stack = [];
-      for (const m of nbr[startKey] || []) stack.push({ node: m, prev: startKey, pts: [nodePt[startKey], nodePt[m]] });
-      const visited = new Set([startKey]);
-      let steps = 0;
-      while (stack.length && steps++ < 6000) {
-        const cur = stack.pop();
-        if (visited.has(cur.node)) continue;
-        visited.add(cur.node);
-        const other = stationAtNode[cur.node];
-        if (other && other !== startId) {
-          const a = startId, b = other;
-          const sid = g.key + "|" + (a < b ? a + "|" + b : b + "|" + a);
-          const prev = segSeen[sid];
-          if (!prev || cur.pts.length < prev.pts.length) segSeen[sid] = { id: sid, key: g.key, color: lineColor[g.key], a, b, pts: cur.pts };
-          continue; // stop at the station; don't walk through it
+      // Project each station onto its nearest edge.
+      const edges = [];
+      for (const a in nbr) for (const b of nbr[a]) if (a < b) edges.push([a, b]);
+      const onEdge = {};
+      for (const s of stationsOfSvc) {
+        let best = null;
+        for (const [a, b] of edges) {
+          const A = nodePt[a], B = nodePt[b];
+          const dx = B[0] - A[0], dy = B[1] - A[1], len2 = dx * dx + dy * dy || 1e-9;
+          let t = ((s.x - A[0]) * dx + (s.y - A[1]) * dy) / len2;
+          t = Math.max(0, Math.min(1, t));
+          const px = A[0] + t * dx, py = A[1] + t * dy;
+          const d = (s.x - px) ** 2 + (s.y - py) ** 2;
+          if (best === null || d < best.d) best = { d, a, b, t, px, py };
         }
-        for (const w of nbr[cur.node] || []) if (w !== cur.prev && !visited.has(w)) stack.push({ node: w, prev: cur.node, pts: cur.pts.concat([nodePt[w]]) });
+        if (!best) continue;
+        (onEdge[best.a + "|" + best.b] = onEdge[best.a + "|" + best.b] || []).push({ t: best.t, id: s.id, px: best.px, py: best.py });
       }
-    }
-    for (const sid in segSeen) {
-      const s = segSeen[sid];
-      s.pts = s.pts.map((p) => [+p[0].toFixed(1), +p[1].toFixed(1)]);
-      SEGMENTS.push(s);
+
+      // Split each edge at its projected stations.
+      const stationAtNode = {};
+      for (const ek in onEdge) {
+        const [a, b] = ek.split("|");
+        if (nbr[a]) nbr[a].delete(b); if (nbr[b]) nbr[b].delete(a);
+        let prev = a;
+        for (const st of onEdge[ek].sort((x, y) => x.t - y.t)) {
+          const skey = "S" + st.id;
+          nodePt[skey] = [st.px, st.py]; stationAtNode[skey] = st.id; addEdge(prev, skey); prev = skey;
+        }
+        addEdge(prev, b);
+      }
+
+      // Walk from each station node to the nearest station in every direction.
+      const segSeen = {};
+      for (const startKey in stationAtNode) {
+        const startId = stationAtNode[startKey];
+        const stack = [];
+        for (const m of nbr[startKey] || []) stack.push({ node: m, prev: startKey, pts: [nodePt[startKey], nodePt[m]] });
+        const visited = new Set([startKey]);
+        let steps = 0;
+        while (stack.length && steps++ < 8000) {
+          const cur = stack.pop();
+          if (visited.has(cur.node)) continue;
+          visited.add(cur.node);
+          const other = stationAtNode[cur.node];
+          if (other && other !== startId) {
+            const a = startId, b = other;
+            const sid = svc + "|" + (a < b ? a + "|" + b : b + "|" + a);
+            const prev = segSeen[sid];
+            if (!prev || cur.pts.length < prev.pts.length) segSeen[sid] = { id: sid, svc, o, color, a, b, pts: cur.pts };
+            continue; // stop at the station; don't walk through it
+          }
+          for (const w of nbr[cur.node] || []) if (w !== cur.prev && !visited.has(w)) stack.push({ node: w, prev: cur.node, pts: cur.pts.concat([nodePt[w]]) });
+        }
+      }
+
+      const svcSegs = [];
+      for (const sid in segSeen) {
+        const s = segSeen[sid];
+        s.pts = s.pts.map((p) => [+p[0].toFixed(1), +p[1].toFixed(1)]);
+        svcSegs.push(s);
+      }
+
+      // Bridge small residual gaps within this service (source geometry breaks a
+      // line across a real adjacency, e.g. A train 145<->155 St).
+      const BRIDGE_MAX = 34;
+      for (let guard = 0; guard < 12; guard++) {
+        const adj = {}, nodes = new Set();
+        svcSegs.forEach((s) => { nodes.add(s.a); nodes.add(s.b); (adj[s.a] = adj[s.a] || []).push(s.b); (adj[s.b] = adj[s.b] || []).push(s.a); });
+        if (nodes.size < 2) break;
+        const seen = new Set(), comps = [];
+        for (const nn of nodes) {
+          if (seen.has(nn)) continue;
+          const q = [nn], c = []; seen.add(nn);
+          while (q.length) { const x = q.shift(); c.push(x); (adj[x] || []).forEach((y) => { if (!seen.has(y)) { seen.add(y); q.push(y); } }); }
+          comps.push(c);
+        }
+        if (comps.length < 2) break;
+        let bestB = null;
+        for (let i = 0; i < comps.length; i++) for (let j = i + 1; j < comps.length; j++)
+          for (const a of comps[i]) for (const b of comps[j]) {
+            const d = Math.hypot(stById[a].x - stById[b].x, stById[a].y - stById[b].y);
+            if (!bestB || d < bestB.d) bestB = { d, a, b };
+          }
+        if (!bestB || bestB.d > BRIDGE_MAX) break;
+        const { a, b } = bestB;
+        const sid = svc + "|" + (a < b ? a + "|" + b : b + "|" + a);
+        svcSegs.push({ id: sid, svc, o, color, a, b, pts: [[stById[a].x, stById[a].y], [stById[b].x, stById[b].y]] });
+      }
+
+      SEGMENTS.push(...svcSegs);
+    });
+  }
+
+  // --- Pack parallel service lines per stretch so the services actually present
+  //     are centered with a uniform gap; the bundle closes up where a line branches
+  //     away (e.g. past Franklin Av). Offset is stored per segment — services that
+  //     share a stretch overlap on the centerline, so proximity finds them. ---
+  const svcRank = {}; SERVICE_ORDER.forEach((s, i) => (svcRank[s] = i));
+  const ptSeg = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-9; let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2; t = Math.max(0, Math.min(1, t)); return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)); };
+  const ptToPath = (p, pts) => { if (pts.length === 1) return Math.hypot(p[0] - pts[0][0], p[1] - pts[0][1]); let m = Infinity; for (let i = 0; i < pts.length - 1; i++) { const d = ptSeg(p, pts[i], pts[i + 1]); if (d < m) m = d; } return m; };
+  const EPS = 4;
+  const byTrunk = {};
+  for (const sg of SEGMENTS) (byTrunk[serviceMeta[sg.svc].trunk] = byTrunk[serviceMeta[sg.svc].trunk] || []).push(sg);
+  for (const t in byTrunk) {
+    const segs = byTrunk[t];
+    for (const S of segs) {
+      const mid = S.pts[Math.floor(S.pts.length / 2)];
+      const present = new Set([S.svc]);
+      for (const T of segs) if (T.svc !== S.svc && ptToPath(mid, T.pts) < EPS) present.add(T.svc);
+      const arr = [...present].sort((a, b) => svcRank[a] - svcRank[b]);
+      S.o = arr.indexOf(S.svc) - (arr.length - 1) / 2;
     }
   }
 
-  // Bridge small residual gaps where the source geometry breaks a line across a
-  // real adjacency (e.g. A train 145<->155 St). The distance cap keeps the three
-  // genuinely separate shuttles apart.
-  const BRIDGE_MAX = 34;
-  const stById = {}; STATIONS.forEach((s) => (stById[s.id] = s));
-  for (const g of GROUP_META) {
-    for (let guard = 0; guard < 12; guard++) {
-      const adj = {}, nodes = new Set();
-      SEGMENTS.filter((s) => s.key === g.key).forEach((s) => {
-        nodes.add(s.a); nodes.add(s.b);
-        (adj[s.a] = adj[s.a] || []).push(s.b); (adj[s.b] = adj[s.b] || []).push(s.a);
-      });
-      if (nodes.size < 2) break;
-      const seen = new Set(), comps = [];
-      for (const n of nodes) {
-        if (seen.has(n)) continue;
-        const q = [n], c = []; seen.add(n);
-        while (q.length) { const x = q.shift(); c.push(x); (adj[x] || []).forEach((y) => { if (!seen.has(y)) { seen.add(y); q.push(y); } }); }
-        comps.push(c);
-      }
-      if (comps.length < 2) break;
-      let best = null;
-      for (let i = 0; i < comps.length; i++) for (let j = i + 1; j < comps.length; j++)
-        for (const a of comps[i]) for (const b of comps[j]) {
-          const d = Math.hypot(stById[a].x - stById[b].x, stById[a].y - stById[b].y);
-          if (!best || d < best.d) best = { d, a, b };
-        }
-      if (!best || best.d > BRIDGE_MAX) break;
-      const { a, b } = best;
-      const sid = g.key + "|" + (a < b ? a + "|" + b : b + "|" + a);
-      SEGMENTS.push({ id: sid, key: g.key, color: lineColor[g.key], a, b, bridge: 1, pts: [[stById[a].x, stById[a].y], [stById[b].x, stById[b].y]] });
-    }
-  }
+  const SERVICES = SERVICE_ORDER
+    .filter((svc) => SEGMENTS.some((s) => s.svc === svc))
+    .map((svc) => ({ svc, trunk: tokenToTrunk[svc], color: lineColor[tokenToTrunk[svc]] }));
 
-  const GROUPS = GROUP_META.map((g) => ({ key: g.key, label: g.label, color: lineColor[g.key] }));
   const out =
     "// AUTO-GENERATED by scripts/generate-subway-data.mjs from the MTA schematic subway\n" +
     "// diagram (ArcGIS feature service \"NYC_Subway_Diagram_Updated_Layers\"). Coordinates\n" +
     "// are the diagram's own schematic layout, scaled/flipped into a " + W + "x" + H + " canvas\n" +
-    "// (north up). Not geographically accurate — it matches the official diagram's placement.\n\n" +
+    "// (north up). Not geographically accurate. Each service (1,2,3,A,C,E,...) is its own\n" +
+    "// line; SEGMENTS carry `o`, an offset index used to fan parallel lines apart.\n\n" +
     "export const CANVAS = { W: " + W + ", H: " + H + " };\n\n" +
-    "export const GROUPS = " + JSON.stringify(GROUPS) + ";\n\n" +
-    "export const LINES = " + JSON.stringify(LINES) + ";\n\n" +
+    "export const SERVICES = " + JSON.stringify(SERVICES) + ";\n\n" +
     "export const STATIONS = " + JSON.stringify(STATIONS) + ";\n\n" +
     "export const SEGMENTS = " + JSON.stringify(SEGMENTS) + ";\n";
   fs.writeFileSync(OUT, out);
   console.log(`Wrote ${OUT}`);
-  console.log(`canvas ${W}x${H} · LINES ${LINES.length} · STATIONS ${STATIONS.length} · SEGMENTS ${SEGMENTS.length}`);
+  console.log(`canvas ${W}x${H} · SERVICES ${SERVICES.length} · STATIONS ${STATIONS.length} · SEGMENTS ${SEGMENTS.length}`);
+  for (const s of SERVICES) console.log("   " + s.svc.padEnd(4), "segments", SEGMENTS.filter((x) => x.svc === s.svc).length);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

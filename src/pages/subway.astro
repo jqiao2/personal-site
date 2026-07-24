@@ -1,7 +1,12 @@
 ---
-// Interactive MTA subway log. The network geometry, stations and per-line track
+// Interactive MTA subway log. Network geometry, stations and per-service track
 // segments are generated from the official MTA schematic diagram — see
 // src/scripts/subway-data.js. Rendering and interaction are handled client-side.
+//
+// Rendering note: the viewport <g> is only ever TRANSLATED (never scaled), and
+// geometry is drawn at data*k plus a fixed-pixel parallel offset. That keeps every
+// stroke, pill and label a constant on-screen size at any zoom while positions
+// scale. Each service is its own parallel line and toggles independently.
 const nav = [
 	{ href: '/', label: 'Home' },
 	{ href: '/about', label: 'About' },
@@ -38,13 +43,12 @@ const nav = [
 
 			<div class="sm-body">
 				<div class="sm-mapwrap">
-					<svg id="sm-svg" viewBox="0 0 1040 1102" preserveAspectRatio="xMidYMid meet">
-						<rect x="0" y="0" width="1040" height="1102" fill="#eef1ee"></rect>
+					<svg id="sm-svg" preserveAspectRatio="xMidYMid meet">
+						<rect id="sm-bg" x="0" y="0" fill="#eef1ee"></rect>
 						<g id="sm-vp">
-							<g id="sm-base"></g>
-							<g id="sm-ridden"></g>
+							<g id="sm-lines"></g>
 							<g id="sm-hit"></g>
-							<g id="sm-dots"></g>
+							<g id="sm-pills"></g>
 							<g id="sm-labels"></g>
 						</g>
 					</svg>
@@ -55,19 +59,12 @@ const nav = [
 							<button id="sm-zout" title="Zoom out">&minus;</button>
 							<button id="sm-reset" title="Reset view">&#8634;</button>
 						</div>
-						<button id="sm-range" class="sm-rangebtn">Mark a range</button>
 						<div id="sm-msg" class="sm-msg" hidden></div>
 					</div>
 
 					<div class="sm-hint">
-						Scroll to zoom &middot; drag to pan &middot; zoom in for station names &middot; click
-						track to mark it ridden, stations to mark visited
-					</div>
-
-					<div id="sm-choices" class="sm-choices" hidden>
-						<div class="sm-choices-title">Which line did you ride?</div>
-						<div id="sm-choices-list"></div>
-						<button id="sm-cancel" class="sm-cancel">Cancel</button>
+						Scroll to zoom &middot; drag to pan &middot; zoom in for station names &middot; click a
+						line to mark it ridden, a station to mark it visited
 					</div>
 				</div>
 
@@ -89,15 +86,15 @@ const nav = [
 						</label>
 					</div>
 					<p class="sm-note">
-						A graph of real MTA stations linked by per-line track segments, laid out from the
-						official schematic diagram and saved in this browser. The transfer stations are larger
-						circles. Export to back up or move devices.
+						Every service is its own line — the A, C and E each run their own track down 8 Av, so
+						you can log them independently. Click a line to mark it ridden and a station to mark it
+						visited. Saved in this browser; export to back up or move devices.
 					</p>
 				</aside>
 			</div>
 		</section>
 
-		<style>
+		<style is:global>
 			* {
 				box-sizing: border-box;
 			}
@@ -190,19 +187,6 @@ const nav = [
 			.sm-zoom button:hover {
 				background: #3a1d1f;
 			}
-			.sm-rangebtn {
-				border: none;
-				border-radius: 8px;
-				background: #20100f;
-				color: #f4e8d1;
-				font: 600 12px Archivo, Arial, sans-serif;
-				padding: 9px 14px;
-				cursor: pointer;
-			}
-			.sm-rangebtn.on {
-				background: #d9b45a;
-				color: #2a1214;
-			}
 			.sm-msg {
 				background: #20100f;
 				color: #f4e8d1;
@@ -220,72 +204,8 @@ const nav = [
 				color: #6b7370;
 				pointer-events: none;
 			}
-			.sm-choices {
-				position: absolute;
-				top: 70px;
-				left: 50%;
-				transform: translateX(-50%);
-				background: #20100f;
-				border: 1px solid #4a2529;
-				border-radius: 12px;
-				padding: 16px;
-				display: flex;
-				flex-direction: column;
-				gap: 8px;
-				min-width: 260px;
-				box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-			}
-			.sm-choices-title {
-				font: 600 13px Archivo, Arial, sans-serif;
-				color: #f4e8d1;
-			}
-			#sm-choices-list {
-				display: flex;
-				flex-direction: column;
-				gap: 8px;
-			}
-			.sm-choice {
-				display: flex;
-				align-items: center;
-				gap: 10px;
-				border: 1px solid #4a2529;
-				border-radius: 8px;
-				background: #2a1214;
-				padding: 8px 12px;
-				cursor: pointer;
-				text-align: left;
-			}
-			.sm-choice:hover {
-				border-color: #d9b45a;
-			}
-			.sm-bullet {
-				display: inline-flex;
-				align-items: center;
-				justify-content: center;
-				min-width: 22px;
-				height: 22px;
-				border-radius: 50%;
-				color: #fff;
-				font: 700 11px Archivo, Arial, sans-serif;
-				padding: 0 4px;
-			}
-			.sm-choice span:last-child {
-				font: 500 12px Archivo, Arial, sans-serif;
-				color: #ddc9b4;
-			}
-			.sm-cancel {
-				border: none;
-				background: none;
-				color: #a2857a;
-				font: 500 12px Archivo, Arial, sans-serif;
-				cursor: pointer;
-				padding: 4px;
-			}
-			.sm-cancel:hover {
-				color: #f4e8d1;
-			}
 			.sm-side {
-				width: 300px;
+				width: 306px;
 				flex: none;
 				background: #20100f;
 				border-left: 1px solid #4a2529;
@@ -323,17 +243,33 @@ const nav = [
 				background: #4a2529;
 			}
 			.sm-rows {
-				display: flex;
-				flex-direction: column;
-				gap: 12px;
+				display: grid;
+				grid-template-columns: repeat(2, 1fr);
+				gap: 12px 16px;
 			}
 			.sm-row {
 				display: grid;
-				grid-template-columns: 34px 1fr auto;
+				grid-template-columns: 26px 1fr;
 				align-items: center;
-				gap: 10px;
+				gap: 9px;
 			}
-			.sm-row-name {
+			.sm-bullet {
+				width: 26px;
+				height: 26px;
+				border-radius: 50%;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				font: 700 13px Archivo, Arial, sans-serif;
+			}
+			.sm-bullet.sir {
+				font-size: 9px;
+				letter-spacing: 0.2px;
+			}
+			.sm-rowinfo {
+				min-width: 0;
+			}
+			.sm-rowpct {
 				font: 600 12px Archivo, Arial, sans-serif;
 				color: #f4e8d1;
 			}
@@ -342,18 +278,12 @@ const nav = [
 				background: #3a1d1f;
 				border-radius: 2px;
 				overflow: hidden;
-				margin: 4px 0;
+				margin-top: 3px;
 			}
 			.sm-bar > div {
 				height: 100%;
-			}
-			.sm-row-sub {
-				font: 500 11px Archivo, Arial, sans-serif;
-				color: #a2857a;
-			}
-			.sm-row-pct {
-				font: 600 12px Archivo, Arial, sans-serif;
-				color: #ddc9b4;
+				border-radius: 2px;
+				transition: width 0.15s ease;
 			}
 			.sm-io {
 				display: flex;
@@ -383,7 +313,7 @@ const nav = [
 				color: #a2857a;
 				line-height: 1.5;
 			}
-			@media (max-width: 720px) {
+			@media (max-width: 760px) {
 				.sm-body {
 					flex-direction: column;
 					height: auto;
@@ -400,36 +330,40 @@ const nav = [
 		</style>
 
 		<script>
-			import { CANVAS, GROUPS, LINES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
+			import { CANVAS, SERVICES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
 
-			const KEY = 'mta-subway-log-v1';
-			const TINT = 0.28; // faded amount for unridden track
+			const KEY = 'mta-subway-log-v2';
 			const SVGNS = 'http://www.w3.org/2000/svg';
+			const W = CANVAS.W, H = CANVAS.H;
+
+			// Fixed on-screen sizes (viewBox units ≈ constant screen px since the group
+			// only translates). Parallel service lines are SPACING apart.
+			const SPACING = 4.8;
+			const LINE_W = 3.0, LINE_W_ON = 3.9, HIT_W = 5.2;
+			const PILL_TH = 5.4, PILL_PAD = 3.6, PILL_BORDER = 1.4;
+			const TINT = 0.32; // faded amount for unridden track
+			const LABEL_FONT = 11, LABEL_ZOOM = 2.0;
+			// Below this zoom, lines/pills hold a fixed on-screen size; beyond it they
+			// scale with zoom so parallel lines fan apart and are easier to click.
+			const SIZE_K0 = 4;
+			const sizeScaleFor = (z) => (z <= SIZE_K0 ? 1 : z / SIZE_K0);
+			let curScale = 1;
 
 			const svg = document.getElementById('sm-svg');
+			svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+			const bg = document.getElementById('sm-bg');
+			bg.setAttribute('width', W); bg.setAttribute('height', H);
 			const vp = document.getElementById('sm-vp');
-			const gBase = document.getElementById('sm-base');
-			const gRidden = document.getElementById('sm-ridden');
+			const gLines = document.getElementById('sm-lines');
 			const gHit = document.getElementById('sm-hit');
-			const gDots = document.getElementById('sm-dots');
+			const gPills = document.getElementById('sm-pills');
 			const gLabels = document.getElementById('sm-labels');
 			const msgEl = document.getElementById('sm-msg');
 
-			const W = CANVAS.W,
-				H = CANVAS.H;
 			const stById = {};
 			STATIONS.forEach((s) => (stById[s.id] = s));
-			const colorByKey = {};
-			GROUPS.concat(LINES).forEach((g) => (colorByKey[g.key] = g.color));
-
-			// Per-group station adjacency (for range marking).
-			const adj = {};
-			GROUPS.forEach((g) => (adj[g.key] = {}));
-			SEGMENTS.forEach((sg) => {
-				const a = adj[sg.key];
-				(a[sg.a] = a[sg.a] || []).push(sg.b);
-				(a[sg.b] = a[sg.b] || []).push(sg.a);
-			});
+			const oMap = {};
+			SERVICES.forEach((sv) => (oMap[sv.svc] = sv.o));
 
 			// ---- state ----
 			let marks = { st: {}, seg: {} };
@@ -437,404 +371,324 @@ const nav = [
 				const s = JSON.parse(localStorage.getItem(KEY));
 				if (s && s.st && s.seg) marks = s;
 			} catch (e) {}
-			let rangeOn = false,
-				rangeA = null;
-			const v = { x: 0, y: 0, k: 1 };
-			let showLabels = false;
+			let k = 1, tx = 0, ty = 0, showLabels = false;
 
 			// ---- helpers ----
 			function el(name, attrs) {
 				const e = document.createElementNS(SVGNS, name);
-				for (const k in attrs) e.setAttribute(k, attrs[k]);
+				for (const kk in attrs) e.setAttribute(kk, attrs[kk]);
 				return e;
 			}
 			function mix(hex, t) {
 				const b = [0xee, 0xf1, 0xee];
 				let c = '#';
 				for (let j = 0; j < 3; j++) {
-					const val = Math.round(parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) * t + b[j] * (1 - t));
-					c += val.toString(16).padStart(2, '0');
+					const v = Math.round(parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) * t + b[j] * (1 - t));
+					c += v.toString(16).padStart(2, '0');
 				}
 				return c;
 			}
-			function ptsToD(pts) {
-				return 'M ' + pts.map((p) => p[0] + ' ' + p[1]).join(' L ');
+			function textOn(hex) {
+				const r = parseInt(hex.slice(1, 3), 16), g = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+				return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#141414' : '#ffffff';
 			}
-			function save() {
-				try {
-					localStorage.setItem(KEY, JSON.stringify(marks));
-				} catch (e) {}
-			}
-			function setMsg(t) {
-				if (t) {
-					msgEl.textContent = t;
-					msgEl.hidden = false;
-				} else {
-					msgEl.hidden = true;
-				}
-			}
+			function save() { try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {} }
+			function setMsg(t) { if (t) { msgEl.textContent = t; msgEl.hidden = false; } else msgEl.hidden = true; }
+			// Orient a normal into a fixed half-plane so parallel offsets never flip
+			// sides between segments (diagonal reference avoids grid-aligned lines).
+			function hemi(nx, ny) { return nx + ny < 0 ? [-nx, -ny] : [nx, ny]; }
 
-			// ---- build static SVG ----
-			// base trunk lines (faded, non-interactive)
-			LINES.forEach((ln) => {
-				ln.paths.forEach((p) => {
-					gBase.appendChild(
-						el('path', {
-							d: ptsToD(p),
-							stroke: mix(ln.color, TINT),
-							'stroke-width': 5,
-							fill: 'none',
-							'stroke-linecap': 'round',
-							'stroke-linejoin': 'round',
-							'pointer-events': 'none',
-						})
-					);
-				});
+			// ---- per-segment unit normals (zoom-independent), pts[0]↔a, pts[last]↔b ----
+			// Orient by PROPAGATION from the most axis-aligned vertex so the normal
+			// never flips sign along a segment (which made diagonals look harsh).
+			SEGMENTS.forEach((sg) => {
+				const P = sg.pts, L = P.length, raw = [];
+				for (let i = 0; i < L; i++) {
+					let ax, ay;
+					if (L === 1) { ax = 1; ay = 0; }
+					else if (i === 0) { ax = P[1][0] - P[0][0]; ay = P[1][1] - P[0][1]; }
+					else if (i === L - 1) { ax = P[L - 1][0] - P[L - 2][0]; ay = P[L - 1][1] - P[L - 2][1]; }
+					else { ax = P[i + 1][0] - P[i - 1][0]; ay = P[i + 1][1] - P[i - 1][1]; }
+					const len = Math.hypot(ax, ay) || 1;
+					raw.push([-ay / len, ax / len]);
+				}
+				// seed at the vertex whose normal sits furthest from the flip boundary
+				let seed = 0, bm = -1;
+				for (let i = 0; i < L; i++) { const m = Math.abs(raw[i][0] + raw[i][1]); if (m > bm) { bm = m; seed = i; } }
+				const N = new Array(L);
+				N[seed] = hemi(raw[seed][0], raw[seed][1]);
+				for (let i = seed + 1; i < L; i++) N[i] = raw[i][0] * N[i - 1][0] + raw[i][1] * N[i - 1][1] >= 0 ? raw[i] : [-raw[i][0], -raw[i][1]];
+				for (let i = seed - 1; i >= 0; i--) N[i] = raw[i][0] * N[i + 1][0] + raw[i][1] * N[i + 1][1] >= 0 ? raw[i] : [-raw[i][0], -raw[i][1]];
+				sg._n = N;
 			});
 
-			// ridden overlay + invisible hit target, one per segment
+			// ---- share endpoint normals so parallel lines line up through a station ----
+			const stationEnds = {};
+			SEGMENTS.forEach((sg) => {
+				const L = sg.pts.length;
+				(stationEnds[sg.a] = stationEnds[sg.a] || []).push({ sg, i: 0 });
+				(stationEnds[sg.b] = stationEnds[sg.b] || []).push({ sg, i: L - 1 });
+			});
+			for (const id in stationEnds) {
+				const ends = stationEnds[id];
+				if (ends.length !== 2) continue; // only straightforward through-stations
+				const n0 = ends[0].sg._n[ends[0].i], n1 = ends[1].sg._n[ends[1].i];
+				let sx = n0[0] + n1[0], sy = n0[1] + n1[1];
+				const l = Math.hypot(sx, sy) || 1; sx /= l; sy /= l;
+				ends[0].sg._n[ends[0].i] = [sx, sy];
+				ends[1].sg._n[ends[1].i] = [sx, sy];
+			}
+
+			// ---- per-station marker geometry (orientation, span) + label priority ----
+			const cov = {}; // id -> {Sxx,Sxy,Syy,cnt}
+			function addDir(id, dx, dy) {
+				const l = Math.hypot(dx, dy) || 1, x = dx / l, y = dy / l;
+				const c = cov[id] || (cov[id] = { Sxx: 0, Sxy: 0, Syy: 0, cnt: 0 });
+				c.Sxx += x * x; c.Sxy += x * y; c.Syy += y * y; c.cnt++;
+			}
+			SEGMENTS.forEach((sg) => {
+				const P = sg.pts, L = P.length;
+				addDir(sg.a, P[1][0] - P[0][0], P[1][1] - P[0][1]);
+				addDir(sg.b, P[L - 2][0] - P[L - 1][0], P[L - 2][1] - P[L - 1][1]);
+			});
+			// offset range of the lines actually meeting at each station (sized/centred
+			// from the packed per-segment offsets, so the pill length tracks the number
+			// of lines through it and stays centred on the bundle).
+			const oRange = {};
+			SEGMENTS.forEach((sg) => {
+				[sg.a, sg.b].forEach((id) => {
+					const r = oRange[id] || (oRange[id] = [Infinity, -Infinity]);
+					r[0] = Math.min(r[0], sg.o); r[1] = Math.max(r[1], sg.o);
+				});
+			});
+			const stMeta = {};
+			STATIONS.forEach((s) => {
+				const c = cov[s.id] || { Sxx: 1, Sxy: 0, Syy: 0, cnt: 0 };
+				const ang = 0.5 * Math.atan2(2 * c.Sxy, c.Sxx - c.Syy); // principal (line) axis
+				let nx = -Math.sin(ang), ny = Math.cos(ang);
+				if (nx + ny < 0) { nx = -nx; ny = -ny; }
+				let deg = (Math.atan2(ny, nx) * 180) / Math.PI;
+				deg = Math.round(deg / 45) * 45; // snap pill to 45° increments
+				const r = oRange[s.id] || [0, 0];
+				stMeta[s.id] = {
+					nx: Math.cos((deg * Math.PI) / 180), ny: Math.sin((deg * Math.PI) / 180),
+					deg,
+					midOff: ((r[0] + r[1]) / 2) * SPACING,
+					len: (r[1] - r[0]) * SPACING + LINE_W_ON + PILL_PAD,
+					prio: c.cnt,
+				};
+			});
+			const stationsByPrio = [...STATIONS].sort((a, b) => stMeta[b.id].prio - stMeta[a.id].prio);
+
+			// ---- build lines (visible + hit) ----
 			const segEls = {};
 			SEGMENTS.forEach((sg) => {
-				const d = ptsToD(sg.pts);
-				const ridden = el('path', {
-					d,
-					stroke: sg.color,
-					'stroke-width': 7,
-					fill: 'none',
-					'stroke-linecap': 'round',
-					'stroke-linejoin': 'round',
-					'pointer-events': 'none',
+				const vis = el('path', {
+					stroke: mix(sg.color, TINT), 'stroke-width': LINE_W, fill: 'none',
+					'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'pointer-events': 'none',
 				});
-				gRidden.appendChild(ridden);
+				gLines.appendChild(vis);
 				const hit = el('path', {
-					d,
-					stroke: 'rgba(0,0,0,0)',
-					'stroke-width': 16,
-					fill: 'none',
-					style: 'cursor:pointer;',
+					stroke: 'rgba(0,0,0,0)', 'stroke-width': HIT_W, fill: 'none',
+					'stroke-linecap': 'round', style: 'cursor:pointer;',
 				});
-				const an = stById[sg.a].name,
-					bn = stById[sg.b].name;
 				const title = el('title', {});
-				title.textContent = sg.key + ' · ' + an + ' ↔ ' + bn;
 				hit.appendChild(title);
 				hit.addEventListener('click', () => toggleSeg(sg.id));
 				gHit.appendChild(hit);
-				segEls[sg.id] = { ridden, title, an, bn, key: sg.key };
+				segEls[sg.id] = { sg, vis, hit, title };
 			});
 
-			// station dots + labels
-			const dotEls = {};
+			// ---- build station pills + labels ----
+			const pillEls = {};
 			const labelEls = {};
 			STATIONS.forEach((s) => {
-				const xfer = s.svcs.length >= 2;
-				const dot = el('circle', {
-					cx: s.x,
-					cy: s.y,
-					r: xfer ? 5.5 : 3.6,
-					style: 'cursor:pointer;',
+				const m = stMeta[s.id];
+				const rect = el('rect', {
+					x: (-m.len / 2).toFixed(2), y: (-PILL_TH / 2).toFixed(2),
+					width: m.len.toFixed(2), height: PILL_TH, rx: (PILL_TH / 2).toFixed(2),
+					'stroke-width': PILL_BORDER, 'vector-effect': 'non-scaling-stroke', style: 'cursor:pointer;',
 				});
 				const title = el('title', {});
-				dot.appendChild(title);
-				dot.addEventListener('click', () => stationClick(s.id));
-				gDots.appendChild(dot);
-				dotEls[s.id] = { dot, title, xfer };
+				rect.appendChild(title);
+				rect.addEventListener('click', () => stationClick(s.id));
+				gPills.appendChild(rect);
+				pillEls[s.id] = { s, rect, title, m };
 
 				const right = s.x >= W / 2;
 				const label = el('text', {
-					x: s.x + (right ? 8 : -8),
-					y: s.y + 3,
 					'text-anchor': right ? 'start' : 'end',
-					style:
-						'font:600 9px Archivo,Arial,sans-serif; fill:#403b33; paint-order:stroke; stroke:#eef1ee; stroke-width:2.5px; pointer-events:none;',
+					style: 'font:600 ' + LABEL_FONT + 'px Archivo,Arial,sans-serif; fill:#2a2620; paint-order:stroke; stroke:#eef1ee; stroke-width:3px; pointer-events:none;',
 				});
 				label.textContent = s.name;
 				label.style.display = 'none';
 				gLabels.appendChild(label);
-				labelEls[s.id] = label;
+				labelEls[s.id] = { s, label, right, w: s.name.length * LABEL_FONT * 0.54 };
 			});
 
-			// ---- render dynamic state ----
-			function renderSegments() {
-				SEGMENTS.forEach((sg) => {
-					const on = !!marks.seg[sg.id];
-					const e = segEls[sg.id];
-					e.ridden.style.display = on ? '' : 'none';
-					e.title.textContent =
-						sg.key + ' · ' + e.an + ' ↔ ' + e.bn + (on ? ' — ridden' : '');
-				});
-			}
-			function renderDots() {
+			// ---- geometry (depends on zoom k). Positions scale; sizes/offsets fixed. ----
+			function drawGeometry() {
+				curScale = sizeScaleFor(k);
+				const sp = SPACING * curScale;
+				const hw = (HIT_W * curScale).toFixed(2);
+				for (const id in segEls) {
+					const e = segEls[id], sg = e.sg, off = sg.o * sp, P = sg.pts, N = sg._n;
+					let d = '';
+					for (let i = 0; i < P.length; i++) {
+						const x = P[i][0] * k + off * N[i][0];
+						const y = P[i][1] * k + off * N[i][1];
+						d += (i ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
+					}
+					e.vis.setAttribute('d', d);
+					e.vis.setAttribute('stroke-width', ((marks.seg[sg.id] ? LINE_W_ON : LINE_W) * curScale).toFixed(2));
+					e.hit.setAttribute('d', d);
+					e.hit.setAttribute('stroke-width', hw);
+				}
 				STATIONS.forEach((s) => {
-					const on = !!marks.st[s.id];
-					const isA = rangeA === s.id;
-					const e = dotEls[s.id];
-					e.dot.setAttribute('fill', on ? '#26231f' : '#ffffff');
-					e.dot.setAttribute('stroke', isA ? '#d9b45a' : on ? '#26231f' : '#7a7264');
-					e.dot.setAttribute('stroke-width', isA ? 3 : e.xfer ? 2 : 1.4);
-					e.title.textContent =
-						s.name + ' (' + s.svcs.join(' ') + ')' + (on ? ' — visited' : '');
+					const m = stMeta[s.id];
+					const cx = s.x * k + m.midOff * curScale * m.nx, cy = s.y * k + m.midOff * curScale * m.ny;
+					pillEls[s.id].rect.setAttribute('transform', 'translate(' + cx.toFixed(1) + ' ' + cy.toFixed(1) + ') rotate(' + m.deg + ') scale(' + curScale.toFixed(3) + ')');
 				});
+				drawLabels();
 			}
-			function renderSidebar() {
-				const per = {};
-				GROUPS.forEach((g) => (per[g.key] = { stT: 0, stV: 0, sgT: 0, sgR: 0 }));
-				STATIONS.forEach((s) =>
-					s.groups.forEach((k) => {
-						if (!per[k]) return;
-						per[k].stT++;
-						if (marks.st[s.id]) per[k].stV++;
-					})
-				);
-				SEGMENTS.forEach((sg) => {
-					per[sg.key].sgT++;
-					if (marks.seg[sg.id]) per[sg.key].sgR++;
-				});
-				GROUPS.forEach((g) => {
-					const p = per[g.key];
-					const pct = p.sgT ? Math.round((100 * p.sgR) / p.sgT) : 0;
-					const r = rowEls[g.key];
-					r.bar.style.width = pct + '%';
-					r.bar.style.background = g.color;
-					r.sub.textContent = 'stations ' + p.stV + '/' + p.stT + ' · track ' + p.sgR + '/' + p.sgT;
-					r.pct.textContent = pct + '%';
-				});
-				const visited = STATIONS.filter((s) => marks.st[s.id]).length;
-				const ridden = SEGMENTS.filter((sg) => marks.seg[sg.id]).length;
-				document.getElementById('sm-tot-st').textContent =
-					visited + ' / ' + STATIONS.length + ' stations visited';
-				document.getElementById('sm-tot-sg').textContent =
-					ridden + ' / ' + SEGMENTS.length + ' track segments ridden';
-				document.getElementById('sm-tot-pct').textContent =
-					Math.round((100 * ridden) / SEGMENTS.length) + '% of the system ridden';
+			function drawLabels() {
+				if (!showLabels) { STATIONS.forEach((s) => (labelEls[s.id].label.style.display = 'none')); return; }
+				const placed = [];
+				for (const s of stationsByPrio) {
+					const e = labelEls[s.id], px = s.x * k, py = s.y * k;
+					const bx = e.right ? px + 8 : px - 8 - e.w;
+					const by = py - LABEL_FONT * 0.55;
+					const box = [bx, by, bx + e.w, by + LABEL_FONT * 1.1];
+					let clash = false;
+					for (let i = 0; i < placed.length; i++) {
+						const p = placed[i];
+						if (box[0] < p[2] && box[2] > p[0] && box[1] < p[3] && box[3] > p[1]) { clash = true; break; }
+					}
+					if (clash) { e.label.style.display = 'none'; }
+					else {
+						placed.push(box);
+						e.label.style.display = '';
+						e.label.setAttribute('x', (e.right ? px + 8 : px - 8).toFixed(1));
+						e.label.setAttribute('y', (py + LABEL_FONT * 0.34).toFixed(1));
+					}
+				}
 			}
-			function renderAll() {
-				renderSegments();
-				renderDots();
+
+			// ---- state → styling (independent of zoom) ----
+			function renderSegMark(sg) {
+				const e = segEls[sg.id], on = !!marks.seg[sg.id];
+				e.vis.setAttribute('stroke', on ? sg.color : mix(sg.color, TINT));
+				e.vis.setAttribute('stroke-width', ((on ? LINE_W_ON : LINE_W) * curScale).toFixed(2));
+				e.title.textContent = sg.svc + ' · ' + stById[sg.a].name + ' ↔ ' + stById[sg.b].name + (on ? ' — ridden' : '');
+			}
+			function renderPillMark(s) {
+				const e = pillEls[s.id], on = !!marks.st[s.id];
+				e.rect.setAttribute('fill', on ? '#26231f' : '#ffffff');
+				e.rect.setAttribute('stroke', on ? '#26231f' : '#7a7264');
+				e.title.textContent = s.name + ' (' + s.svcs.join(' ') + ')' + (on ? ' — visited' : '');
+			}
+			function renderAllMarks() {
+				SEGMENTS.forEach(renderSegMark);
+				STATIONS.forEach(renderPillMark);
 				renderSidebar();
 			}
 
-			// ---- build sidebar rows ----
-			const rowsWrap = document.getElementById('sm-rows');
+			// ---- sidebar ----
 			const rowEls = {};
-			GROUPS.forEach((g) => {
+			const rowsWrap = document.getElementById('sm-rows');
+			SERVICES.forEach((sv) => {
 				const row = document.createElement('div');
 				row.className = 'sm-row';
 				const bullet = document.createElement('span');
-				bullet.className = 'sm-bullet';
-				bullet.style.background = g.color;
-				bullet.textContent = g.key === 'SIR' ? 'SIR' : g.key === 'S' ? 'S' : g.label.replace(/ /g, '');
-				if (bullet.textContent.length > 4) bullet.style.fontSize = '8px';
-				const mid = document.createElement('div');
-				const name = document.createElement('div');
-				name.className = 'sm-row-name';
-				name.textContent = g.label;
+				bullet.className = 'sm-bullet' + (sv.svc.length > 1 ? ' sir' : '');
+				bullet.style.background = sv.color;
+				bullet.style.color = textOn(sv.color);
+				bullet.textContent = sv.svc;
+				const info = document.createElement('div');
+				info.className = 'sm-rowinfo';
+				const pct = document.createElement('div');
+				pct.className = 'sm-rowpct';
 				const bar = document.createElement('div');
 				bar.className = 'sm-bar';
 				const barIn = document.createElement('div');
+				barIn.style.background = sv.color;
 				bar.appendChild(barIn);
-				const sub = document.createElement('div');
-				sub.className = 'sm-row-sub';
-				mid.appendChild(name);
-				mid.appendChild(bar);
-				mid.appendChild(sub);
-				const pct = document.createElement('span');
-				pct.className = 'sm-row-pct';
+				info.appendChild(pct);
+				info.appendChild(bar);
 				row.appendChild(bullet);
-				row.appendChild(mid);
-				row.appendChild(pct);
+				row.appendChild(info);
 				rowsWrap.appendChild(row);
-				rowEls[g.key] = { bar: barIn, sub, pct };
+				rowEls[sv.svc] = { pct, bar: barIn };
 			});
+			function renderSidebar() {
+				const per = {};
+				SERVICES.forEach((sv) => (per[sv.svc] = { sgT: 0, sgR: 0 }));
+				SEGMENTS.forEach((sg) => { const p = per[sg.svc]; p.sgT++; if (marks.seg[sg.id]) p.sgR++; });
+				SERVICES.forEach((sv) => {
+					const p = per[sv.svc], pct = p.sgT ? Math.round((100 * p.sgR) / p.sgT) : 0;
+					rowEls[sv.svc].pct.textContent = pct + '%';
+					rowEls[sv.svc].bar.style.width = pct + '%';
+				});
+				const visited = STATIONS.filter((s) => marks.st[s.id]).length;
+				const ridden = SEGMENTS.filter((sg) => marks.seg[sg.id]).length;
+				document.getElementById('sm-tot-st').textContent = visited + ' / ' + STATIONS.length + ' stations visited';
+				document.getElementById('sm-tot-sg').textContent = ridden + ' / ' + SEGMENTS.length + ' track segments ridden';
+				document.getElementById('sm-tot-pct').textContent = Math.round((100 * ridden) / SEGMENTS.length) + '% of the system ridden';
+			}
 
-			// ---- interactions: marking ----
+			// ---- marking ----
 			function toggleSeg(id) {
 				if (dragMoved) return;
-				if (rangeOn) {
-					setMsg('Range mode: click two stations (not track).');
-					return;
-				}
-				if (marks.seg[id]) delete marks.seg[id];
-				else marks.seg[id] = 1;
+				if (marks.seg[id]) delete marks.seg[id]; else marks.seg[id] = 1;
 				save();
-				renderSegments();
+				renderSegMark(segEls[id].sg);
 				renderSidebar();
 			}
 			function stationClick(id) {
 				if (dragMoved) return;
-				if (rangeOn) {
-					rangePick(id);
-					return;
-				}
-				if (marks.st[id]) delete marks.st[id];
-				else marks.st[id] = 1;
+				if (marks.st[id]) delete marks.st[id]; else marks.st[id] = 1;
 				save();
-				renderDots();
+				renderPillMark(stById[id]);
 				renderSidebar();
 			}
 
-			// ---- range marking (BFS shortest path within a single line) ----
-			function pathBetween(key, a, b) {
-				const prev = { [a]: null };
-				const q = [a];
-				while (q.length) {
-					const cur = q.shift();
-					if (cur === b) break;
-					(adj[key][cur] || []).forEach((n) => {
-						if (!(n in prev)) {
-							prev[n] = cur;
-							q.push(n);
-						}
-					});
-				}
-				if (!(b in prev)) return null;
-				const chain = [];
-				for (let c = b; c != null; c = prev[c]) chain.push(c);
-				return chain.reverse();
-			}
-			function toggleRange() {
-				rangeOn = !rangeOn;
-				rangeA = null;
-				document.getElementById('sm-range').classList.toggle('on', rangeOn);
-				document.getElementById('sm-range').textContent = rangeOn ? 'Cancel range' : 'Mark a range';
-				hideChoices();
-				setMsg(rangeOn ? 'Range: click the first station.' : '');
-				renderDots();
-			}
-			function rangePick(id) {
-				if (!rangeA) {
-					rangeA = id;
-					setMsg('Now click the last station of the ride.');
-					renderDots();
-					return;
-				}
-				if (rangeA === id) {
-					rangeA = null;
-					setMsg('');
-					renderDots();
-					return;
-				}
-				const a = rangeA,
-					b = id;
-				const opts = [];
-				GROUPS.forEach((g) => {
-					const chain = pathBetween(g.key, a, b);
-					if (chain) opts.push({ key: g.key, color: g.color, label: g.label, chain });
-				});
-				if (!opts.length) {
-					rangeA = null;
-					setMsg('No single line connects those two stations.');
-					renderDots();
-					return;
-				}
-				if (opts.length === 1) {
-					applyRange(opts[0]);
-					return;
-				}
-				showChoices(opts);
-			}
-			function applyRange(opt) {
-				for (let i = 0; i < opt.chain.length; i++) {
-					marks.st[opt.chain[i]] = 1;
-					if (i < opt.chain.length - 1) {
-						const x = opt.chain[i],
-							y = opt.chain[i + 1];
-						marks.seg[opt.key + '|' + (x < y ? x + '|' + y : y + '|' + x)] = 1;
-					}
-				}
-				save();
-				rangeOn = false;
-				rangeA = null;
-				document.getElementById('sm-range').classList.remove('on');
-				document.getElementById('sm-range').textContent = 'Mark a range';
-				hideChoices();
-				setMsg('Marked ' + opt.chain.length + ' stations on the ' + opt.label + '.');
-				renderAll();
-			}
-
-			// ---- choices popup ----
-			const choicesEl = document.getElementById('sm-choices');
-			const choicesList = document.getElementById('sm-choices-list');
-			function showChoices(opts) {
-				choicesList.innerHTML = '';
-				opts.forEach((o) => {
-					const btn = document.createElement('button');
-					btn.className = 'sm-choice';
-					const bullet = document.createElement('span');
-					bullet.className = 'sm-bullet';
-					bullet.style.background = o.color;
-					bullet.textContent = o.label.replace(/ /g, '');
-					if (bullet.textContent.length > 4) bullet.style.fontSize = '8px';
-					const txt = document.createElement('span');
-					txt.textContent = o.label + ' — ' + (o.chain.length - 1) + ' stops';
-					btn.appendChild(bullet);
-					btn.appendChild(txt);
-					btn.addEventListener('click', () => applyRange(o));
-					choicesList.appendChild(btn);
-				});
-				choicesEl.hidden = false;
-				setMsg('');
-			}
-			function hideChoices() {
-				choicesEl.hidden = true;
-			}
-			document.getElementById('sm-cancel').addEventListener('click', () => {
-				hideChoices();
-				rangeOn = false;
-				rangeA = null;
-				document.getElementById('sm-range').classList.remove('on');
-				document.getElementById('sm-range').textContent = 'Mark a range';
-				setMsg('');
-				renderDots();
-			});
-			document.getElementById('sm-range').addEventListener('click', toggleRange);
-
 			// ---- pan / zoom ----
-			function tf() {
-				return 'translate(' + v.x + ' ' + v.y + ') scale(' + v.k + ')';
-			}
-			function apply() {
-				vp.setAttribute('transform', tf());
+			function applyPan() { vp.setAttribute('transform', 'translate(' + tx.toFixed(2) + ' ' + ty.toFixed(2) + ')'); }
+			function clampPan() {
+				tx = Math.min(W * 0.4, Math.max(W * (1 - k) - W * 0.4, tx));
+				ty = Math.min(H * 0.4, Math.max(H * (1 - k) - H * 0.4, ty));
 			}
 			function metrics() {
 				const r = svg.getBoundingClientRect();
 				const s = Math.min(r.width / W, r.height / H);
 				return { r, s, ox: (r.width - W * s) / 2, oy: (r.height - H * s) / 2 };
 			}
-			function clampPan() {
-				v.x = Math.min(W * 0.4, Math.max(W * (1 - v.k) - W * 0.4, v.x));
-				v.y = Math.min(H * 0.4, Math.max(H * (1 - v.k) - H * 0.4, v.y));
-			}
 			function labelCheck() {
-				const show = v.k >= 2.2;
-				if (show !== showLabels) {
-					showLabels = show;
-					STATIONS.forEach((s) => (labelEls[s.id].style.display = show ? '' : 'none'));
-				}
+				const show = k >= LABEL_ZOOM;
+				if (show !== showLabels) showLabels = show;
 			}
-			function zoomAt(qx, qy, f) {
-				const k2 = Math.max(1, Math.min(18, v.k * f));
-				f = k2 / v.k;
-				v.x = qx - (qx - v.x) * f;
-				v.y = qy - (qy - v.y) * f;
-				v.k = k2;
-				clampPan();
-				apply();
-				labelCheck();
+			let rafPending = false;
+			function scheduleDraw() {
+				if (rafPending) return;
+				rafPending = true;
+				requestAnimationFrame(() => { rafPending = false; drawGeometry(); });
 			}
-			svg.addEventListener(
-				'wheel',
-				(e) => {
-					e.preventDefault();
-					const m = metrics();
-					const qx = (e.clientX - m.r.left - m.ox) / m.s;
-					const qy = (e.clientY - m.r.top - m.oy) / m.s;
-					zoomAt(qx, qy, Math.exp(-e.deltaY * 0.0015));
-				},
-				{ passive: false }
-			);
-			let drag = null,
-				dragMoved = false;
+			function zoomAt(qx, qy, factor) {
+				const k2 = Math.max(1, Math.min(22, k * factor));
+				tx = qx - (qx - tx) * (k2 / k);
+				ty = qy - (qy - ty) * (k2 / k);
+				k = k2;
+				clampPan(); applyPan(); labelCheck(); scheduleDraw();
+			}
+			svg.addEventListener('wheel', (e) => {
+				e.preventDefault();
+				const m = metrics();
+				const qx = (e.clientX - m.r.left - m.ox) / m.s;
+				const qy = (e.clientY - m.r.top - m.oy) / m.s;
+				zoomAt(qx, qy, Math.exp(-e.deltaY * 0.0015));
+			}, { passive: false });
+
+			let drag = null, dragMoved = false;
 			svg.addEventListener('pointerdown', (e) => {
 				if (e.button !== 0) return;
 				drag = { x: e.clientX, y: e.clientY };
@@ -843,40 +697,25 @@ const nav = [
 			});
 			svg.addEventListener('pointermove', (e) => {
 				if (!drag) return;
-				const dx = e.clientX - drag.x,
-					dy = e.clientY - drag.y;
+				const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
 				if (Math.abs(dx) + Math.abs(dy) > 4) dragMoved = true;
 				const m = metrics();
-				v.x += dx / m.s;
-				v.y += dy / m.s;
+				tx += dx / m.s; ty += dy / m.s;
 				drag = { x: e.clientX, y: e.clientY };
-				clampPan();
-				apply();
+				clampPan(); applyPan();
 			});
-			function endDrag() {
-				drag = null;
-				svg.classList.remove('dragging');
-			}
+			function endDrag() { drag = null; svg.classList.remove('dragging'); }
 			svg.addEventListener('pointerup', endDrag);
 			svg.addEventListener('pointerleave', endDrag);
 			document.getElementById('sm-zin').addEventListener('click', () => zoomAt(W / 2, H / 2, 1.5));
 			document.getElementById('sm-zout').addEventListener('click', () => zoomAt(W / 2, H / 2, 1 / 1.5));
 			document.getElementById('sm-reset').addEventListener('click', () => {
-				v.x = 0;
-				v.y = 0;
-				v.k = 1;
-				apply();
-				labelCheck();
+				k = 1; tx = 0; ty = 0; applyPan(); labelCheck(); drawGeometry();
 			});
 
 			// ---- export / import ----
 			document.getElementById('sm-export').addEventListener('click', () => {
-				const data = {
-					format: 'mta-subway-log',
-					version: 1,
-					stationsVisited: Object.keys(marks.st),
-					segmentsRidden: Object.keys(marks.seg),
-				};
+				const data = { format: 'mta-subway-log', version: 2, stationsVisited: Object.keys(marks.st), segmentsRidden: Object.keys(marks.seg) };
 				const a = document.createElement('a');
 				a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
 				a.download = 'mta-subway-log.json';
@@ -890,20 +729,19 @@ const nav = [
 						const d = JSON.parse(t);
 						marks = { st: {}, seg: {} };
 						(d.stationsVisited || Object.keys(d.st || {})).forEach((id) => (marks.st[id] = 1));
-						(d.segmentsRidden || Object.keys(d.seg || {})).forEach((k) => (marks.seg[k] = 1));
+						(d.segmentsRidden || Object.keys(d.seg || {})).forEach((kk) => (marks.seg[kk] = 1));
 						save();
-						renderAll();
+						renderAllMarks();
 						setMsg('Imported.');
-					} catch (err) {
-						setMsg('Could not read that file.');
-					}
+					} catch (err) { setMsg('Could not read that file.'); }
 				});
 				e.target.value = '';
 			});
 
 			// ---- go ----
-			apply();
-			renderAll();
+			applyPan();
+			drawGeometry();
+			renderAllMarks();
 		</script>
 	</body>
 </html>
