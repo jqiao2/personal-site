@@ -49,13 +49,14 @@ const poster = imageUrl(movie.poster_path, 'w342');
 const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
 const filmHref = `/films/movie/${movie.tmdb_id}`;
 
-// The director and each cast member link to the "All films" grid pre-filtered to
-// them, so this film's people are one click from everything else you've watched
-// with them. `director` / `actor` are the URL params /films/watched reads, and the
-// names match the cached credit facets its chips are built from. `sort=year` orders
-// that person's films by release date rather than the default (recent) order.
-const filterHref = (key: string, value: string) =>
-	`/films/watched?${key}=${encodeURIComponent(value)}&sort=year`;
+// The director, each cast member and each genre link to the "All films" grid
+// pre-filtered to them, so this film's people and genres are one click from
+// everything else you've watched that shares them. `director` / `actor` / `genre`
+// are the URL params /films/watched reads, and the values match the cached facets
+// its chips are built from. People pass `sort=year` to order that person's films by
+// release date rather than the default (recent) order; genre keeps the default.
+const filterHref = (key: string, value: string, sort?: 'year') =>
+	`/films/watched?${key}=${encodeURIComponent(value)}${sort ? `&sort=${sort}` : ''}`;
 
 /** Minutes → "2h 4m" / "48m". */
 function formatRuntime(min: number | null): string | null {
@@ -186,7 +187,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 								{directors.map((d, i) => (
 									<>
 										{i > 0 && ', '}
-										<a class="directed__name" href={filterHref('director', d)}>{d}</a>
+										<a class="directed__name" href={filterHref('director', d, 'year')}>{d}</a>
 									</>
 								))}
 							</div>
@@ -207,7 +208,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 						{genres.length > 0 && (
 							<div class="genres">
 								{genres.map((g) => (
-									<span class="genre">{g}</span>
+									<a class="genre" href={filterHref('genre', g)}>{g}</a>
 								))}
 							</div>
 						)}
@@ -219,7 +220,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 								<div class="block__head">Cast</div>
 								<div class="cast">
 									{cast.map((c) => (
-										<a class="cast__chip" href={filterHref('actor', c)}>{c}</a>
+										<a class="cast__chip" href={filterHref('actor', c, 'year')}>{c}</a>
 									))}
 								</div>
 							</section>
@@ -242,16 +243,21 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 												<span class="review__label">
 													{r.rewatched ? 'Rewatch' : 'Watched'} · {logDate(r)}
 												</span>
-												{isOwner && (
-													<button
-														type="button"
-														class="review__edit"
-														data-open-entry-editor
-														data-entry-editor-log-id={r.id}
-													>
-														Edit
-													</button>
-												)}
+												<div class="review__actions">
+													<a class="review__view" href={`/films/diary/${r.id}`}>
+														View <span class="review__view-arrow">→</span>
+													</a>
+													{isOwner && (
+														<button
+															type="button"
+															class="review__edit"
+															data-open-entry-editor
+															data-entry-editor-log-id={r.id}
+														>
+															Edit
+														</button>
+													)}
+												</div>
 											</div>
 											{r.review_text && <p class="review__text">{r.review_text}</p>}
 										</article>
@@ -535,6 +541,10 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				padding: 5px 13px;
 				background: #241012;
 			}
+			.genre:hover {
+				color: #f0d488;
+				border-color: #d9b45a;
+			}
 			.synopsis {
 				font-size: 15px;
 				color: #d8c6ad;
@@ -604,8 +614,33 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				font-size: 12px;
 				color: #8a6f63;
 			}
-			.review__edit {
+			.review__actions {
 				margin-left: auto;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.review__view {
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 11px;
+				font-weight: 600;
+				color: #a2857a;
+				background: transparent;
+				border: 1px solid #4a2529;
+				border-radius: 6px;
+				padding: 5px 11px;
+				font-family: 'Archivo', sans-serif;
+			}
+			.review__view:hover {
+				border-color: #d9b45a;
+				color: #f4e8d1;
+			}
+			.review__view-arrow {
+				font-size: 12px;
+			}
+			.review__edit {
 				font-size: 11px;
 				font-weight: 600;
 				color: #a2857a;
