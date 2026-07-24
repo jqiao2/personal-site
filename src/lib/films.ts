@@ -980,6 +980,10 @@ export interface FilmByTmdb {
 		tmdb_id: number;
 		title: string;
 		release_year: number | null;
+		/** Full release date, "YYYY-MM-DD" (0014); null when TMDB has no date. The
+		 * film page's meta row shows it in full, where the year alone appears
+		 * beside the title. */
+		release_date: string | null;
 		poster_path: string | null;
 		backdrop_path: string | null;
 		overview: string | null;
@@ -1008,7 +1012,8 @@ export interface FilmByTmdb {
  * migrations have been applied.
  */
 export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
-	const BASE = 'id, tmdb_id, title, release_year, poster_path, backdrop_path, overview, runtime';
+	const BASE =
+		'id, tmdb_id, title, release_year, release_date, poster_path, backdrop_path, overview, runtime';
 	const W = 'watched(rating, liked, first_watched)';
 	const tiers = [
 		`${BASE}, genres, directors, actors, countries, original_language, mpa_rating, ${W}`, // 0008+0009

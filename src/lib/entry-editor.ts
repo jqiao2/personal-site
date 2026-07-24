@@ -1,7 +1,6 @@
 // Shapes for the shared diary Entry Editor modal, plus the mapping from a stored
-// log to the values its form seeds from. Both the film page and the diary entry
-// page open the editor on an existing entry, so the mapping lives here rather
-// than being copied into each of them.
+// log to the values its form seeds from. The diary entry page opens the editor
+// on an existing entry, so the mapping lives here rather than in the page.
 
 /** The film an entry is about. Supplying one to the editor locks its picker. */
 export interface EntryEditorFilm {
@@ -24,12 +23,6 @@ export interface EntryEditorInitial {
 	review: string;
 	tags: string[];
 	friends: string[];
-}
-
-/** An existing entry the editor can be reopened on, with the log it will PATCH. */
-export interface EntryEditorEntry {
-	logId: number;
-	initial: EntryEditorInitial;
 }
 
 /** The mediums the editor offers as buttons; anything else is a free-text "other". */
