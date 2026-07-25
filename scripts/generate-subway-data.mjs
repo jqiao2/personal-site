@@ -365,6 +365,149 @@ async function main() {
     SEGMENTS.length = 0; SEGMENTS.push(...kept);
   }
 
+  // --- Targeted topology corrections (geometry). Runs BEFORE offset packing so the
+  //     parallel-line offsets are recomputed for the corrected shapes. The MTA source
+  //     geometry occasionally mis-threads a service across a junction; these fix the
+  //     specific spots that diverge from the official diagram (the source of truth). ---
+  {
+    const findSt = (name, svc) => STATIONS.find((s) => s.name === name && s.svcs.includes(svc));
+    const segColor = (svc) => lineColor[tokenToTrunk[svc]];
+    const matchSeg = (s, svc, A, B) =>
+      s.svc === svc && ((s.a === A.id && s.b === B.id) || (s.a === B.id && s.b === A.id));
+    function removeSeg(svc, nameA, nameB) {
+      const A = findSt(nameA, svc), B = findSt(nameB, svc);
+      if (!A || !B) { console.warn('  correction removeSeg: station not found', svc, nameA, nameB); return; }
+      const before = SEGMENTS.length;
+      const kept = SEGMENTS.filter((s) => !matchSeg(s, svc, A, B));
+      SEGMENTS.length = 0; SEGMENTS.push(...kept);
+      if (SEGMENTS.length === before) console.warn('  correction removeSeg: no segment', svc, nameA, nameB);
+    }
+    function addSeg(svc, nameA, nameB, pts) {
+      const A = findSt(nameA, svc), B = findSt(nameB, svc);
+      if (!A || !B) { console.warn('  correction addSeg: station not found', svc, nameA, nameB); return; }
+      const a = A.id, b = B.id;
+      const id = svc + '|' + (a < b ? a + '|' + b : b + '|' + a);
+      SEGMENTS.push({ id, svc, o: 0, color: segColor(svc), a, b, pts: pts || [[A.x, A.y], [B.x, B.y]] });
+    }
+    const findSeg = (svc, nameA, nameB) => {
+      const A = findSt(nameA, svc), B = findSt(nameB, svc);
+      if (!A || !B) return null;
+      return SEGMENTS.find((s) => matchSeg(s, svc, A, B)) || null;
+    };
+    function setSegPts(svc, nameA, nameB, pts) {
+      const seg = findSeg(svc, nameA, nameB);
+      if (!seg) { console.warn('  correction setSegPts: no segment', svc, nameA, nameB); return; }
+      // Keep pts oriented a -> b so endpoints stay attached to the right stations.
+      const A = findSt(nameA, svc);
+      seg.pts = seg.a === A.id ? pts.map((p) => p.slice()) : pts.slice().reverse().map((p) => p.slice());
+    }
+    function copySegPts(fromSvc, toSvc, nameA, nameB) {
+      const src = findSeg(fromSvc, nameA, nameB), dst = findSeg(toSvc, nameA, nameB);
+      if (!src || !dst) { console.warn('  correction copySegPts: missing', fromSvc, toSvc, nameA, nameB); return; }
+      const A = findSt(nameA, toSvc);
+      // src.pts run src.a -> src.b; re-orient to dst's a -> b.
+      const base = src.a === dst.a ? src.pts : src.pts.slice().reverse();
+      dst.pts = base.map((p) => p.slice());
+    }
+
+    // Standard corner radius (diagram units). The official diagram rounds every
+    // bend to one consistent radius; the reconstructed geometry has a mix of hard
+    // corners and pre-rounded ones. Measured off the source's own rounded corners
+    // (e.g. the 6 at St Mary's) this is ~6.7 units.
+    const CORNER_R = 6.7;
+    // Replace a hard corner at each interior vertex with a circular fillet of
+    // radius R (capped so it never eats more than ~45% of either adjoining edge).
+    // Vertices that are already gentle (turn < ~8 deg) are left untouched so
+    // existing smooth arcs are not disturbed.
+    function roundCorners(pts, R = CORNER_R, steps = 8) {
+      if (pts.length < 3) return pts.map((p) => p.slice());
+      const out = [pts[0].slice()];
+      for (let i = 1; i < pts.length - 1; i++) {
+        const P = pts[i], A = pts[i - 1], B = pts[i + 1];
+        let v1x = A[0] - P[0], v1y = A[1] - P[1], v2x = B[0] - P[0], v2y = B[1] - P[1];
+        const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
+        if (l1 < 1e-6 || l2 < 1e-6) { continue; }
+        v1x /= l1; v1y /= l1; v2x /= l2; v2y /= l2;
+        let dot = v1x * v2x + v1y * v2y; dot = Math.max(-1, Math.min(1, dot));
+        const ang = Math.acos(dot);            // interior angle at P
+        if (ang > Math.PI - 0.14) { out.push(P.slice()); continue; } // ~straight
+        let t = R / Math.tan(ang / 2);         // tangent length from P
+        t = Math.min(t, l1 * 0.45, l2 * 0.45);
+        const r = t * Math.tan(ang / 2);       // actual radius after capping
+        const T1 = [P[0] + v1x * t, P[1] + v1y * t];
+        const T2 = [P[0] + v2x * t, P[1] + v2y * t];
+        let bx = v1x + v2x, by = v1y + v2y;    // bisector toward the arc centre
+        const bl = Math.hypot(bx, by) || 1; bx /= bl; by /= bl;
+        const C = [P[0] + bx * (r / Math.sin(ang / 2)), P[1] + by * (r / Math.sin(ang / 2))];
+        let a1 = Math.atan2(T1[1] - C[1], T1[0] - C[0]);
+        let a2 = Math.atan2(T2[1] - C[1], T2[0] - C[0]);
+        let da = a2 - a1; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+        out.push(T1);
+        for (let s = 1; s <= steps; s++) { const a = a1 + (da * s) / steps; out.push([C[0] + r * Math.cos(a), C[1] + r * Math.sin(a)]); }
+      }
+      out.push(pts[pts.length - 1].slice());
+      return out.map((p) => [+p[0].toFixed(2), +p[1].toFixed(2)]);
+    }
+
+    // F: the source threads the F over the Manhattan Bridge alignment (phantom
+    // Broadway-Lafayette/2 Av -> York St links) and leaves East Broadway a stub.
+    // The real F runs the Rutgers tunnel: East Broadway -> York St -> Jay St.
+    removeSeg('F', "B'way-Lafayette St", 'York St');
+    removeSeg('F', '2 Av', 'York St');
+    addSeg('F', 'East Broadway', 'York St');
+
+    // 6 in the South Bronx. 3 Av-138 St / Brook Av / Cypress Av are meant to sit on
+    // one horizontal; snap them (and the segments between) to a single y so the run
+    // is dead flat. Straighten the 125 St elbow and the Cypress climb to clean
+    // right angles — the global corner-rounding below gives them the house radius.
+    {
+      const yRow = 311;
+      for (const nm of ['3 Av-138 St', 'Brook Av', 'Cypress Av']) { const s = findSt(nm, '6'); if (s) s.y = yRow; }
+      setSegPts('6', '125 St', '3 Av-138 St', [[255.5, 341.8], [255.5, yRow], [290, yRow]]);
+      setSegPts('6', '3 Av-138 St', 'Brook Av', [[290, yRow], [329, yRow]]);
+      setSegPts('6', 'Brook Av', 'Cypress Av', [[329, yRow], [372.9, yRow]]);
+      setSegPts('6', 'Cypress Av', "E 143 St-St Mary's St", [[372.9, yRow], [406.6, yRow], [406.6, 298.6]]);
+    }
+
+    // Rogers Junction (2/3/4/5 east of Franklin Av). Keep the red locals' branches
+    // where they are (Nostrand/Kingston/Crown Hts stay on their 45-degree line;
+    // President/Sterling/... on theirs) but redraw the two Franklin-Av branch starts
+    // as a clean horizontal-then-45 elbow (no dip), and lay the green expresses on
+    // the SAME centrelines so the fixed +/-0.5 offsets render each branch as one
+    // tight red+green pair. The green expresses converge in from their approach
+    // point; the global rounding turns every elbow into the house radius.
+    {
+      const GX = 530.5, GY = 841.6; // green (4/5) approach point at Franklin Av
+      // Red 3 -> Nostrand: leave Franklin horizontally, bend up to meet the 45-deg
+      // Nostrand->Kingston line squarely at Nostrand.
+      setSegPts('3', 'Franklin Av', 'Nostrand Av', [[GX, 844], [542.9, 844], [557.6, 829.1]]);
+      // Red 2 -> President: leave horizontally, bend down onto the 45-deg SE line.
+      setSegPts('2', 'Franklin Av', 'President St', [[GX, 844], [539.6, 844], [558.5, 862.9]]);
+      // Green 4 (express) traces the red 3's full NE centreline, converging in.
+      const ne = [].concat(
+        findSeg('3', 'Franklin Av', 'Nostrand Av').pts,
+        findSeg('3', 'Nostrand Av', 'Kingston Av').pts.slice(1),
+        findSeg('3', 'Kingston Av', 'Crown Hts-Utica Av').pts.slice(1),
+      );
+      setSegPts('4', 'Franklin Av', 'Crown Hts-Utica Av', [[GX, GY]].concat(ne.slice(1)));
+      // Green 5 traces the red 2's SE centreline, converging in, then follows it.
+      const se = findSeg('2', 'Franklin Av', 'President St').pts;
+      setSegPts('5', 'Franklin Av', 'President St', [[GX, GY]].concat(se.slice(1)));
+      for (const [a, b] of [
+        ['President St', 'Sterling St'], ['Sterling St', 'Winthrop St'],
+        ['Winthrop St', 'Church Av'], ['Church Av', 'Beverly Rd'],
+        ['Beverly Rd', 'Newkirk Av'], ['Newkirk Av', 'Flatbush Av-Brooklyn College'],
+      ]) copySegPts('2', '5', a, b);
+    }
+
+    // Global corner rounding: give every hard elbow on the map the one house radius,
+    // matching the official diagram. Gentle vertices (already-curved source arcs)
+    // are left untouched; the radius is capped to the adjoining edge lengths.
+    for (const s of SEGMENTS) s.pts = roundCorners(s.pts);
+
+    console.log('applied topology corrections; SEGMENTS now', SEGMENTS.length);
+  }
+
   // --- Pack parallel service lines per stretch so the services actually present
   //     are centered with a uniform gap; the bundle closes up where a line branches
   //     away (e.g. past Franklin Av). Offset is stored per segment — services that
@@ -406,6 +549,68 @@ async function main() {
       }
     }
     for (const s of SEGMENTS) { delete s._cnt; delete s._done; }
+  }
+
+  // --- Targeted offset corrections (which side of a shared stretch each service
+  //     draws on). Runs AFTER packing/realign, which set the magnitudes; here we
+  //     only flip sides to match the official diagram. ---
+  {
+    const findSt = (name, svc) => STATIONS.find((s) => s.name === name && s.svcs.includes(svc));
+    const findSeg2 = (svc, nameA, nameB) => {
+      const A = findSt(nameA, svc), B = findSt(nameB, svc);
+      if (!A || !B) return null;
+      return SEGMENTS.find((s) => s.svc === svc &&
+        ((s.a === A.id && s.b === B.id) || (s.a === B.id && s.b === A.id))) || null;
+    };
+    function flipOffset(svc, nameA, nameB) {
+      const seg = findSeg2(svc, nameA, nameB);
+      if (!seg) { console.warn('  offset flip: no segment', svc, nameA, nameB); return; }
+      seg.o = -seg.o;
+    }
+    function setOffset(svc, nameA, nameB, o) {
+      const seg = findSeg2(svc, nameA, nameB);
+      if (!seg) { console.warn('  offset set: no segment', svc, nameA, nameB); return; }
+      seg.o = o;
+    }
+
+    // F Rutgers tunnel: the F runs alone from East Broadway to Jay St, so keep a
+    // single offset across East Broadway -> York -> Jay St; otherwise the packer's
+    // realign leaves a small side-step (kink) at York St where the offset changes.
+    {
+      const jay = findSeg2('F', 'York St', 'Jay St-MetroTech');
+      if (jay) setOffset('F', 'East Broadway', 'York St', jay.o);
+    }
+
+    // Lenox Av (2/3): the diagram runs the 3 WEST of the 2 from 110 St up to
+    // 148/149 St (bullets read "3 2" west-to-east), with the two crossing over in
+    // the 96 St curve. The source packs the 2 on the west, so flip every 2/3
+    // segment at or north of Central Park North (110 St). The crossover lands at
+    // 110 St; south of it (the 96 St curve) keeps the 2 on the west.
+    const cpn = 'Central Park North (110 St)';
+    flipOffset('2', '116 St', cpn);
+    flipOffset('3', '116 St', cpn);
+    flipOffset('2', '125 St', '116 St');
+    flipOffset('3', '125 St', '116 St');
+    flipOffset('2', '135 St', '125 St');
+    flipOffset('3', '135 St', '125 St');
+    flipOffset('3', '145 St', '135 St');
+    flipOffset('3', 'Harlem-148 St', '145 St');
+    flipOffset('2', '135 St', '149 St-Grand Concourse');
+
+    // 6 on the Pelham line runs alone north of 125 St, but inherits the Lexington
+    // bundle's offset (o=1) from the realign step. With a non-zero offset a 90-deg
+    // turn between two stations can't render flat (the parallel normal rotates), so
+    // the flat 3 Av-138/Brook/Cypress run and the elbows tilt. Recentre the lone
+    // Pelham 6 on its own line (o=0); the only cost is a small step at 125 St where
+    // it peels off the bundle eastbound anyway.
+    {
+      const pelham = new Set(['3 Av-138 St', 'Brook Av', 'Cypress Av', "E 143 St-St Mary's St",
+        'E 149 St', 'Longwood Av', 'Hunts Point Av', 'Whitlock Av', 'Elder Av',
+        'Morrison Av-Soundview Av', 'St Lawrence Av', 'Parkchester', 'Castle Hill Av',
+        'Zerega Av', 'Westchester Sq-East Tremont Av', 'Middletown Rd', 'Buhre Av', 'Pelham Bay Park']);
+      const stName = {}; STATIONS.forEach((s) => (stName[s.id] = s.name));
+      for (const s of SEGMENTS) if (s.svc === '6' && (pelham.has(stName[s.a]) || pelham.has(stName[s.b]))) s.o = 0;
+    }
   }
 
   const SERVICES = SERVICE_ORDER
