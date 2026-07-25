@@ -496,6 +496,21 @@ const nav = [
 				segEls[sg.id] = { sg, vis, hit, title };
 			});
 
+			// ---- weld groups: every segment-end of ONE service meeting at a station ----
+			// A service's consecutive segments meet at a shared station, but each segment
+			// computes its own per-vertex normal and carries its own offset index, so the
+			// two endpoints land on slightly different points and the line jogs sideways
+			// at the junction. At draw time we snap all ends in a group to their common
+			// mean, then blend that correction back along each segment so the endpoints
+			// coincide exactly with no kink. Keyed per service so parallel lines stay fanned.
+			const weldGroups = {}; // 'svc|stationId' -> [{ id, end: 0 | last }]
+			SEGMENTS.forEach((sg) => {
+				const last = sg.pts.length - 1;
+				(weldGroups[sg.svc + '|' + sg.a] = weldGroups[sg.svc + '|' + sg.a] || []).push({ id: sg.id, end: 0 });
+				(weldGroups[sg.svc + '|' + sg.b] = weldGroups[sg.svc + '|' + sg.b] || []).push({ id: sg.id, end: last });
+			});
+			const weld = {}; // recomputed each draw: 'svc|stationId' -> [x, y]
+
 			// ---- build station pills + labels ----
 			const pillEls = {};
 			const labelEls = {};
@@ -530,12 +545,41 @@ const nav = [
 				curScale = sizeScaleFor(k);
 				const sp = SPACING * curScale;
 				const hw = (HIT_W * curScale).toFixed(2);
+				// Pass 1 — raw offset endpoints (first + last vertex) of every segment.
 				for (const id in segEls) {
-					const e = segEls[id], sg = e.sg, off = sg.o * sp, P = sg.pts, N = sg._n;
+					const e = segEls[id], sg = e.sg, off = sg.o * sp, P = sg.pts, N = sg._n, L = P.length;
+					e._ra = [P[0][0] * k + off * N[0][0], P[0][1] * k + off * N[0][1]];
+					e._rb = [P[L - 1][0] * k + off * N[L - 1][0], P[L - 1][1] * k + off * N[L - 1][1]];
+				}
+				// Pass 2 — a service's ends meeting at a station weld to their mean point.
+				for (const key in weldGroups) {
+					const g = weldGroups[key];
+					let sx = 0, sy = 0;
+					for (let j = 0; j < g.length; j++) { const p = segEls[g[j].id][g[j].end === 0 ? '_ra' : '_rb']; sx += p[0]; sy += p[1]; }
+					weld[key] = [sx / g.length, sy / g.length];
+				}
+				// Pass 3 — draw each segment on its natural offset, then add a correction
+				// that is (weld − raw) at each end and blends linearly by arc-length between
+				// them. Endpoints hit the welded point exactly; the blend is straight so it
+				// adds no kink even where corner-rounding put a vertex right at the station.
+				for (const id in segEls) {
+					const e = segEls[id], sg = e.sg, off = sg.o * sp, P = sg.pts, N = sg._n, L = P.length;
+					const wa = weld[sg.svc + '|' + sg.a], wb = weld[sg.svc + '|' + sg.b];
+					const dax = wa[0] - e._ra[0], day = wa[1] - e._ra[1];
+					const dbx = wb[0] - e._rb[0], dby = wb[1] - e._rb[1];
+					const rx = new Array(L), ry = new Array(L), cum = new Array(L);
+					let tot = 0;
+					for (let i = 0; i < L; i++) {
+						rx[i] = P[i][0] * k + off * N[i][0];
+						ry[i] = P[i][1] * k + off * N[i][1];
+						if (i) tot += Math.hypot(rx[i] - rx[i - 1], ry[i] - ry[i - 1]);
+						cum[i] = tot;
+					}
 					let d = '';
-					for (let i = 0; i < P.length; i++) {
-						const x = P[i][0] * k + off * N[i][0];
-						const y = P[i][1] * k + off * N[i][1];
+					for (let i = 0; i < L; i++) {
+						const t = tot > 0 ? cum[i] / tot : (L > 1 ? i / (L - 1) : 0);
+						const x = rx[i] + dax * (1 - t) + dbx * t;
+						const y = ry[i] + day * (1 - t) + dby * t;
 						d += (i ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
 					}
 					e.vis.setAttribute('d', d);
