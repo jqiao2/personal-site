@@ -6,15 +6,12 @@
 //            skipped and the film locked (the film page logs this way).
 //   edit   — amend an existing entry; the film is locked.
 //
-// `mode` is the entry point for the page's own trigger, but not a constant:
-// `select` promotes itself to `log` once a film is picked, and any trigger
-// carrying [data-entry-editor-log-id] opens the modal in `edit` on that entry.
-// One editor can therefore serve a page's log button *and* a list of reviews,
-// which is what the film page needs.
+// `mode` is the entry point, but not a constant: `select` promotes itself to
+// `log` once a film is picked.
 //
 // Pages render their own trigger; any element carrying [data-open-entry-editor]
 // opens the modal. Server data reaches the client through the JSON config tag.
-import type { EntryEditorEntry, EntryEditorFilm, EntryEditorInitial } from '../lib/entry-editor';
+import type { EntryEditorFilm, EntryEditorInitial } from '../lib/entry-editor';
 
 interface Props {
 	mode: 'select' | 'log' | 'edit';
@@ -25,16 +22,11 @@ interface Props {
 	redirect: string;
 	/** Where to go once an entry is deleted. */
 	deleteRedirect?: string;
-	/** The entry the page's own trigger edits. edit mode only. */
+	/** The entry the editor edits. edit mode only. */
 	logId?: number | null;
 	/** The film every entry here is about. Omit to show the film picker. */
 	film?: EntryEditorFilm | null;
 	initial?: EntryEditorInitial | null;
-	/**
-	 * Entries a [data-entry-editor-log-id] trigger can reopen the editor on, over
-	 * and above the page's own. Keyed by log id at runtime.
-	 */
-	entries?: EntryEditorEntry[];
 }
 
 const {
@@ -47,7 +39,6 @@ const {
 	logId = null,
 	film = null,
 	initial = null,
-	entries = [],
 } = Astro.props;
 
 const FORMAT_OPTIONS = [
@@ -76,7 +67,6 @@ const config = {
 	friendOptions,
 	initial,
 	film,
-	entries,
 };
 // Escape "<" so a review containing "</script>" can't break out of the JSON tag.
 const configJson = JSON.stringify(config).replace(/</g, '\\u003c');
@@ -1014,7 +1004,6 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			friendOptions: string[];
 			initial: Initial | null;
 			film: Film | null;
-			entries: { logId: number; initial: Initial }[];
 		}
 
 		const cfg = JSON.parse(configEl.textContent || '{}') as Config;
@@ -1080,11 +1069,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		// The picker exists only when the page didn't name the film; when it did, the
 		// film is fixed for every entry this editor opens.
 		const hasPicker = !cfg.film;
-		const seeds = new Map(cfg.entries.map((e) => [e.logId, e.initial]));
 
-		// Which entry the editor is on. All three change per open: the page's own
-		// trigger uses cfg, an [data-entry-editor-log-id] trigger uses its entry, and
-		// `select` promotes itself to `log` once a film is chosen.
+		// Which entry the editor is on. Each open resets these to what the page
+		// configured; `select` then promotes itself to `log` once a film is chosen.
 		let mode: 'select' | 'log' | 'edit' = cfg.mode;
 		let logId: number | null = cfg.logId;
 		let seed: Initial | null = cfg.initial;
@@ -1621,20 +1608,12 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		const lockScroll = (on: boolean) => {
 			document.body.style.overflow = on ? 'hidden' : '';
 		};
-		// A trigger naming a log opens that entry for editing; any other trigger is
-		// the page's own, and opens whatever the page configured.
-		const openModal = (trigger: Element) => {
-			const named = Number((trigger as HTMLElement).dataset.entryEditorLogId);
-			const namedSeed = seeds.get(named);
-			if (namedSeed) {
-				mode = 'edit';
-				logId = named;
-				seed = namedSeed;
-			} else {
-				mode = cfg.mode;
-				logId = cfg.logId;
-				seed = cfg.initial;
-			}
+		// Every trigger opens whatever the page configured; a prior open may have
+		// promoted `select` to `log`, so reset before seeding the form.
+		const openModal = () => {
+			mode = cfg.mode;
+			logId = cfg.logId;
+			seed = cfg.initial;
 			seedForm();
 			discard.hidden = true;
 			modal.hidden = false;
@@ -1663,7 +1642,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		};
 
 		for (const el of document.querySelectorAll('[data-open-entry-editor]')) {
-			el.addEventListener('click', () => openModal(el));
+			el.addEventListener('click', () => openModal());
 		}
 		closeBtn.addEventListener('click', attemptClose);
 		backdrop.addEventListener('click', attemptClose);

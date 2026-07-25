@@ -7,7 +7,6 @@ import {
 	listTags,
 	listTheaterNames,
 } from '../../../lib/films';
-import { toEditorInitial } from '../../../lib/entry-editor';
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, starText } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
@@ -37,12 +36,17 @@ const directors = movie.directors;
 const cast = movie.actors.slice(0, 5);
 const genres = movie.genres;
 const runtime = movie.runtime;
-// The film's original language + its primary production country for the meta row.
+// The film's primary production country for the meta row.
 const country = movie.countries[0] ?? null;
-const language = movie.original_language;
 const mpaRating = movie.mpa_rating;
-// The runtime · country · language row, with only the facts we actually have.
-const metaItems = [formatRuntime(runtime), country, language].filter(Boolean) as string[];
+// The release date · runtime · country row, with only the facts we actually have.
+// The full date earns its place here because the title only carries the year;
+// original_language is still cached, it just isn't part of this row.
+const metaItems = [
+	formatWatchedDate(movie.release_date),
+	formatRuntime(runtime),
+	country,
+].filter(Boolean) as string[];
 
 const backdrop = imageUrl(movie.backdrop_path, 'w780');
 const poster = imageUrl(movie.poster_path, 'w342');
@@ -93,9 +97,9 @@ const yourWatched = watched?.first_watched
 		? logDate(latestLog)
 		: null;
 
-// Editor scaffolding (owner only). One editor serves the whole page: the film is
-// already known, so the log button opens it on a new entry for this film, and
-// each review's Edit button reopens it on that entry.
+// Editor scaffolding (owner only). The film is already known, so the log button
+// opens the editor on a new entry for it. Existing entries are edited from their
+// own diary page (behind "View") rather than from this list.
 const [venueOptions, tagOptions, friendOptions] = isOwner
 	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
 	: [[], [], []];
@@ -105,7 +109,6 @@ const editorFilm = {
 	year: movie.release_year,
 	poster: imageUrl(movie.poster_path, 'w92'),
 };
-const editorEntries = movieLogs.map((l) => ({ logId: l.id, initial: toEditorInitial(l) }));
 // Rewatches and re-reviews are the norm once a film is already logged, so the
 // button says so rather than implying this would be the first entry.
 const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or review';
@@ -243,21 +246,9 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 												<span class="review__label">
 													{r.rewatched ? 'Rewatch' : 'Watched'} · {logDate(r)}
 												</span>
-												<div class="review__actions">
-													<a class="review__view" href={`/films/diary/${r.id}`}>
-														View <span class="review__view-arrow">→</span>
-													</a>
-													{isOwner && (
-														<button
-															type="button"
-															class="review__edit"
-															data-open-entry-editor
-															data-entry-editor-log-id={r.id}
-														>
-															Edit
-														</button>
-													)}
-												</div>
+												<a class="review__view" href={`/films/diary/${r.id}`}>
+													View <span class="review__view-arrow">→</span>
+												</a>
 											</div>
 											{r.review_text && <p class="review__text">{r.review_text}</p>}
 										</article>
@@ -281,7 +272,6 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 			<EntryEditor
 				mode="log"
 				film={editorFilm}
-				entries={editorEntries}
 				venueOptions={venueOptions}
 				tagOptions={tagOptions}
 				friendOptions={friendOptions}
@@ -614,13 +604,8 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				font-size: 12px;
 				color: #8a6f63;
 			}
-			.review__actions {
-				margin-left: auto;
-				display: flex;
-				align-items: center;
-				gap: 8px;
-			}
 			.review__view {
+				margin-left: auto;
 				display: inline-flex;
 				align-items: center;
 				gap: 5px;
@@ -639,21 +624,6 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 			}
 			.review__view-arrow {
 				font-size: 12px;
-			}
-			.review__edit {
-				font-size: 11px;
-				font-weight: 600;
-				color: #a2857a;
-				background: transparent;
-				border: 1px solid #4a2529;
-				border-radius: 6px;
-				padding: 5px 11px;
-				cursor: pointer;
-				font-family: 'Archivo', sans-serif;
-			}
-			.review__edit:hover {
-				border-color: #d9b45a;
-				color: #f4e8d1;
 			}
 			.review__text {
 				font-family: 'Newsreader', serif;
