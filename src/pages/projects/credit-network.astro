@@ -1,0 +1,357 @@
+---
+// Film credit collaboration network. Nodes are people who clear a per-role
+// threshold (actor >= 10 films, director >= 5, composer >= 3); edges join people
+// who share at least 2 films, weighted by how many. People who clear more than
+// one role are drawn as split-colour pie nodes.
+//
+// Full-bleed rather than inside Layout.astro, whose 800px column would strangle a
+// force-directed graph — same reasoning as /subway. The graph itself is rendered
+// client-side by src/scripts/credit-network.js from a static JSON built by
+// scripts/credit-graph/build.mjs.
+const nav = [
+	{ href: '/', label: 'Home' },
+	{ href: '/about', label: 'About' },
+	{ href: '/projects', label: 'Projects', active: true },
+	{ href: '/films', label: 'Films' },
+	{ href: '/subway', label: 'Subway Map' },
+];
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Credit Network</title>
+		<meta
+			name="description"
+			content="A collaboration network of actors, directors and composers built from ~23,000 TMDB films."
+		/>
+	</head>
+	<body>
+		<nav class="cn-nav">
+			{nav.map((n) => <a href={n.href} class={n.active ? 'active' : ''}>{n.label}</a>)}
+		</nav>
+
+		<div class="cn-shell">
+			<aside class="cn-side">
+				<div class="cn-head">
+					<h1>Credit Network</h1>
+					<p id="meta" class="muted small"></p>
+					<p id="counts" class="counts"></p>
+				</div>
+
+				<section>
+					<label class="field">
+						<span>Find someone</span>
+						<input id="search" list="people" type="search" placeholder="e.g. Tilda Swinton" autocomplete="off" />
+						<datalist id="people"></datalist>
+					</label>
+				</section>
+
+				<section>
+					<h2>Roles</h2>
+					<div id="legend"></div>
+					<p class="muted small">
+						Split-colour nodes clear more than one threshold — an actor-director is half red, half blue.
+					</p>
+				</section>
+
+				<section>
+					<h2>Filters</h2>
+					<label class="field">
+						<span>Min. shared films <output id="min-weight-out"></output></span>
+						<input id="min-weight" type="range" min="2" max="12" step="1" />
+					</label>
+					<label class="field">
+						<span>Min. films credited <output id="min-films-out">0</output></span>
+						<input id="min-films" type="range" min="0" max="80" step="1" value="0" />
+					</label>
+				</section>
+
+				<section class="actions">
+					<button id="layout-toggle" type="button">&#9654; Run layout</button>
+					<button id="reset-view" type="button">Reset view</button>
+				</section>
+
+				<section id="details" class="details"></section>
+
+				<section class="about">
+					<h2>How it works</h2>
+					<p class="muted small">
+						Built from the ~23,000 TMDB films with 100+ votes. Each film contributes its top 15 billed
+						cast, its directors and its composers; two people are joined when they appear on the same
+						film. Layout is ForceAtlas2 — drag any node to pull it around, or re-run the layout to let
+						it re-settle.
+					</p>
+					<p class="muted small">
+						<a href="/data/credit-network.gexf" download>Download GEXF</a> to open the same graph in Gephi.
+					</p>
+				</section>
+			</aside>
+
+			<main class="cn-main">
+				<div id="graph"></div>
+				<p id="loading">Loading network…</p>
+			</main>
+		</div>
+
+		<script>
+			import '../../scripts/credit-network.js';
+		</script>
+
+		<style>
+			:root {
+				color-scheme: light dark;
+				--bg: #fff;
+				--fg: #111;
+				--muted: #666;
+				--border: #ddd;
+				--panel: #fafafa;
+				--accent: #4a8fd4;
+			}
+			@media (prefers-color-scheme: dark) {
+				:root {
+					--bg: #111;
+					--fg: #eee;
+					--muted: #999;
+					--border: #333;
+					--panel: #181818;
+				}
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				font-family: system-ui, sans-serif;
+				background: var(--bg);
+				color: var(--fg);
+				margin: 0;
+				height: 100dvh;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+			.cn-nav {
+				display: flex;
+				gap: 1.5rem;
+				padding: 0.75rem 1.25rem;
+				border-bottom: 1px solid var(--border);
+				flex: 0 0 auto;
+			}
+			.cn-nav a {
+				text-decoration: none;
+				color: var(--fg);
+				font-weight: 500;
+				font-size: 0.9rem;
+			}
+			.cn-nav a:hover {
+				text-decoration: underline;
+			}
+			.cn-nav a.active {
+				color: var(--accent);
+			}
+
+			.cn-shell {
+				flex: 1 1 auto;
+				display: grid;
+				grid-template-columns: 320px 1fr;
+				min-height: 0;
+			}
+			.cn-side {
+				border-right: 1px solid var(--border);
+				background: var(--panel);
+				padding: 1.25rem;
+				overflow-y: auto;
+				display: flex;
+				flex-direction: column;
+				gap: 1.5rem;
+			}
+			.cn-main {
+				position: relative;
+				min-width: 0;
+			}
+			#graph {
+				position: absolute;
+				inset: 0;
+			}
+			#loading {
+				position: absolute;
+				inset: 0;
+				display: grid;
+				place-content: center;
+				margin: 0;
+				color: var(--muted);
+			}
+
+			h1 {
+				font-size: 1.35rem;
+				margin: 0 0 0.35rem;
+			}
+			h2 {
+				font-size: 0.75rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: var(--muted);
+				margin: 0 0 0.6rem;
+			}
+			h3 {
+				font-size: 1rem;
+				margin: 0 0 0.4rem;
+			}
+			p {
+				margin: 0 0 0.5rem;
+			}
+			.muted {
+				color: var(--muted);
+			}
+			.small {
+				font-size: 0.78rem;
+				line-height: 1.45;
+			}
+			.counts {
+				font-variant-numeric: tabular-nums;
+				font-size: 0.85rem;
+				margin: 0;
+			}
+
+			.field {
+				display: flex;
+				flex-direction: column;
+				gap: 0.3rem;
+				font-size: 0.82rem;
+			}
+			.field + .field {
+				margin-top: 0.75rem;
+			}
+			.field input[type='search'] {
+				padding: 0.45rem 0.55rem;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				color: var(--fg);
+				font: inherit;
+			}
+			.field input[type='range'] {
+				width: 100%;
+				accent-color: var(--accent);
+			}
+			output {
+				font-variant-numeric: tabular-nums;
+				font-weight: 600;
+			}
+
+			.legend-item {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				font-size: 0.85rem;
+				padding: 0.15rem 0;
+				cursor: pointer;
+			}
+			.swatch {
+				width: 0.85rem;
+				height: 0.85rem;
+				border-radius: 50%;
+				flex: 0 0 auto;
+			}
+
+			.actions {
+				display: flex;
+				gap: 0.5rem;
+			}
+			button {
+				font: inherit;
+				font-size: 0.82rem;
+				padding: 0.45rem 0.7rem;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				color: var(--fg);
+				cursor: pointer;
+			}
+			button:hover {
+				border-color: var(--accent);
+			}
+			button.running {
+				border-color: var(--accent);
+				color: var(--accent);
+			}
+
+			.details {
+				border-top: 1px solid var(--border);
+				padding-top: 1rem;
+				min-height: 6rem;
+			}
+			.chips {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.35rem;
+				margin-bottom: 0.5rem;
+			}
+			.chip {
+				font-size: 0.72rem;
+				padding: 0.15rem 0.45rem;
+				border-radius: 999px;
+				border: 1px solid var(--c);
+				color: var(--c);
+				white-space: nowrap;
+			}
+			.partners {
+				list-style: none;
+				margin: 0.5rem 0;
+				padding: 0;
+				max-height: 15rem;
+				overflow-y: auto;
+				font-size: 0.82rem;
+			}
+			.partners li {
+				display: flex;
+				justify-content: space-between;
+				gap: 0.5rem;
+				padding: 0.12rem 0;
+			}
+			.partners button {
+				border: 0;
+				background: none;
+				padding: 0;
+				text-align: left;
+				color: var(--fg);
+				cursor: pointer;
+				font-size: inherit;
+			}
+			.partners button:hover {
+				color: var(--accent);
+				text-decoration: underline;
+			}
+			.partners span {
+				font-variant-numeric: tabular-nums;
+				color: var(--muted);
+			}
+			.about a {
+				color: var(--accent);
+			}
+			.details a {
+				color: var(--accent);
+			}
+
+			@media (max-width: 800px) {
+				body {
+					overflow: auto;
+					height: auto;
+				}
+				.cn-shell {
+					grid-template-columns: 1fr;
+				}
+				.cn-side {
+					border-right: 0;
+					border-bottom: 1px solid var(--border);
+					overflow: visible;
+				}
+				.cn-main {
+					height: 70dvh;
+				}
+			}
+		</style>
+	</body>
+</html>

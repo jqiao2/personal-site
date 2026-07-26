@@ -5,11 +5,33 @@ import Layout from '../../layouts/Layout.astro';
 const projects = (await getCollection('projects')).sort(
 	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
 );
+
+// Projects that live on this site rather than in a repo, so they aren't in the
+// content collection — they're pages, and they link straight to the thing itself.
+// Kept out of the collection deliberately: an entry with id "credit-network"
+// would collide with the real /projects/credit-network route.
+const interactive = [
+	{
+		href: '/projects/credit-network',
+		title: 'Credit Network',
+		description:
+			'A collaboration graph of actors, directors and composers drawn from ~23,000 TMDB films — ' +
+			'force-directed, filterable and draggable.',
+	},
+];
 ---
 
 <Layout title="Projects">
 	<h1>Projects</h1>
 	<ul>
+		{
+			interactive.map((project) => (
+				<li>
+					<a href={project.href}>{project.title}</a> <span class="tag">interactive</span>
+					<p>{project.description}</p>
+				</li>
+			))
+		}
 		{
 			projects.map((project) => (
 				<li>
@@ -20,3 +42,16 @@ const projects = (await getCollection('projects')).sort(
 		}
 	</ul>
 </Layout>
+
+<style>
+	.tag {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 0.05rem 0.4rem;
+		opacity: 0.7;
+		vertical-align: 0.1em;
+	}
+</style>
