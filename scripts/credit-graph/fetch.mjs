@@ -230,6 +230,14 @@ function extractFilm(d, tmdbId) {
 		vote_count: d.vote_count ?? 0,
 		vote_average: d.vote_average ?? 0,
 		popularity: d.popularity ?? 0,
+		// Worldwide gross in nominal US dollars, or 0 when TMDB has no figure —
+		// which is most of the pre-1980 corpus, and never inflation-adjusted. The
+		// graph offers it as one sizing option among several for that reason.
+		revenue: d.revenue ?? 0,
+		// ISO 3166-1 codes, in TMDB's order. The graph treats the first as the
+		// film's primary production country; the rest are kept so a co-production
+		// can be reinterpreted later without re-scraping.
+		countries: (d.production_countries ?? []).map((c) => c.iso_3166_1).filter(Boolean),
 		credits,
 	};
 }
