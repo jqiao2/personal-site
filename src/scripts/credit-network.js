@@ -42,11 +42,34 @@ const DEFAULT_TOP_N = 1600;
  * the graph white. Edges stay alpha-blended so a dense field fades rather than
  * turning into a solid mat. */
 const THEME = {
-	dark: { node: '#3c3c3c', edge: 'rgba(120,120,120,0.07)', idle: 'rgba(150,160,175,0.22)' },
-	light: { node: '#dcdcdc', edge: 'rgba(90,90,90,0.05)', idle: 'rgba(70,80,95,0.20)' },
+	dark: { node: '#3c3c3c', edge: 'rgba(120,120,120,0.07)', idle: 'rgba(150,160,175,0.22)', halo: '#111' },
+	light: { node: '#dcdcdc', edge: 'rgba(90,90,90,0.05)', idle: 'rgba(70,80,95,0.20)', halo: '#fff' },
 };
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 let theme = prefersDark.matches ? THEME.dark : THEME.light;
+
+/** Draw a node's name with a halo in the page background colour.
+ *
+ * Sigma's default label is plain fillText, which over a mesh of tens of
+ * thousands of edges lands on top of whatever happens to be behind it and
+ * becomes unreadable. Stroking the text in the surface colour first knocks a
+ * small gap out of the graph behind each glyph. Geometry matches sigma's
+ * default (drawDiscNodeLabel) so labels sit where they always did. */
+function drawLabelWithHalo(context, data, settings) {
+	if (!data.label) return;
+	const size = settings.labelSize;
+	const x = data.x + data.size + 3;
+	const y = data.y + size / 3;
+
+	context.font = `${settings.labelWeight} ${size}px ${settings.labelFont}`;
+	context.lineWidth = 3.5;
+	context.lineJoin = 'round';
+	context.miterLimit = 2;
+	context.strokeStyle = theme.halo;
+	context.strokeText(data.label, x, y);
+	context.fillStyle = settings.labelColor.color ?? '#111';
+	context.fillText(data.label, x, y);
+}
 
 /** Fold case and strip diacritics so "toshiro mifune" finds "Toshirō Mifune". */
 const foldName = (s) =>
@@ -164,6 +187,9 @@ async function main() {
 			color: { attribute: `c_${r.role}`, defaultValue: r.color },
 			value: { attribute: `s_${r.role}` },
 		})),
+		// A node program's own drawLabel wins over the renderer's default, so the
+		// halo has to be handed to the program rather than set in settings.
+		drawLabel: drawLabelWithHalo,
 	});
 
 	const state = {
@@ -194,6 +220,10 @@ async function main() {
 		zIndex: true,
 		minCameraRatio: 0.02,
 		maxCameraRatio: 3,
+		// A collapsed container (a very short window, or the page rendered while
+		// hidden) otherwise throws and takes the whole sidebar down with it. The
+		// graph is worth degrading; the controls are not worth losing.
+		allowInvalidContainer: true,
 	});
 
 	// --- Visibility ----------------------------------------------------------

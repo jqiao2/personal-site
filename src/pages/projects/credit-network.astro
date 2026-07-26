@@ -41,6 +41,17 @@ const nav = [
 					<p id="counts" class="counts"></p>
 				</div>
 
+				<section class="physics">
+					<div class="actions">
+						<button id="layout-toggle" type="button">&#9654; Re-settle</button>
+						<button id="reset-view" type="button">Reset view</button>
+					</div>
+					<label class="check">
+						<input id="auto-resettle" type="checkbox" checked />
+						Re-settle on filter change
+					</label>
+				</section>
+
 				<section class="search-wrap">
 					<label class="field">
 						<span>Find someone</span>
@@ -63,10 +74,7 @@ const nav = [
 						<span>Top <output id="top-n-out"></output> people</span>
 						<input id="top-n" type="range" min="100" step="50" />
 					</label>
-					<p class="muted small">
-						The whole graph is 7,518 people, which is denser than a screen can resolve — dots end up
-						about 2px apart. Showing fewer is what makes it readable; drag right for the full set.
-					</p>
+					<p class="muted small">All 7,518 puts dots ~2px apart. Fewer is more readable.</p>
 				</section>
 
 				<section>
@@ -82,8 +90,8 @@ const nav = [
 					<h2>Show roles</h2>
 					<div id="legend"></div>
 					<p class="muted small">
-						A role only counts toward a node if it's at least a quarter of that person's credits, so an
-						actor who directed once stays an actor. Genuine hyphenates are split half-and-half.
+						A role needs a quarter of someone's credits to colour their node, so an actor who directed
+						once stays an actor.
 					</p>
 				</section>
 
@@ -99,35 +107,13 @@ const nav = [
 					</label>
 				</section>
 
-				<section>
-					<h2>Physics</h2>
-					<div class="actions">
-						<button id="layout-toggle" type="button">&#9654; Re-settle</button>
-						<button id="reset-view" type="button">Reset view</button>
-					</div>
-					<label class="check">
-						<input id="auto-resettle" type="checkbox" checked />
-						Re-settle when filters change
-					</label>
-					<p class="muted small">
-						The saved layout was solved for all 7,518 people, so filtering alone leaves the survivors
-						in their old crowded positions. Re-settling reruns the forces over just what's on screen,
-						letting it spread into the whole canvas. Drag nodes around while it runs.
-					</p>
-				</section>
-
 				<section id="details" class="details"></section>
 
 				<section class="about">
-					<h2>How it works</h2>
 					<p class="muted small">
-						Built from the ~23,000 TMDB films with 100+ votes. Each film contributes its top 15 billed
-						cast, its directors and its composers; two people are joined when they appear on the same
-						film. Layout is ForceAtlas2 — drag any node to pull it around, or re-run the layout to let
-						it re-settle.
-					</p>
-					<p class="muted small">
-						<a href="/data/credit-network.gexf" download>Download GEXF</a> to open the same graph in Gephi.
+						~23,000 TMDB films with 100+ votes. Each contributes its top 15 cast, directors and
+						composers; people are joined when they share a film.
+						<a href="/data/credit-network.gexf" download>Download GEXF</a> for Gephi.
 					</p>
 				</section>
 			</aside>
@@ -142,7 +128,18 @@ const nav = [
 			import '../../scripts/credit-network.js';
 		</script>
 
-		<style>
+		<!--
+			is:global is required, not stylistic. The sidebar's contents — the
+			details panel, both legends and the search results — are built in JS
+			with innerHTML, so those elements never receive the data-astro-cid
+			attribute that scoped styles compile against, and every rule aimed at
+			them silently fails to match. Left scoped, the collaborator list renders
+			as default browser buttons and the legend swatches collapse to 0x0.
+			/subway does the same thing for the same reason. Selectors here are all
+			page-specific (cn-*, #graph, .partners …) and this page owns its own
+			<html>, so nothing leaks.
+		-->
+		<style is:global>
 			:root {
 				color-scheme: light dark;
 				--bg: #fff;
@@ -208,6 +205,23 @@ const nav = [
 				display: flex;
 				flex-direction: column;
 				gap: 1.5rem;
+			}
+			/* Without this the details panel — whose height depends on how many
+			   collaborators a person has — gets compressed by flex and its content
+			   spills over the section below it. */
+			.cn-side > section {
+				flex: 0 0 auto;
+			}
+			/* Re-settle and reset stay reachable from anywhere in the sidebar —
+			   they're the controls you want after changing a filter further down. */
+			.physics {
+				position: sticky;
+				top: -1.25rem;
+				z-index: 4;
+				background: var(--panel);
+				padding: 0.6rem 0;
+				margin-bottom: -0.4rem;
+				border-bottom: 1px solid var(--border);
 			}
 			.cn-main {
 				position: relative;
