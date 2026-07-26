@@ -77,6 +77,8 @@ async function readCache() {
 			vote_count: f.vote_count ?? 0,
 			vote_average: f.vote_average ?? null,
 			popularity: f.popularity ?? null,
+			revenue: f.revenue ?? 0,
+			countries: f.countries ?? [],
 		});
 		for (const c of f.credits ?? []) {
 			people.set(c.id, { tmdb_id: c.id, name: c.name });

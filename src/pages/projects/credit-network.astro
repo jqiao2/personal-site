@@ -41,19 +41,49 @@ const nav = [
 					<p id="counts" class="counts"></p>
 				</div>
 
-				<section>
+				<section class="search-wrap">
 					<label class="field">
 						<span>Find someone</span>
-						<input id="search" list="people" type="search" placeholder="e.g. Tilda Swinton" autocomplete="off" />
-						<datalist id="people"></datalist>
+						<input id="search" type="search" placeholder="e.g. mifune, coen, zimmer" autocomplete="off" />
 					</label>
+					<ul id="search-results" hidden></ul>
 				</section>
 
 				<section>
-					<h2>Roles</h2>
+					<h2>Size &amp; rank by</h2>
+					<label class="field">
+						<select id="metric"></select>
+					</label>
+					<p id="metric-note" class="muted small"></p>
+				</section>
+
+				<section>
+					<h2>How much to show</h2>
+					<label class="field">
+						<span>Top <output id="top-n-out"></output> people</span>
+						<input id="top-n" type="range" min="100" step="50" />
+					</label>
+					<p class="muted small">
+						The whole graph is 7,518 people, which is denser than a screen can resolve — dots end up
+						about 2px apart. Showing fewer is what makes it readable; drag right for the full set.
+					</p>
+				</section>
+
+				<section>
+					<h2>Colour by</h2>
+					<label class="field">
+						<select id="color-by"></select>
+					</label>
+					<ul id="color-legend"></ul>
+					<p id="color-note" class="muted small"></p>
+				</section>
+
+				<section>
+					<h2>Show roles</h2>
 					<div id="legend"></div>
 					<p class="muted small">
-						Split-colour nodes clear more than one threshold — an actor-director is half red, half blue.
+						A role only counts toward a node if it's at least a quarter of that person's credits, so an
+						actor who directed once stays an actor. Genuine hyphenates are split half-and-half.
 					</p>
 				</section>
 
@@ -69,9 +99,21 @@ const nav = [
 					</label>
 				</section>
 
-				<section class="actions">
-					<button id="layout-toggle" type="button">&#9654; Run layout</button>
-					<button id="reset-view" type="button">Reset view</button>
+				<section>
+					<h2>Physics</h2>
+					<div class="actions">
+						<button id="layout-toggle" type="button">&#9654; Re-settle</button>
+						<button id="reset-view" type="button">Reset view</button>
+					</div>
+					<label class="check">
+						<input id="auto-resettle" type="checkbox" checked />
+						Re-settle when filters change
+					</label>
+					<p class="muted small">
+						The saved layout was solved for all 7,518 people, so filtering alone leaves the survivors
+						in their old crowded positions. Re-settling reruns the forces over just what's on screen,
+						letting it spread into the whole canvas. Drag nodes around while it runs.
+					</p>
 				</section>
 
 				<section id="details" class="details"></section>
@@ -239,6 +281,91 @@ const nav = [
 			output {
 				font-variant-numeric: tabular-nums;
 				font-weight: 600;
+			}
+
+			.search-wrap {
+				position: relative;
+			}
+			#search-results {
+				list-style: none;
+				margin: 0.35rem 0 0;
+				padding: 0;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				max-height: 17rem;
+				overflow-y: auto;
+				position: absolute;
+				left: 0;
+				right: 0;
+				z-index: 5;
+				box-shadow: 0 6px 18px rgb(0 0 0 / 0.14);
+			}
+			#search-results button {
+				display: flex;
+				flex-direction: column;
+				gap: 0.1rem;
+				width: 100%;
+				border: 0;
+				border-radius: 0;
+				background: none;
+				text-align: left;
+				padding: 0.4rem 0.6rem;
+				cursor: pointer;
+			}
+			#search-results button:hover {
+				background: var(--panel);
+			}
+			#search-results em {
+				font-style: normal;
+				font-size: 0.72rem;
+				color: var(--muted);
+			}
+			#search-results .empty {
+				padding: 0.5rem 0.6rem;
+				font-size: 0.78rem;
+				color: var(--muted);
+			}
+			select {
+				font: inherit;
+				font-size: 0.85rem;
+				padding: 0.4rem 0.5rem;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				color: var(--fg);
+				width: 100%;
+			}
+			.minor {
+				opacity: 0.8;
+			}
+
+			#color-legend {
+				list-style: none;
+				margin: 0.5rem 0 0.6rem;
+				padding: 0;
+				display: flex;
+				flex-direction: column;
+				gap: 0.2rem;
+				font-size: 0.82rem;
+			}
+			#color-legend li {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+			}
+			.check {
+				display: flex;
+				align-items: center;
+				gap: 0.45rem;
+				font-size: 0.82rem;
+				margin-top: 0.6rem;
+				cursor: pointer;
+			}
+			/* Role swatches would contradict the nodes when colour encodes region
+			   or era, so they're hidden outside role mode. */
+			#legend.no-swatch .swatch {
+				display: none;
 			}
 
 			.legend-item {
