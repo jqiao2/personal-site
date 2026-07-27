@@ -184,18 +184,55 @@ async function loadFromDb() {
  * Colour is bound to the country, never to its rank, so adding data later can't
  * repaint anyone.
  */
+const NEUTRAL = '#9A9A95';
+
+/** Every country with at least ~8 graphed people, largest first, plus a
+ * catch-all. Ordered by how many people work there so the coloured slots go to
+ * the biggest industries. `also` folds in historical codes. */
 const COUNTRIES = [
 	{ code: 'US', label: 'United States', color: '#0072B2' },
-	{ code: 'FR', label: 'France', color: '#D55E00' },
 	{ code: 'GB', label: 'United Kingdom', color: '#009E73' },
+	{ code: 'FR', label: 'France', color: '#D55E00' },
 	{ code: 'IT', label: 'Italy', color: '#CC79A7' },
 	{ code: 'JP', label: 'Japan', color: '#E69F00' },
 	{ code: 'CA', label: 'Canada', color: '#56B4E9' },
-	{ code: 'IN', label: 'India', color: '#B03060' },
-	{ code: null, label: 'Elsewhere', color: '#9A9A95' },
+	{ code: 'DE', label: 'Germany', color: '#B03060', also: ['DD'] },
+	// Past seven, colours stop being separable (an eighth hue drops the
+	// normal-vision floor to dE 11.8 against the blue, i.e. two countries a
+	// full-colour reader cannot tell apart), so the rest share the neutral and
+	// are distinguished by the filter and the details panel instead.
+	{ code: 'IN', label: 'India', color: NEUTRAL },
+	{ code: 'ES', label: 'Spain', color: NEUTRAL },
+	{ code: 'KR', label: 'South Korea', color: NEUTRAL },
+	{ code: 'HK', label: 'Hong Kong', color: NEUTRAL },
+	{ code: 'AU', label: 'Australia', color: NEUTRAL },
+	{ code: 'CN', label: 'China', color: NEUTRAL },
+	{ code: 'BE', label: 'Belgium', color: NEUTRAL },
+	{ code: 'MX', label: 'Mexico', color: NEUTRAL },
+	{ code: 'BR', label: 'Brazil', color: NEUTRAL },
+	{ code: 'RU', label: 'Russia / USSR', color: NEUTRAL, also: ['SU'] },
+	{ code: 'DK', label: 'Denmark', color: NEUTRAL },
+	{ code: 'SE', label: 'Sweden', color: NEUTRAL },
+	{ code: 'PL', label: 'Poland', color: NEUTRAL },
+	{ code: 'NO', label: 'Norway', color: NEUTRAL },
+	{ code: 'IE', label: 'Ireland', color: NEUTRAL },
+	{ code: 'TR', label: 'Turkey', color: NEUTRAL },
+	{ code: null, label: 'Elsewhere', color: NEUTRAL },
 ];
-const COUNTRY_OF = new Map(COUNTRIES.flatMap((c, i) => (c.code ? [[c.code, i]] : [])));
+const COUNTRY_OF = new Map(
+	COUNTRIES.flatMap((c, i) => (c.code ? [c.code, ...(c.also ?? [])].map((k) => [k, i]) : [])),
+);
 const OTHER_COUNTRY = COUNTRIES.findIndex((c) => !c.code);
+
+/** Films in a country before a person counts as having worked there.
+ *
+ * This is the "absolute" half of the country model: someone belongs to every
+ * country they have a real body of work in, not just their most common one.
+ * Jackie Chan is Hong Kong by weight (46 films) but has 15 American and 13
+ * Chinese ones, so filtering to the United States has to return him. At 3 films
+ * about 17% of people belong to more than one country, which is roughly the
+ * share whose careers genuinely straddle industries. */
+const COUNTRY_MIN_FILMS = 3;
 
 /**
  * Eras of film history, by the midpoint of a person's career.
@@ -232,7 +269,7 @@ const ERAS = [
  * US-Canadian one to Canada. Splitting the film's weight across its countries
  * removes that bias and lets a career of outright Italian films outvote the
  * co-productions, which is how Fellini ends up Italian rather than French. */
-function dominantCountry(filmIds, filmById) {
+function countryProfile(filmIds, filmById) {
 	const tally = new Map();
 	for (const id of filmIds) {
 		const codes = filmById.get(id)?.countries ?? [];
@@ -240,16 +277,29 @@ function dominantCountry(filmIds, filmById) {
 		const share = 1 / codes.length;
 		for (const code of codes) tally.set(code, (tally.get(code) ?? 0) + share);
 	}
-	if (!tally.size) return OTHER_COUNTRY;
-	let bestCode = null;
-	let bestN = -1;
+	if (!tally.size) return { dominant: OTHER_COUNTRY, members: [OTHER_COUNTRY] };
+
+	// Fold codes onto their bucket first, so Russia and the USSR (or Germany and
+	// East Germany) are one country rather than competing with each other.
+	const byBucket = new Map();
 	for (const [code, n] of tally) {
-		if (n > bestN) {
-			bestN = n;
-			bestCode = code;
-		}
+		const b = COUNTRY_OF.get(code) ?? OTHER_COUNTRY;
+		byBucket.set(b, (byBucket.get(b) ?? 0) + n);
 	}
-	return COUNTRY_OF.get(bestCode) ?? OTHER_COUNTRY;
+
+	let dominant = OTHER_COUNTRY;
+	let best = -1;
+	const members = [];
+	for (const [bucket, n] of byBucket) {
+		if (n > best) {
+			best = n;
+			dominant = bucket;
+		}
+		if (n >= COUNTRY_MIN_FILMS && bucket !== OTHER_COUNTRY) members.push(bucket);
+	}
+	// Everyone belongs somewhere, even if no single country clears the floor.
+	if (!members.includes(dominant)) members.push(dominant);
+	return { dominant, members: members.sort((a, b) => a - b) };
 }
 
 /** The era a person sits in, by the median year of their filmography — the
@@ -427,7 +477,9 @@ async function main() {
 		// volume (r=0.27 with film count) so it answers a different question —
 		// were their films big for their time, however many they made.
 		p.hit = shrunkMean(grossSum, p.grossFilms, grossPct.prior);
-		p.country = dominantCountry(p.films, filmById);
+		const cp = countryProfile(p.films, filmById);
+		p.country = cp.dominant;
+		p.countryList = cp.members;
 		p.era = careerEra(p.films, filmById);
 	}
 
@@ -490,6 +542,7 @@ async function main() {
 			roleMask: p.qroles.reduce((m, i) => m | (1 << i), 0),
 			roles: p.qroles.map((i) => roles[i].role).join('+'),
 			country: p.country,
+			countryList: p.countryList,
 			era: p.era,
 		});
 	};
@@ -575,7 +628,11 @@ async function main() {
 				key: 'country',
 				label: 'Where they work',
 				field: 'country',
-				note: 'Where most of their films were made. Seven stays separable for colour-blind viewers; the rest share a neutral.',
+				// Colour by the dominant country, but filter on every country they
+				// have a real body of work in — so Jackie Chan paints Hong Kong yet
+				// still answers a filter for the United States.
+				filterField: 'countryList',
+				note: `Coloured by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. Only seven colours stay separable, so the rest share a neutral.`,
 				legend: COUNTRIES.map((c) => ({ label: c.label, light: c.color, dark: c.color })),
 			},
 			{
@@ -588,7 +645,7 @@ async function main() {
 		],
 		nodeFields: [
 			'tmdbId', 'name', 'x', 'y',
-			'films', 'reach', 'hit', 'grossFilms', 'roleMask', 'country', 'era',
+			'films', 'reach', 'hit', 'grossFilms', 'roleMask', 'country', 'countryList', 'era',
 			...roles.map((r) => `n_${r.role}`),
 		],
 		edgeFields: ['source', 'target', 'weight'],
@@ -596,7 +653,7 @@ async function main() {
 			const a = graph.getNodeAttributes(id);
 			return [
 				Number(id), a.label, r2(a.x), r2(a.y),
-				a.films, a.reach, a.hit, a.grossFilms, a.roleMask, a.country, a.era,
+				a.films, a.reach, a.hit, a.grossFilms, a.roleMask, a.country, a.countryList, a.era,
 				...roles.map((r) => a[`n_${r.role}`]),
 			];
 		}),

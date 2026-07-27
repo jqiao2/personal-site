@@ -93,6 +93,11 @@ async function main() {
 	const iId = at('tmdbId'), iName = at('name'), iX = at('x'), iY = at('y');
 	const iFilms = at('films'), iMask = at('roleMask'), iGrossFilms = at('grossFilms');
 	const bucketAt = Object.fromEntries(colorModes.filter((m) => m.field).map((m) => [m.key, at(m.field)]));
+	// A dimension can colour by one field and filter on another: country paints
+	// the dominant one but matches on every country the person has worked in.
+	const memberAt = Object.fromEntries(
+		colorModes.filter((m) => m.filterField).map((m) => [m.key, at(m.filterField)]),
+	);
 	const roleAt = roles.map((r) => at(`n_${r.role}`));
 	const metricAt = Object.fromEntries(metrics.map((m) => [m.key, at(m.key)]));
 
@@ -109,6 +114,7 @@ async function main() {
 			counts: roles.map((_r, ri) => n[roleAt[ri]]),
 			metricValues: Object.fromEntries(metrics.map((m) => [m.key, n[metricAt[m.key]]])),
 			buckets: Object.fromEntries(Object.entries(bucketAt).map(([k, idx]) => [k, n[idx]])),
+			members: Object.fromEntries(Object.entries(memberAt).map(([k, idx]) => [k, n[idx]])),
 			held,
 			type: 'piechart',
 			color: roles[held.findIndex(Boolean)].color,
@@ -167,10 +173,21 @@ async function main() {
 	}
 
 	/** The label a node carries in the current colour dimension, for the panel. */
-	function bucketLabel(attrs) {
-		const mode = colorModes.find((m) => m.key === state.colorBy);
-		if (!mode?.field) return null;
-		return (mode.legend[attrs.buckets[mode.key]] ?? {}).label ?? null;
+	/** Where a person sits in every non-role dimension, named in text. Shown
+	 * regardless of what the graph is currently coloured by — the countries
+	 * someone works in are worth reading even while looking at roles — and it's
+	 * the secondary encoding that keeps identity off hue alone. Multi-valued
+	 * dimensions list all their buckets, the coloured one first. */
+	function dimensionLabels(attrs) {
+		return colorModes
+			.filter((m) => m.field)
+			.map((m) => {
+				const dominant = attrs.buckets[m.key];
+				const rest = bucketsOf(attrs, m).filter((b) => b !== dominant);
+				const names = [dominant, ...rest].map((i) => m.legend[i]?.label).filter(Boolean);
+				return names.length ? `${m.label}: ${names.join(', ')}` : null;
+			})
+			.filter(Boolean);
 	}
 
 	/** Node keys ranked by the current metric, best first. Drives "Show top N". */
@@ -240,7 +257,7 @@ async function main() {
 	 * single bucket each. */
 	function bucketsOf(attrs, mode) {
 		if (mode.key === 'role') return attrs.held.flatMap((h, i) => (h ? [i] : []));
-		return [attrs.buckets[mode.key]];
+		return attrs.members[mode.key] ?? [attrs.buckets[mode.key]];
 	}
 
 	/** A node passes when it's in the top-N for the current metric, clears the
@@ -488,14 +505,14 @@ async function main() {
 		const m = metrics.find((x) => x.key === state.metric);
 		const v = a.metricValues[state.metric];
 		const shown = m.key === 'hit' ? `${(v * 100).toFixed(0)}th pct` : v.toLocaleString();
-		const bucket = bucketLabel(a);
+		const dims = dimensionLabels(a);
 
 		details.innerHTML = `
 			<h3>${escapeHtml(a.label)}</h3>
 			<div class="chips">${chips}</div>
 			<p class="muted small">
 				${a.films} films · ${m.label}: <strong>${shown}</strong>
-				${bucket ? `<br>${escapeHtml(bucket)}` : ''}
+				${dims.map((d) => `<br>${escapeHtml(d)}`).join('')}
 				${minor ? `<br><span class="minor">also ${escapeHtml(minor)} credits (below the ${(payload.roleShareFloor * 100).toFixed(0)}% share to colour the node)</span>` : ''}
 			</p>
 			<p class="muted small">${partners.length} collaborators</p>
