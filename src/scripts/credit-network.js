@@ -198,7 +198,12 @@ async function main() {
 		topN: Math.min(DEFAULT_TOP_N, nodes.length),
 		minWeight: meta.minEdge,
 		minFilms: 0,
-		visibleRoles: new Set(roles.map((r) => r.role)),
+		// One enabled-bucket set per dimension, all on to start. Filters combine as
+		// OR within a dimension and AND across them, so unticking everything but
+		// Actor and United States leaves exactly the US actors.
+		enabled: Object.fromEntries(
+			colorModes.map((m) => [m.key, new Set(m.legend.map((_l, i) => i))]),
+		),
 		hovered: null,
 		selected: null,
 		neighbors: null,
@@ -230,13 +235,23 @@ async function main() {
 	let visibleNodes = new Set();
 	let visibleEdges = 0;
 
-	/** A node passes when it's in the top-N for the current metric, holds a
-	 * visible role, and clears the film floor. Role filtering is per-role, so
-	 * hiding "Composer" still keeps a composer-director as a director. */
+	/** Which buckets of a dimension a node belongs to. Role is the only
+	 * multi-valued one — a hyphenate is in two at once; country and era are a
+	 * single bucket each. */
+	function bucketsOf(attrs, mode) {
+		if (mode.key === 'role') return attrs.held.flatMap((h, i) => (h ? [i] : []));
+		return [attrs.buckets[mode.key]];
+	}
+
+	/** A node passes when it's in the top-N for the current metric, clears the
+	 * film floor, and has at least one enabled bucket in EVERY dimension.
+	 * Within a dimension that's an OR (a composer-director survives hiding
+	 * composers); across dimensions it's an AND, which is what lets you ask for
+	 * US actors specifically. */
 	function passesNodeFilters(key, attrs, topSet) {
 		if (!topSet.has(key)) return false;
 		if (attrs.films < state.minFilms) return false;
-		return roles.some((r, ri) => attrs.held[ri] && state.visibleRoles.has(r.role));
+		return colorModes.every((m) => bucketsOf(attrs, m).some((b) => state.enabled[m.key].has(b)));
 	}
 
 	/** Recompute what survives. A node must also keep at least one edge —
@@ -324,7 +339,7 @@ async function main() {
 		// Region and era carry per-mode steps, so re-paint rather than letting the
 		// light values sit on a dark surface.
 		applyColors();
-		renderColorLegend();
+		renderGroups();
 		renderer.refresh({ skipIndexation: true });
 	});
 
@@ -400,14 +415,18 @@ async function main() {
 	function revealNode(key) {
 		const a = graph.getNodeAttributes(key);
 		const changes = [];
-		for (const [ri, r] of roles.entries()) {
-			if (a.held[ri] && !state.visibleRoles.has(r.role)) {
-				state.visibleRoles.add(r.role);
-				const cb = $(`#legend input[data-role="${r.role}"]`);
-				if (cb) cb.checked = true;
-				changes.push(`showed ${r.label.toLowerCase()}s`);
-			}
+		// Re-enable one of the person's own buckets in any dimension that would
+		// otherwise exclude them — enough to make them visible without discarding
+		// the rest of the filter.
+		let regroup = false;
+		for (const m of colorModes) {
+			const mine = bucketsOf(a, m);
+			if (mine.some((b) => state.enabled[m.key].has(b))) continue;
+			for (const b of mine) state.enabled[m.key].add(b);
+			regroup = true;
+			changes.push(`re-enabled ${m.label.toLowerCase()}`);
 		}
+		if (regroup) renderGroups();
 		if (a.films < state.minFilms) {
 			state.minFilms = a.films;
 			const el = $('#min-films');
@@ -623,51 +642,77 @@ async function main() {
 		applyFilters();
 	});
 
-	// Colour-by selector, with its own legend so what the colours mean is always
-	// stated — identity is never carried by hue alone.
+	// Colour-by selector. The filter groups below double as the legend, so there
+	// is no separate colour key to fall out of sync with them.
 	const colorSel = $('#color-by');
 	colorSel.innerHTML = colorModes.map((m) => `<option value="${m.key}">${m.label}</option>`).join('');
 	colorSel.value = state.colorBy;
-	const colorLegend = $('#color-legend');
 	const colorNote = $('#color-note');
-	function renderColorLegend() {
-		const mode = colorModes.find((m) => m.key === state.colorBy);
-		colorLegend.innerHTML = mode.legend
+
+	// One checkbox group per dimension. Every dimension both colours and filters;
+	// only the active one shows swatches, since a coloured key next to a
+	// dimension the nodes aren't painted by would just contradict the canvas.
+	const groupsEl = $('#filter-groups');
+	function renderGroups() {
+		const swatch = (m, l) =>
+			m.key === state.colorBy
+				? `<span class="swatch" style="background:${isDark() ? l.dark : l.light}"></span>`
+				: '';
+		groupsEl.innerHTML = colorModes
 			.map(
-				(l) =>
-					`<li><span class="swatch" style="background:${isDark() ? l.dark : l.light}"></span>${l.label}</li>`,
+				(m) => `<div class="group" data-dim="${m.key}">
+					<div class="group-head">
+						<h3>${m.label}${m.key === state.colorBy ? ' <span class="muted">— colouring</span>' : ''}</h3>
+						<button type="button" class="link" data-all="${m.key}">all</button>
+						<button type="button" class="link" data-only="${m.key}">none</button>
+					</div>
+					${m.legend
+						.map(
+							(l, i) => `<label class="legend-item">
+								<input type="checkbox" ${state.enabled[m.key].has(i) ? 'checked' : ''} data-dim="${m.key}" data-bucket="${i}" />
+								${swatch(m, l)}${l.label}
+							</label>`,
+						)
+						.join('')}
+				</div>`,
 			)
 			.join('');
-		colorNote.textContent = mode.note;
-		// Role swatches on the filter checkboxes would contradict the nodes when
-		// colour encodes something else, so they only show in role mode.
-		$('#legend').classList.toggle('no-swatch', state.colorBy !== 'role');
+
+		for (const cb of groupsEl.querySelectorAll('input[data-bucket]')) {
+			cb.addEventListener('change', () => {
+				const set = state.enabled[cb.dataset.dim];
+				const bucket = Number(cb.dataset.bucket);
+				if (cb.checked) set.add(bucket);
+				else set.delete(bucket);
+				applyFilters();
+			});
+		}
+		for (const b of groupsEl.querySelectorAll('button[data-all]')) {
+			b.addEventListener('click', () => {
+				const key = b.dataset.all;
+				const mode = colorModes.find((m) => m.key === key);
+				state.enabled[key] = new Set(mode.legend.map((_l, i) => i));
+				renderGroups();
+				applyFilters();
+			});
+		}
+		for (const b of groupsEl.querySelectorAll('button[data-only]')) {
+			b.addEventListener('click', () => {
+				state.enabled[b.dataset.only].clear();
+				renderGroups();
+				applyFilters();
+			});
+		}
+		colorNote.textContent = colorModes.find((m) => m.key === state.colorBy).note;
 	}
+
 	colorSel.addEventListener('change', () => {
 		state.colorBy = colorSel.value;
 		applyColors();
-		renderColorLegend();
+		renderGroups();
 		if (state.selected) renderDetails(state.selected);
 		renderer.refresh({ skipIndexation: true });
 	});
-
-	const legend = $('#legend');
-	legend.innerHTML = roles
-		.map(
-			(r) => `<label class="legend-item">
-				<input type="checkbox" checked data-role="${r.role}" />
-				<span class="swatch" style="background:${r.color}"></span>
-				${r.label} <span class="muted">&ge;${r.minFilms} films</span>
-			</label>`,
-		)
-		.join('');
-	for (const cb of legend.querySelectorAll('input[data-role]')) {
-		cb.addEventListener('change', () => {
-			if (cb.checked) state.visibleRoles.add(cb.dataset.role);
-			else state.visibleRoles.delete(cb.dataset.role);
-			applyFilters();
-		});
-	}
 
 	// --- Live layout ---------------------------------------------------------
 	// The layout that ships in the JSON was solved for all 7,518 people, so
@@ -752,7 +797,7 @@ async function main() {
 
 	// --- Boot ----------------------------------------------------------------
 	applyColors();
-	renderColorLegend();
+	renderGroups();
 	recomputeVisible();
 	renderDetails(null);
 	$('#meta').textContent =
