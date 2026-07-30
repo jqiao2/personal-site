@@ -164,22 +164,40 @@ async function loadFromDb() {
 // ---------------------------------------------------------------------------
 
 /**
- * The countries a person mostly works in — the seven largest in this corpus by
- * number of graphed people, covering ~90% of them, plus a neutral catch-all.
+ * The countries a person works in — every one with ~8+ graphed people, plus a
+ * neutral catch-all. The twelve largest carry a colour; the rest share the
+ * neutral and are told apart by the filter list and the details panel.
  *
- * Seven is where the colours stop being safely separable. A network graph is an
- * "all pairs" surface (any two nodes can end up adjacent), and under that test
- * this set is the largest that still clears the colour-blind and normal-vision
- * separation floors — verified with the dataviz validator, which rejected a
- * Tableau-10-style ten (green↔red at ΔE 0.7 for deutan viewers, i.e. identical)
- * and every eighth hue tried. The base is Okabe-Ito, designed for exactly this.
+ * How far the colours go was measured, not guessed. A network graph is an "all
+ * pairs" surface — any two nodes can end up adjacent — so every pair has to
+ * survive, under normal vision and under all three colour-blindness types. A
+ * greedy farthest-point search over the colour space, seeded with the Okabe-Ito
+ * seven and scored with the dataviz validator's OKLab + Machado maths, gives:
  *
- * One set serves both themes rather than two selected ramps: Okabe-Ito is built
- * to hold up on light and dark alike, and here it keeps a country's colour
- * stable when the viewer's theme flips. On the dark surface three of these sit
- * above the usual lightness band — bright, which at a 1–6px node radius helps
- * rather than hurts. The legend and the details panel name the country, so hue
- * never carries identity alone.
+ *     size   normal floor   CVD floor
+ *      7        15.6           7.6      <- Okabe-Ito alone
+ *     10        15.6           7.6      <- three more cost nothing at all
+ *     11        12.4           7.6
+ *     12         9.6           7.6      <- current
+ *     14         9.6           7.3
+ *
+ * So ten is free and twelve is a deliberate trade: the last two drop the
+ * normal-vision floor to 9.6, below the ~15 that reads as comfortably distinct.
+ * The weakest pair is Hong Kong vs Australia (magenta vs purple, ΔE 9.6) — a
+ * full-colour reader can separate them side by side but not across the canvas.
+ * Dropping to ten costs nothing if that trade stops being worth it.
+ *
+ * Past twelve the space is genuinely exhausted, and the additions are what
+ * makes the palette purple-heavy: the Okabe-Ito seven already own blue, green,
+ * orange, pink, red and sky, so violet and magenta are all that is left. The
+ * obvious "nicer" choices are much worse — a teal reads at ΔE 2.7 against the
+ * blue for deutan viewers, and an olive at 3.1 against the vermillion, i.e.
+ * indistinguishable. Softening the harsh hues below halves the CVD floor
+ * (7.6 -> 4.0), so they are kept as measured rather than as preferred.
+ *
+ * One set serves both themes rather than two selected ramps, so a country's
+ * colour stays stable when the viewer's theme flips. The legend and the details
+ * panel always name the country, so hue never carries identity alone.
  *
  * Colour is bound to the country, never to its rank, so adding data later can't
  * repaint anyone.
@@ -197,15 +215,12 @@ const COUNTRIES = [
 	{ code: 'JP', label: 'Japan', color: '#E69F00' },
 	{ code: 'CA', label: 'Canada', color: '#56B4E9' },
 	{ code: 'DE', label: 'Germany', color: '#B03060', also: ['DD'] },
-	// Past seven, colours stop being separable (an eighth hue drops the
-	// normal-vision floor to dE 11.8 against the blue, i.e. two countries a
-	// full-colour reader cannot tell apart), so the rest share the neutral and
-	// are distinguished by the filter and the details panel instead.
-	{ code: 'IN', label: 'India', color: NEUTRAL },
-	{ code: 'ES', label: 'Spain', color: NEUTRAL },
-	{ code: 'KR', label: 'South Korea', color: NEUTRAL },
-	{ code: 'HK', label: 'Hong Kong', color: NEUTRAL },
-	{ code: 'AU', label: 'Australia', color: NEUTRAL },
+	// Eight through ten are free; eleven and twelve are the measured trade above.
+	{ code: 'IN', label: 'India', color: '#4400DD' },
+	{ code: 'ES', label: 'Spain', color: '#9966FF' },
+	{ code: 'KR', label: 'South Korea', color: '#555500' },
+	{ code: 'HK', label: 'Hong Kong', color: '#880077' },
+	{ code: 'AU', label: 'Australia', color: '#7700AA' },
 	{ code: 'CN', label: 'China', color: NEUTRAL },
 	{ code: 'BE', label: 'Belgium', color: NEUTRAL },
 	{ code: 'MX', label: 'Mexico', color: NEUTRAL },
@@ -632,7 +647,7 @@ async function main() {
 				// have a real body of work in — so Jackie Chan paints Hong Kong yet
 				// still answers a filter for the United States.
 				filterField: 'countryList',
-				note: `Coloured by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. Only seven colours stay separable, so the rest share a neutral.`,
+				note: `Coloured by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. The 12 biggest industries carry a colour, the rest share a neutral.`,
 				legend: COUNTRIES.map((c) => ({ label: c.label, light: c.color, dark: c.color })),
 			},
 			{
