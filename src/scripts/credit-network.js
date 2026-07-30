@@ -743,16 +743,83 @@ async function main() {
 	// throwaway subgraph and mirrors positions back to the real one through
 	// `outputReducer`. Node keys are shared, so the mapping is the identity.
 	const layoutBtn = $('#layout-toggle');
-	/** Length of the automatic re-settle after a filter change. Long enough to
-	 * spread out, short enough that the graph comes to rest on its own. */
-	const BURST_MS = 2600;
+
+	/** When the automatic re-settle after a filter change gives up.
+	 *
+	 * This was a flat 2,600ms wall-clock budget, which quietly stopped working
+	 * when the graph grew to 25,236 people: FA2's cost per iteration scales with
+	 * the graph, so the same milliseconds bought roughly a third as many
+	 * iterations as they did at 7,518 and the burst started expiring mid-spread —
+	 * leaving the user to press Re-settle to finish a job that was supposed to be
+	 * automatic.
+	 *
+	 * So stop on the thing actually wanted, the layout coming to rest, instead of
+	 * on a clock. That self-tunes: a bigger graph, a slower machine or a heavier
+	 * filter all just take the polls they need.
+	 *
+	 * Rest is measured on positions normalised into their own bounding box. FA2
+	 * expands more or less indefinitely, so raw displacement never settles to
+	 * zero; normalising divides that global drift out and leaves only the
+	 * structural rearrangement, which does converge. */
+	const SETTLE_POLL_MS = 350;
+	/** Mean normalised movement per poll under which the layout counts as at rest —
+	 * the average node shifting <0.25% of the canvas between polls.
+	 *
+	 * Measured rather than picked. Movement on a 3,000-node view decays from ~0.025
+	 * to ~0.0024 over twenty seconds, and NOT monotonically: it falls to ~0.005 by
+	 * 2.5s, then climbs back to ~0.013 between 8s and 16s as the layout reorganises,
+	 * before finally trailing off. That rebound is the trap — it sits below any
+	 * threshold loose enough to be reached quickly, so a naive rule stops at ~4s
+	 * with the real spreading still ahead of it. 0.0025 sits under the rebound. */
+	const SETTLE_EPS = 0.0025;
+	/** Consecutive quiet polls required. Guards against both a momentarily still
+	 * frame and the tail of the rebound above dipping across the line once. */
+	const SETTLE_QUIET_POLLS = 3;
+	/** Backstop, so a graph that never converges cannot spin the worker forever.
+	 * Generous because settling legitimately takes ~20s at a few thousand nodes;
+	 * this is the "something is wrong" limit, not the expected duration. */
+	const SETTLE_MAX_MS = 45_000;
+	/** Nodes watched for movement. A sample is plenty to detect global rest, and
+	 * keeps each poll cheap on a 25k-node graph. */
+	const SETTLE_SAMPLE = 400;
 
 	let layout = null;
-	let burstTimer = null;
+	let settleTimer = null;
+
+	/** Positions of `keys` normalised into their own bounding box, so a uniformly
+	 * expanding layout reads as no movement at all. */
+	function normalizedPositions(keys) {
+		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+		const raw = new Float64Array(keys.length * 2);
+		for (let i = 0; i < keys.length; i++) {
+			const { x, y } = graph.getNodeAttributes(keys[i]);
+			raw[i * 2] = x;
+			raw[i * 2 + 1] = y;
+			if (x < minX) minX = x;
+			if (x > maxX) maxX = x;
+			if (y < minY) minY = y;
+			if (y > maxY) maxY = y;
+		}
+		const w = maxX - minX || 1;
+		const h = maxY - minY || 1;
+		for (let i = 0; i < raw.length; i += 2) {
+			raw[i] = (raw[i] - minX) / w;
+			raw[i + 1] = (raw[i + 1] - minY) / h;
+		}
+		return raw;
+	}
+
+	/** Mean per-node distance between two normalised snapshots. */
+	function meanShift(a, b) {
+		if (!a.length) return 0;
+		let sum = 0;
+		for (let i = 0; i < a.length; i += 2) sum += Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1]);
+		return sum / (a.length / 2);
+	}
 
 	function stopPhysics() {
-		clearTimeout(burstTimer);
-		burstTimer = null;
+		clearInterval(settleTimer);
+		settleTimer = null;
 		if (layout) {
 			layout.kill();
 			layout = null;
@@ -762,7 +829,7 @@ async function main() {
 		layoutBtn.classList.remove('running');
 	}
 
-	/** Run FA2 over the visible subgraph. `burst` auto-stops after BURST_MS. */
+	/** Run FA2 over the visible subgraph. `burst` auto-stops once it comes to rest. */
 	function startPhysics({ burst }) {
 		stopPhysics();
 		if (visibleNodes.size < 2) return;
@@ -794,11 +861,19 @@ async function main() {
 		layoutBtn.textContent = '■ Stop';
 		layoutBtn.classList.add('running');
 		if (burst) {
-			burstTimer = setTimeout(() => {
+			const sample = [...visibleNodes].slice(0, SETTLE_SAMPLE);
+			let previous = normalizedPositions(sample);
+			let quiet = 0;
+			const started = Date.now();
+			settleTimer = setInterval(() => {
+				const current = normalizedPositions(sample);
+				quiet = meanShift(previous, current) < SETTLE_EPS ? quiet + 1 : 0;
+				previous = current;
+				if (quiet < SETTLE_QUIET_POLLS && Date.now() - started < SETTLE_MAX_MS) return;
 				stopPhysics();
 				frameVisible();
 				renderer.refresh({ skipIndexation: true });
-			}, BURST_MS);
+			}, SETTLE_POLL_MS);
 		}
 	}
 
