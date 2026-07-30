@@ -15,7 +15,7 @@
 //
 // Usage (env supplies TMDB_API_KEY):
 //   node --env-file=.env scripts/credit-graph/fetch.mjs [options]
-//     --min-votes=<n>  TMDB vote_count floor (default 100, ~23k films)
+//     --min-votes=<n>  TMDB vote_count floor (default 50, ~36k films)
 //     --cast=<n>       Billed cast kept per film (default 15)
 //     --limit=<n>      Only fetch n films this run (smoke test)
 //     --ids-only       Re-enumerate the id list and stop
@@ -34,7 +34,7 @@ const opt = (name, fallback) => {
 	return hit ? hit.slice(name.length + 3) : fallback;
 };
 
-const MIN_VOTES = Number.parseInt(opt('min-votes', '100'), 10);
+const MIN_VOTES = Number.parseInt(opt('min-votes', '50'), 10);
 const TOP_CAST = Number.parseInt(opt('cast', '15'), 10);
 const LIMIT = opt('limit') ? Number.parseInt(opt('limit'), 10) : Infinity;
 const IDS_ONLY = flag('ids-only');
@@ -54,7 +54,7 @@ const FILMS_FILE = path.join(CACHE_DIR, 'films.ndjson');
  * workers against ~150ms round-trips lands comfortably under that. */
 const CONCURRENCY = 16;
 
-/** Earliest release year to enumerate. Nothing before this clears a 100-vote floor. */
+/** Earliest release year to enumerate. Nothing before this clears a 50-vote floor. */
 const FIRST_YEAR = 1900;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

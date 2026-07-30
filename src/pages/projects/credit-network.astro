@@ -1,6 +1,6 @@
 ---
 // Film credit collaboration network. Nodes are people who clear a per-role
-// threshold (actor >= 10 films, director >= 5, composer >= 3); edges join people
+// threshold (actor >= 5 films, director >= 2, composer >= 2); edges join people
 // who share at least 2 films, weighted by how many. People who clear more than
 // one role are drawn as split-colour pie nodes.
 //
@@ -25,7 +25,7 @@ const nav = [
 		<title>Credit Network</title>
 		<meta
 			name="description"
-			content="A collaboration network of actors, directors and composers built from ~23,000 TMDB films."
+			content="A collaboration network of actors, directors and composers built from ~36,000 TMDB films."
 		/>
 	</head>
 	<body>
@@ -74,7 +74,7 @@ const nav = [
 						<span>Top <output id="top-n-out"></output> people</span>
 						<input id="top-n" type="range" min="100" step="50" />
 					</label>
-					<p class="muted small">All 7,518 puts dots ~2px apart. Fewer is more readable.</p>
+					<p class="muted small">All 25,236 puts dots ~4px apart. Fewer is more readable.</p>
 				</section>
 
 				<section>
@@ -110,7 +110,7 @@ const nav = [
 
 				<section class="about">
 					<p class="muted small">
-						~23,000 TMDB films with 100+ votes. Each contributes its top 15 cast, directors and
+						~36,000 TMDB films with 50+ votes. Each contributes its top 15 cast, directors and
 						composers; people are joined when they share a film.
 						<a href="/data/credit-network.gexf" download>Download GEXF</a> for Gephi.
 					</p>

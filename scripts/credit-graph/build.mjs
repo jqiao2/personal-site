@@ -15,9 +15,9 @@
 // Usage:
 //   node --env-file=.env scripts/credit-graph/build.mjs [options]
 //     --from=cache|db     Data source (default cache)
-//     --min-actor=<n>     Films needed to appear as an actor    (default 10)
-//     --min-director=<n>  Films needed to appear as a director  (default 5)
-//     --min-composer=<n>  Films needed to appear as a composer  (default 3)
+//     --min-actor=<n>     Films needed to appear as an actor    (default 5)
+//     --min-director=<n>  Films needed to appear as a director  (default 2)
+//     --min-composer=<n>  Films needed to appear as a composer  (default 2)
 //     --min-edge=<n>      Shared films needed for an edge       (default 2)
 //     --iterations=<n>    ForceAtlas2 iterations                (default 400)
 //     --keep-isolates     Keep people left with no surviving edge
@@ -49,9 +49,9 @@ const KEEP_ISOLATES = flag('keep-isolates');
  * migration 0015; `--from=db` replaces this with whatever the table actually
  * says, so the DB stays the source of truth when it is the source of data. */
 const ROLES = [
-	{ role: 'actor', label: 'Actor', color: '#e0574f', min_films: num('min-actor', 10), sort_order: 1 },
-	{ role: 'director', label: 'Director', color: '#4a8fd4', min_films: num('min-director', 5), sort_order: 2 },
-	{ role: 'composer', label: 'Composer', color: '#3fa87a', min_films: num('min-composer', 3), sort_order: 3 },
+	{ role: 'actor', label: 'Actor', color: '#e0574f', min_films: num('min-actor', 5), sort_order: 1 },
+	{ role: 'director', label: 'Director', color: '#4a8fd4', min_films: num('min-director', 2), sort_order: 2 },
+	{ role: 'composer', label: 'Composer', color: '#3fa87a', min_films: num('min-composer', 2), sort_order: 3 },
 ];
 
 const CACHE_FILE = path.join('scripts', '.cache', 'credit-graph', 'films.ndjson');
@@ -165,75 +165,100 @@ async function loadFromDb() {
 
 /**
  * The countries a person works in — every one with ~8+ graphed people, plus a
- * neutral catch-all. The twelve largest carry a colour; the rest share the
- * neutral and are told apart by the filter list and the details panel.
+ * neutral catch-all.
  *
- * How far the colours go was measured, not guessed. A network graph is an "all
- * pairs" surface — any two nodes can end up adjacent — so every pair has to
- * survive, under normal vision and under all three colour-blindness types. A
- * greedy farthest-point search over the colour space, seeded with the Okabe-Ito
- * seven and scored with the dataviz validator's OKLab + Machado maths, gives:
+ * FOUR colours, deliberately repeated across the list. This replaces an earlier
+ * attempt to give the twelve biggest industries a colour each, which was the
+ * wrong goal: it spent the whole colour space chasing unique hues and ended up
+ * with a palette whose worst pair was indistinguishable in practice. Reported
+ * plainly by a colour-blind reader — the twelve could barely be told apart — and
+ * the measurement agrees with them.
  *
- *     size   normal floor   CVD floor
- *      7        15.6           7.6      <- Okabe-Ito alone
- *     10        15.6           7.6      <- three more cost nothing at all
- *     11        12.4           7.6
- *     12         9.6           7.6      <- current
- *     14         9.6           7.3
+ * A network graph is an "all pairs" surface: any two nodes can end up adjacent,
+ * so the palette is only as good as its WORST pair, under normal vision and all
+ * three colour-blindness types (Machado severity 1.0, distance in OKLab x100):
  *
- * So ten is free and twelve is a deliberate trade: the last two drop the
- * normal-vision floor to 9.6, below the ~15 that reads as comfortably distinct.
- * The weakest pair is Hong Kong vs Australia (magenta vs purple, ΔE 9.6) — a
- * full-colour reader can separate them side by side but not across the canvas.
- * Dropping to ten costs nothing if that trade stops being worth it.
+ *     palette                       normal floor   CVD floor
+ *     12 unique hues (previous)         9.6           7.6
+ *     8 repeated                       15.6          11.0
+ *     6 repeated                       15.6          13.1
+ *     5 repeated                       19.5          14.6
+ *     4 repeated (current)             27.1          21.3   <- cliff edge
  *
- * Past twelve the space is genuinely exhausted, and the additions are what
- * makes the palette purple-heavy: the Okabe-Ito seven already own blue, green,
- * orange, pink, red and sky, so violet and magenta are all that is left. The
- * obvious "nicer" choices are much worse — a teal reads at ΔE 2.7 against the
- * blue for deutan viewers, and an olive at 3.1 against the vermillion, i.e.
- * indistinguishable. Softening the harsh hues below halves the CVD floor
- * (7.6 -> 4.0), so they are kept as measured rather than as preferred.
+ * Four is where the cliff is: dropping from 5 to 4 buys a 46% wider floor, and
+ * going the other way collapses it. 21.3 against the old 7.6 is not a tweak,
+ * it is the difference between "these are two colours" and "these are the same
+ * colour". The four survive because they separate on LIGHTNESS as much as hue
+ * (OKLab L 0.44 / 0.52 / 0.73 / 0.75), and lightness is the channel colour
+ * blindness leaves intact — which is exactly why the old purple-heavy set,
+ * where four entries sat at L 0.43-0.44, failed.
  *
- * One set serves both themes rather than two selected ramps, so a country's
- * colour stays stable when the viewer's theme flips. The legend and the details
- * panel always name the country, so hue never carries identity alone.
+ * Black and near-white yellow score better still and are excluded anyway: a node
+ * has to read on both the light and the dark surface, so the extremes of
+ * lightness are unusable no matter how separable they are.
  *
- * Colour is bound to the country, never to its rank, so adding data later can't
- * repaint anyone.
+ * What repetition costs: hue no longer identifies a country on its own. It never
+ * fully did — twenty-four countries were never going to have twenty-four legible
+ * hues — so this makes the honest version explicit. Colour now says "roughly
+ * which part of the list", and the legend, the filter list and the details panel
+ * carry the actual identity. Filtering to one country is the precise instrument.
+ *
+ * Assignment cycles in rank order, so the largest industries — the ones that
+ * dominate the canvas — never collide with each other.
  */
 const NEUTRAL = '#9A9A95';
 
-/** Every country with at least ~8 graphed people, largest first, plus a
- * catch-all. Ordered by how many people work there so the coloured slots go to
- * the biggest industries. `also` folds in historical codes. */
-const COUNTRIES = [
-	{ code: 'US', label: 'United States', color: '#0072B2' },
-	{ code: 'GB', label: 'United Kingdom', color: '#009E73' },
-	{ code: 'FR', label: 'France', color: '#D55E00' },
-	{ code: 'IT', label: 'Italy', color: '#CC79A7' },
-	{ code: 'JP', label: 'Japan', color: '#E69F00' },
-	{ code: 'CA', label: 'Canada', color: '#56B4E9' },
-	{ code: 'DE', label: 'Germany', color: '#B03060', also: ['DD'] },
-	// Eight through ten are free; eleven and twelve are the measured trade above.
-	{ code: 'IN', label: 'India', color: '#4400DD' },
-	{ code: 'ES', label: 'Spain', color: '#9966FF' },
-	{ code: 'KR', label: 'South Korea', color: '#555500' },
-	{ code: 'HK', label: 'Hong Kong', color: '#880077' },
-	{ code: 'AU', label: 'Australia', color: '#7700AA' },
-	{ code: 'CN', label: 'China', color: NEUTRAL },
-	{ code: 'BE', label: 'Belgium', color: NEUTRAL },
-	{ code: 'MX', label: 'Mexico', color: NEUTRAL },
-	{ code: 'BR', label: 'Brazil', color: NEUTRAL },
-	{ code: 'RU', label: 'Russia / USSR', color: NEUTRAL, also: ['SU'] },
-	{ code: 'DK', label: 'Denmark', color: NEUTRAL },
-	{ code: 'SE', label: 'Sweden', color: NEUTRAL },
-	{ code: 'PL', label: 'Poland', color: NEUTRAL },
-	{ code: 'NO', label: 'Norway', color: NEUTRAL },
-	{ code: 'IE', label: 'Ireland', color: NEUTRAL },
-	{ code: 'TR', label: 'Turkey', color: NEUTRAL },
-	{ code: null, label: 'Elsewhere', color: NEUTRAL },
+/** The repeating four, measured above. Ordered so the cycle alternates lightness
+ * as well as hue, which keeps consecutive entries apart for a reader who has
+ * only lightness to go on. */
+const CYCLE = [
+	'#E69F00', // orange,     L 0.75
+	'#4400DD', // blue-violet, L 0.44
+	'#56B4E9', // sky,        L 0.73
+	'#B03060', // maroon,     L 0.52
 ];
+
+/** Every country with at least ~8 graphed people, largest first, plus a
+ * catch-all. `also` folds in historical codes.
+ *
+ * No `color` here: the cycle below assigns one by position, so this list is
+ * purely "which countries, in what order". Re-sorting it repaints, which is
+ * fine and expected now that hue is a grouping cue rather than an identity —
+ * the previous list had to freeze colours per country precisely because hue
+ * was doing work it could not actually do. */
+const COUNTRY_LIST = [
+	{ code: 'US', label: 'United States' },
+	{ code: 'FR', label: 'France' },
+	{ code: 'GB', label: 'United Kingdom' },
+	{ code: 'IT', label: 'Italy' },
+	{ code: 'JP', label: 'Japan' },
+	{ code: 'IN', label: 'India' },
+	{ code: 'DE', label: 'Germany', also: ['DD'] },
+	{ code: 'KR', label: 'South Korea' },
+	{ code: 'ES', label: 'Spain' },
+	{ code: 'CA', label: 'Canada' },
+	{ code: 'HK', label: 'Hong Kong' },
+	{ code: 'AU', label: 'Australia' },
+	{ code: 'RU', label: 'Russia / USSR', also: ['SU'] },
+	{ code: 'MX', label: 'Mexico' },
+	{ code: 'CN', label: 'China' },
+	{ code: 'PL', label: 'Poland' },
+	{ code: 'BR', label: 'Brazil' },
+	{ code: 'TR', label: 'Turkey' },
+	{ code: 'DK', label: 'Denmark' },
+	{ code: 'SE', label: 'Sweden' },
+	{ code: 'BE', label: 'Belgium' },
+	{ code: 'NO', label: 'Norway' },
+	{ code: 'IE', label: 'Ireland' },
+	{ code: null, label: 'Elsewhere' },
+];
+
+/** "Elsewhere" keeps the neutral — it is the one entry whose meaning really is
+ * "not one of the named", so it should not look like a country. */
+const COUNTRIES = COUNTRY_LIST.map((c, i) => ({
+	...c,
+	color: c.code ? CYCLE[i % CYCLE.length] : NEUTRAL,
+}));
 const COUNTRY_OF = new Map(
 	COUNTRIES.flatMap((c, i) => (c.code ? [c.code, ...(c.also ?? [])].map((k) => [k, i]) : [])),
 );
@@ -647,7 +672,7 @@ async function main() {
 				// have a real body of work in — so Jackie Chan paints Hong Kong yet
 				// still answers a filter for the United States.
 				filterField: 'countryList',
-				note: `Coloured by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. The 12 biggest industries carry a colour, the rest share a neutral.`,
+				note: `Coloured by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. Only four colours, reused down the list — too many countries for hue to name one, so filter to read a specific country.`,
 				legend: COUNTRIES.map((c) => ({ label: c.label, light: c.color, dark: c.color })),
 			},
 			{

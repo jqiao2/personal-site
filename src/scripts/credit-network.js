@@ -11,10 +11,11 @@
 // build applies a share floor (a 120-film actor who directed 5 is just an
 // actor) that the raw per-role counts don't capture.
 //
-// Readability note: 7,518 nodes cannot all be legible at once — measured median
-// nearest-neighbour spacing is ~2.3px at 960px wide. The "Show top" control is
-// the real lever (at 600 nodes it's ~5.7px), so it defaults well below the full
-// set and the full graph is opt-in.
+// Readability note: 25,236 nodes cannot all be legible at once. Fitting the
+// visible subset's bounding box to a 960px-wide canvas (what frameVisible does)
+// and taking the median nearest-neighbour distance gives ~3.9px for the full
+// set, ~6.4px at the 1,600 default and ~7.9px at 600. So the "Show top" control
+// is the real lever, and it defaults well below the full set.
 
 import Graph from 'graphology';
 import Sigma from 'sigma';
@@ -302,7 +303,7 @@ async function main() {
 	 * Sigma derives its scale from the extent of every node in the graph, and
 	 * hidden ones keep their full-graph coordinates — so without this, filtering
 	 * down to a few hundred people leaves them huddled in a corner of a frame
-	 * sized for all 7,518. Setting a custom bbox makes whatever survives the
+	 * sized for all 25,236. Setting a custom bbox makes whatever survives the
 	 * filters fill the canvas. */
 	function frameVisible() {
 		if (!visibleNodes.size) return;
@@ -732,7 +733,7 @@ async function main() {
 	});
 
 	// --- Live layout ---------------------------------------------------------
-	// The layout that ships in the JSON was solved for all 7,518 people, so
+	// The layout that ships in the JSON was solved for all 25,236 people, so
 	// filtering alone just hides nodes and leaves the survivors sitting in the
 	// cramped positions the full graph gave them. Re-running the physics over
 	// only what's visible lets that subset relax into the whole canvas, which is
