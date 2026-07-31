@@ -13,11 +13,15 @@
 //
 // Readability note: 25,236 nodes cannot all be legible at once. Fitting the
 // visible subset's bounding box to a 960px-wide canvas (what frameVisible does)
-// and taking the median nearest-neighbour distance gives ~3.9px for the full
-// set, ~6.4px at the 1,600 default and ~7.9px at 600. So the "Show top" control
-// is the real lever, and it defaults well below the full set. Raising GRAVITY
-// buys some of it back — the 1,600 default measures 10.8px settled — but only
-// some; see the note there for why the knob runs backwards.
+// and taking the median nearest-neighbour distance gives 2.6px for the full set,
+// 7.1px at the 1,600 default and 9.8px at 600. So the "Show top" control is the
+// real lever, and it defaults well below the full set.
+//
+// Those are the shipped positions, which are a *subset* of one layout solved for
+// everybody — so the survivors keep the gaps the full graph left them. Pressing
+// Re-settle solves the subset on its own and roughly halves the crowding again:
+// 7.1px becomes 10.8px at the 1,600 default. That is the whole reason the live
+// layout exists, and why filter changes trigger it.
 //
 // Cost note: nothing here may repaint the whole graph on an interaction. Sigma
 // re-runs a reducer per element named in a refresh, and at this size a pass over
