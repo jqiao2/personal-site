@@ -15,7 +15,14 @@
 // visible subset's bounding box to a 960px-wide canvas (what frameVisible does)
 // and taking the median nearest-neighbour distance gives ~3.9px for the full
 // set, ~6.4px at the 1,600 default and ~7.9px at 600. So the "Show top" control
-// is the real lever, and it defaults well below the full set.
+// is the real lever, and it defaults well below the full set. Raising GRAVITY
+// buys some of it back — the 1,600 default measures 10.8px settled — but only
+// some; see the note there for why the knob runs backwards.
+//
+// Cost note: nothing here may repaint the whole graph on an interaction. Sigma
+// re-runs a reducer per element named in a refresh, and at this size a pass over
+// every edge is ~370ms — so hover, filtering and the live layout each touch only
+// what can actually have changed. `repaint`/`reindex` below are the two doors.
 
 import Graph from 'graphology';
 import Sigma from 'sigma';
@@ -250,8 +257,53 @@ async function main() {
 	});
 
 	// --- Visibility ----------------------------------------------------------
-	let visibleNodes = new Set();
-	let visibleEdges = 0;
+	// Seeded with the whole graph, because that is what Sigma indexed when it was
+	// constructed — before the first filter pass hides anything.
+	let visibleNodes = new Set(graph.nodes());
+	let visibleEdges = graph.edges();
+	/** The same edges as a set, for the reducer to test membership against. */
+	let visibleEdgeSet = new Set(visibleEdges);
+	/** Edges touching the focused node, or null when nothing is focused. Kept here
+	 * rather than derived per edge for the same reason as `visibleEdgeSet`. */
+	let focusEdgeSet = null;
+	/** Bumped whenever the visible subset changes, so the physics can tell when its
+	 * cached copy of that subset has gone stale. */
+	let visibilityGeneration = 0;
+
+	/** Repaint what's on screen: appearance changed, geometry didn't.
+	 *
+	 * Sigma decides `fullRefresh = !opts.partialGraph`, so `refresh({ skipIndexation:
+	 * true })` on its own does the opposite of what it reads like — it clears every
+	 * node and edge index and rebuilds them from scratch. At 25,236 nodes and 126,660
+	 * edges that measured ~750ms, and it ran on every hover. Naming the elements is
+	 * what actually makes a repaint cheap.
+	 *
+	 * Only what's on screen can look different: both reducers test visibility before
+	 * they look at the focus, so a filtered-out element renders identically whatever
+	 * is hovered and doesn't need the visit. */
+	function repaint() {
+		renderer.refresh({
+			partialGraph: { nodes: [...visibleNodes], edges: visibleEdges },
+			skipIndexation: true,
+		});
+	}
+
+	/** Rebuild the spatial index, re-running the reducers for the elements named.
+	 *
+	 * Needed whenever the frame or the visible set moves, since that invalidates the
+	 * label grid, the hover quadtree and the normalisation. Moving nodes *within* an
+	 * unchanged frame does not need this: `updateNode` re-normalises each node it
+	 * touches, so a layout tick can go through `repaint` instead. */
+	function reindex(nodes = [], edges = []) {
+		renderer.refresh({ partialGraph: { nodes, edges }, skipIndexation: false });
+	}
+
+	/** Two collections as one array, without duplicates. */
+	function merged(a, b) {
+		const all = new Set(a);
+		for (const key of b) all.add(key);
+		return [...all];
+	}
 
 	/** Which buckets of a dimension a node belongs to. Role is the only
 	 * multi-valued one — a hyphenate is in two at once; country and era are a
@@ -283,19 +335,27 @@ async function main() {
 			if (passesNodeFilters(key, attrs, topSet)) candidates.add(key);
 		});
 
+		const wereVisible = visibleNodes;
+		const hadEdges = visibleEdges;
 		visibleNodes = new Set();
-		visibleEdges = 0;
-		graph.forEachUndirectedEdge((_key, attrs, s, t) => {
+		visibleEdges = [];
+		graph.forEachUndirectedEdge((key, attrs, s, t) => {
 			if (attrs.weight < state.minWeight || !candidates.has(s) || !candidates.has(t)) return;
-			visibleEdges++;
+			visibleEdges.push(key);
 			visibleNodes.add(s);
 			visibleNodes.add(t);
 		});
+		visibleEdgeSet = new Set(visibleEdges);
 		// A selected node stays on screen even if the filters would drop it, so
 		// clicking a search result never shows an empty canvas.
 		if (state.selected) visibleNodes.add(state.selected);
+		visibilityGeneration++;
 		frameVisible();
 		updateCounts();
+		// Everything that was on screen or is now. One that dropped out has to be
+		// told it's hidden, and one that survived can still look different, since a
+		// focus dims the whole visible set rather than just the focused node.
+		reindex(merged(wereVisible, visibleNodes), merged(hadEdges, visibleEdges));
 	}
 
 	/** Point the camera's reference frame at the visible nodes only.
@@ -335,19 +395,16 @@ async function main() {
 		return attrs;
 	});
 
+	// Membership rather than a recomputed predicate: this runs once per edge per
+	// repaint, and at 25,236 people that is 126,660 calls. Resolving the edge's
+	// endpoints here — `graph.extremities` allocates an array every time — was
+	// measurably the most expensive thing on the hover path.
 	renderer.setSetting('edgeReducer', (key, attrs) => {
-		const [s, t] = graph.extremities(key);
-		if (attrs.weight < state.minWeight || !visibleNodes.has(s) || !visibleNodes.has(t)) {
-			return { ...attrs, hidden: true };
-		}
-		const focus = state.hovered ?? state.selected;
-		if (focus) {
-			const touches = s === focus || t === focus;
-			return touches
-				? { ...attrs, color: theme.node === THEME.dark.node ? '#9aa7b4' : '#4a5560', zIndex: 1, size: attrs.size + 0.5 }
-				: { ...attrs, color: theme.edge, zIndex: 0 };
-		}
-		return attrs;
+		if (!visibleEdgeSet.has(key)) return { ...attrs, hidden: true };
+		if (!focusEdgeSet) return attrs;
+		return focusEdgeSet.has(key)
+			? { ...attrs, color: theme.node === THEME.dark.node ? '#9aa7b4' : '#4a5560', zIndex: 1, size: attrs.size + 0.5 }
+			: { ...attrs, color: theme.edge, zIndex: 0 };
 	});
 
 	prefersDark.addEventListener('change', (e) => {
@@ -358,13 +415,14 @@ async function main() {
 		// light values sit on a dark surface.
 		applyColors();
 		renderGroups();
-		renderer.refresh({ skipIndexation: true });
+		repaint();
 	});
 
 	// --- Node dragging -------------------------------------------------------
 	let dragged = null;
 	let isDragging = false;
-	/** The subgraph the physics is currently simulating, if it's running. */
+	/** The subgraph the physics simulates — the visible subset. Kept between runs;
+	 * see `simulationGraph`. */
 	let pinned = null;
 
 	renderer.on('downNode', ({ node }) => {
@@ -400,27 +458,61 @@ async function main() {
 	// --- Hover / selection ---------------------------------------------------
 	const neighborsOf = (key) => new Set(graph.neighbors(key));
 
+	/** Point the highlight at a node, or at nothing, refreshing what the reducers
+	 * consult so neither of them has to work it out per element. */
+	function setFocus(node) {
+		state.neighbors = node ? neighborsOf(node) : null;
+		focusEdgeSet = node ? new Set(graph.edges(node)) : null;
+	}
+
+	/** Move the focus, repainting only what the move can have changed.
+	 *
+	 * Arriving at a focus from nothing, or leaving one for nothing, changes how every
+	 * element on screen is drawn — the whole field dims or undims. Moving *between*
+	 * two focused nodes does not: everything unrelated to either was dimmed before
+	 * and stays dimmed, so only the two stars need redrawing. That distinction is
+	 * what makes tracking the cursor across a dense graph viable — at 25,236 people
+	 * the narrow path is tens of elements against 126,660. */
+	function moveFocus(previous, next) {
+		setFocus(next);
+		if (!previous || !next) {
+			repaint();
+			return;
+		}
+		renderer.refresh({
+			partialGraph: {
+				nodes: [previous, next, ...graph.neighbors(previous), ...graph.neighbors(next)],
+				edges: [...graph.edges(previous), ...graph.edges(next)],
+			},
+			skipIndexation: true,
+		});
+	}
+
 	renderer.on('enterNode', ({ node }) => {
 		if (isDragging) return;
+		const previous = state.hovered ?? state.selected;
 		state.hovered = node;
-		state.neighbors = neighborsOf(node);
-		renderer.refresh({ skipIndexation: true });
+		moveFocus(previous, node);
 	});
 	renderer.on('leaveNode', () => {
 		if (isDragging) return;
+		const previous = state.hovered;
 		state.hovered = null;
-		state.neighbors = state.selected ? neighborsOf(state.selected) : null;
-		renderer.refresh({ skipIndexation: true });
+		moveFocus(previous, state.selected);
 	});
 	renderer.on('clickNode', ({ node }) => selectNode(node));
 	renderer.on('clickStage', () => selectNode(null));
 
 	function selectNode(node) {
 		state.selected = node;
-		state.neighbors = node ? neighborsOf(node) : null;
+		// Mirrors what the reducers treat as the focus: a hover outranks a selection,
+		// so clicking through from a search result focuses the result, while clicking
+		// the node under the cursor leaves the hover in charge.
+		setFocus(state.hovered ?? state.selected);
+		// recomputeVisible repaints the whole visible set, which is what a change of
+		// focus needs — the dimming reaches every node, not just this one.
 		recomputeVisible();
 		renderDetails(node);
-		renderer.refresh({ skipIndexation: true });
 	}
 
 	function focusNode(node) {
@@ -597,22 +689,29 @@ async function main() {
 	// --- Controls ------------------------------------------------------------
 	function updateCounts() {
 		$('#counts').textContent =
-			`${visibleNodes.size.toLocaleString()} people · ${visibleEdges.toLocaleString()} collaborations`;
+			`${visibleNodes.size.toLocaleString()} people · ${visibleEdges.length.toLocaleString()} collaborations`;
 	}
 
 	// Filter changes re-run the physics over the new subset, so the survivors
 	// relax into the space instead of staying in their full-graph positions.
-	// Debounced: dragging a slider fires continuously, and restarting a worker
+	//
+	// Coalesced onto a frame, because a slider fires continuously while it's being
+	// dragged and recomputing what's visible is a pass over 25,236 nodes and 126,660
+	// edges. The re-settle behind it is debounced further still: restarting a worker
 	// on every tick would thrash.
+	let filterFrame = null;
 	let resettleTimer = null;
 	const applyFilters = () => {
-		recomputeVisible();
-		if (state.selected) renderDetails(state.selected);
-		renderer.refresh({ skipIndexation: true });
+		if (filterFrame !== null) return;
+		filterFrame = requestAnimationFrame(() => {
+			filterFrame = null;
+			recomputeVisible();
+			if (state.selected) renderDetails(state.selected);
 
-		if (!resettleBox?.checked) return;
-		clearTimeout(resettleTimer);
-		resettleTimer = setTimeout(() => startPhysics({ burst: true }), 260);
+			if (!resettleBox?.checked) return;
+			clearTimeout(resettleTimer);
+			resettleTimer = setTimeout(() => startPhysics({ burst: true }), 260);
+		});
 	};
 
 	// Size-by selector
@@ -729,7 +828,7 @@ async function main() {
 		applyColors();
 		renderGroups();
 		if (state.selected) renderDetails(state.selected);
-		renderer.refresh({ skipIndexation: true });
+		repaint();
 	});
 
 	// --- Live layout ---------------------------------------------------------
@@ -740,9 +839,44 @@ async function main() {
 	// what actually makes a filtered view readable.
 	//
 	// FA2 writes straight onto whatever graph it's handed, so it simulates a
-	// throwaway subgraph and mirrors positions back to the real one through
-	// `outputReducer`. Node keys are shared, so the mapping is the identity.
+	// separate subgraph and its positions are copied back to the real one. Node keys
+	// are shared, so the mapping is the identity.
 	const layoutBtn = $('#layout-toggle');
+
+	/** Barnes-Hut opening angle. graphology defaults to 0.5, and on the full 25,236
+	 * subset that measured 421ms an iteration — against 157ms at 1.0 and 111ms at
+	 * 1.5. 1.2 takes most of the speedup while keeping the approximation fine enough
+	 * that the dense core doesn't visibly coarsen. */
+	const BARNES_HUT_THETA = 1.2;
+
+	/** Pull toward the centre. Well *above* graphology's inferred 0.05, which is the
+	 * opposite of what wanting a more open layout suggests.
+	 *
+	 * The reason is `frameVisible`: it fits the layout's bounding box to the canvas,
+	 * so anything that expands the layout uniformly is divided straight back out and
+	 * changes nothing on screen. What's left is the ratio between the periphery and
+	 * the core — and weak gravity lets the periphery fly outward, growing the box,
+	 * which fitting to a fixed canvas turns into a *smaller*, denser core.
+	 *
+	 * Measured on the default 1,600-node view, as median nearest-neighbour distance
+	 * once fitted to a 960px canvas: gravity 0.02 gives 4.3px, the inferred 0.05
+	 * gives 6.1px, 0.1 gives 7.7px, 0.25 gives 10.9px and 0.5 gives 12.6px. The gain
+	 * flattens after 0.25. `scalingRatio` is not a second lever for the same reason
+	 * — it scales the whole layout, so 20 and 40 land within 0.1px of each other. */
+	const GRAVITY = 0.25;
+
+	/** Floor on how often the simulation's positions are copied onto the rendered
+	 * graph — fast enough that a settle reads as motion rather than as steps. */
+	const SYNC_MIN_MS = 90;
+	/** Share of the main thread the position sync may take.
+	 *
+	 * A sync costs one `updateNode` per visible node and one `updateEdge` per visible
+	 * edge, so it scales with what's on screen: a few milliseconds at the 1,600
+	 * default, a couple of hundred with all 25,236 people showing. Pacing the next
+	 * sync off the last one's own cost keeps the page responsive at both ends,
+	 * instead of picking one interval that is too slow for the small case and far too
+	 * fast for the big one. */
+	const SYNC_DUTY = 0.25;
 
 	/** When the automatic re-settle after a filter change gives up.
 	 *
@@ -785,14 +919,22 @@ async function main() {
 
 	let layout = null;
 	let settleTimer = null;
+	let syncTimer = null;
+	/** Which visibility generation `pinned` was built from. Building it is 25,236
+	 * addNode plus 126,660 addUndirectedEdge — ~600ms, nearly all of it the edges —
+	 * so a re-settle at an unchanged filter state shouldn't pay for it twice. */
+	let pinnedGeneration = -1;
 
-	/** Positions of `keys` normalised into their own bounding box, so a uniformly
-	 * expanding layout reads as no movement at all. */
-	function normalizedPositions(keys) {
+	/** Positions of `keys` in `source`, normalised into their own bounding box, so a
+	 * uniformly expanding layout reads as no movement at all.
+	 *
+	 * Read off the simulation rather than the rendered graph, so that how often
+	 * positions are synced across can't be mistaken for the layout coming to rest. */
+	function normalizedPositions(source, keys) {
 		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 		const raw = new Float64Array(keys.length * 2);
 		for (let i = 0; i < keys.length; i++) {
-			const { x, y } = graph.getNodeAttributes(keys[i]);
+			const { x, y } = source.getNodeAttributes(keys[i]);
 			raw[i * 2] = x;
 			raw[i * 2 + 1] = y;
 			if (x < minX) minX = x;
@@ -817,16 +959,68 @@ async function main() {
 		return sum / (a.length / 2);
 	}
 
+	/** Copy the simulation's positions onto the rendered graph.
+	 *
+	 * FA2's `outputReducer` is the obvious way to do this, and it was the bug: it
+	 * fires one `mergeNodeAttributes` per node per iteration, and Sigma answers every
+	 * one of those with a full re-index. Writing the attribute objects directly —
+	 * graphology hands back the live object, not a copy — and then repainting once
+	 * costs a single pass per sync instead of 25,236 refreshes per iteration.
+	 *
+	 * A repaint rather than a reindex, because `updateNode` re-normalises each node
+	 * it touches: nothing needs the frame rebuilt until the run ends. */
+	function syncPositions() {
+		if (!pinned) return;
+		pinned.forEachNode((key, { x, y }) => {
+			const attrs = graph.getNodeAttributes(key);
+			attrs.x = x;
+			attrs.y = y;
+		});
+		repaint();
+	}
+
+	/** Sync, then book the next one proportionally to what this one cost. */
+	function scheduleSync() {
+		const started = performance.now();
+		syncPositions();
+		const cost = performance.now() - started;
+		syncTimer = setTimeout(scheduleSync, Math.max(SYNC_MIN_MS, cost / SYNC_DUTY));
+	}
+
 	function stopPhysics() {
 		clearInterval(settleTimer);
+		clearTimeout(syncTimer);
 		settleTimer = null;
+		syncTimer = null;
 		if (layout) {
+			// A last sync, so the graph lands on the positions the simulation actually
+			// finished at rather than up to one interval behind them.
+			syncPositions();
 			layout.kill();
 			layout = null;
-			pinned = null;
 		}
 		layoutBtn.textContent = '▶ Re-settle';
 		layoutBtn.classList.remove('running');
+	}
+
+	/** The visible subset as a graph FA2 can chew on, reusing the last one when the
+	 * filters haven't moved since. Positions are re-seeded from the rendered graph
+	 * either way, so a drag or an earlier run carries into the new pass. */
+	function simulationGraph() {
+		if (!pinned || pinnedGeneration !== visibilityGeneration) {
+			pinned = new Graph({ type: 'undirected' });
+			for (const key of visibleNodes) pinned.addNode(key, {});
+			for (const key of visibleEdges) {
+				const [s, t] = graph.extremities(key);
+				pinned.addUndirectedEdge(s, t, { weight: graph.getEdgeAttribute(key, 'weight') });
+			}
+			pinnedGeneration = visibilityGeneration;
+		}
+		pinned.updateEachNodeAttributes((key) => {
+			const { x, y, size } = graph.getNodeAttributes(key);
+			return { x, y, size };
+		});
+		return pinned;
 	}
 
 	/** Run FA2 over the visible subgraph. `burst` auto-stops once it comes to rest. */
@@ -834,45 +1028,37 @@ async function main() {
 		stopPhysics();
 		if (visibleNodes.size < 2) return;
 
-		const sub = new Graph({ type: 'undirected' });
-		for (const key of visibleNodes) {
-			const a = graph.getNodeAttributes(key);
-			sub.addNode(key, { x: a.x, y: a.y, size: a.size });
-		}
-		graph.forEachUndirectedEdge((_e, a, s, t) => {
-			if (a.weight >= state.minWeight && visibleNodes.has(s) && visibleNodes.has(t)) {
-				sub.addUndirectedEdge(s, t, { weight: a.weight });
-			}
-		});
-
+		const sub = simulationGraph();
 		layout = new FA2Layout(sub, {
-			settings: { ...forceAtlas2.inferSettings(sub), barnesHutOptimize: true, edgeWeightInfluence: 1 },
-			getEdgeWeight: 'weight',
-			outputReducer: (key, attr) => {
-				graph.mergeNodeAttributes(key, { x: attr.x, y: attr.y });
-				return attr;
+			settings: {
+				...forceAtlas2.inferSettings(sub),
+				barnesHutOptimize: true,
+				barnesHutTheta: BARNES_HUT_THETA,
+				gravity: GRAVITY,
+				edgeWeightInfluence: 1,
 			},
+			getEdgeWeight: 'weight',
 		});
 		// Keep a node the user is dragging where they put it.
 		if (dragged && sub.hasNode(dragged)) sub.setNodeAttribute(dragged, 'fixed', true);
-		pinned = sub;
 
 		layout.start();
+		scheduleSync();
 		layoutBtn.textContent = '■ Stop';
 		layoutBtn.classList.add('running');
 		if (burst) {
 			const sample = [...visibleNodes].slice(0, SETTLE_SAMPLE);
-			let previous = normalizedPositions(sample);
+			let previous = normalizedPositions(sub, sample);
 			let quiet = 0;
 			const started = Date.now();
 			settleTimer = setInterval(() => {
-				const current = normalizedPositions(sample);
+				const current = normalizedPositions(sub, sample);
 				quiet = meanShift(previous, current) < SETTLE_EPS ? quiet + 1 : 0;
 				previous = current;
 				if (quiet < SETTLE_QUIET_POLLS && Date.now() - started < SETTLE_MAX_MS) return;
 				stopPhysics();
 				frameVisible();
-				renderer.refresh({ skipIndexation: true });
+				reindex();
 			}, SETTLE_POLL_MS);
 		}
 	}
@@ -885,6 +1071,8 @@ async function main() {
 	const resettleBox = $('#auto-resettle');
 	$('#reset-view').addEventListener('click', () => {
 		frameVisible();
+		// The frame drives Sigma's normalisation, so moving it needs a reprocess.
+		reindex();
 		renderer.getCamera().animatedReset({ duration: 400 });
 	});
 

@@ -612,7 +612,21 @@ async function main() {
 
 	console.log(`Running ForceAtlas2 (${ITERATIONS} iterations)…`);
 	const started = Date.now();
-	const settings = { ...forceAtlas2.inferSettings(graph), barnesHutOptimize: true, edgeWeightInfluence: 1 };
+	// Gravity and the Barnes-Hut angle are pinned rather than inferred, and have to
+	// match the values the page re-settles with (see GRAVITY and BARNES_HUT_THETA in
+	// src/scripts/credit-network.js) — otherwise pressing Re-settle would visibly
+	// respace a layout that had just been shipped at a different density. Gravity is
+	// well above the inferred 0.05 because the page fits the layout's bounding box to
+	// the canvas, which means a *tighter* periphery is what leaves the core room to
+	// spread: on the 1,600-node default view, median nearest-neighbour distance goes
+	// from 6.1px at 0.05 to 10.9px at 0.25.
+	const settings = {
+		...forceAtlas2.inferSettings(graph),
+		barnesHutOptimize: true,
+		barnesHutTheta: 1.2,
+		gravity: 0.25,
+		edgeWeightInfluence: 1,
+	};
 	forceAtlas2.assign(graph, { iterations: ITERATIONS, settings, getEdgeWeight: 'weight' });
 	console.log(`  settled in ${((Date.now() - started) / 1000).toFixed(1)}s.`);
 
