@@ -2005,6 +2005,20 @@ function pgTextArray(values: string[]): string {
 }
 
 /**
+ * How many distinct films are marked watched, ignoring every filter — the
+ * "N films watched" the grid's header counts. A head request, so it costs a count
+ * rather than a page of rows; only worth making when the page's own query is
+ * filtered and its total therefore counts a slice.
+ */
+export async function countWatchedFilms(): Promise<number> {
+	const { count, error } = await supabasePublic
+		.from('watched')
+		.select('*', { count: 'exact', head: true });
+	if (error) throw new Error(`countWatchedFilms failed: ${error.message}`);
+	return count ?? 0;
+}
+
+/**
  * One page of watched films for the "All films" grid at /films/watched.
  *
  * Filtering and sorting are done here rather than in the browser: the page only

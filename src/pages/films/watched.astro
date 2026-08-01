@@ -1,7 +1,9 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
-import { listWatchedPage } from '../../lib/films';
+import { countWatchedFilms, listWatchedPage } from '../../lib/films';
 import { starText } from '../../lib/format';
+import { filterSentence } from '../../lib/watched-filters';
+import { watchedFilterCount, watchedQueryFromParams } from '../../lib/watched-params';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -11,17 +13,71 @@ export const prerender = false;
  * /api/films/watched/list as you scroll (that route caps `limit` at 100). */
 const BATCH = 100;
 
-// The default view: newest-watched first, unfiltered. Search, sort and every
-// filter re-query from the server, so this is only the starting slice.
+// The first page is rendered with the URL's filters already applied, through the
+// same parser the paging API uses. A deep link — a director from a film page, a
+// genre, a Stats bar — therefore paints its own films once, instead of shipping
+// the newest 100 (and starting 100 poster downloads) only for the script to throw
+// them away and re-query the moment it ran.
 //
 // The filter chips deliberately aren't part of this await. Deriving them means
 // reading every watched film's credits plus the whole diary — several times the
 // cost of the 100 tiles below, for a panel that starts collapsed. They come from
 // /api/films/watched/facets once the page has painted (see applyFacets in the
 // script), which is what lets the grid show up as soon as its own query returns.
-const { films, total } = await listWatchedPage({ limit: BATCH });
+const query = watchedQueryFromParams(Astro.url.searchParams);
+// Search is a filter for counting purposes but not for describing: the filter
+// sentence and the Filters badge belong to the panel's filters proper, while the
+// term has its own box beside them.
+const filterCount = watchedFilterCount(query);
+const hasFilters = filterCount > 0;
+const filtered = hasFilters || query.q !== '';
+const [{ films, total }, watchedCount] = await Promise.all([
+	listWatchedPage({ ...query, limit: BATCH }),
+	// "N films watched" counts the whole collection, so a filtered page needs its
+	// own count; unfiltered, the query's own total already is that number.
+	filtered ? countWatchedFilms() : Promise.resolve(null),
+]);
+const collectionTotal = watchedCount ?? total;
 const hasMore = total > films.length;
 const num = (n: number) => n.toLocaleString('en-US');
+
+// An empty grid quotes the search term only when the term is the only thing
+// narrowing; once a filter is on too, the term alone no longer explains it.
+const onlyQuery = query.q !== '' && !hasFilters;
+
+// The filter sentence, drawn server-side for the same reason the tiles are: it
+// sits above the grid, so having the script add it after paint would shove the
+// posters down. The script rebuilds it from live state on every change (and once
+// at startup), from this same builder.
+const decades = query.decades ?? [];
+const summary = hasFilters
+	? filterSentence({
+			total,
+			rewatched: Boolean(query.rewatched),
+			liked: Boolean(query.liked),
+			unrated: Boolean(query.unratedOnly),
+			ratingMin: query.ratingMin ?? null,
+			ratingMax: query.ratingMax ?? null,
+			decadeMin: decades[0] ?? null,
+			decadeMax: decades[decades.length - 1] ?? null,
+			releaseYears: query.releaseYears ?? [],
+			diaryYearMin: query.diaryYearMin ?? null,
+			diaryYearMax: query.diaryYearMax ?? null,
+			tags: query.tags ?? [],
+			directors: query.directors ?? [],
+			actors: query.actors ?? [],
+			genres: query.genres ?? [],
+			languages: query.languages ?? [],
+			countries: query.countries ?? [],
+			friends: query.friends ?? [],
+			friendMode: query.friendMode ?? 'any',
+			mediums: query.mediums ?? [],
+			// Theater names shorten only once the facets carrying the labels land;
+			// until then the sentence reads the full stored "Name, City".
+			venues: query.venues ?? [],
+			formats: query.formats ?? [],
+		})
+	: [];
 ---
 
 <FilmLayout title="Films watched — Jason's film log">
@@ -38,7 +94,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				<div>
 					<h1>All films</h1>
 					<div class="sub">
-						<span class="sub__n">{num(total)}</span> films watched · showing{' '}
+						<span class="sub__n">{num(collectionTotal)}</span> films watched · showing{' '}
 						<span class="sub__n" id="shown">{num(total)}</span>
 					</div>
 				</div>
@@ -55,11 +111,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 				<button
 					type="button"
 					id="filters-toggle"
-					class="pill pill--btn"
+					class={hasFilters ? 'pill pill--btn pill--on' : 'pill pill--btn'}
 					aria-expanded="false"
 					aria-controls="filters"
 				>
-					Filters<span id="filters-count"></span>
+					Filters<span id="filters-count">{hasFilters ? ` · ${filterCount}` : ''}</span>
 				</button>
 				<div class="sortby">
 					<span class="sortby__label">Sort</span>
@@ -253,9 +309,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 				</div>
 			</div>
 
-			<div class="filterinfo" id="filterinfo" hidden>
+			<div class="filterinfo" id="filterinfo" hidden={!hasFilters}>
 				<span class="filterinfo__tag">Filter</span>
-				<p class="filterinfo__text" id="filterinfo-text"></p>
+				<p class="filterinfo__text" id="filterinfo-text">
+					{summary.map((part) => <span class={part.em ? 'finfo__em' : undefined}>{part.t}</span>)}
+				</p>
 			</div>
 
 			<div class="grid" id="grid">
@@ -274,9 +332,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 				})}
 			</div>
 
-			<p class="empty" id="empty" hidden>
-				<span id="empty-by-query">No films match “<span id="empty-q"></span>”</span>
-				<span id="empty-by-filters" hidden>No films match these filters</span>
+			<p class="empty" id="empty" hidden={total > 0 || !filtered}>
+				<span id="empty-by-query" hidden={!onlyQuery}>
+					No films match “<span id="empty-q">{query.q}</span>”
+				</span>
+				<span id="empty-by-filters" hidden={onlyQuery}>No films match these filters</span>
 			</p>
 
 			<div id="sentinel" data-batch={BATCH} hidden={!hasMore}>
@@ -971,6 +1031,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 	<script>
 		import { mediumLabel, starText } from '../../lib/format';
+		import { filterSentence } from '../../lib/watched-filters';
 
 		interface WatchedFilm {
 			tmdb_id: number;
@@ -1063,6 +1124,20 @@ const num = (n: number) => n.toLocaleString('en-US');
 			// deep-link arrives (?ryear=…), and each selected year is drawn as a
 			// removable chip in the Movie details drawer's "Release year" section.
 			const releaseYears = new Set<number>();
+
+			// The raw ?dmin/?dmax and ?dymin/?dymax this page was served with — the
+			// numbers the server both filtered and wrote its filter sentence from. The
+			// sliders can't take over until the facets bring the bounds they snap to, so
+			// these stand in for them until applyFacets clears them.
+			let urlDecMin: number | null = null;
+			let urlDecMax: number | null = null;
+			let urlDiaryMin: number | null = null;
+			let urlDiaryMax: number | null = null;
+
+			/** Whether a date range from the URL is still standing in for its slider. */
+			const urlRangePending = () =>
+				(!hasDecadeRange && (urlDecMin != null || urlDecMax != null)) ||
+				(!hasDiaryRange && (urlDiaryMin != null || urlDiaryMax != null));
 
 			/** Whether the rating control narrows anything. */
 			const ratingActive = () =>
@@ -1367,136 +1442,53 @@ const num = (n: number) => n.toLocaleString('en-US');
 			// rewatched 3 criterion films directed by … rated between ★★★★ and
 			// ★★★★★ … with Maya or Dana seen at the Metrograph or in 70mm." It reads
 			// the same state buildQuery does, so it can never disagree with the grid.
+			// The wording lives in lib/watched-filters so the server can paint the
+			// same sentence before this script runs; here it's rebuilt from live state
+			// on every change.
 			const filterInfo = document.getElementById('filterinfo')!;
 			const filterInfoText = document.getElementById('filterinfo-text')!;
-
-			/** Join names as "a", "a and b", "a, b, and c" — conjunction configurable
-			 * so the any/all toggles can read "or" vs "and". */
-			function andList(items: string[], conj = 'and'): string {
-				if (items.length <= 1) return items.join('');
-				if (items.length === 2) return `${items[0]} ${conj} ${items[1]}`;
-				return `${items.slice(0, -1).join(', ')}, ${conj} ${items[items.length - 1]}`;
-			}
 
 			// A theater's short chip label, keyed by its raw "Name, City" value — the
 			// sentence says "at the Metrograph", not the full stored string. Filled in
 			// by applyFacets; until then a venue restored from the URL reads as its full
 			// value, which is correct if verbose.
 			const venueLabelByValue = new Map<string, string>();
-			// Each medium reads with its own natural preposition.
-			const MEDIUM_PHRASE: Record<string, string> = {
-				theater: 'in a theater',
-				tv: 'on TV',
-				computer: 'on a computer',
-				plane: 'on a plane',
-				tablet: 'on an iPad',
-				ipad: 'on an iPad',
-			};
-			const mediumPhrase = (v: string) => MEDIUM_PHRASE[v] ?? `on ${mediumLabel(v)}`;
-			const venuePhrase = (v: string) => {
-				const label = venueLabelByValue.get(v) ?? v;
-				// Names that already lead with "The" don't want a second article.
-				return /^the\s/i.test(label) ? `at ${label}` : `at the ${label}`;
-			};
 
 			/** Rebuild the filter sentence from current state and show/hide the panel. */
 			function renderFilterInfo() {
-				filterInfo.hidden = activeCount() === 0;
+				filterInfo.hidden = activeCount() === 0 && !urlRangePending();
 				if (filterInfo.hidden) return;
 
-				const parts: { t: string; em: boolean }[] = [];
-				const lit = (t: string) => parts.push({ t, em: false });
-				const em = (t: string) => parts.push({ t, em: true });
-
-				lit(flags.rewatched ? 'You have rewatched ' : 'You have watched ');
-				em(fmt(shownTotal));
-				lit(shownTotal === 1 ? ' film' : ' films');
-				if (sets.tag.size) {
-					lit(' tagged ');
-					em(andList([...sets.tag]));
-				}
-				if (sets.director.size) {
-					lit(' directed by ');
-					em(andList([...sets.director]));
-				}
-				if (sets.actor.size) {
-					lit(' starring ');
-					em(andList([...sets.actor]));
-				}
-				if (flags.unrated) {
-					lit(' that are ');
-					em('unrated');
-				} else if (ratingActive()) {
-					if (rMin === rMax) {
-						lit(' rated ');
-						em(starText(rMin)!);
-					} else {
-						lit(' rated between ');
-						em(`${starText(rMin)} and ${starText(rMax)}`);
-					}
-				}
-				if (flags.liked) {
-					lit(' that you ');
-					em('liked');
-				}
-				if (decadeActive()) {
-					if (dMin === dMax) {
-						lit(' released in the ');
-						em(`${dMin}s`);
-					} else {
-						lit(' released between ');
-						em(`${dMin}s and ${dMax}s`);
-					}
-				}
-				if (releaseYears.size) {
-					lit(' released in ');
-					em(andList([...releaseYears].sort((a, b) => a - b).map(String), 'or'));
-				}
-				if (sets.genre.size) {
-					lit(' in the ');
-					em(andList([...sets.genre]));
-					lit(sets.genre.size === 1 ? ' genre' : ' genres');
-				}
-				if (sets.language.size) {
-					lit(' in ');
-					em(andList([...sets.language]));
-				}
-				if (sets.country.size) {
-					lit(' from ');
-					em(andList([...sets.country]));
-				}
-				if (diaryActive()) {
-					if (yMin === yMax) {
-						lit(' logged in ');
-						em(String(yMin));
-					} else {
-						lit(' logged between ');
-						em(`${yMin} and ${yMax}`);
-					}
-				}
-				if (sets.friend.size) {
-					lit(' with ');
-					em(andList([...sets.friend], modes.friendmode === 'all' ? 'and' : 'or'));
-				}
-				// Medium, theater and format each carry their own preposition and are
-				// emphasized on their own; the phrases simply stack ("at the Metrograph
-				// in IMAX 70mm"), no lead-in or connector. A named theater or a format
-				// both already imply a theater, so drop the redundant theater medium
-				// when either is set.
-				const mediums =
-					sets.venue.size > 0 || sets.format.size > 0
-						? [...sets.medium].filter((m) => m !== 'theater')
-						: [...sets.medium];
-				const whereItems = [
-					...[...sets.venue].map(venuePhrase),
-					...[...sets.format].map((f) => `in ${f}`),
-					...mediums.map(mediumPhrase),
-				];
-				for (const item of whereItems) {
-					lit(' ');
-					em(item);
-				}
-				lit('.');
+				const parts = filterSentence({
+					total: shownTotal,
+					rewatched: flags.rewatched,
+					liked: flags.liked,
+					unrated: flags.unrated,
+					// Only a bound that narrows is a bound; the other end reads as "any",
+					// which is what a null says.
+					ratingMin: !flags.unrated && rMin > RATING_FLOOR ? rMin : null,
+					ratingMax: !flags.unrated && rMax < RATING_CEIL ? rMax : null,
+					// A slider with no bounds yet can't speak for a range the URL asked
+					// for, so until the facets arrive the raw params stand in — the same
+					// numbers the server drew its sentence from.
+					decadeMin: hasDecadeRange ? (decadeActive() ? dMin : null) : urlDecMin,
+					decadeMax: hasDecadeRange ? (decadeActive() ? dMax : null) : urlDecMax,
+					releaseYears: [...releaseYears],
+					diaryYearMin: hasDiaryRange ? (diaryActive() ? yMin : null) : urlDiaryMin,
+					diaryYearMax: hasDiaryRange ? (diaryActive() ? yMax : null) : urlDiaryMax,
+					tags: [...sets.tag],
+					directors: [...sets.director],
+					actors: [...sets.actor],
+					genres: [...sets.genre],
+					languages: [...sets.language],
+					countries: [...sets.country],
+					friends: [...sets.friend],
+					friendMode: modes.friendmode as 'any' | 'all',
+					mediums: [...sets.medium],
+					venues: [...sets.venue],
+					venueLabels: venueLabelByValue,
+					formats: [...sets.format],
+				});
 
 				filterInfoText.replaceChildren(
 					...parts.map((p) => el('span', p.em ? 'finfo__em' : undefined, p.t)),
@@ -1874,10 +1866,25 @@ const num = (n: number) => n.toLocaleString('en-US');
 				return Math.min(hi, Math.max(lo, Math.round(n / step) * step));
 			};
 
-			/** Restore filters from the query string. Returns whether any were applied. */
-			function readUrl(): boolean {
+			/**
+			 * Restore the controls from the query string — the same params the server
+			 * rendered the grid from, so this only puts the panel in step with what's
+			 * already on screen. Nothing here re-queries.
+			 */
+			function readUrl() {
 				const p = new URLSearchParams(location.search);
-				if ([...p.keys()].length === 0) return false;
+				if ([...p.keys()].length === 0) return;
+
+				// Kept for the filter sentence and for applyFacets, which has to tell
+				// whether snapping these to the collection's bounds moved them.
+				const numParam = (raw: string | null) => {
+					const n = Number(raw);
+					return raw != null && Number.isFinite(n) ? n : null;
+				};
+				urlDecMin = numParam(p.get('dmin'));
+				urlDecMax = numParam(p.get('dmax'));
+				urlDiaryMin = numParam(p.get('dymin'));
+				urlDiaryMax = numParam(p.get('dymax'));
 
 				q = p.get('q')?.trim() ?? '';
 				search.value = q;
@@ -1924,8 +1931,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 						b.classList.toggle('mode--on', b.dataset.value === mode);
 					}
 				}
-
-				return q !== '' || sort !== 'recent' || activeCount() > 0;
 			}
 
 			// --- Filters, loaded after the grid ---------------------------------
@@ -2043,9 +2048,28 @@ const num = (n: number) => n.toLocaleString('en-US');
 				peopleSection.hidden = f.directors.length === 0 && f.actors.length === 0;
 				renderPeople();
 
-				// A date range restored from the URL is a filter the first query didn't
-				// carry (its bounds weren't known yet), so re-query when one engaged.
-				const rangeRestored = decadeActive() || diaryActive();
+				// The server filtered by the raw ?dmin/?dymin numbers. Snapping them to
+				// the collection's bounds just now may have moved them — and a slider
+				// that turned out to have no range to draw can't reproduce its filter at
+				// all — either of which leaves the grid saying something the controls no
+				// longer do. Only that needs a re-query; a range that survived intact is
+				// already on screen.
+				const moved = (
+					rawMin: number | null,
+					rawMax: number | null,
+					has: boolean,
+					min: number,
+					max: number,
+				) => {
+					if (rawMin == null && rawMax == null) return false;
+					if (!has) return true;
+					return (rawMin != null && rawMin !== min) || (rawMax != null && rawMax !== max);
+				};
+				const rangeMoved =
+					moved(urlDecMin, urlDecMax, hasDecadeRange, dMin, dMax) ||
+					moved(urlDiaryMin, urlDiaryMax, hasDiaryRange, yMin, yMax);
+				// The sliders are authoritative from here on.
+				urlDecMin = urlDecMax = urlDiaryMin = urlDiaryMax = null;
 				facetsLoading.hidden = true;
 				facetsState = 'done';
 				// Reveal the Movie details drawer when a restored link lands a filter
@@ -2055,7 +2079,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 					mdToggle.setAttribute('aria-expanded', 'true');
 				}
 				syncChrome();
-				if (dropped || rangeRestored) {
+				if (dropped || rangeMoved) {
 					writeUrl();
 					load(true);
 				}
@@ -2080,14 +2104,14 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 			facetsRetry.addEventListener('click', loadFacets);
 
-			// The server rendered the unfiltered first page, so a URL carrying filters
-			// has to re-query before the grid matches what it claims to show.
-			const restored = readUrl();
+			// The server rendered the first page from these same params, so restoring
+			// them only catches the controls up to a grid that's already right — no
+			// opening re-query, and no swapping out a screenful of posters to get there.
+			readUrl();
 			syncChrome();
 			// Draw any release-year chips restored from a ?ryear=… deep-link. These need
 			// no facets — the years come from the URL itself.
 			renderReleaseYears();
-			if (restored) load(true);
 
 			// Fetch the filters once the page has settled — or straight away if the panel
 			// is opened first, so it's never waiting on an idle callback to start.
