@@ -40,6 +40,11 @@ function shortDate(date: string | null): string {
 
 const histMax = Math.max(...stats.histogram, 1);
 const num = (n: number) => n.toLocaleString('en-US');
+
+// A ratings bar deep-links into "All films" pinned to that one half-star step —
+// the same `rmin`/`rmax` pair the grid's own rating slider writes when both ends
+// land on the same star.
+const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars}`;
 ---
 
 <FilmLayout title="Jason's film log">
@@ -150,11 +155,17 @@ const num = (n: number) => n.toLocaleString('en-US');
 							</span>
 						</div>
 						<div class="hist">
-							{stats.histogram.map((c) => (
-								<div class="hist__col" title={`${num(c)}`}>
-									<div class="hist__bar" style={`height:${Math.round((c / histMax) * 100)}%`}></div>
-								</div>
-							))}
+							{stats.histogram.map((c, i) => {
+								const stars = (i + 1) * 0.5;
+								const bar = <div class="hist__bar" style={`height:${Math.round((c / histMax) * 100)}%`}></div>;
+								const title = `${starText(stars)} · ${num(c)} ${c === 1 ? 'film' : 'films'}`;
+								// An empty bucket has nothing to show, so it stays inert.
+								return c > 0 ? (
+									<a class="hist__col hist__col--link" href={ratingHref(stars)} title={title}>{bar}</a>
+								) : (
+									<div class="hist__col" title={title}>{bar}</div>
+								);
+							})}
 						</div>
 						<div class="hist__axis">
 							<span>½★</span>
@@ -501,6 +512,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 			min-height: 3px;
 			background: #d9b45a;
 			border-radius: 2px 2px 0 0;
+		}
+		.hist__col--link {
+			cursor: pointer;
+		}
+		.hist__col--link:hover .hist__bar,
+		.hist__col--link:focus-visible .hist__bar {
+			background: #f4e8d1;
 		}
 		.hist__axis {
 			display: flex;
