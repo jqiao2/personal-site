@@ -100,7 +100,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 								{favorites.map((f) => (
 									<a class="tile" href={`/films/movie/${f.tmdb_id}`}>
 										{imageUrl(f.poster_path, 'w342') && (
-											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+											<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
 										)}
 										<div class="tile__cap">
 											{f.title} <span class="tile__year">{f.release_year}</span>
@@ -125,7 +125,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 								<a class="tile-wrap" href={`/films/diary/${f.id}`}>
 									<div class="tile">
 										{imageUrl(f.poster_path, 'w342') && (
-											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+											<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
 										)}
 										<div class="tile__cap">
 											{f.title} <span class="tile__year">{f.release_year}</span>
@@ -182,7 +182,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 											: {})}
 									>
 										{imageUrl(f.poster_path, 'w342') && (
-											<img src={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} loading="lazy" />
+											<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
 										)}
 										<div class="tile__cap tile__cap--dim">
 											{f.title} <span class="tile__year">{f.release_year}</span>

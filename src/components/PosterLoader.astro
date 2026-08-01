@@ -1,0 +1,118 @@
+---
+// Loads poster images *after* the page itself has rendered.
+//
+// Every film page ships far more posters than fit on screen — the watchlist alone
+// renders ~490 tiles — and each one is a 30–60 KB request to image.tmdb.org. Sent
+// as a plain `src`, they compete with the page's own CSS and JS for connections
+// during the initial load, and `loading="lazy"` doesn't help as much as it looks:
+// the browser still commits to the ones near the fold before first paint, and it
+// picks its own (generous) prefetch distance.
+//
+// So posters ship as `data-poster` with no `src` at all. Nothing is requested
+// until the page has painted, and then only for tiles within ROOT_MARGIN of the
+// viewport. The tile reserves its box either way (the grids give posters an
+// aspect-ratio), so filling one in never moves the page.
+//
+// Include this once per document. Pages built on FilmLayout get it from there;
+// pages with their own <html> shell include it themselves.
+---
+
+<script>
+	// How far outside the viewport a poster starts loading. Roughly one screen of
+	// tiles, so scrolling at a normal speed lands on an image that's already there
+	// without queueing up the whole grid.
+	const ROOT_MARGIN = '600px 0px';
+
+	// Posters whose request has already been kicked off. `data-poster` stays on the
+	// element until the image actually lands (it's what the CSS hides an unfilled
+	// tile by), so it can't double as the "already started" mark.
+	const started = new WeakSet<HTMLImageElement>();
+
+	/** Swap a deferred poster's URL into `src` and reveal it once it decodes. */
+	function load(img: HTMLImageElement): void {
+		const url = img.dataset.poster;
+		if (!url || started.has(img)) return;
+		started.add(img);
+		img.addEventListener(
+			'load',
+			() => {
+				// Attribute off and class on together, so the tile goes straight from
+				// empty to faded-in with no frame of half-drawn image in between.
+				delete img.dataset.poster;
+				img.classList.add('poster--ready');
+			},
+			{ once: true },
+		);
+		// A poster that 404s keeps its empty box rather than showing a broken icon.
+		img.addEventListener('error', () => img.classList.add('poster--failed'), { once: true });
+		img.src = url;
+	}
+
+	const io =
+		'IntersectionObserver' in window
+			? new IntersectionObserver(
+					(entries, obs) => {
+						for (const entry of entries) {
+							if (!entry.isIntersecting) continue;
+							obs.unobserve(entry.target);
+							load(entry.target as HTMLImageElement);
+						}
+					},
+					{ rootMargin: ROOT_MARGIN },
+				)
+			: null;
+
+	/**
+	 * Watch every not-yet-loaded poster under `root` (the document by default).
+	 * Safe to call repeatedly — a poster already in flight is skipped.
+	 *
+	 * Pages that add tiles after load — the diary's and All films' infinite scroll —
+	 * call this on the newly inserted markup.
+	 *
+	 * Tiles that are hidden when the observer first sees them (the watchlist filters
+	 * by `hidden`) report as not intersecting and stay observed, so they load on
+	 * their own once they're shown again. Nothing extra to do for those.
+	 */
+	function observePosters(root: ParentNode = document): void {
+		const pending = root.querySelectorAll<HTMLImageElement>('img[data-poster]');
+		// No IntersectionObserver (very old browsers): load everything rather than
+		// leave the grid empty. Still after paint, which is the bigger win.
+		if (!io) {
+			for (const img of pending) load(img);
+			return;
+		}
+		for (const img of pending) if (!started.has(img)) io.observe(img);
+	}
+
+	(window as unknown as { observePosters: typeof observePosters }).observePosters = observePosters;
+
+	// Wait for the first paint before asking for a single poster, so the text and
+	// layout the page is actually made of get the connection first.
+	if (document.readyState === 'complete') observePosters();
+	else window.addEventListener('load', () => observePosters(), { once: true });
+</script>
+
+<style is:global>
+	/* A poster that hasn't arrived yet is an empty box, not a broken image: no alt
+	   text painted over the tile, no border. The tile's own rules own the size. */
+	img[data-poster],
+	img.poster--failed {
+		font-size: 0;
+		color: transparent;
+	}
+	/* Fade each poster in as it lands, so a grid filling in reads as one motion
+	   rather than a scatter of pop-ins. */
+	img[data-poster] {
+		opacity: 0;
+	}
+	img[data-poster],
+	img.poster--ready {
+		transition: opacity 0.25s ease;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		img[data-poster],
+		img.poster--ready {
+			transition: none;
+		}
+	}
+</style>

@@ -119,7 +119,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 									<div class="row__wd">{f.weekday}</div>
 								</div>
 								<div class="row__poster">
-									{f.poster && <img src={f.poster} alt="" loading="lazy" />}
+									{f.poster && <img data-poster={f.poster} alt="" decoding="async" />}
 								</div>
 								<div class="row__body">
 									<div class="row__title">
@@ -477,9 +477,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 				const poster = el('div', 'row__poster');
 				if (log.poster_path) {
 					const img = el('img') as HTMLImageElement;
-					img.src = `https://image.tmdb.org/t/p/w154${log.poster_path}`;
+					// Deferred like the server-rendered rows: the URL sits in data-poster
+					// until PosterLoader's observer reaches this row (see render()).
+					img.dataset.poster = `https://image.tmdb.org/t/p/w154${log.poster_path}`;
 					img.alt = '';
-					img.loading = 'lazy';
+					img.decoding = 'async';
 					poster.append(img);
 				}
 
@@ -515,6 +517,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 					}
 					section.append(buildRow(log));
 				}
+				// The new rows carry their posters in data-poster like the server-rendered
+				// ones, so hand them to the loader; it skips anything already in flight.
+				window.observePosters?.(months!);
 			}
 
 			function finish() {

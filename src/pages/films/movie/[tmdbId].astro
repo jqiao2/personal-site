@@ -126,6 +126,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap"
 			rel="stylesheet"
 		/>
+		<link rel="preconnect" href="https://image.tmdb.org" />
 	</head>
 	<body>
 		<div class="page">
@@ -147,7 +148,11 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 					<!-- Left: poster + your activity -->
 					<aside class="col-left">
 						<div class="poster">
-							{poster && <img src={poster} alt={`${movie.title} poster`} />}
+							{/* The one poster on the page and the largest thing above the
+							    fold — this is the image to fetch first, not to defer. */}
+							{poster && (
+								<img src={poster} alt={`${movie.title} poster`} fetchpriority="high" />
+							)}
 							<div class="poster__title">
 								{movie.title}
 								{movie.release_year && <span class="poster__year">{movie.release_year}</span>}

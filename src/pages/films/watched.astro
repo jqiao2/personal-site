@@ -1,7 +1,7 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
-import { listWatchedFacets, listWatchedPage } from '../../lib/films';
-import { mediumLabel, starText } from '../../lib/format';
+import { listWatchedPage } from '../../lib/films';
+import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -11,33 +11,17 @@ export const prerender = false;
  * /api/films/watched/list as you scroll (that route caps `limit` at 100). */
 const BATCH = 100;
 
-/** How many chips a group shows before collapsing behind "+N other…". Tags and
- * friends follow the design; theaters get one too because there are 19 of them
- * and their names are long enough to swamp the panel. Genre / language / country
- * live in the Movie details drawer and each shows a healthy handful first. */
-const CHIP_LIMIT = { tags: 7, friends: 4, venues: 6, genres: 8, languages: 8, countries: 8 };
-
 // The default view: newest-watched first, unfiltered. Search, sort and every
 // filter re-query from the server, so this is only the starting slice.
-const [{ films, total }, facets] = await Promise.all([
-	listWatchedPage({ limit: BATCH }),
-	listWatchedFacets(),
-]);
+//
+// The filter chips deliberately aren't part of this await. Deriving them means
+// reading every watched film's credits plus the whole diary — several times the
+// cost of the 100 tiles below, for a panel that starts collapsed. They come from
+// /api/films/watched/facets once the page has painted (see applyFacets in the
+// script), which is what lets the grid show up as soon as its own query returns.
+const { films, total } = await listWatchedPage({ limit: BATCH });
 const hasMore = total > films.length;
 const num = (n: number) => n.toLocaleString('en-US');
-
-// End stops for the release-date slider. It needs two distinct decades to be worth
-// drawing — with everything in one decade there's nothing to narrow to.
-const decLo = facets.decades[0] ?? null;
-const decHi = facets.decades[facets.decades.length - 1] ?? null;
-const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
-
-// End stops for the diary-date slider — the span of calendar years the collection
-// was watched across. Like the decade slider, it's only worth drawing when there's
-// more than one year to narrow between.
-const dyLo = facets.diaryYearLo;
-const dyHi = facets.diaryYearHi;
-const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 ---
 
 <FilmLayout title="Films watched — Jason's film log">
@@ -84,11 +68,19 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				</div>
 			</div>
 
+			{/* Everything chip- or range-shaped in here is filled in by applyFacets()
+			    from /api/films/watched/facets. Only the controls that need no
+			    knowledge of the collection — search, sort, the star range, the
+			    activity flags — are usable before that lands. */}
 			<div class="panel" id="filters" hidden>
 				<div class="panel__head">
 					<span class="panel__title">Filter films</span>
+					<span class="panel__loading" id="facets-loading">Loading filters…</span>
 					<button type="button" id="clear-all" class="clear" hidden>Clear all</button>
 				</div>
+				<p class="panel__error" id="facets-error" hidden>
+					Couldn't load the filters. <button type="button" id="facets-retry">Retry</button>
+				</p>
 
 				<div class="panel__grid">
 					<section>
@@ -115,65 +107,28 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 						</div>
 					</section>
 
-					{hasDiaryRange && (
-						<section>
-							<h2 class="grp">Diary date</h2>
-							<div class="range range--dec" id="yrange" data-lo={dyLo} data-hi={dyHi}>
-								<div class="range__track"></div>
-								<div class="range__fill" id="yrange-fill"></div>
-								<input
-									type="range"
-									id="ymin"
-									min={dyLo}
-									max={dyHi}
-									step="1"
-									value={dyLo}
-									aria-label="Earliest diary year"
-								/>
-								<input
-									type="range"
-									id="ymax"
-									min={dyLo}
-									max={dyHi}
-									step="1"
-									value={dyHi}
-									aria-label="Latest diary year"
-								/>
-								<div class="range__ends">
-									<span id="ymin-label">{dyLo}</span><span id="ymax-label">{dyHi}</span>
-								</div>
+					{/* Bounds arrive with the facets; until then the slider isn't drawn,
+					    same as when the collection spans a single year. */}
+					<section id="yrange-section" hidden>
+						<h2 class="grp">Diary date</h2>
+						<div class="range range--dec" id="yrange">
+							<div class="range__track"></div>
+							<div class="range__fill" id="yrange-fill"></div>
+							<input type="range" id="ymin" step="1" aria-label="Earliest diary year" />
+							<input type="range" id="ymax" step="1" aria-label="Latest diary year" />
+							<div class="range__ends">
+								<span id="ymin-label"></span><span id="ymax-label"></span>
 							</div>
-						</section>
-					)}
-
-					<section>
-						<h2 class="grp">Tags</h2>
-						{facets.tags.length === 0 ? (
-							<p class="grp__none">No tags yet</p>
-						) : (
-							<div class="chips">
-								{facets.tags.map((t, i) => (
-									<button
-										type="button"
-										class="chip"
-										data-filter="tag"
-										data-value={t}
-										aria-pressed="false"
-										hidden={i >= CHIP_LIMIT.tags}
-									>
-										{t}
-									</button>
-								))}
-								{facets.tags.length > CHIP_LIMIT.tags && (
-									<button type="button" class="chip chip--more">
-										+{facets.tags.length - CHIP_LIMIT.tags} other…
-									</button>
-								)}
-							</div>
-						)}
+						</div>
 					</section>
 
-					<section>
+					<section data-group="tag">
+						<h2 class="grp">Tags</h2>
+						<p class="grp__none" data-none hidden>No tags yet</p>
+						<div class="chips" data-chips="tag"></div>
+					</section>
+
+					<section data-group="friend">
 						<div class="grp__row">
 							<h2 class="grp">Watched with</h2>
 							<div class="modes" data-mode="friendmode">
@@ -181,29 +136,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 								<button type="button" class="mode" data-value="all">All</button>
 							</div>
 						</div>
-						{facets.friends.length === 0 ? (
-							<p class="grp__none">No one tagged yet</p>
-						) : (
-							<div class="chips">
-								{facets.friends.map((f, i) => (
-									<button
-										type="button"
-										class="chip"
-										data-filter="friend"
-										data-value={f}
-										aria-pressed="false"
-										hidden={i >= CHIP_LIMIT.friends}
-									>
-										{f}
-									</button>
-								))}
-								{facets.friends.length > CHIP_LIMIT.friends && (
-									<button type="button" class="chip chip--more">
-										+{facets.friends.length - CHIP_LIMIT.friends} other…
-									</button>
-								)}
-							</div>
-						)}
+						<p class="grp__none" data-none hidden>No one tagged yet</p>
+						<div class="chips" data-chips="friend"></div>
 					</section>
 
 					<section class="panel__wide">
@@ -217,46 +151,15 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 						<div class="where">
 							<div class="where__row">
 								<span class="where__label">Medium</span>
-								<div class="chips">
-									{facets.mediums.map((m) => (
-										<button type="button" class="chip" data-filter="medium" data-value={m} aria-pressed="false">
-											{mediumLabel(m)}
-										</button>
-									))}
-								</div>
+								<div class="chips" data-chips="medium"></div>
 							</div>
 							<div class="where__row">
 								<span class="where__label">Theater</span>
-								<div class="chips">
-									{facets.venues.map((v, i) => (
-										<button
-											type="button"
-											class="chip"
-											data-filter="venue"
-											data-value={v.value}
-											title={v.value}
-											aria-pressed="false"
-											hidden={i >= CHIP_LIMIT.venues}
-										>
-											{v.label}
-										</button>
-									))}
-									{facets.venues.length > CHIP_LIMIT.venues && (
-										<button type="button" class="chip chip--more">
-											+{facets.venues.length - CHIP_LIMIT.venues} other…
-										</button>
-									)}
-								</div>
+								<div class="chips" data-chips="venue"></div>
 							</div>
 							<div class="where__row">
 								<span class="where__label">Format</span>
-								<div class="chips">
-									{facets.formats.map((f) => (
-										<button type="button" class="chip" data-filter="format" data-value={f} aria-pressed="false">
-											{f}
-										</button>
-									))}
-								</div>
+								<div class="chips" data-chips="format"></div>
 							</div>
 						</div>
 					</section>
@@ -277,36 +180,20 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 
 					<div class="md__body" id="md-body" hidden>
 						<div class="panel__grid">
-							{hasDecadeRange && (
-								<section>
-									<h2 class="grp">Release date</h2>
-									<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
-										<div class="range__track"></div>
-										<div class="range__fill" id="drange-fill"></div>
-										<input
-											type="range"
-											id="dmin"
-											min={decLo}
-											max={decHi}
-											step="10"
-											value={decLo}
-											aria-label="Earliest release decade"
-										/>
-										<input
-											type="range"
-											id="dmax"
-											min={decLo}
-											max={decHi}
-											step="10"
-											value={decHi}
-											aria-label="Latest release decade"
-										/>
-										<div class="range__ends">
-											<span id="dmin-label">{decLo}s</span><span id="dmax-label">{decHi}s</span>
-										</div>
+							{/* Bounds arrive with the facets; until then the slider isn't drawn,
+							    same as when the collection sits inside one decade. */}
+							<section id="drange-section" hidden>
+								<h2 class="grp">Release date</h2>
+								<div class="range range--dec" id="drange">
+									<div class="range__track"></div>
+									<div class="range__fill" id="drange-fill"></div>
+									<input type="range" id="dmin" step="10" aria-label="Earliest release decade" />
+									<input type="range" id="dmax" step="10" aria-label="Latest release decade" />
+									<div class="range__ends">
+										<span id="dmin-label"></span><span id="dmax-label"></span>
 									</div>
-								</section>
-							)}
+								</div>
+							</section>
 
 							{/* Exact release years. No chips are shipped — the section is
 							    populated only when a Stats "Films by release year" deep-link
@@ -316,116 +203,51 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 								<div class="chips" id="ryears"></div>
 							</section>
 
-							{facets.genres.length > 0 && (
-								<section>
-									<h2 class="grp">Genre</h2>
-									<div class="chips">
-										{facets.genres.map((g, i) => (
-											<button
-												type="button"
-												class="chip"
-												data-filter="genre"
-												data-value={g}
-												aria-pressed="false"
-												hidden={i >= CHIP_LIMIT.genres}
-											>
-												{g}
-											</button>
-										))}
-										{facets.genres.length > CHIP_LIMIT.genres && (
-											<button type="button" class="chip chip--more">
-												+{facets.genres.length - CHIP_LIMIT.genres} other…
-											</button>
-										)}
-									</div>
-								</section>
-							)}
+							<section data-group="genre" hidden>
+								<h2 class="grp">Genre</h2>
+								<div class="chips" data-chips="genre"></div>
+							</section>
 
-							{facets.languages.length > 0 && (
-								<section>
-									<h2 class="grp">Language</h2>
-									<div class="chips">
-										{facets.languages.map((l, i) => (
-											<button
-												type="button"
-												class="chip"
-												data-filter="language"
-												data-value={l}
-												aria-pressed="false"
-												hidden={i >= CHIP_LIMIT.languages}
-											>
-												{l}
-											</button>
-										))}
-										{facets.languages.length > CHIP_LIMIT.languages && (
-											<button type="button" class="chip chip--more">
-												+{facets.languages.length - CHIP_LIMIT.languages} other…
-											</button>
-										)}
-									</div>
-								</section>
-							)}
+							<section data-group="language" hidden>
+								<h2 class="grp">Language</h2>
+								<div class="chips" data-chips="language"></div>
+							</section>
 
-							{facets.countries.length > 0 && (
-								<section>
-									<h2 class="grp">Country</h2>
-									<div class="chips">
-										{facets.countries.map((c, i) => (
-											<button
-												type="button"
-												class="chip"
-												data-filter="country"
-												data-value={c}
-												aria-pressed="false"
-												hidden={i >= CHIP_LIMIT.countries}
-											>
-												{c}
-											</button>
-										))}
-										{facets.countries.length > CHIP_LIMIT.countries && (
-											<button type="button" class="chip chip--more">
-												+{facets.countries.length - CHIP_LIMIT.countries} other…
-											</button>
-										)}
-									</div>
-								</section>
-							)}
+							<section data-group="country" hidden>
+								<h2 class="grp">Country</h2>
+								<div class="chips" data-chips="country"></div>
+							</section>
 
-							{(facets.directors.length > 0 || facets.actors.length > 0) && (
-								<section class="panel__wide">
-									<div class="grp__row">
-										<h2 class="grp">People</h2>
-										<input
-											type="search"
-											id="people-search"
-											class="people-search"
-											placeholder="Search directors & cast…"
-											autocomplete="off"
-											aria-label="Search directors and cast"
-										/>
-									</div>
-									<div class="where">
-										<div class="where__row">
-											<span class="where__label">Director</span>
-											<div class="chips" data-people="director">
-												<span class="people-none" hidden>No matches</span>
-											</div>
-										</div>
-										<div class="where__row">
-											<span class="where__label">Cast</span>
-											<div class="chips" data-people="actor">
-												<span class="people-none" hidden>No matches</span>
-											</div>
-										</div>
-									</div>
-									<script
-										is:inline
-										type="application/json"
-										data-people-names
-										set:html={JSON.stringify({ directors: facets.directors, actors: facets.actors })}
+							{/* The credit lists run to thousands of names, so these two rows
+							    never hold the whole set — the search box builds matching chips
+							    on demand from the facet payload. */}
+							<section class="panel__wide" id="people-section" hidden>
+								<div class="grp__row">
+									<h2 class="grp">People</h2>
+									<input
+										type="search"
+										id="people-search"
+										class="people-search"
+										placeholder="Search directors & cast…"
+										autocomplete="off"
+										aria-label="Search directors and cast"
 									/>
-								</section>
-							)}
+								</div>
+								<div class="where">
+									<div class="where__row">
+										<span class="where__label">Director</span>
+										<div class="chips" data-people="director">
+											<span class="people-none" hidden>No matches</span>
+										</div>
+									</div>
+									<div class="where__row">
+										<span class="where__label">Cast</span>
+										<div class="chips" data-people="actor">
+											<span class="people-none" hidden>No matches</span>
+										</div>
+									</div>
+								</div>
+							</section>
 						</div>
 					</div>
 				</div>
@@ -441,7 +263,7 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 					const poster = imageUrl(f.poster_path, 'w342');
 					return (
 						<a class={poster ? 'tile' : 'tile tile--noimg'} href={`/films/movie/${f.tmdb_id}`}>
-							{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" />}
+							{poster && <img data-poster={poster} alt={`${f.title} poster`} decoding="async" />}
 							<div class="tile__overlay">
 								<div class="tile__title">{f.title}</div>
 								<div class="tile__year">{f.release_year}</div>
@@ -648,6 +470,36 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			text-transform: uppercase;
 			letter-spacing: 1.6px;
 			color: #8a6f63;
+		}
+		/* Sits between the title and "Clear all" while the chips are on their way.
+		   Quiet on purpose: the panel is usable without it (search, stars, activity),
+		   so this is a note, not a blocker. */
+		.panel__loading {
+			margin-right: auto;
+			padding-left: 12px;
+			font-size: 12px;
+			color: #7c6156;
+			font-style: italic;
+		}
+		.panel__loading[hidden] {
+			display: none;
+		}
+		.panel__error {
+			margin: -8px 0 16px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.panel__error[hidden] {
+			display: none;
+		}
+		.panel__error button {
+			font: inherit;
+			color: #d9b45a;
+			background: none;
+			border: none;
+			padding: 0;
+			cursor: pointer;
+			text-decoration: underline;
 		}
 		.clear {
 			font-size: 12px;
@@ -1187,24 +1039,24 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			let rMin = RATING_FLOOR;
 			let rMax = RATING_CEIL;
 
-			// Release-date bounds, as a decade's first year. The slider is only drawn
-			// when the collection spans more than one decade; without it these stay at
-			// the ends and the filter never engages.
-			const drange = document.getElementById('drange');
-			const DEC_LO = drange ? Number(drange.dataset.lo) : 0;
-			const DEC_HI = drange ? Number(drange.dataset.hi) : 0;
-			let dMin = DEC_LO;
-			let dMax = DEC_HI;
+			// Release-date bounds, as a decade's first year, and diary-date bounds as
+			// calendar years. Both come from the facet payload, so they're zero — and
+			// their sliders undrawn — until that lands. Each is only worth drawing when
+			// the collection spans more than one step; while `hasDecadeRange` /
+			// `hasDiaryRange` are false the bounds stay at the ends and the filter never
+			// engages. A film watched across several years matches whenever any of them
+			// lands in range, so one film can answer to more than one year.
+			let hasDecadeRange = false;
+			let DEC_LO = 0;
+			let DEC_HI = 0;
+			let dMin = 0;
+			let dMax = 0;
 
-			// Diary-date bounds, as calendar years. Drawn only when the collection spans
-			// more than one year watched; without it these stay at the ends and the filter
-			// never engages. A film watched across several years matches whenever any of
-			// them lands in range, so one film can answer to more than one year.
-			const yrange = document.getElementById('yrange');
-			const YR_LO = yrange ? Number(yrange.dataset.lo) : 0;
-			const YR_HI = yrange ? Number(yrange.dataset.hi) : 0;
-			let yMin = YR_LO;
-			let yMax = YR_HI;
+			let hasDiaryRange = false;
+			let YR_LO = 0;
+			let YR_HI = 0;
+			let yMin = 0;
+			let yMax = 0;
 
 			// Exact release years. Unlike every other filter these ship no chips in the
 			// panel — the set is populated only when a Stats "Films by release year"
@@ -1217,10 +1069,10 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				flags.unrated || rMin > RATING_FLOOR || rMax < RATING_CEIL;
 
 			/** Whether the release-date range narrows anything. */
-			const decadeActive = () => Boolean(drange) && (dMin > DEC_LO || dMax < DEC_HI);
+			const decadeActive = () => hasDecadeRange && (dMin > DEC_LO || dMax < DEC_HI);
 
 			/** Whether the diary-date range narrows anything. */
-			const diaryActive = () => Boolean(yrange) && (yMin > YR_LO || yMax < YR_HI);
+			const diaryActive = () => hasDiaryRange && (yMin > YR_LO || yMax < YR_HI);
 
 			/** Active filters that live in the "Movie details" drawer — the count shown on
 			 * that section's own toggle. Release date, credits, genre, language, country. */
@@ -1314,9 +1166,12 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				tile.href = `/films/movie/${f.tmdb_id}`;
 				if (f.poster_path) {
 					const img = el('img') as HTMLImageElement;
-					img.src = `https://image.tmdb.org/t/p/w342${f.poster_path}`;
+					// Deferred like the server-rendered tiles: the URL sits in data-poster
+					// until PosterLoader's observer reaches this tile (see the
+					// observePosters call after a batch is appended).
+					img.dataset.poster = `https://image.tmdb.org/t/p/w342${f.poster_path}`;
 					img.alt = `${f.title} poster`;
-					img.loading = 'lazy';
+					img.decoding = 'async';
 					tile.append(img);
 				}
 				const overlay = el('div', 'tile__overlay');
@@ -1357,7 +1212,12 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 						grid!.replaceChildren();
 						offset = 0;
 					}
-					for (const f of films) grid!.append(buildTile(f));
+					const batch = document.createDocumentFragment();
+					for (const f of films) batch.append(buildTile(f));
+					grid!.append(batch);
+					// The tiles ship their posters in data-poster like the server-rendered
+					// ones, so hand them to the loader; it skips anything already in flight.
+					window.observePosters?.(grid!);
 					offset += films.length;
 
 					shown.textContent = fmt(total);
@@ -1420,9 +1280,9 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			const toggle = document.getElementById('filters-toggle')!;
 			const countBadge = document.getElementById('filters-count')!;
 			const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
-			const filterChips = Array.from(
-				panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'),
-			);
+			// Every chip in these groups is built by applyFacets(), so this starts empty
+			// and is refilled there rather than being a snapshot of the server's markup.
+			let filterChips: HTMLButtonElement[] = [];
 			const flagChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-flag]'));
 			const rminInput = document.getElementById('rmin') as HTMLInputElement;
 			const rmaxInput = document.getElementById('rmax') as HTMLInputElement;
@@ -1430,16 +1290,18 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			const rminStars = document.getElementById('rmin-stars')!;
 			const rmaxStars = document.getElementById('rmax-stars')!;
 			const ratingBox = document.querySelector('.rating')!;
-			const dminInput = document.getElementById('dmin') as HTMLInputElement | null;
-			const dmaxInput = document.getElementById('dmax') as HTMLInputElement | null;
-			const drangeFill = document.getElementById('drange-fill');
-			const dminLabel = document.getElementById('dmin-label');
-			const dmaxLabel = document.getElementById('dmax-label');
-			const yminInput = document.getElementById('ymin') as HTMLInputElement | null;
-			const ymaxInput = document.getElementById('ymax') as HTMLInputElement | null;
-			const yrangeFill = document.getElementById('yrange-fill');
-			const yminLabel = document.getElementById('ymin-label');
-			const ymaxLabel = document.getElementById('ymax-label');
+			const drangeSection = document.getElementById('drange-section')!;
+			const dminInput = document.getElementById('dmin') as HTMLInputElement;
+			const dmaxInput = document.getElementById('dmax') as HTMLInputElement;
+			const drangeFill = document.getElementById('drange-fill')!;
+			const dminLabel = document.getElementById('dmin-label')!;
+			const dmaxLabel = document.getElementById('dmax-label')!;
+			const yrangeSection = document.getElementById('yrange-section')!;
+			const yminInput = document.getElementById('ymin') as HTMLInputElement;
+			const ymaxInput = document.getElementById('ymax') as HTMLInputElement;
+			const yrangeFill = document.getElementById('yrange-fill')!;
+			const yminLabel = document.getElementById('ymin-label')!;
+			const ymaxLabel = document.getElementById('ymax-label')!;
 			const mdToggle = document.getElementById('md-toggle')!;
 			const mdBody = document.getElementById('md-body')!;
 			const mdCount = document.getElementById('md-count')!;
@@ -1469,26 +1331,26 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				// that isn't in play rather than hiding it.
 				ratingBox.classList.toggle('rating--off', flags.unrated);
 
-				if (drange && drangeFill && dminLabel && dmaxLabel) {
+				if (hasDecadeRange) {
 					const dpct = (v: number) => ((v - DEC_LO) / (DEC_HI - DEC_LO)) * 100;
 					drangeFill.style.left = `${dpct(dMin)}%`;
 					drangeFill.style.width = `${dpct(dMax) - dpct(dMin)}%`;
 					dminLabel.textContent = `${dMin}s`;
 					dmaxLabel.textContent = `${dMax}s`;
 					const dOverlap = dMin > (DEC_LO + DEC_HI) / 2;
-					dminInput!.style.zIndex = dOverlap ? '2' : '1';
-					dmaxInput!.style.zIndex = dOverlap ? '1' : '2';
+					dminInput.style.zIndex = dOverlap ? '2' : '1';
+					dmaxInput.style.zIndex = dOverlap ? '1' : '2';
 				}
 
-				if (yrange && yrangeFill && yminLabel && ymaxLabel) {
+				if (hasDiaryRange) {
 					const ypct = (v: number) => ((v - YR_LO) / (YR_HI - YR_LO)) * 100;
 					yrangeFill.style.left = `${ypct(yMin)}%`;
 					yrangeFill.style.width = `${ypct(yMax) - ypct(yMin)}%`;
 					yminLabel.textContent = String(yMin);
 					ymaxLabel.textContent = String(yMax);
 					const yOverlap = yMin > (YR_LO + YR_HI) / 2;
-					yminInput!.style.zIndex = yOverlap ? '2' : '1';
-					ymaxInput!.style.zIndex = yOverlap ? '1' : '2';
+					yminInput.style.zIndex = yOverlap ? '2' : '1';
+					ymaxInput.style.zIndex = yOverlap ? '1' : '2';
 				}
 
 				// The drawer's own badge counts just its filters; the drawer springs open on
@@ -1517,13 +1379,10 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			}
 
 			// A theater's short chip label, keyed by its raw "Name, City" value — the
-			// sentence says "at the Metrograph", not the full stored string.
+			// sentence says "at the Metrograph", not the full stored string. Filled in
+			// by applyFacets; until then a venue restored from the URL reads as its full
+			// value, which is correct if verbose.
 			const venueLabelByValue = new Map<string, string>();
-			for (const chip of Array.from(
-				panel.querySelectorAll<HTMLElement>('.chip[data-filter="venue"]'),
-			)) {
-				venueLabelByValue.set(chip.dataset.value!, (chip.textContent ?? '').trim());
-			}
 			// Each medium reads with its own natural preposition.
 			const MEDIUM_PHRASE: Record<string, string> = {
 				theater: 'in a theater',
@@ -1663,28 +1522,16 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 
 			// --- People (director / cast) ---------------------------------------
 			// The credit lists run to thousands of names, so — unlike the other groups —
-			// these chips aren't all shipped in the DOM. Each row shows the top few by
-			// frequency and the search box builds matching chips on demand from the JSON
+			// these chips are never all in the DOM. Each row shows the top few by
+			// frequency and the search box builds matching chips on demand from the facet
 			// payload. The picks live in sets.director / sets.actor, so buildQuery, the
 			// URL and the active-filter count read them the same as any other group.
 			type PeopleKind = 'director' | 'actor';
 			const PEOPLE_TOP = 12; // default quick chips per row, before searching
 			const PEOPLE_MAX = 40; // most chips one search shows at once
+			const peopleSection = document.getElementById('people-section')!;
 			const peopleSearch = document.getElementById('people-search') as HTMLInputElement | null;
 			const peopleNames: Record<PeopleKind, string[]> = { director: [], actor: [] };
-			const namesEl = panel.querySelector('script[data-people-names]');
-			if (namesEl?.textContent) {
-				try {
-					const parsed = JSON.parse(namesEl.textContent) as {
-						directors?: string[];
-						actors?: string[];
-					};
-					peopleNames.director = parsed.directors ?? [];
-					peopleNames.actor = parsed.actors ?? [];
-				} catch (e) {
-					console.error('watched: could not parse people names', e);
-				}
-			}
 
 			interface PeopleRow {
 				kind: PeopleKind;
@@ -1769,16 +1616,93 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				ryears.replaceChildren(...years.map(makeReleaseYearChip));
 			}
 
-			for (const chip of filterChips) {
+			// --- Facet-driven chip groups ---------------------------------------
+			// Tags, friends, medium, theater, format, genre, language and country all
+			// come from /api/films/watched/facets. Each renders into its `data-chips`
+			// host; a group with nothing in it shows its "none" line instead.
+
+			/** How many chips a group shows before collapsing behind "+N other…". Tags
+			 * and friends follow the design; theaters get one too because there are ~20
+			 * and their names are long enough to swamp the panel. Genre / language /
+			 * country live in the Movie details drawer and each shows a healthy handful. */
+			const CHIP_LIMIT: Partial<Record<SetKey, number>> = {
+				tag: 7,
+				friend: 4,
+				venue: 6,
+				genre: 8,
+				language: 8,
+				country: 8,
+			};
+
+			/** One selectable value: `value` is what the API reads, `label` what's drawn. */
+			interface ChipValue {
+				value: string;
+				label: string;
+				/** Full value as a tooltip, for labels shortened to fit (theaters). */
+				title?: string;
+			}
+
+			function makeFilterChip(key: SetKey, v: ChipValue): HTMLButtonElement {
+				const chip = el('button', 'chip') as HTMLButtonElement;
+				chip.type = 'button';
+				chip.dataset.filter = key;
+				chip.dataset.value = v.value;
+				chip.textContent = v.label;
+				if (v.title) chip.title = v.title;
+				chip.setAttribute('aria-pressed', String(sets[key].has(v.value)));
 				chip.addEventListener('click', () => {
-					const key = chip.dataset.filter as SetKey;
-					const value = chip.dataset.value!;
-					const on = !sets[key].has(value);
-					if (on) sets[key].add(value);
-					else sets[key].delete(value);
+					const on = !sets[key].has(v.value);
+					if (on) sets[key].add(v.value);
+					else sets[key].delete(v.value);
 					chip.setAttribute('aria-pressed', String(on));
 					applyFilters();
 				});
+				return chip;
+			}
+
+			/**
+			 * Fill one chip group. Values past the group's limit ship hidden behind a
+			 * "+N other…" button — except any already selected, which stay visible so a
+			 * filter restored from the URL always has a control that can clear it.
+			 */
+			function renderChipGroup(key: SetKey, values: ChipValue[]) {
+				const host = panel.querySelector<HTMLElement>(`.chips[data-chips="${key}"]`);
+				if (!host) return;
+				// Only a section that is *only* this group can be hidden on its behalf —
+				// medium / theater / format share one section and are matched by no
+				// [data-group], so an empty format row never hides its two neighbours.
+				const section = host.closest<HTMLElement>(`section[data-group="${key}"]`);
+				const none = section?.querySelector<HTMLElement>('[data-none]') ?? null;
+
+				// A group with a "none" line says so in place of its chips; one without
+				// (genre / language / country) hides its whole section when empty.
+				if (none) none.hidden = values.length > 0;
+				else if (section) section.hidden = values.length === 0;
+
+				const limit = CHIP_LIMIT[key] ?? values.length;
+				const chips = values.map((v, i) => {
+					const chip = makeFilterChip(key, v);
+					chip.hidden = i >= limit && !sets[key].has(v.value);
+					return chip;
+				});
+				const hiddenCount = chips.filter((c) => c.hidden).length;
+				if (hiddenCount > 0) chips.push(makeMoreChip(hiddenCount));
+				host.replaceChildren(...chips);
+			}
+
+			/** "+N other…" reveals the rest of its group and then removes itself:
+			 * collapsing again would have to hide chips the user may have just picked. */
+			function makeMoreChip(count: number): HTMLButtonElement {
+				const more = el('button', 'chip chip--more') as HTMLButtonElement;
+				more.type = 'button';
+				more.textContent = `+${count} other…`;
+				more.addEventListener('click', () => {
+					for (const sibling of Array.from(more.parentElement!.children)) {
+						(sibling as HTMLElement).hidden = false;
+					}
+					more.remove();
+				});
+				return more;
 			}
 
 			for (const chip of flagChips) {
@@ -1790,17 +1714,6 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 					// clearing it later doesn't restore a range the user can't see.
 					if (key === 'unrated' && flags.unrated) setRange(RATING_FLOOR, RATING_CEIL);
 					applyFilters();
-				});
-			}
-
-			// "+N other…" reveals the rest of a chip group and then removes itself:
-			// collapsing again would have to hide chips the user may have just picked.
-			for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
-				more.addEventListener('click', () => {
-					for (const sibling of Array.from(more.parentElement!.children)) {
-						(sibling as HTMLElement).hidden = false;
-					}
-					more.remove();
 				});
 			}
 
@@ -1854,42 +1767,38 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 			function setDecades(min: number, max: number) {
 				dMin = Math.min(min, max);
 				dMax = Math.max(min, max);
-				dminInput!.value = String(dMin);
-				dmaxInput!.value = String(dMax);
+				dminInput.value = String(dMin);
+				dmaxInput.value = String(dMax);
 			}
 
-			if (dminInput && dmaxInput) {
-				for (const input of [dminInput, dmaxInput]) {
-					input.addEventListener('input', () => {
-						const min = Number(dminInput.value);
-						const max = Number(dmaxInput.value);
-						if (input === dminInput) setDecades(Math.min(min, max), max);
-						else setDecades(min, Math.max(min, max));
-						syncChrome();
-					});
-					input.addEventListener('change', applyFilters);
-				}
+			for (const input of [dminInput, dmaxInput]) {
+				input.addEventListener('input', () => {
+					const min = Number(dminInput.value);
+					const max = Number(dmaxInput.value);
+					if (input === dminInput) setDecades(Math.min(min, max), max);
+					else setDecades(min, Math.max(min, max));
+					syncChrome();
+				});
+				input.addEventListener('change', applyFilters);
 			}
 
 			/** Move both diary-year thumbs, keeping min ≤ max. */
 			function setYears(min: number, max: number) {
 				yMin = Math.min(min, max);
 				yMax = Math.max(min, max);
-				yminInput!.value = String(yMin);
-				ymaxInput!.value = String(yMax);
+				yminInput.value = String(yMin);
+				ymaxInput.value = String(yMax);
 			}
 
-			if (yminInput && ymaxInput) {
-				for (const input of [yminInput, ymaxInput]) {
-					input.addEventListener('input', () => {
-						const min = Number(yminInput.value);
-						const max = Number(ymaxInput.value);
-						if (input === yminInput) setYears(Math.min(min, max), max);
-						else setYears(min, Math.max(min, max));
-						syncChrome();
-					});
-					input.addEventListener('change', applyFilters);
-				}
+			for (const input of [yminInput, ymaxInput]) {
+				input.addEventListener('input', () => {
+					const min = Number(yminInput.value);
+					const max = Number(ymaxInput.value);
+					if (input === yminInput) setYears(Math.min(min, max), max);
+					else setYears(min, Math.max(min, max));
+					syncChrome();
+				});
+				input.addEventListener('change', applyFilters);
 			}
 
 			clearAll.addEventListener('click', () => {
@@ -1899,8 +1808,8 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				}
 				flags.liked = flags.rewatched = flags.unrated = false;
 				setRange(RATING_FLOOR, RATING_CEIL);
-				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
-				if (yminInput && ymaxInput) setYears(YR_LO, YR_HI);
+				setDecades(DEC_LO, DEC_HI);
+				setYears(YR_LO, YR_HI);
 				releaseYears.clear();
 				renderReleaseYears();
 				// Deselecting the People chips lets their rows collapse back to the limit.
@@ -1959,17 +1868,6 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				if (url !== location.pathname + location.search) history.replaceState(null, '', url);
 			}
 
-			/** Re-label "+N other…" once restoring reveals chips from past the cut. */
-			function syncMore() {
-				for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
-					const hidden = Array.from(more.parentElement!.children).filter(
-						(c) => (c as HTMLElement).hidden,
-					).length;
-					if (hidden === 0) more.remove();
-					else more.textContent = `+${hidden} other…`;
-				}
-			}
-
 			const snap = (raw: string | null, lo: number, hi: number, step: number, fallback: number) => {
 				const n = Number(raw);
 				if (raw == null || !Number.isFinite(n)) return fallback;
@@ -2001,19 +1899,6 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 						snap(p.get('rmax'), RATING_FLOOR, RATING_CEIL, 0.5, RATING_CEIL),
 					);
 				}
-				if (dminInput && dmaxInput) {
-					setDecades(
-						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
-						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
-					);
-				}
-				if (yminInput && ymaxInput) {
-					setYears(
-						snap(p.get('dymin'), YR_LO, YR_HI, 1, YR_LO),
-						snap(p.get('dymax'), YR_LO, YR_HI, 1, YR_HI),
-					);
-				}
-
 				// Exact release years arrive only via deep-link. Keep whole four-digit years
 				// in a sane range; renderReleaseYears() draws the removable chips.
 				const nowYear = new Date().getFullYear();
@@ -2022,26 +1907,13 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 					if (Number.isInteger(y) && y >= 1870 && y <= nowYear + 5) releaseYears.add(y);
 				}
 
-				// Drive the sets from the chips rather than straight off the params, so a
-				// stale or hand-typed value can't end up selected with no control to
-				// clear it — and a restored chip from past its group's cut gets revealed.
-				const wanted = new Map(URL_SETS.map((key) => [key, new Set(p.getAll(key))]));
-				for (const chip of filterChips) {
-					const key = chip.dataset.filter as SetKey;
-					if (!wanted.get(key)?.has(chip.dataset.value!)) continue;
-					sets[key].add(chip.dataset.value!);
-					chip.setAttribute('aria-pressed', 'true');
-					chip.hidden = false;
-				}
-				syncMore();
-
-				// People chips aren't shipped in the DOM, so restore their picks straight
-				// into the sets — validated against the known names so a stale or hand-typed
-				// value can't select with no chip to clear it. renderPeople() draws them.
-				for (const kind of ['director', 'actor'] as const) {
-					const known = new Set(peopleNames[kind]);
-					for (const v of p.getAll(kind)) if (known.has(v)) sets[kind].add(v);
-				}
+				// The chips these values belong to don't exist yet, so the sets are filled
+				// straight from the params: the first query has to carry a deep-link's
+				// filter (a Stats "Top directors" link, say) or the grid would open on the
+				// wrong films and only correct itself once the facets landed. applyFacets
+				// then marks the matching chips pressed and drops anything the collection
+				// doesn't actually offer.
+				for (const key of URL_SETS) for (const v of p.getAll(key)) sets[key].add(v);
 
 				for (const key of ['friendmode', 'wheremode'] as const) {
 					const mode = p.get(key);
@@ -2056,21 +1928,172 @@ const hasDiaryRange = dyLo != null && dyHi != null && dyHi > dyLo;
 				return q !== '' || sort !== 'recent' || activeCount() > 0;
 			}
 
+			// --- Filters, loaded after the grid ---------------------------------
+			// Everything the panel offers is derived from the whole collection, which
+			// costs several times what the first page of tiles does — so the page doesn't
+			// wait on it. The chips, the two sliders' end stops and the People names all
+			// arrive here.
+			interface Facets {
+				decades: number[];
+				diaryYearLo: number | null;
+				diaryYearHi: number | null;
+				tags: string[];
+				friends: string[];
+				mediums: string[];
+				venues: { value: string; label: string }[];
+				formats: string[];
+				directors: string[];
+				actors: string[];
+				genres: string[];
+				languages: string[];
+				countries: string[];
+			}
+
+			const facetsLoading = document.getElementById('facets-loading')!;
+			const facetsError = document.getElementById('facets-error')!;
+			const facetsRetry = document.getElementById('facets-retry')!;
+			let facetsState: 'idle' | 'loading' | 'done' = 'idle';
+
+			function applyFacets(f: Facets) {
+				// Theater chips carry the full "Name, City" as their value but show the
+				// shortest unambiguous label, which is also what the filter sentence says.
+				venueLabelByValue.clear();
+				for (const v of f.venues) venueLabelByValue.set(v.value, v.label);
+
+				const plain = (values: string[]): ChipValue[] =>
+					values.map((v) => ({ value: v, label: v }));
+				renderChipGroup('tag', plain(f.tags));
+				renderChipGroup('friend', plain(f.friends));
+				renderChipGroup('medium', f.mediums.map((m) => ({ value: m, label: mediumLabel(m) })));
+				renderChipGroup(
+					'venue',
+					f.venues.map((v) => ({ value: v.value, label: v.label, title: v.value })),
+				);
+				renderChipGroup('format', plain(f.formats));
+				renderChipGroup('genre', plain(f.genres));
+				renderChipGroup('language', plain(f.languages));
+				renderChipGroup('country', plain(f.countries));
+				filterChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'));
+
+				// A value that isn't on offer can't be cleared, and shouldn't silently keep
+				// narrowing the grid — so drop it and re-query. Only reachable from a stale
+				// or hand-typed link; the People sets are checked against their own names.
+				const offered: Partial<Record<SetKey, Set<string>>> = {
+					tag: new Set(f.tags),
+					friend: new Set(f.friends),
+					medium: new Set(f.mediums),
+					venue: new Set(f.venues.map((v) => v.value)),
+					format: new Set(f.formats),
+					genre: new Set(f.genres),
+					language: new Set(f.languages),
+					country: new Set(f.countries),
+					director: new Set(f.directors),
+					actor: new Set(f.actors),
+				};
+				let dropped = false;
+				for (const key of URL_SETS) {
+					const known = offered[key];
+					if (!known) continue;
+					for (const v of sets[key]) {
+						if (known.has(v)) continue;
+						sets[key].delete(v);
+						dropped = true;
+					}
+				}
+
+				// Release-date and diary-date sliders: each is only worth drawing when the
+				// collection spans more than one step to narrow between.
+				const decLo = f.decades[0] ?? null;
+				const decHi = f.decades[f.decades.length - 1] ?? null;
+				hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
+				if (hasDecadeRange) {
+					DEC_LO = decLo!;
+					DEC_HI = decHi!;
+					for (const input of [dminInput, dmaxInput]) {
+						input.min = String(DEC_LO);
+						input.max = String(DEC_HI);
+					}
+					const p = new URLSearchParams(location.search);
+					setDecades(
+						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
+						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
+					);
+					drangeSection.hidden = false;
+				}
+
+				hasDiaryRange =
+					f.diaryYearLo != null && f.diaryYearHi != null && f.diaryYearHi > f.diaryYearLo;
+				if (hasDiaryRange) {
+					YR_LO = f.diaryYearLo!;
+					YR_HI = f.diaryYearHi!;
+					for (const input of [yminInput, ymaxInput]) {
+						input.min = String(YR_LO);
+						input.max = String(YR_HI);
+					}
+					const p = new URLSearchParams(location.search);
+					setYears(
+						snap(p.get('dymin'), YR_LO, YR_HI, 1, YR_LO),
+						snap(p.get('dymax'), YR_LO, YR_HI, 1, YR_HI),
+					);
+					yrangeSection.hidden = false;
+				}
+
+				peopleNames.director = f.directors;
+				peopleNames.actor = f.actors;
+				peopleSection.hidden = f.directors.length === 0 && f.actors.length === 0;
+				renderPeople();
+
+				// A date range restored from the URL is a filter the first query didn't
+				// carry (its bounds weren't known yet), so re-query when one engaged.
+				const rangeRestored = decadeActive() || diaryActive();
+				facetsLoading.hidden = true;
+				facetsState = 'done';
+				// Reveal the Movie details drawer when a restored link lands a filter
+				// inside it, so its active filters aren't hidden behind a collapsed section.
+				if (movieActiveCount() > 0) {
+					mdBody.hidden = false;
+					mdToggle.setAttribute('aria-expanded', 'true');
+				}
+				syncChrome();
+				if (dropped || rangeRestored) {
+					writeUrl();
+					load(true);
+				}
+			}
+
+			async function loadFacets() {
+				if (facetsState !== 'idle') return;
+				facetsState = 'loading';
+				facetsError.hidden = true;
+				facetsLoading.hidden = false;
+				try {
+					const res = await fetch('/api/films/watched/facets');
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					applyFacets((await res.json()) as Facets);
+				} catch (e) {
+					console.error('watched: failed to load filter facets', e);
+					facetsState = 'idle'; // let Retry (or opening the panel again) try once more
+					facetsLoading.hidden = true;
+					facetsError.hidden = false;
+				}
+			}
+
+			facetsRetry.addEventListener('click', loadFacets);
+
 			// The server rendered the unfiltered first page, so a URL carrying filters
 			// has to re-query before the grid matches what it claims to show.
 			const restored = readUrl();
-			// Reveal the Movie details drawer when a restored link lands a filter inside
-			// it, so its active filters aren't hidden behind a collapsed section.
-			if (movieActiveCount() > 0) {
-				mdBody.hidden = false;
-				mdToggle.setAttribute('aria-expanded', 'true');
-			}
 			syncChrome();
-			// Draw the People chips — the top few plus any names restored from the URL.
-			renderPeople();
-			// Draw any release-year chips restored from a ?ryear=… deep-link.
+			// Draw any release-year chips restored from a ?ryear=… deep-link. These need
+			// no facets — the years come from the URL itself.
 			renderReleaseYears();
 			if (restored) load(true);
+
+			// Fetch the filters once the page has settled — or straight away if the panel
+			// is opened first, so it's never waiting on an idle callback to start.
+			toggle.addEventListener('click', loadFacets);
+			if (document.readyState === 'complete') loadFacets();
+			else window.addEventListener('load', loadFacets, { once: true });
 		}
 	</script>
 </FilmLayout>

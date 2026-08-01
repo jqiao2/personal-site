@@ -69,7 +69,9 @@ const editorInitial = toEditorInitial(entry);
 				<!-- poster sidebar -->
 				<div class="side">
 					<a class="poster" href={filmHref}>
-						{poster && <img src={poster} alt={`${movie.title} poster`} />}
+						{/* The one poster on the page and the largest thing above the fold
+						    — this is the image to fetch first, not to defer. */}
+						{poster && <img src={poster} alt={`${movie.title} poster`} fetchpriority="high" />}
 						<div class="poster__title">
 							{movie.title}
 							{movie.release_year && <span class="poster__year">{movie.release_year}</span>}

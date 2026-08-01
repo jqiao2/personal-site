@@ -1223,18 +1223,11 @@ export async function listWatchlist(limit = 4): Promise<WatchlistTile[]> {
 	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
 }
 
-/** A full watchlist entry for the watchlist page — tile fields plus when it was
- * added and the facts its filters read. */
+/** A watchlist entry as the page's tiles render it — everything a tile draws, and
+ * nothing a filter reads. The filterable facts are a separate, deferred read; see
+ * listWatchlistFacets. */
 export interface WatchlistEntry extends WatchlistTile {
 	added_at: string;
-	/** Cached TMDB genres (migration 0008); [] when never synced. */
-	genres: string[];
-	/** Directors (migration 0008); [] when never synced — the "People → Director" chips. */
-	directors: string[];
-	/** Top-billed cast (migration 0008); [] when never synced — the "People → Cast" chips. */
-	actors: string[];
-	/** Original language as an English name (migration 0009); null until backfilled. */
-	language: string | null;
 	/** Full release date, "YYYY-MM-DD" (0014). Null when TMDB has no date — which
 	 * for a watchlist is usually an announced film with nothing but a title. */
 	release_date: string | null;
@@ -1244,32 +1237,16 @@ export interface WatchlistEntry extends WatchlistTile {
  * Unpaged: the page filters and sorts the whole list in the browser, so it has to
  * ship all of it. Fine at a few hundred films; revisit if it reaches thousands.
  *
- * Selects the credit columns leniently, stepping down a tier when original_language
- * (0009) isn't there yet, so the Language / People filters simply come back empty
- * rather than erroring before the migration lands. */
+ * Deliberately narrow. Each film's genres, directors and cast are arrays that
+ * roughly double the response and, rendered as per-tile data attributes, more than
+ * double the page — for values nothing on screen reads until the filter panel is
+ * opened. listWatchlistFacets carries those separately. */
 export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
-	const cols = (movie: string) => `added_at, ${movie}`;
-	const tiers = [
-		cols('movies(tmdb_id, title, release_year, release_date, poster_path, genres, directors, actors, original_language)'), // 0008 + 0009
-		cols('movies(tmdb_id, title, release_year, release_date, poster_path, genres, directors, actors)'), // 0008 only
-	];
-
-	let data: unknown = null;
-	let lastError: { code?: string; message?: string } | null = null;
-	for (const select of tiers) {
-		const res = await supabasePublic
-			.from('watchlist')
-			.select(select)
-			.order('added_at', { ascending: false });
-		if (!res.error) {
-			data = res.data;
-			lastError = null;
-			break;
-		}
-		lastError = res.error;
-		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
-	}
-	if (lastError) throw new Error(`listAllWatchlist failed: ${lastError.message}`);
+	const { data, error } = await supabasePublic
+		.from('watchlist')
+		.select('added_at, movies(tmdb_id, title, release_year, release_date, poster_path)')
+		.order('added_at', { ascending: false });
+	if (error) throw new Error(`listAllWatchlist failed: ${error.message}`);
 
 	type Row = {
 		added_at: string;
@@ -1279,10 +1256,6 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 			release_year: number | null;
 			release_date: string | null;
 			poster_path: string | null;
-			genres: string[] | null;
-			directors?: string[] | null;
-			actors?: string[] | null;
-			original_language?: string | null;
 		};
 	};
 	return ((data ?? []) as unknown as Row[]).map((r) => ({
@@ -1291,11 +1264,67 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 		release_year: r.movies.release_year,
 		release_date: r.movies.release_date,
 		poster_path: r.movies.poster_path,
+		added_at: r.added_at,
+	}));
+}
+
+/** The filterable facts about one watchlist film, keyed to its tile by TMDB id. */
+export interface WatchlistFacetRow {
+	tmdb_id: number;
+	/** Cached TMDB genres (migration 0008); [] when never synced. */
+	genres: string[];
+	/** Directors (migration 0008); [] when never synced — the "People → Director" chips. */
+	directors: string[];
+	/** Top-billed cast (migration 0008); [] when never synced — the "People → Cast" chips. */
+	actors: string[];
+	/** Original language as an English name (migration 0009); null until backfilled. */
+	language: string | null;
+}
+
+/**
+ * Every watchlist film's genres, credits and language — what the Genre / Language /
+ * People filters match on, and what their chips are derived from.
+ *
+ * Split out of listAllWatchlist so the page can render its tiles without waiting on
+ * it, then fill the filters in afterwards. Steps down a tier when original_language
+ * (0009) isn't there yet, so Language / People come back empty rather than erroring
+ * before the migration lands.
+ */
+export async function listWatchlistFacets(): Promise<WatchlistFacetRow[]> {
+	const tiers = [
+		'movies(tmdb_id, genres, directors, actors, original_language)', // 0008 + 0009
+		'movies(tmdb_id, genres, directors, actors)', // 0008 only
+	];
+
+	let data: unknown = null;
+	let lastError: PgError | null = null;
+	for (const select of tiers) {
+		const res = await supabasePublic.from('watchlist').select(select);
+		if (!res.error) {
+			data = res.data;
+			lastError = null;
+			break;
+		}
+		lastError = res.error;
+		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
+	}
+	if (lastError) throw new Error(`listWatchlistFacets failed: ${lastError.message}`);
+
+	type Row = {
+		movies: {
+			tmdb_id: number;
+			genres: string[] | null;
+			directors?: string[] | null;
+			actors?: string[] | null;
+			original_language?: string | null;
+		};
+	};
+	return ((data ?? []) as unknown as Row[]).map((r) => ({
+		tmdb_id: r.movies.tmdb_id,
 		genres: r.movies.genres ?? [],
 		directors: r.movies.directors ?? [],
 		actors: r.movies.actors ?? [],
 		language: r.movies.original_language ?? null,
-		added_at: r.added_at,
 	}));
 }
 
@@ -1623,6 +1652,54 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 	};
 }
 
+/** A PostgREST error as the migration-tier checks above read it. */
+type PgError = { code?: string; message?: string };
+
+/** One page of a paged read: whatever `.range().select()` came back with. */
+interface PageResult<T> {
+	data: T[] | null;
+	error: PgError | null;
+	count?: number | null;
+}
+
+/** PostgREST caps a response at 1000 rows, so anything larger has to be paged. */
+const PAGE = 1000;
+
+/**
+ * Read every row a query matches, fetching the pages concurrently.
+ *
+ * Walking pages in a loop costs one round trip per thousand rows against a
+ * database that's a continent away — and at ~150ms each that's most of what the
+ * facet reads spend. Asking the first page for the exact count says up front how
+ * many more there are, which is enough to fire all of them at once: two round
+ * trips for any collection size rather than one per page.
+ *
+ * `fetchPage` runs a single range query; `wantCount` is true only for the first,
+ * since the count is the same on every page and isn't free. Errors come back
+ * rather than throwing, so callers keep their own migration-tier fallbacks.
+ */
+async function readAllPages<T>(
+	fetchPage: (from: number, to: number, wantCount: boolean) => PromiseLike<PageResult<T>>,
+): Promise<{ rows: T[]; error: PgError | null }> {
+	const first = await fetchPage(0, PAGE - 1, true);
+	if (first.error) return { rows: [], error: first.error };
+
+	const rows = (first.data ?? []) as T[];
+	// A short first page is the whole result — no count needed to know that. When
+	// the count is missing (a view that can't be counted) the short page is still
+	// the signal, and we simply stop here.
+	const total = first.count ?? rows.length;
+	if (rows.length < PAGE || total <= PAGE) return { rows, error: null };
+
+	const rest: PromiseLike<PageResult<T>>[] = [];
+	for (let from = PAGE; from < total; from += PAGE) rest.push(fetchPage(from, from + PAGE - 1, false));
+	for (const page of await Promise.all(rest)) {
+		if (page.error) return { rows: [], error: page.error };
+		rows.push(...((page.data ?? []) as T[]));
+	}
+	return { rows, error: null };
+}
+
 /**
  * The film-level facet values across all watched films — directors, top-billed cast,
  * genres, original languages and production countries — each ranked by how many films
@@ -1642,11 +1719,42 @@ async function watchedFilmFacetFrequency(): Promise<{
 	languages: string[];
 	countries: string[];
 }> {
-	const PAGE = 1000;
 	const tiers = [
 		'movies!inner(directors, actors, genres, countries, original_language)', // 0009
 		'movies!inner(directors, actors, genres, countries)', // 0008
 	];
+	type Row = {
+		movies: {
+			directors: string[] | null;
+			actors: string[] | null;
+			genres: string[] | null;
+			countries: string[] | null;
+			original_language?: string | null;
+		};
+	};
+
+	// Try the richest column set first, dropping a tier if original_language (0009)
+	// isn't there yet. Each tier is a fresh whole-collection read, so nothing has to
+	// be un-counted on the way down.
+	let rows: Row[] = [];
+	for (const [i, cols] of tiers.entries()) {
+		const res = await readAllPages<Row>((from, to, wantCount) =>
+			supabasePublic
+				.from('watched')
+				.select(cols, wantCount ? { count: 'exact' } : undefined)
+				.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
+		);
+		if (!res.error) {
+			rows = res.rows;
+			break;
+		}
+		if (i < tiers.length - 1 && isMissingCreditColumn(res.error)) continue;
+		if (isMissingCreditColumn(res.error) || isMissingRelation(res.error)) {
+			return { directors: [], actors: [], genres: [], languages: [], countries: [] };
+		}
+		throw new Error(`watchedFilmFacetFrequency failed: ${res.error.message}`);
+	}
+
 	const dirCounts = new Map<string, number>();
 	const actCounts = new Map<string, number>();
 	const genreCounts = new Map<string, number>();
@@ -1655,44 +1763,14 @@ async function watchedFilmFacetFrequency(): Promise<{
 	const bump = (counts: Map<string, number>, v: string | null | undefined) => {
 		if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
 	};
-
-	let tier = 0;
-	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
-			.from('watched')
-			.select(tiers[tier])
-			.range(offset, offset + PAGE - 1);
-		if (error) {
-			// original_language (0009) not there yet: drop a tier and restart from the top.
-			if (tier < tiers.length - 1 && isMissingCreditColumn(error)) {
-				tier++;
-				offset = -PAGE; // next iteration resumes at offset 0
-				for (const c of [dirCounts, actCounts, genreCounts, langCounts, countryCounts]) c.clear();
-				continue;
-			}
-			if (isMissingCreditColumn(error) || isMissingRelation(error)) {
-				return { directors: [], actors: [], genres: [], languages: [], countries: [] };
-			}
-			throw new Error(`watchedFilmFacetFrequency failed: ${error.message}`);
-		}
-		const rows = (data ?? []) as unknown as {
-			movies: {
-				directors: string[] | null;
-				actors: string[] | null;
-				genres: string[] | null;
-				countries: string[] | null;
-				original_language?: string | null;
-			};
-		}[];
-		for (const r of rows) {
-			for (const d of r.movies.directors ?? []) bump(dirCounts, d);
-			for (const a of r.movies.actors ?? []) bump(actCounts, a);
-			for (const g of r.movies.genres ?? []) bump(genreCounts, g);
-			for (const c of r.movies.countries ?? []) bump(countryCounts, c);
-			bump(langCounts, r.movies.original_language);
-		}
-		if (rows.length < PAGE) break;
+	for (const r of rows) {
+		for (const d of r.movies.directors ?? []) bump(dirCounts, d);
+		for (const a of r.movies.actors ?? []) bump(actCounts, a);
+		for (const g of r.movies.genres ?? []) bump(genreCounts, g);
+		for (const c of r.movies.countries ?? []) bump(countryCounts, c);
+		bump(langCounts, r.movies.original_language);
 	}
+
 	const rank = (counts: Map<string, number>): string[] =>
 		[...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
 	return {
@@ -1729,39 +1807,41 @@ async function loadDiaryYearsByMovie(): Promise<Map<number, Set<number>>> {
 		set.add(year);
 	};
 
-	const PAGE = 1000;
 	// Dated diary entries — the primary source; one film contributes every year it
-	// was logged in.
-	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
-			.from('logs')
-			.select('movie_id, watched_date')
-			.is('deleted_at', null)
-			.not('watched_date', 'is', null)
-			.range(offset, offset + PAGE - 1);
-		if (error) {
-			if (isMissingRelation(error)) return byMovie;
-			throw new Error(`loadDiaryYearsByMovie (logs) failed: ${error.message}`);
-		}
-		const rows = (data ?? []) as { movie_id: number; watched_date: string | null }[];
-		for (const r of rows) add(r.movie_id, r.watched_date);
-		if (rows.length < PAGE) break;
+	// was logged in. Film-level first watches cover imported films that never got a
+	// dated diary row. The two are independent reads, so they go out together.
+	type LogRow = { movie_id: number; watched_date: string | null };
+	type WatchedRow = { movie_id: number; first_watched: string | null };
+	const [logs, watched] = await Promise.all([
+		readAllPages<LogRow>((from, to, wantCount) =>
+			supabasePublic
+				.from('logs')
+				.select('movie_id, watched_date', wantCount ? { count: 'exact' } : undefined)
+				.is('deleted_at', null)
+				.not('watched_date', 'is', null)
+				.range(from, to) as unknown as PromiseLike<PageResult<LogRow>>,
+		),
+		readAllPages<WatchedRow>((from, to, wantCount) =>
+			supabasePublic
+				.from('watched')
+				.select('movie_id, first_watched', wantCount ? { count: 'exact' } : undefined)
+				.not('first_watched', 'is', null)
+				.range(from, to) as unknown as PromiseLike<PageResult<WatchedRow>>,
+		),
+	]);
+
+	if (logs.error) {
+		if (isMissingRelation(logs.error)) return byMovie;
+		throw new Error(`loadDiaryYearsByMovie (logs) failed: ${logs.error.message}`);
 	}
-	// Film-level first watch — covers imported films that never got a dated diary row.
-	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
-			.from('watched')
-			.select('movie_id, first_watched')
-			.not('first_watched', 'is', null)
-			.range(offset, offset + PAGE - 1);
-		if (error) {
-			if (isMissingRelation(error)) break;
-			throw new Error(`loadDiaryYearsByMovie (watched) failed: ${error.message}`);
-		}
-		const rows = (data ?? []) as { movie_id: number; first_watched: string | null }[];
-		for (const r of rows) add(r.movie_id, r.first_watched);
-		if (rows.length < PAGE) break;
+	for (const r of logs.rows) add(r.movie_id, r.watched_date);
+
+	// A missing `watched` table only costs the imported films their year; the diary
+	// entries already read are still worth returning.
+	if (watched.error && !isMissingRelation(watched.error)) {
+		throw new Error(`loadDiaryYearsByMovie (watched) failed: ${watched.error.message}`);
 	}
+	for (const r of watched.rows) add(r.movie_id, r.first_watched);
 	return byMovie;
 }
 
@@ -1803,18 +1883,16 @@ async function theaterNameByValue(): Promise<Map<string, string>> {
 
 /** Release years of every watched film (with one), for the decade chips. */
 async function listWatchedReleaseYears(): Promise<number[]> {
-	const PAGE = 1000;
-	const out: number[] = [];
-	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
+	type Row = { movies: { release_year: number | null } };
+	const { rows, error } = await readAllPages<Row>((from, to, wantCount) =>
+		supabasePublic
 			.from('watched')
-			.select('movies!inner(release_year)')
-			.range(offset, offset + PAGE - 1);
-		if (error) throw new Error(`listWatchedReleaseYears failed: ${error.message}`);
-		const rows = (data ?? []) as unknown as { movies: { release_year: number | null } }[];
-		for (const r of rows) if (r.movies.release_year != null) out.push(r.movies.release_year);
-		if (rows.length < PAGE) break;
-	}
+			.select('movies!inner(release_year)', wantCount ? { count: 'exact' } : undefined)
+			.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
+	);
+	if (error) throw new Error(`listWatchedReleaseYears failed: ${error.message}`);
+	const out: number[] = [];
+	for (const r of rows) if (r.movies.release_year != null) out.push(r.movies.release_year);
 	return out;
 }
 
@@ -2146,59 +2224,56 @@ interface WatchedFacts {
  * that depend on its columns simply come back empty until the backfill runs.
  */
 async function loadWatchedFacts(): Promise<WatchedFacts[]> {
-	const PAGE = 1000;
 	const tiers = [
 		'movies!inner(release_year, runtime, genres, countries, directors, actors, original_language)', // 0009
 		'movies!inner(release_year, runtime, genres, countries, directors, actors)', // 0008
 		'movies!inner(release_year, runtime)', // pre-0008
 	];
-	let tier = 0;
-	const out: WatchedFacts[] = [];
-	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
-			.from('watched')
-			.select(`first_watched, rating, ${tiers[tier]}`)
-			.order('first_watched', { ascending: false, nullsFirst: false })
-			.range(offset, offset + PAGE - 1);
-		if (error) {
-			// Columns not there yet: drop to the next tier and restart from the top.
-			if (tier < tiers.length - 1 && isMissingCreditColumn(error)) {
-				tier++;
-				offset = -PAGE; // next loop iteration resumes at offset 0
-				out.length = 0;
-				continue;
-			}
-			throw new Error(`loadWatchedFacts failed: ${error.message}`);
+	type Row = {
+		first_watched: string | null;
+		rating: number | null;
+		movies: {
+			release_year: number | null;
+			runtime: number | null;
+			genres?: string[] | null;
+			countries?: string[] | null;
+			directors?: string[] | null;
+			actors?: string[] | null;
+			original_language?: string | null;
+		};
+	};
+
+	// Each tier is a fresh whole-collection read, so dropping to the next one never
+	// has to un-accumulate what the last attempt got.
+	let rows: Row[] = [];
+	for (const [i, cols] of tiers.entries()) {
+		const res = await readAllPages<Row>((from, to, wantCount) =>
+			supabasePublic
+				.from('watched')
+				.select(`first_watched, rating, ${cols}`, wantCount ? { count: 'exact' } : undefined)
+				.order('first_watched', { ascending: false, nullsFirst: false })
+				.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
+		);
+		if (!res.error) {
+			rows = res.rows;
+			break;
 		}
-		const rows = (data ?? []) as unknown as {
-			first_watched: string | null;
-			rating: number | null;
-			movies: {
-				release_year: number | null;
-				runtime: number | null;
-				genres?: string[] | null;
-				countries?: string[] | null;
-				directors?: string[] | null;
-				actors?: string[] | null;
-				original_language?: string | null;
-			};
-		}[];
-		for (const r of rows) {
-			out.push({
-				first_watched: r.first_watched,
-				rating: r.rating,
-				release_year: r.movies.release_year,
-				runtime: r.movies.runtime,
-				genres: r.movies.genres ?? [],
-				countries: r.movies.countries ?? [],
-				directors: r.movies.directors ?? [],
-				actors: r.movies.actors ?? [],
-				originalLanguage: r.movies.original_language ?? null,
-			});
-		}
-		if (rows.length < PAGE) break;
+		// Columns not there yet: drop to the next tier.
+		if (i < tiers.length - 1 && isMissingCreditColumn(res.error)) continue;
+		throw new Error(`loadWatchedFacts failed: ${res.error.message}`);
 	}
-	return out;
+
+	return rows.map((r) => ({
+		first_watched: r.first_watched,
+		rating: r.rating,
+		release_year: r.movies.release_year,
+		runtime: r.movies.runtime,
+		genres: r.movies.genres ?? [],
+		countries: r.movies.countries ?? [],
+		directors: r.movies.directors ?? [],
+		actors: r.movies.actors ?? [],
+		originalLanguage: r.movies.original_language ?? null,
+	}));
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

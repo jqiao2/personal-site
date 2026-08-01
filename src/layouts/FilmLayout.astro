@@ -1,6 +1,7 @@
 ---
 // Shell for the art-directed "Jason's film log" section — dark warm theme,
 // Archivo + Newsreader webfonts. Page-specific styles live in each page.
+import PosterLoader from '../components/PosterLoader.astro';
 interface Props {
 	title: string;
 }
@@ -19,9 +20,14 @@ const { title } = Astro.props;
 			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap"
 			rel="stylesheet"
 		/>
+		<!-- Posters all come from one host and none is requested until after paint,
+		     so warm the connection while the page is still being built rather than
+		     paying for it on the first tile. -->
+		<link rel="preconnect" href="https://image.tmdb.org" />
 	</head>
 	<body>
 		<slot />
+		<PosterLoader />
 		<script>
 			// "Back" links go to the actual previous page when you arrived from within
 			// the site; the href stays a fallback for direct loads / new tabs / external

@@ -8,11 +8,11 @@ import { ytsUrl } from '../../lib/format';
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
-/** How many chips a group shows before collapsing behind "+N other…". Genre and
- * language each show a healthy handful; the People rows (director / cast) follow the
- * "All films" pattern — a top-few-by-frequency default the search box expands. */
-const CHIP_LIMIT = { genres: 8, languages: 8 };
-
+// The tiles, and nothing the filter panel needs. Genres, directors and cast are a
+// separate read the browser makes after paint (/api/films/watchlist/facets): they
+// roughly double the query and, written out as per-tile data attributes, more than
+// double this page — all for a panel that starts collapsed. See applyFacets in the
+// script for where they're attached.
 const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Astro.cookies)]);
 
 // The whole watchlist ships to the browser, which does the filtering and sorting
@@ -36,21 +36,6 @@ const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.re
 // Whether the watchlist holds anything still ahead of us. The "Include upcoming"
 // toggle is only worth drawing when there's something for it to exclude.
 const hasUpcoming = films.some(isUpcoming);
-
-/** Facet values present on the watchlist, most common first, ties alphabetical —
- * matches the chip order the "All films" filters use. Feeds the Genre / Language
- * chips and the People (director / cast) rows. */
-function byFrequency(pick: (f: (typeof films)[number]) => Iterable<string>): string[] {
-	const counts = new Map<string, number>();
-	for (const f of films) {
-		for (const v of pick(f)) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
-	}
-	return [...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
-}
-const genres = byFrequency((f) => f.genres);
-const languages = byFrequency((f) => (f.language ? [f.language] : []));
-const directors = byFrequency((f) => f.directors);
-const actors = byFrequency((f) => f.actors);
 
 // End stops for the release-date slider, as a decade's first year. It needs two
 // distinct decades to be worth drawing. Films with no release_year at all sit
@@ -118,8 +103,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			<div class="panel" id="filters" hidden>
 				<div class="panel__head">
 					<span class="panel__title">Filter watchlist</span>
+					<span class="panel__loading" id="facets-loading">Loading filters…</span>
 					<button type="button" id="clear-all" class="clear" hidden>Clear all</button>
 				</div>
+				<p class="panel__error" id="facets-error" hidden>
+					Couldn't load the filters. <button type="button" id="facets-retry">Retry</button>
+				</p>
 
 				<div class="panel__grid">
 					<section>
@@ -162,101 +151,54 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						)}
 					</section>
 
-					<section>
+					{/* Genre, Language and People are all built by applyFacets() from
+					    /api/films/watchlist/facets. Only search, sort, the release-date
+					    range and the upcoming toggle work before that lands — they read
+					    facts the tiles already carry. */}
+					<section data-group="genre">
 						<div class="grp__row">
 							<h2 class="grp">Genre</h2>
-							{genres.length > 0 && (
-								<div class="modes" data-mode="genremode">
-									<button type="button" class="mode mode--on" data-value="any">Any</button>
-									<button type="button" class="mode" data-value="all">All</button>
-								</div>
-							)}
-						</div>
-						{genres.length === 0 ? (
-							<p class="grp__none">No genres yet</p>
-						) : (
-							<div class="chips">
-								{genres.map((g, i) => (
-									<button
-										type="button"
-										class="chip"
-										data-filter="genre"
-										data-value={g}
-										aria-pressed="false"
-										hidden={i >= CHIP_LIMIT.genres}
-									>
-										{g}
-									</button>
-								))}
-								{genres.length > CHIP_LIMIT.genres && (
-									<button type="button" class="chip chip--more">
-										+{genres.length - CHIP_LIMIT.genres} other…
-									</button>
-								)}
+							<div class="modes" data-mode="genremode" hidden>
+								<button type="button" class="mode mode--on" data-value="any">Any</button>
+								<button type="button" class="mode" data-value="all">All</button>
 							</div>
-						)}
+						</div>
+						<p class="grp__none" data-none hidden>No genres yet</p>
+						<div class="chips" data-chips="genre"></div>
 					</section>
 
-					{languages.length > 0 && (
-						<section>
-							<h2 class="grp">Language</h2>
-							<div class="chips">
-								{languages.map((l, i) => (
-									<button
-										type="button"
-										class="chip"
-										data-filter="language"
-										data-value={l}
-										aria-pressed="false"
-										hidden={i >= CHIP_LIMIT.languages}
-									>
-										{l}
-									</button>
-								))}
-								{languages.length > CHIP_LIMIT.languages && (
-									<button type="button" class="chip chip--more">
-										+{languages.length - CHIP_LIMIT.languages} other…
-									</button>
-								)}
-							</div>
-						</section>
-					)}
+					<section data-group="language" hidden>
+						<h2 class="grp">Language</h2>
+						<div class="chips" data-chips="language"></div>
+					</section>
 
-					{(directors.length > 0 || actors.length > 0) && (
-						<section class="panel__wide">
-							<div class="grp__row">
-								<h2 class="grp">People</h2>
-								<input
-									type="search"
-									id="people-search"
-									class="people-search"
-									placeholder="Search directors & cast…"
-									autocomplete="off"
-									aria-label="Search directors and cast"
-								/>
-							</div>
-							<div class="where">
-								<div class="where__row">
-									<span class="where__label">Director</span>
-									<div class="chips" data-people="director">
-										<span class="people-none" hidden>No matches</span>
-									</div>
-								</div>
-								<div class="where__row">
-									<span class="where__label">Cast</span>
-									<div class="chips" data-people="actor">
-										<span class="people-none" hidden>No matches</span>
-									</div>
-								</div>
-							</div>
-							<script
-								is:inline
-								type="application/json"
-								data-people-names
-								set:html={JSON.stringify({ directors, actors })}
+					<section class="panel__wide" id="people-section" hidden>
+						<div class="grp__row">
+							<h2 class="grp">People</h2>
+							<input
+								type="search"
+								id="people-search"
+								class="people-search"
+								placeholder="Search directors & cast…"
+								autocomplete="off"
+								aria-label="Search directors and cast"
 							/>
-						</section>
-					)}
+						</div>
+						<div class="where">
+							<div class="where__row">
+								<span class="where__label">Director</span>
+								<div class="chips" data-people="director">
+									<span class="people-none" hidden>No matches</span>
+								</div>
+							</div>
+							<div class="where__row">
+								<span class="where__label">Cast</span>
+								<div class="chips" data-people="actor">
+									<span class="people-none" hidden>No matches</span>
+								</div>
+							</div>
+						</div>
+					</section>
 				</div>
 			</div>
 
@@ -266,6 +208,10 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					const upcoming = isUpcoming(f);
 					// The owner's tiles link out to YTS; a visitor's aren't links at all.
 					const Tag = isOwner ? 'a' : 'div';
+					// No genres / directors / cast / language on the tile: across ~500 of
+					// them they'd be most of this page's HTML, for values nothing shows
+					// until the filter panel opens. applyFacets attaches them to the
+					// matching Item once the facet payload lands.
 					return (
 						<div
 							class="item"
@@ -273,10 +219,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 							data-order={i}
 							data-title={f.title.toLowerCase()}
 							data-year={f.release_year ?? ''}
-							data-genres={f.genres.join('|')}
-							data-directors={f.directors.join('|')}
-							data-actors={f.actors.join('|')}
-							data-language={f.language ?? ''}
 							data-upcoming={upcoming ? '1' : ''}
 						>
 							{isOwner && (
@@ -290,12 +232,14 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 									? { href: ytsUrl(f.title, f.release_year), target: '_blank', rel: 'noopener noreferrer' }
 									: {})}
 							>
-								{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" />}
+								{poster && <img data-poster={poster} alt={`${f.title} poster`} decoding="async" />}
 								{upcoming && <span class="badge">Upcoming</span>}
 								<div class="tile__overlay">
 									<div class="tile__title">{f.title}</div>
 									<div class="tile__year">{f.release_year}</div>
-									{f.genres[0] && <div class="tile__genre">{f.genres[0]}</div>}
+									{/* Filled in by applyFacets — the film's primary genre isn't
+									    known until the facet payload arrives. */}
+									<div class="tile__genre" data-tile-genre hidden></div>
 									<div class="tile__added">Added {addedLabel(f.added_at)}</div>
 								</div>
 							</Tag>
@@ -541,6 +485,40 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			text-transform: uppercase;
 			letter-spacing: 1.6px;
 			color: #8a6f63;
+		}
+		/* Sits between the title and "Clear all" while the chips are on their way.
+		   Quiet on purpose: search, sort, the release-date range and the upcoming
+		   toggle all work without them, so this is a note, not a blocker. */
+		.panel__loading {
+			margin-right: auto;
+			padding-left: 12px;
+			font-size: 12px;
+			color: #7c6156;
+			font-style: italic;
+		}
+		.panel__loading[hidden] {
+			display: none;
+		}
+		.panel__error {
+			margin: -8px 0 16px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.panel__error[hidden] {
+			display: none;
+		}
+		.panel__error button {
+			font: inherit;
+			color: #d9b45a;
+			background: none;
+			border: none;
+			padding: 0;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+		.modes[hidden],
+		section[hidden] {
+			display: none;
 		}
 		.clear {
 			font-size: 12px;
@@ -1463,9 +1441,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			const toggle = document.getElementById('filters-toggle')!;
 			const countBadge = document.getElementById('filters-count')!;
 			const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
-			// Genre + language chips, both server-rendered. Director/cast chips are
-			// built on demand (see People below) and wired as they're created.
-			const filterChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'));
+			// Every chip — genre, language, director, cast — is built from the facet
+			// payload, so this starts empty and is refilled by applyFacets.
+			let filterChips: HTMLButtonElement[] = [];
 			const peopleSearch = document.getElementById('people-search') as HTMLInputElement | null;
 			const drange = document.getElementById('drange');
 			const dminInput = document.getElementById('dmin') as HTMLInputElement | null;
@@ -1477,19 +1455,23 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 			const fmt = (n: number) => n.toLocaleString('en-US');
 
-			/** A tile's facts, read off its data attributes once. */
+			/** A tile's facts. Title, year and upcoming come off its data attributes;
+			 * the rest are attached by applyFacets when the facet payload lands. */
 			interface Item {
 				el: HTMLElement;
+				tmdbId: number;
 				title: string;
 				/** Decade's first year, or null when the film has no release year — such
 				 * a film can't satisfy any decade range, so a narrowed slider drops it. */
 				decade: number | null;
 				year: number | null;
+				/** Empty until the facets arrive; the chips that match on them don't
+				 * exist before then either, so nothing can filter on a blank. */
 				genres: string[];
-					directors: string[];
-					actors: string[];
-					/** Original language as an English name; '' when TMDB has none. */
-					language: string;
+				directors: string[];
+				actors: string[];
+				/** Original language as an English name; '' when TMDB has none. */
+				language: string;
 				/** A release date still ahead of us. Governed by the "Include upcoming"
 				 * toggle, not the decade range — decade alone can't tell an upcoming
 				 * 2026 film from a released one that shares its decade. */
@@ -1502,13 +1484,14 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				const year = el.dataset.year ? Number(el.dataset.year) : null;
 				return {
 					el,
+					tmdbId: Number(el.dataset.tmdbId),
 					title: el.dataset.title ?? '',
 					year,
 					decade: year == null ? null : Math.floor(year / 10) * 10,
-					genres: el.dataset.genres ? el.dataset.genres.split('|') : [],
-						directors: el.dataset.directors ? el.dataset.directors.split('|') : [],
-						actors: el.dataset.actors ? el.dataset.actors.split('|') : [],
-						language: el.dataset.language ?? '',
+					genres: [],
+					directors: [],
+					actors: [],
+					language: '',
 					upcoming: el.dataset.upcoming === '1',
 					order: Number(el.dataset.order),
 				};
@@ -1564,6 +1547,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 			function matches(item: Item): boolean {
 				if (q && !item.title.includes(q)) return false;
+				// Genre, language and the credits can only be judged once the facet
+				// payload has attached them. Until then a filter restored from the URL is
+				// held rather than matched: every tile's arrays are still empty, so
+				// applying it would empty the grid and claim nothing matched. applyFacets
+				// re-runs this the moment it can answer honestly.
+				if (facetsState !== 'done') return upcomingOk(item) && decadeOk(item);
 				// Genre honours the any/all toggle; the other groups are always "any of".
 				if (sets.genre.size) {
 					const has = (g: string) => item.genres.includes(g);
@@ -1574,12 +1563,14 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				if (sets.language.size && !sets.language.has(item.language)) return false;
 				if (sets.director.size && !item.directors.some((d) => sets.director.has(d))) return false;
 				if (sets.actor.size && !item.actors.some((a) => sets.actor.has(a))) return false;
-				if (!includeUpcoming && item.upcoming) return false;
-				if (decadeActive() && (item.decade == null || item.decade < dMin || item.decade > dMax)) {
-					return false;
-				}
-				return true;
+				return upcomingOk(item) && decadeOk(item);
 			}
+
+			/** The two filters that read only what a tile already carries, so they hold
+			 * before the facet payload lands as well as after. */
+			const upcomingOk = (item: Item) => includeUpcoming || !item.upcoming;
+			const decadeOk = (item: Item) =>
+				!decadeActive() || (item.decade != null && item.decade >= dMin && item.decade <= dMax);
 
 			function apply() {
 				const visible = items.filter(matches);
@@ -1666,18 +1657,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				});
 			}
 
-			for (const chip of filterChips) {
-				chip.addEventListener('click', () => {
-					const value = chip.dataset.value!;
-					const key = chip.dataset.filter as SetKey;
-					const on = !sets[key].has(value);
-					if (on) sets[key].add(value);
-					else sets[key].delete(value);
-					chip.setAttribute('aria-pressed', String(on));
-					apply();
-				});
-			}
-
 			// Genre any/all toggle. A mode flip only changes results once genres are
 			// picked; only genre carries a toggle, but the wiring stays general.
 			for (const group of Array.from(panel.querySelectorAll<HTMLElement>('.modes'))) {
@@ -1700,20 +1679,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			type PeopleKind = 'director' | 'actor';
 			const PEOPLE_TOP_JS = 12; // quick chips per row before searching
 			const PEOPLE_MAX = 40; // most chips one search reveals
+			const peopleSection = document.getElementById('people-section')!;
 			const peopleNames: Record<PeopleKind, string[]> = { director: [], actor: [] };
-			const namesEl = panel.querySelector('script[data-people-names]');
-			if (namesEl?.textContent) {
-				try {
-					const parsed = JSON.parse(namesEl.textContent) as {
-						directors?: string[];
-						actors?: string[];
-					};
-					peopleNames.director = parsed.directors ?? [];
-					peopleNames.actor = parsed.actors ?? [];
-				} catch (e) {
-					console.error('watchlist: could not parse people names', e);
-				}
-			}
 
 			interface PeopleRow {
 				kind: PeopleKind;
@@ -1731,18 +1698,23 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
 			// so a chip built here has to carry it or it renders unstyled. Read the name
-			// off a server-rendered chip rather than hard-coding the hash.
-			const scopeAttr = filterChips[0]
-				? Array.from(filterChips[0].attributes)
-						.map((a) => a.name)
-						.find((n) => n.startsWith('data-astro-cid-'))
-				: undefined;
+			// off a server-rendered element rather than hard-coding the hash, which
+			// changes whenever this file does.
+			const scopeAttr = Array.from(panel.attributes)
+				.map((a) => a.name)
+				.find((n) => n.startsWith('data-astro-cid-'));
 
-			function makePeopleChip(kind: PeopleKind, name: string): HTMLButtonElement {
+			/** A `.chip` button carrying the page's style scope. */
+			function newChip(className = 'chip'): HTMLButtonElement {
 				const chip = document.createElement('button');
 				if (scopeAttr) chip.setAttribute(scopeAttr, '');
-				chip.className = 'chip';
+				chip.className = className;
 				chip.type = 'button';
+				return chip;
+			}
+
+			function makePeopleChip(kind: PeopleKind, name: string): HTMLButtonElement {
+				const chip = newChip();
 				chip.dataset.filter = kind;
 				chip.dataset.value = name;
 				chip.setAttribute('aria-pressed', String(sets[kind].has(name)));
@@ -1783,15 +1755,61 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				renderPeople();
 			});
 
-			// "+N other…" reveals the rest of the group and then removes itself:
-			// collapsing again would have to hide chips the user may have just picked.
-			for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
+			// --- Genre / Language chip groups -----------------------------------
+			// Both are built from the facet payload. Values past the group's limit ship
+			// hidden behind "+N other…" — except any already picked, which stay visible
+			// so a filter restored from the URL always has a control that can clear it.
+
+			/** How many chips a group shows before collapsing behind "+N other…". */
+			const CHIP_LIMIT: Record<'genre' | 'language', number> = { genre: 8, language: 8 };
+
+			function makeFilterChip(key: SetKey, value: string): HTMLButtonElement {
+				const chip = newChip();
+				chip.dataset.filter = key;
+				chip.dataset.value = value;
+				chip.textContent = value;
+				chip.setAttribute('aria-pressed', String(sets[key].has(value)));
+				chip.addEventListener('click', () => {
+					const on = !sets[key].has(value);
+					if (on) sets[key].add(value);
+					else sets[key].delete(value);
+					chip.setAttribute('aria-pressed', String(on));
+					apply();
+				});
+				return chip;
+			}
+
+			/** "+N other…" reveals the rest of its group and then removes itself:
+			 * collapsing again would have to hide chips the user may have just picked. */
+			function makeMoreChip(count: number): HTMLButtonElement {
+				const more = newChip('chip chip--more');
+				more.textContent = `+${count} other…`;
 				more.addEventListener('click', () => {
 					for (const sibling of Array.from(more.parentElement!.children)) {
 						(sibling as HTMLElement).hidden = false;
 					}
 					more.remove();
 				});
+				return more;
+			}
+
+			function renderChipGroup(key: 'genre' | 'language', values: string[]) {
+				const host = panel.querySelector<HTMLElement>(`.chips[data-chips="${key}"]`);
+				if (!host) return;
+				const section = host.closest<HTMLElement>(`section[data-group="${key}"]`);
+				const none = section?.querySelector<HTMLElement>('[data-none]') ?? null;
+				// Genre keeps its section and says "No genres yet"; language just hides.
+				if (none) none.hidden = values.length > 0;
+				else if (section) section.hidden = values.length === 0;
+
+				const chips = values.map((v, i) => {
+					const chip = makeFilterChip(key, v);
+					chip.hidden = i >= CHIP_LIMIT[key] && !sets[key].has(v);
+					return chip;
+				});
+				const hiddenCount = chips.filter((c) => c.hidden).length;
+				if (hiddenCount > 0) chips.push(makeMoreChip(hiddenCount));
+				host.replaceChildren(...chips);
 			}
 
 			/** Move both thumbs, keeping min ≤ max and the inputs in step. */
@@ -1863,17 +1881,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				if (url !== location.pathname + location.search) history.replaceState(null, '', url);
 			}
 
-			/** Re-label "+N other…" once restoring reveals chips from past the cut. */
-			function syncMore() {
-				for (const more of Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip--more'))) {
-					const hidden = Array.from(more.parentElement!.children).filter(
-						(c) => (c as HTMLElement).hidden,
-					).length;
-					if (hidden === 0) more.remove();
-					else more.textContent = `+${hidden} other…`;
-				}
-			}
-
 			const snap = (raw: string | null, lo: number, hi: number, step: number, fallback: number) => {
 				const n = Number(raw);
 				if (raw == null || !Number.isFinite(n)) return fallback;
@@ -1913,40 +1920,128 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					}
 				}
 
-				// Drive the genre/language sets from the chips rather than straight off the
-				// params, so a stale or hand-typed value can't end up selected with no
-				// control to clear it — and a restored chip from past the cut gets revealed.
-				const wanted: Partial<Record<SetKey, Set<string>>> = {
-					genre: new Set(p.getAll('genre')),
-					language: new Set(p.getAll('language')),
-				};
-				for (const chip of filterChips) {
-					const key = chip.dataset.filter as SetKey;
-					if (!wanted[key]?.has(chip.dataset.value!)) continue;
-					sets[key].add(chip.dataset.value!);
-					chip.setAttribute('aria-pressed', 'true');
-					chip.hidden = false;
-				}
-				syncMore();
-
-				// People chips aren't shipped in the DOM, so restore their picks straight
-				// into the sets — validated against the known names so a stale or hand-typed
-				// value can't select with no chip to clear it. renderPeople() draws them.
-				for (const kind of ['director', 'actor'] as const) {
-					const known = new Set(peopleNames[kind]);
-					for (const v of p.getAll(kind)) if (known.has(v)) sets[kind].add(v);
+				// No chips exist yet, so the sets are filled straight from the params.
+				// applyFacets then marks the matching chips pressed and drops anything the
+				// watchlist doesn't actually offer.
+				for (const key of ['genre', 'language', 'director', 'actor'] as const) {
+					for (const v of p.getAll(key)) sets[key].add(v);
 				}
 
 				return q !== '' || sort !== 'added' || activeCount() > 0;
 			}
 
+			// --- Filters, loaded after the grid ---------------------------------
+			// Genre, language and the credits are per-film arrays: most of this page's
+			// weight, for a panel that starts collapsed. They arrive here instead, and
+			// attach to the tiles already on screen.
+			interface FacetRow {
+				tmdb_id: number;
+				genres: string[];
+				directors: string[];
+				actors: string[];
+				language: string | null;
+			}
+
+			const facetsLoading = document.getElementById('facets-loading')!;
+			const facetsError = document.getElementById('facets-error')!;
+			const facetsRetry = document.getElementById('facets-retry')!;
+			const genreModes = panel.querySelector<HTMLElement>('.modes[data-mode="genremode"]')!;
+			let facetsState: 'idle' | 'loading' | 'done' = 'idle';
+
+			/** Values present on the watchlist, most common first, ties alphabetical —
+			 * the chip order the "All films" filters use. */
+			function byFrequency(pick: (r: FacetRow) => Iterable<string>, rows: FacetRow[]): string[] {
+				const counts = new Map<string, number>();
+				for (const r of rows) {
+					for (const v of pick(r)) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+				}
+				return [...counts.keys()].sort(
+					(a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b),
+				);
+			}
+
+			function applyFacets(rows: FacetRow[]) {
+				const byId = new Map(rows.map((r) => [r.tmdb_id, r]));
+				for (const item of items) {
+					const row = byId.get(item.tmdbId);
+					if (!row) continue;
+					item.genres = row.genres;
+					item.directors = row.directors;
+					item.actors = row.actors;
+					item.language = row.language ?? '';
+					// The hover overlay's primary-genre line, which had nothing to show
+					// until now.
+					const slot = item.el.querySelector<HTMLElement>('[data-tile-genre]');
+					if (slot && row.genres[0]) {
+						slot.textContent = row.genres[0];
+						slot.hidden = false;
+					}
+				}
+
+				const genres = byFrequency((r) => r.genres, rows);
+				const languages = byFrequency((r) => (r.language ? [r.language] : []), rows);
+				peopleNames.director = byFrequency((r) => r.directors, rows);
+				peopleNames.actor = byFrequency((r) => r.actors, rows);
+
+				renderChipGroup('genre', genres);
+				renderChipGroup('language', languages);
+				genreModes.hidden = genres.length === 0;
+				peopleSection.hidden =
+					peopleNames.director.length === 0 && peopleNames.actor.length === 0;
+				renderPeople();
+				filterChips = Array.from(panel.querySelectorAll<HTMLButtonElement>('.chip[data-filter]'));
+
+				// A value that isn't on offer can't be cleared, and shouldn't silently keep
+				// narrowing the grid — so drop it. Only reachable from a stale or
+				// hand-typed link.
+				const offered: Record<SetKey, Set<string>> = {
+					genre: new Set(genres),
+					language: new Set(languages),
+					director: new Set(peopleNames.director),
+					actor: new Set(peopleNames.actor),
+				};
+				for (const key of Object.keys(sets) as SetKey[]) {
+					for (const v of sets[key]) if (!offered[key].has(v)) sets[key].delete(v);
+				}
+
+				facetsLoading.hidden = true;
+				facetsState = 'done';
+				// Re-run the filter now that these values can actually be judged — until
+				// this moment matches() has been holding any of them that came in on the
+				// URL. apply() rewrites the URL too, so a dropped stale value goes with it.
+				apply();
+			}
+
+			async function loadFacets() {
+				if (facetsState !== 'idle') return;
+				facetsState = 'loading';
+				facetsError.hidden = true;
+				facetsLoading.hidden = false;
+				try {
+					const res = await fetch('/api/films/watchlist/facets');
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+					applyFacets((await res.json()) as FacetRow[]);
+				} catch (e) {
+					console.error('watchlist: failed to load filter facets', e);
+					facetsState = 'idle'; // let Retry (or opening the panel again) try once more
+					facetsLoading.hidden = true;
+					facetsError.hidden = false;
+				}
+			}
+
+			facetsRetry.addEventListener('click', loadFacets);
+
 			// The server rendered the full list in added order, so a URL carrying
 			// filters has to re-apply before the grid matches what it claims to show.
 			const restored = readUrl();
-				// Draw the People chips — the top few, plus any names restored from the URL.
-				renderPeople();
-				if (restored) apply();
+			if (restored) apply();
 			else syncChrome();
+
+			// Fetch the filters once the page has settled — or straight away if the panel
+			// is opened first, so it's never waiting on the load event to start.
+			toggle.addEventListener('click', loadFacets);
+			if (document.readyState === 'complete') loadFacets();
+			else window.addEventListener('load', loadFacets, { once: true });
 
 			// --- Remove a film from the watchlist (owner only) ---
 			grid.addEventListener('click', async (e) => {

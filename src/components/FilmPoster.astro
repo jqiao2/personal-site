@@ -12,7 +12,9 @@ const src = imageUrl(posterPath, size);
 
 {
 	src ? (
-		<img class="poster" src={src} alt={`${title} poster`} loading="lazy" />
+		// Deferred: PosterLoader swaps data-poster into src once the tile nears the
+		// viewport. The aspect-ratio below holds the box open until then.
+		<img class="poster" data-poster={src} alt={`${title} poster`} decoding="async" />
 	) : (
 		<div class="poster poster--placeholder">
 			<span>{title}</span>

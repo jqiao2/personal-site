@@ -12,3 +12,15 @@ interface ImportMetaEnv {
 interface ImportMeta {
 	readonly env: ImportMetaEnv;
 }
+
+interface Window {
+	/**
+	 * Start watching every `img[data-poster]` under `root` (the document by
+	 * default), loading each one as it nears the viewport. Defined by
+	 * components/PosterLoader.astro; pages that build tiles after load — the
+	 * diary's and All films' infinite scroll — call it on what they just inserted.
+	 * Optional at the call site: the loader is a separate module, so it may not
+	 * have run yet when an early batch lands.
+	 */
+	observePosters?: (root?: ParentNode) => void;
+}
