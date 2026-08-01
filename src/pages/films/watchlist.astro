@@ -36,15 +36,15 @@ const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.re
 // toggle is only worth drawing when there's something for it to exclude.
 const hasUpcoming = films.some(isUpcoming);
 
-// End stops for the release-date slider, as a decade's first year. It needs two
-// distinct decades to be worth drawing. Films with no release_year at all sit
-// outside every decade and drop out once the slider is narrowed.
-const decades = [...new Set(films.map((f) => f.release_year).filter((y): y is number => y != null))]
-	.map((y) => Math.floor(y / 10) * 10)
-	.sort((a, b) => a - b);
-const decLo = decades[0] ?? null;
-const decHi = decades[decades.length - 1] ?? null;
-const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
+// End stops for the release-date slider, as calendar years. It needs two distinct
+// years to be worth drawing. Films with no release_year at all sit outside any
+// year and drop out once the slider is narrowed.
+const releaseYears = [
+	...new Set(films.map((f) => f.release_year).filter((y): y is number => y != null)),
+].sort((a, b) => a - b);
+const relLo = releaseYears[0] ?? null;
+const relHi = releaseYears[releaseYears.length - 1] ?? null;
+const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 ---
 
 <FilmLayout title="Watchlist — Jason's film log">
@@ -112,30 +112,30 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				<div class="panel__grid">
 					<section>
 						<h2 class="grp">Release date</h2>
-						{hasDecadeRange ? (
-							<div class="range range--dec" id="drange" data-lo={decLo} data-hi={decHi}>
+						{hasReleaseRange ? (
+							<div class="range range--dec" id="drange" data-lo={relLo} data-hi={relHi}>
 								<div class="range__track"></div>
 								<div class="range__fill" id="drange-fill"></div>
 								<input
 									type="range"
 									id="dmin"
-									min={decLo}
-									max={decHi}
-									step="10"
-									value={decLo}
-									aria-label="Earliest release decade"
+									min={relLo}
+									max={relHi}
+									step="1"
+									value={relLo}
+									aria-label="Earliest release year"
 								/>
 								<input
 									type="range"
 									id="dmax"
-									min={decLo}
-									max={decHi}
-									step="10"
-									value={decHi}
-									aria-label="Latest release decade"
+									min={relLo}
+									max={relHi}
+									step="1"
+									value={relHi}
+									aria-label="Latest release year"
 								/>
 								<div class="range__ends">
-									<span id="dmin-label">{decLo}s</span><span id="dmax-label">{decHi}s</span>
+									<span id="dmin-label">{relLo}</span><span id="dmax-label">{relHi}</span>
 								</div>
 							</div>
 						) : (
@@ -1455,9 +1455,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				el: HTMLElement;
 				tmdbId: number;
 				title: string;
-				/** Decade's first year, or null when the film has no release year — such
-				 * a film can't satisfy any decade range, so a narrowed slider drops it. */
-				decade: number | null;
+				/** Release year, or null when TMDB has none — such a film can't satisfy
+				 * any year range, so a narrowed slider drops it. */
 				year: number | null;
 				/** Empty until the facets arrive; the chips that match on them don't
 				 * exist before then either, so nothing can filter on a blank. */
@@ -1467,8 +1466,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				/** Original language as an English name; '' when TMDB has none. */
 				language: string;
 				/** A release date still ahead of us. Governed by the "Include upcoming"
-				 * toggle, not the decade range — decade alone can't tell an upcoming
-				 * 2026 film from a released one that shares its decade. */
+				 * toggle, not the year range — a year alone can't tell an upcoming 2026
+				 * film from one already out. */
 				upcoming: boolean;
 				/** Position in the server's added_at-descending order. */
 				order: number;
@@ -1481,7 +1480,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					tmdbId: Number(el.dataset.tmdbId),
 					title: el.dataset.title ?? '',
 					year,
-					decade: year == null ? null : Math.floor(year / 10) * 10,
 					genres: [],
 					directors: [],
 					actors: [],
@@ -1509,22 +1507,22 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 			// order you're looking at instead of reshuffling under you.
 			let shuffleSeed = 1;
 
-			const DEC_LO = drange ? Number(drange.dataset.lo) : 0;
-			const DEC_HI = drange ? Number(drange.dataset.hi) : 0;
-			let dMin = DEC_LO;
-			let dMax = DEC_HI;
+			const REL_LO = drange ? Number(drange.dataset.lo) : 0;
+			const REL_HI = drange ? Number(drange.dataset.hi) : 0;
+			let dMin = REL_LO;
+			let dMax = REL_HI;
 			// The "Include upcoming" toggle. On by default, so the page opens on the
 			// full list the server rendered; when off, films with a future release date
-			// drop out whatever the decade range says.
+			// drop out whatever the year range says.
 			let includeUpcoming = true;
 
 			/** Whether the release-date range narrows anything. */
-			const decadeActive = () => Boolean(drange) && (dMin > DEC_LO || dMax < DEC_HI);
+			const releaseActive = () => Boolean(drange) && (dMin > REL_LO || dMax < REL_HI);
 
 			/** Number of active filters — the count on the Filters button. The
-			 * release-date range counts once however many decades it spans. */
+			 * release-date range counts once however many years it spans. */
 			const activeCount = () =>
-				(decadeActive() ? 1 : 0) +
+				(releaseActive() ? 1 : 0) +
 				sets.genre.size +
 				sets.language.size +
 				sets.director.size +
@@ -1546,7 +1544,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				// held rather than matched: every tile's arrays are still empty, so
 				// applying it would empty the grid and claim nothing matched. applyFacets
 				// re-runs this the moment it can answer honestly.
-				if (facetsState !== 'done') return upcomingOk(item) && decadeOk(item);
+				if (facetsState !== 'done') return upcomingOk(item) && releaseOk(item);
 				// Genre honours the any/all toggle; the other groups are always "any of".
 				if (sets.genre.size) {
 					const has = (g: string) => item.genres.includes(g);
@@ -1557,14 +1555,14 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				if (sets.language.size && !sets.language.has(item.language)) return false;
 				if (sets.director.size && !item.directors.some((d) => sets.director.has(d))) return false;
 				if (sets.actor.size && !item.actors.some((a) => sets.actor.has(a))) return false;
-				return upcomingOk(item) && decadeOk(item);
+				return upcomingOk(item) && releaseOk(item);
 			}
 
 			/** The two filters that read only what a tile already carries, so they hold
 			 * before the facet payload lands as well as after. */
 			const upcomingOk = (item: Item) => includeUpcoming || !item.upcoming;
-			const decadeOk = (item: Item) =>
-				!decadeActive() || (item.decade != null && item.decade >= dMin && item.decade <= dMax);
+			const releaseOk = (item: Item) =>
+				!releaseActive() || (item.year != null && item.year >= dMin && item.year <= dMax);
 
 			function apply() {
 				const visible = items.filter(matches);
@@ -1608,15 +1606,15 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				if (upcomingToggle) upcomingToggle.checked = includeUpcoming;
 
 				if (drange && drangeFill && dminLabel && dmaxLabel) {
-					const pct = (v: number) => ((v - DEC_LO) / (DEC_HI - DEC_LO)) * 100;
+					const pct = (v: number) => ((v - REL_LO) / (REL_HI - REL_LO)) * 100;
 					drangeFill.style.left = `${pct(dMin)}%`;
 					drangeFill.style.width = `${pct(dMax) - pct(dMin)}%`;
-					dminLabel.textContent = `${dMin}s`;
-					dmaxLabel.textContent = `${dMax}s`;
+					dminLabel.textContent = String(dMin);
+					dmaxLabel.textContent = String(dMax);
 					// The two inputs cover the same box, so where the thumbs overlap the
 					// later one in the DOM (max) swallows the drag. Raise min once it's
 					// past the midpoint, which is the only place the two can meet.
-					const overlapping = dMin > (DEC_LO + DEC_HI) / 2;
+					const overlapping = dMin > (REL_LO + REL_HI) / 2;
 					dminInput!.style.zIndex = overlapping ? '2' : '1';
 					dmaxInput!.style.zIndex = overlapping ? '1' : '2';
 				}
@@ -1806,8 +1804,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				host.replaceChildren(...chips);
 			}
 
-			/** Move both thumbs, keeping min ≤ max and the inputs in step. */
-			function setDecades(min: number, max: number) {
+			/** Move both release-year thumbs, keeping min ≤ max and the inputs in step. */
+			function setReleaseRange(min: number, max: number) {
 				dMin = Math.min(min, max);
 				dMax = Math.max(min, max);
 				dminInput!.value = String(dMin);
@@ -1820,8 +1818,8 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 						// The thumbs share a track, so each one pushes rather than crosses.
 						const min = Number(dminInput.value);
 						const max = Number(dmaxInput.value);
-						if (input === dminInput) setDecades(Math.min(min, max), max);
-						else setDecades(min, Math.max(min, max));
+						if (input === dminInput) setReleaseRange(Math.min(min, max), max);
+						else setReleaseRange(min, Math.max(min, max));
 						apply();
 					});
 				}
@@ -1841,7 +1839,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				for (const b of Array.from(panel.querySelectorAll<HTMLButtonElement>('.mode'))) {
 					b.classList.toggle('mode--on', b.dataset.value === 'any');
 				}
-				if (dminInput && dmaxInput) setDecades(DEC_LO, DEC_HI);
+				if (dminInput && dmaxInput) setReleaseRange(REL_LO, REL_HI);
 				includeUpcoming = true;
 				// Deselecting the People chips lets their rows collapse back to the top few.
 				renderPeople();
@@ -1860,7 +1858,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				// The shuffle seed stays out: it's re-rolled on load anyway, and a link
 				// that promised one order but dealt another would be worse than neither.
 				if (sort !== 'added') p.set('sort', sort);
-				if (decadeActive()) {
+				if (releaseActive()) {
 					p.set('dmin', String(dMin));
 					p.set('dmax', String(dMax));
 				}
@@ -1895,9 +1893,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 					for (const pill of pills) pill.classList.toggle('pill--on', pill.dataset.sort === sort);
 				}
 				if (dminInput && dmaxInput) {
-					setDecades(
-						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
-						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
+					setReleaseRange(
+						snap(p.get('dmin'), REL_LO, REL_HI, 1, REL_LO),
+						snap(p.get('dmax'), REL_LO, REL_HI, 1, REL_HI),
 					);
 				}
 				if (upcomingToggle && p.get('upcoming') === '0') {

@@ -16,9 +16,9 @@ export interface FilterSummary {
 	/** Inclusive star bounds, in half steps. */
 	ratingMin: number | null;
 	ratingMax: number | null;
-	/** Release-decade span, as each decade's first year. */
-	decadeMin: number | null;
-	decadeMax: number | null;
+	/** Inclusive release-year bounds. */
+	releaseYearMin: number | null;
+	releaseYearMax: number | null;
 	releaseYears: number[];
 	/** Inclusive calendar-year bounds on when the films were logged. */
 	diaryYearMin: number | null;
@@ -116,15 +116,15 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 		lit(' that you ');
 		em('liked');
 	}
-	if (s.decadeMin != null || s.decadeMax != null) {
-		const lo = s.decadeMin ?? s.decadeMax!;
-		const hi = s.decadeMax ?? s.decadeMin!;
+	if (s.releaseYearMin != null || s.releaseYearMax != null) {
+		const lo = s.releaseYearMin ?? s.releaseYearMax!;
+		const hi = s.releaseYearMax ?? s.releaseYearMin!;
 		if (lo === hi) {
-			lit(' released in the ');
-			em(`${lo}s`);
+			lit(' released in ');
+			em(String(lo));
 		} else {
 			lit(' released between ');
-			em(`${lo}s and ${hi}s`);
+			em(`${lo} and ${hi}`);
 		}
 	}
 	if (s.releaseYears.length) {

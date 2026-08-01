@@ -49,7 +49,6 @@ const onlyQuery = query.q !== '' && !hasFilters;
 // sits above the grid, so having the script add it after paint would shove the
 // posters down. The script rebuilds it from live state on every change (and once
 // at startup), from this same builder.
-const decades = query.decades ?? [];
 const summary = hasFilters
 	? filterSentence({
 			total,
@@ -58,8 +57,8 @@ const summary = hasFilters
 			unrated: Boolean(query.unratedOnly),
 			ratingMin: query.ratingMin ?? null,
 			ratingMax: query.ratingMax ?? null,
-			decadeMin: decades[0] ?? null,
-			decadeMax: decades[decades.length - 1] ?? null,
+			releaseYearMin: query.releaseYearMin ?? null,
+			releaseYearMax: query.releaseYearMax ?? null,
 			releaseYears: query.releaseYears ?? [],
 			diaryYearMin: query.diaryYearMin ?? null,
 			diaryYearMax: query.diaryYearMax ?? null,
@@ -237,14 +236,14 @@ const summary = hasFilters
 					<div class="md__body" id="md-body" hidden>
 						<div class="panel__grid">
 							{/* Bounds arrive with the facets; until then the slider isn't drawn,
-							    same as when the collection sits inside one decade. */}
+							    same as when the collection sits inside one year. */}
 							<section id="drange-section" hidden>
 								<h2 class="grp">Release date</h2>
 								<div class="range range--dec" id="drange">
 									<div class="range__track"></div>
 									<div class="range__fill" id="drange-fill"></div>
-									<input type="range" id="dmin" step="10" aria-label="Earliest release decade" />
-									<input type="range" id="dmax" step="10" aria-label="Latest release decade" />
+									<input type="range" id="dmin" step="1" aria-label="Earliest release year" />
+									<input type="range" id="dmax" step="1" aria-label="Latest release year" />
 									<div class="range__ends">
 										<span id="dmin-label"></span><span id="dmax-label"></span>
 									</div>
@@ -1100,16 +1099,16 @@ const summary = hasFilters
 			let rMin = RATING_FLOOR;
 			let rMax = RATING_CEIL;
 
-			// Release-date bounds, as a decade's first year, and diary-date bounds as
-			// calendar years. Both come from the facet payload, so they're zero — and
-			// their sliders undrawn — until that lands. Each is only worth drawing when
-			// the collection spans more than one step; while `hasDecadeRange` /
-			// `hasDiaryRange` are false the bounds stay at the ends and the filter never
-			// engages. A film watched across several years matches whenever any of them
-			// lands in range, so one film can answer to more than one year.
-			let hasDecadeRange = false;
-			let DEC_LO = 0;
-			let DEC_HI = 0;
+			// Release-date bounds and diary-date bounds, both as calendar years. Each
+			// comes from the facet payload, so they're zero — and their sliders undrawn
+			// — until that lands. Each is only worth drawing when the collection spans
+			// more than one year; while `hasReleaseRange` / `hasDiaryRange` are false the
+			// bounds stay at the ends and the filter never engages. A film watched across
+			// several years matches whenever any of them lands in range, so one film can
+			// answer to more than one year.
+			let hasReleaseRange = false;
+			let REL_LO = 0;
+			let REL_HI = 0;
 			let dMin = 0;
 			let dMax = 0;
 
@@ -1129,14 +1128,14 @@ const summary = hasFilters
 			// numbers the server both filtered and wrote its filter sentence from. The
 			// sliders can't take over until the facets bring the bounds they snap to, so
 			// these stand in for them until applyFacets clears them.
-			let urlDecMin: number | null = null;
-			let urlDecMax: number | null = null;
+			let urlRelMin: number | null = null;
+			let urlRelMax: number | null = null;
 			let urlDiaryMin: number | null = null;
 			let urlDiaryMax: number | null = null;
 
 			/** Whether a date range from the URL is still standing in for its slider. */
 			const urlRangePending = () =>
-				(!hasDecadeRange && (urlDecMin != null || urlDecMax != null)) ||
+				(!hasReleaseRange && (urlRelMin != null || urlRelMax != null)) ||
 				(!hasDiaryRange && (urlDiaryMin != null || urlDiaryMax != null));
 
 			/** Whether the rating control narrows anything. */
@@ -1144,7 +1143,7 @@ const summary = hasFilters
 				flags.unrated || rMin > RATING_FLOOR || rMax < RATING_CEIL;
 
 			/** Whether the release-date range narrows anything. */
-			const decadeActive = () => hasDecadeRange && (dMin > DEC_LO || dMax < DEC_HI);
+			const releaseActive = () => hasReleaseRange && (dMin > REL_LO || dMax < REL_HI);
 
 			/** Whether the diary-date range narrows anything. */
 			const diaryActive = () => hasDiaryRange && (yMin > YR_LO || yMax < YR_HI);
@@ -1153,7 +1152,7 @@ const summary = hasFilters
 			 * that section's own toggle. Release date, credits, genre, language, country. */
 			function movieActiveCount(): number {
 				return (
-					(decadeActive() ? 1 : 0) +
+					(releaseActive() ? 1 : 0) +
 					releaseYears.size +
 					sets.director.size +
 					sets.actor.size +
@@ -1169,7 +1168,7 @@ const summary = hasFilters
 			function activeCount(): number {
 				let n =
 					(ratingActive() ? 1 : 0) +
-					(decadeActive() ? 1 : 0) +
+					(releaseActive() ? 1 : 0) +
 					(diaryActive() ? 1 : 0) +
 					(flags.liked ? 1 : 0) +
 					(flags.rewatched ? 1 : 0) +
@@ -1193,10 +1192,12 @@ const summary = hasFilters
 				}
 				if (flags.liked) p.set('liked', '1');
 				if (flags.rewatched) p.set('rewatched', '1');
-				// The API matches a list of decades, not a span, so send every decade the
-				// slider covers. At most a dozen — the collection doesn't predate film.
-				if (decadeActive()) {
-					for (let d = dMin; d <= dMax; d += 10) p.append('decade', String(d));
+				// Release date is a year span; the server keeps a film released inside it,
+				// which drops films with no release year at all. Send a bound only when it
+				// narrows, so the slider's extremes read as "any year".
+				if (releaseActive()) {
+					if (dMin > REL_LO) p.set('dmin', String(dMin));
+					if (dMax < REL_HI) p.set('dmax', String(dMax));
 				}
 				// Exact release years, one param each — the API reads these as `ryear`.
 				for (const y of releaseYears) p.append('ryear', String(y));
@@ -1406,13 +1407,13 @@ const summary = hasFilters
 				// that isn't in play rather than hiding it.
 				ratingBox.classList.toggle('rating--off', flags.unrated);
 
-				if (hasDecadeRange) {
-					const dpct = (v: number) => ((v - DEC_LO) / (DEC_HI - DEC_LO)) * 100;
+				if (hasReleaseRange) {
+					const dpct = (v: number) => ((v - REL_LO) / (REL_HI - REL_LO)) * 100;
 					drangeFill.style.left = `${dpct(dMin)}%`;
 					drangeFill.style.width = `${dpct(dMax) - dpct(dMin)}%`;
-					dminLabel.textContent = `${dMin}s`;
-					dmaxLabel.textContent = `${dMax}s`;
-					const dOverlap = dMin > (DEC_LO + DEC_HI) / 2;
+					dminLabel.textContent = String(dMin);
+					dmaxLabel.textContent = String(dMax);
+					const dOverlap = dMin > (REL_LO + REL_HI) / 2;
 					dminInput.style.zIndex = dOverlap ? '2' : '1';
 					dmaxInput.style.zIndex = dOverlap ? '1' : '2';
 				}
@@ -1471,8 +1472,8 @@ const summary = hasFilters
 					// A slider with no bounds yet can't speak for a range the URL asked
 					// for, so until the facets arrive the raw params stand in — the same
 					// numbers the server drew its sentence from.
-					decadeMin: hasDecadeRange ? (decadeActive() ? dMin : null) : urlDecMin,
-					decadeMax: hasDecadeRange ? (decadeActive() ? dMax : null) : urlDecMax,
+					releaseYearMin: hasReleaseRange ? (releaseActive() ? dMin : null) : urlRelMin,
+					releaseYearMax: hasReleaseRange ? (releaseActive() ? dMax : null) : urlRelMax,
 					releaseYears: [...releaseYears],
 					diaryYearMin: hasDiaryRange ? (diaryActive() ? yMin : null) : urlDiaryMin,
 					diaryYearMax: hasDiaryRange ? (diaryActive() ? yMax : null) : urlDiaryMax,
@@ -1756,7 +1757,7 @@ const summary = hasFilters
 			}
 
 			/** Move both release-date thumbs, keeping min ≤ max. */
-			function setDecades(min: number, max: number) {
+			function setReleaseRange(min: number, max: number) {
 				dMin = Math.min(min, max);
 				dMax = Math.max(min, max);
 				dminInput.value = String(dMin);
@@ -1767,8 +1768,8 @@ const summary = hasFilters
 				input.addEventListener('input', () => {
 					const min = Number(dminInput.value);
 					const max = Number(dmaxInput.value);
-					if (input === dminInput) setDecades(Math.min(min, max), max);
-					else setDecades(min, Math.max(min, max));
+					if (input === dminInput) setReleaseRange(Math.min(min, max), max);
+					else setReleaseRange(min, Math.max(min, max));
 					syncChrome();
 				});
 				input.addEventListener('change', applyFilters);
@@ -1800,7 +1801,7 @@ const summary = hasFilters
 				}
 				flags.liked = flags.rewatched = flags.unrated = false;
 				setRange(RATING_FLOOR, RATING_CEIL);
-				setDecades(DEC_LO, DEC_HI);
+				setReleaseRange(REL_LO, REL_HI);
 				setYears(YR_LO, YR_HI);
 				releaseYears.clear();
 				renderReleaseYears();
@@ -1839,9 +1840,9 @@ const summary = hasFilters
 				}
 				if (flags.liked) p.set('liked', '1');
 				if (flags.rewatched) p.set('rewatched', '1');
-				// A span, not the expanded decade list buildQuery sends — the URL is read
-				// by people.
-				if (decadeActive()) {
+				// Both ends, even where one sits at its extreme — the URL is read by
+				// people, and a half-written span reads as an open end.
+				if (releaseActive()) {
 					p.set('dmin', String(dMin));
 					p.set('dmax', String(dMax));
 				}
@@ -1881,8 +1882,8 @@ const summary = hasFilters
 					const n = Number(raw);
 					return raw != null && Number.isFinite(n) ? n : null;
 				};
-				urlDecMin = numParam(p.get('dmin'));
-				urlDecMax = numParam(p.get('dmax'));
+				urlRelMin = numParam(p.get('dmin'));
+				urlRelMax = numParam(p.get('dmax'));
 				urlDiaryMin = numParam(p.get('dymin'));
 				urlDiaryMax = numParam(p.get('dymax'));
 
@@ -1939,7 +1940,8 @@ const summary = hasFilters
 			// wait on it. The chips, the two sliders' end stops and the People names all
 			// arrive here.
 			interface Facets {
-				decades: number[];
+				releaseYearLo: number | null;
+				releaseYearHi: number | null;
 				diaryYearLo: number | null;
 				diaryYearHi: number | null;
 				tags: string[];
@@ -2007,21 +2009,20 @@ const summary = hasFilters
 				}
 
 				// Release-date and diary-date sliders: each is only worth drawing when the
-				// collection spans more than one step to narrow between.
-				const decLo = f.decades[0] ?? null;
-				const decHi = f.decades[f.decades.length - 1] ?? null;
-				hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
-				if (hasDecadeRange) {
-					DEC_LO = decLo!;
-					DEC_HI = decHi!;
+				// collection spans more than one year to narrow between.
+				hasReleaseRange =
+					f.releaseYearLo != null && f.releaseYearHi != null && f.releaseYearHi > f.releaseYearLo;
+				if (hasReleaseRange) {
+					REL_LO = f.releaseYearLo!;
+					REL_HI = f.releaseYearHi!;
 					for (const input of [dminInput, dmaxInput]) {
-						input.min = String(DEC_LO);
-						input.max = String(DEC_HI);
+						input.min = String(REL_LO);
+						input.max = String(REL_HI);
 					}
 					const p = new URLSearchParams(location.search);
-					setDecades(
-						snap(p.get('dmin'), DEC_LO, DEC_HI, 10, DEC_LO),
-						snap(p.get('dmax'), DEC_LO, DEC_HI, 10, DEC_HI),
+					setReleaseRange(
+						snap(p.get('dmin'), REL_LO, REL_HI, 1, REL_LO),
+						snap(p.get('dmax'), REL_LO, REL_HI, 1, REL_HI),
 					);
 					drangeSection.hidden = false;
 				}
@@ -2066,10 +2067,10 @@ const summary = hasFilters
 					return (rawMin != null && rawMin !== min) || (rawMax != null && rawMax !== max);
 				};
 				const rangeMoved =
-					moved(urlDecMin, urlDecMax, hasDecadeRange, dMin, dMax) ||
+					moved(urlRelMin, urlRelMax, hasReleaseRange, dMin, dMax) ||
 					moved(urlDiaryMin, urlDiaryMax, hasDiaryRange, yMin, yMax);
 				// The sliders are authoritative from here on.
-				urlDecMin = urlDecMax = urlDiaryMin = urlDiaryMax = null;
+				urlRelMin = urlRelMax = urlDiaryMin = urlDiaryMax = null;
 				facetsLoading.hidden = true;
 				facetsState = 'done';
 				// Reveal the Movie details drawer when a restored link lands a filter

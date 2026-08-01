@@ -1461,10 +1461,12 @@ export interface WatchedQuery {
 	unratedOnly?: boolean;
 	/** Only films liked at the film level. */
 	liked?: boolean;
-	/** Release decades as their first year, e.g. [1990, 2020]. Matches any of them. */
-	decades?: number[];
-	/** Exact release years, e.g. [2019]. Matches any of them. Narrower than `decades`
-	 * — the Stats "Films by release year" bars link here. ANDs with `decades` when
+	/** Inclusive release-year bounds, e.g. 1994–2003. Films with no release year fall
+	 * outside any bound, so a narrowed range drops them. Omit both for "any year". */
+	releaseYearMin?: number;
+	releaseYearMax?: number;
+	/** Exact release years, e.g. [2019]. Matches any of them. Narrower than the bounds
+	 * above — the Stats "Films by release year" bars link here. ANDs with them when
 	 * both are set, though the UI only ever sends one. */
 	releaseYears?: number[];
 	/** Matches films directed by any of these people (cached `movies.directors`). */
@@ -1650,12 +1652,14 @@ async function movieIdsMatchingLogFilters(q: WatchedQuery): Promise<number[] | n
 
 /**
  * The chip values offered by the filter panel, derived from what's actually there.
- * Every list but `decades` is ordered by how many films carry the value, most
- * first, ties alphabetical.
+ * Every list is ordered by how many films carry the value, most first, ties
+ * alphabetical.
  */
 export interface WatchedFacets {
-	/** Release decades as their first year, ascending — the slider's end stops. */
-	decades: number[];
+	/** Earliest / latest year anything in the collection was released — the
+	 * release-date slider's end stops. Null when nothing carries a release year. */
+	releaseYearLo: number | null;
+	releaseYearHi: number | null;
 	/** Earliest / latest calendar year the collection was watched — the diary-date
 	 * slider's end stops. Null when nothing carries a watch date. */
 	diaryYearLo: number | null;
@@ -1715,7 +1719,10 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 		);
 	};
 
-	const decades = [...new Set(years.map((y) => Math.floor(y / 10) * 10))].sort((a, b) => a - b);
+	// End stops for the release-date slider, straight off the collection's own years.
+	const releaseYearsAsc = [...new Set(years)].sort((a, b) => a - b);
+	const releaseYearLo = releaseYearsAsc[0] ?? null;
+	const releaseYearHi = releaseYearsAsc[releaseYearsAsc.length - 1] ?? null;
 
 	// Label a theater by its name alone, falling back to the full "Name, City" when
 	// two venues share a name — chips stay short without becoming ambiguous. The name
@@ -1733,7 +1740,8 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 	});
 
 	return {
-		decades,
+		releaseYearLo,
+		releaseYearHi,
 		diaryYearLo,
 		diaryYearHi,
 		tags: byFrequency((d) => d.tags),
@@ -1978,7 +1986,7 @@ async function theaterNameByValue(): Promise<Map<string, string>> {
 	return out;
 }
 
-/** Release years of every watched film (with one), for the decade chips. */
+/** Release years of every watched film (with one), for the release-date slider. */
 async function listWatchedReleaseYears(): Promise<number[]> {
 	type Row = { movies: { release_year: number | null } };
 	const { rows, error } = await readAllPages<Row>((from, to, wantCount) =>
@@ -2075,18 +2083,15 @@ export async function listWatchedPage(query: WatchedQuery = {}): Promise<Watched
 	}
 	if (query.liked) req = req.eq('liked', true);
 
-	// Decades OR together as year ranges against the joined movie row. `!inner`
-	// above is what makes a filter on the embed exclude the parent watched row.
-	if (query.decades?.length) {
-		const ranges = query.decades
-			.map((d) => `and(release_year.gte.${d},release_year.lte.${d + 9})`)
-			.join(',');
-		req = req.or(ranges, { referencedTable: 'movies' });
-	}
+	// Release-year bounds against the joined movie row. `!inner` above is what makes
+	// a filter on the embed exclude the parent watched row; a film with a null
+	// release_year fails either comparison, which is what drops the undated.
+	if (query.releaseYearMin != null) req = req.gte('movies.release_year', query.releaseYearMin);
+	if (query.releaseYearMax != null) req = req.lte('movies.release_year', query.releaseYearMax);
 
-	// Exact release years — a single year rather than a decade span (the Stats
-	// "Films by release year" bars deep-link here). ANDs with the decade filter
-	// above when both are present, though the UI only ever sends one.
+	// Exact release years — picked years rather than a span (the Stats "Films by
+	// release year" bars deep-link here). ANDs with the bounds above when both are
+	// present, though the UI only ever sends one.
 	if (query.releaseYears?.length) {
 		req = req.in('movies.release_year', query.releaseYears);
 	}
