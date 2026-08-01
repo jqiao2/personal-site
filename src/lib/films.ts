@@ -1061,6 +1061,103 @@ export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null
 	};
 }
 
+/** Whether a film is currently on the watchlist — the unwatched film page's toggle
+ * starts from this. */
+export async function isOnWatchlist(movieId: number): Promise<boolean> {
+	const { data, error } = await supabasePublic
+		.from('watchlist')
+		.select('id')
+		.eq('movie_id', movieId)
+		.maybeSingle();
+	if (error) throw new Error(`isOnWatchlist failed: ${error.message}`);
+	return !!data;
+}
+
+/** A film you've watched, offered as a way into a film you haven't. */
+export interface RelatedFilm extends WatchlistTile {
+	/** The director both films share, when that's why this one is here; null for a
+	 * genre match. Drives the tile's caption. */
+	sharedDirector: string | null;
+}
+
+/**
+ * Films you've already watched that this (unwatched) one might send you back to —
+ * the "If you liked" strip on the film page.
+ *
+ * Same director first, since that's the strongest signal and the one worth saying
+ * out loud, then films sharing genres ranked by how many they share and how highly
+ * you rated them. Only ever returns films from your own `watched` set, so every
+ * tile links to a page that exists. Returns [] when the credit columns (0008)
+ * aren't there yet, or when the film has no directors or genres cached.
+ */
+export async function listRelatedWatched(
+	film: { tmdb_id: number; directors: string[]; genres: string[] },
+	limit = 4,
+): Promise<RelatedFilm[]> {
+	const { tmdb_id, directors, genres } = film;
+	if (directors.length === 0 && genres.length === 0) return [];
+
+	const SELECT = 'rating, movies!inner(tmdb_id, title, release_year, poster_path, genres, directors)';
+	type Row = {
+		rating: number | null;
+		movies: WatchlistTile & { genres: string[] | null; directors: string[] | null };
+	};
+
+	// Best-rated first, unrated last — the order both pools are drawn in.
+	const pool = async (column: 'directors' | 'genres', values: string[], take: number) => {
+		if (values.length === 0) return [] as Row[];
+		const res = await supabasePublic
+			.from('watched')
+			.select(SELECT)
+			.filter(`movies.${column}`, 'ov', pgTextArray(values))
+			.order('rating', { ascending: false, nullsFirst: false })
+			.limit(take);
+		// Pre-0008 there are no credit columns to match on — no related films, not an error.
+		if (res.error) {
+			if (isMissingCreditColumn(res.error)) return [] as Row[];
+			throw new Error(`listRelatedWatched failed: ${res.error.message}`);
+		}
+		return (res.data ?? []) as unknown as Row[];
+	};
+
+	// The genre pool is drawn wide because it gets re-ranked below; the director pool
+	// is already in its final order, so it only needs enough to fill the strip.
+	const [byDirector, byGenre] = await Promise.all([
+		pool('directors', directors, limit + 1),
+		pool('genres', genres, 60),
+	]);
+
+	const wanted = new Set(genres);
+	const shared = (r: Row) => (r.movies.genres ?? []).filter((g) => wanted.has(g)).length;
+	// More shared genres wins; the pool already arrived rating-ordered, so a stable
+	// sort keeps rating as the tiebreak.
+	const ranked = byGenre.slice().sort((a, b) => shared(b) - shared(a));
+
+	const out: RelatedFilm[] = [];
+	const seen = new Set<number>([tmdb_id]);
+	for (const [rows, isDirectorMatch] of [
+		[byDirector, true],
+		[ranked, false],
+	] as const) {
+		for (const r of rows) {
+			if (out.length === limit) return out;
+			const m = r.movies;
+			if (seen.has(m.tmdb_id)) continue;
+			seen.add(m.tmdb_id);
+			out.push({
+				tmdb_id: m.tmdb_id,
+				title: m.title,
+				release_year: m.release_year,
+				poster_path: m.poster_path,
+				sharedDirector: isDirectorMatch
+					? ((m.directors ?? []).find((d) => directors.includes(d)) ?? null)
+					: null,
+			});
+		}
+	}
+	return out;
+}
+
 // --- Aggregates for the film-log overview ("Jason's film log") ---
 
 /** Sidebar counts + this-year total + the all-time ratings histogram. */

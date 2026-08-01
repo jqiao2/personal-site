@@ -1,34 +1,61 @@
 ---
 import EntryEditor from '../../../components/EntryEditor.astro';
+import PosterLoader from '../../../components/PosterLoader.astro';
 import {
+	ensureMovieCached,
 	getFilmByTmdbId,
+	isOnWatchlist,
 	listFriends,
 	listMovieEntries,
+	listRelatedWatched,
 	listTags,
 	listTheaterNames,
+	type RelatedFilm,
 } from '../../../lib/films';
 import { imageUrl } from '../../../lib/tmdb';
-import { formatWatchedDate, starText } from '../../../lib/format';
+import { formatWatchedDate, starText, ytsUrl } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
 const tmdbId = Number(Astro.params.tmdbId);
-const film = Number.isInteger(tmdbId) ? await getFilmByTmdbId(tmdbId) : null;
+const isOwner = await requireOwner(Astro.cookies);
+let film = Number.isInteger(tmdbId) ? await getFilmByTmdbId(tmdbId) : null;
+
+// A film reached from the log composer's search results usually isn't cached yet —
+// nothing has watchlisted or logged it. For the owner, pull it from TMDB and cache
+// it (the same path adding to the watchlist takes) so any film they can search for
+// has a page. A visitor still gets a 404 rather than the power to write rows.
+if (!film && isOwner && Number.isInteger(tmdbId)) {
+	try {
+		await ensureMovieCached(tmdbId);
+		film = await getFilmByTmdbId(tmdbId);
+	} catch {
+		film = null; // TMDB miss or outage — fall through to the 404 below.
+	}
+}
 
 if (!film) {
 	return new Response('Film not found', { status: 404 });
 }
 
 const { movie, watched } = film;
-const isOwner = await requireOwner(Astro.cookies);
 
 // Every diary entry for this film (newest first) → the "Your reviews" list, and
 // the values the editor reopens each of them with. A film can be watched with no
 // logs at all (Letterboxd import), in which case this is empty and the reviews
 // section says so.
 const movieLogs = await listMovieEntries(movie.id);
+
+// The page has two modes off one route. A film with no `watched` row and no diary
+// entry is one you haven't seen: the left column trades "Your activity" for the
+// watchlist and download actions, and the right column trades your reviews for
+// films you've already watched that it resembles.
+const seen = !!watched || movieLogs.length > 0;
+const [onWatchlist, related] = seen
+	? ([false, []] as [boolean, RelatedFilm[]])
+	: await Promise.all([isOnWatchlist(movie.id), listRelatedWatched(movie)]);
 
 // Director / cast / genres / language / country / rating come from our cache row
 // (migrations 0008 + 0009), so the page renders without a live TMDB call.
@@ -112,6 +139,17 @@ const editorFilm = {
 // Rewatches and re-reviews are the norm once a film is already logged, so the
 // button says so rather than implying this would be the first entry.
 const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or review';
+
+// An unwatched film is nearly always arrived at from the watchlist, a watched one
+// from the "All films" grid, so the back link's fallback follows the mode. The
+// click handler below still prefers real history when you came from within the site.
+const back = seen
+	? { href: '/films/watched', label: 'Films watched' }
+	: { href: '/films/watchlist', label: 'Watchlist' };
+
+// The YTS search the watchlist tiles used to link out to directly, now the
+// "Download" action on the film itself. Owner-only, as those links were.
+const downloadHref = ytsUrl(movie.title, movie.release_year);
 ---
 
 <html lang="en">
@@ -135,8 +173,8 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				<div class="backdrop__scrim"></div>
 				<div class="backdrop__bar">
 					<div class="wrap">
-						<a class="back" href="/films/watched">
-							<span class="back__arrow">←</span><span>Films watched</span>
+						<a class="back" href={back.href}>
+							<span class="back__arrow">←</span><span>{back.label}</span>
 						</a>
 					</div>
 				</div>
@@ -145,7 +183,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 			<!-- Content -->
 			<div class="content">
 				<div class="wrap layout">
-					<!-- Left: poster + your activity -->
+					<!-- Left: poster, then your activity (seen) or what to do about it (not) -->
 					<aside class="col-left">
 						<div class="poster">
 							{/* The one poster on the page and the largest thing above the
@@ -153,6 +191,7 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 							{poster && (
 								<img src={poster} alt={`${movie.title} poster`} fetchpriority="high" />
 							)}
+							{!seen && <span class="poster__badge">Not seen</span>}
 							<div class="poster__title">
 								{movie.title}
 								{movie.release_year && <span class="poster__year">{movie.release_year}</span>}
@@ -165,21 +204,42 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 							</button>
 						)}
 
-						<div class="activity">
-							<div class="activity__head">Your activity</div>
-							<div class="activity__row">
-								<span class="activity__key">Your rating</span>
-								<span class="stars">{yourRating || '—'}</span>
+						{seen ? (
+							<div class="activity">
+								<div class="activity__head">Your activity</div>
+								<div class="activity__row">
+									<span class="activity__key">Your rating</span>
+									<span class="stars">{yourRating || '—'}</span>
+								</div>
+								<div class="activity__row">
+									<span class="activity__key">Liked</span>
+									<span class="stars">{activityLiked ? '♥' : '—'}</span>
+								</div>
+								<div class="activity__row">
+									<span class="activity__key">Watched</span>
+									<span class="activity__val">{yourWatched ?? '—'}</span>
+								</div>
 							</div>
-							<div class="activity__row">
-								<span class="activity__key">Liked</span>
-								<span class="stars">{activityLiked ? '♥' : '—'}</span>
-							</div>
-							<div class="activity__row">
-								<span class="activity__key">Watched</span>
-								<span class="activity__val">{yourWatched ?? '—'}</span>
-							</div>
-						</div>
+						) : (
+							isOwner && (
+								<>
+									<a class="btn-ghost" href={downloadHref} target="_blank" rel="noopener noreferrer">
+										<span class="btn-ghost__icon">↓</span><span>Download</span>
+									</a>
+									{/* Label and pressed state are re-rendered by the toggle script. */}
+									<button
+										type="button"
+										class="btn-ghost btn-ghost--toggle"
+										id="watchlist-toggle"
+										data-tmdb-id={movie.tmdb_id}
+										data-on={onWatchlist ? '1' : undefined}
+										aria-pressed={onWatchlist ? 'true' : 'false'}
+									>
+										{onWatchlist ? '✓ On watchlist' : '+ Add to watchlist'}
+									</button>
+								</>
+							)
+						)}
 					</aside>
 
 					<!-- Right: details -->
@@ -234,33 +294,59 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 							</section>
 						)}
 
-						<section class="block">
-							<div class="block__head block__head--row">
-								<span>Your reviews</span>
-								<span class="block__count">{movieLogs.length} {movieLogs.length === 1 ? 'entry' : 'entries'}</span>
-							</div>
-							{movieLogs.length === 0 ? (
-								<p class="empty">No review yet — just marked watched.</p>
-							) : (
-								<div class="reviews">
-									{movieLogs.map((r) => (
-										<article class="review">
-											<div class="review__meta">
-												{r.rating != null && <span class="stars">{starText(r.rating)}</span>}
-												{r.liked && <span class="stars review__heart">♥</span>}
-												<span class="review__label">
-													{r.rewatched ? 'Rewatch' : 'Watched'} · {logDate(r)}
-												</span>
-												<a class="review__view" href={`/films/diary/${r.id}`}>
-													View <span class="review__view-arrow">→</span>
-												</a>
-											</div>
-											{r.review_text && <p class="review__text">{r.review_text}</p>}
-										</article>
-									))}
+						{seen ? (
+							<section class="block">
+								<div class="block__head block__head--row">
+									<span>Your reviews</span>
+									<span class="block__count">{movieLogs.length} {movieLogs.length === 1 ? 'entry' : 'entries'}</span>
 								</div>
-							)}
-						</section>
+								{movieLogs.length === 0 ? (
+									<p class="empty">No review yet — just marked watched.</p>
+								) : (
+									<div class="reviews">
+										{movieLogs.map((r) => (
+											<article class="review">
+												<div class="review__meta">
+													{r.rating != null && <span class="stars">{starText(r.rating)}</span>}
+													{r.liked && <span class="stars review__heart">♥</span>}
+													<span class="review__label">
+														{r.rewatched ? 'Rewatch' : 'Watched'} · {logDate(r)}
+													</span>
+													<a class="review__view" href={`/films/diary/${r.id}`}>
+														View <span class="review__view-arrow">→</span>
+													</a>
+												</div>
+												{r.review_text && <p class="review__text">{r.review_text}</p>}
+											</article>
+										))}
+									</div>
+								)}
+							</section>
+						) : (
+							related.length > 0 && (
+								<section class="block">
+									<div class="block__head">If you liked</div>
+									<div class="related">
+										{related.map((f) => {
+											const src = imageUrl(f.poster_path, 'w185');
+											return (
+												<a class="related__tile" href={`/films/movie/${f.tmdb_id}`}>
+													<div class="related__art">
+														{src && (
+															<img data-poster={src} alt={`${f.title} poster`} decoding="async" />
+														)}
+													</div>
+													<span class="related__title">{f.title}</span>
+													{f.sharedDirector && (
+														<span class="related__why">Same director</span>
+													)}
+												</a>
+											);
+										})}
+									</div>
+								</section>
+							)
+						)}
 
 						<footer class="attribution">
 							Metadata from{' '}
@@ -271,6 +357,10 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				</div>
 			</div>
 		</div>
+
+		{/* The "If you liked" posters are below the fold and secondary to this film's
+		    own — they wait for the page to paint. */}
+		{related.length > 0 && <PosterLoader />}
 
 		{/* Entry editor (owner only): the log button and every review's Edit share it. */}
 		{isOwner && (
@@ -411,6 +501,22 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				font-size: 15px;
 				margin-left: 4px;
 			}
+			/* Sits over the artwork, so it reads on a real poster as well as on the
+			   striped placeholder behind it. */
+			.poster__badge {
+				position: absolute;
+				top: 12px;
+				left: 12px;
+				font-size: 10px;
+				font-weight: 700;
+				letter-spacing: 1.2px;
+				text-transform: uppercase;
+				color: #e9d9c4;
+				background: rgba(28, 13, 14, 0.72);
+				border: 1px solid #5d3036;
+				border-radius: 20px;
+				padding: 4px 10px;
+			}
 
 			.activity {
 				background: #2a1214;
@@ -463,6 +569,42 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 			}
 			.btn-primary:hover {
 				background: #f0d488;
+			}
+			/* Download / watchlist: one outlined shape shared by a link and a button, so
+			   they stack as a matched pair under the primary action. */
+			.btn-ghost {
+				width: 100%;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 8px;
+				line-height: 15px;
+				font-size: 13px;
+				font-weight: 600;
+				font-family: 'Archivo', sans-serif;
+				border-radius: 9px;
+				padding: 11px;
+				background: transparent;
+				border: 1px solid #4a2529;
+				color: #c2a99a;
+				cursor: pointer;
+			}
+			.btn-ghost:hover {
+				border-color: #d9b45a;
+				color: #f4e8d1;
+			}
+			.btn-ghost__icon {
+				font-size: 13px;
+			}
+			/* Off the watchlist is the state that invites a click, so it carries the
+			   brighter border and text; on it, the button recedes. */
+			.btn-ghost--toggle:not([data-on]) {
+				border-color: #5d3036;
+				color: #e9d9c4;
+			}
+			.btn-ghost--toggle[disabled] {
+				opacity: 0.6;
+				cursor: default;
 			}
 
 			/* Right column */
@@ -651,6 +793,51 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 				color: #8a6f63;
 				margin: 0;
 			}
+
+			/* "If you liked" — four films you've already watched, at a size that reads
+			   as a footnote to this page rather than a grid of its own. */
+			.related {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 12px;
+				max-width: 560px;
+			}
+			.related__tile {
+				display: flex;
+				flex-direction: column;
+				gap: 7px;
+			}
+			.related__art {
+				position: relative;
+				aspect-ratio: 2 / 3;
+				border-radius: 5px;
+				overflow: hidden;
+				background-image: repeating-linear-gradient(135deg, #351a1d 0 8px, #2c1518 8px 16px);
+				border: 1px solid #4a2529;
+			}
+			.related__art img {
+				width: 100%;
+				height: 100%;
+				object-fit: cover;
+				display: block;
+			}
+			.related__tile:hover .related__art {
+				border-color: #d9b45a;
+			}
+			.related__title {
+				font-size: 11px;
+				color: #c2a99a;
+				line-height: 1.3;
+			}
+			.related__tile:hover .related__title {
+				color: #f0d488;
+			}
+			.related__why {
+				font-size: 10px;
+				letter-spacing: 0.4px;
+				text-transform: uppercase;
+				color: #7d6355;
+			}
 			.attribution {
 				margin-top: 40px;
 				padding-top: 16px;
@@ -696,6 +883,39 @@ const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or re
 					if (history.length > 1 && sameOrigin) {
 						e.preventDefault();
 						history.back();
+					}
+				});
+			}
+
+			// Watchlist toggle (unwatched films, owner only). Optimistic-free: the
+			// button waits for the write, so its state always matches the list.
+			const toggle = document.getElementById('watchlist-toggle');
+			if (toggle instanceof HTMLButtonElement) {
+				toggle.addEventListener('click', async () => {
+					const id = toggle.dataset.tmdbId;
+					const adding = !toggle.dataset.on;
+					toggle.disabled = true;
+					try {
+						const res = adding
+							? await fetch('/api/films/watchlist', {
+									method: 'POST',
+									headers: { 'Content-Type': 'application/json' },
+									body: JSON.stringify({ tmdbId: Number(id) }),
+								})
+							: await fetch(`/api/films/watchlist?tmdbId=${id}`, { method: 'DELETE' });
+						if (res.status === 401) {
+							window.location.href = `/films/login?redirect=${encodeURIComponent(location.pathname)}`;
+							return;
+						}
+						if (!res.ok) throw new Error(String(res.status));
+						if (adding) toggle.dataset.on = '1';
+						else delete toggle.dataset.on;
+						toggle.textContent = adding ? '✓ On watchlist' : '+ Add to watchlist';
+						toggle.setAttribute('aria-pressed', adding ? 'true' : 'false');
+					} catch {
+						toggle.textContent = "Couldn't save — try again";
+					} finally {
+						toggle.disabled = false;
 					}
 				});
 			}

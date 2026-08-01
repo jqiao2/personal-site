@@ -21,8 +21,12 @@ const today = new Date().toISOString().slice(0, 10);
 			<ul id="results" class="results" hidden></ul>
 		</div>
 		<div class="selected" id="selected" hidden>
-			<img id="sel-poster" alt="" width="46" height="69" />
-			<span id="sel-title"></span>
+			{/* The film's own page, in a new tab so this half-written entry survives.
+			    href is filled in by selectMovie. */}
+			<a class="sel-link" id="sel-link" target="_blank" rel="noopener">
+				<img id="sel-poster" alt="" width="46" height="69" />
+				<span id="sel-title"></span>
+			</a>
 			<button type="button" id="change" class="link">change</button>
 		</div>
 
@@ -144,6 +148,17 @@ const today = new Date().toISOString().slice(0, 10);
 	.selected span {
 		font-weight: 600;
 	}
+	/* Poster + title are one link to the film's page; "change" stays outside it. */
+	.sel-link {
+		display: flex;
+		align-items: center;
+		gap: 0.7rem;
+		color: inherit;
+		text-decoration: none;
+	}
+	.sel-link:hover span {
+		text-decoration: underline;
+	}
 	.rating-row {
 		display: flex;
 		align-items: center;
@@ -259,6 +274,7 @@ const today = new Date().toISOString().slice(0, 10);
 	const q = el<HTMLInputElement>('q');
 	const results = el<HTMLUListElement>('results');
 	const selected = el<HTMLDivElement>('selected');
+	const selLink = el<HTMLAnchorElement>('sel-link');
 	const selPoster = el<HTMLImageElement>('sel-poster');
 	const selTitle = el<HTMLSpanElement>('sel-title');
 	const searchWrap = el<HTMLDivElement>('search-wrap');
@@ -324,6 +340,7 @@ const today = new Date().toISOString().slice(0, 10);
 	function selectMovie(m: any) {
 		tmdbId = m.id;
 		selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+		selLink.href = `/films/movie/${m.id}`;
 		if (m.poster_path) {
 			selPoster.src = IMG + m.poster_path;
 			selPoster.hidden = false;

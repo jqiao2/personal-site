@@ -3,7 +3,6 @@ import FilmLayout from '../../layouts/FilmLayout.astro';
 import { listAllWatchlist } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { imageUrl } from '../../lib/tmdb';
-import { ytsUrl } from '../../lib/format';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -206,8 +205,6 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 				{films.map((f, i) => {
 					const poster = imageUrl(f.poster_path, 'w342');
 					const upcoming = isUpcoming(f);
-					// The owner's tiles link out to YTS; a visitor's aren't links at all.
-					const Tag = isOwner ? 'a' : 'div';
 					// No genres / directors / cast / language on the tile: across ~500 of
 					// them they'd be most of this page's HTML, for values nothing shows
 					// until the filter panel opens. applyFacets attaches them to the
@@ -226,12 +223,9 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 									✕
 								</button>
 							)}
-							<Tag
-								class={poster ? 'tile' : 'tile tile--noimg'}
-								{...(isOwner
-									? { href: ytsUrl(f.title, f.release_year), target: '_blank', rel: 'noopener noreferrer' }
-									: {})}
-							>
+							{/* Tiles lead to the film's own page — where the download link now
+							    lives, alongside the synopsis, cast and the watchlist toggle. */}
+							<a class={poster ? 'tile' : 'tile tile--noimg'} href={`/films/movie/${f.tmdb_id}`}>
 								{poster && <img data-poster={poster} alt={`${f.title} poster`} decoding="async" />}
 								{upcoming && <span class="badge">Upcoming</span>}
 								<div class="tile__overlay">
@@ -242,7 +236,7 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 									<div class="tile__genre" data-tile-genre hidden></div>
 									<div class="tile__added">Added {addedLabel(f.added_at)}</div>
 								</div>
-							</Tag>
+							</a>
 						</div>
 					);
 				})}
@@ -2223,13 +2217,12 @@ const hasDecadeRange = decLo != null && decHi != null && decHi > decLo;
 
 			function showWinner(f: Pick) {
 				wheelWinnerTitle.textContent = f.year ? `${f.title} · ${f.year}` : f.title;
+				// The tile's href is the film's own page now, not an outbound YTS search —
+				// so the pick opens in this tab like every other link on the site.
 				if (f.href) {
 					wheelWinner.href = f.href;
-					wheelWinner.target = '_blank';
-					wheelWinner.rel = 'noopener noreferrer';
 				} else {
 					wheelWinner.removeAttribute('href');
-					wheelWinner.removeAttribute('target');
 				}
 				wheelWinner.hidden = false;
 			}

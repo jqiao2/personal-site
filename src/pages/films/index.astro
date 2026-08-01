@@ -11,7 +11,7 @@ import {
 	listFriends,
 } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
-import { starText, ytsUrl } from '../../lib/format';
+import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -170,26 +170,18 @@ const num = (n: number) => n.toLocaleString('en-US');
 							<a class="sec-head__link" href="/films/watchlist">See more →</a>
 						</div>
 						<div class="grid4">
-							{watchlist.map((f) => {
-								// Matches the watchlist grid: the owner tiles link out to YTS;
-								// a visitor tiles are not links at all.
-								const Tag = isOwner ? 'a' : 'div';
-								return (
-									<Tag
-										class="tile tile--dim"
-										{...(isOwner
-											? { href: ytsUrl(f.title, f.release_year), target: '_blank', rel: 'noopener noreferrer' }
-											: {})}
-									>
-										{imageUrl(f.poster_path, 'w342') && (
-											<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
-										)}
-										<div class="tile__cap tile__cap--dim">
-											{f.title} <span class="tile__year">{f.release_year}</span>
-										</div>
-									</Tag>
-								);
-							})}
+							{watchlist.map((f) => (
+								// Matches the watchlist grid: tiles lead to the film's own page,
+								// which is where the download link lives.
+								<a class="tile tile--dim" href={`/films/movie/${f.tmdb_id}`}>
+									{imageUrl(f.poster_path, 'w342') && (
+										<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
+									)}
+									<div class="tile__cap tile__cap--dim">
+										{f.title} <span class="tile__year">{f.release_year}</span>
+									</div>
+								</a>
+							))}
 						</div>
 					</section>
 				)}

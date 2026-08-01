@@ -111,13 +111,23 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 					{
 						film ? (
 							<div class="selected selected--locked">
-								<div class="selected__poster">{film.poster && <img src={film.poster} alt="" />}</div>
-								<div class="selected__info">
-									<div class="selected__title">
-										{film.title}
-										{film.year && <span class="selected__year">{film.year}</span>}
+								{/* The film's page, in a new tab: leaving this one would take a
+								    half-written entry with it. */}
+								<a
+									class="selected__link"
+									href={`/films/movie/${film.tmdbId}`}
+									target="_blank"
+									rel="noopener"
+									title={`Open ${film.title}`}
+								>
+									<div class="selected__poster">{film.poster && <img src={film.poster} alt="" />}</div>
+									<div class="selected__info">
+										<div class="selected__title">
+											{film.title}
+											{film.year && <span class="selected__year">{film.year}</span>}
+										</div>
 									</div>
-								</div>
+								</a>
 							</div>
 						) : (
 							<>
@@ -126,15 +136,18 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 									<ul class="results" id="ee-results" hidden />
 								</div>
 								<div class="selected" id="ee-selected" hidden>
-									<div class="selected__poster">
-										<img id="ee-sel-poster" alt="" />
-									</div>
-									<div class="selected__info">
-										<div class="selected__title">
-											<span id="ee-sel-title" />
-											<span class="selected__year" id="ee-sel-year" />
+									{/* href is filled in by selectMovie, once there's a film to point at. */}
+									<a class="selected__link" id="ee-sel-link" target="_blank" rel="noopener">
+										<div class="selected__poster">
+											<img id="ee-sel-poster" alt="" />
 										</div>
-									</div>
+										<div class="selected__info">
+											<div class="selected__title">
+												<span id="ee-sel-title" />
+												<span class="selected__year" id="ee-sel-year" />
+											</div>
+										</div>
+									</a>
 									<button type="button" class="selected__change" id="ee-change">
 										Change
 									</button>
@@ -576,6 +589,23 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	}
 	.selected[hidden] {
 		display: none;
+	}
+	/* Poster + title together are the link to the film's page; "Change" stays outside
+	   it. Takes the row's width so the title can still truncate. */
+	.selected__link {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		flex: 1;
+		min-width: 0;
+		text-decoration: none;
+		color: inherit;
+	}
+	.selected__link:hover .selected__title {
+		color: #f0d488;
+	}
+	.selected__link:hover .selected__poster {
+		border-color: #d9b45a;
 	}
 	.selected__poster {
 		width: 38px;
@@ -1031,6 +1061,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		const results = $<HTMLUListElement>('ee-results');
 		const searchWrap = $('ee-search');
 		const selected = $('ee-selected');
+		const selLink = $<HTMLAnchorElement>('ee-sel-link');
 		const selPoster = $<HTMLImageElement>('ee-sel-poster');
 		const selTitle = $<HTMLSpanElement>('ee-sel-title');
 		const selYear = $<HTMLSpanElement>('ee-sel-year');
@@ -1224,6 +1255,11 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			tmdbId = m.id;
 			selTitle.textContent = m.title;
 			selYear.textContent = m.release_date ? m.release_date.slice(0, 4) : '';
+			// Its own page, in a new tab — the entry being written stays put. The page
+			// caches the film on first view, so a film picked straight out of TMDB
+			// search resolves even though nothing has logged it yet.
+			selLink.href = `/films/movie/${m.id}`;
+			selLink.title = `Open ${m.title}`;
 			if (m.poster_path) {
 				selPoster.src = IMG + m.poster_path;
 				selPoster.hidden = false;
