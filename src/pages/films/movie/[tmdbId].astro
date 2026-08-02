@@ -1018,6 +1018,9 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				}
 
 				let base = '';
+				// True once we know this browser is running on the Jellyfin machine —
+				// localhost only resolves there, so the winning URL settles it.
+				let onHost = false;
 				// A sleeping or absent server should fail fast, not hang the button.
 				const jf = (path: string, init?: RequestInit) =>
 					fetch(`${base}${path}`, { ...init, headers: auth, signal: AbortSignal.timeout(6000) });
@@ -1053,20 +1056,30 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					return map;
 				}
 
-				// The desktop app registers as a remote-controllable session, which is
-				// what lets a click here start playback over there. A browser tab on the
-				// Jellyfin web client is also controllable, but casting the film to some
-				// other tab isn't what the button promises, so match on the app.
-				//
-				// Only consulted when this browser is ON the Jellyfin machine. From a
-				// phone, starting the desktop player would put the film on in an empty
-				// room — the point is to watch it here.
-				async function desktopSession(): Promise<string | null> {
+				// Every Jellyfin client registers as a remote-controllable session while
+				// it's open, which is what lets a click here start playback over there.
+				// The trick is picking the session that belongs to the device in your
+				// hand: casting to the desktop from a phone puts the film on in an empty
+				// room. Which URL answered identifies the desktop; the user agent
+				// identifies the rest.
+				function deviceClient(): RegExp | null {
+					if (onHost) return /jellyfin media player/i;
+					const ua = navigator.userAgent;
+					if (/iPhone|iPad|iPod/.test(ua)) return /jellyfin ios|swiftfin/i;
+					if (/Android/.test(ua)) return /jellyfin android/i;
+					return null;
+				}
+
+				// The session to play on, or null if this device has no Jellyfin client
+				// open to receive it.
+				async function deviceSession(): Promise<string | null> {
+					const pattern = deviceClient();
+					if (!pattern) return null;
 					try {
 						const res = await jf('/Sessions');
 						if (!res.ok) return null;
 						const found = (await res.json()).find(
-							(s: any) => s.SupportsRemoteControl && /jellyfin media player/i.test(s.Client ?? ''),
+							(s: any) => s.SupportsRemoteControl && pattern.test(s.Client ?? ''),
 						);
 						return found?.Id ?? null;
 					} catch {
@@ -1074,67 +1087,61 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					}
 				}
 
-				// The button promises one thing — this film plays on the device you're
-				// holding — so it appears only when Jellyfin answers and has the film.
-				// Those two are the whole test, because the web player can always play it
-				// here; the desktop app is an upgrade on that, not a precondition for it.
+				// The button plays the film in a real Jellyfin client on the device you're
+				// holding, so it appears only when there is one to play it in: Jellyfin
+				// answers, it has the film, and this device has a client open.
+				//
+				// Deliberately no web-client fallback. Deep-linking into /web only lands
+				// on the film if that browser already holds a Jellyfin session; otherwise
+				// it bounces to a login page — which, on a phone where you use the app
+				// rather than Safari, is every time. A button that opens a login screen
+				// isn't playing the film, so we show nothing instead.
 				(async () => {
 					const found = await pickBase();
 					if (!found) return; // Jellyfin isn't reachable from here — stay hidden.
 					base = found;
+					onHost = !!localUrl && base === localUrl;
 
 					let itemId: string | null = null;
+					let sessionId: string | null = null;
 					try {
-						itemId = (await libraryMap())[tmdbId] ?? null;
+						[itemId, sessionId] = await Promise.all([
+							libraryMap().then((m) => m[tmdbId] ?? null),
+							deviceSession(),
+						]);
 					} catch {
 						return; // Unreachable server — leave the button hidden.
 					}
 					if (!itemId) return; // Not in the library — the YTS link is the answer.
-
-					// Which URL answered tells us where we're reading this: localhost only
-					// resolves on the machine Jellyfin runs on, so it doubles as "this
-					// browser is the desktop". Anything else means a phone or a laptop,
-					// where the desktop player is the wrong place to start a film.
-					const onHost = !!localUrl && base === localUrl;
-					const webHref = `${base}/web/index.html#/details?id=${itemId}`;
+					if (!sessionId) return; // No Jellyfin client open here to play it in.
 
 					label.textContent = 'Play';
 					play.hidden = false;
 
 					play.addEventListener('click', async () => {
-						// On the desktop, handing the film to the native player beats a
-						// browser tab. Checked at click time, not at load, so opening or
-						// closing the player between the two is handled either way.
-						if (onHost) {
-							const target = await desktopSession();
-							if (target) {
-								play.disabled = true;
-								play.dataset.busy = '1';
-								label.textContent = 'Starting…';
-								try {
-									const res = await jf(
-										`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
-										{ method: 'POST' },
-									);
-									if (!res.ok) throw new Error(String(res.status));
-									label.textContent = 'Playing on desktop';
-									return;
-								} catch {
-									// Cast failed — fall through to the web player, which plays
-									// on this same machine and so still keeps the promise.
-									label.textContent = 'Play';
-								} finally {
-									play.disabled = false;
-									delete play.dataset.busy;
-								}
-							}
+						// Re-resolve rather than trusting the load-time answer: the client
+						// may have been closed since the page rendered.
+						const target = await deviceSession();
+						if (!target) {
+							play.hidden = true;
+							return;
 						}
-						// Navigate in place rather than opening a tab. iOS Safari's popup
-						// blocker silently drops cross-origin window.open — no navigation,
-						// no error — which left this button doing nothing at all on a
-						// phone. A same-tab navigation is never blocked, and the player is
-						// where you were trying to get to anyway.
-						location.href = webHref;
+						play.disabled = true;
+						play.dataset.busy = '1';
+						label.textContent = 'Starting…';
+						try {
+							const res = await jf(
+								`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
+								{ method: 'POST' },
+							);
+							if (!res.ok) throw new Error(String(res.status));
+							label.textContent = 'Playing';
+						} catch {
+							play.hidden = true;
+						} finally {
+							play.disabled = false;
+							delete play.dataset.busy;
+						}
 					});
 				})();
 			}
