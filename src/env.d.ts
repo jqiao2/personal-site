@@ -7,6 +7,10 @@ interface ImportMetaEnv {
 	readonly SUPABASE_SERVICE_ROLE_KEY: string;
 	readonly ADMIN_PASSWORD: string;
 	readonly SESSION_SECRET: string;
+	/** Optional — see src/lib/jellyfin.ts. Absent means "no play button". */
+	readonly JELLYFIN_URL?: string;
+	readonly JELLYFIN_LOCAL_URL?: string;
+	readonly JELLYFIN_API_KEY?: string;
 }
 
 interface ImportMeta {

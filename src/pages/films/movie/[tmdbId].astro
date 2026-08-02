@@ -15,6 +15,7 @@ import {
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, starText, ytsUrl } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
+import { jellyfinConfig } from '../../../lib/jellyfin';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -150,6 +151,12 @@ const back = seen
 // The YTS search the watchlist tiles used to link out to directly, now the
 // "Download" action on the film itself. Owner-only, as those links were.
 const downloadHref = ytsUrl(movie.title, movie.release_year);
+
+// Whether this film is actually in the Jellyfin library can't be answered here —
+// the server is tailnet-only and this render happens on Vercel. So we ship the
+// config and let the page ask from the browser; see the script at the foot of the
+// file. Null when Jellyfin isn't configured, which renders no button at all.
+const jellyfin = isOwner ? jellyfinConfig() : null;
 ---
 
 <html lang="en">
@@ -201,6 +208,25 @@ const downloadHref = ytsUrl(movie.title, movie.release_year);
 						{isOwner && (
 							<button type="button" class="btn-primary" data-open-entry-editor>
 								{logButtonLabel}
+							</button>
+						)}
+
+						{/* Sits above the seen/unseen split because it belongs to both: a
+						    film you've watched is the one you're most likely to put on
+						    again. Ships hidden and stays that way unless the browser can
+						    reach Jellyfin AND the library actually has this film — so on
+						    a device off the tailnet nothing here ever appears. */}
+						{jellyfin && (
+							<button
+								type="button"
+								class="btn-ghost btn-ghost--play"
+								id="jellyfin-play"
+								data-bases={JSON.stringify(jellyfin.baseUrls)}
+								data-key={jellyfin.apiKey}
+								data-tmdb={movie.tmdb_id}
+								hidden
+							>
+								<span class="btn-ghost__icon">▶</span><span data-label>Play</span>
 							</button>
 						)}
 
@@ -606,6 +632,26 @@ const downloadHref = ytsUrl(movie.title, movie.release_year);
 				opacity: 0.6;
 				cursor: default;
 			}
+			/* Having the file on hand is the best outcome the page can offer, so when
+			   this button does appear it outranks Download and the watchlist toggle. */
+			.btn-ghost--play {
+				border-color: #d9b45a;
+				color: #f4e8d1;
+			}
+			.btn-ghost--play:hover {
+				background: #d9b45a;
+				border-color: #d9b45a;
+				color: #2a1518;
+			}
+			.btn-ghost--play[disabled] {
+				opacity: 0.6;
+				cursor: default;
+			}
+			/* Reaching a sleeping machine takes a moment; dim rather than jump. */
+			.btn-ghost--play[data-busy] {
+				color: #c2a99a;
+				border-color: #5d3036;
+			}
 
 			/* Right column */
 			.col-right {
@@ -918,6 +964,161 @@ const downloadHref = ytsUrl(movie.title, movie.release_year);
 						toggle.disabled = false;
 					}
 				});
+			}
+
+			// --- Play on Jellyfin (owner only, and only when it's configured) ------
+			// All of this runs in the browser rather than on the server because
+			// Jellyfin is tailnet-only: Vercel can't reach it, this device might.
+			// Every failure is silent by design — off the tailnet, machine asleep,
+			// Jellyfin restarting — because the page already has a working answer for
+			// "I want to watch this" in the YTS link. A broken button would be worse
+			// than no button, so the button only ever appears once we've confirmed
+			// both that the server answered and that the film is really in it.
+			const play = document.getElementById('jellyfin-play');
+			if (play instanceof HTMLButtonElement) {
+				const tmdbId = play.dataset.tmdb!;
+				const label = play.querySelector('[data-label]')!;
+				// Key travels as a header, not a query param, so it stays out of URLs
+				// and Jellyfin's request log. Verified to pass CORS preflight.
+				const auth = { Authorization: `MediaBrowser Token="${play.dataset.key}"` };
+
+				// Which origin can see Jellyfin depends on where you're reading this:
+				// the tailnet name from other devices, localhost from the machine it
+				// runs on (which can't reach its own serve endpoint). Rather than guess
+				// from the URL, ask both at once and keep whichever replies. The probe
+				// is unauthenticated and tiny, and the winner is cached for the tab.
+				const BASE_KEY = 'jellyfin:base:v1';
+				const bases: string[] = JSON.parse(play.dataset.bases!);
+				async function pickBase(): Promise<string | null> {
+					const cached = sessionStorage.getItem(BASE_KEY);
+					if (cached && bases.includes(cached)) return cached;
+					try {
+						const winner = await Promise.any(
+							bases.map(async (b) => {
+								const res = await fetch(`${b}/System/Info/Public`, {
+									signal: AbortSignal.timeout(5000),
+								});
+								if (!res.ok) throw new Error(String(res.status));
+								return b;
+							}),
+						);
+						try {
+							sessionStorage.setItem(BASE_KEY, winner);
+						} catch {
+							// Storage unavailable — we'll just probe again next page.
+						}
+						return winner;
+					} catch {
+						return null; // Every candidate failed: not on the tailnet, or it's asleep.
+					}
+				}
+
+				let base = '';
+				// A sleeping or absent server should fail fast, not hang the button.
+				const jf = (path: string, init?: RequestInit) =>
+					fetch(`${base}${path}`, { ...init, headers: auth, signal: AbortSignal.timeout(6000) });
+
+				// 10.10 has no "find by TMDB id" filter — only a hasTmdbId boolean — so
+				// the lookup is one pass over the movie library, reduced to the id map
+				// we actually want and cached for the tab. That's a single request per
+				// session rather than one per film page.
+				const CACHE_KEY = 'jellyfin:movies:v1';
+				const CACHE_TTL = 10 * 60 * 1000;
+				async function libraryMap(): Promise<Record<string, string>> {
+					try {
+						const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+						if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.map;
+					} catch {
+						// Unparseable or storage disabled — just refetch.
+					}
+					const res = await jf(
+						'/Items?recursive=true&includeItemTypes=Movie&fields=ProviderIds' +
+							'&enableImages=false&enableTotalRecordCount=false',
+					);
+					if (!res.ok) throw new Error(String(res.status));
+					const map: Record<string, string> = {};
+					for (const item of (await res.json()).Items ?? []) {
+						const id = item.ProviderIds?.Tmdb;
+						if (id) map[String(id)] = item.Id;
+					}
+					try {
+						sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), map }));
+					} catch {
+						// Private mode / quota — the map just won't survive this page.
+					}
+					return map;
+				}
+
+				// The desktop app registers as a remote-controllable session, which is
+				// what lets a click here start playback over there. A browser tab on the
+				// Jellyfin web client is also controllable, but casting the film to some
+				// other tab isn't what "play on desktop" promises, so match on the app.
+				async function desktopSession(): Promise<string | null> {
+					try {
+						const res = await jf('/Sessions');
+						if (!res.ok) return null;
+						const found = (await res.json()).find(
+							(s: any) => s.SupportsRemoteControl && /jellyfin media player/i.test(s.Client ?? ''),
+						);
+						return found?.Id ?? null;
+					} catch {
+						return null;
+					}
+				}
+
+				// Resolve both up front so the button can name what it will actually do
+				// before it's clicked, instead of promising the desktop and then quietly
+				// opening a browser tab.
+				(async () => {
+					const found = await pickBase();
+					if (!found) return; // Jellyfin isn't reachable from here — stay hidden.
+					base = found;
+
+					let itemId: string | null = null;
+					let sessionId: string | null = null;
+					try {
+						[itemId, sessionId] = await Promise.all([
+							libraryMap().then((m) => m[tmdbId] ?? null),
+							desktopSession(),
+						]);
+					} catch {
+						return; // Unreachable server — leave the button hidden.
+					}
+					if (!itemId) return; // Not in the library — the YTS link is the answer.
+
+					const webHref = `${base}/web/index.html#/details?id=${itemId}`;
+					label.textContent = sessionId ? 'Play on desktop' : 'Open in Jellyfin';
+					play.hidden = false;
+
+					play.addEventListener('click', async () => {
+						// Re-check rather than trusting the load-time answer: the desktop
+						// player may have been opened or closed since the page rendered.
+						const target = await desktopSession();
+						if (!target) {
+							window.open(webHref, '_blank', 'noopener');
+							return;
+						}
+						play.disabled = true;
+						play.dataset.busy = '1';
+						label.textContent = 'Starting…';
+						try {
+							const res = await jf(
+								`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
+								{ method: 'POST' },
+							);
+							if (!res.ok) throw new Error(String(res.status));
+							label.textContent = 'Playing on desktop';
+						} catch {
+							// Fall back to the web client rather than dead-ending: whatever
+							// went wrong with the cast, the file is still there to play.
+							label.textContent = 'Open in Jellyfin';
+							window.open(webHref, '_blank', 'noopener');
+						} finally {
+							play.disabled = false;
+							delete play.dataset.busy;
+						}
+					});
+				})();
 			}
 		</script>
 	</body>
