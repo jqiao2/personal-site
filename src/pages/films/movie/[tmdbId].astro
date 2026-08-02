@@ -1029,8 +1029,26 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// the lookup is one pass over the movie library, reduced to the id map
 				// we actually want and cached for the tab. That's a single request per
 				// session rather than one per film page.
-				const CACHE_KEY = 'jellyfin:movies:v1';
+				const CACHE_KEY = 'jellyfin:movies:v2';
 				const CACHE_TTL = 10 * 60 * 1000;
+
+				// Rows from a library's previous location linger in /Items indefinitely:
+				// a scan only walks the folders currently configured, so it never visits
+				// the strays and never prunes them. They collide with the live entries on
+				// TMDB id, and handing one to a player starts a file that isn't there
+				// (NSURLErrorDomain -1008 on iOS). Scoping the query to the configured
+				// movies library leaves them out by construction.
+				async function moviesLibraryId(): Promise<string | null> {
+					try {
+						const res = await jf('/Library/VirtualFolders');
+						if (!res.ok) return null;
+						const lib = (await res.json()).find((v: any) => v.CollectionType === 'movies');
+						return lib?.ItemId ?? null;
+					} catch {
+						return null;
+					}
+				}
+
 				async function libraryMap(): Promise<Record<string, string>> {
 					try {
 						const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
@@ -1038,8 +1056,12 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					} catch {
 						// Unparseable or storage disabled — just refetch.
 					}
+					// Unscoped only if the server has no movies library to scope to, in
+					// which case there's nothing better to ask for.
+					const libId = await moviesLibraryId();
 					const res = await jf(
-						'/Items?recursive=true&includeItemTypes=Movie&fields=ProviderIds' +
+						`/Items?recursive=true&includeItemTypes=Movie&fields=ProviderIds` +
+							`${libId ? `&parentId=${libId}` : ''}` +
 							'&enableImages=false&enableTotalRecordCount=false',
 					);
 					if (!res.ok) throw new Error(String(res.status));
