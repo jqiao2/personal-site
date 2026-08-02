@@ -1129,7 +1129,12 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 								}
 							}
 						}
-						window.open(webHref, '_blank', 'noopener');
+						// Navigate in place rather than opening a tab. iOS Safari's popup
+						// blocker silently drops cross-origin window.open — no navigation,
+						// no error — which left this button doing nothing at all on a
+						// phone. A same-tab navigation is never blocked, and the player is
+						// where you were trying to get to anyway.
+						location.href = webHref;
 					});
 				})();
 			}
