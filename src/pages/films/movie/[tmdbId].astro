@@ -626,6 +626,15 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				border-color: #d9b45a;
 				color: #f4e8d1;
 			}
+			/* The play button ships with the `hidden` attribute and is revealed only
+			   after the library check clears it. That attribute alone isn't enough
+			   here: `display: flex` above is an author rule, and author rules beat
+			   the UA stylesheet's `[hidden] { display: none }`, so without this the
+			   button shows on every film — including ones Jellyfin doesn't have —
+			   and the script's `hidden = true` failure paths do nothing either. */
+			.btn-ghost[hidden] {
+				display: none;
+			}
 			.btn-ghost__icon {
 				font-size: 13px;
 			}
