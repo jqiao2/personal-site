@@ -4,18 +4,21 @@
 // For every film in `watched` or `watchlist`, fetch TMDB details+credits and fill
 // the columns added in migration 0008: genres, languages (spoken), countries
 // (production), directors (crew job=Director) and actors (top ~10 billed), plus
-// the release_date/release_year from 0014. `credits_synced_at` is stamped on
-// success so re-runs skip already-done films — the script is safe to stop/resume.
+// the release_date/release_year from 0014 and the premiere_date from 0019.
+// `credits_synced_at` is stamped on success so re-runs skip already-done films —
+// the script is safe to stop/resume.
 //
 // release_date/release_year prefer the US theatrical release (see
 // preferredReleaseDate below), not TMDB's earliest-anywhere release_date. Because
 // that's a value change to columns that are already populated — not a newly-added
 // null column — re-deriving existing rows needs a one-time `--force` run; the
 // `needsSync` heuristic below only catches never-synced or still-null rows.
+// premiere_date keeps the earliest-anywhere date alongside it, for the YTS search.
 //
 // A film is otherwise due when it has never been synced, or when it predates a
-// column added since its last sync (release_date, 0014) and so would still be
-// null. That makes adding a column a matter of running this again, no --force.
+// column added since its last sync (release_date, 0014; premiere_date, 0019) and so
+// would still be null. That makes adding a column a matter of running this again,
+// no --force.
 //
 // Usage (env supplies SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TMDB_API_KEY):
 //   node --env-file=.env scripts/backfill-credits.mjs [options]
@@ -148,12 +151,15 @@ function preferredReleaseDate(d) {
 
 /** Mirror of extractCreditFacts() in src/lib/tmdb.ts (kept in sync by hand).
  * release_year is derived from the same preferred date as release_date so the
- * two never disagree. */
+ * two never disagree. premiere_date (0019) is TMDB's top-level release_date — the
+ * earliest release anywhere — kept because that's the year YTS files films under;
+ * see premiereDate() in src/lib/tmdb.ts. */
 function extractFacts(d) {
 	const releasedOn = preferredReleaseDate(d);
 	return {
 		release_date: releasedOn,
 		release_year: releasedOn ? Number.parseInt(releasedOn.slice(0, 4), 10) : null,
+		premiere_date: /^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null,
 		genres: uniq((d.genres ?? []).map((g) => g.name)),
 		languages: uniq((d.spoken_languages ?? []).map((l) => l.english_name || l.name)),
 		countries: uniq((d.production_countries ?? []).map((c) => c.name)),
@@ -164,7 +170,7 @@ function extractFacts(d) {
 	};
 }
 
-const COLUMNS = 'id, tmdb_id, title, credits_synced_at, release_date';
+const COLUMNS = 'id, tmdb_id, title, credits_synced_at, release_date, premiere_date';
 
 /** One relation's movie rows, paged past PostgREST's 1000-row cap. */
 async function loadMoviesVia(table, orderBy) {
@@ -197,14 +203,15 @@ async function loadMovies() {
 }
 
 /** Whether a film still needs a TMDB fetch: never synced, or synced before a
- * column it would fill existed (release_date, migration 0014).
+ * column it would fill existed (release_date, migration 0014; premiere_date, 0019).
  *
- * The release_date test re-fetches the handful of films TMDB has no date for on
- * every run, since a null there is indistinguishable from "not yet fetched". They
- * cost a few calls and converge to the same (null) value, which beats carrying a
- * per-column sync stamp just to skip them. */
+ * The date tests re-fetch the handful of films TMDB has no date for on every run,
+ * since a null there is indistinguishable from "not yet fetched". They cost a few
+ * calls and converge to the same (null) value, which beats carrying a per-column
+ * sync stamp just to skip them. Adding premiere_date is why every film is due once
+ * after 0019 — no --force needed, unlike the US-theatrical change. */
 function needsSync(m) {
-	return !m.credits_synced_at || m.release_date == null;
+	return !m.credits_synced_at || m.release_date == null || m.premiere_date == null;
 }
 
 async function main() {

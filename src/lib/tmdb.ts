@@ -277,3 +277,14 @@ export function preferredReleaseDate(d: TmdbMovieDetails): string | null {
 
 	return releaseDate(d.release_date);
 }
+
+/**
+ * The film's premiere date — TMDB's top-level `release_date`, i.e. the earliest
+ * release anywhere, festival premieres included. Cached beside preferredReleaseDate()
+ * (migration 0019) because that's the year YTS files films under: a film that
+ * premiered abroad in one year and opened in US theaters the next is listed there by
+ * the earlier year, so searching by our displayed year finds nothing.
+ */
+export function premiereDate(d: TmdbMovieDetails): string | null {
+	return releaseDate(d.release_date);
+}

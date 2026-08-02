@@ -12,7 +12,7 @@ import {
 	listTheaterNames,
 	type RelatedFilm,
 } from '../../../lib/films';
-import { imageUrl } from '../../../lib/tmdb';
+import { imageUrl, releaseYear } from '../../../lib/tmdb';
 import { formatWatchedDate, starText, ytsUrl } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 import { jellyfinConfig } from '../../../lib/jellyfin';
@@ -150,7 +150,13 @@ const back = seen
 
 // The YTS search the watchlist tiles used to link out to directly, now the
 // "Download" action on the film itself. Owner-only, as those links were.
-const downloadHref = ytsUrl(movie.title, movie.release_year);
+//
+// Searched by the premiere year (0019), not the US theatrical year the rest of the
+// page shows: YTS files a film under its earliest release anywhere, so a festival
+// premiere in December and a US opening the following spring are the same film
+// under the earlier year, and searching the later one returns nothing. Falls back
+// to the displayed year for films cached before the premiere date was.
+const downloadHref = ytsUrl(movie.title, releaseYear(movie.premiere_date) ?? movie.release_year);
 
 // Whether this film is actually in the Jellyfin library can't be answered here —
 // the server is tailnet-only and this render happens on Vercel. So we ship the

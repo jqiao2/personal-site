@@ -39,7 +39,11 @@ export function mediumLabel(medium: string | null | undefined): string | null {
 	return MEDIUM_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
 
-/** YTS search URL for a film, e.g. "bridge of spies 2015" → …/browse-movies/bridge%20of%20spies%202015/all/all/0/latest/0/all */
+/** YTS search URL for a film, e.g. "bridge of spies 2015" → …/browse-movies/bridge%20of%20spies%202015/all/all/0/latest/0/all
+ *
+ * `year` should be the film's premiere year (its earliest release anywhere), which
+ * is how YTS files films — not the US theatrical year the site displays. See the
+ * download link in /films/movie/[tmdbId]. */
 export function ytsUrl(title: string, year: number | null): string {
 	const query = year ? `${title} ${year}` : title;
 	return `https://yts.gg/browse-movies/${encodeURIComponent(query.toLowerCase())}/all/all/0/latest/0/all`;
