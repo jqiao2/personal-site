@@ -25,6 +25,12 @@ export type JellyfinConfig = {
 	 * Neither is redundant, and probing is cheap, so the client tries both.
 	 */
 	baseUrls: string[];
+	/**
+	 * The localhost entry, when configured. Doubles as a device test: if this is
+	 * the URL that answered, the browser is running on the Jellyfin machine
+	 * itself, and only then does starting the desktop player mean "play here".
+	 */
+	localUrl: string | null;
 	/** API key from Jellyfin's Dashboard → API Keys. */
 	apiKey: string;
 };
@@ -36,10 +42,12 @@ export type JellyfinConfig = {
  * exactly as before this existed.
  */
 export function jellyfinConfig(): JellyfinConfig | null {
+	const clean = (u: string | undefined) => u?.trim().replace(/\/+$/, '') || null;
 	const apiKey = import.meta.env.JELLYFIN_API_KEY?.trim();
-	const baseUrls = [import.meta.env.JELLYFIN_URL, import.meta.env.JELLYFIN_LOCAL_URL]
-		.map((u) => u?.trim().replace(/\/+$/, ''))
-		.filter((u): u is string => !!u);
+	const localUrl = clean(import.meta.env.JELLYFIN_LOCAL_URL);
+	const baseUrls = [clean(import.meta.env.JELLYFIN_URL), localUrl].filter(
+		(u): u is string => !!u,
+	);
 	if (!apiKey || baseUrls.length === 0) return null;
-	return { baseUrls, apiKey };
+	return { baseUrls, localUrl, apiKey };
 }
