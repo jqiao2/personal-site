@@ -231,14 +231,6 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 							</button>
 						)}
 
-						{/* TEMPORARY. The play button does nothing on iOS and none of the
-						    failure paths are observable from here — no console on a phone,
-						    and the server logs requests at a level that doesn't record
-						    them. This reports what the script actually resolved, so the
-						    next report is data instead of another guess. Owner-only, and
-						    to be deleted once the cause is known. */}
-						{jellyfin && <pre class="jf-debug" id="jellyfin-debug">jellyfin: starting…</pre>}
-
 						{seen ? (
 							<div class="activity">
 								<div class="activity__head">Your activity</div>
@@ -655,20 +647,6 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 			.btn-ghost--play[disabled] {
 				opacity: 0.6;
 				cursor: default;
-			}
-			/* TEMPORARY diagnostic readout — removed once the iOS cause is known. */
-			.jf-debug {
-				margin-top: 10px;
-				padding: 8px;
-				border: 1px solid #4a2529;
-				border-radius: 8px;
-				background: #1c0f12;
-				color: #c2a99a;
-				font-size: 10px;
-				line-height: 1.45;
-				white-space: pre-wrap;
-				word-break: break-all;
-				font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 			}
 			/* Reaching a sleeping machine takes a moment; dim rather than jump. */
 			.btn-ghost--play[data-busy] {
@@ -1106,6 +1084,15 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// hand: casting to the desktop from a phone puts the film on in an empty
 				// room. Which URL answered identifies the desktop; the user agent
 				// identifies the rest.
+				//
+				// In practice this only ever fires on the desktop, where the player is an
+				// ordinary app that stays controllable while you browse. A phone can't
+				// cast to itself: the mobile clients set SupportsRemoteControl only while
+				// foregrounded and drop their session within seconds of being backgrounded
+				// — and reading this page means the browser is foregrounded, not the app.
+				// The phone branches are kept because they're correct when a session does
+				// exist, but don't expect them to. Playing on a phone would mean the web
+				// client, which needs that browser signed into Jellyfin separately.
 				function deviceClient(): RegExp | null {
 					if (onHost) return /jellyfin media player/i;
 					const ua = navigator.userAgent;
@@ -1140,25 +1127,11 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// it bounces to a login page — which, on a phone where you use the app
 				// rather than Safari, is every time. A button that opens a login screen
 				// isn't playing the film, so we show nothing instead.
-				// TEMPORARY diagnostics — see the note on the panel in the markup above.
-				const dbg = document.getElementById('jellyfin-debug');
-				const say = (line: string) => {
-					if (dbg) dbg.textContent += `\n${line}`;
-				};
-
 				(async () => {
-				  try {
-					say(`ua: ${/iPhone|iPad|iPod/.test(navigator.userAgent) ? 'iOS' : /Android/.test(navigator.userAgent) ? 'Android' : 'other'}`);
-					say(`AbortSignal.timeout: ${typeof AbortSignal?.timeout === 'function'}`);
-					say(`Promise.any: ${typeof Promise?.any === 'function'}`);
-					say(`bases: ${bases.join(' | ')}`);
-
 					const found = await pickBase();
-					say(`base picked: ${found ?? 'NONE — nothing answered'}`);
 					if (!found) return; // Jellyfin isn't reachable from here — stay hidden.
 					base = found;
 					onHost = !!localUrl && base === localUrl;
-					say(`onHost: ${onHost}`);
 
 					let itemId: string | null = null;
 					let sessionId: string | null = null;
@@ -1167,25 +1140,19 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 							libraryMap().then((m) => m[tmdbId] ?? null),
 							deviceSession(),
 						]);
-					} catch (e: any) {
-						say(`lookup failed: ${e?.name}: ${e?.message}`);
+					} catch {
 						return; // Unreachable server — leave the button hidden.
 					}
-					say(`itemId: ${itemId ?? 'NOT in library'}`);
-					say(`session: ${sessionId ?? 'NONE open on this device'}`);
 					if (!itemId) return; // Not in the library — the YTS link is the answer.
 					if (!sessionId) return; // No Jellyfin client open here to play it in.
 
 					label.textContent = 'Play';
 					play.hidden = false;
-					say('button shown — tap it');
 
 					play.addEventListener('click', async () => {
-						say('TAP received');
 						// Re-resolve rather than trusting the load-time answer: the client
 						// may have been closed since the page rendered.
 						const target = await deviceSession();
-						say(`tap session: ${target ?? 'NONE'}`);
 						if (!target) {
 							play.hidden = true;
 							return;
@@ -1198,20 +1165,15 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 								`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
 								{ method: 'POST' },
 							);
-							say(`cast status: ${res.status}`);
 							if (!res.ok) throw new Error(String(res.status));
 							label.textContent = 'Playing';
-						} catch (e: any) {
-							say(`cast failed: ${e?.name}: ${e?.message}`);
+						} catch {
 							play.hidden = true;
 						} finally {
 							play.disabled = false;
 							delete play.dataset.busy;
 						}
 					});
-				  } catch (e: any) {
-					say(`ERROR: ${e?.name}: ${e?.message}`);
-				  }
 				})();
 			}
 		</script>
