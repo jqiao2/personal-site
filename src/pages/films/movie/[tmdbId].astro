@@ -213,15 +213,16 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 
 						{/* Sits above the seen/unseen split because it belongs to both: a
 						    film you've watched is the one you're most likely to put on
-						    again. Ships hidden and stays that way unless the browser can
-						    reach Jellyfin AND the library actually has this film — so on
-						    a device off the tailnet nothing here ever appears. */}
+						    again. Ships hidden and is revealed only once the browser has
+						    reached Jellyfin and found this film in the library — so off
+						    the tailnet, nothing here ever appears. */}
 						{jellyfin && (
 							<button
 								type="button"
 								class="btn-ghost btn-ghost--play"
 								id="jellyfin-play"
 								data-bases={JSON.stringify(jellyfin.baseUrls)}
+								data-local={jellyfin.localUrl ?? ''}
 								data-key={jellyfin.apiKey}
 								data-tmdb={movie.tmdb_id}
 								hidden
@@ -989,6 +990,9 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// is unauthenticated and tiny, and the winner is cached for the tab.
 				const BASE_KEY = 'jellyfin:base:v1';
 				const bases: string[] = JSON.parse(play.dataset.bases!);
+				// Empty when JELLYFIN_LOCAL_URL isn't set, in which case no device ever
+				// counts as the host and every play goes to the web player.
+				const localUrl = play.dataset.local || null;
 				async function pickBase(): Promise<string | null> {
 					const cached = sessionStorage.getItem(BASE_KEY);
 					if (cached && bases.includes(cached)) return cached;
@@ -1052,7 +1056,11 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// The desktop app registers as a remote-controllable session, which is
 				// what lets a click here start playback over there. A browser tab on the
 				// Jellyfin web client is also controllable, but casting the film to some
-				// other tab isn't what "play on desktop" promises, so match on the app.
+				// other tab isn't what the button promises, so match on the app.
+				//
+				// Only consulted when this browser is ON the Jellyfin machine. From a
+				// phone, starting the desktop player would put the film on in an empty
+				// room — the point is to watch it here.
 				async function desktopSession(): Promise<string | null> {
 					try {
 						const res = await jf('/Sessions');
@@ -1066,57 +1074,62 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					}
 				}
 
-				// Resolve both up front so the button can name what it will actually do
-				// before it's clicked, instead of promising the desktop and then quietly
-				// opening a browser tab.
+				// The button promises one thing — this film plays on the device you're
+				// holding — so it appears only when Jellyfin answers and has the film.
+				// Those two are the whole test, because the web player can always play it
+				// here; the desktop app is an upgrade on that, not a precondition for it.
 				(async () => {
 					const found = await pickBase();
 					if (!found) return; // Jellyfin isn't reachable from here — stay hidden.
 					base = found;
 
 					let itemId: string | null = null;
-					let sessionId: string | null = null;
 					try {
-						[itemId, sessionId] = await Promise.all([
-							libraryMap().then((m) => m[tmdbId] ?? null),
-							desktopSession(),
-						]);
+						itemId = (await libraryMap())[tmdbId] ?? null;
 					} catch {
 						return; // Unreachable server — leave the button hidden.
 					}
 					if (!itemId) return; // Not in the library — the YTS link is the answer.
 
+					// Which URL answered tells us where we're reading this: localhost only
+					// resolves on the machine Jellyfin runs on, so it doubles as "this
+					// browser is the desktop". Anything else means a phone or a laptop,
+					// where the desktop player is the wrong place to start a film.
+					const onHost = !!localUrl && base === localUrl;
 					const webHref = `${base}/web/index.html#/details?id=${itemId}`;
-					label.textContent = sessionId ? 'Play on desktop' : 'Open in Jellyfin';
+
+					label.textContent = 'Play';
 					play.hidden = false;
 
 					play.addEventListener('click', async () => {
-						// Re-check rather than trusting the load-time answer: the desktop
-						// player may have been opened or closed since the page rendered.
-						const target = await desktopSession();
-						if (!target) {
-							window.open(webHref, '_blank', 'noopener');
-							return;
+						// On the desktop, handing the film to the native player beats a
+						// browser tab. Checked at click time, not at load, so opening or
+						// closing the player between the two is handled either way.
+						if (onHost) {
+							const target = await desktopSession();
+							if (target) {
+								play.disabled = true;
+								play.dataset.busy = '1';
+								label.textContent = 'Starting…';
+								try {
+									const res = await jf(
+										`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
+										{ method: 'POST' },
+									);
+									if (!res.ok) throw new Error(String(res.status));
+									label.textContent = 'Playing on desktop';
+									return;
+								} catch {
+									// Cast failed — fall through to the web player, which plays
+									// on this same machine and so still keeps the promise.
+									label.textContent = 'Play';
+								} finally {
+									play.disabled = false;
+									delete play.dataset.busy;
+								}
+							}
 						}
-						play.disabled = true;
-						play.dataset.busy = '1';
-						label.textContent = 'Starting…';
-						try {
-							const res = await jf(
-								`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
-								{ method: 'POST' },
-							);
-							if (!res.ok) throw new Error(String(res.status));
-							label.textContent = 'Playing on desktop';
-						} catch {
-							// Fall back to the web client rather than dead-ending: whatever
-							// went wrong with the cast, the file is still there to play.
-							label.textContent = 'Open in Jellyfin';
-							window.open(webHref, '_blank', 'noopener');
-						} finally {
-							play.disabled = false;
-							delete play.dataset.busy;
-						}
+						window.open(webHref, '_blank', 'noopener');
 					});
 				})();
 			}
