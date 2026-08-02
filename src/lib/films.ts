@@ -2,7 +2,13 @@
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
-import { extractCreditFacts, getMovieDetails, preferredReleaseDate, releaseYear } from './tmdb';
+import {
+	extractCreditFacts,
+	getMovieDetails,
+	preferredReleaseDate,
+	premiereDate,
+	releaseYear,
+} from './tmdb';
 
 /** How long a cached movie row is considered fresh before we re-sync from TMDB. */
 const STALE_AFTER_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -54,14 +60,16 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		runtime: d.runtime,
 		last_synced_at: now,
 	};
-	// Genre + credit facts for the Stats page (migration 0008) and the full release
-	// date the Watchlist's upcoming badge needs (0014). The backfill fills these in
+	// Genre + credit facts for the Stats page (migration 0008), the full release
+	// date the Watchlist's upcoming badge needs (0014), and the premiere date the
+	// film page's YTS search is keyed on (0019). The backfill fills these in
 	// bulk for existing films; this keeps them fresh for anything logged from now
 	// on. If those migrations haven't been applied yet, fall back to the base
 	// columns so caching a movie still works.
 	const withFacts = {
 		...base,
 		release_date: releasedOn,
+		premiere_date: premiereDate(d),
 		genres: facts.genres,
 		languages: facts.languages,
 		countries: facts.countries,
@@ -984,6 +992,10 @@ export interface FilmByTmdb {
 		 * film page's meta row shows it in full, where the year alone appears
 		 * beside the title. */
 		release_date: string | null;
+		/** Premiere date — earliest release anywhere, "YYYY-MM-DD" (0019); null when
+		 * TMDB has no date or the column isn't populated yet. Nothing on the page
+		 * displays it; it's the year the YTS search has to use. */
+		premiere_date: string | null;
 		poster_path: string | null;
 		backdrop_path: string | null;
 		overview: string | null;
@@ -1012,14 +1024,18 @@ export interface FilmByTmdb {
  * migrations have been applied.
  */
 export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
-	const BASE =
+	const CORE =
 		'id, tmdb_id, title, release_year, release_date, poster_path, backdrop_path, overview, runtime';
 	const W = 'watched(rating, liked, first_watched)';
-	const tiers = [
-		`${BASE}, genres, directors, actors, countries, original_language, mpa_rating, ${W}`, // 0008+0009
-		`${BASE}, genres, directors, actors, countries, ${W}`, // 0008 only
-		`${BASE}, ${W}`, // pre-0008
-	];
+	// Two independent migration dimensions: the premiere date (0019) and the credit
+	// columns (0008/0009). Walk the credit tiers with premiere_date, then walk them
+	// again without it, so a missing 0019 costs the premiere date rather than the
+	// credits.
+	const tiers = [`${CORE}, premiere_date`, CORE].flatMap((base) => [
+		`${base}, genres, directors, actors, countries, original_language, mpa_rating, ${W}`, // 0008+0009
+		`${base}, genres, directors, actors, countries, ${W}`, // 0008 only
+		`${base}, ${W}`, // pre-0008
+	]);
 
 	let data: unknown = null;
 	let lastError: { code?: string; message?: string } | null = null;
@@ -1036,20 +1052,40 @@ export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null
 	if (lastError) throw new Error(`getFilmByTmdbId failed: ${lastError.message}`);
 	if (!data) return null;
 
-	const { watched, genres, directors, actors, countries, original_language, mpa_rating, ...rest } =
-		data as Omit<FilmByTmdb['movie'], 'genres' | 'directors' | 'actors' | 'countries' | 'original_language' | 'mpa_rating'> & {
-			genres?: string[] | null;
-			directors?: string[] | null;
-			actors?: string[] | null;
-			countries?: string[] | null;
-			original_language?: string | null;
-			mpa_rating?: string | null;
-			watched: WatchedActivity[] | WatchedActivity | null;
-		};
+	const {
+		watched,
+		genres,
+		directors,
+		actors,
+		countries,
+		original_language,
+		mpa_rating,
+		premiere_date,
+		...rest
+	} = data as Omit<
+		FilmByTmdb['movie'],
+		| 'genres'
+		| 'directors'
+		| 'actors'
+		| 'countries'
+		| 'original_language'
+		| 'mpa_rating'
+		| 'premiere_date'
+	> & {
+		genres?: string[] | null;
+		directors?: string[] | null;
+		actors?: string[] | null;
+		countries?: string[] | null;
+		original_language?: string | null;
+		mpa_rating?: string | null;
+		premiere_date?: string | null;
+		watched: WatchedActivity[] | WatchedActivity | null;
+	};
 	const w = Array.isArray(watched) ? (watched[0] ?? null) : (watched ?? null);
 	return {
 		movie: {
 			...rest,
+			premiere_date: premiere_date ?? null,
 			genres: genres ?? [],
 			directors: directors ?? [],
 			actors: actors ?? [],
