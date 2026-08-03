@@ -19,8 +19,14 @@ export interface HeatmapDay {
 export interface BookProgress {
 	id: number;
 	md5: string;
+	/** Corrected title where one exists, KOReader's otherwise — resolved in the view. */
 	title: string;
 	authors: string | null;
+	/**
+	 * What KOReader calls the file, uncorrected. Not for display; it's what you
+	 * need when a book stops matching and you're working out why.
+	 */
+	source_title: string;
 	series: string | null;
 	total_pages: number | null;
 	cover_url: string | null;
