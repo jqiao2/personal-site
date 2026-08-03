@@ -355,6 +355,11 @@ function cellFor(day: string, record: ActivityDay | undefined, maxPages: number)
  * A calendar heatmap of a year containing three weeks of reading is a year of
  * blank squares; this shows the three weeks at full size and says "10 quiet
  * months" where the blanks were.
+ *
+ * Returned newest first, so the most recent reading is the first thing on the
+ * page. The rows are built chronologically and reversed at the end rather than
+ * walked backwards: a break describes the gap between the two spells it sits
+ * between, and reversing the whole list keeps every break between the same pair.
  */
 export function buildSpells(
 	days: ActivityDay[],
@@ -412,7 +417,7 @@ export function buildSpells(
 		});
 	});
 
-	return rows;
+	return rows.reverse();
 }
 
 export interface HeatColumn {
