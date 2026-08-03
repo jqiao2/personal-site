@@ -78,14 +78,16 @@ const hasActivity = days.length > 0;
 
 <ReadingLayout title="Reading">
 	<div class="page">
-		<nav class="tabs">
-			<a class="tabs__link" href="/">Home</a>
-			<a class="tabs__link" href="/about">About</a>
-			<a class="tabs__link" href="/projects">Projects</a>
-			<a class="tabs__link" href="/films">Films</a>
-			<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
-			<a class="tabs__link" href="/subway">Subway</a>
-		</nav>
+		<div class="tabs-bar">
+			<nav class="tabs">
+				<a class="tabs__link" href="/">Home</a>
+				<a class="tabs__link" href="/about">About</a>
+				<a class="tabs__link" href="/projects">Projects</a>
+				<a class="tabs__link" href="/films">Films</a>
+				<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
+				<a class="tabs__link" href="/subway">Subway</a>
+			</nav>
+		</div>
 
 		<div class="wrap">
 			<div class="col">
@@ -423,14 +425,25 @@ const hasActivity = days.length > 0;
 			background: #1a120a;
 		}
 
-		/* Site nav — matches the film log's, in the reading palette. */
+		/* Site nav. The strip runs to both edges while the links sit on the same
+		   960px column as the page content — 1008px is that column plus the
+		   padding either side.
+
+		   The mock reaches for the bleed with a pair of ±2000px box-shadows, but
+		   an offset shadow of a box at most 1008px wide lands 1000px clear of it
+		   and never meets the edge. A wrapper carries the background and the rule
+		   out at every width instead. */
+		.tabs-bar {
+			background: #150e07;
+			border-bottom: 1px solid #45341f;
+		}
 		.tabs {
 			display: flex;
 			align-items: stretch;
 			gap: 2px;
-			background: #150e07;
-			border-bottom: 1px solid #45341f;
-			padding: 0 clamp(14px, 4vw, 28px);
+			max-width: 1008px;
+			margin: 0 auto;
+			padding: 0 clamp(14px, 4vw, 24px);
 			overflow-x: auto;
 		}
 		.tabs__link {
@@ -980,9 +993,6 @@ const hasActivity = days.length > 0;
 		}
 
 		@media (max-width: 640px) {
-			.tabs {
-				padding: 0 14px;
-			}
 			.tabs__link {
 				padding: 18px 10px 16px;
 			}
