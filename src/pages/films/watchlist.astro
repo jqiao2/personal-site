@@ -216,6 +216,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 							data-order={i}
 							data-title={f.title.toLowerCase()}
 							data-year={f.release_year ?? ''}
+							data-release-date={f.release_date ?? ''}
 							data-upcoming={upcoming ? '1' : ''}
 						>
 							{isOwner && (
@@ -1458,6 +1459,11 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				/** Release year, or null when TMDB has none — such a film can't satisfy
 				 * any year range, so a narrowed slider drops it. */
 				year: number | null;
+				/** Sort key for "Release date": the full TMDB date when there is one,
+				 * else `YYYY-00-00` so a year-only film sits below every dated film of
+				 * its own year, else null when TMDB has neither. Compared as a string —
+				 * both forms are fixed-width and zero-padded. */
+				releaseKey: string | null;
 				/** Empty until the facets arrive; the chips that match on them don't
 				 * exist before then either, so nothing can filter on a blank. */
 				genres: string[];
@@ -1475,11 +1481,13 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 
 			const items: Item[] = Array.from(grid.querySelectorAll<HTMLElement>('.item')).map((el) => {
 				const year = el.dataset.year ? Number(el.dataset.year) : null;
+				const releaseDate = el.dataset.releaseDate ?? '';
 				return {
 					el,
 					tmdbId: Number(el.dataset.tmdbId),
 					title: el.dataset.title ?? '',
 					year,
+					releaseKey: releaseDate || (year != null ? `${year}-00-00` : null),
 					genres: [],
 					directors: [],
 					actors: [],
@@ -1571,10 +1579,18 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 
 				const ordered = visible.slice();
 				if (sort === 'shuffle') ordered.sort((a, b) => shuffleRank(a) - shuffleRank(b));
-				// Newest release first, with undated films last — they'd otherwise sort
-				// as year 0 and bury the top of the list.
+				// Newest release first, by full date — a year alone can't tell a film out
+				// next week from one out in December. Films TMDB has no date for fall back
+				// to their year; films with neither go last, rather than sorting as year 0
+				// and burying the top of the list. Ties keep added_at order (stable sort).
 				else if (sort === 'year') {
-					ordered.sort((a, b) => (b.year ?? -Infinity) - (a.year ?? -Infinity));
+					ordered.sort((a, b) => {
+						if (a.releaseKey == null || b.releaseKey == null) {
+							return (a.releaseKey == null ? 1 : 0) - (b.releaseKey == null ? 1 : 0);
+						}
+						if (a.releaseKey === b.releaseKey) return 0;
+						return a.releaseKey < b.releaseKey ? 1 : -1;
+					});
 				} else ordered.sort((a, b) => a.order - b.order);
 
 				// One reflow rather than one per tile. Hidden tiles stay put; they're
