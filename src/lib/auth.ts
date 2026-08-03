@@ -49,20 +49,32 @@ export function checkPassword(input: string): boolean {
 }
 
 /**
+ * 'unconfigured' is deliberately not merged into 'unauthorized'. The caller is
+ * a Kindle with no screen to show an error on, so the difference between "your
+ * token is wrong" and "the server has no token to compare against" is the
+ * difference between a two-minute fix and an evening of guessing.
+ */
+export type SyncAuthResult = 'ok' | 'unauthorized' | 'unconfigured';
+
+/**
  * Check an `Authorization: Bearer …` header against READING_SYNC_TOKEN.
  *
  * The reading sync is machine-to-machine — a Kindle running KOReader, with no
  * cookie jar and no login page — so it carries a static bearer token instead of
  * the owner session above. Same constant-time comparison; the length check is
  * what keeps it from throwing on a token of the wrong size.
+ *
+ * Returns rather than throws on a missing environment variable: a config
+ * mistake should surface as a described failure, not a stack trace the runtime
+ * turns into an opaque 500.
  */
-export function checkSyncToken(header: string | null | undefined): boolean {
+export function checkSyncToken(header: string | null | undefined): SyncAuthResult {
 	const expected = import.meta.env.READING_SYNC_TOKEN;
-	if (!expected) throw new Error('READING_SYNC_TOKEN is not set');
-	if (typeof header !== 'string') return false;
+	if (!expected) return 'unconfigured';
+	if (typeof header !== 'string') return 'unauthorized';
 	const match = /^Bearer\s+(.+)$/i.exec(header.trim());
-	if (!match) return false;
-	return safeEqual(match[1], expected);
+	if (!match) return 'unauthorized';
+	return safeEqual(match[1], expected) ? 'ok' : 'unauthorized';
 }
 
 /** Mint a signed session token that expires MAX_AGE_SECONDS from now. */
