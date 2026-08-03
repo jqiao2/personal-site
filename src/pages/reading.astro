@@ -1,0 +1,998 @@
+---
+import ReadingLayout from '../layouts/ReadingLayout.astro';
+import {
+	getCurrentlyReading,
+	getFinished,
+	getHeatmap,
+	getSetAside,
+	getStats,
+} from '../lib/reading-queries';
+import {
+	activityMeta,
+	buildHeatmap,
+	buildShelf,
+	buildSpells,
+	DOW_LABELS,
+	formatDuration,
+	formatNumber,
+	HEAT_LEVELS,
+	prefersHeatmap,
+	readDays,
+	SPINE_HEIGHT,
+	today,
+	type BookView,
+} from '../lib/reading-view';
+
+// Rendered on demand — reflects whatever the Kindle last pushed.
+export const prerender = false;
+
+const todayDay = today();
+
+const [stats, currentRaw, asideRaw, finishedRaw] = await Promise.all([
+	getStats(),
+	getCurrentlyReading(),
+	getSetAside(),
+	getFinished(),
+]);
+
+// One heatmap query covers both activity views: the spells need the days with
+// reading on them, the calendar needs the same set plus a date spine it can
+// derive itself. Empty history means nothing to ask for.
+const heatmapDays = stats.first_day ? await getHeatmap(stats.first_day, todayDay) : [];
+
+const days = readDays(heatmapDays);
+const maxPages = Math.max(1, ...days.map((d) => d.pages));
+
+const { current, setAside, finished } = buildShelf(currentRaw, asideRaw, finishedRaw, todayDay);
+
+// Which books a spell covers is answered from every public book, not just the
+// ones in flight — a spell three years ago was spent on something long finished.
+const shelf = [...current, ...setAside, ...finished];
+const spells = buildSpells(days, shelf, maxPages);
+const heatmap = buildHeatmap(days, maxPages, todayDay);
+
+// The data picks the instrument. A year of near-daily reading is what a calendar
+// is for; a fortnight in April surrounded by nothing is not.
+const defaultView = days.length && prefersHeatmap(days, todayDay) ? 'heatmap' : 'spells';
+const autoNote =
+	defaultView === 'heatmap' ? 'dense enough for a calendar' : 'shown as spells';
+
+const years = [...new Set(finished.map((b) => b.finishedYear))].sort((a, b) => b - a);
+
+const metrics = [
+	{ value: formatNumber(stats.current_streak), label: 'Current streak' },
+	{ value: formatNumber(stats.longest_streak), label: 'Longest streak' },
+	{ value: formatNumber(stats.days_read), label: 'Days read' },
+	{ value: formatNumber(stats.total_pages), label: 'Pages' },
+	{ value: formatDuration(stats.total_seconds), label: 'Time read' },
+];
+
+const spineStyle = (b: BookView) => `width:${b.spineWidth}px; height:${SPINE_HEIGHT}px`;
+const fillStyle = (b: BookView) => `height:${b.spineFill}px`;
+
+// A heatmap with no reading in it has no scale to place the legend against, so
+// both the view toggle and the grid stay out of the way until there is something
+// to show.
+const hasActivity = days.length > 0;
+---
+
+<ReadingLayout title="Reading">
+	<div class="page">
+		<nav class="tabs">
+			<a class="tabs__link" href="/">Home</a>
+			<a class="tabs__link" href="/about">About</a>
+			<a class="tabs__link" href="/projects">Projects</a>
+			<a class="tabs__link" href="/films">Films</a>
+			<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
+			<a class="tabs__link" href="/subway">Subway</a>
+		</nav>
+
+		<div class="wrap">
+			<div class="col">
+				<header class="head">
+					<h1 class="head__title">Reading</h1>
+					<p class="head__note">
+						Logged automatically by the Kindle, one page turn at a time. Nothing here is
+						typed by hand.
+					</p>
+				</header>
+
+				<div class="metrics">
+					{
+						metrics.map((m) => (
+							<div class="metric">
+								<div class="metric__value">{m.value}</div>
+								<div class="metric__label">{m.label}</div>
+							</div>
+						))
+					}
+				</div>
+
+				<section class="section">
+					<div class="sec-head">
+						<h2 class="sec-head__title">Currently reading</h2>
+					</div>
+
+					{
+						current.length > 0 ? (
+							<div class="stack">
+								{current.map((b) => (
+									<article class="book">
+										<div class="spine" style={spineStyle(b)}>
+											<div class="spine__fill" style={fillStyle(b)} />
+										</div>
+										<div class="book__main">
+											<h3 class="book__title">{b.main}</h3>
+											{b.sub && <div class="book__sub">{b.sub}</div>}
+											{b.author && <div class="book__author">{b.author}</div>}
+
+											<div class="progress">
+												{b.progress !== null && (
+													<div class="bar">
+														<div
+															class="bar__fill"
+															style={`width:${Math.max(1.5, b.progress * 100)}%`}
+														/>
+													</div>
+												)}
+												<div class="progress__row">
+													<span class="progress__pages">
+														{b.pagesLabel}
+														{b.progress !== null && <span class="dim"> pages</span>}
+													</span>
+													<span class="progress__pct">
+														{b.percent ?? 'length unknown'}
+													</span>
+												</div>
+											</div>
+										</div>
+										<dl class="facts">
+											{b.facts.map((f) => (
+												<div class="fact">
+													<dt class="fact__k">{f.k}</dt>
+													<dd class="fact__v">{f.v}</dd>
+												</div>
+											))}
+										</dl>
+									</article>
+								))}
+							</div>
+						) : (
+							<div class="empty">
+								<div class="empty__line">
+									{days.length ? 'Between books right now.' : 'No reading logged yet.'}
+								</div>
+								<div class="empty__sub">
+									The next page turn on the Kindle starts a new entry here.
+								</div>
+							</div>
+						)
+					}
+				</section>
+
+				{
+					setAside.length > 0 && (
+						<section class="section">
+							<div class="sec-head sec-head--tight">
+								<h2 class="sec-head__title">Set aside</h2>
+							</div>
+							{setAside.map((b) => (
+								<div class="row">
+									<div class="spine" style={spineStyle(b)}>
+										<div class="spine__fill" style={fillStyle(b)} />
+									</div>
+									<div class="row__main">
+										<div class="row__title">{b.main}</div>
+										<div class="row__meta">{b.asideMeta}</div>
+									</div>
+									<div class="row__bar">
+										<div class="bar bar--slim">
+											{b.progress !== null && (
+												<div
+													class="bar__fill"
+													style={`width:${Math.max(1.5, b.progress * 100)}%`}
+												/>
+											)}
+										</div>
+									</div>
+									<span class="row__pct">{b.percent ?? '—'}</span>
+								</div>
+							))}
+						</section>
+					)
+				}
+
+				<section class="section">
+					<div class="sec-head">
+						<h2 class="sec-head__title">Reading activity</h2>
+						{
+							hasActivity && (
+								<div class="sec-head__tools">
+									<span class="sec-head__meta">
+										{activityMeta(days)}
+										<span class="auto-note" data-auto-note> · {autoNote}</span>
+									</span>
+									<div class="pills">
+										<button
+											type="button"
+											class:list={['pill', 'pill--sm', defaultView === 'spells' && 'pill--on']}
+											data-view="spells"
+											title="Only the stretches with reading in them"
+										>
+											Spells
+										</button>
+										<button
+											type="button"
+											class:list={['pill', 'pill--sm', defaultView === 'heatmap' && 'pill--on']}
+											data-view="heatmap"
+											title="Calendar heatmap of the last 12 months"
+										>
+											Year
+										</button>
+									</div>
+								</div>
+							)
+						}
+					</div>
+
+					{
+						hasActivity ? (
+							<Fragment>
+								<div class="view" data-panel="spells" hidden={defaultView !== 'spells'}>
+									{spells.map((row) =>
+										row.kind === 'break' ? (
+											<div class="gap">
+												<span class="gap__rule" />
+												<span class="gap__label">{row.label}</span>
+												<span class="gap__rule" />
+											</div>
+										) : (
+											<div class="spell">
+												<div class="spell__head">
+													<div class="spell__label">{row.label}</div>
+													<div class="spell__meta">{row.meta}</div>
+												</div>
+												<div class="spell__cells">
+													{row.cells.map((c) => (
+														<div
+															class:list={[
+																'cell',
+																'cell--lg',
+																`cell--l${c.level}`,
+																!c.read && 'cell--off',
+															]}
+															title={c.title}
+														/>
+													))}
+												</div>
+												<div class="spell__books">{row.books}</div>
+											</div>
+										),
+									)}
+								</div>
+
+								<div class="view" data-panel="heatmap" hidden={defaultView !== 'heatmap'}>
+									<div class="heat-scroll">
+										<div class="heat">
+											<div class="heat__months">
+												{heatmap.columns.map((col) => (
+													<div class="heat__month">{col.month}</div>
+												))}
+											</div>
+											<div class="heat__body">
+												<div class="heat__dows">
+													{DOW_LABELS.map((d) => (
+														<div class="heat__dow">{d}</div>
+													))}
+												</div>
+												<div class="heat__grid">
+													{heatmap.columns.map((col) => (
+														<div class="heat__col">
+															{col.cells.map((c) => (
+																<div
+																	class:list={[
+																		'cell',
+																		`cell--l${c.level}`,
+																		!c.inRange && 'cell--void',
+																		c.inRange && !c.read && 'cell--off',
+																	]}
+																	title={c.title}
+																/>
+															))}
+														</div>
+													))}
+												</div>
+											</div>
+										</div>
+									</div>
+									<div class="legend">
+										<span class="legend__label">Fewer pages</span>
+										<div class="legend__steps">
+											{HEAT_LEVELS.map((l) => (
+												<div class:list={['cell', `cell--l${l}`, l === 0 && 'cell--off']} />
+											))}
+										</div>
+										<span class="legend__label">More</span>
+										<span class="legend__span">{heatmap.span}</span>
+									</div>
+								</div>
+							</Fragment>
+						) : (
+							<p class="none">Nothing logged yet — the first sync fills this in.</p>
+						)
+					}
+				</section>
+
+				<section class="section">
+					<div class="sec-head sec-head--tight">
+						<h2 class="sec-head__title">Finished</h2>
+						{
+							years.length > 1 && (
+								<div class="pills">
+									<button type="button" class="pill pill--on" data-year="all">
+										All
+									</button>
+									{years.map((y) => (
+										<button type="button" class="pill" data-year={String(y)}>
+											{y}
+										</button>
+									))}
+								</div>
+							)
+						}
+					</div>
+
+					{
+						finished.length > 0 ? (
+							<Fragment>
+								{finished.map((b) => (
+									<div class="row row--done" data-finished-year={String(b.finishedYear)}>
+										<div class="spine" style={spineStyle(b)}>
+											<div class="spine__fill" style={fillStyle(b)} />
+										</div>
+										<div class="row__main">
+											<div class="row__title row__title--lg">{b.main}</div>
+											<div class="row__meta">{b.finishedMeta}</div>
+										</div>
+										<div class="row__when">
+											<div class="row__time">{b.readTime}</div>
+											<div class="row__date">{b.finishedDate}</div>
+										</div>
+									</div>
+								))}
+								<p class="none" data-no-finished hidden>
+									Nothing finished in this period.
+								</p>
+							</Fragment>
+						) : (
+							<p class="none">Nothing finished yet.</p>
+						)
+					}
+				</section>
+
+				<p class="foot">
+					Some books are read privately. They are counted in the totals and streaks above
+					but never listed.
+				</p>
+			</div>
+		</div>
+	</div>
+
+	<script>
+		// Both controls filter markup that is already on the page: the server sends
+		// every finished book and both activity views, so switching is instant and
+		// the page still reads correctly with JavaScript off (all books listed, the
+		// denser-fitting activity view shown).
+		const panels = document.querySelectorAll<HTMLElement>('[data-panel]');
+		const viewButtons = document.querySelectorAll<HTMLButtonElement>('[data-view]');
+		const autoNote = document.querySelector<HTMLElement>('[data-auto-note]');
+
+		for (const button of viewButtons) {
+			button.addEventListener('click', () => {
+				const wanted = button.dataset.view;
+				for (const panel of panels) panel.hidden = panel.dataset.panel !== wanted;
+				for (const other of viewButtons) other.classList.toggle('pill--on', other === button);
+				// The note explains an automatic choice. Once it's been overruled it
+				// is describing something that is no longer on screen.
+				autoNote?.remove();
+			});
+		}
+
+		const yearButtons = document.querySelectorAll<HTMLButtonElement>('[data-year]');
+		const finishedRows = document.querySelectorAll<HTMLElement>('[data-finished-year]');
+		const noFinished = document.querySelector<HTMLElement>('[data-no-finished]');
+
+		for (const button of yearButtons) {
+			button.addEventListener('click', () => {
+				const wanted = button.dataset.year;
+				let shown = 0;
+				for (const row of finishedRows) {
+					const match = wanted === 'all' || row.dataset.finishedYear === wanted;
+					row.hidden = !match;
+					if (match) shown++;
+				}
+				for (const other of yearButtons) other.classList.toggle('pill--on', other === button);
+				if (noFinished) noFinished.hidden = shown > 0;
+			});
+		}
+	</script>
+
+	<style>
+		.page {
+			min-height: 100vh;
+			background: #1a120a;
+		}
+
+		/* Site nav — matches the film log's, in the reading palette. */
+		.tabs {
+			display: flex;
+			align-items: stretch;
+			gap: 2px;
+			background: #150e07;
+			border-bottom: 1px solid #45341f;
+			padding: 0 clamp(14px, 4vw, 28px);
+			overflow-x: auto;
+		}
+		.tabs__link {
+			font-size: 13px;
+			letter-spacing: 0.4px;
+			color: #bfa886;
+			padding: 26px 16px 24px;
+			border-bottom: 2px solid transparent;
+			white-space: nowrap;
+			transition: color 0.12s;
+		}
+		.tabs__link:hover {
+			color: #f2e6cd;
+		}
+		.tabs__link--active {
+			color: #f2e6cd;
+			font-weight: 600;
+			border-bottom-color: #cfa452;
+		}
+		.tabs__link--active:hover {
+			color: #fff2da;
+		}
+
+		.wrap {
+			display: flex;
+			justify-content: center;
+			padding: 34px clamp(14px, 4vw, 24px) 90px;
+		}
+		.col {
+			width: 100%;
+			max-width: 960px;
+		}
+
+		/* Header */
+		.head {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			gap: 14px;
+			flex-wrap: wrap;
+			margin-bottom: 30px;
+		}
+		.head__title {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: clamp(38px, 9vw, 52px);
+			color: #f2e6cd;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.head__note {
+			margin: 0;
+			font-size: 12.5px;
+			color: #8a745a;
+			line-height: 1.5;
+			max-width: 280px;
+		}
+
+		/* Metrics */
+		.metrics {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+			gap: 12px;
+			margin-bottom: 44px;
+		}
+		.metric {
+			background: #241a10;
+			border: 1px solid #45341f;
+			border-radius: 10px;
+			padding: 20px 18px;
+		}
+		.metric__value {
+			font-family: 'Newsreader', serif;
+			font-size: 36px;
+			color: #cfa452;
+			line-height: 1;
+		}
+		.metric__label {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #a68f6e;
+			margin-top: 8px;
+		}
+
+		/* Sections */
+		.section {
+			margin-bottom: 46px;
+		}
+		.sec-head {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+			flex-wrap: wrap;
+			padding-bottom: 10px;
+			border-bottom: 1px solid #392a19;
+			margin-bottom: 20px;
+		}
+		.sec-head--tight {
+			margin-bottom: 14px;
+		}
+		.sec-head__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-weight: 400;
+			font-size: 20px;
+			color: #ead9b6;
+			margin: 0;
+		}
+		.sec-head__tools {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+		.sec-head__meta {
+			font-size: 12px;
+			color: #a68f6e;
+		}
+
+		/* Pills */
+		.pills {
+			display: flex;
+			gap: 7px;
+			flex-wrap: wrap;
+		}
+		.pill {
+			font-family: 'Archivo', sans-serif;
+			font-size: 12.5px;
+			line-height: 1.2;
+			padding: 7px 13px;
+			border-radius: 20px;
+			border: 1px solid #45341f;
+			background: transparent;
+			color: #dcc9a6;
+			cursor: pointer;
+		}
+		.pill--sm {
+			font-size: 12px;
+			padding: 6px 12px;
+		}
+		.pill:hover {
+			border-color: #6b5231;
+			color: #f2e6cd;
+		}
+		.pill--on,
+		.pill--on:hover {
+			background: #cfa452;
+			border-color: #cfa452;
+			color: #241a10;
+			font-weight: 600;
+		}
+
+		/* Book spine — width tracks page count, fill tracks progress. */
+		.spine {
+			flex: none;
+			position: relative;
+			border-radius: 2px;
+			border: 1px solid #45341f;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #33261a 0 6px, #2a1c0c 6px 12px);
+		}
+		.spine__fill {
+			position: absolute;
+			left: 0;
+			right: 0;
+			bottom: 0;
+			background: #cfa452;
+			opacity: 0.9;
+		}
+
+		/* Currently reading */
+		.stack {
+			display: flex;
+			flex-direction: column;
+			gap: 14px;
+		}
+		.book {
+			background: #241a10;
+			border: 1px solid #45341f;
+			border-radius: 10px;
+			padding: 22px 20px;
+			display: flex;
+			gap: 22px;
+			align-items: stretch;
+			flex-wrap: wrap;
+		}
+		.book__main {
+			flex: 1 1 260px;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
+		}
+		.book__title {
+			font-family: 'Newsreader', serif;
+			font-size: 26px;
+			font-weight: 500;
+			color: #f2e6cd;
+			line-height: 1.15;
+			letter-spacing: -0.2px;
+			margin: 0;
+		}
+		.book__sub {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 15px;
+			color: #a68f6e;
+			margin-top: 4px;
+			line-height: 1.3;
+		}
+		.book__author {
+			font-size: 13px;
+			color: #a68f6e;
+			margin-top: 9px;
+		}
+
+		.progress {
+			margin-top: 18px;
+		}
+		.bar {
+			height: 8px;
+			background: #33261a;
+			border-radius: 4px;
+			overflow: hidden;
+		}
+		.bar--slim {
+			height: 6px;
+			border-radius: 3px;
+		}
+		.bar__fill {
+			height: 100%;
+			background: #cfa452;
+			border-radius: 4px;
+		}
+		.progress__row {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			gap: 12px;
+			margin-top: 9px;
+			flex-wrap: wrap;
+		}
+		.progress__pages {
+			font-size: 12.5px;
+			color: #dcc9a6;
+		}
+		.dim {
+			color: #8a745a;
+		}
+		.progress__pct {
+			font-family: 'Newsreader', serif;
+			font-size: 19px;
+			color: #cfa452;
+			line-height: 1;
+		}
+
+		.facts {
+			flex: 0 1 190px;
+			min-width: 170px;
+			display: flex;
+			flex-direction: column;
+			gap: 9px;
+			border-left: 1px solid #392a19;
+			padding-left: 20px;
+			margin: 0;
+		}
+		.fact {
+			display: flex;
+			justify-content: space-between;
+			gap: 10px;
+			font-size: 12.5px;
+		}
+		.fact__k {
+			color: #8a745a;
+		}
+		.fact__v {
+			color: #efe0c2;
+			text-align: right;
+			margin: 0;
+		}
+
+		.empty {
+			border: 1px dashed #392a19;
+			border-radius: 10px;
+			padding: 30px 22px;
+			text-align: center;
+		}
+		.empty__line {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 18px;
+			color: #a68f6e;
+		}
+		.empty__sub {
+			font-size: 12.5px;
+			color: #8a745a;
+			margin-top: 7px;
+		}
+
+		/* Set aside / finished rows */
+		.row {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			padding: 14px 2px;
+			border-bottom: 1px solid #33261a;
+			flex-wrap: wrap;
+		}
+		.row[hidden] {
+			display: none;
+		}
+		.row--done {
+			gap: 18px;
+			padding: 16px 2px;
+		}
+		.row__main {
+			flex: 1 1 220px;
+			min-width: 0;
+		}
+		.row__title {
+			font-family: 'Newsreader', serif;
+			font-size: 19px;
+			color: #e4d3b0;
+			line-height: 1.2;
+		}
+		.row__title--lg {
+			font-size: 21px;
+			color: #f2e6cd;
+		}
+		.row__meta {
+			font-size: 12px;
+			color: #8a745a;
+			margin-top: 4px;
+			line-height: 1.4;
+		}
+		.row__bar {
+			width: 110px;
+			flex: none;
+		}
+		.row__pct {
+			font-size: 12.5px;
+			color: #a68f6e;
+			width: 46px;
+			text-align: right;
+			flex: none;
+		}
+		.row__when {
+			text-align: right;
+			flex: none;
+		}
+		.row__time {
+			font-family: 'Newsreader', serif;
+			font-size: 20px;
+			color: #cfa452;
+			line-height: 1;
+		}
+		.row__date {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.2px;
+			color: #a68f6e;
+			margin-top: 5px;
+		}
+
+		/* Activity cells, shared by both views */
+		.cell {
+			width: 11px;
+			height: 11px;
+			border-radius: 2px;
+			border: 1px solid transparent;
+			flex: none;
+		}
+		.cell--lg {
+			width: 17px;
+			height: 17px;
+			border-radius: 3px;
+		}
+		.cell--l0 {
+			background: #241a10;
+		}
+		.cell--l1 {
+			background: rgba(207, 164, 82, 0.26);
+		}
+		.cell--l2 {
+			background: rgba(207, 164, 82, 0.48);
+		}
+		.cell--l3 {
+			background: rgba(207, 164, 82, 0.72);
+		}
+		.cell--l4 {
+			background: #cfa452;
+		}
+		.cell--off {
+			border-color: #2f2415;
+		}
+		.cell--lg.cell--off {
+			border-color: #33261a;
+		}
+		.cell--void {
+			background: transparent;
+			border-color: transparent;
+		}
+
+		.view[hidden] {
+			display: none;
+		}
+
+		/* Spells */
+		.spell {
+			background: #201709;
+			border: 1px solid #392a19;
+			border-radius: 10px;
+			padding: 16px 18px;
+		}
+		.spell__head {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+			flex-wrap: wrap;
+		}
+		.spell__label {
+			font-size: 13.5px;
+			color: #efe0c2;
+			font-weight: 500;
+			letter-spacing: 0.2px;
+		}
+		.spell__meta {
+			font-size: 12px;
+			color: #a68f6e;
+		}
+		.spell__cells {
+			display: flex;
+			gap: 3px;
+			margin-top: 13px;
+			flex-wrap: wrap;
+		}
+		.spell__books {
+			font-size: 12px;
+			color: #8a745a;
+			margin-top: 12px;
+			line-height: 1.45;
+		}
+		.gap {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			padding: 16px 0;
+		}
+		.gap__rule {
+			flex: 1;
+			height: 1px;
+			background: repeating-linear-gradient(90deg, #392a19 0 5px, transparent 5px 11px);
+		}
+		.gap__label {
+			font-size: 10.5px;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #8a745a;
+			white-space: nowrap;
+		}
+
+		/* Year heatmap */
+		.heat-scroll {
+			overflow-x: auto;
+			padding-bottom: 6px;
+		}
+		.heat {
+			min-width: 680px;
+		}
+		.heat__months {
+			display: flex;
+			gap: 3px;
+			margin-left: 26px;
+			margin-bottom: 6px;
+		}
+		.heat__month {
+			width: 11px;
+			flex: none;
+			font-size: 9.5px;
+			color: #8a745a;
+			white-space: nowrap;
+		}
+		.heat__body {
+			display: flex;
+			gap: 6px;
+		}
+		.heat__dows {
+			display: flex;
+			flex-direction: column;
+			gap: 3px;
+			width: 20px;
+			flex: none;
+		}
+		.heat__dow {
+			height: 11px;
+			font-size: 9px;
+			color: #8a745a;
+			line-height: 11px;
+		}
+		.heat__grid {
+			display: flex;
+			gap: 3px;
+		}
+		.heat__col {
+			display: flex;
+			flex-direction: column;
+			gap: 3px;
+		}
+		.legend {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			margin-top: 14px;
+			flex-wrap: wrap;
+		}
+		.legend__steps {
+			display: flex;
+			gap: 3px;
+		}
+		.legend__label,
+		.legend__span {
+			font-size: 11.5px;
+			color: #8a745a;
+		}
+		.legend__span {
+			margin-left: auto;
+		}
+
+		.none {
+			font-size: 13px;
+			color: #8a745a;
+			padding: 18px 2px;
+			margin: 0;
+		}
+		.none[hidden] {
+			display: none;
+		}
+		.foot {
+			font-size: 11.5px;
+			color: #8a745a;
+			padding-top: 4px;
+			line-height: 1.6;
+			margin: 0;
+		}
+
+		@media (max-width: 640px) {
+			.tabs {
+				padding: 0 14px;
+			}
+			.tabs__link {
+				padding: 18px 10px 16px;
+			}
+			.facts {
+				flex: 1 1 100%;
+				border-left: none;
+				border-top: 1px solid #392a19;
+				padding-left: 0;
+				padding-top: 16px;
+			}
+		}
+	</style>
+</ReadingLayout>

@@ -53,7 +53,7 @@ export interface ReadingStats {
 }
 
 /** How recently a book must have been touched to still count as "currently reading". */
-const CURRENTLY_READING_DAYS = 30;
+export const CURRENTLY_READING_DAYS = 30;
 
 /**
  * Every day from `from` to `to` inclusive, zeros included.
@@ -90,6 +90,29 @@ export async function getCurrentlyReading(includePrivate = false): Promise<BookP
 
 	const { data, error } = await q;
 	if (error) throw new Error(`currently-reading query failed: ${error.message}`);
+	return (data ?? []) as BookProgress[];
+}
+
+/**
+ * Books left in the middle: unfinished, and untouched for longer than the
+ * currently-reading window. Least stale first.
+ *
+ * The exact complement of getCurrentlyReading — between them every unfinished
+ * book appears once, which is what stops a book abandoned in March from either
+ * vanishing or pretending to be in progress.
+ */
+export async function getSetAside(includePrivate = false): Promise<BookProgress[]> {
+	const cutoff = new Date(Date.now() - CURRENTLY_READING_DAYS * 24 * 60 * 60 * 1000).toISOString();
+	let q = supabaseAdmin
+		.from('book_progress')
+		.select('*')
+		.is('finished_at', null)
+		.lte('last_read_at', cutoff)
+		.order('last_read_at', { ascending: false });
+	if (!includePrivate) q = q.eq('is_public', true);
+
+	const { data, error } = await q;
+	if (error) throw new Error(`set-aside query failed: ${error.message}`);
 	return (data ?? []) as BookProgress[];
 }
 
