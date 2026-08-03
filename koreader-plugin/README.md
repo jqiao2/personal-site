@@ -8,23 +8,23 @@ This is the device half of the reading tracker. The server half lives in
 
 ## Install
 
-1. Mount the Kindle over USB.
-2. Copy the whole `readingsync.koplugin` folder into `koreader/plugins/`:
+Mount the Kindle over USB, then:
 
-   ```
-   koreader/
-     plugins/
-       readingsync.koplugin/
-         _meta.lua
-         main.lua
-         stats_sync.lua
-   ```
+```bash
+node --env-file=.env scripts/reading-plugin-install.mjs --dest F:/
+```
 
-3. Eject, and restart KOReader (exit to the launcher and back in).
+That copies the plugin in and writes its settings file already filled in, so
+there is nothing to type on the device — which matters, because the sync token
+is 64 hex characters and the alternative is an e-ink keyboard. It refuses to
+write anywhere without a `koreader/` directory, since the argument is a drive
+letter and drive letters move. Re-running it updates the plugin but leaves your
+settings alone unless you pass `--force`.
 
-## Set it up
+Then eject and restart KOReader (exit to the launcher and back in).
 
-**Tools → Reading sync**:
+To do it by hand instead: copy the `readingsync.koplugin` folder into
+`koreader/plugins/`, then fill in **Tools → Reading sync**:
 
 | Setting | Value |
 |---|---|
@@ -32,9 +32,25 @@ This is the device half of the reading tracker. The server half lives in
 | Sync token | the `READING_SYNC_TOKEN` value |
 | Device name | `kindle-pw5` (anything, as long as it's stable) |
 
-Then **Sync now**. It should report something like `12 sent, 12 new`. If it says
-`0 sent`, the server already has everything — which is the expected result if
-you have already run the USB importer.
+Either way, finish with **Sync now**. It should report something like
+`12 sent, 12 new`. If it says `0 sent`, the server already has everything —
+the expected result if you have already run the USB importer.
+
+## Keeping it hands-off
+
+The plugin only syncs when the device is online, and skips silently when it
+isn't. On a Kindle that usually means turning on **KOReader → Network → auto
+connect on network access** (or leaving WiFi on), otherwise a sync fires only
+when WiFi happens to already be up.
+
+Worth knowing before you leave WiFi on: on a jailbroken Kindle that also means
+the device can reach Amazon's update servers. If OTA updates are not already
+blocked (OTArenamer, from the post-jailbreak setup), a firmware update can
+remove the jailbreak — and KOReader with it.
+
+There is no background daemon. KOReader has to be running for a sync to happen;
+if you exit to the Kindle's own reader, nothing syncs until you go back in. The
+suspend trigger is what covers the normal case of a book left open for weeks.
 
 The token is never displayed after it is saved; the menu only shows whether one
 is set. A Kindle screen is a public surface and the token is a bearer
