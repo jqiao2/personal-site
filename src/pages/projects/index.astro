@@ -12,8 +12,18 @@ const projects = (await getCollection('projects')).sort(
 // would collide with the real /projects/credit-network route.
 const interactive = [
 	{
+		href: '/films',
+		title: 'Film Log',
+		tag: 'live',
+		description:
+			'My own Letterboxd replacement — diary, watchlist, ratings and stats over TMDB data, ' +
+			'built end to end with Claude Code so it does the handful of things I actually wanted ' +
+			'and none of the ones I did not.',
+	},
+	{
 		href: '/projects/credit-network',
 		title: 'Credit Network',
+		tag: 'interactive',
 		description:
 			'A collaboration graph of actors, directors and composers drawn from ~36,000 TMDB films — ' +
 			'force-directed, filterable and draggable.',
@@ -27,7 +37,7 @@ const interactive = [
 		{
 			interactive.map((project) => (
 				<li>
-					<a href={project.href}>{project.title}</a> <span class="tag">interactive</span>
+					<a href={project.href}>{project.title}</a> <span class="tag">{project.tag}</span>
 					<p>{project.description}</p>
 				</li>
 			))
