@@ -66,8 +66,9 @@ a day *before* the cursor rather than risk skipping a row.
 - **A WiFi prompt** — the device is offline. Automatic syncs skip silently when
   offline; only the manual one asks.
 - **`HTTP 401`** — the token doesn't match `READING_SYNC_TOKEN` on the server.
-- **`HTTP 500` on every request** — the server has no `READING_SYNC_TOKEN` set
-  in its environment. It needs a redeploy after the variable is added.
+- **`HTTP 503: reading sync is not configured`** — the server has no
+  `READING_SYNC_TOKEN` in its environment. Note that setting it is not enough on
+  Vercel: the deployment has to postdate the variable, so add it *and* redeploy.
 - **Nothing at all** — check `koreader/crash.log`; the plugin logs under
   `[readingsync]`.
 
