@@ -48,6 +48,23 @@ export function checkPassword(input: string): boolean {
 	return typeof input === 'string' && input.length > 0 && safeEqual(input, expected);
 }
 
+/**
+ * Check an `Authorization: Bearer …` header against READING_SYNC_TOKEN.
+ *
+ * The reading sync is machine-to-machine — a Kindle running KOReader, with no
+ * cookie jar and no login page — so it carries a static bearer token instead of
+ * the owner session above. Same constant-time comparison; the length check is
+ * what keeps it from throwing on a token of the wrong size.
+ */
+export function checkSyncToken(header: string | null | undefined): boolean {
+	const expected = import.meta.env.READING_SYNC_TOKEN;
+	if (!expected) throw new Error('READING_SYNC_TOKEN is not set');
+	if (typeof header !== 'string') return false;
+	const match = /^Bearer\s+(.+)$/i.exec(header.trim());
+	if (!match) return false;
+	return safeEqual(match[1], expected);
+}
+
 /** Mint a signed session token that expires MAX_AGE_SECONDS from now. */
 export async function createSessionToken(): Promise<string> {
 	const exp = Date.now() + MAX_AGE_SECONDS * 1000;

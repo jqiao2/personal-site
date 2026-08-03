@@ -7,6 +7,8 @@ interface ImportMetaEnv {
 	readonly SUPABASE_SERVICE_ROLE_KEY: string;
 	readonly ADMIN_PASSWORD: string;
 	readonly SESSION_SECRET: string;
+	/** Bearer token for /api/reading/sync — the KOReader plugin's only credential. */
+	readonly READING_SYNC_TOKEN: string;
 	/** Optional — see src/lib/jellyfin.ts. Absent means "no play button". */
 	readonly JELLYFIN_URL?: string;
 	readonly JELLYFIN_LOCAL_URL?: string;
