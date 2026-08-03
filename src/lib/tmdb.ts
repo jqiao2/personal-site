@@ -219,11 +219,21 @@ export function releaseDate(date: string | null | undefined): string | null {
 }
 
 /**
- * TMDB release_dates `type` codes. We only care about the theatrical/premiere end
- * of the scale; digital/physical/TV releases (4/5/6) don't set a film's release.
+ * TMDB release_dates `type` codes. Physical (5) and TV (6) are re-distribution
+ * windows, never a film's debut, so they're excluded.
  * https://developer.themoviedb.org/reference/movie-release-dates
  */
-const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3 } as const;
+const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3, DIGITAL: 4 } as const;
+
+/** The release types that count as a film actually opening to the public: a wide
+ * or limited theatrical run, or — for streaming-first films that never had one —
+ * the digital drop. Compared by date, not ranked: whichever came first is the
+ * debut. A festival premiere (type 1) is deliberately not in here; see below. */
+const OPENING_TYPES: number[] = [
+	RELEASE_TYPE.THEATRICAL,
+	RELEASE_TYPE.THEATRICAL_LIMITED,
+	RELEASE_TYPE.DIGITAL,
+];
 
 /** The calendar-date portion ("YYYY-MM-DD") of a per-country release_dates entry.
  * These carry a full ISO timestamp ("2023-07-21T00:00:00.000Z"); we keep the date
@@ -234,28 +244,37 @@ function releaseDatesDay(iso: string | null | undefined): string | null {
 }
 
 /**
- * The film's canonical release date, preferring the US theatrical release.
+ * The film's canonical release date: its *first* US opening.
  *
- * TMDB's top-level `release_date` is the earliest release *anywhere* — often a
- * foreign festival premiere months before the film reached US audiences. For a
- * US-centric film log the meaningful date is the US theatrical one, so we read the
- * per-country release_dates (append_to_response=release_dates) and prefer, in order:
- *   1. US theatrical            (type 3)
- *   2. US theatrical (limited)  (type 2)
- *   3. US premiere              (type 1)
- *   4. earliest premiere anywhere — an international premiere (type 1)
+ * TMDB's top-level `release_date` is its "primary" one, which tracks re-releases —
+ * Hamilton reads 2025-09-05 (the anniversary run) rather than its 2020 debut. So we
+ * read the per-country release_dates (append_to_response=release_dates) and take,
+ * in order:
+ *   1. earliest US opening      — theatrical, limited or digital, whichever is first
+ *   2. earliest US premiere     (type 1) — festival-only films that never opened here
+ *   3. earliest opening anywhere — films with no US release at all
+ *   4. earliest premiere anywhere
  * falling back to TMDB's top-level release_date only when none of those exist.
- * Within a type the earliest date wins, so a later re-release can't override the
- * original run. Returns "YYYY-MM-DD" or null when TMDB has no usable date.
+ *
+ * The three opening types are compared by *date*, never ranked against each other.
+ * Ranking them is what made Akira read 2026: its original US run was limited (type 2,
+ * 1989-12-25) while its only wide entry (type 3) is the 2026 4K restoration, so
+ * preferring type 3 handed a re-release the win. Comparing dates means a re-release
+ * can never displace the original, whatever window it played in. Including digital
+ * covers streaming-first films whose only "theatrical" entry is a later revival run.
+ *
+ * A festival premiere is a fallback rather than a contender — a Cannes or Sundance
+ * screening months before the commercial opening isn't when the film came out for
+ * this log's purposes. Returns "YYYY-MM-DD", or null when TMDB has no usable date.
  */
 export function preferredReleaseDate(d: TmdbMovieDetails): string | null {
 	const results = d.release_dates?.results ?? [];
-	const earliestOfType = (
+	const earliestOfTypes = (
 		entries: { release_date: string; type: number }[],
-		type: number,
+		types: number[],
 	): string | null => {
 		const days = entries
-			.filter((e) => e.type === type)
+			.filter((e) => types.includes(e.type))
 			.map((e) => releaseDatesDay(e.release_date))
 			.filter((day): day is string => day != null)
 			.sort();
@@ -263,28 +282,34 @@ export function preferredReleaseDate(d: TmdbMovieDetails): string | null {
 	};
 
 	const us = results.find((r) => r.iso_3166_1 === 'US')?.release_dates ?? [];
-	const usDate =
-		earliestOfType(us, RELEASE_TYPE.THEATRICAL) ??
-		earliestOfType(us, RELEASE_TYPE.THEATRICAL_LIMITED) ??
-		earliestOfType(us, RELEASE_TYPE.PREMIERE);
-	if (usDate) return usDate;
-
-	const premiere = earliestOfType(
-		results.flatMap((r) => r.release_dates),
-		RELEASE_TYPE.PREMIERE,
+	const anywhere = results.flatMap((r) => r.release_dates);
+	return (
+		earliestOfTypes(us, OPENING_TYPES) ??
+		earliestOfTypes(us, [RELEASE_TYPE.PREMIERE]) ??
+		earliestOfTypes(anywhere, OPENING_TYPES) ??
+		earliestOfTypes(anywhere, [RELEASE_TYPE.PREMIERE]) ??
+		releaseDate(d.release_date)
 	);
-	if (premiere) return premiere;
-
-	return releaseDate(d.release_date);
 }
 
 /**
- * The film's premiere date — TMDB's top-level `release_date`, i.e. the earliest
- * release anywhere, festival premieres included. Cached beside preferredReleaseDate()
+ * The film's premiere date — the earliest release anywhere in the world, festival
+ * premieres and digital drops included. Cached beside preferredReleaseDate()
  * (migration 0019) because that's the year YTS files films under: a film that
  * premiered abroad in one year and opened in US theaters the next is listed there by
  * the earlier year, so searching by our displayed year finds nothing.
+ *
+ * Derived from the per-country release_dates rather than TMDB's top-level
+ * `release_date`, which is its *primary* date and tracks re-releases — for Hamilton
+ * it reads 2025-09-05, the anniversary run, so the YTS search missed the 2020 file.
+ * Physical/TV windows (types 5/6) are excluded; they're never a premiere.
  */
 export function premiereDate(d: TmdbMovieDetails): string | null {
-	return releaseDate(d.release_date);
+	const days = (d.release_dates?.results ?? [])
+		.flatMap((r) => r.release_dates)
+		.filter((e) => e.type !== 5 && e.type !== 6)
+		.map((e) => releaseDatesDay(e.release_date))
+		.filter((day): day is string => day != null)
+		.sort();
+	return days[0] ?? releaseDate(d.release_date);
 }

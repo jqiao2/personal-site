@@ -45,9 +45,10 @@ function isMissingCreditColumn(err: { code?: string; message?: string } | null):
 async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const d = await getMovieDetails(tmdbId);
 	const facts = extractCreditFacts(d);
-	// Prefer the US theatrical release over TMDB's earliest-anywhere release_date,
-	// and derive the year from that same date so the year and the full date can't
-	// disagree (a foreign premiere and the US run can straddle a New Year).
+	// The film's first US opening rather than TMDB's top-level release_date (which
+	// follows re-releases), with the year derived from that same date so the year and
+	// the full date can't disagree (a foreign premiere and the US run can straddle a
+	// New Year).
 	const releasedOn = preferredReleaseDate(d);
 	const now = new Date().toISOString();
 	const base = {

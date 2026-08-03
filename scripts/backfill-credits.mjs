@@ -8,12 +8,13 @@
 // `credits_synced_at` is stamped on success so re-runs skip already-done films —
 // the script is safe to stop/resume.
 //
-// release_date/release_year prefer the US theatrical release (see
-// preferredReleaseDate below), not TMDB's earliest-anywhere release_date. Because
-// that's a value change to columns that are already populated — not a newly-added
-// null column — re-deriving existing rows needs a one-time `--force` run; the
-// `needsSync` heuristic below only catches never-synced or still-null rows.
-// premiere_date keeps the earliest-anywhere date alongside it, for the YTS search.
+// release_date/release_year are the film's first US opening (see
+// preferredReleaseDate below), not TMDB's top-level release_date, which follows
+// re-releases. premiere_date keeps the earliest release anywhere alongside it, for
+// the YTS search. Both are value changes to columns that are already populated —
+// not newly-added null columns — so re-deriving existing rows needs a one-time
+// `--force` run; the `needsSync` heuristic below only catches never-synced or
+// still-null rows.
 //
 // A film is otherwise due when it has never been synced, or when it predates a
 // column added since its last sync (release_date, 0014; premiere_date, 0019) and so
@@ -116,7 +117,9 @@ function usCertification(d) {
 }
 
 /** TMDB release_dates `type` codes (mirror of RELEASE_TYPE in src/lib/tmdb.ts). */
-const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3 };
+const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3, DIGITAL: 4 };
+/** Types that count as the film opening to the public, compared by date not rank. */
+const OPENING_TYPES = [RELEASE_TYPE.THEATRICAL, RELEASE_TYPE.THEATRICAL_LIMITED, RELEASE_TYPE.DIGITAL];
 
 /** The "YYYY-MM-DD" of a per-country release_dates entry's ISO timestamp, or null. */
 function releaseDatesDay(iso) {
@@ -124,42 +127,56 @@ function releaseDatesDay(iso) {
 }
 
 /** Mirror of preferredReleaseDate() in src/lib/tmdb.ts (kept in sync by hand):
- * US theatrical → US limited → US premiere → earliest premiere anywhere → TMDB's
- * top-level release_date. TMDB sends "" — not null — for an unknown date, which
- * releaseDatesDay/the regex reject so Postgres gets null. */
+ * earliest US opening (theatrical/limited/digital, by date) → earliest US premiere →
+ * earliest opening anywhere → earliest premiere anywhere → TMDB's top-level
+ * release_date. The opening types are compared by date rather than ranked, so a
+ * re-release can't displace the original run; see the full rationale in tmdb.ts.
+ * TMDB sends "" — not null — for an unknown date, which releaseDatesDay/the regex
+ * reject so Postgres gets null. */
 function preferredReleaseDate(d) {
 	const results = d.release_dates?.results ?? [];
-	const earliestOfType = (entries, type) =>
+	const earliestOfTypes = (entries, types) =>
 		entries
-			.filter((e) => e.type === type)
+			.filter((e) => types.includes(e.type))
 			.map((e) => releaseDatesDay(e.release_date))
 			.filter((day) => day != null)
 			.sort()[0] ?? null;
 
 	const us = results.find((r) => r.iso_3166_1 === 'US')?.release_dates ?? [];
-	const usDate =
-		earliestOfType(us, RELEASE_TYPE.THEATRICAL) ??
-		earliestOfType(us, RELEASE_TYPE.THEATRICAL_LIMITED) ??
-		earliestOfType(us, RELEASE_TYPE.PREMIERE);
-	if (usDate) return usDate;
+	const anywhere = results.flatMap((r) => r.release_dates);
+	return (
+		earliestOfTypes(us, OPENING_TYPES) ??
+		earliestOfTypes(us, [RELEASE_TYPE.PREMIERE]) ??
+		earliestOfTypes(anywhere, OPENING_TYPES) ??
+		earliestOfTypes(anywhere, [RELEASE_TYPE.PREMIERE]) ??
+		(/^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null)
+	);
+}
 
-	const premiere = earliestOfType(results.flatMap((r) => r.release_dates), RELEASE_TYPE.PREMIERE);
-	if (premiere) return premiere;
-
-	return /^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null;
+/** Mirror of premiereDate() in src/lib/tmdb.ts: earliest release anywhere, any
+ * window except physical/TV (types 5/6). Not TMDB's top-level release_date, which
+ * is its *primary* date and follows re-releases. */
+function premiereDate(d) {
+	const day =
+		(d.release_dates?.results ?? [])
+			.flatMap((r) => r.release_dates)
+			.filter((e) => e.type !== 5 && e.type !== 6)
+			.map((e) => releaseDatesDay(e.release_date))
+			.filter((x) => x != null)
+			.sort()[0] ?? null;
+	return day ?? (/^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null);
 }
 
 /** Mirror of extractCreditFacts() in src/lib/tmdb.ts (kept in sync by hand).
  * release_year is derived from the same preferred date as release_date so the
- * two never disagree. premiere_date (0019) is TMDB's top-level release_date — the
- * earliest release anywhere — kept because that's the year YTS files films under;
- * see premiereDate() in src/lib/tmdb.ts. */
+ * two never disagree. premiere_date (0019) is the earliest release anywhere, kept
+ * because that's the year YTS files films under; see premiereDate() above. */
 function extractFacts(d) {
 	const releasedOn = preferredReleaseDate(d);
 	return {
 		release_date: releasedOn,
 		release_year: releasedOn ? Number.parseInt(releasedOn.slice(0, 4), 10) : null,
-		premiere_date: /^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null,
+		premiere_date: premiereDate(d),
 		genres: uniq((d.genres ?? []).map((g) => g.name)),
 		languages: uniq((d.spoken_languages ?? []).map((l) => l.english_name || l.name)),
 		countries: uniq((d.production_countries ?? []).map((c) => c.name)),
