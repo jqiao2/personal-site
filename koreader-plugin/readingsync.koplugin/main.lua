@@ -56,7 +56,12 @@ end
 function ReadingSync:addToMainMenu(menu_items)
 	menu_items.readingsync = {
 		text = _("Reading sync"),
-		sorting_hint = "tools",
+		-- "more_tools", not "tools". A plugin's menu item is an orphan as far as
+		-- the menu sorter is concerned, and an orphan is appended to the END of
+		-- whatever it points at — so "tools" buries it below "More tools", off
+		-- the bottom of the first page on a Paperwhite. Tools -> More tools is
+		-- also where every other third-party plugin puts itself.
+		sorting_hint = "more_tools",
 		sub_item_table = {
 			{
 				text = _("Sync now"),
