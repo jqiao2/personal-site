@@ -11,7 +11,12 @@
 // parsed to UTC midnight, so a DST boundary can never add or drop an hour
 // mid-subtraction the way local-midnight Dates would.
 import { SITE_TZ, siteDay } from './day';
-import { CURRENTLY_READING_DAYS, type BookProgress, type HeatmapDay } from './reading-queries';
+import {
+	CURRENTLY_READING_DAYS,
+	type BookProgress,
+	type HeatmapDay,
+	type OfflineRead,
+} from './reading-queries';
 
 /**
  * The zone the stored day boundaries are measured in. Must match migration 0020,
@@ -119,6 +124,12 @@ export interface BookView {
 	id: number;
 	/** True once the book is done — see buildShelf for what counts. */
 	done: boolean;
+	/**
+	 * Whether the Kindle logged this book. False for a book read on paper, whose
+	 * every page-derived field below is a placeholder rather than a measurement —
+	 * the shelf says so rather than printing a plausible zero.
+	 */
+	tracked: boolean;
 	main: string;
 	sub: string | null;
 	author: string | null;
@@ -210,6 +221,7 @@ export function toBookView(book: BookProgress, todayDay = today()): BookView {
 	return {
 		id: book.id,
 		done: book.finished_at !== null || (progress !== null && progress >= FINISHED_PROGRESS),
+		tracked: true,
 		main,
 		sub,
 		author,
@@ -236,6 +248,69 @@ export function toBookView(book: BookProgress, todayDay = today()): BookView {
 	};
 }
 
+/** Half-star rating as text. Matches the book page and the film log. */
+function stars(rating: number): string {
+	return '★'.repeat(Math.floor(rating)) + (rating % 1 >= 0.5 ? '½' : '');
+}
+
+/** "27–31 Mar 2025", collapsing to one date or opening out across months. */
+function readRange(from: string, to: string): string {
+	if (from === to) return formatDay(from);
+	if (from.slice(0, 7) === to.slice(0, 7)) return `${Number(from.slice(8))}–${formatDay(to)}`;
+	return `${formatDay(from)} → ${formatDay(to)}`;
+}
+
+/**
+ * A book read off-device, in the shape the finished shelf renders.
+ *
+ * Every page-derived field is a placeholder, and deliberately an empty one: no
+ * percentage, no pages label, no time. The alternative — a 0%, a "0 pages", a
+ * "0m" — is not a smaller claim than the truth, it is a different and false one,
+ * and it would sit in the same column as figures that were actually measured.
+ *
+ * The spine is drawn full rather than empty. Its fill means "how much of this
+ * book have you read", and the answer here is all of it; only the page count
+ * behind the width is unknown, which is what the default width already says.
+ */
+export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
+	const { main, sub } = splitTitle(book.title);
+	const finishedDay = zonedDay(book.finished_at);
+	const firstDay = book.read_from ?? finishedDay;
+	const lastDay = book.read_to ?? finishedDay;
+	const author = book.authors;
+
+	const meta = [
+		author,
+		book.read_from && book.read_to ? `read ${readRange(book.read_from, book.read_to)}` : null,
+		book.rating != null ? stars(book.rating) : null,
+		book.reads > 1 ? `${book.reads} reads` : null,
+		'no page data',
+	].filter(Boolean) as string[];
+
+	return {
+		id: book.id,
+		done: true,
+		tracked: false,
+		main,
+		sub,
+		author,
+		progress: null,
+		spineWidth: spineWidth(book.total_pages),
+		spineFill: SPINE_HEIGHT,
+		pagesLabel: '—',
+		percent: null,
+		facts: [],
+		readTime: '—',
+		firstDay,
+		lastDay,
+		daysAgo: daysBetween(lastDay, todayDay),
+		finishedDate: formatMonth(finishedDay),
+		finishedYear: Number(finishedDay.slice(0, 4)),
+		finishedMeta: meta.join(' · '),
+		asideMeta: '',
+	};
+}
+
 export interface Shelf {
 	current: BookView[];
 	setAside: BookView[];
@@ -254,6 +329,7 @@ export function buildShelf(
 	currentRaw: BookProgress[],
 	setAsideRaw: BookProgress[],
 	finishedRaw: BookProgress[],
+	offlineRaw: OfflineRead[] = [],
 	todayDay = today(),
 ): Shelf {
 	const view = (b: BookProgress) => toBookView(b, todayDay);
@@ -263,10 +339,14 @@ export function buildShelf(
 		current: inFlight.filter((b) => !b.done && b.daysAgo <= CURRENTLY_READING_DAYS),
 		setAside: inFlight.filter((b) => !b.done && b.daysAgo > CURRENTLY_READING_DAYS),
 		// Sorted by when reading stopped, so books promoted by progress interleave
-		// with hand-marked ones instead of being appended after them.
-		finished: [...finishedRaw.map(view), ...inFlight.filter((b) => b.done)].sort((a, b) =>
-			a.lastDay < b.lastDay ? 1 : -1,
-		),
+		// with hand-marked ones instead of being appended after them — and so books
+		// read on paper sit in date order among the tracked ones rather than in a
+		// second list underneath, which would sort the shelf by device.
+		finished: [
+			...finishedRaw.map(view),
+			...inFlight.filter((b) => b.done),
+			...offlineRaw.map((b) => toOfflineView(b, todayDay)),
+		].sort((a, b) => (a.lastDay < b.lastDay ? 1 : -1)),
 	};
 }
 

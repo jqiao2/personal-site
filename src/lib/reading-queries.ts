@@ -42,6 +42,28 @@ export interface BookProgress {
 	progress: number | null;
 }
 
+/**
+ * A finished book with no page turns behind it — read on paper, or before the
+ * Kindle. Almost none of BookProgress applies: there is no furthest page, no
+ * time on it and no pace, and the only record of when it happened is the date
+ * range on its review.
+ */
+export interface OfflineRead {
+	id: number;
+	title: string;
+	authors: string | null;
+	total_pages: number | null;
+	is_public: boolean;
+	finished_at: string;
+	/** From the most recent review. Null when the read was never written up. */
+	read_from: string | null;
+	read_to: string | null;
+	rating: number | null;
+	loved: boolean;
+	/** How many reviews the book has, i.e. how many times it was read. */
+	reads: number;
+}
+
 export interface ReadingStats {
 	current_streak: number;
 	longest_streak: number;
@@ -134,6 +156,39 @@ export async function getFinished(year?: number, includePrivate = false): Promis
 	const { data, error } = await q;
 	if (error) throw new Error(`finished-books query failed: ${error.message}`);
 	return (data ?? []) as BookProgress[];
+}
+
+/**
+ * Finished books the Kindle knows nothing about, most recently finished first.
+ *
+ * The complement of getFinished: that one reads `book_progress`, which INNER
+ * JOINs sessions and so cannot see these, and this one reads a view that
+ * requires the absence of sessions. Every finished book comes back from exactly
+ * one of them, which is what keeps the shelf from listing anything twice.
+ *
+ * These do NOT feed the streaks or the page totals — those measure the device,
+ * and a book read in 2021 has no days or pages to contribute. See getStats.
+ */
+export async function getOfflineReads(
+	year?: number,
+	includePrivate = false,
+): Promise<OfflineRead[]> {
+	let q = supabaseAdmin
+		.from('book_offline_reads')
+		.select('*')
+		.order('finished_at', { ascending: false });
+	if (!includePrivate) q = q.eq('is_public', true);
+	if (year != null) {
+		q = q.gte('finished_at', `${year}-01-01`).lt('finished_at', `${year + 1}-01-01`);
+	}
+
+	const { data, error } = await q;
+	if (error) throw new Error(`offline-reads query failed: ${error.message}`);
+	return (data ?? []).map((r) => ({
+		...(r as unknown as OfflineRead),
+		rating: r.rating == null ? null : Number(r.rating),
+		reads: Number(r.reads ?? 0),
+	}));
 }
 
 /**
