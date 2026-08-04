@@ -11,6 +11,7 @@ import {
 	listFriends,
 } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
+import { siteNav } from '../../lib/nav';
 import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
@@ -45,6 +46,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 // the same `rmin`/`rmax` pair the grid's own rating slider writes when both ends
 // land on the same star.
 const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars}`;
+
+const nav = siteNav(Astro.url.pathname);
 ---
 
 <FilmLayout title="Jason's film log">
@@ -52,12 +55,15 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 		<div class="card">
 			<!-- Site nav -->
 			<nav class="tabs">
-				<a class="tabs__link" href="/">Home</a>
-				<a class="tabs__link" href="/about">About</a>
-				<a class="tabs__link" href="/projects">Projects</a>
-				<a class="tabs__link tabs__link--active" href="/films" aria-current="page">Films</a>
-				<a class="tabs__link" href="/reading">Reading</a>
-				<a class="tabs__link" href="/subway">Subway</a>
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
 				{isOwner ? (
 					<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
 				) : (

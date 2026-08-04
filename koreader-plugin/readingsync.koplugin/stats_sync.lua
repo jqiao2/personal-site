@@ -282,7 +282,7 @@ function Sync.run(settings)
 	end
 	url = url:gsub("/+$", "")
 
-	local endpoint = url .. "/api/reading/sync"
+	local endpoint = url .. "/api/books/sync"
 
 	-- Ask the server what it already has. This is the source of truth rather
 	-- than a locally remembered cursor: it survives a settings reset, a restored

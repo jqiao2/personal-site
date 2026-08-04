@@ -1,10 +1,13 @@
 ---
+import { siteNav } from '../lib/nav';
+
 interface Props {
 	title: string;
 	showTmdbFooter?: boolean;
 }
 
 const { title, showTmdbFooter = false } = Astro.props;
+const nav = siteNav(Astro.url.pathname);
 ---
 
 <html lang="en">
@@ -18,12 +21,17 @@ const { title, showTmdbFooter = false } = Astro.props;
 	<body>
 		<header>
 			<nav>
-				<a href="/">Home</a>
-				<a href="/about">About</a>
-				<a href="/projects">Projects</a>
-				<a href="/films">Films</a>
-				<a href="/reading">Reading</a>
-				<a href="/subway">Subway</a>
+				{
+					nav.map((n) => (
+						<a
+							href={n.href}
+							class={n.active ? 'active' : ''}
+							aria-current={n.active ? 'page' : undefined}
+						>
+							{n.label}
+						</a>
+					))
+				}
 			</nav>
 		</header>
 		<main>
@@ -79,6 +87,10 @@ const { title, showTmdbFooter = false } = Astro.props;
 			}
 			nav a:hover {
 				text-decoration: underline;
+			}
+			nav a.active {
+				text-decoration: underline;
+				text-underline-offset: 4px;
 			}
 			main {
 				max-width: 800px;

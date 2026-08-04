@@ -13,8 +13,8 @@ import { json, apiError } from '../../../lib/http';
 
 export const prerender = false;
 
-// POST   /api/reading/review  { bookId, readFrom, readTo, … }  → (owner) save.
-// DELETE /api/reading/review?bookId=1&id=7                     → (owner) delete.
+// POST   /api/books/review  { bookId, readFrom, readTo, … }  → (owner) save.
+// DELETE /api/books/review?bookId=1&id=7                     → (owner) delete.
 //
 // A review belongs to a READ, not to a book: the (readFrom, readTo) pair is the
 // stretch of sessions it is about, and it is also the upsert key. Re-reading a

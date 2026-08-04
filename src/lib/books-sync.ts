@@ -1,14 +1,14 @@
-// Ingest side of the reading tracker: validate a KOReader sync payload, hand it
+// Ingest side of the book log: validate a KOReader sync payload, hand it
 // to the database, report what landed.
 //
-// The endpoint (src/pages/api/reading/sync.ts) stays thin; everything that has
+// The endpoint (src/pages/api/books/sync.ts) stays thin; everything that has
 // an opinion lives here, and everything that needs a transaction lives in the
 // `ingest_reading_sync` SQL function (migration 0020). This module is the seam
 // between the two: it turns loose JSON from a Kindle into rows that cannot
 // violate a check constraint, so a bad field is a 400 with a path rather than a
 // 500 from Postgres.
 //
-// Read-side helpers live in src/lib/reading-queries.ts.
+// Read-side helpers live in src/lib/books-queries.ts.
 import { supabaseAdmin } from './supabase';
 
 /** Caps from the API contract. The plugin chunks; these bound one chunk. */

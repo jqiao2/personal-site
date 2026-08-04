@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { checkSyncToken } from '../../../lib/auth';
 import { json, apiError } from '../../../lib/http';
-import { getSyncCursor, ingestSync, parseSyncPayload, SyncPayloadError } from '../../../lib/reading';
+import { getSyncCursor, ingestSync, parseSyncPayload, SyncPayloadError } from '../../../lib/books-sync';
 
 export const prerender = false;
 
@@ -29,7 +29,7 @@ function denyUnauthenticated(request: Request): Response | null {
 	}
 }
 
-// POST /api/reading/sync — take a batch of books + page-turn sessions.
+// POST /api/books/sync — take a batch of books + page-turn sessions.
 //
 // Idempotent: the plugin resends overlapping ranges after any failed or partial
 // sync, and `sessions_inserted` coming back lower than `sessions_received` is
@@ -55,7 +55,7 @@ export const POST: APIRoute = async ({ request }) => {
 	}
 };
 
-// GET /api/reading/sync?device=kindle-pw5 — resume cursor, so the plugin can
+// GET /api/books/sync?device=kindle-pw5 — resume cursor, so the plugin can
 // send only what came after and skip re-uploading months of history.
 export const GET: APIRoute = async ({ request, url }) => {
 	const denied = denyUnauthenticated(request);

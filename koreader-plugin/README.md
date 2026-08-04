@@ -1,10 +1,10 @@
 # Reading sync — KOReader plugin
 
-Sends KOReader's reading statistics to `/api/reading/sync` as you read, so
+Sends KOReader's reading statistics to `/api/books/sync` as you read, so
 pages-per-day appears on the site without anyone touching anything.
 
-This is the device half of the reading tracker. The server half lives in
-`src/pages/api/reading/`, `src/lib/reading.ts` and `supabase/migrations/0020_*`.
+This is the device half of the book log. The server half lives in
+`src/pages/api/books/`, `src/lib/books-sync.ts` and `supabase/migrations/0020_*`.
 
 ## Install
 
@@ -20,6 +20,14 @@ is 64 hex characters and the alternative is an e-ink keyboard. It refuses to
 write anywhere without a `koreader/` directory, since the argument is a drive
 letter and drive letters move. Re-running it updates the plugin but leaves your
 settings alone unless you pass `--force`.
+
+`READING_SYNC_TOKEN` is only needed when the settings file is actually being
+written — a first install, or `--force`. Updating the plugin on a device that is
+already configured needs no credential, so `--env-file` can be dropped:
+
+```bash
+node scripts/reading-plugin-install.mjs --dest F:/
+```
 
 Then eject and restart KOReader (exit to the launcher and back in).
 
