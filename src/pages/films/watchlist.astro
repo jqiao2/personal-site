@@ -2,6 +2,7 @@
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import { listAllWatchlist } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
+import { siteDay } from '../../lib/day';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -28,8 +29,9 @@ const addedLabel = (iso: string) =>
 // A film is upcoming when its release date is still ahead of us. This needs the
 // full date, not release_year: for most of a year, "released in 2026" and "out in
 // 2026" are different claims. Films TMDB has no date for (announced, no schedule
-// yet) aren't badged — unknown isn't the same as future.
-const today = new Date().toISOString().slice(0, 10);
+// yet) aren't badged — unknown isn't the same as future. The badge is baked into
+// the HTML, so there's no client to ask what day it is: the site's zone it is.
+const today = siteDay();
 const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.release_date > today;
 
 // Whether the watchlist holds anything still ahead of us. The "Include upcoming"

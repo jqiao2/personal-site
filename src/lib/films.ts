@@ -2,6 +2,7 @@
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
+import { siteDay, siteYear } from './day';
 import {
 	extractCreditFacts,
 	getMovieDetails,
@@ -120,6 +121,12 @@ export async function ensureMovieCached(tmdbId: number, forceRefresh = false): P
 export interface CreateLogInput {
 	tmdbId: number;
 	watchedDate?: string | null; // "YYYY-MM-DD"
+	/**
+	 * The diary date — the day the entry is being made, as "YYYY-MM-DD" on the
+	 * client's own calendar. Sent by the composer because only the browser knows
+	 * what day it is where the user is; falls back to the day in SITE_TZ.
+	 */
+	loggedDate?: string | null;
 	rating?: number | null; // 0.5–5.0 in half-steps
 	reviewText?: string | null;
 	rewatched?: boolean;
@@ -159,8 +166,10 @@ export interface UpdateLogInput {
  * rating/liked — a bare "I saw it" carries no opinion, and syncFilmRating owns
  * those. Idempotent via the movie_id unique constraint: re-logging keeps the
  * original first_watched. */
-async function markWatched(movie: MovieRow, watchedDate: string | null): Promise<void> {
-	const firstWatched = watchedDate ? `${watchedDate}T00:00:00Z` : new Date().toISOString();
+async function markWatched(movie: MovieRow, watchedDate: string | null, today: string): Promise<void> {
+	// Undated entries fall back to the day it is for the user, not the instant in
+	// UTC — `first_watched` is read as a calendar day (year buckets, "first seen").
+	const firstWatched = `${watchedDate ?? today}T00:00:00Z`;
 	const { error } = await supabaseAdmin.from('watched').upsert(
 		{
 			movie_id: movie.id,
@@ -283,7 +292,10 @@ export interface LogFilmResult {
  */
 export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 	const movie = await ensureMovieCached(input.tmdbId);
-	await markWatched(movie, input.watchedDate ?? null);
+	// The day this entry is being made. The client's own, when it sent one; the
+	// site's zone otherwise — never UTC's, which turns over mid-evening here.
+	const today = input.loggedDate ?? siteDay();
+	await markWatched(movie, input.watchedDate ?? null, today);
 	// Once it's watched it no longer belongs on the "to watch" list.
 	await removeFromWatchlist(movie.id);
 
@@ -299,7 +311,6 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 	const formatName = inTheater ? input.format?.trim() || 'Digital' : null;
 	const formatId = formatName ? await resolveFormatId(formatName) : null;
 
-	const today = new Date().toISOString().slice(0, 10);
 	const { data: log, error } = await supabaseAdmin
 		.from('logs')
 		.insert({
@@ -1215,7 +1226,7 @@ export interface FilmLogStats {
 }
 
 export async function getFilmLogStats(): Promise<FilmLogStats> {
-	const year = new Date().getFullYear();
+	const year = siteYear();
 	const head = { count: 'exact' as const, head: true };
 	const [watched, diary, watchlist, liked, thisYear, ratings] = await Promise.all([
 		supabasePublic.from('watched').select('*', head),
@@ -2509,7 +2520,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	const rated = rows.filter((r) => r.rating != null) as (WatchedFacts & { rating: number })[];
 	const avgRating = rated.length ? rated.reduce((a, r) => a + r.rating, 0) / rated.length : 0;
 	const num = (n: number) => n.toLocaleString('en-US');
-	const thisYear = new Date().getFullYear();
+	const thisYear = siteYear();
 	const thisYearCount = perYear.get(thisYear) ?? 0;
 	const metrics = isAll
 		? [
