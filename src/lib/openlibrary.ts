@@ -32,6 +32,30 @@ export interface OpenLibraryWork {
 	genres: string[];
 	kind: 'Fiction' | 'Nonfiction' | null;
 	firstPublished: string | null;
+	/** Cover image id, for a work whose editions have none of their own. */
+	coverId: number | null;
+}
+
+/**
+ * Everything a match needs, resolved from an ISBN alone.
+ *
+ * The same payload the picker produces, assembled without ever asking the
+ * search endpoint — which matters more than it sounds. Open Library's search is
+ * a Solr cluster that falls over regularly (503 "No server is available"), while
+ * `/isbn/…` and `/works/…` are key lookups against a different backend that
+ * stays up through it. A book with an ISBN never needs the flaky half.
+ */
+export interface OpenLibraryEdition {
+	/** Work key, the identifier stored on the book. */
+	key: string;
+	title: string;
+	subtitle: string | null;
+	pages: number | null;
+	coverUrl: string | null;
+	firstPublished: string | null;
+	description: string[];
+	genres: string[];
+	kind: 'Fiction' | 'Nonfiction' | null;
 }
 
 /**
@@ -155,8 +179,15 @@ function classify(raw: unknown): 'Fiction' | 'Nonfiction' | null {
 	if (!Array.isArray(raw)) return null;
 	const all = (raw as unknown[]).filter((s): s is string => typeof s === 'string').join(' | ').toLowerCase();
 	if (!all) return null;
-	if (/non-?fiction|biography|history|essays|memoir/.test(all)) return 'Nonfiction';
+	// Order matters, and it is not the obvious one. A novel's catalogue subjects
+	// are full of nonfiction-looking words — Emma is shelved under "Historical
+	// Fiction" and "England, fiction", Foundation under "Psychohistory" — so a
+	// history/biography test that runs first calls half the classics nonfiction.
+	// Only an explicit "nonfiction" outranks a fiction marker; the softer words
+	// decide nothing until no fiction marker is present at all.
+	if (/non-?fiction/.test(all)) return 'Nonfiction';
 	if (/fiction|novel|stories|poetry/.test(all)) return 'Fiction';
+	if (/biography|history|essays|memoir/.test(all)) return 'Nonfiction';
 	return null;
 }
 
@@ -166,10 +197,84 @@ export async function getWork(key: string): Promise<OpenLibraryWork> {
 	const data = (await getJson(`https://openlibrary.org${path}.json`)) as Record<string, unknown>;
 
 	const published = data.first_publish_date;
+	const covers = Array.isArray(data.covers) ? (data.covers as unknown[]) : [];
+	const coverId = covers.find((c) => typeof c === 'number' && c > 0);
 	return {
 		description: paragraphs(data.description),
 		genres: subjects(data.subjects),
 		kind: classify(data.subjects),
 		firstPublished: typeof published === 'string' ? published : null,
+		coverId: typeof coverId === 'number' ? coverId : null,
+	};
+}
+
+/** Digits and a possible trailing X, which is all an ISBN ever is. */
+function normalizeIsbn(raw: string): string {
+	return raw.replace(/[^0-9Xx]/g, '').toUpperCase();
+}
+
+/**
+ * The book an ISBN names, or null when Open Library has never heard of it.
+ *
+ * Two requests: the edition (`/isbn/…`, which redirects to `/books/OL…M`) for
+ * the physical facts, then its work for the blurb and subjects. Both are key
+ * lookups — see OpenLibraryEdition for why that is the point.
+ *
+ * Missing edition data falls through to the work rather than failing: plenty of
+ * editions carry no cover and no date while the work has both.
+ */
+export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | null> {
+	const clean = normalizeIsbn(isbn);
+	if (clean.length !== 10 && clean.length !== 13) return null;
+
+	let edition: Record<string, unknown>;
+	try {
+		edition = (await getJson(`https://openlibrary.org/isbn/${clean}.json`)) as Record<string, unknown>;
+	} catch (e) {
+		// A 404 is an answer — this ISBN is not in their catalogue — while a 503 or
+		// a timeout is not, and the caller has to be able to tell them apart to
+		// know whether retrying is worth anything.
+		if (e instanceof Error && e.message.includes('404')) return null;
+		throw e;
+	}
+
+	const works = Array.isArray(edition.works) ? (edition.works as { key?: unknown }[]) : [];
+	const workKey = typeof works[0]?.key === 'string' ? (works[0].key as string) : null;
+	if (!workKey) return null;
+
+	let work: OpenLibraryWork = {
+		description: [],
+		genres: [],
+		kind: null,
+		firstPublished: null,
+		coverId: null,
+	};
+	try {
+		work = await getWork(workKey);
+	} catch {
+		// The edition alone is a usable match; the blurb is a nice-to-have.
+	}
+
+	// The edition's own cover is the one you are holding; the work's is the
+	// series' or the first edition's. Prefer the specific, accept the general.
+	const editionCovers = Array.isArray(edition.covers) ? (edition.covers as unknown[]) : [];
+	const editionCover = editionCovers.find((c) => typeof c === 'number' && c > 0);
+	const coverId = typeof editionCover === 'number' ? editionCover : work.coverId;
+
+	const pages = edition.number_of_pages;
+	const published = edition.publish_date;
+
+	return {
+		key: workKey,
+		title: typeof edition.title === 'string' ? edition.title : '',
+		subtitle: typeof edition.subtitle === 'string' ? edition.subtitle : null,
+		pages: typeof pages === 'number' && pages > 0 ? pages : null,
+		coverUrl: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : null,
+		// The work's date is the book's; the edition's is this printing's. For "first
+		// published" the work wins, and the edition stands in when it has none.
+		firstPublished: work.firstPublished ?? (typeof published === 'string' ? published : null),
+		description: work.description,
+		genres: work.genres,
+		kind: work.kind,
 	};
 }

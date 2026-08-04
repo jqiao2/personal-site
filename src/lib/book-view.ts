@@ -218,6 +218,12 @@ export interface BookPageView {
 	fullTitle: string;
 	titleIsCorrected: boolean;
 	matched: boolean;
+	/**
+	 * Whether the book can be matched from its ISBN alone. The imported half of
+	 * the library has one, and it is the route that does not touch Open Library's
+	 * search — so where it exists it is offered ahead of the picker.
+	 */
+	canMatchByIsbn: boolean;
 	coverUrl: string | null;
 	hue: string;
 	isPublic: boolean;
@@ -754,6 +760,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		fullTitle: book.title,
 		titleIsCorrected: book.title !== book.source_title,
 		matched,
+		canMatchByIsbn: !matched && !!book.isbn,
 		coverUrl: book.cover_url,
 		hue: bookHue(book.title),
 		isPublic: book.is_public,

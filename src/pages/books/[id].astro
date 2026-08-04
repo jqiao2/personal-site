@@ -355,9 +355,25 @@ const spines = Array.from({ length: 18 }, () => ({
 							<div class="invite__raw">{v.sourceTitle}</div>
 							{
 								isOwner && (
-									<button type="button" class="btn-primary invite__cta" data-open-match>
-										Find this book on Open Library
-									</button>
+									<div class="invite__actions">
+										{/*
+											Offered first where it exists: it needs no query, no
+											choosing between editions, and it keeps working during the
+											search outages that make the picker useless.
+										*/}
+										{v.canMatchByIsbn && (
+											<button type="button" class="btn-primary invite__cta" data-book-action="isbn">
+												Match from its ISBN
+											</button>
+										)}
+										<button
+											type="button"
+											class:list={['invite__cta', v.canMatchByIsbn ? 'btn-quiet' : 'btn-primary']}
+											data-open-match
+										>
+											{v.canMatchByIsbn ? 'Or search Open Library' : 'Find this book on Open Library'}
+										</button>
+									</div>
 								)
 							}
 						</div>
@@ -1423,7 +1439,22 @@ const spines = Array.from({ length: 18 }, () => ({
 		overflow-x: auto;
 		white-space: nowrap;
 	}
-	.invite__cta {
+	.invite__actions {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			flex-wrap: wrap;
+		}
+		.btn-quiet {
+			background: transparent;
+			border: 1px solid #45341f;
+			color: #dcc9a6;
+		}
+		.btn-quiet:hover {
+			border-color: #cfa452;
+			color: #f2e6cd;
+		}
+		.invite__cta {
 		width: auto;
 		margin-top: 16px;
 		font-size: 13.5px;

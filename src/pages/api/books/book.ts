@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../lib/auth';
 import { getBook, mergeBook, updateBook } from '../../../lib/book-queries';
 import { json, apiError } from '../../../lib/http';
-import { getWork } from '../../../lib/openlibrary';
+import { getWork, lookupIsbn } from '../../../lib/openlibrary';
 
 export const prerender = false;
 
@@ -20,6 +20,7 @@ export const prerender = false;
 //   resume    undo that (a page turn does it too, and usually first)
 //   private   hide it from the public shelf without losing the reading
 //   match     link it to an Open Library work and fix the displayed title
+//   isbn      the same, resolved from the ISBN we already hold, no search
 //   merge     the Kindle filed this book twice; fold its row into this one
 //
 // One route rather than ten: they are all a patch of one row, and the shapes
@@ -36,6 +37,7 @@ type Action =
 	| 'resume'
 	| 'private'
 	| 'match'
+	| 'isbn'
 	| 'merge';
 
 const ACTIONS: Action[] = [
@@ -48,6 +50,7 @@ const ACTIONS: Action[] = [
 	'resume',
 	'private',
 	'match',
+	'isbn',
 	'merge',
 ];
 
@@ -157,6 +160,39 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				if (!source) return apiError('source book not found', 404);
 
 				await mergeBook(id, sourceId);
+				break;
+			}
+
+			case 'isbn': {
+				// The metadata a match gives, without the picker and without the
+				// search endpoint — which is the point: Open Library's search is a
+				// Solr cluster that falls over regularly, while the key lookups this
+				// uses stay up through those outages.
+				if (!book.isbn) return apiError('no ISBN on file for this book', 400);
+
+				let edition;
+				try {
+					edition = await lookupIsbn(book.isbn);
+				} catch (e) {
+					return apiError(e instanceof Error ? e.message : 'Open Library lookup failed', 502);
+				}
+				if (!edition) return apiError('Open Library has no record of that ISBN', 404);
+
+				await updateBook(id, {
+					ol_key: edition.key,
+					// Titles are deliberately untouched. Open Library's are often
+					// miscased ("The power broker: Robert Moses and the fall of New
+					// York"), and the title already stored came either from a human or
+					// from an export that had it right — neither is worth overwriting
+					// automatically. The match dialog is where a title gets corrected.
+					cover_url: edition.coverUrl,
+					first_published: edition.firstPublished,
+					description: edition.description,
+					genres: edition.genres,
+					kind: edition.kind,
+					...(book.subtitle || !edition.subtitle ? {} : { subtitle: edition.subtitle }),
+					...(book.total_pages || !edition.pages ? {} : { total_pages: edition.pages }),
+				});
 				break;
 			}
 
