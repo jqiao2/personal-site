@@ -1,0 +1,2351 @@
+---
+import BookReviewEditor from '../../../components/BookReviewEditor.astro';
+import ReadingLayout from '../../../layouts/ReadingLayout.astro';
+import {
+	getBook,
+	getBookDays,
+	getBookHighlights,
+	getBookReviews,
+} from '../../../lib/book-queries';
+import { buildBookPage } from '../../../lib/book-view';
+import { requireOwner } from '../../../lib/auth';
+
+// Rendered on demand — reflects whatever the Kindle last pushed.
+export const prerender = false;
+
+const id = Number(Astro.params.id);
+const isOwner = await requireOwner(Astro.cookies);
+const book = Number.isInteger(id) ? await getBook(id, isOwner) : null;
+
+// A private book does not exist to a visitor. Not a redacted page, not "you
+// don't have access" — those both answer the question the privacy toggle is
+// there to refuse. getBook returns null for both cases so this can't leak the
+// difference by accident.
+if (!book) {
+	return new Response(
+		`<!doctype html><html lang="en"><head><meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Not found</title>
+		<style>
+			body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+				padding:40px 24px;background:#1a120a;color:#f2e6cd;font-family:Archivo,Arial,sans-serif}
+			.box{max-width:420px}
+			.code{font-family:Georgia,serif;font-size:64px;color:#33261a;line-height:1;letter-spacing:-2px}
+			.head{font-family:Georgia,serif;font-style:italic;font-size:22px;color:#ead9b6;margin-top:18px;line-height:1.4}
+			p{font-size:13px;color:#8a745a;margin:12px 0 0;line-height:1.65}
+			a{display:inline-block;margin-top:22px;font-size:13px;color:#cfa452;text-decoration:none}
+		</style></head><body><div class="box">
+		<div class="code">404</div>
+		<div class="head">There is nothing at this address.</div>
+		<p>No redacted page, no placeholder — as far as this site is concerned the book was never here.</p>
+		<a href="/reading">&larr; Back to Reading</a>
+		</div></body></html>`,
+		{ status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } },
+	);
+}
+
+const [days, reviews, highlights] = await Promise.all([
+	getBookDays(book.id),
+	getBookReviews(book.id),
+	getBookHighlights(book.id),
+]);
+
+const v = buildBookPage({ book, days, reviews, highlights, isOwner });
+
+// Decorative shelf behind the hero: the spines from /reading, out of focus. A
+// fixed seed rather than Math.random so the same book draws the same shelf on
+// every render instead of shuffling on each page load.
+let seed = 90_210;
+const random = () => ((seed = (seed * 9301 + 49_297) % 233_280), seed / 233_280);
+const spines = Array.from({ length: 18 }, () => ({
+	w: 8 + Math.round(random() * 20),
+	h: 46 + Math.round(random() * 30),
+}));
+---
+
+<ReadingLayout title={v.pageTitle}>
+	<div class="page" style={`--hue:${v.hue}`}>
+		<div class="tabs-bar">
+			<nav class="tabs">
+				<a class="tabs__link" href="/">Home</a>
+				<a class="tabs__link" href="/about">About</a>
+				<a class="tabs__link" href="/projects">Projects</a>
+				<a class="tabs__link" href="/films">Films</a>
+				<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
+				<a class="tabs__link" href="/subway">Subway</a>
+			</nav>
+		</div>
+
+		<!-- Hero: a wash pulled from the book, on a shelf with one book missing -->
+		<div class="hero">
+			<div class="hero__grain"></div>
+			<div class="hero__shelf">
+				{spines.map((s) => <div class="hero__spine" style={`width:${s.w}px;height:${s.h}px`} />)}
+			</div>
+			<div class="hero__inner">
+				<div class="wrap hero__row">
+					<a class="back" href="/reading" data-back>
+						<span class="back__arrow">←</span><span>Reading</span>
+					</a>
+					<div class="hero__status">
+						<span class:list={['dot', v.heroDotClass]}></span>
+						<span class="hero__status-label">{v.heroStatus}</span>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="wrap layout">
+			<!-- ============ LEFT RAIL ============ -->
+			<aside class="rail">
+				{
+					v.coverUrl ? (
+						<div class="cover">
+							<img class="cover__art" src={v.coverUrl} alt={`${v.title} cover`} fetchpriority="high" />
+							<div class="cover__scrim" />
+							<div class="cover__edge" />
+							<div class="cover__text">
+								<div class="cover__title">{v.title}</div>
+								<div class="cover__author">{v.authorLine}</div>
+							</div>
+							{v.badge && !!v.isPublic && <div class:list={['badge', `badge--${v.shelf}`]}>{v.badge}</div>}
+							{
+								!v.isPublic && (
+									<Fragment>
+										<div class="cover__hatch" />
+										<div class="cover__private">
+											<span class="dot dot--private" />
+											<span>Private</span>
+										</div>
+									</Fragment>
+								)
+							}
+						</div>
+					) : (
+						<div class="nocover">
+							<div class="nocover__spine">
+								<div class="nocover__fill" style={`height:${v.spineFill}px`} />
+								<span class="nocover__title">{v.title}</span>
+							</div>
+							<div class="nocover__note">no cover on file</div>
+						</div>
+					)
+				}
+
+				{/* A reading, not a control — the state is reported, never asked for. */}
+				{
+					(v.shelf === 'reading' || v.shelf === 'aside' || v.shelf === 'gaveup') && (
+						<div class:list={['status', `status--${v.shelf}`]}>
+							<div class="status__head">
+								<span class:list={['dot', `dot--${v.shelf}`]} />
+								<span class="status__label">{v.statusLabel}</span>
+								{v.lovedAny && <span class="status__heart" title="You loved this">♥</span>}
+							</div>
+							{
+								v.knowsTotal ? (
+									<Fragment>
+										<div class="track">
+											<div class="track__bar" style={`width:${v.barWidth}%`} />
+										</div>
+										<div class="status__pages">{v.railPageLine}</div>
+									</Fragment>
+								) : (
+									<Fragment>
+										<div class="status__pages">{v.railPageLine}</div>
+										<div class="status__note">
+											No page count on file, so there is no percentage and the automatic finish will
+											never fire.
+										</div>
+									</Fragment>
+								)
+							}
+							{v.statusNote && <div class="status__note">{v.statusNote}</div>}
+							<dl class="facts">
+								{
+									v.railFacts.map((f) => (
+										<div class="fact">
+											<dt>{f.k}</dt>
+											<dd>{f.v}</dd>
+										</div>
+									))
+								}
+							</dl>
+						</div>
+					)
+				}
+
+				{
+					v.shelf === 'finished' && (
+						<div class="status status--finished">
+							<div class="status__head">
+								<span class="dot dot--finished" />
+								<span class="status__label">Finished</span>
+								{v.lovedAny && <span class="status__heart" title="You loved this">♥</span>}
+							</div>
+							<div class="status__date">{v.finishedLong}</div>
+							{
+								v.byHand && (
+									<Fragment>
+										{v.stoppedLine && <div class="status__stopped">{v.stoppedLine}</div>}
+										<div class="status__note">Called done by hand — the rest is endnotes and sources.</div>
+									</Fragment>
+								)
+							}
+							<dl class="facts">
+								{
+									v.railFacts.map((f) => (
+										<div class="fact">
+											<dt>{f.k}</dt>
+											<dd>{f.v}</dd>
+										</div>
+									))
+								}
+							</dl>
+						</div>
+					)
+				}
+
+				{v.addedLine && <div class="rail__line">{v.addedLine}</div>}
+				{v.autoNote && <div class="rail__auto">{v.autoNote}</div>}
+
+				{/* One primary action, everything else quieter. */}
+				{
+					v.primaryLabel && (
+						<button
+							type="button"
+							class:list={['btn-primary', v.shelf === 'toread' && 'btn-primary--on']}
+							data-open-review={v.primaryAction === 'review' ? '' : undefined}
+							data-seed={
+								v.primaryAction === 'review' && v.reviews.length
+									? JSON.stringify(v.reviews[0].seed)
+									: undefined
+							}
+							data-read-label={
+								v.primaryAction === 'review' && v.reviews.length
+									? [v.reviews[0].readLabel, v.reviews[0].dates].filter(Boolean).join(' · ')
+									: undefined
+							}
+							data-book-action={v.primaryAction === 'to-read' ? 'to-read' : undefined}
+						>
+							{v.primaryLabel}
+						</button>
+					)
+				}
+
+				{
+					v.quietActions.length > 0 && (
+						<div class="quiet">
+							{
+								v.quietActions.map((q) => (
+									<button type="button" class="quiet__btn" title={q.hint} data-book-action={q.action}>
+										{q.label}
+									</button>
+								))
+							}
+						</div>
+					)
+				}
+
+				{
+					isOwner && (
+						<div class:list={['priv', !v.isPublic && 'priv--on']}>
+							<button type="button" class="priv__toggle" data-book-action="private" aria-pressed={!v.isPublic}>
+								<span class="priv__track"><span class="priv__knob" /></span>
+								<span class="priv__label">
+									{v.isPublic ? 'Private' : 'Private — only you can see this'}
+								</span>
+							</button>
+							<div class="priv__caption">
+								{
+									v.isPublic
+										? 'Hides the book, its reviews and its highlights from the public shelf. Your streak and totals keep counting it.'
+										: 'Visitors get a 404, not a redacted page. The reading still counts: your streak, days read, pages and time all include it — the numbers say how much you read, not what.'
+								}
+							</div>
+						</div>
+					)
+				}
+			</aside>
+
+			<!-- ============ RIGHT COLUMN ============ -->
+			<div class="col">
+				<h1 class="title">{v.title}</h1>
+				{v.subtitle && <div class="subtitle">{v.subtitle}</div>}
+				{v.series && <div class="series">{v.series}</div>}
+
+				{
+					v.authors.length > 0 && (
+						<div class="byline">
+							By{' '}
+							{v.authors.map((a, i) => (
+								<Fragment>
+									{i > 0 && ' & '}
+									<a class="byline__name" href={`/reading?author=${encodeURIComponent(a)}`}>{a}</a>
+								</Fragment>
+							))}
+						</div>
+					)
+				}
+
+				{
+					(v.metaBits.length > 0 || isOwner) && (
+						<div class="meta">
+							{
+								v.metaBits.map((m, i) => (
+									<Fragment>
+										{i > 0 && <span class="meta__dot">·</span>}
+										<span class="meta__bit">{m}</span>
+									</Fragment>
+								))
+							}
+							{
+								isOwner && v.matched && (
+									<button type="button" class="meta__fix" data-open-match>wrong edition?</button>
+								)
+							}
+						</div>
+					)
+				}
+
+				{
+					v.kind && (
+						<div class="tags">
+							<a class="tag tag--kind" href={`/reading?kind=${encodeURIComponent(v.kind)}`}>{v.kind}</a>
+							{
+								v.genres.map((g) => (
+									<a class="tag" href={`/reading?subject=${encodeURIComponent(g)}`}>{g}</a>
+								))
+							}
+						</div>
+					)
+				}
+
+				{
+					v.description.length > 0 && (
+						<div class="blurb" data-blurb>
+							{
+								v.description.map((p, i) => (
+									<p class="blurb__p" hidden={i >= v.descriptionPreview.length}>{p}</p>
+								))
+							}
+							{
+								v.description.length > v.descriptionPreview.length && (
+									<button type="button" class="blurb__more" data-blurb-toggle>More</button>
+								)
+							}
+						</div>
+					)
+				}
+
+				{/* Unmatched: most of this column is simply absent, and says so. */}
+				{
+					!v.matched && (
+						<div class="invite">
+							<div class="invite__head">Nothing is known about this book yet.</div>
+							<div class="invite__body">{v.missingLine}</div>
+							<div class="invite__raw">{v.sourceTitle}</div>
+							{
+								isOwner && (
+									<button type="button" class="btn-primary invite__cta" data-open-match>
+										Find this book on Open Library
+									</button>
+								)
+							}
+						</div>
+					)
+				}
+
+				{/* ============ YOUR READING ============ */}
+				{
+					v.hasActivity && (
+						<section class="section">
+							<div class="sec-head">
+								<h2 class="sec-head__title">Your reading</h2>
+								<span class="sec-head__meta">{v.lifetimeScope}</span>
+							</div>
+
+							{
+								v.progressIsHero && (
+									<div class="hero-progress">
+										<div class="hero-progress__pct">{v.percent}</div>
+										<div class="hero-progress__main">
+											<div class="track track--lg">
+												<div class="track__bar" style={`width:${v.barWidth}%`} />
+											</div>
+											<div class="hero-progress__row">
+												<span>{v.pageLine}</span>
+												<span class="dim">{v.pagesLeftLine}</span>
+											</div>
+										</div>
+									</div>
+								)
+							}
+
+							<div class="stats">
+								{
+									v.stats.map((s) => (
+										<div class="stat">
+											<div class="stat__value">{s.value}</div>
+											<div class="stat__label">{s.label}</div>
+										</div>
+									))
+								}
+							</div>
+
+							{
+								v.pace && (
+									<div class="pace">
+										<div class="pace__head">
+											<span class="pace__value">{v.pace.value}</span>
+											<span class="pace__unit">{v.pace.unit}</span>
+										</div>
+										<div class="pace__projection">{v.pace.projection}</div>
+										<div class="pace__basis">{v.pace.basis}</div>
+									</div>
+								)
+							}
+							{v.noPaceLine && <div class="nopace">{v.noPaceLine}</div>}
+						</section>
+					)
+				}
+
+				{/* ============ WHEN YOU READ IT ============ */}
+				{
+					v.hasActivity && (
+						<section class="section">
+							<div class="sec-head">
+								<h2 class="sec-head__title">When you read it</h2>
+								<span class="sec-head__meta">{v.activityMeta}</span>
+							</div>
+							<div class="stretches">
+								{
+									v.stretches.map((row) =>
+										row.kind === 'gap' ? (
+											<div class="gap">
+												<span class="gap__rule" />
+												<span class="gap__label">{row.label}</span>
+												<span class="gap__rule" />
+											</div>
+										) : (
+											<div class="stretch">
+												<div class="stretch__head">
+													<div class="stretch__names">
+														<span class="stretch__range">{row.label}</span>
+														{row.readLabel && <span class="stretch__read">{row.readLabel}</span>}
+													</div>
+													<span class="stretch__meta">{row.meta}</span>
+												</div>
+												<div class="stretch__cells">
+													{
+														row.cells.map((c) => (
+															<div
+																class:list={['cell', `cell--l${c.level}`, !c.read && 'cell--off']}
+																title={c.title}
+															/>
+														))
+													}
+												</div>
+											</div>
+										),
+									)
+								}
+							</div>
+						</section>
+					)
+				}
+
+				{/* ============ HIGHLIGHTS ============ */}
+				{
+					v.highlights.length > 0 && (
+						<section class="section">
+							<div class="sec-head sec-head--tight">
+								<h2 class="sec-head__title">Highlights</h2>
+								<span class="sec-head__meta">{v.highlightMeta}</span>
+							</div>
+							<div
+								class:list={['highlights', v.highlights.length > 12 && 'highlights--scroll']}
+								data-highlights
+							>
+								{
+									v.highlights.map((h, i) => (
+										<div class="highlight" hidden={i >= v.highlightPreview.length}>
+											<div class="highlight__page">{h.page}</div>
+											<div class="highlight__text">{h.text}</div>
+										</div>
+									))
+								}
+							</div>
+							{
+								v.highlights.length > v.highlightPreview.length && (
+									<button type="button" class="btn-pill" data-highlights-toggle>
+										Show all {v.highlights.length} highlights
+									</button>
+								)
+							}
+						</section>
+					)
+				}
+
+				{/* ============ REVIEWS ============ */}
+				{
+					v.showReviews && (
+						<section class="section">
+							<div class="sec-head">
+								<h2 class="sec-head__title">{v.reviewsHeading}</h2>
+								{v.readsMeta && <span class="sec-head__meta">{v.readsMeta}</span>}
+							</div>
+
+							<div class="reviews">
+								{
+									v.reviews.map((r, i) => (
+										<article class:list={['review', i === 0 && 'review--latest']}>
+											<div class="review__head">
+												{r.readLabel && <span class="review__read">{r.readLabel}</span>}
+												<span class="review__dates">{r.dates}</span>
+												{
+													isOwner && (
+														<button
+															type="button"
+															class="review__edit"
+															data-open-review
+															data-seed={JSON.stringify(r.seed)}
+															data-read-label={[r.readLabel, r.dates].filter(Boolean).join(' · ')}
+														>
+															{r.editLabel}
+														</button>
+													)
+												}
+											</div>
+
+											<div class="review__meta">
+												{r.stars && <span class="review__stars">{r.stars}</span>}
+												{
+													r.loved && (
+														<span class="review__loved" title="You loved this">
+															<span class="review__heart">♥</span>
+															{r.lovedWord}
+														</span>
+													)
+												}
+												{r.ending && <span class="review__ending">{r.ending}</span>}
+												{r.readStats && <span class="review__stats">{r.readStats}</span>}
+											</div>
+
+											{
+												r.text ? (
+													<p class="review__text">{r.text}</p>
+												) : (
+													<div class="review__empty">{r.emptyLine}</div>
+												)
+											}
+
+											{
+												(r.chips.length > 0 || r.hiddenChips.length > 0) && (
+													<div class="chips" data-chips>
+														{
+															r.chips.map((c) => (
+																<span class:list={['chip', c.scale && 'chip--scale']}>{c.label}</span>
+															))
+														}
+														{
+															r.hiddenChips.map((c) => (
+																<span class:list={['chip', c.scale && 'chip--scale']} hidden>
+																	{c.label}
+																</span>
+															))
+														}
+														{
+															r.hiddenChips.length > 0 && (
+																<button type="button" class="chips__more" data-chips-toggle>
+																	+{r.hiddenChips.length} more
+																</button>
+															)
+														}
+													</div>
+												)
+											}
+										</article>
+									))
+								}
+							</div>
+
+							{v.noReadsLine && <div class="reviews__empty">{v.noReadsLine}</div>}
+						</section>
+					)
+				}
+			</div>
+		</div>
+
+		{/* ============ MATCH PANEL (owner) ============ */}
+		{
+			isOwner && (
+				<div class="modal" id="match-modal" data-source-title={v.sourceTitle} data-book-id={v.id} hidden>
+					<div class="modal__backdrop" data-match-close />
+					<div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="match-title">
+						<div class="modal__head">
+							<div class="modal__heading">
+								<div class="modal__title" id="match-title">
+									{v.matched ? 'Match a different edition' : 'Match this book'}
+								</div>
+								<div class="modal__raw">{v.sourceTitle || '(no filename on record)'}</div>
+							</div>
+							<button type="button" class="modal__close" data-match-close aria-label="Close">✕</button>
+						</div>
+
+						<div class="modal__body">
+							<div data-match-search>
+								<input
+									type="text"
+									id="match-q"
+									placeholder="Title and author…"
+									autocomplete="off"
+									value={[v.title, v.authors[0]].filter(Boolean).join(' ')}
+								/>
+								<div class="modal__meta" id="match-meta"></div>
+								<div class="results" id="match-results"></div>
+							</div>
+
+							<div data-match-confirm hidden>
+								<div class="picked">
+									<div class="picked__thumb" id="picked-thumb"></div>
+									<div class="picked__main">
+										<div class="picked__title" id="picked-title"></div>
+										<div class="picked__meta" id="picked-meta"></div>
+										<button type="button" class="linkish" data-match-back>Pick a different edition</button>
+									</div>
+								</div>
+								<div class="edits">
+									<div>
+										<label class="lbl" for="edit-title">Shown as</label>
+										<input type="text" id="edit-title" class="input--serif" />
+									</div>
+									<div>
+										<label class="lbl" for="edit-author">Author</label>
+										<input type="text" id="edit-author" />
+									</div>
+									<div class="edits__note">
+										The file the Kindle reports stays underneath as the identifier:<br />
+										<span class="edits__raw">{v.sourceTitle || '(none)'}</span>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="modal__foot">
+							<button type="button" class="btn-ghost" data-match-close>Cancel</button>
+							<button type="button" class="btn-save" id="match-confirm" hidden>Link this edition</button>
+						</div>
+					</div>
+				</div>
+			)
+		}
+
+		{
+			isOwner && (
+				<BookReviewEditor
+					bookId={v.id}
+					bookTitle={v.title}
+					newRead={v.newRead}
+					latestRead={
+						v.reviews.length
+							? {
+									from: v.reviews[0].seed.readFrom,
+									to: v.reviews[0].seed.readTo,
+									label: v.latestReadTitle ?? '',
+								}
+							: null
+					}
+					priorReads={v.priorReads}
+					attachOnBody={v.attachOnBody}
+					attachOffBody={v.attachOffBody}
+					gaveUp={v.shelf === 'gaveup'}
+				/>
+			)
+		}
+	</div>
+</ReadingLayout>
+
+<style>
+	.page {
+		min-height: 100vh;
+	}
+	.wrap {
+		width: 100%;
+		max-width: 960px;
+		margin: 0 auto;
+		padding: 0 clamp(14px, 4vw, 24px);
+	}
+
+	/* Tabs — the shelf's, unchanged */
+	.tabs-bar {
+		background: #150e07;
+		border-bottom: 1px solid #45341f;
+		position: relative;
+		z-index: 3;
+	}
+	.tabs {
+		display: flex;
+		gap: 2px;
+		max-width: 1008px;
+		margin: 0 auto;
+		padding: 0 clamp(14px, 4vw, 24px);
+		overflow-x: auto;
+	}
+	.tabs__link {
+		font-size: 13px;
+		letter-spacing: 0.4px;
+		color: #bfa886;
+		padding: 26px 16px 24px;
+		border-bottom: 2px solid transparent;
+		white-space: nowrap;
+	}
+	.tabs__link:hover {
+		color: #f2e6cd;
+	}
+	.tabs__link--active {
+		color: #f2e6cd;
+		border-bottom-color: #cfa452;
+	}
+
+	/* Hero */
+	.hero {
+		position: relative;
+		height: 186px;
+		overflow: hidden;
+		background-color: #1a120a;
+		background-image:
+			radial-gradient(120% 190% at 16% 130%, var(--hue) 0%, rgba(26, 18, 10, 0) 62%),
+			radial-gradient(90% 150% at 82% -20%, var(--hue) 0%, rgba(26, 18, 10, 0) 58%);
+		border-bottom: 1px solid #45341f;
+	}
+	.hero__grain {
+		position: absolute;
+		inset: 0;
+		background-image: repeating-linear-gradient(
+			135deg,
+			rgba(255, 246, 224, 0.022) 0 2px,
+			transparent 2px 5px
+		);
+		pointer-events: none;
+	}
+	.hero__shelf {
+		position: absolute;
+		bottom: 0;
+		left: 272px;
+		right: 0;
+		display: flex;
+		align-items: flex-end;
+		gap: 5px;
+		opacity: 0.3;
+		mask-image: linear-gradient(90deg, #000 0%, #000 55%, transparent 100%);
+		-webkit-mask-image: linear-gradient(90deg, #000 0%, #000 55%, transparent 100%);
+		pointer-events: none;
+	}
+	.hero__spine {
+		flex: none;
+		border-radius: 1.5px 1.5px 0 0;
+		border: 1px solid rgba(255, 240, 214, 0.1);
+		border-bottom: none;
+		background-color: var(--hue);
+		background-image: repeating-linear-gradient(
+			135deg,
+			rgba(255, 244, 222, 0.09) 0 5px,
+			rgba(0, 0, 0, 0.14) 5px 10px
+		);
+	}
+	.hero__inner {
+		position: relative;
+		height: 100%;
+	}
+	.hero__row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 18px;
+		padding-top: 22px;
+		flex-wrap: wrap;
+	}
+	.back {
+		display: inline-flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 13px;
+		color: #e8dbc2;
+	}
+	.back:hover {
+		color: #fff2da;
+	}
+	.back__arrow {
+		font-size: 15px;
+	}
+	.hero__status {
+		display: inline-flex;
+		align-items: center;
+		gap: 9px;
+	}
+	.hero__status-label {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.7px;
+		color: #c9b491;
+	}
+
+	.dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		flex: none;
+		background: #cfa452;
+	}
+	.dot--aside {
+		background: #8a745a;
+	}
+	.dot--gaveup {
+		background: #c07a5a;
+	}
+	.dot--finished {
+		background: #9fb072;
+	}
+	.dot--toread {
+		background: #a68f6e;
+	}
+	.dot--none {
+		background: #5c4a30;
+	}
+	.dot--private {
+		width: 5px;
+		height: 5px;
+	}
+
+	/* Layout */
+	.layout {
+		display: flex;
+		gap: 38px;
+		align-items: flex-start;
+		flex-wrap: wrap;
+		padding-bottom: 96px;
+	}
+	.rail {
+		flex: 0 0 236px;
+		max-width: 100%;
+		margin-top: -104px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		position: relative;
+		z-index: 2;
+	}
+	.col {
+		flex: 1 1 440px;
+		min-width: 0;
+		padding-top: 26px;
+	}
+
+	/* Cover */
+	.cover {
+		position: relative;
+		height: 354px;
+		border-radius: 4px 8px 8px 4px;
+		overflow: hidden;
+		border: 1px solid #45341f;
+		box-shadow: 0 24px 46px -14px rgba(0, 0, 0, 0.7);
+		background-color: var(--hue);
+		background-image: repeating-linear-gradient(
+			135deg,
+			rgba(255, 244, 222, 0.075) 0 9px,
+			rgba(0, 0, 0, 0.13) 9px 18px
+		);
+	}
+	.cover__art {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.cover__scrim {
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(180deg, rgba(20, 13, 6, 0.05) 40%, rgba(20, 13, 6, 0.82) 100%);
+	}
+	.cover__edge {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 9px;
+		background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.28));
+	}
+	.cover__text {
+		position: absolute;
+		inset: 0;
+		padding: 16px;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-end;
+	}
+	.cover__title {
+		font-family: 'Newsreader', serif;
+		font-size: 19px;
+		color: #fbf1dc;
+		line-height: 1.2;
+		letter-spacing: -0.1px;
+	}
+	.cover__author {
+		font-size: 11.5px;
+		color: #d6c3a0;
+		margin-top: 6px;
+	}
+	.cover__hatch {
+		position: absolute;
+		inset: 0;
+		background-image: repeating-linear-gradient(
+			45deg,
+			rgba(20, 13, 6, 0.62) 0 8px,
+			rgba(20, 13, 6, 0.18) 8px 16px
+		);
+		pointer-events: none;
+	}
+	.cover__private {
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: #1a120a;
+		border-bottom: 1px solid #6b5228;
+		padding: 8px 12px;
+		font-size: 9.5px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 1.6px;
+		color: #ecc87c;
+	}
+	.badge {
+		position: absolute;
+		top: 0;
+		right: 0;
+		font-size: 9.5px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 1.3px;
+		padding: 6px 11px;
+		border-radius: 0 0 0 8px;
+		color: #1a120a;
+		background: #cfa452;
+	}
+	.badge--aside {
+		background: #8a745a;
+	}
+	.badge--gaveup {
+		background: #c07a5a;
+	}
+	.badge--finished {
+		background: #9fb072;
+	}
+	.badge--toread {
+		background: #a68f6e;
+	}
+
+	/* No cover: the shelf's spine, standing in */
+	.nocover {
+		height: 354px;
+		display: flex;
+		align-items: flex-end;
+		justify-content: center;
+		gap: 14px;
+		border: 1px dashed #45341f;
+		border-radius: 8px;
+		padding: 20px;
+	}
+	.nocover__spine {
+		position: relative;
+		width: 52px;
+		height: 280px;
+		border-radius: 2px;
+		overflow: hidden;
+		border: 1px solid #45341f;
+		background-image: repeating-linear-gradient(135deg, #3a2c1c 0 7px, #2a1c0c 7px 14px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.nocover__fill {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: #cfa452;
+		opacity: 0.85;
+	}
+	.nocover__title {
+		position: relative;
+		writing-mode: vertical-rl;
+		font-family: 'Newsreader', serif;
+		font-size: 15px;
+		color: #f2e6cd;
+		letter-spacing: 0.4px;
+		white-space: nowrap;
+		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+	}
+	.nocover__note {
+		align-self: flex-end;
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		font-size: 9.5px;
+		letter-spacing: 0.5px;
+		color: #75603f;
+		writing-mode: vertical-rl;
+	}
+
+	/* Rail status */
+	.status {
+		border-left: 2px solid #cfa452;
+		background: #241a10;
+		border-radius: 0 9px 9px 0;
+		padding: 14px 15px 15px;
+	}
+	.status--aside {
+		border-left-style: dashed;
+		border-left-color: #8a745a;
+		background: #1f1609;
+	}
+	.status--gaveup {
+		border-left-color: #c07a5a;
+	}
+	.status--finished {
+		border-left-color: #7f8f5a;
+	}
+	.status__head {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		margin-bottom: 12px;
+	}
+	.status__label {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.5px;
+		color: #cfa452;
+	}
+	.status--aside .status__label {
+		color: #8a745a;
+	}
+	.status--gaveup .status__label {
+		color: #c07a5a;
+	}
+	.status--finished .status__label {
+		color: #9fb072;
+	}
+	.status__heart {
+		margin-left: auto;
+		color: #cfa452;
+		font-size: 13px;
+		line-height: 1;
+	}
+	.status__pages {
+		font-size: 12.5px;
+		color: #dcc9a6;
+		margin-top: 9px;
+		line-height: 1.45;
+	}
+	.status__note {
+		font-size: 11.5px;
+		color: #8a745a;
+		margin-top: 8px;
+		line-height: 1.55;
+	}
+	.status__date {
+		font-family: 'Newsreader', serif;
+		font-size: 20px;
+		color: #f2e6cd;
+		line-height: 1.25;
+	}
+	.status__stopped {
+		font-size: 12px;
+		color: #a68f6e;
+		margin-top: 7px;
+		line-height: 1.5;
+	}
+
+	.track {
+		height: 7px;
+		border-radius: 4px;
+		overflow: hidden;
+		background: #33261a;
+	}
+	.status--gaveup .track {
+		background-image: repeating-linear-gradient(45deg, #3a2c1c 0 4px, #241a10 4px 8px);
+	}
+	.track--lg {
+		height: 10px;
+		border-radius: 5px;
+	}
+	.track__bar {
+		height: 100%;
+		background: #cfa452;
+		border-radius: 5px;
+	}
+	.status--gaveup .track__bar {
+		background: #c07a5a;
+	}
+
+	.facts {
+		display: flex;
+		flex-direction: column;
+		gap: 7px;
+		margin: 13px 0 0;
+		padding-top: 12px;
+		border-top: 1px solid #33261a;
+	}
+	.fact {
+		display: flex;
+		justify-content: space-between;
+		gap: 10px;
+		font-size: 12px;
+	}
+	.fact dt {
+		color: #8a745a;
+	}
+	.fact dd {
+		margin: 0;
+		color: #efe0c2;
+		text-align: right;
+	}
+
+	.rail__line {
+		font-size: 12px;
+		color: #8a745a;
+		line-height: 1.55;
+	}
+	.rail__auto {
+		font-size: 11.5px;
+		color: #75603f;
+		line-height: 1.5;
+	}
+
+	/* Rail actions */
+	.btn-primary {
+		width: 100%;
+		font-size: 14px;
+		font-weight: 700;
+		color: #241a10;
+		background: #cfa452;
+		border: none;
+		border-radius: 9px;
+		padding: 12px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-primary:hover {
+		background: #ecc87c;
+	}
+	.btn-primary--on {
+		font-size: 13.5px;
+		font-weight: 600;
+		color: #f2e6cd;
+		background: #2c2013;
+		border: 1px solid #cfa452;
+	}
+	.btn-primary--on:hover {
+		background: #33261a;
+	}
+	.quiet {
+		display: flex;
+		flex-flow: row wrap;
+		align-items: baseline;
+		gap: 10px 18px;
+		padding-top: 14px;
+		border-top: 1px solid #2b2013;
+	}
+	.quiet__btn {
+		font-size: 12px;
+		color: #a68f6e;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-align: left;
+		text-decoration: underline;
+		text-decoration-color: #4d3a22;
+		text-underline-offset: 4px;
+	}
+	.quiet__btn:hover {
+		color: #f2e6cd;
+	}
+
+	/* Visibility */
+	.priv {
+		border-top: 1px solid #2b2013;
+		padding: 15px 0 0;
+	}
+	.priv--on {
+		border: 1px solid #6b5228;
+		background: #2a1f0f;
+		border-radius: 9px;
+		padding: 13px 14px;
+	}
+	.priv__toggle {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-align: left;
+	}
+	.priv__track {
+		position: relative;
+		flex: none;
+		width: 30px;
+		height: 17px;
+		border-radius: 9px;
+		background: #3d2d1a;
+		transition: background 0.16s ease;
+	}
+	.priv--on .priv__track {
+		background: #cfa452;
+	}
+	.priv__knob {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 13px;
+		height: 13px;
+		border-radius: 50%;
+		background: #8a745a;
+		transition:
+			left 0.16s ease,
+			background 0.16s ease;
+	}
+	.priv--on .priv__knob {
+		left: 15px;
+		background: #241a10;
+	}
+	.priv__label {
+		font-size: 12px;
+		letter-spacing: 0.2px;
+		color: #a68f6e;
+	}
+	.priv--on .priv__label {
+		font-weight: 600;
+		color: #ecc87c;
+	}
+	.priv__caption {
+		font-size: 11px;
+		color: #75603f;
+		line-height: 1.55;
+		margin-top: 9px;
+	}
+
+	/* Identity */
+	.title {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: clamp(32px, 5.4vw, 46px);
+		color: #f4e9d2;
+		letter-spacing: -0.6px;
+		line-height: 1.05;
+		margin: 0;
+	}
+	.subtitle {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: clamp(17px, 2.6vw, 22px);
+		color: #a68f6e;
+		margin-top: 7px;
+		line-height: 1.3;
+	}
+	.series {
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 1.6px;
+		color: #8a745a;
+		margin-top: 12px;
+	}
+	.byline {
+		font-size: 14.5px;
+		color: #c2ab88;
+		margin-top: 14px;
+	}
+	.byline__name {
+		color: #f2e6cd;
+		font-weight: 600;
+	}
+	.byline__name:hover {
+		color: #ecc87c;
+	}
+	.meta {
+		display: flex;
+		align-items: center;
+		gap: 11px;
+		margin-top: 15px;
+		flex-wrap: wrap;
+	}
+	.meta__bit,
+	.meta__dot {
+		font-size: 12.5px;
+		color: #8a745a;
+	}
+	.meta__dot {
+		margin: 0 -5px;
+	}
+	.meta__fix {
+		font-size: 11.5px;
+		color: #75603f;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-decoration: underline;
+		text-decoration-color: #3d2d1a;
+		text-underline-offset: 3px;
+	}
+	.meta__fix:hover {
+		color: #cfa452;
+	}
+	.tags {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		margin-top: 19px;
+	}
+	.tag {
+		font-size: 12px;
+		color: #dcc9a6;
+		border: 1px solid #45341f;
+		border-radius: 20px;
+		padding: 6px 14px;
+		background: #221809;
+	}
+	.tag:hover {
+		border-color: #cfa452;
+		color: #f2e6cd;
+	}
+	.tag--kind {
+		font-size: 11.5px;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 1.2px;
+		color: #241a10;
+		background: #cfa452;
+		border-color: #cfa452;
+	}
+	.tag--kind:hover {
+		background: #ecc87c;
+		color: #241a10;
+	}
+	.blurb {
+		margin-top: 22px;
+		max-width: 600px;
+	}
+	.blurb__p {
+		font-size: 15px;
+		color: #d5c3a4;
+		line-height: 1.68;
+		margin: 0 0 13px;
+		text-wrap: pretty;
+	}
+	.blurb__more {
+		font-size: 12.5px;
+		color: #cfa452;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.blurb__more:hover {
+		color: #ecc87c;
+	}
+
+	/* Unmatched */
+	.invite {
+		margin-top: 26px;
+		border: 1px dashed #45341f;
+		border-radius: 10px;
+		padding: 22px 20px;
+		max-width: 600px;
+	}
+	.invite__head {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 19px;
+		color: #ead9b6;
+		line-height: 1.35;
+	}
+	.invite__body {
+		font-size: 13px;
+		color: #8a745a;
+		margin-top: 8px;
+		line-height: 1.6;
+	}
+	.invite__raw {
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		font-size: 11.5px;
+		color: #a68f6e;
+		background: #1f1609;
+		border: 1px solid #33261a;
+		border-radius: 7px;
+		padding: 10px 12px;
+		margin-top: 14px;
+		overflow-x: auto;
+		white-space: nowrap;
+	}
+	.invite__cta {
+		width: auto;
+		margin-top: 16px;
+		font-size: 13.5px;
+		border-radius: 8px;
+		padding: 11px 20px;
+	}
+
+	/* Sections */
+	.section {
+		margin-top: 42px;
+	}
+	.sec-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		padding-bottom: 10px;
+		border-bottom: 1px solid #392a19;
+		margin-bottom: 20px;
+		flex-wrap: wrap;
+	}
+	.sec-head--tight {
+		margin-bottom: 6px;
+	}
+	.sec-head__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-weight: 400;
+		font-size: 20px;
+		color: #ead9b6;
+		margin: 0;
+	}
+	.sec-head__meta {
+		font-size: 11.5px;
+		color: #75603f;
+	}
+
+	/* Your reading */
+	.hero-progress {
+		display: flex;
+		align-items: flex-end;
+		gap: 20px;
+		flex-wrap: wrap;
+		margin-bottom: 8px;
+	}
+	.hero-progress__pct {
+		font-family: 'Newsreader', serif;
+		font-size: clamp(48px, 9vw, 68px);
+		color: #cfa452;
+		line-height: 0.85;
+		letter-spacing: -2px;
+	}
+	.hero-progress__main {
+		flex: 1 1 220px;
+		min-width: 0;
+		padding-bottom: 6px;
+	}
+	.hero-progress__row {
+		display: flex;
+		justify-content: space-between;
+		gap: 12px;
+		margin-top: 8px;
+		font-size: 12.5px;
+		color: #dcc9a6;
+	}
+	.dim {
+		color: #8a745a;
+	}
+	.stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+		gap: 1px;
+		background: #33261a;
+		border: 1px solid #45341f;
+		border-radius: 10px;
+		overflow: hidden;
+		margin-top: 18px;
+	}
+	.stat {
+		background: #221809;
+		padding: 15px 16px 16px;
+	}
+	.stat__value {
+		font-family: 'Newsreader', serif;
+		font-size: 26px;
+		color: #f2e6cd;
+		line-height: 1;
+	}
+	.stat__label {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.3px;
+		color: #8a745a;
+		margin-top: 8px;
+	}
+	.pace {
+		margin-top: 18px;
+		border-left: 2px solid #cfa452;
+		background: #221809;
+		border-radius: 0 10px 10px 0;
+		padding: 18px 20px 19px;
+	}
+	.pace__head {
+		display: flex;
+		align-items: baseline;
+		gap: 14px;
+		flex-wrap: wrap;
+	}
+	.pace__value {
+		font-family: 'Newsreader', serif;
+		font-size: 34px;
+		color: #cfa452;
+		line-height: 1;
+	}
+	.pace__unit {
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 1.4px;
+		color: #a68f6e;
+	}
+	.pace__projection {
+		font-family: 'Newsreader', serif;
+		font-size: 19px;
+		color: #f2e6cd;
+		line-height: 1.45;
+		margin-top: 12px;
+		max-width: 520px;
+	}
+	.pace__basis {
+		font-size: 12px;
+		color: #8a745a;
+		margin-top: 9px;
+		line-height: 1.55;
+		max-width: 520px;
+	}
+	.nopace {
+		margin-top: 18px;
+		border-left: 2px solid #3d2d1a;
+		padding: 4px 0 4px 18px;
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 17px;
+		color: #a68f6e;
+		line-height: 1.5;
+		max-width: 520px;
+	}
+
+	/* When you read it */
+	.stretches {
+		display: flex;
+		flex-direction: column;
+	}
+	.gap {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		padding: 15px 0;
+	}
+	.gap__rule {
+		flex: 1;
+		height: 1px;
+		background: repeating-linear-gradient(90deg, #392a19 0 5px, transparent 5px 11px);
+	}
+	.gap__label {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.6px;
+		color: #75603f;
+		white-space: nowrap;
+	}
+	.stretch {
+		background: #201709;
+		border: 1px solid #392a19;
+		border-radius: 10px;
+		padding: 16px 18px 17px;
+	}
+	.stretch__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.stretch__names {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.stretch__range {
+		font-size: 13.5px;
+		color: #efe0c2;
+		font-weight: 500;
+		letter-spacing: 0.2px;
+	}
+	.stretch__read {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.4px;
+		color: #cfa452;
+	}
+	.stretch__meta {
+		font-size: 12px;
+		color: #a68f6e;
+	}
+	.stretch__cells {
+		display: flex;
+		gap: 3px;
+		margin-top: 14px;
+		flex-wrap: wrap;
+	}
+	.cell {
+		width: 17px;
+		height: 17px;
+		border-radius: 3px;
+		flex: none;
+		border: 1px solid transparent;
+	}
+	.cell--off {
+		border-color: #33261a;
+	}
+	.cell--l0 {
+		background: #241a10;
+	}
+	.cell--l1 {
+		background: rgba(207, 164, 82, 0.26);
+	}
+	.cell--l2 {
+		background: rgba(207, 164, 82, 0.48);
+	}
+	.cell--l3 {
+		background: rgba(207, 164, 82, 0.74);
+	}
+	.cell--l4 {
+		background: #cfa452;
+	}
+
+	/* Highlights */
+	.highlights--scroll {
+		max-height: 620px;
+		overflow-y: auto;
+		padding-right: 10px;
+	}
+	.highlight {
+		display: flex;
+		gap: 20px;
+		padding: 20px 0;
+		border-bottom: 1px solid #2b2013;
+	}
+	.highlight__page {
+		flex: 0 0 34px;
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		font-size: 11px;
+		color: #75603f;
+		text-align: right;
+		padding-top: 6px;
+		letter-spacing: 0.4px;
+	}
+	.highlight__text {
+		flex: 1;
+		min-width: 0;
+		font-family: 'Newsreader', serif;
+		font-size: 17.5px;
+		color: #e9dbbf;
+		line-height: 1.62;
+		text-wrap: pretty;
+	}
+	.btn-pill {
+		margin-top: 16px;
+		font-size: 12.5px;
+		font-weight: 600;
+		color: #dcc9a6;
+		background: transparent;
+		border: 1px solid #45341f;
+		border-radius: 20px;
+		padding: 9px 18px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-pill:hover {
+		border-color: #cfa452;
+		color: #f2e6cd;
+	}
+
+	/* Reviews */
+	.reviews {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+	}
+	.review {
+		border-left: 2px solid #33261a;
+		padding: 2px 0 26px 20px;
+	}
+	.review--latest {
+		border-left-color: #4d3a22;
+	}
+	.review__head {
+		display: flex;
+		align-items: baseline;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+	.review__read {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.5px;
+		color: #cfa452;
+	}
+	.review__dates {
+		font-size: 12.5px;
+		color: #8a745a;
+	}
+	.review__edit {
+		margin-left: auto;
+		font-size: 11px;
+		font-weight: 600;
+		color: #a68f6e;
+		background: transparent;
+		border: 1px solid #45341f;
+		border-radius: 6px;
+		padding: 5px 11px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.review__edit:hover {
+		border-color: #cfa452;
+		color: #f2e6cd;
+	}
+	.review__meta {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		margin-top: 11px;
+		flex-wrap: wrap;
+	}
+	.review__stars {
+		color: #cfa452;
+		font-size: 16px;
+		letter-spacing: 2px;
+		line-height: 1;
+	}
+	.review__loved {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 11.5px;
+		letter-spacing: 0.4px;
+		color: #cfa452;
+	}
+	.review__heart {
+		font-size: 14px;
+		line-height: 1;
+	}
+	.review__ending {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.3px;
+		color: #c07a5a;
+	}
+	.review__stats {
+		font-size: 12px;
+		color: #75603f;
+	}
+	.review__text {
+		font-family: 'Newsreader', serif;
+		font-size: 17px;
+		color: #e6d8bd;
+		line-height: 1.65;
+		margin: 13px 0 0;
+		max-width: 580px;
+		text-wrap: pretty;
+	}
+	.review__empty {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 16px;
+		color: #75603f;
+		margin-top: 12px;
+	}
+	.reviews__empty {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 17px;
+		color: #75603f;
+	}
+	.chips {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+		margin-top: 15px;
+		align-items: center;
+	}
+	.chip {
+		font-size: 11.5px;
+		color: #b09a78;
+		border: 1px solid #33261a;
+		border-radius: 5px;
+		padding: 5px 11px;
+		background: #1f1609;
+	}
+	.chip--scale {
+		font-weight: 600;
+		letter-spacing: 0.2px;
+		color: #ecc87c;
+		border-color: #6b5228;
+		background: #2a1f0f;
+	}
+	.chips__more {
+		font-size: 11.5px;
+		color: #8a745a;
+		background: transparent;
+		border: none;
+		padding: 4px 2px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-decoration: underline;
+		text-decoration-color: #3d2d1a;
+		text-underline-offset: 3px;
+	}
+	.chips__more:hover {
+		color: #dcc9a6;
+	}
+
+	/* Match panel */
+	.modal {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		padding: 48px 20px;
+	}
+	.modal[hidden] {
+		display: none;
+	}
+	.modal__backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(9, 6, 3, 0.74);
+		backdrop-filter: blur(3px);
+	}
+	.modal__panel {
+		position: relative;
+		width: 100%;
+		max-width: 620px;
+		max-height: calc(100vh - 96px);
+		display: flex;
+		flex-direction: column;
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 14px;
+		box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.75);
+		overflow: hidden;
+	}
+	.modal__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 14px;
+		padding: 18px 22px;
+		border-bottom: 1px solid #392a19;
+		flex: none;
+	}
+	.modal__heading {
+		min-width: 0;
+	}
+	.modal__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 21px;
+		color: #f2e6cd;
+		line-height: 1.2;
+	}
+	.modal__raw {
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		font-size: 10.5px;
+		color: #75603f;
+		margin-top: 6px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.modal__close {
+		flex: none;
+		width: 30px;
+		height: 30px;
+		border: 1px solid #45341f;
+		background: transparent;
+		color: #a68f6e;
+		border-radius: 7px;
+		cursor: pointer;
+		font-size: 14px;
+		line-height: 1;
+	}
+	.modal__close:hover {
+		background: #33261a;
+		color: #f2e6cd;
+	}
+	.modal__body {
+		flex: 1 1 auto;
+		overflow-y: auto;
+		padding: 20px 22px 24px;
+	}
+	.modal__meta {
+		font-size: 11.5px;
+		color: #75603f;
+		margin-top: 9px;
+	}
+	.modal__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 15px 22px;
+		border-top: 1px solid #392a19;
+		background: #1f1609;
+		flex: none;
+	}
+	.modal input {
+		width: 100%;
+		background: #1a120a;
+		border: 1px solid #45341f;
+		border-radius: 9px;
+		padding: 12px 14px;
+		color: #f2e6cd;
+		font-size: 14px;
+		font-family: 'Archivo', sans-serif;
+		outline: none;
+	}
+	.modal input:focus {
+		border-color: #cfa452;
+	}
+	.input--serif {
+		font-family: 'Newsreader', serif !important;
+		font-size: 15px !important;
+	}
+	.results {
+		display: flex;
+		flex-direction: column;
+		margin-top: 12px;
+	}
+	.result {
+		display: flex;
+		gap: 14px;
+		align-items: center;
+		padding: 12px;
+		border: 1px solid transparent;
+		border-radius: 9px;
+		cursor: pointer;
+		background: transparent;
+		text-align: left;
+		font-family: 'Archivo', sans-serif;
+		width: 100%;
+	}
+	.result:hover {
+		background: #2c2013;
+		border-color: #45341f;
+	}
+	.thumb {
+		width: 38px;
+		height: 56px;
+		flex: none;
+		border-radius: 3px;
+		border: 1px solid #45341f;
+		object-fit: cover;
+		background-color: var(--hue);
+		background-image: repeating-linear-gradient(
+			135deg,
+			rgba(255, 244, 222, 0.1) 0 6px,
+			rgba(0, 0, 0, 0.16) 6px 12px
+		);
+	}
+	.result__main {
+		flex: 1;
+		min-width: 0;
+	}
+	.result__title {
+		font-family: 'Newsreader', serif;
+		font-size: 16.5px;
+		color: #f2e6cd;
+		line-height: 1.25;
+	}
+	.result__author {
+		font-size: 12px;
+		color: #a68f6e;
+		margin-top: 4px;
+	}
+	.result__side {
+		flex: none;
+		text-align: right;
+	}
+	.result__year {
+		font-family: 'Newsreader', serif;
+		font-size: 17px;
+		color: #cfa452;
+		line-height: 1;
+	}
+	.result__pages {
+		font-size: 11px;
+		color: #75603f;
+		margin-top: 5px;
+	}
+	.picked {
+		display: flex;
+		gap: 16px;
+		align-items: flex-start;
+		background: #1f1609;
+		border: 1px solid #33261a;
+		border-radius: 10px;
+		padding: 15px;
+	}
+	.picked__main {
+		flex: 1;
+		min-width: 0;
+	}
+	.picked__title {
+		font-family: 'Newsreader', serif;
+		font-size: 17px;
+		color: #f2e6cd;
+		line-height: 1.25;
+	}
+	.picked__meta {
+		font-size: 12px;
+		color: #a68f6e;
+		margin: 5px 0 6px;
+	}
+	.edits {
+		margin-top: 20px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.lbl {
+		display: block;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.5px;
+		color: #8a745a;
+		margin-bottom: 8px;
+	}
+	.edits__note {
+		font-size: 11.5px;
+		color: #75603f;
+		line-height: 1.6;
+	}
+	.edits__raw {
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		color: #a68f6e;
+	}
+	.linkish {
+		font-size: 11.5px;
+		color: #8a745a;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.linkish:hover {
+		color: #dcc9a6;
+	}
+	.btn-ghost {
+		font-size: 13.5px;
+		font-weight: 600;
+		color: #dcc9a6;
+		background: transparent;
+		border: 1px solid #45341f;
+		border-radius: 8px;
+		padding: 10px 18px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-ghost:hover {
+		border-color: #a68f6e;
+		color: #f2e6cd;
+	}
+	.btn-save {
+		font-size: 14px;
+		font-weight: 700;
+		color: #241a10;
+		background: #cfa452;
+		border: none;
+		border-radius: 8px;
+		padding: 10px 22px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-save:hover {
+		background: #ecc87c;
+	}
+
+	@media (max-width: 820px) {
+		.rail {
+			flex: 1 1 100%;
+			margin-top: -72px;
+		}
+		.hero__shelf {
+			left: 55%;
+		}
+		.cover,
+		.nocover {
+			height: 300px;
+		}
+	}
+	@media (max-width: 560px) {
+		.modal {
+			padding: 16px 12px;
+		}
+		.modal__panel {
+			max-height: calc(100vh - 32px);
+		}
+	}
+</style>
+
+<script>
+	// Back link: prefer real history when you arrived from inside the site, so
+	// "← Reading" returns you to the shelf you were scrolled to rather than the
+	// top of a fresh one.
+	document.querySelector<HTMLAnchorElement>('[data-back]')?.addEventListener('click', (e) => {
+		if (document.referrer && new URL(document.referrer).origin === location.origin) {
+			e.preventDefault();
+			history.back();
+		}
+	});
+
+	// Blurb: show the rest.
+	const blurb = document.querySelector('[data-blurb]');
+	const blurbToggle = document.querySelector<HTMLButtonElement>('[data-blurb-toggle]');
+	blurbToggle?.addEventListener('click', () => {
+		const open = blurbToggle.textContent === 'Less';
+		blurb?.querySelectorAll<HTMLElement>('.blurb__p').forEach((p, i) => {
+			if (i >= 2) p.hidden = open;
+		});
+		blurbToggle.textContent = open ? 'More' : 'Less';
+	});
+
+	// Highlights: 4, then all of them.
+	const highlightsToggle = document.querySelector<HTMLButtonElement>('[data-highlights-toggle]');
+	highlightsToggle?.addEventListener('click', () => {
+		const list = document.querySelector('[data-highlights]');
+		const all = Array.from(list?.querySelectorAll<HTMLElement>('.highlight') ?? []);
+		const open = all.some((h) => h.hidden);
+		all.forEach((h, i) => {
+			if (i >= 4) h.hidden = !open;
+		});
+		highlightsToggle.textContent = open ? 'Show fewer' : `Show all ${all.length} highlights`;
+	});
+
+	// Attribute chips past the eighth.
+	document.querySelectorAll<HTMLElement>('[data-chips]').forEach((box) => {
+		const toggle = box.querySelector<HTMLButtonElement>('[data-chips-toggle]');
+		toggle?.addEventListener('click', () => {
+			const chips = Array.from(box.querySelectorAll<HTMLElement>('.chip'));
+			const hidden = chips.filter((c) => c.hidden);
+			const opening = hidden.length > 0;
+			const extra = chips.length - 8;
+			chips.forEach((c, i) => {
+				if (i >= 8) c.hidden = !opening;
+			});
+			toggle.textContent = opening ? 'fewer' : `+${extra} more`;
+		});
+	});
+
+	// Rail actions. Every one of these is a single-column patch, and the page is
+	// rendered from the database on every request, so a reload is the render.
+	document.querySelectorAll<HTMLButtonElement>('[data-book-action]').forEach((button) => {
+		button.addEventListener('click', async () => {
+			const action = button.dataset.bookAction;
+			const id = Number(
+				document.querySelector<HTMLElement>('#match-modal')?.dataset.bookId ??
+					location.pathname.split('/').pop(),
+			);
+			const label = button.textContent;
+			button.disabled = true;
+			button.textContent = '…';
+			const res = await fetch('/api/reading/book', {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ id, action }),
+			});
+			if (!res.ok) {
+				button.disabled = false;
+				button.textContent = label;
+				return;
+			}
+			location.reload();
+		});
+	});
+
+	// Match panel: search Open Library, pick an edition, correct the title.
+	const matchModal = document.getElementById('match-modal');
+	if (matchModal) {
+		type Result = {
+			key: string;
+			title: string;
+			author: string;
+			year: number | null;
+			pages: number | null;
+			coverUrl: string | null;
+		};
+
+		const bookId = Number(matchModal.dataset.bookId);
+		const search = matchModal.querySelector<HTMLElement>('[data-match-search]')!;
+		const confirm = matchModal.querySelector<HTMLElement>('[data-match-confirm]')!;
+		const input = document.getElementById('match-q') as HTMLInputElement;
+		const meta = document.getElementById('match-meta')!;
+		const list = document.getElementById('match-results')!;
+		const confirmBtn = document.getElementById('match-confirm') as HTMLButtonElement;
+		const editTitle = document.getElementById('edit-title') as HTMLInputElement;
+		const editAuthor = document.getElementById('edit-author') as HTMLInputElement;
+		let picked: Result | null = null;
+		let timer: ReturnType<typeof setTimeout>;
+
+		const show = (which: 'search' | 'confirm') => {
+			search.hidden = which !== 'search';
+			confirm.hidden = which !== 'confirm';
+			confirmBtn.hidden = which !== 'confirm';
+		};
+
+		function thumb(result: Result): HTMLElement {
+			if (result.coverUrl) {
+				const img = document.createElement('img');
+				img.className = 'thumb';
+				img.src = result.coverUrl;
+				img.alt = '';
+				return img;
+			}
+			const div = document.createElement('div');
+			div.className = 'thumb';
+			return div;
+		}
+
+		function pick(result: Result) {
+			picked = result;
+			editTitle.value = result.title;
+			editAuthor.value = result.author;
+			document.getElementById('picked-title')!.textContent = result.title;
+			document.getElementById('picked-meta')!.textContent = [
+				result.author,
+				result.year,
+				result.pages ? `${result.pages} pages` : null,
+			]
+				.filter(Boolean)
+				.join(' · ');
+			const holder = document.getElementById('picked-thumb')!;
+			holder.replaceWith(Object.assign(thumb(result), { id: 'picked-thumb' }));
+			show('confirm');
+		}
+
+		async function run() {
+			const q = input.value.trim();
+			if (q.length < 2) {
+				list.replaceChildren();
+				meta.textContent = '';
+				return;
+			}
+			meta.textContent = 'Searching Open Library…';
+			const res = await fetch(`/api/reading/openlibrary?q=${encodeURIComponent(q)}`);
+			if (!res.ok) {
+				meta.textContent = 'Open Library is not answering. Try again in a minute.';
+				return;
+			}
+			const { results } = (await res.json()) as { results: Result[] };
+			list.replaceChildren();
+			meta.textContent = results.length
+				? `${results.length} editions on Open Library — the year and page count are how you tell them apart`
+				: 'Nothing on Open Library matches that. Try the author alone, or leave it unmatched — the reading log works without it.';
+
+			for (const result of results) {
+				const row = document.createElement('button');
+				row.type = 'button';
+				row.className = 'result';
+				const main = document.createElement('div');
+				main.className = 'result__main';
+				const title = document.createElement('div');
+				title.className = 'result__title';
+				title.textContent = result.title;
+				const author = document.createElement('div');
+				author.className = 'result__author';
+				author.textContent = result.author;
+				main.append(title, author);
+
+				const side = document.createElement('div');
+				side.className = 'result__side';
+				const year = document.createElement('div');
+				year.className = 'result__year';
+				year.textContent = result.year ? String(result.year) : '—';
+				const pages = document.createElement('div');
+				pages.className = 'result__pages';
+				pages.textContent = result.pages ? `${result.pages} pp` : '';
+				side.append(year, pages);
+
+				row.append(thumb(result), main, side);
+				row.addEventListener('click', () => pick(result));
+				list.append(row);
+			}
+		}
+
+		document.querySelectorAll<HTMLElement>('[data-open-match]').forEach((b) => {
+			b.addEventListener('click', () => {
+				matchModal.hidden = false;
+				document.body.style.overflow = 'hidden';
+				picked = null;
+				show('search');
+				run();
+			});
+		});
+		matchModal.querySelectorAll<HTMLElement>('[data-match-close]').forEach((b) => {
+			b.addEventListener('click', () => {
+				matchModal.hidden = true;
+				document.body.style.overflow = '';
+			});
+		});
+		matchModal.querySelector('[data-match-back]')?.addEventListener('click', () => show('search'));
+		input.addEventListener('input', () => {
+			clearTimeout(timer);
+			timer = setTimeout(run, 260);
+		});
+
+		confirmBtn.addEventListener('click', async () => {
+			if (!picked) return;
+			confirmBtn.disabled = true;
+			confirmBtn.textContent = 'Linking…';
+			const res = await fetch('/api/reading/book', {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					id: bookId,
+					action: 'match',
+					olKey: picked.key,
+					title: editTitle.value,
+					authors: editAuthor.value,
+					pages: picked.pages,
+					year: picked.year,
+					coverUrl: picked.coverUrl,
+				}),
+			});
+			if (!res.ok) {
+				confirmBtn.disabled = false;
+				confirmBtn.textContent = 'Link this edition';
+				return;
+			}
+			location.reload();
+		});
+	}
+</script>

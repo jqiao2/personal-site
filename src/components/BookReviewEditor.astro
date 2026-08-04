@@ -1,0 +1,964 @@
+---
+// The book review dialog — the reading log's answer to EntryEditor.
+//
+// Same shape as the film log's composer (scrim, sticky head, scrolling body,
+// sticky foot, discard guard) with the fields a book needs instead of a film's.
+// One difference matters: a review here belongs to a READ, not to the book, so
+// the dialog has to decide which read it is writing about. That is what the
+// Re-read toggle does, and the panel under the rating says out loud which read
+// a save will land on — getting it wrong silently would file a review of the
+// book you just finished against the copy you read in 2019.
+//
+// Ships hidden. Anything with `data-open-review` opens it, carrying the review
+// to edit in `data-seed` (absent means a new one).
+import { FOCUS, MOODS, PACING, TONES } from '../lib/book-queries';
+
+interface Props {
+	bookId: number;
+	bookTitle: string;
+	/** Where a new review lands when Re-read is on: the latest stretch of sessions. */
+	newRead: { from: string; to: string; label: string };
+	/** The read a new review lands on when Re-read is off. Null when there are none. */
+	latestRead: { from: string; to: string; label: string } | null;
+	priorReads: number;
+	attachOnBody: string;
+	attachOffBody: string;
+	/** True while the book is given up, so a fresh review records that ending. */
+	gaveUp: boolean;
+}
+
+const { bookId, bookTitle, newRead, latestRead, priorReads, attachOnBody, attachOffBody, gaveUp } =
+	Astro.props;
+
+const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachOnBody, attachOffBody, gaveUp });
+---
+
+<div class="modal" id="br-modal" data-config={config} hidden>
+	<div class="modal__backdrop" data-close></div>
+	<div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="br-title">
+		<div class="modal__head">
+			<div class="modal__heading">
+				<div class="modal__title" id="br-title">{bookTitle}</div>
+				<div class="modal__read" id="br-read-label">This read</div>
+			</div>
+			<button type="button" class="modal__close" id="br-close" aria-label="Close">✕</button>
+		</div>
+
+		<div class="discard" id="br-discard" hidden>
+			<div class="discard__box">
+				<div class="discard__title" id="br-discard-title">Discard this review?</div>
+				<div class="discard__msg">You have unsaved changes to this review.</div>
+				<div class="discard__actions">
+					<button type="button" class="btn-ghost" id="br-keep">Keep editing</button>
+					<button type="button" class="btn-discard" id="br-discard-confirm">Discard</button>
+				</div>
+			</div>
+		</div>
+
+		<div class="modal__body">
+			<div class="field">
+				<div class="field__head">
+					<span class="lbl">Rating</span>
+					<button type="button" class="linkish" id="br-clear-rating" hidden>Clear</button>
+				</div>
+				<div class="rating-row">
+					<div class="stars" id="br-stars">
+						{
+							[1, 2, 3, 4, 5].map((n) => (
+								<span class="star">
+									★<span class="star__fill" data-fill={n}>★</span>
+									<button
+										type="button"
+										class="star__hit star__hit--half"
+										data-value={n - 0.5}
+										aria-label={`${n - 0.5} stars`}
+									/>
+									<button
+										type="button"
+										class="star__hit star__hit--full"
+										data-value={n}
+										aria-label={`${n} stars`}
+									/>
+								</span>
+							))
+						}
+					</div>
+					<span class="rating-label" id="br-rating-label">Not rated</span>
+					<div class="toggles">
+						<button type="button" class="toggle" id="br-loved">♥ Loved</button>
+						<button type="button" class="toggle" id="br-reread" hidden>↻ Re-read</button>
+					</div>
+				</div>
+				<div class="hint" id="br-loved-hint" hidden>
+					Loved with no stars is a complete answer — the page will show the heart on its own.
+				</div>
+			</div>
+
+			<div class="attach" id="br-attach" hidden>
+				<div class="attach__label" id="br-attach-label">Attaching to</div>
+				<div class="attach__title" id="br-attach-title"></div>
+				<div class="attach__body" id="br-attach-body"></div>
+				<button type="button" class="btn-ghost btn-ghost--sm" id="br-attach-action"></button>
+			</div>
+
+			<div class="field">
+				<label class="lbl" for="br-text">Review</label>
+				<textarea id="br-text" rows="5" placeholder="What stayed with you…"></textarea>
+			</div>
+
+			<div class="scales">
+				<div>
+					<span class="lbl">Pacing</span>
+					<div class="segmented" id="br-pacing">
+						{PACING.map((p) => <button type="button" class="seg" data-value={p}>{p}</button>)}
+					</div>
+					<div class="scale-ends"><span>slower</span><span>faster</span></div>
+				</div>
+				<div>
+					<span class="lbl">Character focus</span>
+					<div class="segmented" id="br-focus">
+						{FOCUS.map((f) => <button type="button" class="seg" data-value={f}>{f}</button>)}
+					</div>
+					<div class="scale-ends"><span>character</span><span>plot</span></div>
+				</div>
+			</div>
+
+			<div class="field">
+				<div class="field__head">
+					<span class="lbl">Mood</span>
+					<span class="count" id="br-mood-count">none yet</span>
+					<button type="button" class="linkish linkish--end" id="br-clear-moods" hidden>Clear</button>
+				</div>
+				<div class="grid" id="br-moods">
+					{
+						MOODS.map((m) => (
+							<button type="button" class="check" data-value={m}>
+								<span class="check__box">✓</span>
+								{m}
+							</button>
+						))
+					}
+				</div>
+			</div>
+
+			<div class="field">
+				<div class="field__head">
+					<span class="lbl">Tone</span>
+					<span class="count" id="br-tone-count">none yet</span>
+					<button type="button" class="linkish linkish--end" id="br-clear-tones" hidden>Clear</button>
+				</div>
+				<div class="grid" id="br-tones">
+					{
+						TONES.map((t) => (
+							<button type="button" class="check" data-value={t}>
+								<span class="check__box">✓</span>
+								{t}
+							</button>
+						))
+					}
+				</div>
+			</div>
+		</div>
+
+		<div class="modal__foot">
+			<button type="button" class="btn-ghost" id="br-left">Cancel</button>
+			<div class="foot__right">
+				<span class="save-msg" id="br-msg"></span>
+				<button type="button" class="btn-save" id="br-save">Save review</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<style>
+	.modal {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		padding: 48px 20px;
+	}
+	.modal[hidden] {
+		display: none;
+	}
+	.modal__backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(9, 6, 3, 0.74);
+		backdrop-filter: blur(3px);
+	}
+	.modal__panel {
+		position: relative;
+		width: 100%;
+		max-width: 620px;
+		max-height: calc(100vh - 96px);
+		display: flex;
+		flex-direction: column;
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 14px;
+		box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.75);
+		overflow: hidden;
+	}
+	.modal__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 14px;
+		padding: 18px 22px;
+		border-bottom: 1px solid #392a19;
+		flex: none;
+	}
+	.modal__heading {
+		min-width: 0;
+	}
+	.modal__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 21px;
+		color: #f2e6cd;
+		line-height: 1.2;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.modal__read {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.5px;
+		color: #8a745a;
+		margin-top: 5px;
+	}
+	.modal__close {
+		flex: none;
+		width: 30px;
+		height: 30px;
+		border: 1px solid #45341f;
+		background: transparent;
+		color: #a68f6e;
+		border-radius: 7px;
+		cursor: pointer;
+		font-size: 14px;
+		line-height: 1;
+	}
+	.modal__close:hover {
+		background: #33261a;
+		color: #f2e6cd;
+	}
+	.modal__body {
+		flex: 1 1 auto;
+		overflow-y: auto;
+		padding: 22px;
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
+	.modal__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 15px 22px;
+		border-top: 1px solid #392a19;
+		background: #1f1609;
+		flex: none;
+	}
+	.foot__right {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+	}
+
+	.field__head {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		margin-bottom: 10px;
+	}
+	.lbl {
+		display: block;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.5px;
+		color: #8a745a;
+		margin-bottom: 8px;
+	}
+	.field__head .lbl {
+		margin-bottom: 0;
+	}
+	.count {
+		font-size: 11.5px;
+		color: #75603f;
+	}
+	.linkish {
+		font-size: 11.5px;
+		color: #8a745a;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-decoration: underline;
+		text-underline-offset: 3px;
+	}
+	.linkish:hover {
+		color: #dcc9a6;
+	}
+	.linkish--end {
+		margin-left: auto;
+	}
+	.hint {
+		font-size: 11.5px;
+		color: #75603f;
+		margin-top: 11px;
+		line-height: 1.5;
+	}
+
+	/* Rating */
+	.rating-row {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		flex-wrap: wrap;
+	}
+	.stars {
+		display: flex;
+		gap: 2px;
+	}
+	.star {
+		position: relative;
+		display: inline-block;
+		width: 30px;
+		height: 30px;
+		font-size: 29px;
+		line-height: 30px;
+		color: #3d2d1a;
+	}
+	.star__fill {
+		position: absolute;
+		left: 0;
+		top: 0;
+		height: 100%;
+		overflow: hidden;
+		color: #cfa452;
+		width: 0;
+	}
+	.star__hit {
+		position: absolute;
+		top: 0;
+		height: 100%;
+		width: 50%;
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+	.star__hit--half {
+		left: 0;
+	}
+	.star__hit--full {
+		right: 0;
+	}
+	.rating-label {
+		font-family: 'Newsreader', serif;
+		font-size: 20px;
+		color: #cfa452;
+		line-height: 1;
+	}
+	.toggles {
+		display: flex;
+		gap: 8px;
+		margin-left: auto;
+	}
+	.toggle {
+		font-size: 12.5px;
+		font-weight: 600;
+		border-radius: 20px;
+		padding: 8px 15px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		white-space: nowrap;
+		background: transparent;
+		color: #b09a78;
+		border: 1px solid #45341f;
+	}
+	.toggle[aria-pressed='true'] {
+		background: #cfa452;
+		color: #241a10;
+		border-color: #cfa452;
+	}
+
+	/* Which read this attaches to */
+	.attach {
+		border: 1px dashed #45341f;
+		border-radius: 10px;
+		padding: 15px 17px 16px;
+	}
+	.attach--on {
+		border: none;
+		border-left: 2px solid #cfa452;
+		background: #221809;
+		border-radius: 0 10px 10px 0;
+	}
+	.attach__label {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.5px;
+		color: #8a745a;
+	}
+	.attach--on .attach__label {
+		color: #cfa452;
+	}
+	.attach__title {
+		font-family: 'Newsreader', serif;
+		font-size: 17px;
+		color: #f2e6cd;
+		line-height: 1.45;
+		margin-top: 8px;
+	}
+	.attach__body {
+		font-size: 12.5px;
+		color: #8a745a;
+		line-height: 1.6;
+		margin-top: 7px;
+		max-width: 460px;
+	}
+
+	textarea {
+		width: 100%;
+		background: #1a120a;
+		border: 1px solid #45341f;
+		border-radius: 9px;
+		padding: 13px 14px;
+		color: #f2e6cd;
+		font-size: 15px;
+		font-family: 'Newsreader', serif;
+		line-height: 1.6;
+		outline: none;
+		resize: vertical;
+	}
+	textarea:focus {
+		border-color: #cfa452;
+	}
+
+	/* Scales */
+	.scales {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+		gap: 20px;
+	}
+	.segmented {
+		display: flex;
+		border: 1px solid #45341f;
+		border-radius: 9px;
+		overflow: hidden;
+	}
+	.seg {
+		flex: 1 1 0;
+		min-width: 0;
+		padding: 10px 4px;
+		font-size: 12px;
+		font-weight: 600;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		border: none;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		background: #1f1609;
+		color: #b09a78;
+	}
+	.seg + .seg {
+		border-left: 1px solid #45341f;
+	}
+	.seg[aria-pressed='true'] {
+		background: #cfa452;
+		color: #241a10;
+	}
+	.scale-ends {
+		display: flex;
+		justify-content: space-between;
+		font-size: 10.5px;
+		color: #75603f;
+		margin-top: 6px;
+		letter-spacing: 0.3px;
+	}
+
+	/* Mood / tone */
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+		gap: 1px;
+		background: #33261a;
+		border: 1px solid #45341f;
+		border-radius: 9px;
+		overflow: hidden;
+	}
+	.check {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		text-align: left;
+		padding: 10px 12px;
+		border: none;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		font-size: 13px;
+		letter-spacing: 0.1px;
+		background: #1f1609;
+		color: #b09a78;
+	}
+	.check[aria-pressed='true'] {
+		background: #332411;
+		color: #f7ead0;
+		font-weight: 600;
+	}
+	.check__box {
+		flex: none;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 15px;
+		height: 15px;
+		border-radius: 3px;
+		font-size: 10px;
+		line-height: 1;
+		background: transparent;
+		color: transparent;
+		border: 1px solid #4d3a22;
+	}
+	.check[aria-pressed='true'] .check__box {
+		background: #cfa452;
+		color: #241a10;
+		border-color: #cfa452;
+	}
+
+	/* Buttons */
+	.btn-ghost {
+		font-size: 13.5px;
+		font-weight: 600;
+		color: #dcc9a6;
+		background: transparent;
+		border: 1px solid #45341f;
+		border-radius: 8px;
+		padding: 10px 18px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-ghost:hover {
+		border-color: #a68f6e;
+		color: #f2e6cd;
+	}
+	.btn-ghost--sm {
+		margin-top: 11px;
+		font-size: 12px;
+		padding: 8px 14px;
+	}
+	.btn-ghost--danger {
+		color: #e0a06e;
+		border-color: #6b4a2a;
+	}
+	.btn-save {
+		font-size: 14px;
+		font-weight: 700;
+		color: #241a10;
+		background: #cfa452;
+		border: none;
+		border-radius: 8px;
+		padding: 10px 22px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-save:hover {
+		background: #ecc87c;
+	}
+	.btn-discard {
+		font-size: 13px;
+		font-weight: 700;
+		color: #241a10;
+		background: #d08a52;
+		border: none;
+		border-radius: 8px;
+		padding: 9px 18px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.save-msg {
+		font-size: 11.5px;
+		letter-spacing: 0.3px;
+		color: #8a745a;
+	}
+	.save-msg--ok {
+		color: #8fae6a;
+	}
+
+	/* Discard guard */
+	.discard {
+		position: absolute;
+		inset: 0;
+		background: rgba(14, 9, 4, 0.9);
+		backdrop-filter: blur(2px);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 28px;
+		z-index: 20;
+	}
+	.discard[hidden] {
+		display: none;
+	}
+	.discard__box {
+		width: 100%;
+		max-width: 360px;
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 12px;
+		padding: 24px;
+		text-align: center;
+	}
+	.discard__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 21px;
+		color: #f2e6cd;
+		margin-bottom: 8px;
+	}
+	.discard__msg {
+		font-size: 13px;
+		color: #a68f6e;
+		line-height: 1.5;
+		margin-bottom: 22px;
+	}
+	.discard__actions {
+		display: flex;
+		gap: 10px;
+		justify-content: center;
+	}
+
+	@media (max-width: 560px) {
+		.modal {
+			padding: 16px 12px;
+		}
+		.modal__panel {
+			max-height: calc(100vh - 32px);
+		}
+		.toggles {
+			margin-left: 0;
+		}
+	}
+</style>
+
+<script>
+	const modal = document.getElementById('br-modal');
+	if (modal) {
+		type Seed = {
+			id: number | null;
+			readFrom: string;
+			readTo: string;
+			rating: number;
+			loved: boolean;
+			gaveUp?: boolean;
+			text: string;
+			pacing: string;
+			focus: string;
+			moods: string[];
+			tones: string[];
+		};
+		type Read = { from: string; to: string; label: string };
+
+		const config = JSON.parse(modal.dataset.config || '{}') as {
+			bookId: number;
+			newRead: Read;
+			latestRead: Read | null;
+			priorReads: number;
+			attachOnBody: string;
+			attachOffBody: string;
+			gaveUp: boolean;
+		};
+
+		const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+		const starFills = Array.from(modal.querySelectorAll<HTMLElement>('.star__fill'));
+		const readLabel = $('br-read-label');
+		const ratingLabel = $('br-rating-label');
+		const clearRating = $<HTMLButtonElement>('br-clear-rating');
+		const lovedBtn = $<HTMLButtonElement>('br-loved');
+		const rereadBtn = $<HTMLButtonElement>('br-reread');
+		const lovedHint = $('br-loved-hint');
+		const attach = $('br-attach');
+		const attachLabel = $('br-attach-label');
+		const attachTitle = $('br-attach-title');
+		const attachBody = $('br-attach-body');
+		const attachAction = $<HTMLButtonElement>('br-attach-action');
+		const textArea = $<HTMLTextAreaElement>('br-text');
+		const moodCount = $('br-mood-count');
+		const toneCount = $('br-tone-count');
+		const clearMoods = $<HTMLButtonElement>('br-clear-moods');
+		const clearTones = $<HTMLButtonElement>('br-clear-tones');
+		const leftBtn = $<HTMLButtonElement>('br-left');
+		const saveBtn = $<HTMLButtonElement>('br-save');
+		const msg = $('br-msg');
+		const discard = $('br-discard');
+		const discardTitle = $('br-discard-title');
+
+		const empty = (): Seed => ({
+			id: null,
+			readFrom: config.newRead.from,
+			readTo: config.newRead.to,
+			rating: 0,
+			loved: false,
+			gaveUp: config.gaveUp,
+			text: '',
+			pacing: '',
+			focus: '',
+			moods: [],
+			tones: [],
+		});
+
+		let seed = empty();
+		let state = empty();
+		let mode: 'write' | 'edit' = 'write';
+		let reread = false;
+		let hover = 0;
+		let saved = false;
+
+		const same = (a: string[], b: string[]) => a.join('|') === b.join('|');
+		const dirty = () =>
+			state.rating !== seed.rating ||
+			state.text !== seed.text ||
+			state.pacing !== seed.pacing ||
+			state.focus !== seed.focus ||
+			state.loved !== seed.loved ||
+			reread ||
+			!same(state.moods, seed.moods) ||
+			!same(state.tones, seed.tones);
+
+		const ratingText = (r: number) =>
+			!r ? 'Not rated' : (Math.floor(r) || '') + (r % 1 >= 0.5 ? '½' : '');
+
+		function pressed(el: HTMLElement, on: boolean) {
+			el.setAttribute('aria-pressed', on ? 'true' : 'false');
+		}
+
+		function paintGroup(id: string, values: string[]) {
+			modal!.querySelectorAll<HTMLButtonElement>(`#${id} button`).forEach((b) => {
+				pressed(b, values.includes(b.dataset.value || ''));
+			});
+		}
+
+		function render() {
+			const active = hover || state.rating;
+			starFills.forEach((fill, i) => {
+				const n = i + 1;
+				fill.style.width = active >= n ? '100%' : active >= n - 0.5 ? '50%' : '0';
+			});
+			ratingLabel.textContent = ratingText(active);
+			clearRating.hidden = state.rating === 0;
+			pressed(lovedBtn, state.loved);
+			pressed(rereadBtn, reread);
+			lovedHint.hidden = !(state.loved && !state.rating);
+
+			// The Re-read choice only exists when there is an earlier read to
+			// confuse this one with.
+			const showAttach = mode === 'write' && config.priorReads > 0 && !!config.latestRead;
+			rereadBtn.hidden = !showAttach;
+			attach.hidden = !showAttach;
+			if (showAttach) {
+				attach.classList.toggle('attach--on', reread);
+				attachLabel.textContent = reread ? 'New read' : 'Attaching to';
+				attachTitle.textContent = reread ? config.newRead.label : config.latestRead!.label;
+				attachBody.textContent = reread ? config.attachOnBody : config.attachOffBody;
+				attachAction.textContent = reread
+					? 'Not a re-read — keep it on the latest read'
+					: '↻ This is a new read';
+			}
+
+			paintGroup('br-pacing', state.pacing ? [state.pacing] : []);
+			paintGroup('br-focus', state.focus ? [state.focus] : []);
+			paintGroup('br-moods', state.moods);
+			paintGroup('br-tones', state.tones);
+			moodCount.textContent = state.moods.length ? `${state.moods.length} of 10 selected` : 'none yet';
+			toneCount.textContent = state.tones.length ? `${state.tones.length} of 13 selected` : 'none yet';
+			clearMoods.hidden = state.moods.length === 0;
+			clearTones.hidden = state.tones.length === 0;
+
+			saveBtn.textContent = mode === 'edit' ? 'Save changes' : 'Save review';
+			leftBtn.textContent = mode === 'edit' ? 'Delete review' : 'Cancel';
+			leftBtn.classList.toggle('btn-ghost--danger', mode === 'edit');
+			discardTitle.textContent = mode === 'edit' ? 'Discard changes?' : 'Discard this review?';
+			msg.textContent = saved ? 'Saved' : dirty() ? 'Unsaved changes' : '';
+			msg.classList.toggle('save-msg--ok', saved);
+		}
+
+		function open(button: HTMLElement) {
+			const raw = button.dataset.seed;
+			mode = raw ? 'edit' : 'write';
+			seed = raw ? { ...empty(), ...(JSON.parse(raw) as Seed) } : empty();
+			state = { ...seed, moods: [...seed.moods], tones: [...seed.tones] };
+			reread = false;
+			hover = 0;
+			saved = false;
+			readLabel.textContent =
+				button.dataset.readLabel ||
+				(config.priorReads && config.latestRead ? config.latestRead.label : config.newRead.label);
+			textArea.value = state.text;
+			modal!.hidden = false;
+			document.body.style.overflow = 'hidden';
+			render();
+		}
+
+		function close() {
+			modal!.hidden = true;
+			discard.hidden = true;
+			document.body.style.overflow = '';
+		}
+
+		function attemptClose() {
+			if (dirty()) discard.hidden = false;
+			else close();
+		}
+
+		document.querySelectorAll<HTMLElement>('[data-open-review]').forEach((b) => {
+			b.addEventListener('click', () => open(b));
+		});
+
+		$('br-close').addEventListener('click', attemptClose);
+		modal.querySelector('[data-close]')?.addEventListener('click', attemptClose);
+		$('br-keep').addEventListener('click', () => (discard.hidden = true));
+		$('br-discard-confirm').addEventListener('click', close);
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && !modal!.hidden) attemptClose();
+		});
+
+		modal.querySelectorAll<HTMLButtonElement>('.star__hit').forEach((hit) => {
+			const value = Number(hit.dataset.value);
+			hit.addEventListener('click', () => {
+				state.rating = value;
+				saved = false;
+				render();
+			});
+			hit.addEventListener('mouseenter', () => {
+				hover = value;
+				render();
+			});
+		});
+		$('br-stars').addEventListener('mouseleave', () => {
+			hover = 0;
+			render();
+		});
+		clearRating.addEventListener('click', () => {
+			state.rating = 0;
+			saved = false;
+			render();
+		});
+
+		lovedBtn.addEventListener('click', () => {
+			state.loved = !state.loved;
+			saved = false;
+			render();
+		});
+		const toggleReread = () => {
+			reread = !reread;
+			saved = false;
+			render();
+		};
+		rereadBtn.addEventListener('click', toggleReread);
+		attachAction.addEventListener('click', toggleReread);
+
+		textArea.addEventListener('input', () => {
+			state.text = textArea.value;
+			saved = false;
+			render();
+		});
+
+		const single = (id: string, key: 'pacing' | 'focus') => {
+			modal!.querySelectorAll<HTMLButtonElement>(`#${id} button`).forEach((b) => {
+				b.addEventListener('click', () => {
+					const value = b.dataset.value || '';
+					state[key] = state[key] === value ? '' : value;
+					saved = false;
+					render();
+				});
+			});
+		};
+		single('br-pacing', 'pacing');
+		single('br-focus', 'focus');
+
+		const multi = (id: string, key: 'moods' | 'tones') => {
+			modal!.querySelectorAll<HTMLButtonElement>(`#${id} button`).forEach((b) => {
+				b.addEventListener('click', () => {
+					const value = b.dataset.value || '';
+					const at = state[key].indexOf(value);
+					if (at >= 0) state[key].splice(at, 1);
+					else state[key].push(value);
+					saved = false;
+					render();
+				});
+			});
+		};
+		multi('br-moods', 'moods');
+		multi('br-tones', 'tones');
+
+		clearMoods.addEventListener('click', () => {
+			state.moods = [];
+			saved = false;
+			render();
+		});
+		clearTones.addEventListener('click', () => {
+			state.tones = [];
+			saved = false;
+			render();
+		});
+
+		leftBtn.addEventListener('click', async () => {
+			if (mode !== 'edit') return attemptClose();
+			if (seed.id == null) return close();
+			msg.textContent = 'Deleting…';
+			const res = await fetch(
+				`/api/reading/review?bookId=${config.bookId}&id=${seed.id}`,
+				{ method: 'DELETE' },
+			);
+			if (!res.ok) {
+				msg.textContent = 'Delete failed';
+				return;
+			}
+			location.reload();
+		});
+
+		saveBtn.addEventListener('click', async () => {
+			// Which read this lands on. Editing keeps the read it was opened from;
+			// a new review goes to the latest stretch of sessions, unless Re-read
+			// says it is a fresh one.
+			const target = mode === 'edit' ? { from: seed.readFrom, to: seed.readTo } : reread || !config.latestRead ? { from: config.newRead.from, to: config.newRead.to } : { from: config.latestRead.from, to: config.latestRead.to };
+
+			msg.textContent = 'Saving…';
+			const res = await fetch('/api/reading/review', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					bookId: config.bookId,
+					readFrom: target.from,
+					readTo: target.to,
+					rating: state.rating,
+					loved: state.loved,
+					gaveUp: state.gaveUp ?? false,
+					text: state.text,
+					pacing: state.pacing,
+					focus: state.focus,
+					moods: state.moods,
+					tones: state.tones,
+				}),
+			});
+			if (!res.ok) {
+				const body = (await res.json().catch(() => ({}))) as { error?: string };
+				msg.textContent = body.error || 'Save failed';
+				return;
+			}
+			saved = true;
+			location.reload();
+		});
+
+		render();
+	}
+</script>
