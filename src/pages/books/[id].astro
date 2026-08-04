@@ -355,25 +355,39 @@ const spines = Array.from({ length: 18 }, () => ({
 							<div class="invite__raw">{v.sourceTitle}</div>
 							{
 								isOwner && (
-									<div class="invite__actions">
+									<Fragment>
 										{/*
-											Offered first where it exists: it needs no query, no
-											choosing between editions, and it keeps working during the
-											search outages that make the picker useless.
+											The ISBN route is offered first: it needs no query, no
+											choosing between editions, and it keeps working through the
+											search outages that make the picker useless. The field is
+											editable rather than a button, because the imported number
+											is sometimes an audiobook or a foreign printing, and
+											correcting it is the same gesture as matching on it.
 										*/}
-										{v.canMatchByIsbn && (
-											<button type="button" class="btn-primary invite__cta" data-book-action="isbn">
-												Match from its ISBN
+										<div class="isbn">
+											<input
+												class="isbn__field"
+												value={v.isbn ?? ''}
+												placeholder="ISBN"
+												aria-label="ISBN"
+												inputmode="numeric"
+												autocomplete="off"
+												data-isbn-field
+											/>
+											<button
+												type="button"
+												class="btn-primary isbn__go"
+												data-book-action="isbn"
+												disabled={!v.isbn}
+											>
+												Match from ISBN
 											</button>
-										)}
-										<button
-											type="button"
-											class:list={['invite__cta', v.canMatchByIsbn ? 'btn-quiet' : 'btn-primary']}
-											data-open-match
-										>
-											{v.canMatchByIsbn ? 'Or search Open Library' : 'Find this book on Open Library'}
+										</div>
+										<div class="isbn__error" data-isbn-error hidden />
+										<button type="button" class="btn-quiet invite__cta" data-open-match>
+											Or search Open Library
 										</button>
-									</div>
+									</Fragment>
 								)
 							}
 						</div>
@@ -1439,7 +1453,46 @@ const spines = Array.from({ length: 18 }, () => ({
 		overflow-x: auto;
 		white-space: nowrap;
 	}
-	.invite__actions {
+	.isbn {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			flex-wrap: wrap;
+			margin-bottom: 12px;
+		}
+		.isbn__field {
+			flex: 0 1 190px;
+			min-width: 140px;
+			background: #1a120a;
+			border: 1px solid #45341f;
+			border-radius: 8px;
+			padding: 10px 12px;
+			font-family: 'Archivo', sans-serif;
+			font-size: 13px;
+			letter-spacing: 0.4px;
+			color: #f2e6cd;
+			outline: none;
+		}
+		.isbn__field:focus {
+			border-color: #cfa452;
+		}
+		.isbn__field::placeholder {
+			color: #7d6a52;
+		}
+		.isbn__go:disabled {
+			opacity: 0.45;
+			cursor: default;
+		}
+		.isbn__error {
+			font-size: 12px;
+			color: #a68f6e;
+			margin-bottom: 12px;
+			line-height: 1.5;
+		}
+		.isbn__error[hidden] {
+			display: none;
+		}
+		.invite__actions {
 			display: flex;
 			align-items: center;
 			gap: 12px;
@@ -2232,6 +2285,12 @@ const spines = Array.from({ length: 18 }, () => ({
 
 	// Rail actions. Every one of these is a single-column patch, and the page is
 	// rendered from the database on every request, so a reload is the render.
+	const isbnInput = document.querySelector<HTMLInputElement>('[data-isbn-field]');
+	const isbnButton = document.querySelector<HTMLButtonElement>('[data-book-action="isbn"]');
+	isbnInput?.addEventListener('input', () => {
+		if (isbnButton) isbnButton.disabled = isbnInput.value.trim().length === 0;
+	});
+
 	document.querySelectorAll<HTMLButtonElement>('[data-book-action]').forEach((button) => {
 		button.addEventListener('click', async () => {
 			const action = button.dataset.bookAction;
@@ -2240,16 +2299,33 @@ const spines = Array.from({ length: 18 }, () => ({
 					location.pathname.split('/').pop(),
 			);
 			const label = button.textContent;
+			const isbnField = document.querySelector<HTMLInputElement>('[data-isbn-field]');
+			const isbnError = document.querySelector<HTMLElement>('[data-isbn-error]');
 			button.disabled = true;
 			button.textContent = '…';
+			if (isbnError) isbnError.hidden = true;
 			const res = await fetch('/api/books/book', {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ id, action }),
+				body: JSON.stringify({
+					id,
+					action,
+					// Only this one action reads the field, and only when it holds
+					// something other than what the page was rendered with.
+					...(action === 'isbn' && isbnField ? { isbn: isbnField.value.trim() } : {}),
+				}),
 			});
 			if (!res.ok) {
 				button.disabled = false;
 				button.textContent = label;
+				// A failed ISBN lookup has a reason worth reading — the number is not
+				// in their catalogue, or it is not an ISBN at all — and without it the
+				// button just flickers back and looks broken.
+				if (action === 'isbn' && isbnError) {
+					const body = (await res.json().catch(() => ({}))) as { error?: string };
+					isbnError.textContent = body.error ?? 'That did not work.';
+					isbnError.hidden = false;
+				}
 				return;
 			}
 			location.reload();
