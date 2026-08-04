@@ -104,36 +104,31 @@ export function splitTitle(title: string): { main: string; sub: string | null } 
 /** Height of a book spine in the shelf illustrations, in px. */
 export const SPINE_HEIGHT = 104;
 
-/** Px of spine per printed page. A 300-page book is 9px, a 1,300-page one 39px. */
-const PX_PER_PAGE = 0.03;
+/** Tuned so a 300-page paperback is 11px and a 1,300-page doorstop is 22px. */
+const SPINE_SCALE = 0.62;
 /** Thin enough to read as a book rather than a rule. */
-const MIN_SPINE = 8;
-/**
- * Only reached past ~1,470 pages, which in this library is the Calvin and Hobbes
- * box set — an object that is three books in a slipcase and would otherwise draw
- * wider than the cover art beside it.
- */
-const MAX_SPINE = 44;
+const MIN_SPINE = 9;
+/** Only reached past ~3,000 pages, which nothing in the library is. */
+const MAX_SPINE = 34;
 
 /**
- * Spine width from page count, and the width is the point: a book three times as
- * long is drawn three times as wide.
+ * Spine width from page count.
  *
- * Linear, deliberately. A square-root scale keeps everything tidy and says
- * nothing — it renders The Power Broker at twice the width of a paperback rather
- * than four times, which is the one comparison a shelf of spines exists to make.
- * The floor is the only departure, because proportion at the bottom of the range
- * produces a 3px sliver that reads as a mistake.
+ * Square root rather than linear: page counts span an order of magnitude, and
+ * proportional widths give the long books so much of the row that the short ones
+ * stop being distinguishable from each other. The compressed scale still orders
+ * every book correctly and still shows a doorstop as a doorstop — it just does
+ * not spend forty pixels saying so.
  *
  * WHICH page count matters. `ol_pages` is the printed edition's; `total_pages`
  * is KOReader's repagination of the file, which runs about three times higher
- * and differs by font size. Mixing them puts two scales in one picture, so the
- * printed length wins wherever it is known — see migration 0026.
+ * and shifts with the font size on the device. Mixing them puts two scales in
+ * one picture, so the printed length wins wherever it is known — migration 0026.
  */
 export function spineWidth(pages: number | null, editionPages: number | null = null): number {
 	const length = editionPages ?? pages;
 	if (!length) return 14;
-	return Math.max(MIN_SPINE, Math.min(MAX_SPINE, Math.round(length * PX_PER_PAGE)));
+	return Math.max(MIN_SPINE, Math.min(MAX_SPINE, Math.round(Math.sqrt(length) * SPINE_SCALE)));
 }
 
 export interface BookFact {
