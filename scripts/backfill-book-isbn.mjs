@@ -16,10 +16,17 @@
 // an export that had it right. Covers, page counts, dates, subjects and blurbs
 // are filled; naming stays a human decision (see fix-book-titles.mjs).
 //
-// Only ever fills what is missing. A book that already has a cover keeps it, and
-// a page count is never overwritten — KOReader's is what the progress bars are
-// measured against, and Open Library's median across editions would silently
-// move every percentage on the site.
+// Only ever fills what is missing, with one exception: `ol_pages`, the printed
+// edition's length, is always refreshed. It is display-only — the spines are
+// drawn from it — so there is nothing for a correction to break. `total_pages`
+// is the opposite and is never overwritten: KOReader's pagination is what the
+// progress bars are measured against, and a median across editions would move
+// every percentage on the site at once.
+//
+// A book that is already matched but has no printed length is picked up too, by
+// its work key alone. That is how the Kindle's books get a real width: their
+// total_pages is KOReader's repagination (The Power Broker: 3,943 against a
+// printed 1,289) and drawing spines from it puts two scales in one picture.
 //
 // Dry run by default. Nothing is written without --apply.
 //
@@ -127,6 +134,20 @@ function paragraphs(raw) {
 		.filter((p) => p.length > 0);
 }
 
+/**
+ * The median page count across a work's editions — the fallback when an edition
+ * record has no length of its own, and the whole of the pages-only pass.
+ * Mirrors editionsMedian in src/lib/openlibrary.ts.
+ */
+async function editionsMedian(workKey) {
+	const data = await ol(`https://openlibrary.org${workKey}/editions.json?limit=50`);
+	const counts = (data?.entries ?? [])
+		.map((e) => e.number_of_pages)
+		.filter((n) => typeof n === 'number' && n > 0)
+		.sort((a, b) => a - b);
+	return counts.length ? counts[Math.floor(counts.length / 2)] : null;
+}
+
 async function lookup(isbn) {
 	const clean = String(isbn).replace(/[^0-9Xx]/g, '').toUpperCase();
 	if (clean.length !== 10 && clean.length !== 13) return null;
@@ -152,7 +173,7 @@ async function lookup(isbn) {
 	return {
 		key: workKey,
 		subtitle: typeof edition.subtitle === 'string' ? edition.subtitle : null,
-		pages: typeof edition.number_of_pages === 'number' ? edition.number_of_pages : null,
+		pages: typeof edition.number_of_pages === 'number' ? edition.number_of_pages : await editionsMedian(workKey).catch(() => null),
 		coverUrl: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : null,
 		firstPublished:
 			(typeof work.first_publish_date === 'string' ? work.first_publish_date : null) ??
@@ -163,9 +184,13 @@ async function lookup(isbn) {
 	};
 }
 
-const select = 'id,title,isbn,ol_key,cover_url,total_pages,subtitle,first_published';
-let query = `books?select=${select}&isbn=not.is.null&order=id`;
-if (!force) query += '&ol_key=is.null';
+const select = 'id,title,isbn,ol_key,cover_url,total_pages,ol_pages,subtitle,first_published';
+// Two populations: books with an ISBN and no match at all, and books already
+// matched that have no printed length yet. The second needs only a work key, so
+// a Kindle book with no usable ISBN is still reachable.
+let query = `books?select=${select}&order=id`;
+if (!force) query += '&or=(and(isbn.not.is.null,ol_key.is.null),ol_pages.is.null)';
+else query += '&or=(isbn.not.is.null,ol_key.not.is.null)';
 if (onlyId) query += `&id=eq.${onlyId}`;
 
 const books = await db(query);
@@ -179,6 +204,41 @@ let failed = 0;
 
 for (const [i, book] of targets.entries()) {
 	if (i > 0) await sleep(DELAY_MS);
+
+	// Already matched, only the printed length missing: one request, no ISBN
+	// needed. This is the pass that fixes the Kindle's inflated widths.
+	if (book.ol_key && !book.ol_pages) {
+		let pages;
+		try {
+			pages = await editionsMedian(book.ol_key);
+		} catch (e) {
+			failed++;
+			console.log(`  ✗ ${book.title} — ${e.message}`);
+			continue;
+		}
+		if (!pages) {
+			missing++;
+			console.log(`  – ${book.title} — Open Library lists no page count for any edition`);
+			continue;
+		}
+		matched++;
+		const was = book.total_pages ? ` (was ${book.total_pages} on the device)` : '';
+		console.log(`  ✓ ${book.title} — ${pages} printed pages${was}`);
+		if (apply) {
+			await db(`books?id=eq.${book.id}`, {
+				method: 'PATCH',
+				headers: { prefer: 'return=minimal' },
+				body: JSON.stringify({ ol_pages: pages, updated_at: new Date().toISOString() }),
+			});
+		}
+		continue;
+	}
+
+	if (!book.isbn) {
+		missing++;
+		console.log(`  – ${book.title} — no ISBN and no match to work from`);
+		continue;
+	}
 
 	let found;
 	try {
@@ -199,6 +259,7 @@ for (const [i, book] of targets.entries()) {
 	// better evidence than a median across editions.
 	const patch = {
 		ol_key: found.key,
+		...(found.pages ? { ol_pages: found.pages } : {}),
 		...(book.cover_url || !found.coverUrl ? {} : { cover_url: found.coverUrl }),
 		...(book.total_pages || !found.pages ? {} : { total_pages: found.pages }),
 		...(book.subtitle || !found.subtitle ? {} : { subtitle: found.subtitle }),
@@ -213,7 +274,7 @@ for (const [i, book] of targets.entries()) {
 	matched++;
 	const gained = [
 		patch.cover_url ? 'cover' : null,
-		patch.total_pages ? `${patch.total_pages}pp` : null,
+		patch.ol_pages ? `${patch.ol_pages}pp` : null,
 		patch.first_published ? patch.first_published : null,
 		patch.kind ?? null,
 		patch.genres ? `${patch.genres.length} subjects` : null,

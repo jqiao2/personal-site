@@ -104,15 +104,36 @@ export function splitTitle(title: string): { main: string; sub: string | null } 
 /** Height of a book spine in the shelf illustrations, in px. */
 export const SPINE_HEIGHT = 104;
 
+/** Px of spine per printed page. A 300-page book is 9px, a 1,300-page one 39px. */
+const PX_PER_PAGE = 0.03;
+/** Thin enough to read as a book rather than a rule. */
+const MIN_SPINE = 8;
 /**
- * Spine width from page count — a long book looks like a long book. Square root
- * because raw page counts span two orders of magnitude (a 238-page novel next to
- * The Power Broker's 3,943) and a linear scale would make everything but the
- * doorstop a sliver.
+ * Only reached past ~1,470 pages, which in this library is the Calvin and Hobbes
+ * box set — an object that is three books in a slipcase and would otherwise draw
+ * wider than the cover art beside it.
  */
-function spineWidth(totalPages: number | null): number {
-	if (!totalPages) return 14;
-	return Math.max(9, Math.min(34, Math.round(Math.sqrt(totalPages) * 0.62)));
+const MAX_SPINE = 44;
+
+/**
+ * Spine width from page count, and the width is the point: a book three times as
+ * long is drawn three times as wide.
+ *
+ * Linear, deliberately. A square-root scale keeps everything tidy and says
+ * nothing — it renders The Power Broker at twice the width of a paperback rather
+ * than four times, which is the one comparison a shelf of spines exists to make.
+ * The floor is the only departure, because proportion at the bottom of the range
+ * produces a 3px sliver that reads as a mistake.
+ *
+ * WHICH page count matters. `ol_pages` is the printed edition's; `total_pages`
+ * is KOReader's repagination of the file, which runs about three times higher
+ * and differs by font size. Mixing them puts two scales in one picture, so the
+ * printed length wins wherever it is known — see migration 0026.
+ */
+export function spineWidth(pages: number | null, editionPages: number | null = null): number {
+	const length = editionPages ?? pages;
+	if (!length) return 14;
+	return Math.max(MIN_SPINE, Math.min(MAX_SPINE, Math.round(length * PX_PER_PAGE)));
 }
 
 export interface BookFact {
@@ -233,7 +254,7 @@ export function toBookView(book: BookProgress, todayDay = today()): BookView {
 		sub,
 		author,
 		progress,
-		spineWidth: spineWidth(total),
+		spineWidth: spineWidth(total, book.ol_pages),
 		spineFill: progress === null ? 0 : Math.max(2, Math.round(progress * SPINE_HEIGHT)),
 		pagesLabel: total
 			? `${formatNumber(furthest)} / ${formatNumber(total)}`
@@ -303,7 +324,7 @@ export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
 		sub,
 		author,
 		progress: null,
-		spineWidth: spineWidth(book.total_pages),
+		spineWidth: spineWidth(book.total_pages, book.ol_pages),
 		spineFill: SPINE_HEIGHT,
 		pagesLabel: '—',
 		percent: null,
@@ -341,14 +362,19 @@ export function toManualView(book: ManualRead, todayDay = today()): BookView {
 		sub,
 		author: book.authors,
 		progress: null,
-		spineWidth: spineWidth(book.total_pages),
+		spineWidth: spineWidth(book.total_pages, book.ol_pages),
 		spineFill: 0,
 		pagesLabel: '—',
 		percent: null,
 		facts: [
 			{ k: 'Started', v: formatDay(startedDay) },
 			{ k: 'On it', v: days <= 0 ? 'since today' : plural(days, 'day') },
-			{ k: 'Length', v: book.total_pages ? `${formatNumber(book.total_pages)} pages` : '—' },
+			{
+				k: 'Length',
+				v: book.ol_pages ?? book.total_pages
+					? `${formatNumber((book.ol_pages ?? book.total_pages)!)} pages`
+					: '—',
+			},
 		],
 		untrackedNote: `Started ${formatDay(startedDay)}, away from the Kindle — no pages to count.`,
 		readTime: '—',
