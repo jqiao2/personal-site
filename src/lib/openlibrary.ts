@@ -208,6 +208,26 @@ export async function getWork(key: string): Promise<OpenLibraryWork> {
 	};
 }
 
+/**
+ * The median page count across a work's editions.
+ *
+ * The fallback for an edition record that carries no length of its own, which is
+ * common — and the same statistic Open Library's own search exposes as
+ * `number_of_pages_median`. A median rather than a first-found because the
+ * editions of one book disagree by a hundred pages (The Power Broker's run
+ * 1,246 to 1,312) and the outliers are usually omnibus or large-print printings.
+ */
+async function editionsMedian(workKey: string): Promise<number | null> {
+	const data = (await getJson(`https://openlibrary.org${workKey}/editions.json?limit=50`)) as {
+		entries?: { number_of_pages?: unknown }[];
+	};
+	const counts = (data.entries ?? [])
+		.map((e) => e.number_of_pages)
+		.filter((n): n is number => typeof n === 'number' && n > 0)
+		.sort((a, b) => a - b);
+	return counts.length ? counts[Math.floor(counts.length / 2)] : null;
+}
+
 /** Digits and a possible trailing X, which is all an ISBN ever is. */
 function normalizeIsbn(raw: string): string {
 	return raw.replace(/[^0-9Xx]/g, '').toUpperCase();
@@ -261,14 +281,23 @@ export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | nul
 	const editionCover = editionCovers.find((c) => typeof c === 'number' && c > 0);
 	const coverId = typeof editionCover === 'number' ? editionCover : work.coverId;
 
-	const pages = edition.number_of_pages;
+	// The edition's own length first; the work's editions decide it when this
+	// record has none, which is the difference between drawing a spine and not.
+	let pages = typeof edition.number_of_pages === 'number' ? edition.number_of_pages : null;
+	if (!pages) {
+		try {
+			pages = await editionsMedian(workKey);
+		} catch {
+			// A spine at the fallback width is a smaller loss than no match at all.
+		}
+	}
 	const published = edition.publish_date;
 
 	return {
 		key: workKey,
 		title: typeof edition.title === 'string' ? edition.title : '',
 		subtitle: typeof edition.subtitle === 'string' ? edition.subtitle : null,
-		pages: typeof pages === 'number' && pages > 0 ? pages : null,
+		pages: pages && pages > 0 ? pages : null,
 		coverUrl: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-L.jpg` : null,
 		// The work's date is the book's; the edition's is this printing's. For "first
 		// published" the work wins, and the edition stands in when it has none.

@@ -40,6 +40,8 @@ export interface BookProgress {
 	days_read: number;
 	/** 0–1, clamped. Null when the book's page count is unknown. */
 	progress: number | null;
+	/** The printed edition's length, for drawing the spine. See migration 0026. */
+	ol_pages: number | null;
 }
 
 /**
@@ -62,6 +64,8 @@ export interface OfflineRead {
 	loved: boolean;
 	/** How many reviews the book has, i.e. how many times it was read. */
 	reads: number;
+	/** The printed edition's length, for drawing the spine. See migration 0026. */
+	ol_pages: number | null;
 }
 
 /**
@@ -84,6 +88,8 @@ export interface PileBook {
 	kind: string | null;
 	is_public: boolean;
 	added_at: string;
+	/** The printed edition's length, for drawing the spine. See migration 0026. */
+	ol_pages: number | null;
 }
 
 /**
@@ -103,6 +109,8 @@ export interface ManualRead {
 	is_public: boolean;
 	added_at: string | null;
 	started_at: string;
+	/** The printed edition's length, for drawing the spine. See migration 0026. */
+	ol_pages: number | null;
 }
 
 export interface ReadingStats {

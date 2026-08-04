@@ -210,6 +210,9 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 					genres: edition.genres,
 					kind: edition.kind,
 					...(book.subtitle || !edition.subtitle ? {} : { subtitle: edition.subtitle }),
+					// The printed length always; the working denominator only if absent.
+					// See the note in `match` and migration 0026.
+					...(edition.pages ? { ol_pages: edition.pages } : {}),
 					...(book.total_pages || !edition.pages ? {} : { total_pages: edition.pages }),
 				});
 				break;
@@ -252,9 +255,13 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 					description: work.description,
 					genres: work.genres,
 					kind: work.kind,
-					// Only fill a page count we don't have. KOReader's is the one the
-					// progress bar is measured against, and Open Library's median
-					// across editions would silently move every percentage on the page.
+					// Two page counts, two jobs. `ol_pages` is the printed edition's and
+					// is what the spine is drawn from, so it is always refreshed;
+					// `total_pages` is the denominator every percentage on the page is
+					// measured against, so it is only ever filled when missing —
+					// overwriting KOReader's with a median across editions would move
+					// every number on the page at once (migration 0026).
+					...(Number.isInteger(pages) && pages > 0 ? { ol_pages: pages } : {}),
 					...(book.total_pages || !Number.isInteger(pages) || pages <= 0 ? {} : { total_pages: pages }),
 				});
 				break;

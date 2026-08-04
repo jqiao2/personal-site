@@ -69,6 +69,8 @@ export interface BookRow {
 	series: string | null;
 	language: string | null;
 	total_pages: number | null;
+	/** The printed edition's length, for drawing the spine. See migration 0026. */
+	ol_pages: number | null;
 	cover_url: string | null;
 	ol_key: string | null;
 	first_published: string | null;

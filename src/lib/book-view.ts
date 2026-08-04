@@ -733,8 +733,13 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	// publication date and no language, and its page count is KOReader's
 	// repagination rather than a fact about the edition. One number on its own
 	// under the title reads as a claim the page cannot support.
+	// The printed length, where it is known. This row is about the edition — the
+	// number beside its publication year and language — while `total` is
+	// KOReader's repagination of the file and belongs only where a position in it
+	// is being reported. See migration 0026.
+	const printedPages = book.ol_pages ?? total;
 	const metaBits = (
-		matched ? [knowsTotal ? `${formatNumber(total!)} pages` : null, book.first_published, book.language] : []
+		matched ? [printedPages ? `${formatNumber(printedPages)} pages` : null, book.first_published, book.language] : []
 	).filter(Boolean) as string[];
 
 	// What the unmatched notice apologises for, listed from what is actually
