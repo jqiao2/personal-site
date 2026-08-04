@@ -924,7 +924,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			if (seed.id == null) return close();
 			msg.textContent = 'Deleting…';
 			const res = await fetch(
-				`/api/reading/review?bookId=${config.bookId}&id=${seed.id}`,
+				`/api/books/review?bookId=${config.bookId}&id=${seed.id}`,
 				{ method: 'DELETE' },
 			);
 			if (!res.ok) {
@@ -941,7 +941,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			const target = mode === 'edit' ? { from: seed.readFrom, to: seed.readTo } : reread || !config.latestRead ? { from: config.newRead.from, to: config.newRead.to } : { from: config.latestRead.from, to: config.latestRead.to };
 
 			msg.textContent = 'Saving…';
-			const res = await fetch('/api/reading/review', {
+			const res = await fetch('/api/books/review', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({

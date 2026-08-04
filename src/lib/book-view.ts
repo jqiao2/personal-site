@@ -1,9 +1,9 @@
 // Presentation layer for the book detail page.
 //
-// Same contract as reading-view.ts: no database, nothing async, every field a
+// Same contract as books-view.ts: no database, nothing async, every field a
 // finished string or a number of pixels, so the .astro stays markup and the
 // reasoning is testable arithmetic. Days are "YYYY-MM-DD" strings throughout —
-// see the note at the top of reading-view.ts for why they are never Dates.
+// see the note at the top of books-view.ts for why they are never Dates.
 import {
 	addDays,
 	daysBetween,
@@ -15,13 +15,13 @@ import {
 	splitTitle,
 	today,
 	zonedDay,
-} from './reading-view';
+} from './books-view';
 import { VOCABULARY, type BookDay, type BookRow, type HighlightRow, type ReviewRow } from './book-queries';
 
 /**
  * How far through counts as finished on its own.
  *
- * Matches reading-view.ts, and for the same reason: the last pages of an EPUB
+ * Matches books-view.ts, and for the same reason: the last pages of an EPUB
  * are acknowledgements and an index, and KOReader's repagination means the
  * final recorded page is only approximately the real one. A book finished by
  * hand wins regardless.

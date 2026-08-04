@@ -3,7 +3,7 @@
 // The hands-off path is a KOReader plugin that POSTs on document close; this is
 // the path that needs no code running on the device. Plug the Kindle in, point
 // this at koreader/settings/statistics.sqlite3, and it does the same thing the
-// plugin will: read the stats, translate them to /api/reading/sync's contract,
+// plugin will: read the stats, translate them to /api/books/sync's contract,
 // and send them in chunks.
 //
 // Two things it has to do that a naive dump would not:
@@ -271,7 +271,7 @@ function token() {
 }
 
 async function getCursor() {
-	const url = new URL(`/api/reading/sync?device=${encodeURIComponent(opts.device)}`, opts.url);
+	const url = new URL(`/api/books/sync?device=${encodeURIComponent(opts.device)}`, opts.url);
 	const res = await fetch(url, { headers: { authorization: `Bearer ${token()}` } });
 	if (!res.ok) {
 		console.error(`cursor lookup failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
@@ -281,7 +281,7 @@ async function getCursor() {
 }
 
 async function post(payload) {
-	const url = new URL('/api/reading/sync', opts.url);
+	const url = new URL('/api/books/sync', opts.url);
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', authorization: `Bearer ${token()}` },

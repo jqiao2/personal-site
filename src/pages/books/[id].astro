@@ -1,18 +1,20 @@
 ---
-import BookReviewEditor from '../../../components/BookReviewEditor.astro';
-import ReadingLayout from '../../../layouts/ReadingLayout.astro';
+import BookReviewEditor from '../../components/BookReviewEditor.astro';
+import BookLayout from '../../layouts/BookLayout.astro';
 import {
 	getBook,
 	getBookDays,
 	getBookHighlights,
 	getBookReviews,
-} from '../../../lib/book-queries';
-import { buildBookPage } from '../../../lib/book-view';
-import { requireOwner } from '../../../lib/auth';
+} from '../../lib/book-queries';
+import { buildBookPage } from '../../lib/book-view';
+import { requireOwner } from '../../lib/auth';
+import { siteNav } from '../../lib/nav';
 
 // Rendered on demand — reflects whatever the Kindle last pushed.
 export const prerender = false;
 
+const nav = siteNav(Astro.url.pathname);
 const id = Number(Astro.params.id);
 const isOwner = await requireOwner(Astro.cookies);
 const book = Number.isInteger(id) ? await getBook(id, isOwner) : null;
@@ -38,7 +40,7 @@ if (!book) {
 		<div class="code">404</div>
 		<div class="head">There is nothing at this address.</div>
 		<p>No redacted page, no placeholder — as far as this site is concerned the book was never here.</p>
-		<a href="/reading">&larr; Back to Reading</a>
+		<a href="/books">&larr; Back to Books</a>
 		</div></body></html>`,
 		{ status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } },
 	);
@@ -52,7 +54,7 @@ const [days, reviews, highlights] = await Promise.all([
 
 const v = buildBookPage({ book, days, reviews, highlights, isOwner });
 
-// Decorative shelf behind the hero: the spines from /reading, out of focus. A
+// Decorative shelf behind the hero: the spines from /books, out of focus. A
 // fixed seed rather than Math.random so the same book draws the same shelf on
 // every render instead of shuffling on each page load.
 let seed = 90_210;
@@ -63,16 +65,19 @@ const spines = Array.from({ length: 18 }, () => ({
 }));
 ---
 
-<ReadingLayout title={v.pageTitle}>
+<BookLayout title={v.pageTitle}>
 	<div class="page" style={`--hue:${v.hue}`}>
 		<div class="tabs-bar">
 			<nav class="tabs">
-				<a class="tabs__link" href="/">Home</a>
-				<a class="tabs__link" href="/about">About</a>
-				<a class="tabs__link" href="/projects">Projects</a>
-				<a class="tabs__link" href="/films">Films</a>
-				<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
-				<a class="tabs__link" href="/subway">Subway</a>
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
 			</nav>
 		</div>
 
@@ -84,8 +89,8 @@ const spines = Array.from({ length: 18 }, () => ({
 			</div>
 			<div class="hero__inner">
 				<div class="wrap hero__row">
-					<a class="back" href="/reading" data-back>
-						<span class="back__arrow">←</span><span>Reading</span>
+					<a class="back" href="/books" data-back>
+						<span class="back__arrow">←</span><span>Books</span>
 					</a>
 					<div class="hero__status">
 						<span class:list={['dot', v.heroDotClass]}></span>
@@ -280,7 +285,7 @@ const spines = Array.from({ length: 18 }, () => ({
 							{v.authors.map((a, i) => (
 								<Fragment>
 									{i > 0 && ' & '}
-									<a class="byline__name" href={`/reading?author=${encodeURIComponent(a)}`}>{a}</a>
+									<a class="byline__name" href={`/books?author=${encodeURIComponent(a)}`}>{a}</a>
 								</Fragment>
 							))}
 						</div>
@@ -312,10 +317,10 @@ const spines = Array.from({ length: 18 }, () => ({
 				{
 					v.kind && (
 						<div class="tags">
-							<a class="tag tag--kind" href={`/reading?kind=${encodeURIComponent(v.kind)}`}>{v.kind}</a>
+							<a class="tag tag--kind" href={`/books?kind=${encodeURIComponent(v.kind)}`}>{v.kind}</a>
 							{
 								v.genres.map((g) => (
-									<a class="tag" href={`/reading?subject=${encodeURIComponent(g)}`}>{g}</a>
+									<a class="tag" href={`/books?subject=${encodeURIComponent(g)}`}>{g}</a>
 								))
 							}
 						</div>
@@ -673,7 +678,7 @@ const spines = Array.from({ length: 18 }, () => ({
 			)
 		}
 	</div>
-</ReadingLayout>
+</BookLayout>
 
 <style>
 	.page {
@@ -2145,7 +2150,7 @@ const spines = Array.from({ length: 18 }, () => ({
 
 <script>
 	// Back link: prefer real history when you arrived from inside the site, so
-	// "← Reading" returns you to the shelf you were scrolled to rather than the
+	// "← Books" returns you to the shelf you were scrolled to rather than the
 	// top of a fresh one.
 	document.querySelector<HTMLAnchorElement>('[data-back]')?.addEventListener('click', (e) => {
 		if (document.referrer && new URL(document.referrer).origin === location.origin) {
@@ -2204,7 +2209,7 @@ const spines = Array.from({ length: 18 }, () => ({
 			const label = button.textContent;
 			button.disabled = true;
 			button.textContent = '…';
-			const res = await fetch('/api/reading/book', {
+			const res = await fetch('/api/books/book', {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ id, action }),
@@ -2294,7 +2299,7 @@ const spines = Array.from({ length: 18 }, () => ({
 				return;
 			}
 			meta.textContent = 'Searching Open Library…';
-			const res = await fetch(`/api/reading/openlibrary?q=${encodeURIComponent(q)}`);
+			const res = await fetch(`/api/books/openlibrary?q=${encodeURIComponent(q)}`);
 			if (!res.ok) {
 				meta.textContent = 'Open Library is not answering. Try again in a minute.';
 				return;
@@ -2362,7 +2367,7 @@ const spines = Array.from({ length: 18 }, () => ({
 			if (!picked) return;
 			confirmBtn.disabled = true;
 			confirmBtn.textContent = 'Linking…';
-			const res = await fetch('/api/reading/book', {
+			const res = await fetch('/api/books/book', {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({

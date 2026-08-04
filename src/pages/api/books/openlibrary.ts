@@ -5,7 +5,7 @@ import { searchBooks } from '../../../lib/openlibrary';
 
 export const prerender = false;
 
-// GET /api/reading/openlibrary?q=power+broker+caro → (owner) match candidates.
+// GET /api/books/openlibrary?q=power+broker+caro → (owner) match candidates.
 //
 // Owner-only, though the data behind it is public: this is a proxy, and an open
 // one would let anyone use the site to hammer a volunteer-run service.
