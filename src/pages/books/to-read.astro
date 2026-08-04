@@ -1,12 +1,14 @@
 ---
-import ReadingLayout from '../../layouts/ReadingLayout.astro';
+import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
-import { getCurrentlyReading, getToRead } from '../../lib/reading-queries';
+import { getCurrentlyReading, getToRead } from '../../lib/books-queries';
+import { siteNav } from '../../lib/nav';
 import { buildPile, PILE_SPINE_HEIGHT, GHOST_SPINE_HEIGHT, suggestMerges } from '../../lib/to-read-view';
 
 // Rendered on demand — the pile changes from this page and from the Kindle.
 export const prerender = false;
 
+const nav = siteNav(Astro.url.pathname);
 const isOwner = await requireOwner(Astro.cookies);
 
 // The suggestion pass needs the books the Kindle has started lately, which is
@@ -32,23 +34,26 @@ const mechanicNote = isOwner
 const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEIGHT}px`;
 ---
 
-<ReadingLayout title="To read — Jason's reading">
+<BookLayout title="To read — Jason's books">
 	<div class="page">
 		<div class="tabs-bar">
 			<nav class="tabs">
-				<a class="tabs__link" href="/">Home</a>
-				<a class="tabs__link" href="/about">About</a>
-				<a class="tabs__link" href="/projects">Projects</a>
-				<a class="tabs__link" href="/films">Films</a>
-				<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
-				<a class="tabs__link" href="/subway">Subway</a>
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
 			</nav>
 		</div>
 
 		<div class="wrap">
 			<div class="col">
 				<div class="crumb">
-					<a class="crumb__link" href="/reading">Reading</a>
+					<a class="crumb__link" href="/books">Books</a>
 					<span class="crumb__sep">/</span>
 					<span>To read</span>
 				</div>
@@ -321,7 +326,7 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 		}
 
 		async function patch(body: Record<string, unknown>): Promise<boolean> {
-			const res = await fetch('/api/reading/book', {
+			const res = await fetch('/api/books/book', {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
@@ -491,7 +496,7 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 				const label = button.textContent;
 				button.disabled = true;
 				button.textContent = '…';
-				const res = await fetch('/api/reading/to-read', {
+				const res = await fetch('/api/books/to-read', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify(body),
@@ -564,7 +569,7 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 				// of it is ours to be polite with.
 				timer = setTimeout(async () => {
 					const mine = ++sequence;
-					const res = await fetch(`/api/reading/openlibrary?q=${encodeURIComponent(text)}`).catch(
+					const res = await fetch(`/api/books/openlibrary?q=${encodeURIComponent(text)}`).catch(
 						() => null,
 					);
 					// A slow first request must not overwrite a fast second one.
@@ -610,7 +615,7 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 		}
 
 		/* Site nav — the strip bleeds to both edges while the links stay on the
-		   960px column. Same wrapper trick as /reading. */
+		   960px column. Same wrapper trick as /books. */
 		.tabs-bar {
 			background: #150e07;
 			border-bottom: 1px solid #45341f;
@@ -1245,4 +1250,4 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 			}
 		}
 	</style>
-</ReadingLayout>
+</BookLayout>

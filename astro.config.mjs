@@ -8,4 +8,10 @@ import vercel from '@astrojs/vercel';
 // https://astro.build/config
 export default defineConfig({
 	adapter: vercel(),
+	// The book log used to live at /reading; keep the old addresses working for
+	// anything already linking to them.
+	redirects: {
+		'/reading': '/books',
+		'/reading/book/[id]': '/books/[id]',
+	},
 });

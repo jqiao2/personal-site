@@ -1,6 +1,6 @@
 // Emit a realistic KOReader sync payload — a few hundred sequential pages with
 // plausible dwell times, spread across several evenings — for exercising
-// POST /api/reading/sync without a Kindle in hand.
+// POST /api/books/sync without a Kindle in hand.
 //
 // KOReader logs one row per page turn, so an evening's reading is dozens of
 // rows, not one; that shape is what the idempotency constraint has to survive,
@@ -23,7 +23,7 @@
 //   --total-pages N     The book's page count               (default 320)
 //   --title / --author / --md5 / --device
 //   --seed N            RNG seed                            (default 20260802)
-//   --post BASE_URL     POST it to BASE_URL/api/reading/sync using
+//   --post BASE_URL     POST it to BASE_URL/api/books/sync using
 //                       READING_SYNC_TOKEN from the environment
 //   --pretty            Indent the JSON
 
@@ -107,7 +107,7 @@ async function post(baseUrl, body) {
 		console.error('READING_SYNC_TOKEN is not set (try: node --env-file=.env …)');
 		process.exit(1);
 	}
-	const url = new URL('/api/reading/sync', baseUrl).toString();
+	const url = new URL('/api/books/sync', baseUrl).toString();
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },

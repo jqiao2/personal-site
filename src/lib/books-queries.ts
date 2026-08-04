@@ -1,4 +1,4 @@
-// Read side of the reading tracker: everything the eventual /reading page needs.
+// Read side of the book log: everything the /books page needs.
 //
 // All of it goes through supabaseAdmin. The reading tables have RLS on with no
 // policies (migration 0020), so the anon client sees nothing — session rows are
@@ -6,7 +6,7 @@
 // What ships to the browser is what these helpers return: aggregates, and books
 // that have opted in via `is_public`.
 //
-// Write side lives in src/lib/reading.ts.
+// Write side lives in src/lib/books-sync.ts.
 import { supabaseAdmin } from './supabase';
 
 export interface HeatmapDay {

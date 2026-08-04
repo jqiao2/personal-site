@@ -7,13 +7,9 @@
 // geometry is drawn at data*k plus a fixed-pixel parallel offset. That keeps every
 // stroke, pill and label a constant on-screen size at any zoom while positions
 // scale. Each service is its own parallel line and toggles independently.
-const nav = [
-	{ href: '/', label: 'Home' },
-	{ href: '/about', label: 'About' },
-	{ href: '/projects', label: 'Projects' },
-	{ href: '/films', label: 'Films' },
-	{ href: '/subway', label: 'Subway Map', active: true },
-];
+import { siteNav } from '../lib/nav';
+
+const nav = siteNav(Astro.url.pathname);
 ---
 
 <html lang="en">
@@ -34,7 +30,11 @@ const nav = [
 			<nav class="sm-nav">
 				{
 					nav.map((n) => (
-						<a href={n.href} class={n.active ? 'active' : ''}>
+						<a
+							href={n.href}
+							class={n.active ? 'active' : ''}
+							aria-current={n.active ? 'page' : undefined}
+						>
 							{n.label}
 						</a>
 					))

@@ -1,11 +1,11 @@
-// Presentation layer for /reading/to-read, the same shape as reading-view.ts:
+// Presentation layer for /books/to-read, the same shape as books-view.ts:
 // arithmetic and strings, no database, no async.
 //
-// The pile is the one page in the reading tracker with nothing measured on it.
+// The pile is the one page in the book log with nothing measured on it.
 // Every book here has zero sessions by definition, so there is no progress, no
 // pace and no percentage — the fields below are a title, a date, and how long
 // the book has been waiting.
-import type { BookProgress, PileBook } from './reading-queries';
+import type { BookProgress, PileBook } from './books-queries';
 import {
 	daysBetween,
 	formatDay,
@@ -14,7 +14,7 @@ import {
 	splitTitle,
 	today,
 	zonedDay,
-} from './reading-view';
+} from './books-view';
 
 /** Shorter than the shelf's spine: these are a list, not an illustration. */
 export const PILE_SPINE_HEIGHT = 84;
@@ -101,7 +101,7 @@ export function toPileView(book: PileBook, todayDay = today()): PileView {
 		main,
 		sub,
 		author,
-		href: `/reading/book/${book.id}`,
+		href: `/books/${book.id}`,
 		isPrivate: !book.is_public,
 		spineWidth: spineWidth(book.total_pages),
 		hasSpine: book.total_pages !== null,
@@ -134,7 +134,7 @@ export function buildPile(books: PileBook[], todayDay = today()): PileView[] {
 export function pileStrip(books: PileBook[], limit = 4) {
 	return books.slice(0, limit).map((b) => ({
 		id: b.id,
-		href: `/reading/book/${b.id}`,
+		href: `/books/${b.id}`,
 		title: `${b.title}${b.authors ? ` — ${b.authors}` : ''}${b.total_pages ? ` · ${formatNumber(b.total_pages)} pages` : ''}`,
 		width: spineWidth(b.total_pages),
 		hasSpine: b.total_pages !== null,

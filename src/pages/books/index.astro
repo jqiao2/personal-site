@@ -1,6 +1,6 @@
 ---
-import ReadingLayout from '../layouts/ReadingLayout.astro';
-import { requireOwner } from '../lib/auth';
+import BookLayout from '../../layouts/BookLayout.astro';
+import { requireOwner } from '../../lib/auth';
 import {
 	getCurrentlyReading,
 	getFinished,
@@ -10,8 +10,8 @@ import {
 	getSetAside,
 	getStats,
 	getToRead,
-} from '../lib/reading-queries';
-import { pileStrip } from '../lib/to-read-view';
+} from '../../lib/books-queries';
+import { pileStrip } from '../../lib/to-read-view';
 import {
 	activityMeta,
 	buildHeatmap,
@@ -26,10 +26,13 @@ import {
 	SPINE_HEIGHT,
 	today,
 	type BookView,
-} from '../lib/reading-view';
+} from '../../lib/books-view';
+import { siteNav } from '../../lib/nav';
 
 // Rendered on demand — reflects whatever the Kindle last pushed.
 export const prerender = false;
+
+const nav = siteNav(Astro.url.pathname);
 
 const todayDay = today();
 
@@ -106,7 +109,7 @@ const fillStyle = (b: BookView) => `height:${b.spineFill}px`;
 // Every book on the shelf is a page of its own. The spine is the strongest tie
 // between the two views, so it links as well as the title does — but it is the
 // same destination, so it stays out of the tab order and off the a11y tree.
-const bookHref = (b: BookView) => `/reading/book/${b.id}`;
+const bookHref = (b: BookView) => `/books/${b.id}`;
 
 // A heatmap with no reading in it has no scale to place the legend against, so
 // both the view toggle and the grid stay out of the way until there is something
@@ -114,23 +117,26 @@ const bookHref = (b: BookView) => `/reading/book/${b.id}`;
 const hasActivity = days.length > 0;
 ---
 
-<ReadingLayout title="Reading">
+<BookLayout title="Books">
 	<div class="page">
 		<div class="tabs-bar">
 			<nav class="tabs">
-				<a class="tabs__link" href="/">Home</a>
-				<a class="tabs__link" href="/about">About</a>
-				<a class="tabs__link" href="/projects">Projects</a>
-				<a class="tabs__link" href="/films">Films</a>
-				<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
-				<a class="tabs__link" href="/subway">Subway</a>
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
 			</nav>
 		</div>
 
 		<div class="wrap">
 			<div class="col">
 				<header class="head">
-					<h1 class="head__title">Reading</h1>
+					<h1 class="head__title">Books</h1>
 					<p class="head__note">
 						Logged automatically by the Kindle, one page turn at a time. The older
 						entries, read on paper, carry a date and a rating and nothing else.
@@ -244,7 +250,7 @@ const hasActivity = days.length > 0;
 										</a>
 									))}
 								</div>
-								<a class="pile-strip__link" href="/reading/to-read">
+								<a class="pile-strip__link" href="/books/to-read">
 									{pileLabel}
 								</a>
 							</div>
@@ -252,7 +258,7 @@ const hasActivity = days.length > 0;
 							isOwner && (
 								<div class="pile-strip">
 									<span class="pile-strip__label">To read</span>
-									<a class="pile-strip__link" href="/reading/to-read">
+									<a class="pile-strip__link" href="/books/to-read">
 										Nothing on the pile
 									</a>
 								</div>
@@ -771,7 +777,7 @@ const hasActivity = days.length > 0;
 			box-shadow: none;
 		}
 
-		/* Entry point to /reading/to-read */
+		/* Entry point to /books/to-read */
 		.pile-strip {
 			display: flex;
 			align-items: center;
@@ -1200,4 +1206,4 @@ const hasActivity = days.length > 0;
 			}
 		}
 	</style>
-</ReadingLayout>
+</BookLayout>

@@ -1,4 +1,4 @@
-// Presentation layer for /reading: turns the aggregates in reading-queries.ts
+// Presentation layer for /books: turns the aggregates in books-queries.ts
 // into the strings, sizes and grids the page renders.
 //
 // Nothing here touches the database, and nothing here is async — it is all
@@ -17,7 +17,7 @@ import {
 	type HeatmapDay,
 	type ManualRead,
 	type OfflineRead,
-} from './reading-queries';
+} from './books-queries';
 
 /**
  * The zone the stored day boundaries are measured in. Must match migration 0020,

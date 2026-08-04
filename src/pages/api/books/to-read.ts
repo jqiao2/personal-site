@@ -7,10 +7,10 @@ import { supabaseAdmin } from '../../../lib/supabase';
 
 export const prerender = false;
 
-// POST /api/reading/to-read  { title, authors?, olKey?, pages?, year?, coverUrl? }
+// POST /api/books/to-read  { title, authors?, olKey?, pages?, year?, coverUrl? }
 //   → (owner) a book on the to-read pile.
 //
-// The one thing PATCH /api/reading/book cannot do: that route patches a row that
+// The one thing PATCH /api/books/book cannot do: that route patches a row that
 // already exists, and every book here reaches the database by being read. A book
 // you intend to read has never been opened, so nothing has created it.
 //

@@ -1,6 +1,6 @@
 // Read and write side of one book's page.
 //
-// Sibling to reading-queries.ts, which serves the shelf. Same posture: the
+// Sibling to books-queries.ts, which serves the shelf. Same posture: the
 // reading tables have RLS on with no policies (migration 0020), so everything
 // goes through supabaseAdmin and nothing reaches the browser except what these
 // helpers return. `is_public` is enforced here rather than in the page — a

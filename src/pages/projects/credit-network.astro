@@ -8,13 +8,9 @@
 // force-directed graph — same reasoning as /subway. The graph itself is rendered
 // client-side by src/scripts/credit-network.js from a static JSON built by
 // scripts/credit-graph/build.mjs.
-const nav = [
-	{ href: '/', label: 'Home' },
-	{ href: '/about', label: 'About' },
-	{ href: '/projects', label: 'Projects', active: true },
-	{ href: '/films', label: 'Films' },
-	{ href: '/subway', label: 'Subway Map' },
-];
+import { siteNav } from '../../lib/nav';
+
+const nav = siteNav(Astro.url.pathname);
 ---
 
 <html lang="en">
@@ -30,7 +26,17 @@ const nav = [
 	</head>
 	<body>
 		<nav class="cn-nav">
-			{nav.map((n) => <a href={n.href} class={n.active ? 'active' : ''}>{n.label}</a>)}
+			{
+				nav.map((n) => (
+					<a
+						href={n.href}
+						class={n.active ? 'active' : ''}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))
+			}
 		</nav>
 
 		<div class="cn-shell">

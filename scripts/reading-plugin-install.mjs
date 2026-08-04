@@ -43,11 +43,10 @@ const opts = {
 	force: !!args.force,
 };
 
-const token = process.env.READING_SYNC_TOKEN;
-if (!token) {
-	console.error('READING_SYNC_TOKEN is not set (try: node --env-file=.env …)');
-	process.exit(1);
-}
+// Only needed when the settings file is actually going to be written. Updating
+// the plugin on a device that is already configured — the common case, since the
+// settings outlive every reinstall — asks for no credential at all.
+const token = process.env.READING_SYNC_TOKEN ?? null;
 
 // --- is this actually a Kindle running KOReader? ----------------------------
 const koreader = join(dest, 'koreader');
@@ -76,6 +75,22 @@ console.log(
 		: '  no statistics.sqlite3 yet — it appears once you have read a few pages',
 );
 
+// --- what will happen to the settings file ----------------------------------
+// Decided before anything is written, so a missing token stops the run instead
+// of leaving a new plugin next to settings it cannot configure.
+const settingsPath = join(settingsDir, 'readingsync.lua');
+const settingsExist = existsSync(settingsPath);
+const writeSettings = !settingsExist || opts.force;
+
+if (writeSettings && !token) {
+	console.error(
+		settingsExist
+			? 'READING_SYNC_TOKEN is not set, and --force would rewrite the settings file (try: node --env-file=.env …)'
+			: 'READING_SYNC_TOKEN is not set and this device has no settings file yet (try: node --env-file=.env …)',
+	);
+	process.exit(1);
+}
+
 // --- the plugin -------------------------------------------------------------
 const target = join(pluginsDir, 'readingsync.koplugin');
 const files = readdirSync(SOURCE);
@@ -88,17 +103,17 @@ if (!opts.dryRun) {
 }
 
 // --- the settings file ------------------------------------------------------
-const settingsPath = join(settingsDir, 'readingsync.lua');
-const exists = existsSync(settingsPath);
-
 console.log(`\nsettings  ${settingsPath}`);
-console.log(`          server_url = ${opts.url}`);
-console.log(`          device     = ${opts.device}`);
-console.log(`          sync_token = ${token.slice(0, 4)}… (${token.length} chars, not shown)`);
 
-if (exists && !opts.force) {
+if (!writeSettings) {
 	console.log('          EXISTS — left alone. Pass --force to overwrite.');
-} else if (!opts.dryRun) {
+} else {
+	console.log(`          server_url = ${opts.url}`);
+	console.log(`          device     = ${opts.device}`);
+	console.log(`          sync_token = ${token.slice(0, 4)}… (${token.length} chars, not shown)`);
+}
+
+if (writeSettings && !opts.dryRun) {
 	writeFileSync(settingsPath, luaSettings(settingsPath, {
 		server_url: opts.url,
 		sync_token: token,

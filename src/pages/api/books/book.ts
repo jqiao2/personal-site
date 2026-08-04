@@ -6,7 +6,7 @@ import { getWork } from '../../../lib/openlibrary';
 
 export const prerender = false;
 
-// PATCH /api/reading/book  { id, action, … }  → (owner) the six things about a
+// PATCH /api/books/book  { id, action, … }  → (owner) the six things about a
 // book that are decisions rather than readings.
 //
 // Everything else on the page is derived from page turns. These are not:
