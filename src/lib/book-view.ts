@@ -205,6 +205,16 @@ export interface BookPageView {
 	authors: string[];
 	authorLine: string;
 	sourceTitle: string;
+	/**
+	 * The full stored title, and whether it is already a hand-made correction.
+	 *
+	 * Open Library's titles are often miscased ("The power broker: Robert Moses
+	 * and the fall of New York"), so the match panel must not prefill over a
+	 * title someone has already fixed — that is the exact work migration 0022
+	 * exists to keep.
+	 */
+	fullTitle: string;
+	titleIsCorrected: boolean;
 	matched: boolean;
 	coverUrl: string | null;
 	hue: string;
@@ -301,12 +311,18 @@ export interface BookPageInput {
  */
 export function resolveShelf(book: BookRow, todayDay: string): Shelf {
 	const lastDay = book.last_read_at ? zonedDay(book.last_read_at) : null;
+
+	// A recorded ending outranks everything, including having no sessions at all.
+	// Books imported from another tracker arrive finished and unread — the Kindle
+	// never saw them — and reading them as unstarted would file a shelf of books
+	// finished years ago under "to read".
+	if (book.gave_up_at && (!lastDay || zonedDay(book.gave_up_at) >= lastDay)) return 'gaveup';
+	if (book.finished_at) return 'finished';
+
 	if (!lastDay) return book.added_at ? 'toread' : 'none';
 
-	if (book.gave_up_at && zonedDay(book.gave_up_at) >= lastDay) return 'gaveup';
-
 	const progress = book.total_pages ? Math.min(1, book.furthest_page / book.total_pages) : null;
-	if (book.finished_at || (progress !== null && progress >= FINISHED_PROGRESS)) return 'finished';
+	if (progress !== null && progress >= FINISHED_PROGRESS) return 'finished';
 
 	return daysBetween(lastDay, todayDay) > SET_ASIDE_DAYS ? 'aside' : 'reading';
 }
@@ -370,6 +386,16 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		.filter(Boolean);
 	const matched = !!book.ol_key;
 	const lovedAny = reviews.some((r) => r.loved);
+
+	// Finished by hand *and* demonstrably short of the end — the endnotes case the
+	// manual finish exists for. A hand-marked finish with no sessions behind it
+	// (an import, a book read before the Kindle) is just finished.
+	const stoppedShort =
+		book.finished_by_hand &&
+		days.length > 0 &&
+		knowsTotal &&
+		furthest > 0 &&
+		furthest / total! < FINISHED_PROGRESS;
 
 	// ---- pace and projection -------------------------------------------------
 	// Drawn from the last five weeks only. A book picked up again after a year
@@ -551,8 +577,13 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		railFacts.push({ k: 'Last read', v: lastDay ? ago(lastDay, todayDay) : '—' });
 		railFacts.push({ k: 'Time on it', v: formatDuration(totalSeconds) });
 	} else if (isFinished) {
-		railFacts.push({ k: 'Time read', v: formatDuration(totalSeconds) });
-		railFacts.push({ k: 'Days read', v: plural(days.length, 'day') });
+		// Only when there is reading behind them. A book finished before the Kindle
+		// existed, or imported from another tracker, would otherwise report "0m"
+		// and "0 days" — measurements of our records rather than of the reading.
+		if (days.length > 0) {
+			railFacts.push({ k: 'Time read', v: formatDuration(totalSeconds) });
+			railFacts.push({ k: 'Days read', v: plural(days.length, 'day') });
+		}
 		if (reviews.length > 1) railFacts.push({ k: 'Reads', v: String(reviews.length) });
 	}
 
@@ -637,6 +668,8 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		authors,
 		authorLine: authors.join(' & '),
 		sourceTitle: book.source_title,
+		fullTitle: book.title,
+		titleIsCorrected: book.title !== book.source_title,
 		matched,
 		coverUrl: book.cover_url,
 		hue: bookHue(book.title),
@@ -695,11 +728,12 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 					? formatDayLong(lastDay)
 					: null
 			: null,
-		byHand: book.finished_by_hand,
-		stoppedLine:
-			book.finished_by_hand && knowsTotal
-				? `Stopped at page ${formatNumber(furthest)} of ${formatNumber(total!)}.`
-				: null,
+		// "Called done by hand" is a claim about *stopping early*, so it needs
+		// reading data showing you did. A book marked finished by an import has
+		// the flag set and no sessions behind it, where the line would announce
+		// that you stopped at page 0 of a book you finished years ago.
+		byHand: stoppedShort,
+		stoppedLine: stoppedShort ? `Stopped at page ${formatNumber(furthest)} of ${formatNumber(total!)}.` : null,
 		addedLine:
 			shelf === 'toread' && book.added_at
 				? `Added ${formatDay(zonedDay(book.added_at))} · ${ago(zonedDay(book.added_at), todayDay)}`
