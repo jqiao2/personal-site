@@ -1,0 +1,1248 @@
+---
+import ReadingLayout from '../../layouts/ReadingLayout.astro';
+import { requireOwner } from '../../lib/auth';
+import { getCurrentlyReading, getToRead } from '../../lib/reading-queries';
+import { buildPile, PILE_SPINE_HEIGHT, GHOST_SPINE_HEIGHT, suggestMerges } from '../../lib/to-read-view';
+
+// Rendered on demand — the pile changes from this page and from the Kindle.
+export const prerender = false;
+
+const isOwner = await requireOwner(Astro.cookies);
+
+// The suggestion pass needs the books the Kindle has started lately, which is
+// exactly getCurrentlyReading. A visitor never sees a suggestion, so a visitor
+// never pays for the query.
+const [pileRaw, recent] = await Promise.all([
+	getToRead(isOwner),
+	isOwner ? getCurrentlyReading(true) : Promise.resolve([]),
+]);
+
+const pile = buildPile(pileRaw);
+const suggestions = isOwner ? suggestMerges(pileRaw, recent) : new Map();
+
+const countLabel = pile.length === 0 ? 'empty' : `${pile.length} book${pile.length === 1 ? '' : 's'}`;
+
+// The one explanatory line on the page. Everything else is left to the controls'
+// own labels — the automatic transition is the only thing here a reader could
+// not work out by looking.
+const mechanicNote = isOwner
+	? 'A book leaves the pile by itself: the first page turn the Kindle sends moves it to Currently reading.'
+	: 'A book leaves the pile by itself, on the first page turn the Kindle sends.';
+
+const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEIGHT}px`;
+---
+
+<ReadingLayout title="To read — Jason's reading">
+	<div class="page">
+		<div class="tabs-bar">
+			<nav class="tabs">
+				<a class="tabs__link" href="/">Home</a>
+				<a class="tabs__link" href="/about">About</a>
+				<a class="tabs__link" href="/projects">Projects</a>
+				<a class="tabs__link" href="/films">Films</a>
+				<a class="tabs__link tabs__link--active" href="/reading" aria-current="page">Reading</a>
+				<a class="tabs__link" href="/subway">Subway</a>
+			</nav>
+		</div>
+
+		<div class="wrap">
+			<div class="col">
+				<div class="crumb">
+					<a class="crumb__link" href="/reading">Reading</a>
+					<span class="crumb__sep">/</span>
+					<span>To read</span>
+				</div>
+
+				<header class="head">
+					<h1 class="head__title">To read</h1>
+					<p class="head__note">{mechanicNote}</p>
+				</header>
+
+				<div class="sec-head">
+					<h2 class="sec-head__title">The pile</h2>
+					<div class="sec-head__tools">
+						<span class="sec-head__meta" data-count>{countLabel}</span>
+						{
+							isOwner && (
+								<button type="button" class="pill" data-composer-open>
+									Add a book
+								</button>
+							)
+						}
+					</div>
+				</div>
+
+				{
+					isOwner && (
+						<div class="composer" data-composer hidden>
+							<div class="composer__head">
+								<span class="composer__title" data-composer-title>
+									Open Library
+								</span>
+								<button type="button" class="link-btn" data-composer-close>
+									Close
+								</button>
+							</div>
+
+							<div data-mode="search">
+								<input
+									type="search"
+									class="field"
+									placeholder="Title or author"
+									aria-label="Search Open Library"
+									autocomplete="off"
+									data-q
+								/>
+
+								<div class="searching" data-searching hidden>
+									<span class="searching__dot" />
+									<span>Searching</span>
+								</div>
+
+								<div class="results" data-results />
+
+								<div class="none-row" data-none hidden>
+									<span class="none-row__line" data-none-line />
+									<button type="button" class="pill pill--go" data-to-manual>
+										Type it in
+									</button>
+								</div>
+
+								<button type="button" class="link-btn link-btn--block" data-to-manual>
+									Type it in instead
+								</button>
+
+								{/*
+									Cloned rather than built with createElement: markup written here is
+									compiled by Astro and carries the scope attribute its styles are
+									written against, which nothing created in the browser ever does.
+								*/}
+								<template data-result-template>
+									<button type="button" class="result">
+										<img class="result__cover" alt="" hidden />
+										<span class="result__nocover" hidden>no cover</span>
+										<span class="result__main">
+											<span class="result__title" />
+											<span class="result__author" />
+											<span class="result__meta" />
+										</span>
+										<span class="result__add">Add</span>
+									</button>
+								</template>
+							</div>
+
+							<div data-mode="manual" hidden>
+								<div class="fields">
+									<input class="field" placeholder="Title" aria-label="Title" data-manual-title />
+									<input
+										class="field field--short"
+										placeholder="Author"
+										aria-label="Author"
+										data-manual-author
+									/>
+								</div>
+								<div class="fields__actions">
+									<button type="button" class="pill pill--go" data-manual-add disabled>
+										Add
+									</button>
+									<button type="button" class="link-btn" data-to-search>
+										Search instead
+									</button>
+								</div>
+							</div>
+						</div>
+					)
+				}
+
+				{
+					pile.length > 1 && (
+						<div class="controls">
+							<input
+								type="search"
+								class="field field--pill"
+								placeholder="Filter"
+								aria-label="Filter the pile"
+								autocomplete="off"
+								data-filter
+							/>
+							<div class="sorts">
+								<span class="sorts__label">Sort</span>
+								<button type="button" class="pill pill--sm pill--on" data-sort="added">
+									Added
+								</button>
+								<button type="button" class="pill pill--sm" data-sort="author">
+									Author
+								</button>
+								<button type="button" class="pill pill--sm" data-sort="pages">
+									Length
+								</button>
+								<button type="button" class="pill pill--sm" data-sort="kind">
+									Kind
+								</button>
+							</div>
+						</div>
+					)
+				}
+
+				<div class="pile" data-pile>
+					{
+						pile.map((b) => (
+							<div
+								class="row"
+								data-row
+								data-id={String(b.id)}
+								data-added={b.sortAdded}
+								data-author={b.sortAuthor}
+								data-pages={String(b.sortPages)}
+								data-kind={String(b.sortKind)}
+								data-text={b.filterText}
+								data-added-at={b.addedAt}
+							>
+								<div data-open>
+									<div class="row__line">
+										<a class="spine-link" href={b.href} tabindex="-1" aria-hidden="true">
+											<div
+												class:list={['spine', !b.hasSpine && 'spine--unknown']}
+												style={spineStyle(b.spineWidth)}
+												title={b.spineTitle}
+											/>
+										</a>
+
+										<div class="row__main">
+											<div class="row__titleline">
+												<h3 class="row__title">
+													<a class="book__link" href={b.href}>
+														{b.main}
+													</a>
+												</h3>
+												{b.isPrivate && <span class="tag">Private</span>}
+											</div>
+											{b.author && <div class="row__author">{b.author}</div>}
+											<div class:list={['row__meta', b.metaIsPlaceholder && 'row__meta--none']}>
+												{b.meta}
+											</div>
+										</div>
+
+										<div class="row__when">
+											<div class="row__added">{b.addedLabel}</div>
+											<div class="row__age">{b.ageLabel}</div>
+										</div>
+
+										{isOwner && (
+											<div class="acts">
+												<button type="button" class="link-btn" data-act="start">
+													Started it
+												</button>
+												<span class="acts__sep">·</span>
+												<button type="button" class="link-btn link-btn--dim" data-act="remove">
+													Take off the pile
+												</button>
+											</div>
+										)}
+									</div>
+
+									{suggestions.has(b.id) && (
+										<div class="suggest" data-suggest>
+											<div class="suggest__line">{suggestions.get(b.id)!.line}</div>
+											<div class="suggest__acts">
+												<button
+													type="button"
+													class="pill pill--go pill--solid"
+													data-act="merge"
+													data-source={String(suggestions.get(b.id)!.sourceId)}
+												>
+													Same book
+												</button>
+												<button type="button" class="link-btn" data-suggest-no>
+													No
+												</button>
+											</div>
+										</div>
+									)}
+								</div>
+
+								{/*
+									Resolved in place, with an undo instead of a confirm: taking a book
+									off the pile is one column going null, and a dialog would make it
+									feel like deletion.
+								*/}
+								<div class="resolved" data-resolved hidden>
+									<div class="ghost" style={`height:${GHOST_SPINE_HEIGHT}px`} />
+									<div class="resolved__line" data-resolved-line />
+									<button type="button" class="pill pill--sm" data-undo>
+										Undo
+									</button>
+								</div>
+							</div>
+						))
+					}
+				</div>
+
+				<p class="none" data-empty-filtered hidden>Nothing matches.</p>
+
+				{
+					pile.length === 0 && (
+						<div class="empty">
+							<div class="empty__line">Nothing on the pile.</div>
+							{isOwner && (
+								<button type="button" class="pill pill--go" data-composer-open>
+									Add a book
+								</button>
+							)}
+						</div>
+					)
+				}
+			</div>
+		</div>
+	</div>
+
+	<script>
+		// Everything here is the owner's; a visitor's page has no composer, no
+		// actions and no buttons to bind, so each block checks for its own markup
+		// rather than the page checking who is looking.
+		type Result = {
+			key: string;
+			title: string;
+			author: string;
+			year: number | null;
+			pages: number | null;
+			coverUrl: string | null;
+		};
+
+		const pile = document.querySelector<HTMLElement>('[data-pile]');
+		const countEl = document.querySelector<HTMLElement>('[data-count]');
+		const rows = () => [...document.querySelectorAll<HTMLElement>('[data-row]')];
+
+		/** The count is the pile, not the filter: rows resolved on this page are gone. */
+		function updateCount() {
+			if (!countEl) return;
+			const left = rows().filter((r) => !r.dataset.resolvedAs).length;
+			countEl.textContent = left === 0 ? 'empty' : `${left} book${left === 1 ? '' : 's'}`;
+		}
+
+		async function patch(body: Record<string, unknown>): Promise<boolean> {
+			const res = await fetch('/api/reading/book', {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			return res.ok;
+		}
+
+		// ---- row actions -------------------------------------------------------
+		for (const row of rows()) {
+			const id = Number(row.dataset.id);
+			const open = row.querySelector<HTMLElement>('[data-open]')!;
+			const resolved = row.querySelector<HTMLElement>('[data-resolved]')!;
+			const line = row.querySelector<HTMLElement>('[data-resolved-line]')!;
+			const undo = row.querySelector<HTMLButtonElement>('[data-undo]')!;
+			const title = row.querySelector<HTMLElement>('.row__title')?.textContent?.trim() ?? '';
+
+			const resolve = (kind: string, text: string, undoable: boolean) => {
+				row.dataset.resolvedAs = kind;
+				line.textContent = `${title} — ${text}`;
+				// A merge deleted the other row and moved its page turns onto this
+				// book. There is no undo for that, and offering one that silently did
+				// something else would be worse than not offering one.
+				undo.hidden = !undoable;
+				open.hidden = true;
+				resolved.hidden = false;
+				updateCount();
+			};
+
+			for (const button of open.querySelectorAll<HTMLButtonElement>('[data-act]')) {
+				button.addEventListener('click', async () => {
+					const act = button.dataset.act!;
+					const label = button.textContent;
+					button.disabled = true;
+					button.textContent = '…';
+
+					const ok = await patch(
+						act === 'start'
+							? { id, action: 'start' }
+							: act === 'remove'
+								? { id, action: 'to-read' }
+								: { id, action: 'merge', sourceId: Number(button.dataset.source) },
+					);
+
+					button.disabled = false;
+					button.textContent = label;
+					if (!ok) return;
+
+					if (act === 'start') resolve('start', 'now reading', true);
+					else if (act === 'remove') resolve('remove', 'off the pile', true);
+					else resolve('merge', 'merged, now reading', false);
+				});
+			}
+
+			undo.addEventListener('click', async () => {
+				const kind = row.dataset.resolvedAs;
+				undo.disabled = true;
+				// Both undos are the inverse of one column: `to-read` toggles added_at
+				// back on, `unstart` clears the hand-set start.
+				const ok = await patch(
+					kind === 'start'
+						? { id, action: 'unstart' }
+						// The date this row was rendered with, so the restored book keeps
+						// the day it actually went on the pile.
+						: { id, action: 'to-read', addedAt: row.dataset.addedAt },
+				);
+				undo.disabled = false;
+				if (!ok) return;
+
+				delete row.dataset.resolvedAs;
+				resolved.hidden = true;
+				open.hidden = false;
+				updateCount();
+			});
+
+			// Dismissing a suggestion is this page view only. Persisting it would mean
+			// a column recording that two books are not each other, which is a lot of
+			// schema for a question that stops being asked the moment either book
+			// moves on.
+			const suggest = row.querySelector<HTMLElement>('[data-suggest]');
+			row.querySelector<HTMLButtonElement>('[data-suggest-no]')?.addEventListener('click', () => {
+				suggest?.remove();
+			});
+		}
+
+		// ---- filter and sort ---------------------------------------------------
+		const filterInput = document.querySelector<HTMLInputElement>('[data-filter]');
+		const emptyFiltered = document.querySelector<HTMLElement>('[data-empty-filtered]');
+
+		function applyFilter() {
+			const q = (filterInput?.value ?? '').trim().toLowerCase();
+			let shown = 0;
+			for (const row of rows()) {
+				const match = !q || (row.dataset.text ?? '').includes(q);
+				row.hidden = !match;
+				if (match) shown++;
+			}
+			if (emptyFiltered) emptyFiltered.hidden = shown > 0 || rows().length === 0;
+		}
+
+		filterInput?.addEventListener('input', applyFilter);
+
+		const sortButtons = document.querySelectorAll<HTMLButtonElement>('[data-sort]');
+		for (const button of sortButtons) {
+			button.addEventListener('click', () => {
+				const key = button.dataset.sort;
+				const sorted = rows().sort((a, b) => {
+					if (key === 'author') return (a.dataset.author ?? '').localeCompare(b.dataset.author ?? '');
+					if (key === 'pages') return Number(b.dataset.pages) - Number(a.dataset.pages);
+					if (key === 'kind') {
+						const byKind = Number(a.dataset.kind) - Number(b.dataset.kind);
+						if (byKind !== 0) return byKind;
+					}
+					// Added is the default and the tiebreak: within a kind, the newest
+					// intention is the one still worth acting on.
+					return (b.dataset.added ?? '').localeCompare(a.dataset.added ?? '');
+				});
+				for (const row of sorted) pile?.appendChild(row);
+				for (const other of sortButtons) other.classList.toggle('pill--on', other === button);
+			});
+		}
+
+		// ---- the composer ------------------------------------------------------
+		const composer = document.querySelector<HTMLElement>('[data-composer]');
+		if (composer) {
+			const modeSearch = composer.querySelector<HTMLElement>('[data-mode="search"]')!;
+			const modeManual = composer.querySelector<HTMLElement>('[data-mode="manual"]')!;
+			const composerTitle = composer.querySelector<HTMLElement>('[data-composer-title]')!;
+			const q = composer.querySelector<HTMLInputElement>('[data-q]')!;
+			const searching = composer.querySelector<HTMLElement>('[data-searching]')!;
+			const results = composer.querySelector<HTMLElement>('[data-results]')!;
+			const none = composer.querySelector<HTMLElement>('[data-none]')!;
+			const noneLine = composer.querySelector<HTMLElement>('[data-none-line]')!;
+			const template = composer.querySelector<HTMLTemplateElement>('[data-result-template]')!;
+			const manualTitle = composer.querySelector<HTMLInputElement>('[data-manual-title]')!;
+			const manualAuthor = composer.querySelector<HTMLInputElement>('[data-manual-author]')!;
+			const manualAdd = composer.querySelector<HTMLButtonElement>('[data-manual-add]')!;
+			const idleLink = composer.querySelector<HTMLElement>('.link-btn--block')!;
+
+			const setMode = (manual: boolean) => {
+				modeSearch.hidden = manual;
+				modeManual.hidden = !manual;
+				composerTitle.textContent = manual ? 'Type it in' : 'Open Library';
+				(manual ? manualTitle : q).focus();
+			};
+
+			const open = () => {
+				composer.hidden = false;
+				setMode(false);
+			};
+
+			for (const button of document.querySelectorAll<HTMLButtonElement>('[data-composer-open]')) {
+				button.addEventListener('click', open);
+			}
+			composer
+				.querySelector<HTMLButtonElement>('[data-composer-close]')!
+				.addEventListener('click', () => {
+					composer.hidden = true;
+				});
+			for (const button of composer.querySelectorAll<HTMLButtonElement>('[data-to-manual]')) {
+				button.addEventListener('click', () => setMode(true));
+			}
+			composer
+				.querySelector<HTMLButtonElement>('[data-to-search]')!
+				.addEventListener('click', () => setMode(false));
+
+			async function add(body: Record<string, unknown>, button: HTMLButtonElement) {
+				const label = button.textContent;
+				button.disabled = true;
+				button.textContent = '…';
+				const res = await fetch('/api/reading/to-read', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify(body),
+				});
+				if (!res.ok) {
+					button.disabled = false;
+					button.textContent = label;
+					return;
+				}
+				// Reload rather than splice a row in: the server decides how a book on
+				// the pile reads, and half these fields (the blurb, the subjects, the
+				// publication year) are fetched after the insert.
+				location.reload();
+			}
+
+			function render(list: Result[]) {
+				results.replaceChildren();
+				for (const r of list) {
+					const node = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
+					const cover = node.querySelector<HTMLImageElement>('.result__cover')!;
+					const nocover = node.querySelector<HTMLElement>('.result__nocover')!;
+					if (r.coverUrl) {
+						cover.src = r.coverUrl;
+						cover.hidden = false;
+					} else {
+						nocover.hidden = false;
+					}
+					node.querySelector<HTMLElement>('.result__title')!.textContent = r.title;
+					node.querySelector<HTMLElement>('.result__author')!.textContent = r.author;
+					node.querySelector<HTMLElement>('.result__meta')!.textContent = [
+						r.year,
+						r.pages ? `${r.pages.toLocaleString('en-US')} pages` : null,
+					]
+						.filter(Boolean)
+						.join(' · ');
+					node.addEventListener('click', () =>
+						add(
+							{
+								olKey: r.key,
+								title: r.title,
+								authors: r.author,
+								pages: r.pages,
+								year: r.year,
+								coverUrl: r.coverUrl,
+							},
+							node as HTMLButtonElement,
+						),
+					);
+					results.appendChild(node);
+				}
+			}
+
+			let timer: ReturnType<typeof setTimeout>;
+			let sequence = 0;
+			q.addEventListener('input', () => {
+				clearTimeout(timer);
+				const text = q.value.trim();
+				if (text.length < 2) {
+					searching.hidden = true;
+					none.hidden = true;
+					results.replaceChildren();
+					idleLink.hidden = false;
+					return;
+				}
+				searching.hidden = false;
+				none.hidden = true;
+				idleLink.hidden = true;
+				// Typed a letter at a time, this is one request per pause rather than
+				// per keystroke — Open Library is volunteer-run and the proxy in front
+				// of it is ours to be polite with.
+				timer = setTimeout(async () => {
+					const mine = ++sequence;
+					const res = await fetch(`/api/reading/openlibrary?q=${encodeURIComponent(text)}`).catch(
+						() => null,
+					);
+					// A slow first request must not overwrite a fast second one.
+					if (mine !== sequence) return;
+					searching.hidden = true;
+
+					// Open Library goes down, and when it does the row that offers to
+					// type the book in is the answer to both this and an empty result —
+					// so the same row says which happened and holds the same way out.
+					if (!res || !res.ok) {
+						render([]);
+						none.hidden = false;
+						noneLine.textContent = 'Open Library is not answering.';
+						return;
+					}
+
+					const body = (await res.json()) as { results?: Result[] };
+					const list = body.results ?? [];
+					render(list);
+					none.hidden = list.length > 0;
+					noneLine.textContent = `Nothing for “${text}”.`;
+				}, 350);
+			});
+
+			const manualReady = () =>
+				manualTitle.value.trim().length > 0 && manualAuthor.value.trim().length > 0;
+			const syncManual = () => {
+				manualAdd.disabled = !manualReady();
+			};
+			manualTitle.addEventListener('input', syncManual);
+			manualAuthor.addEventListener('input', syncManual);
+			manualAdd.addEventListener('click', () => {
+				if (!manualReady()) return;
+				add({ title: manualTitle.value.trim(), authors: manualAuthor.value.trim() }, manualAdd);
+			});
+		}
+	</script>
+
+	<style>
+		.page {
+			min-height: 100vh;
+			background: #1a120a;
+		}
+
+		/* Site nav — the strip bleeds to both edges while the links stay on the
+		   960px column. Same wrapper trick as /reading. */
+		.tabs-bar {
+			background: #150e07;
+			border-bottom: 1px solid #45341f;
+		}
+		.tabs {
+			display: flex;
+			align-items: stretch;
+			gap: 2px;
+			max-width: 1008px;
+			margin: 0 auto;
+			padding: 0 clamp(14px, 4vw, 24px);
+			overflow-x: auto;
+		}
+		.tabs__link {
+			font-size: 13px;
+			letter-spacing: 0.4px;
+			color: #bfa886;
+			padding: 26px 16px 24px;
+			border-bottom: 2px solid transparent;
+			white-space: nowrap;
+			transition: color 0.12s;
+		}
+		.tabs__link:hover {
+			color: #f2e6cd;
+		}
+		.tabs__link--active {
+			color: #f2e6cd;
+			font-weight: 600;
+			border-bottom-color: #cfa452;
+		}
+
+		.wrap {
+			display: flex;
+			justify-content: center;
+			padding: 34px clamp(14px, 4vw, 24px) 90px;
+		}
+		.col {
+			width: 100%;
+			max-width: 960px;
+		}
+
+		.crumb {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.5px;
+			color: #8a745a;
+			margin-bottom: 14px;
+		}
+		.crumb__link {
+			color: #8a745a;
+		}
+		.crumb__link:hover {
+			color: #cfa452;
+		}
+		.crumb__sep {
+			color: #5d4b36;
+			padding: 0 4px;
+		}
+
+		.head {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			gap: 14px;
+			flex-wrap: wrap;
+			margin-bottom: 30px;
+		}
+		.head__title {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: clamp(38px, 9vw, 52px);
+			color: #f2e6cd;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.head__note {
+			margin: 0;
+			font-size: 12.5px;
+			color: #8a745a;
+			line-height: 1.5;
+			max-width: 300px;
+		}
+
+		.sec-head {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+			flex-wrap: wrap;
+			padding-bottom: 10px;
+			border-bottom: 1px solid #392a19;
+			margin-bottom: 18px;
+		}
+		.sec-head__title {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-weight: 400;
+			font-size: 20px;
+			color: #ead9b6;
+			margin: 0;
+		}
+		.sec-head__tools {
+			display: flex;
+			align-items: baseline;
+			gap: 14px;
+			flex-wrap: wrap;
+		}
+		.sec-head__meta {
+			font-size: 12px;
+			color: #a68f6e;
+		}
+
+		/* Buttons */
+		.pill {
+			font-family: 'Archivo', sans-serif;
+			font-size: 12.5px;
+			line-height: 1.2;
+			padding: 7px 14px;
+			border-radius: 20px;
+			border: 1px solid #45341f;
+			background: transparent;
+			color: #dcc9a6;
+			cursor: pointer;
+		}
+		.pill--sm {
+			font-size: 12px;
+			padding: 6px 12px;
+		}
+		.pill:hover {
+			border-color: #6b5231;
+			color: #f2e6cd;
+		}
+		.pill--on,
+		.pill--on:hover {
+			background: #cfa452;
+			border-color: #cfa452;
+			color: #241a10;
+			font-weight: 600;
+		}
+		.pill--go {
+			border-color: #cfa452;
+			color: #cfa452;
+		}
+		.pill--go:hover {
+			background: #cfa452;
+			border-color: #cfa452;
+			color: #241a10;
+		}
+		.pill--solid {
+			background: #cfa452;
+			color: #241a10;
+			font-weight: 600;
+		}
+		.pill--solid:hover {
+			background: #ecc87c;
+			border-color: #ecc87c;
+			color: #241a10;
+		}
+		.pill:disabled {
+			border-color: #392a19;
+			background: transparent;
+			color: #6f5c46;
+			cursor: default;
+		}
+
+		.link-btn {
+			font-family: 'Archivo', sans-serif;
+			font-size: 12px;
+			background: none;
+			border: none;
+			padding: 3px 0;
+			color: #a68f6e;
+			cursor: pointer;
+		}
+		.link-btn:hover {
+			color: #ecc87c;
+		}
+		.link-btn--dim {
+			color: #8a745a;
+		}
+		.link-btn--block {
+			display: block;
+			margin-top: 14px;
+			font-size: 12.5px;
+			color: #8a745a;
+		}
+		.link-btn[hidden] {
+			display: none;
+		}
+
+		/* Composer */
+		.composer {
+			background: #201709;
+			border: 1px solid #45341f;
+			border-radius: 10px;
+			padding: 20px;
+			margin-bottom: 26px;
+		}
+		.composer[hidden] {
+			display: none;
+		}
+		.composer__head {
+			display: flex;
+			align-items: baseline;
+			justify-content: space-between;
+			gap: 12px;
+			margin-bottom: 14px;
+		}
+		.composer__title {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.5px;
+			color: #a68f6e;
+		}
+		[data-mode][hidden] {
+			display: none;
+		}
+
+		.field {
+			width: 100%;
+			background: #1a120a;
+			border: 1px solid #45341f;
+			border-radius: 8px;
+			padding: 12px 14px;
+			font-family: 'Archivo', sans-serif;
+			font-size: 14px;
+			color: #f2e6cd;
+			outline: none;
+		}
+		.field:focus {
+			border-color: #cfa452;
+		}
+		.field::placeholder {
+			color: #7d6a52;
+		}
+		.field--pill {
+			flex: 0 1 220px;
+			min-width: 150px;
+			width: auto;
+			background: #201709;
+			border-color: #392a19;
+			border-radius: 20px;
+			padding: 8px 15px;
+			font-size: 12.5px;
+		}
+		.fields {
+			display: flex;
+			gap: 10px;
+			flex-wrap: wrap;
+		}
+		.fields .field {
+			flex: 1 1 240px;
+			min-width: 0;
+			width: auto;
+		}
+		.fields .field--short {
+			flex: 1 1 180px;
+		}
+		.fields__actions {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			margin-top: 14px;
+			flex-wrap: wrap;
+		}
+
+		.searching {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			margin-top: 16px;
+			font-size: 12.5px;
+			color: #8a745a;
+		}
+		.searching[hidden] {
+			display: none;
+		}
+		.searching__dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: #cfa452;
+			opacity: 0.7;
+			flex: none;
+			animation: pulse 1.1s ease-in-out infinite;
+		}
+		@keyframes pulse {
+			50% {
+				opacity: 0.15;
+			}
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.searching__dot {
+				animation: none;
+			}
+		}
+
+		.results {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+		}
+		.results:not(:empty) {
+			margin-top: 16px;
+		}
+		.result {
+			display: flex;
+			gap: 14px;
+			align-items: center;
+			width: 100%;
+			text-align: left;
+			background: #241a10;
+			border: 1px solid #392a19;
+			border-radius: 8px;
+			padding: 11px 13px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+		}
+		.result:hover {
+			border-color: #cfa452;
+			background: #2a1e11;
+		}
+		.result__cover {
+			width: 34px;
+			height: 50px;
+			flex: none;
+			object-fit: cover;
+			border-radius: 2px;
+			border: 1px solid #45341f;
+		}
+		.result__nocover {
+			width: 34px;
+			height: 50px;
+			flex: none;
+			border-radius: 2px;
+			border: 1px dashed #45341f;
+			font-size: 8px;
+			color: #7d6a52;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			text-align: center;
+			line-height: 1.2;
+			padding: 2px;
+		}
+		.result__cover[hidden],
+		.result__nocover[hidden] {
+			display: none;
+		}
+		.result__main {
+			flex: 1 1 auto;
+			min-width: 0;
+		}
+		.result__title {
+			display: block;
+			font-family: 'Newsreader', serif;
+			font-size: 17px;
+			color: #f2e6cd;
+			line-height: 1.2;
+		}
+		.result__author {
+			display: block;
+			font-size: 12px;
+			color: #a68f6e;
+			margin-top: 3px;
+		}
+		.result__meta {
+			display: block;
+			font-size: 11.5px;
+			color: #8a745a;
+			margin-top: 4px;
+		}
+		.result__add {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.3px;
+			color: #cfa452;
+			flex: none;
+			padding-left: 6px;
+		}
+
+		.none-row {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			margin-top: 16px;
+			flex-wrap: wrap;
+		}
+		.none-row[hidden] {
+			display: none;
+		}
+		.none-row__line {
+			font-size: 12.5px;
+			color: #a68f6e;
+		}
+
+		/* Filter + sort */
+		.controls {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 14px;
+			flex-wrap: wrap;
+		}
+		.sorts {
+			display: flex;
+			align-items: center;
+			gap: 7px;
+			flex-wrap: wrap;
+		}
+		.sorts__label {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.3px;
+			color: #8a745a;
+			margin-right: 2px;
+		}
+
+		/* The pile */
+		.pile {
+			margin-top: 14px;
+		}
+		.row {
+			padding: 18px 2px;
+			border-bottom: 1px solid #33261a;
+		}
+		.row[hidden] {
+			display: none;
+		}
+		.row__line {
+			display: flex;
+			align-items: center;
+			gap: 18px;
+			flex-wrap: wrap;
+		}
+		[data-open][hidden] {
+			display: none;
+		}
+
+		.spine-link {
+			flex: none;
+			display: block;
+		}
+		/* The same spine as the shelf with no gold in it: nothing has been read.
+		   A book with no page count has no width to draw, so it gets the narrow
+		   dashed outline the book page uses for something unknown. */
+		.spine {
+			flex: none;
+			border-radius: 2px;
+			border: 1px solid #45341f;
+			background-image: repeating-linear-gradient(135deg, #2c2013 0 6px, #241906 6px 12px);
+			transition:
+				transform 0.16s ease,
+				border-color 0.16s ease,
+				box-shadow 0.16s ease;
+		}
+		.spine--unknown {
+			background-image: none;
+			background: transparent;
+			border-style: dashed;
+		}
+		.spine-link:hover .spine,
+		.spine-link:focus-visible .spine {
+			transform: translateY(-7px);
+			border-color: #cfa452;
+			box-shadow:
+				0 12px 22px -8px rgba(0, 0, 0, 0.8),
+				0 0 0 1px rgba(207, 164, 82, 0.4);
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.spine {
+				transition: none;
+			}
+			.spine-link:hover .spine,
+			.spine-link:focus-visible .spine {
+				transform: none;
+			}
+		}
+
+		.row__main {
+			flex: 1 1 240px;
+			min-width: 0;
+		}
+		.row__titleline {
+			display: flex;
+			align-items: baseline;
+			gap: 9px;
+			flex-wrap: wrap;
+		}
+		.row__title {
+			font-family: 'Newsreader', serif;
+			font-weight: 400;
+			font-size: 21px;
+			color: #f2e6cd;
+			line-height: 1.2;
+			margin: 0;
+		}
+		.book__link {
+			color: inherit;
+		}
+		.book__link:hover {
+			color: #ecc87c;
+		}
+		.tag {
+			font-size: 9.5px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #a68f6e;
+			border: 1px solid #45341f;
+			border-radius: 3px;
+			padding: 2px 5px;
+		}
+		.row__author {
+			font-size: 12.5px;
+			color: #a68f6e;
+			margin-top: 4px;
+		}
+		.row__meta {
+			font-size: 12px;
+			color: #8a745a;
+			margin-top: 5px;
+		}
+		.row__meta--none {
+			color: #7d6a52;
+			font-style: italic;
+		}
+		.row__when {
+			flex: none;
+			text-align: right;
+			min-width: 92px;
+		}
+		.row__added {
+			font-size: 12px;
+			color: #dcc9a6;
+		}
+		.row__age {
+			font-size: 11px;
+			color: #8a745a;
+			margin-top: 4px;
+		}
+		.acts {
+			display: flex;
+			align-items: center;
+			gap: 13px;
+			flex: none;
+		}
+		.acts__sep {
+			color: #45341f;
+			font-size: 11px;
+		}
+
+		/* Kindle reconciliation */
+		.suggest {
+			margin-top: 15px;
+			background: #201709;
+			border: 1px solid #45341f;
+			border-left: 3px solid #cfa452;
+			border-radius: 8px;
+			padding: 14px 16px;
+			display: flex;
+			align-items: center;
+			gap: 18px;
+			flex-wrap: wrap;
+		}
+		.suggest__line {
+			flex: 1 1 300px;
+			min-width: 0;
+			font-size: 13px;
+			color: #efe0c2;
+			line-height: 1.5;
+		}
+		.suggest__acts {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			flex: none;
+		}
+
+		/* Resolved rows */
+		.resolved {
+			display: flex;
+			align-items: center;
+			gap: 14px;
+			flex-wrap: wrap;
+		}
+		.resolved[hidden] {
+			display: none;
+		}
+		.ghost {
+			width: 13px;
+			flex: none;
+			border: 1px dashed #33261a;
+			border-radius: 2px;
+		}
+		.resolved__line {
+			flex: 1 1 240px;
+			min-width: 0;
+			font-size: 12.5px;
+			color: #a68f6e;
+		}
+
+		.none {
+			font-size: 13px;
+			color: #8a745a;
+			padding: 22px 2px;
+			margin: 0;
+		}
+		.none[hidden] {
+			display: none;
+		}
+		.empty {
+			border: 1px dashed #392a19;
+			border-radius: 10px;
+			padding: 34px 24px;
+			text-align: center;
+		}
+		.empty__line {
+			font-family: 'Newsreader', serif;
+			font-style: italic;
+			font-size: 18px;
+			color: #a68f6e;
+			margin-bottom: 16px;
+		}
+
+		@media (max-width: 640px) {
+			.tabs__link {
+				padding: 18px 10px 16px;
+			}
+			.row__when {
+				text-align: left;
+			}
+		}
+	</style>
+</ReadingLayout>

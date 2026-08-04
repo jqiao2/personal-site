@@ -1,13 +1,17 @@
 ---
 import ReadingLayout from '../layouts/ReadingLayout.astro';
+import { requireOwner } from '../lib/auth';
 import {
 	getCurrentlyReading,
 	getFinished,
 	getHeatmap,
+	getManualReads,
 	getOfflineReads,
 	getSetAside,
 	getStats,
+	getToRead,
 } from '../lib/reading-queries';
+import { pileStrip } from '../lib/to-read-view';
 import {
 	activityMeta,
 	buildHeatmap,
@@ -29,12 +33,16 @@ export const prerender = false;
 
 const todayDay = today();
 
-const [stats, currentRaw, asideRaw, finishedRaw, offlineRaw] = await Promise.all([
+const isOwner = await requireOwner(Astro.cookies);
+
+const [stats, currentRaw, asideRaw, finishedRaw, offlineRaw, manualRaw, pileRaw] = await Promise.all([
 	getStats(),
 	getCurrentlyReading(),
 	getSetAside(),
 	getFinished(),
 	getOfflineReads(),
+	getManualReads(),
+	getToRead(isOwner),
 ]);
 
 // One heatmap query covers both activity views: the spells need the days with
@@ -50,8 +58,15 @@ const { current, setAside, finished } = buildShelf(
 	asideRaw,
 	finishedRaw,
 	offlineRaw,
+	manualRaw,
 	todayDay,
 );
+
+// The pile's own page holds all of it; this shows the newest few spines and the
+// way in. An empty pile says so to me and says nothing at all to a visitor — a
+// zero there would report a fact about my intentions rather than my reading.
+const pile = pileStrip(pileRaw);
+const pileLabel = `${pileRaw.length} book${pileRaw.length === 1 ? '' : 's'} →`;
 
 // Which books a spell covers is answered from every public book, not just the
 // ones in flight — a spell three years ago was spent on something long finished.
@@ -155,25 +170,34 @@ const hasActivity = days.length > 0;
 											{b.sub && <div class="book__sub">{b.sub}</div>}
 											{b.author && <div class="book__author">{b.author}</div>}
 
-											<div class="progress">
-												{b.progress !== null && (
-													<div class="bar">
-														<div
-															class="bar__fill"
-															style={`width:${Math.max(1.5, b.progress * 100)}%`}
-														/>
+											{/*
+												A book nobody is counting gets the sentence instead of the
+												bar. An empty track would read as a stalled Kindle book,
+												which is the opposite of what is true.
+											*/}
+											{
+												b.untrackedNote ? (
+													<div class="offdevice">{b.untrackedNote}</div>
+												) : (
+													<div class="progress">
+														{b.progress !== null && (
+															<div class="bar">
+																<div
+																	class="bar__fill"
+																	style={`width:${Math.max(1.5, b.progress * 100)}%`}
+																/>
+															</div>
+														)}
+														<div class="progress__row">
+															<span class="progress__pages">
+																{b.pagesLabel}
+																{b.progress !== null && <span class="dim"> pages</span>}
+															</span>
+															<span class="progress__pct">{b.percent ?? 'length unknown'}</span>
+														</div>
 													</div>
-												)}
-												<div class="progress__row">
-													<span class="progress__pages">
-														{b.pagesLabel}
-														{b.progress !== null && <span class="dim"> pages</span>}
-													</span>
-													<span class="progress__pct">
-														{b.percent ?? 'length unknown'}
-													</span>
-												</div>
-											</div>
+												)
+											}
 										</div>
 										<dl class="facts">
 											{b.facts.map((f) => (
@@ -195,6 +219,44 @@ const hasActivity = days.length > 0;
 									The next page turn on the Kindle starts a new entry here.
 								</div>
 							</div>
+						)
+					}
+
+					{/*
+						The way to the to-read pile. It sits at the foot of this section
+						rather than as a section of its own: the pile is what happens after
+						the book in hand, and nesting it here costs one row instead of a
+						fifth heading competing with the four above it. Spines rather than
+						covers — half the pile has no cover, and a row of blank rectangles
+						would read as a failure to load.
+					*/}
+					{
+						pile.length > 0 ? (
+							<div class="pile-strip">
+								<span class="pile-strip__label">To read</span>
+								<div class="pile-strip__spines">
+									{pile.map((p) => (
+										<a class="spine-link spine-link--sm" href={p.href} title={p.title}>
+											<div
+												class:list={['spine', 'spine--empty', !p.hasSpine && 'spine--unknown']}
+												style={`width:${p.width}px`}
+											/>
+										</a>
+									))}
+								</div>
+								<a class="pile-strip__link" href="/reading/to-read">
+									{pileLabel}
+								</a>
+							</div>
+						) : (
+							isOwner && (
+								<div class="pile-strip">
+									<span class="pile-strip__label">To read</span>
+									<a class="pile-strip__link" href="/reading/to-read">
+										Nothing on the pile
+									</a>
+								</div>
+							)
 						)
 					}
 				</section>
@@ -692,6 +754,57 @@ const hasActivity = days.length > 0;
 		}
 		.spine--untracked .spine__fill {
 			opacity: 0.35;
+		}
+		/* On the pile: the same spine with no gold in it, because nothing has been
+		   read. A book with no page count has no width to draw and gets the narrow
+		   dashed outline instead. */
+		.spine--empty {
+			height: 54px;
+			background-image: repeating-linear-gradient(135deg, #2c2013 0 6px, #241906 6px 12px);
+		}
+		.spine--unknown {
+			background-image: none;
+			background: transparent;
+			border-style: dashed;
+		}
+		.spine-link--sm:hover .spine {
+			box-shadow: none;
+		}
+
+		/* Entry point to /reading/to-read */
+		.pile-strip {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			margin-top: 16px;
+			padding-top: 15px;
+			border-top: 1px solid #33261a;
+			flex-wrap: wrap;
+		}
+		.pile-strip__label {
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #8a745a;
+			flex: none;
+		}
+		.pile-strip__spines {
+			display: flex;
+			align-items: flex-end;
+			gap: 9px;
+			flex: 1 1 auto;
+		}
+		.pile-strip__link {
+			font-size: 12.5px;
+			flex: none;
+		}
+
+		/* A book in flight that nothing is counting. */
+		.offdevice {
+			margin-top: 18px;
+			font-size: 12.5px;
+			color: #8a745a;
+			line-height: 1.5;
 		}
 
 		/* Currently reading */

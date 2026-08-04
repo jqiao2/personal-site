@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../lib/auth';
-import { getBook, updateBook } from '../../../lib/book-queries';
+import { getBook, mergeBook, updateBook } from '../../../lib/book-queries';
 import { json, apiError } from '../../../lib/http';
 import { getWork } from '../../../lib/openlibrary';
 
@@ -12,19 +12,44 @@ export const prerender = false;
 // Everything else on the page is derived from page turns. These are not:
 //
 //   to-read   put it on / take it off the pile
+//   start     began it away from the Kindle, which has no page turns to prove it
+//   unstart   undo that
 //   finish    call it done before the last page — endnotes, sources, appendices
 //   unfinish  undo that
 //   give-up   stop on purpose, which is not the same as drifting away from it
 //   resume    undo that (a page turn does it too, and usually first)
 //   private   hide it from the public shelf without losing the reading
 //   match     link it to an Open Library work and fix the displayed title
+//   merge     the Kindle filed this book twice; fold its row into this one
 //
-// One route rather than seven: they are all a patch of one row, and the shapes
-// differ only in which columns they null out.
+// One route rather than ten: they are all a patch of one row, and the shapes
+// differ only in which columns they null out. `merge` is the exception that
+// proves it — it touches two rows and so hands off to SQL (migration 0025).
 
-type Action = 'to-read' | 'finish' | 'unfinish' | 'give-up' | 'resume' | 'private' | 'match';
+type Action =
+	| 'to-read'
+	| 'start'
+	| 'unstart'
+	| 'finish'
+	| 'unfinish'
+	| 'give-up'
+	| 'resume'
+	| 'private'
+	| 'match'
+	| 'merge';
 
-const ACTIONS: Action[] = ['to-read', 'finish', 'unfinish', 'give-up', 'resume', 'private', 'match'];
+const ACTIONS: Action[] = [
+	'to-read',
+	'start',
+	'unstart',
+	'finish',
+	'unfinish',
+	'give-up',
+	'resume',
+	'private',
+	'match',
+	'merge',
+];
 
 interface MatchBody {
 	olKey?: unknown;
@@ -65,10 +90,33 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 
 	try {
 		switch (action) {
-			case 'to-read':
+			case 'to-read': {
 				// A toggle, so the current state decides. A book with sessions is
 				// past the pile — the pile is for books that have not been opened.
-				await updateBook(id, { added_at: book.added_at ? null : now });
+				//
+				// `addedAt` is the undo path: the pile page hands back the timestamp it
+				// rendered, so putting a book back does not relabel a June intention as
+				// today's. Owner-only and bounded to the past — a future date would
+				// sort above everything and describe a decision not yet made.
+				const restore = text(body.addedAt);
+				const parsed = restore ? Date.parse(restore) : NaN;
+				const addedAt =
+					!book.added_at && Number.isFinite(parsed) && parsed <= Date.now()
+						? new Date(parsed).toISOString()
+						: now;
+				await updateBook(id, { added_at: book.added_at ? null : addedAt });
+				break;
+			}
+
+			case 'start':
+				// A decision, like gave_up_at, and only meaningful while there are no
+				// page turns: the first synced session answers the same question with
+				// evidence, and book_manual_reads drops the book at that point.
+				await updateBook(id, { started_at: now, gave_up_at: null });
+				break;
+
+			case 'unstart':
+				await updateBook(id, { started_at: null });
 				break;
 
 			case 'finish':
@@ -94,6 +142,23 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 			case 'private':
 				await updateBook(id, { is_public: !book.is_public });
 				break;
+
+			case 'merge': {
+				const sourceId = Number(body.sourceId);
+				if (!Number.isInteger(sourceId) || sourceId <= 0) {
+					return apiError('sourceId is required', 400);
+				}
+				if (sourceId === id) return apiError('cannot merge a book into itself', 400);
+
+				// Owner view: the source is a row the sync created and may well be
+				// private. A missing one means the page is stale, not that anything is
+				// wrong with the request.
+				const source = await getBook(sourceId, true);
+				if (!source) return apiError('source book not found', 404);
+
+				await mergeBook(id, sourceId);
+				break;
+			}
 
 			case 'match': {
 				const m = body as MatchBody;
