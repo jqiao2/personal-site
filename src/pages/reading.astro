@@ -69,6 +69,10 @@ const metrics = [
 
 const spineStyle = (b: BookView) => `width:${b.spineWidth}px; height:${SPINE_HEIGHT}px`;
 const fillStyle = (b: BookView) => `height:${b.spineFill}px`;
+// Every book on the shelf is a page of its own. The spine is the strongest tie
+// between the two views, so it links as well as the title does — but it is the
+// same destination, so it stays out of the tab order and off the a11y tree.
+const bookHref = (b: BookView) => `/reading/book/${b.id}`;
 
 // A heatmap with no reading in it has no scale to place the legend against, so
 // both the view toggle and the grid stay out of the way until there is something
@@ -120,11 +124,15 @@ const hasActivity = days.length > 0;
 							<div class="stack">
 								{current.map((b) => (
 									<article class="book">
-										<div class="spine" style={spineStyle(b)}>
-											<div class="spine__fill" style={fillStyle(b)} />
-										</div>
+										<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
+											<div class="spine" style={spineStyle(b)}>
+												<div class="spine__fill" style={fillStyle(b)} />
+											</div>
+										</a>
 										<div class="book__main">
-											<h3 class="book__title">{b.main}</h3>
+											<h3 class="book__title">
+												<a class="book__link" href={bookHref(b)}>{b.main}</a>
+											</h3>
 											{b.sub && <div class="book__sub">{b.sub}</div>}
 											{b.author && <div class="book__author">{b.author}</div>}
 
@@ -180,11 +188,15 @@ const hasActivity = days.length > 0;
 							</div>
 							{setAside.map((b) => (
 								<div class="row">
-									<div class="spine" style={spineStyle(b)}>
-										<div class="spine__fill" style={fillStyle(b)} />
-									</div>
+									<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
+										<div class="spine" style={spineStyle(b)}>
+											<div class="spine__fill" style={fillStyle(b)} />
+										</div>
+									</a>
 									<div class="row__main">
-										<div class="row__title">{b.main}</div>
+										<div class="row__title">
+											<a class="book__link" href={bookHref(b)}>{b.main}</a>
+										</div>
 										<div class="row__meta">{b.asideMeta}</div>
 									</div>
 									<div class="row__bar">
@@ -349,11 +361,15 @@ const hasActivity = days.length > 0;
 							<Fragment>
 								{finished.map((b) => (
 									<div class="row row--done" data-finished-year={String(b.finishedYear)}>
-										<div class="spine" style={spineStyle(b)}>
-											<div class="spine__fill" style={fillStyle(b)} />
-										</div>
+										<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
+											<div class="spine" style={spineStyle(b)}>
+												<div class="spine__fill" style={fillStyle(b)} />
+											</div>
+										</a>
 										<div class="row__main">
-											<div class="row__title row__title--lg">{b.main}</div>
+											<div class="row__title row__title--lg">
+												<a class="book__link" href={bookHref(b)}>{b.main}</a>
+											</div>
 											<div class="row__meta">{b.finishedMeta}</div>
 										</div>
 										<div class="row__when">
@@ -607,6 +623,23 @@ const hasActivity = days.length > 0;
 			border: 1px solid #45341f;
 			overflow: hidden;
 			background-image: repeating-linear-gradient(135deg, #33261a 0 6px, #2a1c0c 6px 12px);
+			transition:
+				border-color 0.14s ease,
+				box-shadow 0.14s ease;
+		}
+		.spine-link {
+			flex: none;
+			display: block;
+		}
+		.spine-link:hover .spine {
+			border-color: #cfa452;
+			box-shadow: 0 0 0 3px rgba(207, 164, 82, 0.16);
+		}
+		.book__link {
+			color: inherit;
+		}
+		.book__link:hover {
+			color: #ecc87c;
 		}
 		.spine__fill {
 			position: absolute;
