@@ -71,6 +71,13 @@ const autoNote =
 
 const years = [...new Set(finished.map((b) => b.finishedYear))].sort((a, b) => b - a);
 
+// The shelf opens on this year — what you have read lately is the question the
+// section usually answers, and a decade of back catalogue above it buries that.
+// A year with nothing finished in it yet (every January, and any fallow one)
+// would open on an empty list saying so, so those fall back to All.
+const thisYear = Number(todayDay.slice(0, 4));
+const defaultYear = years.includes(thisYear) ? String(thisYear) : 'all';
+
 const metrics = [
 	{ value: formatNumber(stats.current_streak), label: 'Current streak' },
 	{ value: formatNumber(stats.longest_streak), label: 'Longest streak' },
@@ -355,11 +362,19 @@ const hasActivity = days.length > 0;
 						{
 							years.length > 1 && (
 								<div class="pills">
-									<button type="button" class="pill pill--on" data-year="all">
+									<button
+										type="button"
+										class:list={['pill', defaultYear === 'all' && 'pill--on']}
+										data-year="all"
+									>
 										All
 									</button>
 									{years.map((y) => (
-										<button type="button" class="pill" data-year={String(y)}>
+										<button
+											type="button"
+											class:list={['pill', defaultYear === String(y) && 'pill--on']}
+											data-year={String(y)}
+										>
 											{y}
 										</button>
 									))}
@@ -372,7 +387,11 @@ const hasActivity = days.length > 0;
 						finished.length > 0 ? (
 							<Fragment>
 								{finished.map((b) => (
-									<div class="row row--done" data-finished-year={String(b.finishedYear)}>
+									<div
+										class="row row--done"
+										data-finished-year={String(b.finishedYear)}
+										hidden={defaultYear !== 'all' && String(b.finishedYear) !== defaultYear}
+									>
 										<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
 											<div class:list={['spine', !b.tracked && 'spine--untracked']} style={spineStyle(b)}>
 												<div class="spine__fill" style={fillStyle(b)} />
