@@ -20,7 +20,7 @@ export const prerender = false;
 //   resume    undo that (a page turn does it too, and usually first)
 //   private   hide it from the public shelf without losing the reading
 //   match     link it to an Open Library work and fix the displayed title
-//   isbn      the same, resolved from the ISBN we already hold, no search
+//   isbn      the same, resolved from an ISBN — the stored one, or one sent
 //   merge     the Kindle filed this book twice; fold its row into this one
 //
 // One route rather than ten: they are all a patch of one row, and the shapes
@@ -168,17 +168,36 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				// search endpoint — which is the point: Open Library's search is a
 				// Solr cluster that falls over regularly, while the key lookups this
 				// uses stay up through those outages.
-				if (!book.isbn) return apiError('no ISBN on file for this book', 400);
+				// An ISBN in the body replaces the stored one. The import records
+				// whichever edition was logged, which is sometimes an audiobook or a
+				// foreign printing that Open Library files somewhere else entirely —
+				// so the number has to be correctable, and correcting it is the same
+				// gesture as matching on it.
+				const supplied = text(body.isbn);
+				const isbn = supplied ? supplied.replace(/[^0-9Xx]/g, '').toUpperCase() : book.isbn;
+				if (!isbn) return apiError('no ISBN on file for this book', 400);
+				if (supplied && isbn.length !== 10 && isbn.length !== 13) {
+					return apiError('an ISBN is 10 or 13 digits', 400);
+				}
 
 				let edition;
 				try {
-					edition = await lookupIsbn(book.isbn);
+					edition = await lookupIsbn(isbn);
 				} catch (e) {
 					return apiError(e instanceof Error ? e.message : 'Open Library lookup failed', 502);
 				}
-				if (!edition) return apiError('Open Library has no record of that ISBN', 404);
+
+				if (!edition) {
+					// The number is still worth keeping: it is a fact about the book that
+					// was just asserted by hand, and Open Library's catalogue grows. What
+					// failed was the lookup, and the message says so rather than implying
+					// the ISBN was rejected.
+					if (supplied && isbn !== book.isbn) await updateBook(id, { isbn });
+					return apiError('Open Library has no record of that ISBN', 404);
+				}
 
 				await updateBook(id, {
+					...(isbn === book.isbn ? {} : { isbn }),
 					ol_key: edition.key,
 					// Titles are deliberately untouched. Open Library's are often
 					// miscased ("The power broker: Robert Moses and the fall of New
