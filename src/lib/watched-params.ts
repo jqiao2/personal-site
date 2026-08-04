@@ -1,3 +1,4 @@
+import { siteYear } from './day';
 import { isMatchMode, isWatchedSort, type WatchedQuery } from './films';
 
 /**
@@ -95,7 +96,7 @@ function releaseBound(raw: string | null): number | undefined {
 	if (raw == null) return undefined;
 	const n = Number(raw);
 	if (!Number.isFinite(n)) return undefined;
-	const ceiling = new Date().getFullYear() + 5;
+	const ceiling = siteYear() + 5;
 	return Math.min(ceiling, Math.max(RELEASE_FLOOR, Math.round(n)));
 }
 
