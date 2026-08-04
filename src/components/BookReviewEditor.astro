@@ -778,8 +778,16 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			paintGroup('br-focus', state.focus ? [state.focus] : []);
 			paintGroup('br-moods', state.moods);
 			paintGroup('br-tones', state.tones);
-			moodCount.textContent = state.moods.length ? `${state.moods.length} of 10 selected` : 'none yet';
-			toneCount.textContent = state.tones.length ? `${state.tones.length} of 13 selected` : 'none yet';
+			// Counted from the rendered buttons, not written down: the vocabularies
+			// are defined once in book-queries.ts and have already grown once.
+			const moodTotal = modal!.querySelectorAll('#br-moods button').length;
+			const toneTotal = modal!.querySelectorAll('#br-tones button').length;
+			moodCount.textContent = state.moods.length
+				? `${state.moods.length} of ${moodTotal} selected`
+				: 'none yet';
+			toneCount.textContent = state.tones.length
+				? `${state.tones.length} of ${toneTotal} selected`
+				: 'none yet';
 			clearMoods.hidden = state.moods.length === 0;
 			clearTones.hidden = state.tones.length === 0;
 

@@ -207,6 +207,16 @@ export interface BookPageView {
 	/** "Translated by Ken Liu" — credits, printed under the byline, never in it. */
 	contributorLine: string | null;
 	sourceTitle: string;
+	/**
+	 * The full stored title, and whether it is already a hand-made correction.
+	 *
+	 * Open Library's titles are often miscased ("The power broker: Robert Moses
+	 * and the fall of New York"), so the match panel must not prefill over a
+	 * title someone has already fixed — that is the exact work migration 0022
+	 * exists to keep.
+	 */
+	fullTitle: string;
+	titleIsCorrected: boolean;
 	matched: boolean;
 	coverUrl: string | null;
 	hue: string;
@@ -426,6 +436,16 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	const matched = !!book.ol_key;
 	const lovedAny = reviews.some((r) => r.loved);
 
+	// Finished by hand *and* demonstrably short of the end — the endnotes case the
+	// manual finish exists for. A hand-marked finish with no sessions behind it
+	// (an import, a book read before the Kindle) is just finished.
+	const stoppedShort =
+		book.finished_by_hand &&
+		days.length > 0 &&
+		knowsTotal &&
+		furthest > 0 &&
+		furthest / total! < FINISHED_PROGRESS;
+
 	// "Ken Liu (Translator)" reads as a database row. Grouped by role it reads as
 	// a credit — and the translator is the one that matters, so it goes first and
 	// the rest fall in behind it in whatever order they arrived.
@@ -619,8 +639,13 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		railFacts.push({ k: 'Last read', v: lastDay ? ago(lastDay, todayDay) : '—' });
 		railFacts.push({ k: 'Time on it', v: formatDuration(totalSeconds) });
 	} else if (isFinished) {
-		railFacts.push({ k: 'Time read', v: formatDuration(totalSeconds) });
-		railFacts.push({ k: 'Days read', v: plural(days.length, 'day') });
+		// Only when there is reading behind them. A book finished before the Kindle
+		// existed, or imported from another tracker, would otherwise report "0m"
+		// and "0 days" — measurements of our records rather than of the reading.
+		if (days.length > 0) {
+			railFacts.push({ k: 'Time read', v: formatDuration(totalSeconds) });
+			railFacts.push({ k: 'Days read', v: plural(days.length, 'day') });
+		}
 		if (reviews.length > 1) railFacts.push({ k: 'Reads', v: String(reviews.length) });
 	}
 
@@ -706,6 +731,8 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		authorLine: authors.join(' & '),
 		contributorLine,
 		sourceTitle: book.source_title,
+		fullTitle: book.title,
+		titleIsCorrected: book.title !== book.source_title,
 		matched,
 		coverUrl: book.cover_url,
 		hue: bookHue(book.title),
@@ -770,14 +797,13 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 					? formatDayLong(lastDay)
 					: null
 			: null,
-		// The by-hand note explains stopping short of the last page. A book with no
-		// pages on file never had a last page to stop short of, so the flag stays
-		// true in the database (it says who set finished_at) and stays out of here.
-		byHand: book.finished_by_hand && !noPageData,
-		stoppedLine:
-			book.finished_by_hand && knowsTotal
-				? `Stopped at page ${formatNumber(furthest)} of ${formatNumber(total!)}.`
-				: null,
+		// "Called done by hand" explains stopping short of the last page, so it
+		// needs reading data showing you did. The flag stays true in the database
+		// either way — there it records who set finished_at — but a book imported
+		// from another tracker has it set with no sessions behind it, and a book
+		// you marked done on its final page did not stop short of anything.
+		byHand: stoppedShort,
+		stoppedLine: stoppedShort ? `Stopped at page ${formatNumber(furthest)} of ${formatNumber(total!)}.` : null,
 		addedLine:
 			shelf === 'toread' && book.added_at
 				? `Added ${formatDay(zonedDay(book.added_at))} · ${ago(zonedDay(book.added_at), todayDay)}`

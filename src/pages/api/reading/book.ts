@@ -115,13 +115,19 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				const pages = Number(m.pages);
 				const title = text(m.title);
 
+				// The picker asks for -M, which is 180px wide and right for a 38px
+				// thumbnail. The rail renders the cover at 236 and would upscale it,
+				// so the size stored is the large one. Same image, same id — Open
+				// Library serves the variants off one path.
+				const cover = text(m.coverUrl)?.replace(/-M\.jpg$/, '-L.jpg') ?? null;
+
 				await updateBook(id, {
 					ol_key: olKey,
 					// display_* rather than title/authors: sync overwrites those on
 					// every push (0022), and this correction has to survive it.
 					display_title: title,
 					display_authors: text(m.authors),
-					cover_url: text(m.coverUrl),
+					cover_url: cover,
 					first_published: work.firstPublished ?? (Number.isFinite(year) ? String(year) : null),
 					description: work.description,
 					genres: work.genres,

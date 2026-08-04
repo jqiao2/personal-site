@@ -84,13 +84,21 @@ function paragraphs(raw: unknown): string[] {
 }
 
 /**
- * Subjects, thinned to something printable.
+ * Subjects, thinned to the few that read as genres.
  *
- * Open Library subjects run from "Fiction" to "New York (N.Y.) -- Politics and
- * government -- 1951-" and there are often fifty of them. Anything with a
- * subdivision dash or an accession-style number is catalogue apparatus rather
- * than a genre, and the bare "Fiction"/"Nonfiction" pair is displayed as the
- * kind chip instead, so it is dropped from this list.
+ * Open Library's subject list is a library catalogue, not a shelf label. The
+ * real list for The Power Broker is fourteen entries and includes
+ * "Na9085.m68 c37 1974", "974.7/04/0924 b", "Moses, robert, 1888-1981" and
+ * "New york (n.y.), history" — call numbers, a person as a heading, and
+ * compound subject headings with their subdivisions comma-joined.
+ *
+ * So the test is well-formedness rather than meaning: a genre chip is a short
+ * phrase, and anything carrying a comma, a parenthesis, a subdivision dash or a
+ * number is apparatus that only reads as a genre if you are a cataloguer. Some
+ * noise still gets through ("Group processes") — the alternative is a
+ * hand-maintained vocabulary, which is a bigger promise than four chips are
+ * worth. The bare Fiction/Nonfiction pair is dropped because it is displayed
+ * separately as the kind.
  */
 function subjects(raw: unknown): string[] {
 	if (!Array.isArray(raw)) return [];
@@ -99,7 +107,8 @@ function subjects(raw: unknown): string[] {
 	for (const value of raw as unknown[]) {
 		if (typeof value !== 'string') continue;
 		const s = value.trim();
-		if (!s || s.length > 32 || s.includes('--') || /\d{3}/.test(s)) continue;
+		if (!s || s.length > 28) continue;
+		if (/[,()[\]/]|--|\d/.test(s)) continue;
 		if (/^(fiction|non-?fiction)$/i.test(s)) continue;
 		const key = s.toLowerCase();
 		if (seen.has(key)) continue;

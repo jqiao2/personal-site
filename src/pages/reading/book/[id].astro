@@ -581,7 +581,15 @@ const spines = Array.from({ length: 18 }, () => ({
 		{/* ============ MATCH PANEL (owner) ============ */}
 		{
 			isOwner && (
-				<div class="modal" id="match-modal" data-source-title={v.sourceTitle} data-book-id={v.id} hidden>
+				<div
+					class="modal"
+					id="match-modal"
+					data-source-title={v.sourceTitle}
+					data-book-id={v.id}
+					data-corrected-title={v.titleIsCorrected ? v.fullTitle : undefined}
+					data-corrected-author={v.authorLine || undefined}
+					hidden
+				>
 					<div class="modal__backdrop" data-match-close />
 					<div class="modal__panel" role="dialog" aria-modal="true" aria-labelledby="match-title">
 						<div class="modal__head">
@@ -609,7 +617,7 @@ const spines = Array.from({ length: 18 }, () => ({
 
 							<div data-match-confirm hidden>
 								<div class="picked">
-									<div class="picked__thumb" id="picked-thumb"></div>
+									<div class="thumb" id="picked-thumb"></div>
 									<div class="picked__main">
 										<div class="picked__title" id="picked-title"></div>
 										<div class="picked__meta" id="picked-meta"></div>
@@ -1952,7 +1960,15 @@ const spines = Array.from({ length: 18 }, () => ({
 		flex-direction: column;
 		margin-top: 12px;
 	}
-	.result {
+
+	/*
+	 * The result rows are built in JS, so they never receive the scoping
+	 * attribute Astro stamps on markup and a plain `.result {}` here would not
+	 * match one of them. `:global()` on the descendant drops that requirement;
+	 * the `.modal` ancestor is real markup and still scoped, so nothing here
+	 * escapes this page.
+	 */
+	.modal :global(.result) {
 		display: flex;
 		gap: 14px;
 		align-items: center;
@@ -1965,11 +1981,11 @@ const spines = Array.from({ length: 18 }, () => ({
 		font-family: 'Archivo', sans-serif;
 		width: 100%;
 	}
-	.result:hover {
+	.modal :global(.result:hover) {
 		background: #2c2013;
 		border-color: #45341f;
 	}
-	.thumb {
+	.modal :global(.thumb) {
 		width: 38px;
 		height: 56px;
 		flex: none;
@@ -1983,32 +1999,32 @@ const spines = Array.from({ length: 18 }, () => ({
 			rgba(0, 0, 0, 0.16) 6px 12px
 		);
 	}
-	.result__main {
+	.modal :global(.result__main) {
 		flex: 1;
 		min-width: 0;
 	}
-	.result__title {
+	.modal :global(.result__title) {
 		font-family: 'Newsreader', serif;
 		font-size: 16.5px;
 		color: #f2e6cd;
 		line-height: 1.25;
 	}
-	.result__author {
+	.modal :global(.result__author) {
 		font-size: 12px;
 		color: #a68f6e;
 		margin-top: 4px;
 	}
-	.result__side {
+	.modal :global(.result__side) {
 		flex: none;
 		text-align: right;
 	}
-	.result__year {
+	.modal :global(.result__year) {
 		font-family: 'Newsreader', serif;
 		font-size: 17px;
 		color: #cfa452;
 		line-height: 1;
 	}
-	.result__pages {
+	.modal :global(.result__pages) {
 		font-size: 11px;
 		color: #75603f;
 		margin-top: 5px;
@@ -2245,10 +2261,18 @@ const spines = Array.from({ length: 18 }, () => ({
 			return div;
 		}
 
+		// Open Library's cataloguing is inconsistently cased — "The power broker:
+		// Robert Moses and the fall of New York" — so a title that has already
+		// been corrected by hand wins over the one the edition arrives with.
+		// There is nothing to preserve on an unmatched book, where the stored
+		// title is the EPUB's filename and anything is an improvement.
+		const correctedTitle = matchModal.dataset.correctedTitle || null;
+		const correctedAuthor = matchModal.dataset.correctedAuthor || null;
+
 		function pick(result: Result) {
 			picked = result;
-			editTitle.value = result.title;
-			editAuthor.value = result.author;
+			editTitle.value = correctedTitle ?? result.title;
+			editAuthor.value = correctedAuthor ?? result.author;
 			document.getElementById('picked-title')!.textContent = result.title;
 			document.getElementById('picked-meta')!.textContent = [
 				result.author,
@@ -2277,9 +2301,11 @@ const spines = Array.from({ length: 18 }, () => ({
 			}
 			const { results } = (await res.json()) as { results: Result[] };
 			list.replaceChildren();
-			meta.textContent = results.length
-				? `${results.length} editions on Open Library — the year and page count are how you tell them apart`
-				: 'Nothing on Open Library matches that. Try the author alone, or leave it unmatched — the reading log works without it.';
+			meta.textContent = !results.length
+				? 'Nothing on Open Library matches that. Try the author alone, or leave it unmatched — the reading log works without it.'
+				: results.length === 1
+					? 'One edition on Open Library.'
+					: `${results.length} editions on Open Library — the year and page count are how you tell them apart`;
 
 			for (const result of results) {
 				const row = document.createElement('button');

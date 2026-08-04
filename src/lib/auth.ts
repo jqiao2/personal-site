@@ -96,8 +96,33 @@ async function isValidToken(token: string | undefined): Promise<boolean> {
 	return safeEqual(sig, expected);
 }
 
+/**
+ * Owner without a login, when and only when this is a local dev server.
+ *
+ * Almost the entire site is owner-gated — the log composer, the watchlist
+ * toggles, the whole right-hand half of a book page — so a dev server that
+ * treats you as a visitor can only ever exercise the small public part of what
+ * is being built. Logging in to check a button is friction on every restart, in
+ * every worktree.
+ *
+ * This cannot reach production, and not by convention: `import.meta.env.DEV` is
+ * substituted by Vite at transform time, so in any built bundle this function
+ * begins `if (!false) return false` and the rest is dead code the minifier
+ * removes. There is no environment variable Vercel could be given that turns it
+ * back on, because the branch is not in the deployed file at all.
+ *
+ * Set `OWNER_DEV=0` in .env to opt out and browse the dev server as a stranger
+ * — which is the only way to check what a visitor is not supposed to see.
+ */
+function isDevOwner(): boolean {
+	if (!import.meta.env.DEV) return false;
+	const flag = import.meta.env.OWNER_DEV;
+	return flag !== '0' && flag !== 'false';
+}
+
 /** True if the request carries a valid owner session cookie. */
 export function requireOwner(cookies: AstroCookies): Promise<boolean> {
+	if (isDevOwner()) return Promise.resolve(true);
 	return isValidToken(cookies.get(COOKIE_NAME)?.value);
 }
 
