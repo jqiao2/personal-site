@@ -147,7 +147,7 @@ const spines = Array.from({ length: 18 }, () => ({
 								{v.lovedAny && <span class="status__heart" title="You loved this">♥</span>}
 							</div>
 							{
-								v.knowsTotal ? (
+								v.showProgress ? (
 									<Fragment>
 										<div class="track">
 											<div class="track__bar" style={`width:${v.barWidth}%`} />
@@ -157,10 +157,12 @@ const spines = Array.from({ length: 18 }, () => ({
 								) : (
 									<Fragment>
 										<div class="status__pages">{v.railPageLine}</div>
-										<div class="status__note">
-											No page count on file, so there is no percentage and the automatic finish will
-											never fire.
-										</div>
+										{!v.knowsTotal && (
+											<div class="status__note">
+												No page count on file, so there is no percentage and the automatic
+												finish will never fire.
+											</div>
+										)}
 									</Fragment>
 								)
 							}

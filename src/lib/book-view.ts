@@ -241,6 +241,12 @@ export interface BookPageView {
 	statusLabel: string | null;
 	statusNote: string | null;
 	knowsTotal: boolean;
+	/**
+	 * Whether to draw the progress track at all. A page count is not enough — a
+	 * book being read on paper has one and has no position in it, and an empty
+	 * bar under it would claim a stall rather than an absence of counting.
+	 */
+	showProgress: boolean;
 	percent: string | null;
 	barWidth: number;
 	spineFill: number;
@@ -320,6 +326,10 @@ export function resolveShelf(book: BookRow, todayDay: string): Shelf {
 		// added to the pile, read, and finished without a device ever seeing it.
 		if (book.finished_at) return 'finished';
 		if (book.gave_up_at) return 'gaveup';
+		// Started by hand — on paper, or anywhere the Kindle is not. Checked after
+		// the endings and before the pile: it is the one state between them that
+		// no page turn will ever prove.
+		if (book.started_at) return 'reading';
 		return book.added_at ? 'toread' : 'none';
 	}
 
@@ -411,7 +421,8 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	 * is missing rather than zero. Guards the places that would otherwise print
 	 * "0m" and "0 days" beside a book that took someone a fortnight.
 	 */
-	const noPageData = days.length === 0 && (isFinished || shelf === 'gaveup');
+	const noPageData =
+		days.length === 0 && (isFinished || shelf === 'gaveup' || book.started_at !== null);
 
 	const total = book.total_pages;
 	const knowsTotal = !!total && total > 0;
@@ -658,6 +669,15 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 				action: 'finish',
 			});
 			quietActions.push({ label: 'Give up on it', hint: 'An ending, not a failure', action: 'give-up' });
+			// Only for a start that was declared rather than measured. A book with
+			// page turns behind it cannot be un-started: the sessions happened.
+			if (book.started_at && days.length === 0) {
+				quietActions.push({
+					label: 'Not started after all',
+					hint: book.added_at ? 'Back onto the to-read pile' : 'Undo the hand-set start',
+					action: 'unstart',
+				});
+			}
 		} else if (shelf === 'gaveup') {
 			quietActions.push({
 				label: 'Picked it back up',
@@ -774,15 +794,22 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 					? `Stopped on purpose${book.gave_up_at ? ` on ${formatDay(zonedDay(book.gave_up_at))}` : ''}. One page turn puts it back in progress by itself.`
 					: null,
 		knowsTotal,
+		showProgress: knowsTotal && !noPageData,
 		percent,
 		barWidth: Math.max(1.5, pctNum),
 		spineFill: knowsTotal ? Math.round((pctNum / 100) * 280) : 0,
-		railPageLine: !knowsTotal
-			? `page ${formatNumber(furthest)} · total unknown`
-			: `${shelf === 'gaveup' ? 'Gave up at page ' : 'page '}${formatNumber(furthest)} of ${formatNumber(total!)} · ${percent}`,
+		railPageLine: noPageData
+			? knowsTotal
+				? `${formatNumber(total!)} pages · none of them counted`
+				: 'no page count on file'
+			: !knowsTotal
+				? `page ${formatNumber(furthest)} · total unknown`
+				: `${shelf === 'gaveup' ? 'Gave up at page ' : 'page '}${formatNumber(furthest)} of ${formatNumber(total!)} · ${percent}`,
 		railFacts,
 		autoNote: noPageData
-			? 'Read away from the Kindle, so there are no page turns behind this — the dates and the rating are the whole record.'
+			? inProgress
+				? 'Being read away from the Kindle, so nothing here is counting. A page turn from the device would take over.'
+				: 'Read away from the Kindle, so there are no page turns behind this — the dates and the rating are the whole record.'
 			: shelf === 'reading'
 				? 'Logged automatically by the Kindle, one page turn at a time.'
 				: shelf === 'aside'

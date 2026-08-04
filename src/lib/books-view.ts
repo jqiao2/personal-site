@@ -15,6 +15,7 @@ import {
 	CURRENTLY_READING_DAYS,
 	type BookProgress,
 	type HeatmapDay,
+	type ManualRead,
 	type OfflineRead,
 } from './books-queries';
 
@@ -142,6 +143,12 @@ export interface BookView {
 	/** "99.8%", or null when progress is unknown. */
 	percent: string | null;
 	facts: BookFact[];
+	/**
+	 * Set only for a book in flight that the Kindle knows nothing about, where it
+	 * replaces the progress bar. Null everywhere else — a tracked book's progress
+	 * is drawn, not described.
+	 */
+	untrackedNote: string | null;
 	readTime: string;
 	firstDay: string;
 	lastDay: string;
@@ -233,6 +240,7 @@ export function toBookView(book: BookProgress, todayDay = today()): BookView {
 			: `page ${formatNumber(furthest)}`,
 		percent: progress === null ? null : formatPercent(progress),
 		facts,
+		untrackedNote: null,
 		readTime: formatDuration(seconds),
 		firstDay,
 		lastDay,
@@ -300,6 +308,7 @@ export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
 		pagesLabel: '—',
 		percent: null,
 		facts: [],
+		untrackedNote: null,
 		readTime: '—',
 		firstDay,
 		lastDay,
@@ -307,6 +316,49 @@ export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
 		finishedDate: formatMonth(finishedDay),
 		finishedYear: Number(finishedDay.slice(0, 4)),
 		finishedMeta: meta.join(' · '),
+		asideMeta: '',
+	};
+}
+
+/**
+ * A book started away from the Kindle, in the shape the shelf renders.
+ *
+ * Same principle as toOfflineView: every page-derived field is empty rather than
+ * zero. A 0% bar next to a book that is genuinely being read would say the
+ * reading had stalled, when what is true is that nothing is counting it — so the
+ * card carries a line saying that instead of a bar saying nothing.
+ */
+export function toManualView(book: ManualRead, todayDay = today()): BookView {
+	const { main, sub } = splitTitle(book.title);
+	const startedDay = zonedDay(book.started_at);
+	const days = daysBetween(startedDay, todayDay);
+
+	return {
+		id: book.id,
+		done: false,
+		tracked: false,
+		main,
+		sub,
+		author: book.authors,
+		progress: null,
+		spineWidth: spineWidth(book.total_pages),
+		spineFill: 0,
+		pagesLabel: '—',
+		percent: null,
+		facts: [
+			{ k: 'Started', v: formatDay(startedDay) },
+			{ k: 'On it', v: days <= 0 ? 'since today' : plural(days, 'day') },
+			{ k: 'Length', v: book.total_pages ? `${formatNumber(book.total_pages)} pages` : '—' },
+		],
+		untrackedNote: `Started ${formatDay(startedDay)}, away from the Kindle — no pages to count.`,
+		readTime: '—',
+		firstDay: startedDay,
+		lastDay: startedDay,
+		// Sorts by when it was started, alongside the tracked books' last page turn.
+		daysAgo: days,
+		finishedDate: formatMonth(startedDay),
+		finishedYear: Number(startedDay.slice(0, 4)),
+		finishedMeta: '',
 		asideMeta: '',
 	};
 }
@@ -330,13 +382,22 @@ export function buildShelf(
 	setAsideRaw: BookProgress[],
 	finishedRaw: BookProgress[],
 	offlineRaw: OfflineRead[] = [],
+	manualRaw: ManualRead[] = [],
 	todayDay = today(),
 ): Shelf {
 	const view = (b: BookProgress) => toBookView(b, todayDay);
 	const inFlight = [...currentRaw.map(view), ...setAsideRaw.map(view)];
 
 	return {
-		current: inFlight.filter((b) => !b.done && b.daysAgo <= CURRENTLY_READING_DAYS),
+		// Books started by hand join the tracked ones in date order rather than
+		// sitting in a block above or below them: they are being read now, which is
+		// the only thing this heading claims. They never go stale into "Set aside"
+		// — that is thirty days of Kindle silence, and there is no device here to
+		// be silent.
+		current: [
+			...manualRaw.map((b) => toManualView(b, todayDay)),
+			...inFlight.filter((b) => !b.done && b.daysAgo <= CURRENTLY_READING_DAYS),
+		].sort((a, b) => a.daysAgo - b.daysAgo),
 		setAside: inFlight.filter((b) => !b.done && b.daysAgo > CURRENTLY_READING_DAYS),
 		// Sorted by when reading stopped, so books promoted by progress interleave
 		// with hand-marked ones instead of being appended after them — and so books

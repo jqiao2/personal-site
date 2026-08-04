@@ -34,8 +34,32 @@ export interface OpenLibraryWork {
 	firstPublished: string | null;
 }
 
+/**
+ * How long to wait before giving up on Open Library.
+ *
+ * Not a nicety: a search that hangs never resolves, and the caller on the other
+ * end is a picker with a spinner in it. Observed in the wild — the same query
+ * that 503s in a second one minute will hold the connection open indefinitely
+ * the next. Better a clean failure the UI can offer to type around.
+ */
+const TIMEOUT_MS = 8000;
+
 async function getJson(url: string): Promise<unknown> {
-	const res = await fetch(url, { headers: { accept: 'application/json', 'user-agent': UA } });
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			headers: { accept: 'application/json', 'user-agent': UA },
+			signal: AbortSignal.timeout(TIMEOUT_MS),
+		});
+	} catch (e) {
+		// TimeoutError is what an aborted signal raises; anything else is DNS or a
+		// dropped connection. They read the same to a caller: no answer.
+		throw new Error(
+			e instanceof Error && e.name === 'TimeoutError'
+				? `Open Library did not answer within ${TIMEOUT_MS / 1000}s`
+				: 'Open Library could not be reached',
+		);
+	}
 	if (!res.ok) throw new Error(`Open Library returned ${res.status}`);
 	return res.json();
 }

@@ -77,6 +77,8 @@ export interface BookRow {
 	description: string[];
 	is_public: boolean;
 	added_at: string | null;
+	/** Set when reading began away from any device. See migration 0025. */
+	started_at: string | null;
 	finished_at: string | null;
 	finished_by_hand: boolean;
 	gave_up_at: string | null;
@@ -194,6 +196,20 @@ export async function updateBook(id: number, patch: Record<string, unknown>): Pr
 		.update({ ...patch, updated_at: new Date().toISOString() })
 		.eq('id', id);
 	if (error) throw new Error(`book update failed: ${error.message}`);
+}
+
+/**
+ * Fold the Kindle's row for a book into the hand-typed one and delete it.
+ *
+ * All of the work is in `merge_book` (migration 0025): five statements that have
+ * to land together, one of which frees a unique md5 for another to claim.
+ */
+export async function mergeBook(targetId: number, sourceId: number): Promise<void> {
+	const { error } = await supabaseAdmin.rpc('merge_book', {
+		p_target: targetId,
+		p_source: sourceId,
+	});
+	if (error) throw new Error(`merge failed: ${error.message}`);
 }
 
 export interface ReviewInput {

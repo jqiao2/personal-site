@@ -64,6 +64,47 @@ export interface OfflineRead {
 	reads: number;
 }
 
+/**
+ * A book on the to-read pile: intended, never opened. Almost nothing is known
+ * about it and that is not a defect — half the pile is typed in by hand, with a
+ * title and an author and no page count to draw a spine from.
+ */
+export interface PileBook {
+	id: number;
+	md5: string | null;
+	title: string;
+	authors: string | null;
+	subtitle: string | null;
+	series: string | null;
+	total_pages: number | null;
+	cover_url: string | null;
+	/** Open Library work key, or null for a book that was typed in. */
+	ol_key: string | null;
+	first_published: string | null;
+	kind: string | null;
+	is_public: boolean;
+	added_at: string;
+}
+
+/**
+ * A book being read away from any device — started by hand, no page turns.
+ *
+ * The complement of getCurrentlyReading, which can only see books the Kindle
+ * reported. Between them the "Currently reading" section holds every book in
+ * flight, measured or not.
+ */
+export interface ManualRead {
+	id: number;
+	title: string;
+	authors: string | null;
+	subtitle: string | null;
+	total_pages: number | null;
+	cover_url: string | null;
+	is_public: boolean;
+	added_at: string | null;
+	started_at: string;
+}
+
 export interface ReadingStats {
 	current_streak: number;
 	longest_streak: number;
@@ -189,6 +230,35 @@ export async function getOfflineReads(
 		rating: r.rating == null ? null : Number(r.rating),
 		reads: Number(r.reads ?? 0),
 	}));
+}
+
+/**
+ * The to-read pile, most recently added first.
+ *
+ * `book_pile` (migration 0025) is what decides membership: added, unopened, not
+ * started by hand, not finished. Nothing here re-checks any of that — a book
+ * leaves the pile by acquiring a session, which is a fact about another table.
+ */
+export async function getToRead(includePrivate = false): Promise<PileBook[]> {
+	let q = supabaseAdmin.from('book_pile').select('*').order('added_at', { ascending: false });
+	if (!includePrivate) q = q.eq('is_public', true);
+
+	const { data, error } = await q;
+	if (error) throw new Error(`to-read query failed: ${error.message}`);
+	return (data ?? []) as PileBook[];
+}
+
+/** Books started off-device, most recently started first. */
+export async function getManualReads(includePrivate = false): Promise<ManualRead[]> {
+	let q = supabaseAdmin
+		.from('book_manual_reads')
+		.select('*')
+		.order('started_at', { ascending: false });
+	if (!includePrivate) q = q.eq('is_public', true);
+
+	const { data, error } = await q;
+	if (error) throw new Error(`manual-reads query failed: ${error.message}`);
+	return (data ?? []) as ManualRead[];
 }
 
 /**
