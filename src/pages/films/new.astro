@@ -6,8 +6,6 @@ export const prerender = false;
 
 // Owner-only. Bounce to login (preserving intent) if not authenticated.
 if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?redirect=/films/new');
-
-const today = new Date().toISOString().slice(0, 10);
 ---
 
 <Layout title="Log a film" showTmdbFooter>
@@ -43,8 +41,9 @@ const today = new Date().toISOString().slice(0, 10);
 		</div>
 
 		<!-- Watched date -->
+		<!-- Defaulted from the browser's clock, not the server's UTC one. -->
 		<label class="field-label" for="date">Watched date</label>
-		<input type="date" id="date" value={today} />
+		<input type="date" id="date" />
 
 		<!-- Flags -->
 		<div class="flags">
@@ -268,6 +267,8 @@ const today = new Date().toISOString().slice(0, 10);
 </style>
 
 <script>
+	import { localDay } from '../../lib/day';
+
 	const IMG = 'https://image.tmdb.org/t/p/w92';
 
 	const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -288,6 +289,10 @@ const today = new Date().toISOString().slice(0, 10);
 	let tmdbId: number | null = null;
 	let rating: number | null = null;
 	let liked = false;
+
+	// Today where the user is. Filled here rather than server-side, where "today"
+	// would be UTC's — a day ahead of Eastern every evening.
+	el<HTMLInputElement>('date').value = localDay();
 
 	// --- TMDB search (debounced) ---
 	let timer: number | undefined;
@@ -412,6 +417,7 @@ const today = new Date().toISOString().slice(0, 10);
 		const payload = {
 			tmdbId,
 			watchedDate: el<HTMLInputElement>('date').value || null,
+			loggedDate: localDay(),
 			rating,
 			reviewText: el<HTMLTextAreaElement>('review').value,
 			rewatched: el<HTMLInputElement>('rewatch').checked,

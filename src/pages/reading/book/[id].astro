@@ -287,6 +287,8 @@ const spines = Array.from({ length: 18 }, () => ({
 					)
 				}
 
+				{v.contributorLine && <div class="credits">{v.contributorLine}</div>}
+
 				{
 					(v.metaBits.length > 0 || isOwner) && (
 						<div class="meta">
@@ -1287,6 +1289,14 @@ const spines = Array.from({ length: 18 }, () => ({
 	}
 	.byline__name:hover {
 		color: #ecc87c;
+	}
+	/* A step quieter than the byline and a step louder than the meta row: the
+	   translator is not the author, but for a book you read in translation they
+	   are half of why it reads the way it does. */
+	.credits {
+		font-size: 13px;
+		color: #8a745a;
+		margin-top: 6px;
 	}
 	.meta {
 		display: flex;

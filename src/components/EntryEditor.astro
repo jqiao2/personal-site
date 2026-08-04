@@ -54,13 +54,13 @@ const FORMAT_OPTIONS = [
 	'DCP',
 ];
 
-const today = new Date().toISOString().slice(0, 10);
+// No `today` here: the server's day is UTC's, which is a day ahead of the user
+// all evening. The client reads it off its own clock instead (see localDay).
 const config = {
 	mode,
 	logId,
 	redirect,
 	deleteRedirect,
-	today,
 	venueOptions,
 	formatOptions: FORMAT_OPTIONS,
 	tagOptions,
@@ -997,6 +997,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 </style>
 
 <script>
+	import { localDay } from '../lib/day';
+
 	// Owner-only. Astro always hoists this script; bail out when the modal isn't
 	// in the DOM (a non-owner viewing the page).
 	const modal = document.getElementById('ee-modal') as HTMLDivElement | null;
@@ -1027,7 +1029,6 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			logId: number | null;
 			redirect: string;
 			deleteRedirect: string;
-			today: string;
 			venueOptions: string[];
 			formatOptions: string[];
 			tagOptions: string[];
@@ -1108,7 +1109,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		let seed: Initial | null = cfg.initial;
 
 		let tmdbId: number | null = cfg.film?.tmdbId ?? null;
-		let date: string = cfg.initial?.date || cfg.today;
+		// Re-read on every open (seedForm), so a tab left sitting overnight still
+		// defaults to the day it actually is when the composer is next opened.
+		let date: string = cfg.initial?.date || localDay();
 		let rating: number | null = null;
 		let liked = false;
 		let rewatch = false;
@@ -1160,7 +1163,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			}
 		}
 		function openCal() {
-			const p = parseIso(date) ?? parseIso(cfg.today)!;
+			const p = parseIso(date) ?? parseIso(localDay())!;
 			calY = p[0];
 			calM = p[1] - 1;
 			renderCal();
@@ -1598,7 +1601,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		// composer (log mode).
 		function seedForm() {
 			const init = seed;
-			date = init?.date || cfg.today;
+			date = init?.date || localDay();
 			rating = init?.rating ?? null;
 			liked = init?.liked ?? false;
 			rewatch = init?.rewatch ?? false;
@@ -1697,6 +1700,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		// 'other' sends its free-text value as the medium; theater carries venue+format.
 		const payload = () => ({
 			watchedDate: date || null,
+			// The diary date (when the entry was made), from the user's own clock —
+			// the server would only be able to guess at it. Ignored by PATCH.
+			loggedDate: localDay(),
 			rating,
 			reviewText: reviewInput.value,
 			rewatched: rewatch,
