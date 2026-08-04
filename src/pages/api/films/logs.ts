@@ -22,7 +22,10 @@ export const GET: APIRoute = async ({ url }) => {
 // POST /api/films/logs  (owner only) — "log a film".
 // Always marks the film watched; creates a dated diary log only when the entry
 // has content (rating/like/rewatch/review/tags/friends). Returns { watchedOnly, logId }.
-// Body: { tmdbId, watchedDate?, rating?, reviewText?, rewatched?, liked?, tags?, friends? }
+// Body: { tmdbId, watchedDate?, loggedDate?, rating?, reviewText?, rewatched?,
+//         liked?, tags?, friends? }
+// `loggedDate` is the client's own calendar day — the diary date. Omitted, the
+// server falls back to the day in SITE_TZ.
 export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
@@ -45,6 +48,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 		const result = await logFilm({
 			tmdbId,
 			watchedDate: asDateString(body.watchedDate),
+			loggedDate: asDateString(body.loggedDate),
 			rating,
 			reviewText: asText(body.reviewText),
 			rewatched: Boolean(body.rewatched),

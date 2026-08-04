@@ -10,30 +10,28 @@
 // always "YYYY-MM-DD" and never a Date. Where arithmetic is needed the string is
 // parsed to UTC midnight, so a DST boundary can never add or drop an hour
 // mid-subtraction the way local-midnight Dates would.
+import { SITE_TZ, siteDay } from './day';
 import { CURRENTLY_READING_DAYS, type BookProgress, type HeatmapDay } from './reading-queries';
 
-/** The zone the stored day boundaries are measured in. Must match migration 0020. */
-export const READING_TZ = 'America/New_York';
+/**
+ * The zone the stored day boundaries are measured in. Must match migration 0020,
+ * which is why this one stays fixed rather than following the reader's clock the
+ * way the film composer's date does: a day here has to name the same bucket the
+ * SQL side already wrote.
+ */
+export const READING_TZ = SITE_TZ;
 
 const DAY_MS = 86_400_000;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// en-CA formats as YYYY-MM-DD, which is the shape the SQL side already uses.
-const dayFormat = new Intl.DateTimeFormat('en-CA', {
-	timeZone: READING_TZ,
-	year: 'numeric',
-	month: '2-digit',
-	day: '2-digit',
-});
-
 /** The local day an instant falls on, e.g. a `last_read_at` timestamptz. */
 export function zonedDay(when: string | Date): string {
-	return dayFormat.format(typeof when === 'string' ? new Date(when) : when);
+	return siteDay(when);
 }
 
 /** Today, in the reading timezone. */
 export function today(): string {
-	return zonedDay(new Date());
+	return siteDay();
 }
 
 function dayMs(day: string): number {
