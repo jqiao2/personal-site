@@ -15,12 +15,13 @@ export const PACING = ['Slow', 'Moderate', 'Fast', 'Page-Turner'] as const;
 export const FOCUS = ['Character-Driven', 'A bit of both', 'Plot-Driven'] as const;
 export const MOODS = [
 	'Cozy',
-	'Hopeful',
+	'Inspiring',
 	'Emotional',
 	'Funny',
 	'Dark',
-	'Suspenseful',
-	'Heartbreaking',
+	'Tense',
+	'Mysterious',
+	'Sad',
 	'Magical',
 	'Nostalgic',
 	'Bittersweet',
@@ -29,11 +30,12 @@ export const TONES = [
 	'Atmospheric',
 	'Immersive',
 	'Grounded',
+	'Informative',
 	'Dreamlike',
 	'Gritty',
 	'Gothic',
 	'Eerie',
-	'Expansive',
+	'Adventurous',
 	'Reflective',
 	'Cynical',
 	'Witty',
@@ -54,12 +56,16 @@ export const VOCABULARY: string[] = [...PACING, ...FOCUS, ...MOODS, ...TONES];
 export interface BookRow {
 	id: number;
 	md5: string | null;
+	/** As the source recorded it, digits only. A search key, not a unique one. */
+	isbn: string | null;
 	/** Corrected title where one exists, KOReader's otherwise. */
 	title: string;
 	authors: string | null;
 	/** What KOReader calls the file. Not for display — it's the identifier. */
 	source_title: string;
 	subtitle: string | null;
+	/** "Ken Liu (Translator)" — credits, kept out of the byline. */
+	contributors: string[];
 	series: string | null;
 	language: string | null;
 	total_pages: number | null;
@@ -127,6 +133,7 @@ export async function getBook(id: number, includePrivate = false): Promise<BookR
 	const row = data as Record<string, unknown>;
 	return {
 		...(row as unknown as BookRow),
+		contributors: (row.contributors as string[]) ?? [],
 		genres: (row.genres as string[]) ?? [],
 		description: (row.description as string[]) ?? [],
 		furthest_page: Number(row.furthest_page ?? 0),

@@ -204,6 +204,8 @@ export interface BookPageView {
 	series: string | null;
 	authors: string[];
 	authorLine: string;
+	/** "Translated by Ken Liu" — credits, printed under the byline, never in it. */
+	contributorLine: string | null;
 	sourceTitle: string;
 	matched: boolean;
 	coverUrl: string | null;
@@ -301,7 +303,15 @@ export interface BookPageInput {
  */
 export function resolveShelf(book: BookRow, todayDay: string): Shelf {
 	const lastDay = book.last_read_at ? zonedDay(book.last_read_at) : null;
-	if (!lastDay) return book.added_at ? 'toread' : 'none';
+	if (!lastDay) {
+		// No page turns is not the same as no reading. A book read on paper has
+		// nothing but the two dates and the rating, and those are enough to say
+		// which shelf it is on — checked before the pile, because a book can be
+		// added to the pile, read, and finished without a device ever seeing it.
+		if (book.finished_at) return 'finished';
+		if (book.gave_up_at) return 'gaveup';
+		return book.added_at ? 'toread' : 'none';
+	}
 
 	if (book.gave_up_at && zonedDay(book.gave_up_at) >= lastDay) return 'gaveup';
 
@@ -339,6 +349,44 @@ function readDates(from: string, to: string): string {
 	return `${formatDay(from)} → ${formatDay(to)}`;
 }
 
+/** Verbs for the roles worth printing, in the order they are printed. */
+const CONTRIBUTOR_ROLES: [string, string][] = [
+	['translator', 'Translated by'],
+	['illustrator', 'Illustrated by'],
+	['narrator', 'Narrated by'],
+	['editor', 'Edited by'],
+];
+
+/**
+ * "Ken Liu (Translator), Joel Martinsen (Translator)" → "Translated by Ken Liu
+ * & Joel Martinsen".
+ *
+ * Names with no role in brackets are dropped rather than guessed at. A StoryGraph
+ * export carries plenty of them — Frankenstein lists Lord Byron and Mary
+ * Wollstonecraft as bare names — and printing an unlabelled name under a byline
+ * reads as a claim about authorship that nothing here can support.
+ */
+function buildContributorLine(contributors: string[]): string | null {
+	const byRole = new Map<string, string[]>();
+	for (const entry of contributors) {
+		const parsed = entry.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+		if (!parsed) continue;
+		const role = parsed[2].trim().toLowerCase();
+		const name = parsed[1].trim();
+		if (!name) continue;
+		const names = byRole.get(role) ?? [];
+		// The export repeats a person under two roles; within one role it can also
+		// simply repeat them.
+		if (!names.includes(name)) names.push(name);
+		byRole.set(role, names);
+	}
+
+	const parts = CONTRIBUTOR_ROLES.filter(([role]) => byRole.has(role)).map(
+		([role, verb]) => `${verb} ${byRole.get(role)!.join(' & ')}`,
+	);
+	return parts.length ? parts.join(' · ') : null;
+}
+
 export function buildBookPage(input: BookPageInput): BookPageView {
 	const { book, days, highlights, isOwner } = input;
 	const todayDay = input.todayDay ?? today();
@@ -347,6 +395,13 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	const shelf = resolveShelf(book, todayDay);
 	const inProgress = shelf === 'reading' || shelf === 'aside' || shelf === 'gaveup';
 	const isFinished = shelf === 'finished';
+
+	/**
+	 * Read, but not on the device — so every figure this page normally leads with
+	 * is missing rather than zero. Guards the places that would otherwise print
+	 * "0m" and "0 days" beside a book that took someone a fortnight.
+	 */
+	const noPageData = days.length === 0 && (isFinished || shelf === 'gaveup');
 
 	const total = book.total_pages;
 	const knowsTotal = !!total && total > 0;
@@ -370,6 +425,11 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		.filter(Boolean);
 	const matched = !!book.ol_key;
 	const lovedAny = reviews.some((r) => r.loved);
+
+	// "Ken Liu (Translator)" reads as a database row. Grouped by role it reads as
+	// a credit — and the translator is the one that matters, so it goes first and
+	// the rest fall in behind it in whatever order they arrived.
+	const contributorLine = buildContributorLine(book.contributors ?? []);
 
 	// ---- pace and projection -------------------------------------------------
 	// Drawn from the last five weeks only. A book picked up again after a year
@@ -547,7 +607,15 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 
 	// ---- rail ----------------------------------------------------------------
 	const railFacts: Fact[] = [];
-	if (inProgress) {
+	if (noPageData) {
+		// The read's own dates are the only measurement there is. Where a tracked
+		// book reports how long it took, this reports when it happened.
+		const latestReview = reviews[0];
+		if (latestReview) {
+			railFacts.push({ k: 'Read', v: rangeLabel(latestReview.read_from, latestReview.read_to) });
+		}
+		if (reviews.length > 1) railFacts.push({ k: 'Reads', v: String(reviews.length) });
+	} else if (inProgress) {
 		railFacts.push({ k: 'Last read', v: lastDay ? ago(lastDay, todayDay) : '—' });
 		railFacts.push({ k: 'Time on it', v: formatDuration(totalSeconds) });
 	} else if (isFinished) {
@@ -636,6 +704,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		series: book.series,
 		authors,
 		authorLine: authors.join(' & '),
+		contributorLine,
 		sourceTitle: book.source_title,
 		matched,
 		coverUrl: book.cover_url,
@@ -647,7 +716,12 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		heroDotClass: `dot--${shelf}`,
 
 		metaBits,
-		missingLine: `It came in as a sideloaded EPUB, so all this page has is what the Kindle reported and what you read${missing.length ? `: ${missing.join(', ')}` : ''}.`,
+		// Two different absences, and saying "sideloaded EPUB" about a book that was
+		// never a file at all is the kind of wrong detail that makes a reader stop
+		// trusting the rest of the page.
+		missingLine: book.md5
+			? `It came in as a sideloaded EPUB, so all this page has is what the Kindle reported and what you read${missing.length ? `: ${missing.join(', ')}` : ''}.`
+			: `It was typed in rather than opened on a device, so all this page has is a title, an author and whatever you made of it${missing.length ? `: ${missing.join(', ')}` : ''}.`,
 		kind: book.kind,
 		genres: book.genres,
 		description: book.description,
@@ -680,8 +754,9 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 			? `page ${formatNumber(furthest)} · total unknown`
 			: `${shelf === 'gaveup' ? 'Gave up at page ' : 'page '}${formatNumber(furthest)} of ${formatNumber(total!)} · ${percent}`,
 		railFacts,
-		autoNote:
-			shelf === 'reading'
+		autoNote: noPageData
+			? 'Read away from the Kindle, so there are no page turns behind this — the dates and the rating are the whole record.'
+			: shelf === 'reading'
 				? 'Logged automatically by the Kindle, one page turn at a time.'
 				: shelf === 'aside'
 					? 'Nothing was decided here — the Kindle simply stopped sending page turns.'
@@ -695,7 +770,10 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 					? formatDayLong(lastDay)
 					: null
 			: null,
-		byHand: book.finished_by_hand,
+		// The by-hand note explains stopping short of the last page. A book with no
+		// pages on file never had a last page to stop short of, so the flag stays
+		// true in the database (it says who set finished_at) and stays out of here.
+		byHand: book.finished_by_hand && !noPageData,
 		stoppedLine:
 			book.finished_by_hand && knowsTotal
 				? `Stopped at page ${formatNumber(furthest)} of ${formatNumber(total!)}.`

@@ -4,6 +4,7 @@ import {
 	getCurrentlyReading,
 	getFinished,
 	getHeatmap,
+	getOfflineReads,
 	getSetAside,
 	getStats,
 } from '../lib/reading-queries';
@@ -28,11 +29,12 @@ export const prerender = false;
 
 const todayDay = today();
 
-const [stats, currentRaw, asideRaw, finishedRaw] = await Promise.all([
+const [stats, currentRaw, asideRaw, finishedRaw, offlineRaw] = await Promise.all([
 	getStats(),
 	getCurrentlyReading(),
 	getSetAside(),
 	getFinished(),
+	getOfflineReads(),
 ]);
 
 // One heatmap query covers both activity views: the spells need the days with
@@ -43,11 +45,21 @@ const heatmapDays = stats.first_day ? await getHeatmap(stats.first_day, todayDay
 const days = readDays(heatmapDays);
 const maxPages = Math.max(1, ...days.map((d) => d.pages));
 
-const { current, setAside, finished } = buildShelf(currentRaw, asideRaw, finishedRaw, todayDay);
+const { current, setAside, finished } = buildShelf(
+	currentRaw,
+	asideRaw,
+	finishedRaw,
+	offlineRaw,
+	todayDay,
+);
 
 // Which books a spell covers is answered from every public book, not just the
 // ones in flight — a spell three years ago was spent on something long finished.
-const shelf = [...current, ...setAside, ...finished];
+//
+// Tracked books only: a spell is a run of days the Kindle recorded, and a book
+// read on paper that merely overlaps those dates was not what those page turns
+// were spent on.
+const shelf = [...current, ...setAside, ...finished].filter((b) => b.tracked);
 const spells = buildSpells(days, shelf, maxPages);
 const heatmap = buildHeatmap(days, maxPages, todayDay);
 
@@ -98,8 +110,8 @@ const hasActivity = days.length > 0;
 				<header class="head">
 					<h1 class="head__title">Reading</h1>
 					<p class="head__note">
-						Logged automatically by the Kindle, one page turn at a time. Nothing here is
-						typed by hand.
+						Logged automatically by the Kindle, one page turn at a time. The older
+						entries, read on paper, carry a date and a rating and nothing else.
 					</p>
 				</header>
 
@@ -362,7 +374,7 @@ const hasActivity = days.length > 0;
 								{finished.map((b) => (
 									<div class="row row--done" data-finished-year={String(b.finishedYear)}>
 										<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
-											<div class="spine" style={spineStyle(b)}>
+											<div class:list={['spine', !b.tracked && 'spine--untracked']} style={spineStyle(b)}>
 												<div class="spine__fill" style={fillStyle(b)} />
 											</div>
 										</a>
@@ -373,7 +385,7 @@ const hasActivity = days.length > 0;
 											<div class="row__meta">{b.finishedMeta}</div>
 										</div>
 										<div class="row__when">
-											<div class="row__time">{b.readTime}</div>
+											<div class:list={['row__time', !b.tracked && 'row__time--none']}>{b.readTime}</div>
 											<div class="row__date">{b.finishedDate}</div>
 										</div>
 									</div>
@@ -390,7 +402,9 @@ const hasActivity = days.length > 0;
 
 				<p class="foot">
 					Some books are read privately. They are counted in the totals and streaks above
-					but never listed.
+					but never listed. Books read on paper are the other way round — listed, with a
+					dashed spine and no time against them, and left out of every number up top,
+					which measures the Kindle rather than the reading.
 				</p>
 			</div>
 		</div>
@@ -649,6 +663,17 @@ const hasActivity = days.length > 0;
 			background: #cfa452;
 			opacity: 0.9;
 		}
+		/* Read, but not measured. The spine fills — the book was finished — while
+		   the flat, unhatched face says the width and the fill are both standing in
+		   for numbers nobody has. */
+		.spine--untracked {
+			background-image: none;
+			background: #2a1c0c;
+			border-style: dashed;
+		}
+		.spine--untracked .spine__fill {
+			opacity: 0.35;
+		}
 
 		/* Currently reading */
 		.stack {
@@ -834,6 +859,11 @@ const hasActivity = days.length > 0;
 			font-size: 20px;
 			color: #cfa452;
 			line-height: 1;
+		}
+		/* An em dash where a duration goes, dimmed so it reads as an absence in
+		   the column rather than a value in it. */
+		.row__time--none {
+			color: #4b3a24;
 		}
 		.row__date {
 			font-size: 11px;
