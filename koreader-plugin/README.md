@@ -32,7 +32,7 @@ node scripts/reading-plugin-install.mjs --dest F:/
 Then eject and restart KOReader (exit to the launcher and back in).
 
 To do it by hand instead: copy the `readingsync.koplugin` folder into
-`koreader/plugins/`, then fill in **Tools → Reading sync**:
+`koreader/plugins/`, then fill in **Tools → More tools → Reading sync**:
 
 | Setting | Value |
 |---|---|
@@ -93,6 +93,10 @@ a day *before* the cursor rather than risk skipping a row.
 - **`HTTP 503: reading sync is not configured`** — the server has no
   `READING_SYNC_TOKEN` in its environment. Note that setting it is not enough on
   Vercel: the deployment has to postdate the variable, so add it *and* redeploy.
+- **No menu entry, but it is still syncing** — the plugin loaded and the menu
+  placement didn't, which are separate paths. `crash.log` should say
+  `menu id not found: readingsync`; if it doesn't, the entry is somewhere else
+  in the menu, prefixed `NEW:`.
 - **Nothing at all** — check `koreader/crash.log`; the plugin logs under
   `[readingsync]`.
 
