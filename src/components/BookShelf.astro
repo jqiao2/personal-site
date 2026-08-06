@@ -28,28 +28,20 @@ const { spines, emptyLine } = Astro.props;
 					spines.length > 0 ? (
 						spines.map((s) => (
 							<a
-								class:list={['spine', !s.foiled && 'spine--matte']}
+								class="spine"
 								href={s.href}
 								title={s.tooltip}
 								aria-label={s.aria}
 								data-spine
-								style={`--w:${s.width}px; --h:${s.height}px; --run:${s.runLength}px; --cloth:${s.cloth}; --foil:${s.foil}; --ts:${s.titleSize}px; --as:${s.authorSize}px`}
+								style={`--w:${s.width}px; --h:${s.height}px; --run:${s.runLength}px; --cloth:${s.cloth}; --foil:${s.foil}; --ts:${s.titleSize}px; --as:${s.authorSize}px; --lines:${s.titleLines}`}
 							>
 								<span class="spine__body">
 									<span class="spine__curve" />
-									{/*
-										Head and tail bands and the pair of rules between them, in
-										the binding's own foil. A book read on paper has none of
-										this — see ShelfSpine.foiled.
-									*/}
-									{s.foiled && (
-										<Fragment>
-											<span class="spine__band spine__band--head" />
-											<span class="spine__band spine__band--tail" />
-											<span class="spine__rule spine__rule--head" />
-											<span class="spine__rule spine__rule--tail" />
-										</Fragment>
-									)}
+									{/* Head and tail bands, and the pair of rules between them. */}
+									<span class="spine__band spine__band--head" />
+									<span class="spine__band spine__band--tail" />
+									<span class="spine__rule spine__rule--head" />
+									<span class="spine__rule spine__rule--tail" />
 									<span class="spine__type">
 										<span class="spine__title">{s.title}</span>
 										{s.showAuthor && (
@@ -295,16 +287,22 @@ const { spines, emptyLine } = Astro.props;
 		align-items: center;
 		padding: 0 2px;
 	}
+	/* A thick spine has room to letter the title across two or three lines, the
+	   way a real one does; a thin one gets a single line. --lines carries the
+	   count that fits, and the clamp puts an ellipsis on whatever overruns it. */
 	.spine__title {
 		flex: 0 1 auto;
 		min-width: 0;
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: var(--lines);
+		line-clamp: var(--lines);
 		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+		overflow-wrap: break-word;
 		font-family: 'Newsreader', serif;
 		font-weight: 500;
 		font-size: var(--ts);
-		line-height: 1.05;
+		line-height: 1.15;
 		letter-spacing: 0.1px;
 	}
 	.spine__sep {
@@ -314,11 +312,6 @@ const { spines, emptyLine } = Astro.props;
 		background: currentColor;
 		opacity: 0.5;
 		margin-left: auto;
-	}
-	/* Printed, not stamped: on a paper book the rule is ink on cloth rather than
-	   a line of foil, and it sits back accordingly. */
-	.spine--matte .spine__sep {
-		opacity: 0.24;
 	}
 	.spine__author {
 		flex: none;

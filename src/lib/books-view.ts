@@ -177,9 +177,10 @@ export interface BookView {
 	/** True once the book is done — see buildShelf for what counts. */
 	done: boolean;
 	/**
-	 * Whether the Kindle logged this book. False for a book read on paper, whose
-	 * every page-derived field below is a placeholder rather than a measurement —
-	 * the shelf says so rather than printing a plausible zero.
+	 * Whether there are recorded reading sessions behind this book. False for the
+	 * older entries, whose every page-derived field below is a placeholder rather
+	 * than a measurement — the page leaves those empty rather than printing a
+	 * plausible zero.
 	 */
 	tracked: boolean;
 	main: string;
@@ -202,7 +203,7 @@ export interface BookView {
 	percent: string | null;
 	facts: BookFact[];
 	/**
-	 * Set only for a book in flight that the Kindle knows nothing about, where it
+	 * Set only for a book in flight that the sync knows nothing about, where it
 	 * replaces the progress bar. Null everywhere else — a tracked book's progress
 	 * is drawn, not described.
 	 */
@@ -328,7 +329,7 @@ function readRange(from: string, to: string): string {
 }
 
 /**
- * A book read off-device, in the shape the finished shelf renders.
+ * A book with no recorded sessions, in the shape the finished shelf renders.
  *
  * Every page-derived field is a placeholder, and deliberately an empty one: no
  * percentage, no pages label, no time. The alternative — a 0%, a "0 pages", a
@@ -381,7 +382,7 @@ export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
 }
 
 /**
- * A book started away from the Kindle, in the shape the shelf renders.
+ * A book started by hand rather than by a sync, in the shape the shelf renders.
  *
  * Same principle as toOfflineView: every page-derived field is empty rather than
  * zero. A 0% bar next to a book that is genuinely being read would say the
@@ -416,7 +417,7 @@ export function toManualView(book: ManualRead, todayDay = today()): BookView {
 					: '—',
 			},
 		],
-		untrackedNote: `Started ${formatDay(startedDay)}, away from the Kindle — no pages to count.`,
+		untrackedNote: `Started ${formatDay(startedDay)} — nothing is counting the pages.`,
 		readTime: '—',
 		firstDay: startedDay,
 		lastDay: startedDay,
@@ -458,8 +459,8 @@ export function buildShelf(
 		// Books started by hand join the tracked ones in date order rather than
 		// sitting in a block above or below them: they are being read now, which is
 		// the only thing this heading claims. They never go stale into "Set aside"
-		// — that is thirty days of Kindle silence, and there is no device here to
-		// be silent.
+		// — that is thirty days of silence from the sync, and nothing is syncing
+		// these to fall silent.
 		current: [
 			...manualRaw.map((b) => toManualView(b, todayDay)),
 			...inFlight.filter((b) => !b.done && b.daysAgo <= CURRENTLY_READING_DAYS),
@@ -467,8 +468,9 @@ export function buildShelf(
 		setAside: inFlight.filter((b) => !b.done && b.daysAgo > CURRENTLY_READING_DAYS),
 		// Sorted by when reading stopped, so books promoted by progress interleave
 		// with hand-marked ones instead of being appended after them — and so books
-		// read on paper sit in date order among the tracked ones rather than in a
-		// second list underneath, which would sort the shelf by device.
+		// with no sessions behind them sit in date order among the tracked ones
+		// rather than in a second list underneath, which would sort the shelf by
+		// how well each entry happens to be recorded.
 		finished: [
 			...finishedRaw.map(view),
 			...inFlight.filter((b) => b.done),

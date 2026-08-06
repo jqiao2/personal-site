@@ -79,9 +79,9 @@ const pileLabel = `${pileRaw.length} book${pileRaw.length === 1 ? '' : 's'} →`
 // Which books a spell covers is answered from every public book, not just the
 // ones in flight — a spell three years ago was spent on something long finished.
 //
-// Tracked books only: a spell is a run of days the Kindle recorded, and a book
-// read on paper that merely overlaps those dates was not what those page turns
-// were spent on.
+// Books with recorded sessions only: a spell is a run of days that were actually
+// logged, and a book with no sessions behind it that merely overlaps those dates
+// was not what those page turns were spent on.
 const shelf = [...current, ...setAside, ...finished].filter((b) => b.tracked);
 const spells = buildSpells(days, shelf, maxPages);
 const heatmap = buildHeatmap(days, maxPages, todayDay);
@@ -140,8 +140,8 @@ const hasActivity = days.length > 0;
 				<header class="head">
 					<h1 class="head__title">Books</h1>
 					<p class="head__note">
-						Logged automatically by the Kindle, one page turn at a time. The older
-						entries, read on paper, carry a date and a rating and nothing else.
+						Logged automatically, one page turn at a time. The older entries carry a
+						date and a rating and nothing else.
 					</p>
 				</header>
 
@@ -180,12 +180,12 @@ const hasActivity = days.length > 0;
 
 											{/*
 												A book nobody is counting gets the sentence instead of the
-												bar. An empty track would read as a stalled Kindle book,
+												bar. An empty track would read as a stalled book,
 												which is the opposite of what is true.
 											*/}
 											{
 												b.untrackedNote ? (
-													<div class="offdevice">{b.untrackedNote}</div>
+													<div class="untracked-note">{b.untrackedNote}</div>
 												) : (
 													<div class="progress">
 														{b.progress !== null && (
@@ -224,7 +224,7 @@ const hasActivity = days.length > 0;
 									{days.length ? 'Between books right now.' : 'No reading logged yet.'}
 								</div>
 								<div class="empty__sub">
-									The next page turn on the Kindle starts a new entry here.
+									The next page turn starts a new entry here.
 								</div>
 							</div>
 						)
@@ -419,12 +419,6 @@ const hasActivity = days.length > 0;
 					<BookShelf spines={done} emptyLine="Nothing finished yet." />
 				</section>
 
-				<p class="foot">
-					Some books are read privately. They are counted in the totals and streaks above
-					but never listed. Books read on paper are the other way round — shelved, in a
-					plain unlettered binding with no time against them, and left out of every
-					number up top, which measures the Kindle rather than the reading.
-				</p>
 			</div>
 		</div>
 	</div>
@@ -672,19 +666,8 @@ const hasActivity = days.length > 0;
 			background: #cfa452;
 			opacity: 0.9;
 		}
-		/* Read, but not measured. The spine fills — the book was finished — while
-		   the flat, unhatched face says the width and the fill are both standing in
-		   for numbers nobody has. */
-		.spine--untracked {
-			background-image: none;
-			background: #2a1c0c;
-			border-style: dashed;
-		}
-		.spine--untracked .spine__fill {
-			opacity: 0.35;
-		}
 		/* A book in flight that nothing is counting. */
-		.offdevice {
+		.untracked-note {
 			margin-top: 18px;
 			font-size: 12.5px;
 			color: #8a745a;
@@ -1029,14 +1012,6 @@ const hasActivity = days.length > 0;
 		.none[hidden] {
 			display: none;
 		}
-		.foot {
-			font-size: 11.5px;
-			color: #8a745a;
-			padding-top: 4px;
-			line-height: 1.6;
-			margin: 0;
-		}
-
 		@media (max-width: 640px) {
 			.tabs__link {
 				padding: 18px 10px 16px;
