@@ -986,12 +986,49 @@ const clientData = JSON.stringify({
 			else flash(url);
 		});
 
-		document.querySelector('[data-download]')?.addEventListener('click', async () => {
+		// ---- saving the card ----
+		// On a phone a downloaded file goes to Files, not Photos, and Photos is where
+		// a picture you meant to post belongs. The share sheet's "Save Image" is the
+		// only way in, so on touch devices the render is handed to navigator.share.
+		// Desktop keeps the plain download: a share sheet there is a detour.
+		const download = document.querySelector<HTMLElement>('[data-download]');
+		const shareFile =
+			matchMedia('(pointer: coarse)').matches &&
+			typeof navigator.share === 'function' &&
+			(() => {
+				try {
+					return !!navigator.canShare?.({
+						files: [new File([new Blob()], 'card.png', { type: 'image/png' })],
+					});
+				} catch {
+					return false;
+				}
+			})();
+		if (shareFile && download) download.textContent = 'Save image';
+
+		// Rendering can outlast the tap that started it, and Safari won't open the
+		// sheet without a live user gesture. Keeping the render means the second tap
+		// can share immediately, inside its own gesture.
+		let rendered: { state: string; file: File } | null = null;
+		const renderState = (): string => `${data.key}|${aspect}|${showLikes}`;
+
+		download?.addEventListener('click', async () => {
 			const height = data.geometry[aspect].height;
+			const name = `film-log-${data.key}.png`;
+
+			if (shareFile && rendered?.state === renderState()) {
+				try {
+					await navigator.share({ files: [rendered.file] });
+				} catch (error) {
+					if ((error as DOMException)?.name !== 'AbortError') flash('Could not open the share sheet');
+				}
+				return;
+			}
+
 			flash(`Rendering ${data.width}×${height}…`);
 			try {
-				const { toPng } = await import('html-to-image');
-				const url = await toPng(card, {
+				const { toBlob } = await import('html-to-image');
+				const blob = await toBlob(card, {
 					width: data.width,
 					height,
 					backgroundColor: '#1c0d0e',
@@ -1005,11 +1042,30 @@ const clientData = JSON.stringify({
 					// satisfy — so bust the URL and get a fresh one.
 					cacheBust: true,
 				});
-				const name = `film-log-${data.key}.png`;
+				if (!blob) throw new Error('nothing was rendered');
+
+				if (shareFile) {
+					const file = new File([blob], name, { type: 'image/png' });
+					rendered = { state: renderState(), file };
+					try {
+						await navigator.share({ files: [file] });
+					} catch (error) {
+						const kind = (error as DOMException)?.name;
+						// The sheet needs a gesture that hasn't gone stale; the render is
+						// kept, so tapping again opens it straight away.
+						if (kind === 'NotAllowedError') flash('Ready — tap Save image again');
+						else if (kind !== 'AbortError') flash('Could not open the share sheet');
+					}
+					return;
+				}
+
+				const url = URL.createObjectURL(blob);
 				const link = document.createElement('a');
 				link.href = url;
 				link.download = name;
 				link.click();
+				// Revoked late: some browsers are still reading the blob when click() returns.
+				setTimeout(() => URL.revokeObjectURL(url), 10_000);
 				flash(`Saved ${name}`);
 			} catch {
 				flash('Could not render the image — posters may have blocked the export');
