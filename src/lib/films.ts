@@ -3,6 +3,7 @@
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
 import { siteDay, siteYear } from './day';
+import { monthOf, shiftMonth, type MonthWatch } from './month-view';
 import {
 	extractCreditFacts,
 	getMovieDetails,
@@ -614,6 +615,96 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		movie: row.movies,
 		tags: (row.log_tags ?? []).map((lt) => lt.tags.name).sort(),
 	};
+}
+
+/**
+ * Every watch in one "YYYY-MM" month, for the share card.
+ *
+ * Reads `logs` rather than the `logs_with_movie` view because the card needs
+ * `runtime`, which the view doesn't carry (CREATE OR REPLACE VIEW can only
+ * append columns, and this is the only caller that wants it). Rows with no
+ * `watched_date` are excluded rather than falling back to `created_at` the way
+ * the diary list does — a watch with no day has no cell to sit in.
+ */
+export async function listMonthWatches(key: string): Promise<MonthWatch[]> {
+	const { data, error } = await supabasePublic
+		.from('logs')
+		.select(
+			'id, watched_date, rating, liked, rewatched, created_at, ' +
+				'movies(tmdb_id, title, release_year, poster_path, runtime)',
+		)
+		.gte('watched_date', `${key}-01`)
+		.lt('watched_date', `${shiftMonth(key, 1)}-01`)
+		.is('deleted_at', null)
+		.order('watched_date', { ascending: true })
+		.order('created_at', { ascending: true })
+		.order('id', { ascending: true });
+	if (error) throw new Error(`listMonthWatches failed: ${error.message}`);
+
+	const rows = (data ?? []) as unknown as {
+		id: number;
+		watched_date: string;
+		rating: number | null;
+		liked: boolean;
+		rewatched: boolean;
+		created_at: string;
+		movies: {
+			tmdb_id: number;
+			title: string;
+			release_year: number | null;
+			poster_path: string | null;
+			runtime: number | null;
+		} | null;
+	}[];
+
+	// A log always has a movie (movie_id is not null), but the embed is typed as
+	// nullable — drop anything that came back without one rather than render a
+	// blank print.
+	return rows.flatMap((row) =>
+		row.movies
+			? [
+					{
+						id: row.id,
+						watched_date: row.watched_date,
+						rating: row.rating,
+						liked: row.liked,
+						rewatched: row.rewatched,
+						created_at: row.created_at,
+						tmdb_id: row.movies.tmdb_id,
+						title: row.movies.title,
+						release_year: row.movies.release_year,
+						poster_path: row.movies.poster_path,
+						runtime: row.movies.runtime,
+					},
+				]
+			: [],
+	);
+}
+
+/**
+ * Watches per "YYYY-MM", for the month picker's counts. Pages explicitly because
+ * PostgREST caps an unbounded select at 1000 rows, which a few years of diary
+ * would quietly exceed — and a truncated count reads as "no films that month".
+ */
+export async function countWatchesByMonth(): Promise<Record<string, number>> {
+	const PAGE = 1000;
+	const counts: Record<string, number> = {};
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('logs')
+			.select('watched_date')
+			.not('watched_date', 'is', null)
+			.is('deleted_at', null)
+			.order('watched_date', { ascending: true })
+			.range(offset, offset + PAGE - 1);
+		if (error) throw new Error(`countWatchesByMonth failed: ${error.message}`);
+		const rows = (data ?? []) as { watched_date: string }[];
+		for (const row of rows) {
+			const key = monthOf(row.watched_date);
+			counts[key] = (counts[key] ?? 0) + 1;
+		}
+		if (rows.length < PAGE) return counts;
+	}
 }
 
 /**

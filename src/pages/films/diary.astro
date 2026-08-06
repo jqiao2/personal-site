@@ -93,6 +93,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 					{isOwner && (
 						<button type="button" class="log-btn" data-open-entry-editor>+ Log film</button>
 					)}
+					<a class="month-link" href="/films/month">Month in film →</a>
 				</div>
 				<div class="titleblock__stats">
 					<div class="stat">
@@ -233,6 +234,16 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.log-btn:hover {
 			background: #f0d488;
+		}
+		.month-link {
+			font-size: 13px;
+			color: #a2857a;
+			border-bottom: 1px solid transparent;
+			padding-bottom: 2px;
+		}
+		.month-link:hover {
+			color: #f4e8d1;
+			border-bottom-color: #d9b45a;
 		}
 		.titleblock__stats {
 			display: flex;
