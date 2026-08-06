@@ -17,10 +17,12 @@ import {
 	CARD_WIDTH,
 	MONTH_ABBR,
 	WEEKDAYS,
+	aspectBySlug,
 	buildCells,
 	geometries,
 	monthKey,
 	monthLabel,
+	monthQuery,
 	parseMonthKey,
 	shiftMonth,
 	summarise,
@@ -36,11 +38,17 @@ const parsed = parseMonthKey(key);
 // /films/month is a reasonable thing to type, and so is a half-remembered date.
 if (!parsed) return Astro.redirect(`/films/month/${siteDay().slice(0, 7)}`, 302);
 
+// The card's settings ride in the URL rather than in memory, so stepping to the
+// next month keeps them and a copied link opens the same card.
+const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+const showLikes = Astro.url.searchParams.get('likes') !== '0';
+const query = monthQuery(aspect, showLikes);
+
 const [watches, counts] = await Promise.all([listMonthWatches(key), countWatchesByMonth()]);
 
 const rows = weekRows(key);
 const geometry = geometries(rows);
-const initial = geometry[ASPECTS[0].id];
+const initial = geometry[aspect.id];
 const cells = buildCells(key, watches);
 const summary = summarise(key, watches);
 const label = monthLabel(key);
@@ -59,7 +67,15 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 
 // Everything the controls need, handed over as data rather than imported —
 // month-view pulls in the TMDB module, which has no business in a client bundle.
-const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
+const clientData = JSON.stringify({
+	key,
+	width: CARD_WIDTH,
+	counts,
+	geometry,
+	aspect: aspect.slug,
+	showLikes,
+	slugs: Object.fromEntries(ASPECTS.map((a) => [a.id, a.slug])),
+});
 ---
 
 <FilmLayout title={`${label} in film — Jason's film log`}>
@@ -75,20 +91,28 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 			<div class="titleblock">
 				<h1>Month in film</h1>
 				<span class="dims" data-dims>
-					{CARD_WIDTH} × {ASPECTS[0].height} · {ASPECTS[0].id}
+					{CARD_WIDTH} × {aspect.height} · {aspect.id}
 				</span>
 			</div>
 
 			<!-- Controls: screen only, never part of the exported card. -->
 			<div class="controls">
 				<div class="stepper" data-picker>
-					<a class="step" href={`/films/month/${shiftMonth(key, -1)}`} aria-label="Previous month"
-						>←</a
+					<a
+						class="step"
+						href={`/films/month/${shiftMonth(key, -1)}${query}`}
+						data-month-link={`/films/month/${shiftMonth(key, -1)}`}
+						aria-label="Previous month">←</a
 					>
 					<button class="step step--month" type="button" data-picker-toggle>
 						<span>{label}</span><span class="step__caret">▾</span>
 					</button>
-					<a class="step" href={`/films/month/${shiftMonth(key, 1)}`} aria-label="Next month">→</a>
+					<a
+						class="step"
+						href={`/films/month/${shiftMonth(key, 1)}${query}`}
+						data-month-link={`/films/month/${shiftMonth(key, 1)}`}
+						aria-label="Next month">→</a
+					>
 
 					<div class="picker" hidden data-picker-panel>
 						<div class="picker__head">
@@ -101,7 +125,7 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 								pickerMonths.map((m) => (
 									<a
 										class:list={['picker__month', m.current && 'is-on']}
-										href={`/films/month/${m.key}`}
+										href={`/films/month/${m.key}${query}`}
 										data-picker-month
 									>
 										<span class="picker__abbr">{m.abbr}</span>
@@ -115,9 +139,9 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 
 				<div class="aspects">
 					{
-						ASPECTS.map((a, i) => (
+						ASPECTS.map((a) => (
 							<button
-								class:list={['aspect', i === 0 && 'is-on']}
+								class:list={['aspect', a.id === aspect.id && 'is-on']}
 								type="button"
 								data-aspect={a.id}
 								data-height={a.height}
@@ -128,7 +152,7 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 					}
 				</div>
 
-				<button class="likes" type="button" data-likes aria-pressed="true">
+				<button class="likes" type="button" data-likes aria-pressed={String(showLikes)}>
 					<span class="switch"><span class="switch__knob"></span></span>
 					<span>Show likes</span>
 				</button>
@@ -144,7 +168,7 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 				<div class="viewport" data-viewport>
 					<div class="scaler">
 						<div
-							class="card"
+							class:list={['card', !showLikes && 'no-likes']}
 							data-card
 							style={`--cell:${initial.cell}px; --card-h:${initial.height}px; --grid-w:${initial.grid}px`}
 						>
@@ -176,7 +200,6 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 																	class="art"
 																	src={film.poster}
 																	alt=""
-																	crossorigin="anonymous"
 																	decoding="async"
 																/>
 															)}
@@ -192,7 +215,6 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 																	class="art"
 																	src={cell.films[0].poster}
 																	alt={cell.films[0].title}
-																	crossorigin="anonymous"
 																	decoding="async"
 																/>
 															) : (
@@ -819,6 +841,11 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 		width: number;
 		counts: Record<string, number>;
 		geometry: Record<string, Geometry>;
+		/** Slug of the aspect the page was rendered with. */
+		aspect: string;
+		showLikes: boolean;
+		/** Aspect id ("4:5") to URL slug ("feed"). */
+		slugs: Record<string, string>;
 	}
 
 	const dataEl = document.querySelector('[data-month-data]');
@@ -826,7 +853,29 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
 	if (dataEl?.textContent && card && viewport) {
 		const data = JSON.parse(dataEl.textContent) as MonthData;
-		let aspect = Object.keys(data.geometry)[0];
+		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
+		let showLikes = data.showLikes;
+		const defaultSlug = data.slugs[Object.keys(data.geometry)[0]];
+
+		// ---- carry the settings across a month step ----
+		// Stepping months is a real navigation, so the aspect and the likes switch
+		// live in the query string: every month link gets rewritten as they change,
+		// and the address bar follows so a reload or a copied link comes back to the
+		// same card. Mirrors monthQuery() in month-view.ts.
+		function query(): string {
+			const parts: string[] = [];
+			if (data.slugs[aspect] !== defaultSlug) parts.push(`fmt=${data.slugs[aspect]}`);
+			if (!showLikes) parts.push('likes=0');
+			return parts.length ? `?${parts.join('&')}` : '';
+		}
+		function syncLinks(): void {
+			const q = query();
+			for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-month-link]'))
+				link.href = `${link.dataset.monthLink}${q}`;
+			for (const tile of document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]'))
+				tile.href = `${tile.pathname}${q}`;
+			history.replaceState(null, '', `${location.pathname}${q}`);
+		}
 
 		// ---- fit the 1080px artboard to whatever room the column has ----
 		// Capped at 0.62 so the card doesn't outgrow the controls above it on a
@@ -869,6 +918,7 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
+				syncLinks();
 			});
 		}
 		// The viewport sizes itself from --card-h too; seed it from the card's own.
@@ -877,9 +927,10 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 		// ---- likes ----
 		const likes = document.querySelector<HTMLElement>('[data-likes]');
 		likes?.addEventListener('click', () => {
-			const on = likes.getAttribute('aria-pressed') !== 'true';
-			likes.setAttribute('aria-pressed', String(on));
-			card.classList.toggle('no-likes', !on);
+			showLikes = !showLikes;
+			likes.setAttribute('aria-pressed', String(showLikes));
+			card.classList.toggle('no-likes', !showLikes);
+			syncLinks();
 		});
 
 		// ---- month picker ----
@@ -897,7 +948,7 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 			tiles.forEach((tile, i) => {
 				const id = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
 				const count = data.counts[id] ?? 0;
-				tile.href = `/films/month/${id}`;
+				tile.href = `/films/month/${id}${query()}`;
 				tile.classList.toggle('is-on', id === data.key);
 				const countEl = tile.querySelector('.picker__count');
 				if (countEl) countEl.textContent = count ? `${count} ${count === 1 ? 'film' : 'films'}` : '—';
@@ -925,7 +976,8 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 
 		// ---- share ----
 		document.querySelector('[data-copy]')?.addEventListener('click', () => {
-			const url = `${location.origin}/films/month/${data.key}`;
+			// With the settings on it, so what opens is the card that was on screen.
+			const url = `${location.origin}/films/month/${data.key}${query()}`;
 			if (navigator.clipboard)
 				navigator.clipboard.writeText(url).then(
 					() => flash(`Link copied · ${url}`),
@@ -946,6 +998,12 @@ const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
 					pixelRatio: 1,
 					// The card sits inside a scaled wrapper; the clone must not inherit it.
 					style: { transform: 'none' },
+					// The posters are drawn by <img> without CORS, so what's in the cache is
+					// a response with no Access-Control-Allow-Origin on it (TMDB only sends
+					// that header when asked, and sets a year of max-age). Inlining them for
+					// the export needs a real CORS fetch, which that cached copy can't
+					// satisfy — so bust the URL and get a fresh one.
+					cacheBust: true,
 				});
 				const name = `film-log-${data.key}.png`;
 				const link = document.createElement('a');

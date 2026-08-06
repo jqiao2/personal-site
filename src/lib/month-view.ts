@@ -247,16 +247,37 @@ export function weekRows(key: string): number {
 
 export interface Aspect {
 	id: string;
+	/** What it's called in a URL — the id has a colon in it. */
+	slug: string;
 	label: string;
 	height: number;
 }
 
 /** The three share sizes. All 1080 wide; only the height changes. */
 export const ASPECTS: readonly Aspect[] = [
-	{ id: '4:5', label: 'Feed', height: 1350 },
-	{ id: '1:1', label: 'Square', height: 1080 },
-	{ id: '9:16', label: 'Story', height: 1920 },
+	{ id: '4:5', slug: 'feed', label: 'Feed', height: 1350 },
+	{ id: '1:1', slug: 'square', label: 'Square', height: 1080 },
+	{ id: '9:16', slug: 'story', label: 'Story', height: 1920 },
 ];
+
+/** The aspect a `?fmt=` names, or the default for anything unrecognised. */
+export function aspectBySlug(slug: string | null): Aspect {
+	return ASPECTS.find((a) => a.slug === slug) ?? ASPECTS[0];
+}
+
+/**
+ * The card's settings as a query string, so stepping to another month keeps
+ * them — each step is a real navigation, and a copied link should reproduce the
+ * card that was on screen. Defaults are left out, so the plain URL stays clean.
+ *
+ * The client mirrors this when it rewrites the month links; keep the two in step.
+ */
+export function monthQuery(aspect: Aspect, showLikes: boolean): string {
+	const parts: string[] = [];
+	if (aspect.slug !== ASPECTS[0].slug) parts.push(`fmt=${aspect.slug}`);
+	if (!showLikes) parts.push('likes=0');
+	return parts.length ? `?${parts.join('&')}` : '';
+}
 
 export const CARD_WIDTH = 1080;
 const PAD = 46;
