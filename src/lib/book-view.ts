@@ -248,9 +248,9 @@ export interface BookPageView {
 	statusNote: string | null;
 	knowsTotal: boolean;
 	/**
-	 * Whether to draw the progress track at all. A page count is not enough — a
-	 * book being read on paper has one and has no position in it, and an empty
-	 * bar under it would claim a stall rather than an absence of counting.
+	 * Whether to draw the progress track at all. A page count is not enough — an
+	 * untracked book has one and has no position in it, and an empty bar under it
+	 * would claim a stall rather than an absence of counting.
 	 */
 	showProgress: boolean;
 	percent: string | null;
@@ -326,15 +326,15 @@ export interface BookPageInput {
 export function resolveShelf(book: BookRow, todayDay: string): Shelf {
 	const lastDay = book.last_read_at ? zonedDay(book.last_read_at) : null;
 	if (!lastDay) {
-		// No page turns is not the same as no reading. A book read on paper has
-		// nothing but the two dates and the rating, and those are enough to say
-		// which shelf it is on — checked before the pile, because a book can be
-		// added to the pile, read, and finished without a device ever seeing it.
+		// No page turns is not the same as no reading. A book read without the
+		// tracking on has nothing but the two dates and the rating, and those are
+		// enough to say which shelf it is on — checked before the pile, because a
+		// book can be added to the pile, read and finished with nothing logging it.
 		if (book.finished_at) return 'finished';
 		if (book.gave_up_at) return 'gaveup';
-		// Started by hand — on paper, or anywhere the Kindle is not. Checked after
-		// the endings and before the pile: it is the one state between them that
-		// no page turn will ever prove.
+		// Started by hand, with nothing syncing pages for it. Checked after the
+		// endings and before the pile: it is the one state between them that no
+		// page turn will ever prove.
 		if (book.started_at) return 'reading';
 		return book.added_at ? 'toread' : 'none';
 	}
@@ -820,8 +820,8 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		railFacts,
 		autoNote: noPageData
 			? inProgress
-				? 'Being read away from the Kindle, so nothing here is counting. A page turn from the device would take over.'
-				: 'Read away from the Kindle, so there are no page turns behind this — the dates and the rating are the whole record.'
+				? 'Read without tracking, so nothing here is counting. A synced page turn would take over.'
+				: 'Read without tracking, so there are no page turns behind this — the dates and the rating are the whole record.'
 			: shelf === 'reading'
 				? 'Logged automatically by the Kindle, one page turn at a time.'
 				: shelf === 'aside'

@@ -45,8 +45,8 @@ export interface BookProgress {
 }
 
 /**
- * A finished book with no page turns behind it — read on paper, or before the
- * Kindle. Almost none of BookProgress applies: there is no furthest page, no
+ * A finished book with no page turns behind it — read before the sync existed,
+ * or with the tracking off. Almost none of BookProgress applies: no furthest page, no
  * time on it and no pace, and the only record of when it happened is the date
  * range on its review.
  */
@@ -256,7 +256,7 @@ export async function getToRead(includePrivate = false): Promise<PileBook[]> {
 	return (data ?? []) as PileBook[];
 }
 
-/** Books started off-device, most recently started first. */
+/** Books started by hand, with nothing syncing pages. Most recent first. */
 export async function getManualReads(includePrivate = false): Promise<ManualRead[]> {
 	let q = supabaseAdmin
 		.from('book_manual_reads')

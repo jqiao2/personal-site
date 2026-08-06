@@ -137,14 +137,28 @@ interface SpineType {
 	showAuthor: boolean;
 	/** Length of the rotated text run, i.e. the spine's height less its bands. */
 	runLength: number;
+	/** How many lines the title may break across before it truncates. */
+	titleLines: number;
+}
+
+/** Space across the spine for one line of title, with a little air around it. */
+const LINE_PITCH = 1.25;
+/** Past three, a spine has stopped being lettered and is carrying a paragraph. */
+const MAX_TITLE_LINES = 3;
+
+/** How many lines of a given size fit across a spine of a given width. */
+function fitLines(width: number, size: number): number {
+	return Math.max(1, Math.min(MAX_TITLE_LINES, Math.floor(width / (size * LINE_PITCH))));
 }
 
 /**
  * Type that fits the board it is printed on.
  *
- * Width picks the size, then one step down if the title would overrun the space
- * left after the author. Past that it truncates: a title set small enough to fit
- * in every case would be set too small to read in most of them.
+ * Width picks the size and, with it, how many lines the title can break across:
+ * a thick spine is lettered across two or three lines the way a real one is,
+ * while a thin one gets a single line and then an ellipsis. Only if the title
+ * overruns even that does the size step down once. A size small enough to fit
+ * every title in one line would be too small to read on most of them.
  */
 function spineType(width: number, height: number, title: string, author: string): SpineType {
 	const showAuthor = width >= 21 && author.length > 0;
@@ -154,28 +168,46 @@ function spineType(width: number, height: number, title: string, author: string)
 	let authorSize = Math.max(7.5, half(titleSize - 3.5));
 
 	const authorRun = showAuthor ? author.length * authorSize * 0.64 + 14 : 0;
-	if (title.length * titleSize * 0.46 > runLength - authorRun - 6) {
+	const run = runLength - authorRun - 6;
+
+	let titleLines = fitLines(width, titleSize);
+	if (title.length * titleSize * 0.46 > run * titleLines) {
 		titleSize = Math.max(9, titleSize - 1.5);
 		authorSize = Math.max(7.5, half(titleSize - 3.5));
+		// Smaller type may buy back a line on a spine that was one short of it.
+		titleLines = fitLines(width, titleSize);
 	}
 
-	return { titleSize, authorSize, showAuthor, runLength };
+	return { titleSize, authorSize, showAuthor, runLength, titleLines };
+}
+
+/**
+ * What a series or edition note adds in parentheses — "(Dune Chronicles, #1)",
+ * "(Penguin Classics)" — is catalogue apparatus rather than the book's name, and
+ * on a spine it crowds out the name itself. The tooltip keeps the whole title.
+ */
+function stripParentheticals(title: string): string {
+	// Innermost pairs first, repeatedly: one pass over a nested parenthetical
+	// would leave the outer pair behind as an empty "()".
+	let stripped = title;
+	for (;;) {
+		const next = stripped.replace(/\s*\([^()]*\)/g, '');
+		if (next === stripped) break;
+		stripped = next;
+	}
+	stripped = stripped.replace(/\s{2,}/g, ' ').trim();
+	// A title that is nothing but a parenthetical keeps what it had.
+	return stripped || title;
 }
 
 /** One spine, ready to render. Every field is a finished string or a number of px. */
 export interface ShelfSpine {
 	id: number;
 	href: string;
-	/** The main title — the subtitle is dropped, there is no room for it. */
+	/** The main title — the subtitle and any parentheses are dropped, no room. */
 	title: string;
 	surname: string;
 	showAuthor: boolean;
-	/**
-	 * False for a book read on paper, which gets a matte, unlettered binding. It
-	 * is the only thing an unfoiled spine means: an unknown page count is drawn
-	 * as an ordinary book rather than flagged.
-	 */
-	foiled: boolean;
 	tooltip: string;
 	/** The accessible name, since the spine's own lettering is a picture of text. */
 	aria: string;
@@ -185,6 +217,7 @@ export interface ShelfSpine {
 	foil: string;
 	titleSize: number;
 	authorSize: number;
+	titleLines: number;
 	runLength: number;
 }
 
@@ -195,7 +228,6 @@ interface SpineInput {
 	main: string;
 	author: string | null;
 	pages: number | null;
-	foiled: boolean;
 	/** The last clause of the tooltip: how long it has waited, or when it was read. */
 	tail: string;
 }
@@ -207,8 +239,9 @@ function toShelfSpine(book: SpineInput): ShelfSpine {
 	// different widths and break the one thing the width means.
 	const width = spineWidth(book.pages, null, REFERENCE_SPINE_HEIGHT);
 
+	const printed = stripParentheticals(book.main);
 	const author = spineAuthor(book.author);
-	const type = spineType(width, height, book.main, author);
+	const type = spineType(width, height, printed, author);
 	const cloth = spineCloth(book.id);
 
 	const byline = book.author ? ` — ${book.author}` : '';
@@ -217,20 +250,18 @@ function toShelfSpine(book: SpineInput): ShelfSpine {
 	return {
 		id: book.id,
 		href: `/books/${book.id}`,
-		title: book.main,
+		title: printed,
 		surname: author,
 		showAuthor: type.showAuthor,
-		foiled: book.foiled,
 		tooltip: `${book.fullTitle}${byline} · ${length} · ${book.tail}`,
-		aria: `${book.main}${byline}, ${length}`,
+		aria: `${printed}${byline}, ${length}`,
 		width,
 		height,
 		cloth: cloth.background,
-		// A paper book's lettering is not foil, so it does not take the family's
-		// gold — it gets a flat cream that reads on every one of the six cloths.
-		foil: book.foiled ? cloth.foil : '#efe6d2',
+		foil: cloth.foil,
 		titleSize: type.titleSize,
 		authorSize: type.authorSize,
+		titleLines: type.titleLines,
 		runLength: type.runLength,
 	};
 }
@@ -248,7 +279,6 @@ export function toReadShelf(pile: PileView[]): ShelfSpine[] {
 			main: b.main,
 			author: b.author,
 			pages: b.pages,
-			foiled: true,
 			tail: b.ageLabel,
 		}),
 	);
@@ -263,7 +293,6 @@ export function finishedShelf(finished: BookView[]): ShelfSpine[] {
 			main: b.main,
 			author: b.author,
 			pages: b.pages,
-			foiled: b.tracked,
 			tail: `finished ${b.finishedDate}`,
 		}),
 	);

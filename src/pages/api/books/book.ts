@@ -12,7 +12,7 @@ export const prerender = false;
 // Everything else on the page is derived from page turns. These are not:
 //
 //   to-read   put it on / take it off the pile
-//   start     began it away from the Kindle, which has no page turns to prove it
+//   start     began it with nothing syncing, so no page turn will prove it
 //   unstart   undo that
 //   finish    call it done before the last page — endnotes, sources, appendices
 //   unfinish  undo that
