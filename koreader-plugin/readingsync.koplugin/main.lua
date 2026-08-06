@@ -29,9 +29,35 @@ local ReadingSync = WidgetContainer:extend({
 	is_doc_only = false,
 })
 
+--- Name the menu entry in KOReader's own menu order, instead of leaving it to
+--- the sorter's orphan handling to honour the sorting_hint below.
+---
+--- Both routes end up in the same place, but this is the mechanism KOReader
+--- documents for plugins that aren't part of its core menu order, and it fails
+--- loudly: an entry that goes missing leaves "menu id not found: readingsync"
+--- in crash.log rather than just not being there. The sorting_hint stays as the
+--- fallback for versions without this module.
+local function placeInMoreTools()
+	local ok, inserter = pcall(require, "ui/plugin/insert_menu")
+	if not ok then
+		return
+	end
+	-- The order tables are process-wide singletons that survive switching
+	-- between the reader and the file manager, so inserting on every init
+	-- would stack up duplicate entries.
+	local order = require("ui/elements/reader_menu_order")
+	for _, id in ipairs(order.more_tools) do
+		if id == "readingsync" then
+			return
+		end
+	end
+	inserter.add("readingsync")
+end
+
 function ReadingSync:init()
 	self.settings = LuaSettings:open(DataStorage:getSettingsDir() .. "/readingsync.lua")
 	if self.ui and self.ui.menu then
+		placeInMoreTools()
 		self.ui.menu:registerToMainMenu(self)
 	end
 end
