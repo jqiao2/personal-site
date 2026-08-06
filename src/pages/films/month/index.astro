@@ -1,0 +1,8 @@
+---
+// /films/month has no card of its own — it opens on the month it is now.
+import { siteDay } from '../../../lib/day';
+
+export const prerender = false;
+
+return Astro.redirect(`/films/month/${siteDay().slice(0, 7)}`, 302);
+---

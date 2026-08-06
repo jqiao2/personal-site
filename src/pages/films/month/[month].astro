@@ -1,0 +1,961 @@
+---
+// "The Month in film" — one month of the diary as a shareable poster grid.
+//
+// The card is a fixed 1080-wide artboard: it renders at full size and is scaled
+// down by a transform on its wrapper, so the PNG export can capture the element
+// itself and get the drawing at share resolution rather than at whatever size it
+// happened to be shown at.
+//
+// Everything the card measures with comes from `--cell`, which is why switching
+// the aspect ratio on the client is three custom properties rather than a
+// re-render.
+import FilmLayout from '../../../layouts/FilmLayout.astro';
+import { listMonthWatches, countWatchesByMonth } from '../../../lib/films';
+import { siteDay } from '../../../lib/day';
+import {
+	ASPECTS,
+	CARD_WIDTH,
+	MONTH_ABBR,
+	WEEKDAYS,
+	buildCells,
+	geometries,
+	monthKey,
+	monthLabel,
+	parseMonthKey,
+	shiftMonth,
+	summarise,
+	weekRows,
+} from '../../../lib/month-view';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const key = Astro.params.month ?? '';
+const parsed = parseMonthKey(key);
+// Anything that isn't a YYYY-MM lands on the current month rather than 404ing:
+// /films/month is a reasonable thing to type, and so is a half-remembered date.
+if (!parsed) return Astro.redirect(`/films/month/${siteDay().slice(0, 7)}`, 302);
+
+const [watches, counts] = await Promise.all([listMonthWatches(key), countWatchesByMonth()]);
+
+const rows = weekRows(key);
+const geometry = geometries(rows);
+const initial = geometry[ASPECTS[0].id];
+const cells = buildCells(key, watches);
+const summary = summarise(key, watches);
+const label = monthLabel(key);
+const isEmpty = watches.length === 0;
+
+const pickerMonths = MONTH_ABBR.map((abbr, i) => {
+	const monthId = monthKey(parsed.year, i + 1);
+	const count = counts[monthId] ?? 0;
+	return {
+		abbr,
+		key: monthId,
+		count: count ? `${count} ${count === 1 ? 'film' : 'films'}` : '—',
+		current: monthId === key,
+	};
+});
+
+// Everything the controls need, handed over as data rather than imported —
+// month-view pulls in the TMDB module, which has no business in a client bundle.
+const clientData = JSON.stringify({ key, width: CARD_WIDTH, counts, geometry });
+---
+
+<FilmLayout title={`${label} in film — Jason's film log`}>
+	<div class="page">
+		<div class="wrap">
+			<header class="topbar">
+				<a class="back" href="/films/diary">
+					<span class="back__arrow">←</span><span>Film diary</span>
+				</a>
+				<span class="topbar__tag">Share</span>
+			</header>
+
+			<div class="titleblock">
+				<h1>Month in film</h1>
+				<span class="dims" data-dims>
+					{CARD_WIDTH} × {ASPECTS[0].height} · {ASPECTS[0].id}
+				</span>
+			</div>
+
+			<!-- Controls: screen only, never part of the exported card. -->
+			<div class="controls">
+				<div class="stepper" data-picker>
+					<a class="step" href={`/films/month/${shiftMonth(key, -1)}`} aria-label="Previous month"
+						>←</a
+					>
+					<button class="step step--month" type="button" data-picker-toggle>
+						<span>{label}</span><span class="step__caret">▾</span>
+					</button>
+					<a class="step" href={`/films/month/${shiftMonth(key, 1)}`} aria-label="Next month">→</a>
+
+					<div class="picker" hidden data-picker-panel>
+						<div class="picker__head">
+							<button type="button" data-picker-year="-1" aria-label="Previous year">←</button>
+							<span data-picker-label>{parsed.year}</span>
+							<button type="button" data-picker-year="1" aria-label="Next year">→</button>
+						</div>
+						<div class="picker__grid">
+							{
+								pickerMonths.map((m) => (
+									<a
+										class:list={['picker__month', m.current && 'is-on']}
+										href={`/films/month/${m.key}`}
+										data-picker-month
+									>
+										<span class="picker__abbr">{m.abbr}</span>
+										<span class="picker__count">{m.count}</span>
+									</a>
+								))
+							}
+						</div>
+					</div>
+				</div>
+
+				<div class="aspects">
+					{
+						ASPECTS.map((a, i) => (
+							<button
+								class:list={['aspect', i === 0 && 'is-on']}
+								type="button"
+								data-aspect={a.id}
+								data-height={a.height}
+							>
+								{a.label}
+							</button>
+						))
+					}
+				</div>
+
+				<button class="likes" type="button" data-likes aria-pressed="true">
+					<span class="switch"><span class="switch__knob"></span></span>
+					<span>Show likes</span>
+				</button>
+
+				<div class="actions">
+					<button class="btn" type="button" data-copy>Copy link</button>
+					<button class="btn btn--primary" type="button" data-download>Download image</button>
+				</div>
+			</div>
+
+			<!-- The card. -->
+			<div class="stage">
+				<div class="viewport" data-viewport>
+					<div class="scaler">
+						<div
+							class="card"
+							data-card
+							style={`--cell:${initial.cell}px; --card-h:${initial.height}px; --grid-w:${initial.grid}px`}
+						>
+							<div class="card__head">
+								<div class="eyebrow">Month in review</div>
+								<div class="card__month">{label}</div>
+							</div>
+
+							<div class="calendar">
+								<div class="weekdays">
+									{WEEKDAYS.map((w) => <div>{w}</div>)}
+								</div>
+
+								<div class="grid">
+									{
+										cells.map((cell) =>
+											cell.outside ? (
+												<div class="cell" />
+											) : (
+												<div class="cell">
+													{cell.films.length === 0 && <div class="numeral">{cell.date}</div>}
+													{cell.behind.map((film) => (
+														<div
+															class="print print--behind"
+															style={`--k:${film.layer}; --rot:${film.rotation}deg; --ground:${film.ground}`}
+														>
+															{film.poster && (
+																<img
+																	class="art"
+																	src={film.poster}
+																	alt=""
+																	crossorigin="anonymous"
+																	decoding="async"
+																/>
+															)}
+														</div>
+													))}
+													{cell.films.length > 0 && (
+														<div
+															class="print print--top"
+															style={`--ground:${cell.films[0].ground}; --lift:${5 + cell.count}px; --blur:${14 + cell.count * 3}px`}
+														>
+															{cell.films[0].poster ? (
+																<img
+																	class="art"
+																	src={cell.films[0].poster}
+																	alt={cell.films[0].title}
+																	crossorigin="anonymous"
+																	decoding="async"
+																/>
+															) : (
+																<div class="art art--blank">
+																	<span class="art__title">{cell.films[0].title}</span>
+																	{cell.films[0].year && (
+																		<span class="art__year">{cell.films[0].year}</span>
+																	)}
+																</div>
+															)}
+															{cell.films[0].liked && <div class="heart">♥</div>}
+															{cell.count > 1 && <div class="badge">{cell.count}</div>}
+														</div>
+													)}
+													{cell.count > 1 && (
+														<div class="tip">
+															{cell.lines.map((line) => (
+																<div>{line}</div>
+															))}
+														</div>
+													)}
+												</div>
+											),
+										)
+									}
+								</div>
+							</div>
+
+							{
+								isEmpty ? (
+									<div class="card__empty">No films logged in {label}</div>
+								) : (
+									<div class="summary">
+										{summary.map((stat) => (
+											<div class="summary__item">
+												<div class="summary__label">{stat.label}</div>
+												<div class="summary__value">{stat.value}</div>
+											</div>
+										))}
+									</div>
+								)
+							}
+
+							<div class="card__foot">
+								<span>jqiao.vercel.app</span>
+								<span>Film data from TMDB</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="toast" hidden data-toast></div>
+
+	<script type="application/json" data-month-data set:html={clientData} />
+</FilmLayout>
+
+<style>
+	.page {
+		min-height: 100vh;
+		display: flex;
+		justify-content: center;
+		padding: 0 24px 90px;
+	}
+	.wrap {
+		width: 100%;
+		max-width: 900px;
+	}
+
+	/* ---- chrome ---- */
+	.topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 26px 0 22px;
+		border-bottom: 1px solid #4a2529;
+		margin-bottom: 30px;
+	}
+	.back {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 13px;
+		color: #a2857a;
+	}
+	.back:hover {
+		color: #f4e8d1;
+	}
+	.back__arrow {
+		font-size: 15px;
+	}
+	.topbar__tag {
+		font-size: 11.5px;
+		text-transform: uppercase;
+		letter-spacing: 2px;
+		color: #8a6f63;
+	}
+	.titleblock {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 16px;
+		flex-wrap: wrap;
+		margin-bottom: 22px;
+	}
+	h1 {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: 44px;
+		color: #f4e8d1;
+		letter-spacing: -0.5px;
+		line-height: 1;
+		margin: 0;
+	}
+	.dims {
+		font-size: 12.5px;
+		color: #8a6f63;
+		padding-bottom: 6px;
+	}
+
+	/* ---- controls ---- */
+	.controls {
+		background: #20100f;
+		border: 1px solid #4a2529;
+		border-radius: 12px;
+		padding: 16px 18px;
+		display: flex;
+		align-items: center;
+		gap: 26px;
+		flex-wrap: wrap;
+		margin-bottom: 30px;
+	}
+	.stepper {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.step {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		border: 1px solid #4a2529;
+		background: #2a1214;
+		color: #c2a99a;
+		font-size: 14px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.step:hover {
+		border-color: #d9b45a;
+		color: #f4e8d1;
+	}
+	.step--month {
+		justify-content: space-between;
+		gap: 10px;
+		min-width: 168px;
+		width: auto;
+		padding: 0 12px;
+		color: #f4e8d1;
+		font-size: 13px;
+	}
+	.step__caret {
+		font-size: 9px;
+		color: #a2857a;
+	}
+	.picker {
+		position: absolute;
+		left: 0;
+		top: calc(100% + 8px);
+		z-index: 40;
+		background: #20100f;
+		border: 1px solid #4a2529;
+		border-radius: 10px;
+		padding: 12px;
+		width: 290px;
+		box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.7);
+	}
+	.picker__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+		font-family: 'Newsreader', serif;
+		font-size: 19px;
+		color: #f4e8d1;
+	}
+	.picker__head button {
+		width: 24px;
+		height: 24px;
+		border: none;
+		background: none;
+		color: #a2857a;
+		cursor: pointer;
+		font-size: 13px;
+	}
+	.picker__head button:hover {
+		color: #f4e8d1;
+	}
+	.picker__grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 5px;
+	}
+	.picker__month {
+		display: block;
+		text-align: center;
+		padding: 8px 0;
+		border-radius: 7px;
+		border: 1px solid transparent;
+		color: #e9d9c4;
+	}
+	.picker__month:hover {
+		background: #2a1214;
+		color: #f4e8d1;
+	}
+	.picker__month.is-on {
+		color: #f0d488;
+		background: #33211a;
+		border-color: #5c3a22;
+	}
+	.picker__abbr {
+		display: block;
+		font-size: 12px;
+	}
+	.picker__count {
+		display: block;
+		font-size: 10px;
+		color: #8a6f63;
+		margin-top: 2px;
+	}
+	.aspects {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		padding: 3px;
+		background: #2a1214;
+	}
+	.aspect {
+		padding: 6px 13px;
+		border: none;
+		border-radius: 6px;
+		background: transparent;
+		color: #a2857a;
+		font-size: 12.5px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.aspect.is-on {
+		color: #f0d488;
+		background: #33211a;
+	}
+	.likes {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		border: none;
+		background: none;
+		padding: 0;
+		font-size: 12.5px;
+		font-family: inherit;
+		color: #c2a99a;
+		cursor: pointer;
+	}
+	.switch {
+		position: relative;
+		width: 40px;
+		height: 22px;
+		border-radius: 11px;
+		background: #d9b45a;
+		border: 1px solid #d9b45a;
+		transition: background 0.16s ease;
+	}
+	.switch__knob {
+		position: absolute;
+		top: 2px;
+		left: 20px;
+		width: 16px;
+		height: 16px;
+		border-radius: 50%;
+		background: #2a1214;
+		transition: left 0.16s ease;
+	}
+	.likes[aria-pressed='false'] .switch {
+		background: #3a1f21;
+		border-color: #4a2529;
+	}
+	.likes[aria-pressed='false'] .switch__knob {
+		left: 2px;
+		background: #8a6f63;
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-left: auto;
+	}
+	.btn {
+		height: 34px;
+		padding: 0 15px;
+		border-radius: 8px;
+		border: 1px solid #4a2529;
+		background: transparent;
+		color: #c2a99a;
+		font-size: 12.5px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.btn:hover {
+		border-color: #d9b45a;
+		color: #f4e8d1;
+	}
+	.btn--primary {
+		border: none;
+		background: #d9b45a;
+		color: #2a1214;
+		font-weight: 700;
+		padding: 0 17px;
+	}
+	.btn--primary:hover {
+		background: #f0d488;
+	}
+
+	/* ---- the artboard ----
+	   .viewport reserves the scaled-down footprint; .scaler shrinks the 1080px
+	   card into it. The card keeps its real size so the PNG export renders at
+	   1080 regardless of the screen. */
+	.stage {
+		display: flex;
+		justify-content: center;
+	}
+	.viewport {
+		position: relative;
+		width: calc(1080px * var(--s, 0.5));
+		height: calc(var(--card-h, 1350px) * var(--s, 0.5));
+	}
+	.scaler {
+		transform: scale(var(--s, 0.5));
+		transform-origin: 0 0;
+		width: 1080px;
+	}
+	.card {
+		width: 1080px;
+		height: var(--card-h);
+		background: #1c0d0e;
+		padding: 44px 46px 40px;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		/* Derived from the poster size, so one number moves the whole drawing. */
+		--step: max(3px, calc(var(--cell) * 0.032));
+		--badge: max(22px, calc(var(--cell) * 0.26));
+		--fan: 1;
+		--fan-rot: 1;
+	}
+	.card__head {
+		text-align: center;
+	}
+	.eyebrow {
+		font-size: 15px;
+		letter-spacing: 3.4px;
+		color: #d9b45a;
+		text-transform: uppercase;
+	}
+	.card__month {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: 84px;
+		line-height: 1.02;
+		color: #f4e8d1;
+		letter-spacing: -1.5px;
+		margin-top: 10px;
+	}
+	.calendar {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex: 1;
+		justify-content: center;
+		gap: 16px;
+	}
+	.weekdays {
+		width: var(--grid-w);
+		display: grid;
+		grid-template-columns: repeat(7, var(--cell));
+		column-gap: 10px;
+		text-align: center;
+		font-size: 14px;
+		letter-spacing: 2px;
+		color: #8a6f63;
+	}
+	.grid {
+		width: var(--grid-w);
+		display: grid;
+		grid-template-columns: repeat(7, var(--cell));
+		gap: 10px;
+	}
+
+	/* ---- a day ---- */
+	.cell {
+		position: relative;
+		width: var(--cell);
+		height: calc(var(--cell) * 1.5);
+	}
+	/* Hovering fans the stack open and lifts it over its neighbours. Screen only —
+	   the export never sees a hover state. */
+	.cell:hover {
+		z-index: 30;
+		--fan: 2.4;
+		--fan-rot: 2;
+	}
+	.numeral {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-family: 'Newsreader', serif;
+		font-size: calc(var(--cell) * 0.28);
+		line-height: 1;
+		color: #573331;
+	}
+	.print {
+		position: absolute;
+		inset: 0;
+		border-radius: 3px;
+		background: var(--ground);
+	}
+	.print--behind {
+		border: 2px solid #d8c9ae;
+		box-shadow: 0 3px 10px -4px rgba(0, 0, 0, 0.7);
+		z-index: calc(10 - var(--k));
+		transform: translate(
+				calc(var(--k) * var(--step) * var(--fan)),
+				calc(var(--k) * var(--step) * var(--fan))
+			)
+			rotate(calc(var(--rot) * var(--fan-rot)));
+		transition: transform 0.18s ease;
+	}
+	.print--top {
+		border: 2px solid #f4e8d1;
+		background: #1c0d0e;
+		z-index: 12;
+		box-shadow: 0 var(--lift) var(--blur) -6px rgba(0, 0, 0, 0.8);
+	}
+	.art {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: 1px;
+		background: var(--ground);
+	}
+	.art--blank {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		padding: calc(var(--cell) * 0.09);
+		text-align: center;
+		font-family: 'Newsreader', serif;
+	}
+	.art__title {
+		font-size: calc(var(--cell) * 0.125);
+		line-height: 1.16;
+		color: #f2e5cd;
+		text-wrap: pretty;
+	}
+	.art__year {
+		font-style: italic;
+		font-size: calc(var(--cell) * 0.095);
+		color: #b0917f;
+		margin-top: calc(var(--cell) * 0.05);
+	}
+	.heart {
+		position: absolute;
+		left: calc(var(--cell) * 0.05);
+		top: calc(var(--cell) * 0.05);
+		z-index: 14;
+		background: rgba(18, 8, 9, 0.6);
+		border-radius: 4px;
+		padding: calc(var(--cell) * 0.02) calc(var(--cell) * 0.035);
+		font-size: calc(var(--cell) * 0.14);
+		line-height: 1;
+		color: #f0d488;
+	}
+	.card.no-likes .heart {
+		display: none;
+	}
+	.badge {
+		position: absolute;
+		right: calc(var(--badge) * -0.32);
+		bottom: calc(var(--badge) * -0.32);
+		z-index: 14;
+		width: var(--badge);
+		height: var(--badge);
+		border-radius: 50%;
+		background: #d9b45a;
+		color: #2a1214;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: calc(var(--badge) * 0.54);
+		font-weight: 700;
+		box-shadow: 0 2px 7px -1px rgba(0, 0, 0, 0.6);
+	}
+	.tip {
+		position: absolute;
+		left: 50%;
+		bottom: calc(var(--cell) * 1.5 + 14px);
+		transform: translateX(-50%);
+		z-index: 40;
+		display: none;
+		background: #20100f;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		padding: 12px 16px;
+		box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.8);
+		font-size: 17px;
+		color: #f2e5cd;
+		line-height: 1.45;
+		white-space: nowrap;
+	}
+	.cell:hover .tip {
+		display: block;
+	}
+
+	/* ---- under the grid ---- */
+	.summary {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		margin-top: 30px;
+	}
+	.summary__item {
+		padding: 0 26px;
+	}
+	.summary__item + .summary__item {
+		border-left: 1px solid #4a2529;
+	}
+	.summary__item:first-child {
+		padding-left: 0;
+	}
+	.summary__label {
+		font-size: 12.5px;
+		letter-spacing: 2.2px;
+		text-transform: uppercase;
+		color: #8a6f63;
+	}
+	.summary__value {
+		font-family: 'Newsreader', serif;
+		font-size: 40px;
+		line-height: 1;
+		color: #d9b45a;
+		margin-top: 9px;
+	}
+	.card__empty {
+		text-align: center;
+		margin-top: 30px;
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 28px;
+		color: #8a6f63;
+	}
+	.card__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		border-top: 1px solid #4a2529;
+		margin-top: 30px;
+		padding-top: 18px;
+		font-size: 13px;
+		color: #8a6f63;
+	}
+
+	.toast {
+		position: fixed;
+		left: 50%;
+		bottom: 34px;
+		transform: translateX(-50%);
+		background: #2a1214;
+		border: 1px solid #4a2529;
+		border-radius: 9px;
+		padding: 11px 18px;
+		font-size: 13px;
+		color: #f4e8d1;
+		box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.7);
+		z-index: 60;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.print--behind,
+		.switch,
+		.switch__knob {
+			transition: none;
+		}
+	}
+	@media (max-width: 720px) {
+		.controls {
+			gap: 16px;
+		}
+		.actions {
+			margin-left: 0;
+		}
+	}
+</style>
+
+<script>
+	interface Geometry {
+		height: number;
+		cell: number;
+		grid: number;
+	}
+	interface MonthData {
+		key: string;
+		width: number;
+		counts: Record<string, number>;
+		geometry: Record<string, Geometry>;
+	}
+
+	const dataEl = document.querySelector('[data-month-data]');
+	const card = document.querySelector<HTMLElement>('[data-card]');
+	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+	if (dataEl?.textContent && card && viewport) {
+		const data = JSON.parse(dataEl.textContent) as MonthData;
+		let aspect = Object.keys(data.geometry)[0];
+
+		// ---- fit the 1080px artboard to whatever room the column has ----
+		// Capped at 0.62 so the card doesn't outgrow the controls above it on a
+		// wide screen, and floored so it stays a picture on a phone.
+		const stage = viewport.parentElement;
+		function fit(): void {
+			const width = stage?.clientWidth ?? data.width;
+			const scale = Math.max(0.2, Math.min(0.62, width / data.width));
+			viewport!.style.setProperty('--s', String(scale));
+		}
+		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
+		else window.addEventListener('resize', fit);
+		fit();
+
+		// ---- toast ----
+		let toastTimer: ReturnType<typeof setTimeout> | undefined;
+		const toastEl = document.querySelector<HTMLElement>('[data-toast]');
+		function flash(message: string): void {
+			if (!toastEl) return;
+			toastEl.textContent = message;
+			toastEl.hidden = false;
+			clearTimeout(toastTimer);
+			toastTimer = setTimeout(() => {
+				toastEl.hidden = true;
+			}, 2600);
+		}
+
+		// ---- aspect ----
+		const dims = document.querySelector<HTMLElement>('[data-dims]');
+		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
+			button.addEventListener('click', () => {
+				const id = button.dataset.aspect;
+				const geometry = id ? data.geometry[id] : undefined;
+				if (!id || !geometry) return;
+				aspect = id;
+				card.style.setProperty('--cell', `${geometry.cell}px`);
+				card.style.setProperty('--card-h', `${geometry.height}px`);
+				card.style.setProperty('--grid-w', `${geometry.grid}px`);
+				viewport.style.setProperty('--card-h', `${geometry.height}px`);
+				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
+				for (const other of document.querySelectorAll('[data-aspect]'))
+					other.classList.toggle('is-on', other === button);
+			});
+		}
+		// The viewport sizes itself from --card-h too; seed it from the card's own.
+		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
+
+		// ---- likes ----
+		const likes = document.querySelector<HTMLElement>('[data-likes]');
+		likes?.addEventListener('click', () => {
+			const on = likes.getAttribute('aria-pressed') !== 'true';
+			likes.setAttribute('aria-pressed', String(on));
+			card.classList.toggle('no-likes', !on);
+		});
+
+		// ---- month picker ----
+		// The twelve tiles are server-rendered and stay in the DOM; changing the
+		// year rewrites their text and hrefs. (Building them here instead would
+		// put them outside this component's scoped styles.)
+		const picker = document.querySelector<HTMLElement>('[data-picker]');
+		const panel = document.querySelector<HTMLElement>('[data-picker-panel]');
+		const yearLabel = document.querySelector<HTMLElement>('[data-picker-label]');
+		const tiles = document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]');
+		let pickerYear = Number(data.key.slice(0, 4));
+
+		function paintPicker(): void {
+			if (yearLabel) yearLabel.textContent = String(pickerYear);
+			tiles.forEach((tile, i) => {
+				const id = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
+				const count = data.counts[id] ?? 0;
+				tile.href = `/films/month/${id}`;
+				tile.classList.toggle('is-on', id === data.key);
+				const countEl = tile.querySelector('.picker__count');
+				if (countEl) countEl.textContent = count ? `${count} ${count === 1 ? 'film' : 'films'}` : '—';
+			});
+		}
+		document.querySelector('[data-picker-toggle]')?.addEventListener('click', () => {
+			if (!panel) return;
+			panel.hidden = !panel.hidden;
+			if (!panel.hidden) {
+				pickerYear = Number(data.key.slice(0, 4));
+				paintPicker();
+			}
+		});
+		for (const button of document.querySelectorAll<HTMLElement>('[data-picker-year]')) {
+			button.addEventListener('click', (event) => {
+				event.stopPropagation();
+				pickerYear += Number(button.dataset.pickerYear);
+				paintPicker();
+			});
+		}
+		document.addEventListener('mousedown', (event) => {
+			if (!panel || panel.hidden) return;
+			if (!picker?.contains(event.target as Node)) panel.hidden = true;
+		});
+
+		// ---- share ----
+		document.querySelector('[data-copy]')?.addEventListener('click', () => {
+			const url = `${location.origin}/films/month/${data.key}`;
+			if (navigator.clipboard)
+				navigator.clipboard.writeText(url).then(
+					() => flash(`Link copied · ${url}`),
+					() => flash(url),
+				);
+			else flash(url);
+		});
+
+		document.querySelector('[data-download]')?.addEventListener('click', async () => {
+			const height = data.geometry[aspect].height;
+			flash(`Rendering ${data.width}×${height}…`);
+			try {
+				const { toPng } = await import('html-to-image');
+				const url = await toPng(card, {
+					width: data.width,
+					height,
+					backgroundColor: '#1c0d0e',
+					pixelRatio: 1,
+					// The card sits inside a scaled wrapper; the clone must not inherit it.
+					style: { transform: 'none' },
+				});
+				const name = `film-log-${data.key}.png`;
+				const link = document.createElement('a');
+				link.href = url;
+				link.download = name;
+				link.click();
+				flash(`Saved ${name}`);
+			} catch {
+				flash('Could not render the image — posters may have blocked the export');
+			}
+		});
+	}
+</script>
