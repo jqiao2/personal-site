@@ -25,13 +25,13 @@ export const PILE_SPINE_HEIGHT = 84;
  * imported rather than reimplemented, because two spine widths that agree by
  * coincidence stop agreeing the first time one is tuned.
  *
- * A book with no page count at all has no width to draw and gets the narrow
- * dashed outline instead, which is the vocabulary the book page already uses for
- * something it does not know.
+ * The height goes in because the scale is defined at one reference height and
+ * every context scales off it: passing nothing would draw these at the /books
+ * shelf's proportions on a spine two thirds the height, which is a stubbier
+ * book, not the same book.
  */
-function pileSpineWidth(book: PileBook): number {
-	if (!book.total_pages && !book.ol_pages) return 13;
-	return spineWidth(book.total_pages, book.ol_pages);
+function pileSpineWidth(book: PileBook, height: number): number {
+	return spineWidth(book.total_pages, book.ol_pages, height);
 }
 
 /**
@@ -57,6 +57,12 @@ export interface PileView {
 	author: string | null;
 	href: string;
 	isPrivate: boolean;
+	/**
+	 * The printed length the spine is drawn from, or null when neither source
+	 * knows it. The /books shelf draws the same book at its own height and has to
+	 * run the width formula again, so it needs the length and not just the width.
+	 */
+	pages: number | null;
 	spineWidth: number;
 	/** False when the book has no page count: the spine is drawn as an outline. */
 	hasSpine: boolean;
@@ -109,7 +115,8 @@ export function toPileView(book: PileBook, todayDay = today()): PileView {
 		author,
 		href: `/books/${book.id}`,
 		isPrivate: !book.is_public,
-		spineWidth: pileSpineWidth(book),
+		pages: book.ol_pages ?? book.total_pages,
+		spineWidth: pileSpineWidth(book, PILE_SPINE_HEIGHT),
 		hasSpine: book.total_pages !== null || book.ol_pages !== null,
 		spineTitle: book.ol_pages ?? book.total_pages
 			? `${formatNumber((book.ol_pages ?? book.total_pages)!)} pages, none read`
@@ -131,23 +138,6 @@ export function toPileView(book: PileBook, todayDay = today()): PileView {
 
 export function buildPile(books: PileBook[], todayDay = today()): PileView[] {
 	return books.map((b) => toPileView(b, todayDay));
-}
-
-/**
- * The strip of spines the shelf page shows above the link to this one. Newest
- * first, and only a few — it is a pointer, not a preview of the whole pile.
- */
-export function pileStrip(books: PileBook[], limit = 4) {
-	return books.slice(0, limit).map((b) => ({
-		id: b.id,
-		href: `/books/${b.id}`,
-		// The printed length, matching the width the spine is drawn at. Quoting
-		// KOReader's count beside a spine scaled to the edition's would explain the
-		// picture with the wrong number.
-		title: `${b.title}${b.authors ? ` — ${b.authors}` : ''}${b.ol_pages ?? b.total_pages ? ` · ${formatNumber((b.ol_pages ?? b.total_pages)!)} pages` : ''}`,
-		width: pileSpineWidth(b),
-		hasSpine: b.total_pages !== null || b.ol_pages !== null,
-	}));
 }
 
 /**

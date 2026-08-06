@@ -1,4 +1,5 @@
 ---
+import BookShelf from '../../components/BookShelf.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import {
@@ -11,7 +12,8 @@ import {
 	getStats,
 	getToRead,
 } from '../../lib/books-queries';
-import { pileStrip } from '../../lib/to-read-view';
+import { finishedShelf, shelfSpan, toReadShelf } from '../../lib/shelf-view';
+import { buildPile } from '../../lib/to-read-view';
 import {
 	activityMeta,
 	buildHeatmap,
@@ -65,10 +67,13 @@ const { current, setAside, finished } = buildShelf(
 	todayDay,
 );
 
-// The pile's own page holds all of it; this shows the newest few spines and the
-// way in. An empty pile says so to me and says nothing at all to a visitor — a
-// zero there would report a fact about my intentions rather than my reading.
-const pile = pileStrip(pileRaw);
+// The pile as a shelf, newest addition at the left. Its own page holds the
+// sortable, filterable version; this is the whole pile as an object, and running
+// out of board is the honest way to show how far behind it is.
+//
+// An empty pile says so to me and says nothing at all to a visitor — a zero
+// there would report a fact about my intentions rather than my reading.
+const toRead = toReadShelf(buildPile(pileRaw, todayDay));
 const pileLabel = `${pileRaw.length} book${pileRaw.length === 1 ? '' : 's'} →`;
 
 // Which books a spell covers is answered from every public book, not just the
@@ -87,14 +92,11 @@ const defaultView = days.length && prefersHeatmap(days, todayDay) ? 'heatmap' : 
 const autoNote =
 	defaultView === 'heatmap' ? 'dense enough for a calendar' : 'shown as spells';
 
-const years = [...new Set(finished.map((b) => b.finishedYear))].sort((a, b) => b - a);
-
-// The shelf opens on this year — what you have read lately is the question the
-// section usually answers, and a decade of back catalogue above it buries that.
-// A year with nothing finished in it yet (every January, and any fallow one)
-// would open on an empty list saying so, so those fall back to All.
-const thisYear = Number(todayDay.slice(0, 4));
-const defaultYear = years.includes(thisYear) ? String(thisYear) : 'all';
+// Everything read, newest finish at the left. There is no year filter: scrolling
+// back along the shelf is the time axis, and a row of year pills would only let
+// you cut the one continuous thing into pieces.
+const done = finishedShelf(finished);
+const doneSpan = shelfSpan(finished);
 
 const metrics = [
 	{ value: formatNumber(stats.current_streak), label: 'Current streak' },
@@ -228,43 +230,6 @@ const hasActivity = days.length > 0;
 						)
 					}
 
-					{/*
-						The way to the to-read pile. It sits at the foot of this section
-						rather than as a section of its own: the pile is what happens after
-						the book in hand, and nesting it here costs one row instead of a
-						fifth heading competing with the four above it. Spines rather than
-						covers — half the pile has no cover, and a row of blank rectangles
-						would read as a failure to load.
-					*/}
-					{
-						pile.length > 0 ? (
-							<div class="pile-strip">
-								<span class="pile-strip__label">To read</span>
-								<div class="pile-strip__spines">
-									{pile.map((p) => (
-										<a class="spine-link spine-link--sm" href={p.href} title={p.title}>
-											<div
-												class:list={['spine', 'spine--empty', !p.hasSpine && 'spine--unknown']}
-												style={`width:${p.width}px`}
-											/>
-										</a>
-									))}
-								</div>
-								<a class="pile-strip__link" href="/books/to-read">
-									{pileLabel}
-								</a>
-							</div>
-						) : (
-							isOwner && (
-								<div class="pile-strip">
-									<span class="pile-strip__label">To read</span>
-									<a class="pile-strip__link" href="/books/to-read">
-										Nothing on the pile
-									</a>
-								</div>
-							)
-						)
-					}
 				</section>
 
 				{
@@ -424,84 +389,50 @@ const hasActivity = days.length > 0;
 					}
 				</section>
 
-				<section class="section">
-					<div class="sec-head sec-head--tight">
-						<h2 class="sec-head__title">Finished</h2>
-						{
-							years.length > 1 && (
-								<div class="pills">
-									<button
-										type="button"
-										class:list={['pill', defaultYear === 'all' && 'pill--on']}
-										data-year="all"
-									>
-										All
-									</button>
-									{years.map((y) => (
-										<button
-											type="button"
-											class:list={['pill', defaultYear === String(y) && 'pill--on']}
-											data-year={String(y)}
-										>
-											{y}
-										</button>
-									))}
-								</div>
-							)
-						}
-					</div>
+				{/*
+					The two shelves. They sit at the foot of the page because they are the
+					long views: what is waiting and what is done, both of them whole rather
+					than sampled, and both of them a picture of the library before they are
+					a list of it. Everything a row used to spell out — the read time, the
+					exact finish date — is on the book's own page, one click away, and in
+					the spine's tooltip meanwhile.
+				*/}
+				{
+					(toRead.length > 0 || isOwner) && (
+						<section class="section">
+							<div class="sec-head sec-head--shelf">
+								<h2 class="sec-head__title">To read</h2>
+								<a class="sec-head__link" href="/books/to-read">
+									{toRead.length > 0 ? pileLabel : 'Nothing on the pile'}
+								</a>
+							</div>
+							<BookShelf spines={toRead} emptyLine="Nothing on the pile." />
+						</section>
+					)
+				}
 
-					{
-						finished.length > 0 ? (
-							<Fragment>
-								{finished.map((b) => (
-									<div
-										class="row row--done"
-										data-finished-year={String(b.finishedYear)}
-										hidden={defaultYear !== 'all' && String(b.finishedYear) !== defaultYear}
-									>
-										<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
-											<div class:list={['spine', !b.tracked && 'spine--untracked']} style={spineStyle(b)}>
-												<div class="spine__fill" style={fillStyle(b)} />
-											</div>
-										</a>
-										<div class="row__main">
-											<div class="row__title row__title--lg">
-												<a class="book__link" href={bookHref(b)}>{b.main}</a>
-											</div>
-											<div class="row__meta">{b.finishedMeta}</div>
-										</div>
-										<div class="row__when">
-											<div class:list={['row__time', !b.tracked && 'row__time--none']}>{b.readTime}</div>
-											<div class="row__date">{b.finishedDate}</div>
-										</div>
-									</div>
-								))}
-								<p class="none" data-no-finished hidden>
-									Nothing finished in this period.
-								</p>
-							</Fragment>
-						) : (
-							<p class="none">Nothing finished yet.</p>
-						)
-					}
+				<section class="section">
+					<div class="sec-head sec-head--shelf">
+						<h2 class="sec-head__title">Finished</h2>
+						{doneSpan && <span class="sec-head__meta">{doneSpan}</span>}
+					</div>
+					<BookShelf spines={done} emptyLine="Nothing finished yet." />
 				</section>
 
 				<p class="foot">
 					Some books are read privately. They are counted in the totals and streaks above
-					but never listed. Books read on paper are the other way round — listed, with a
-					dashed spine and no time against them, and left out of every number up top,
-					which measures the Kindle rather than the reading.
+					but never listed. Books read on paper are the other way round — shelved, in a
+					plain unlettered binding with no time against them, and left out of every
+					number up top, which measures the Kindle rather than the reading.
 				</p>
 			</div>
 		</div>
 	</div>
 
 	<script>
-		// Both controls filter markup that is already on the page: the server sends
-		// every finished book and both activity views, so switching is instant and
-		// the page still reads correctly with JavaScript off (all books listed, the
-		// denser-fitting activity view shown).
+		// The toggle switches between markup that is already on the page: the server
+		// sends both activity views, so switching is instant and the page still
+		// reads correctly with JavaScript off, showing whichever view fits the data.
 		const panels = document.querySelectorAll<HTMLElement>('[data-panel]');
 		const viewButtons = document.querySelectorAll<HTMLButtonElement>('[data-view]');
 		const autoNote = document.querySelector<HTMLElement>('[data-auto-note]');
@@ -514,24 +445,6 @@ const hasActivity = days.length > 0;
 				// The note explains an automatic choice. Once it's been overruled it
 				// is describing something that is no longer on screen.
 				autoNote?.remove();
-			});
-		}
-
-		const yearButtons = document.querySelectorAll<HTMLButtonElement>('[data-year]');
-		const finishedRows = document.querySelectorAll<HTMLElement>('[data-finished-year]');
-		const noFinished = document.querySelector<HTMLElement>('[data-no-finished]');
-
-		for (const button of yearButtons) {
-			button.addEventListener('click', () => {
-				const wanted = button.dataset.year;
-				let shown = 0;
-				for (const row of finishedRows) {
-					const match = wanted === 'all' || row.dataset.finishedYear === wanted;
-					row.hidden = !match;
-					if (match) shown++;
-				}
-				for (const other of yearButtons) other.classList.toggle('pill--on', other === button);
-				if (noFinished) noFinished.hidden = shown > 0;
 			});
 		}
 	</script>
@@ -664,6 +577,15 @@ const hasActivity = days.length > 0;
 		.sec-head--tight {
 			margin-bottom: 14px;
 		}
+		/* A shelf carries its own headroom for a pulled book, so the heading sits
+		   nearly on top of it rather than opening a second gap. */
+		.sec-head--shelf {
+			margin-bottom: 6px;
+		}
+		.sec-head__link {
+			font-size: 12.5px;
+			flex: none;
+		}
 		.sec-head__title {
 			font-family: 'Newsreader', serif;
 			font-style: italic;
@@ -761,50 +683,6 @@ const hasActivity = days.length > 0;
 		.spine--untracked .spine__fill {
 			opacity: 0.35;
 		}
-		/* On the pile: the same spine with no gold in it, because nothing has been
-		   read. A book with no page count has no width to draw and gets the narrow
-		   dashed outline instead. */
-		.spine--empty {
-			height: 54px;
-			background-image: repeating-linear-gradient(135deg, #2c2013 0 6px, #241906 6px 12px);
-		}
-		.spine--unknown {
-			background-image: none;
-			background: transparent;
-			border-style: dashed;
-		}
-		.spine-link--sm:hover .spine {
-			box-shadow: none;
-		}
-
-		/* Entry point to /books/to-read */
-		.pile-strip {
-			display: flex;
-			align-items: center;
-			gap: 16px;
-			margin-top: 16px;
-			padding-top: 15px;
-			border-top: 1px solid #33261a;
-			flex-wrap: wrap;
-		}
-		.pile-strip__label {
-			font-size: 11px;
-			text-transform: uppercase;
-			letter-spacing: 1.4px;
-			color: #8a745a;
-			flex: none;
-		}
-		.pile-strip__spines {
-			display: flex;
-			align-items: flex-end;
-			gap: 9px;
-			flex: 1 1 auto;
-		}
-		.pile-strip__link {
-			font-size: 12.5px;
-			flex: none;
-		}
-
 		/* A book in flight that nothing is counting. */
 		.offdevice {
 			margin-top: 18px;
@@ -950,13 +828,6 @@ const hasActivity = days.length > 0;
 			border-bottom: 1px solid #33261a;
 			flex-wrap: wrap;
 		}
-		.row[hidden] {
-			display: none;
-		}
-		.row--done {
-			gap: 18px;
-			padding: 16px 2px;
-		}
 		.row__main {
 			flex: 1 1 220px;
 			min-width: 0;
@@ -966,10 +837,6 @@ const hasActivity = days.length > 0;
 			font-size: 19px;
 			color: #e4d3b0;
 			line-height: 1.2;
-		}
-		.row__title--lg {
-			font-size: 21px;
-			color: #f2e6cd;
 		}
 		.row__meta {
 			font-size: 12px;
@@ -988,29 +855,6 @@ const hasActivity = days.length > 0;
 			text-align: right;
 			flex: none;
 		}
-		.row__when {
-			text-align: right;
-			flex: none;
-		}
-		.row__time {
-			font-family: 'Newsreader', serif;
-			font-size: 20px;
-			color: #cfa452;
-			line-height: 1;
-		}
-		/* An em dash where a duration goes, dimmed so it reads as an absence in
-		   the column rather than a value in it. */
-		.row__time--none {
-			color: #4b3a24;
-		}
-		.row__date {
-			font-size: 11px;
-			text-transform: uppercase;
-			letter-spacing: 1.2px;
-			color: #a68f6e;
-			margin-top: 5px;
-		}
-
 		/* Activity cells, shared by both views */
 		.cell {
 			width: 11px;

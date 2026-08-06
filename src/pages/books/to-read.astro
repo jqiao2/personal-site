@@ -1061,8 +1061,9 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 			display: block;
 		}
 		/* The same spine as the shelf with no gold in it: nothing has been read.
-		   A book with no page count has no width to draw, so it gets the narrow
-		   dashed outline the book page uses for something unknown. */
+		   A book with no page count is drawn at an ordinary length and carries the
+		   dashed outline the book page uses for something unknown — the width is
+		   a guess, so it says so rather than shrinking to a sliver. */
 		.spine {
 			flex: none;
 			border-radius: 2px;
