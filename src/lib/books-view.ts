@@ -104,31 +104,66 @@ export function splitTitle(title: string): { main: string; sub: string | null } 
 /** Height of a book spine in the shelf illustrations, in px. */
 export const SPINE_HEIGHT = 104;
 
-/** Tuned so a 300-page paperback is 11px and a 1,300-page doorstop is 22px. */
-const SPINE_SCALE = 0.62;
-/** Thin enough to read as a book rather than a rule. */
-const MIN_SPINE = 9;
-/** Only reached past ~3,000 pages, which nothing in the library is. */
-const MAX_SPINE = 34;
+/**
+ * The height the width scale below is expressed at: the mid-height of a spine on
+ * the /books shelves, which are the largest and most detailed drawing of a book
+ * on the site. Every smaller context scales off it rather than defining its own
+ * widths, so a given book keeps its shape wherever it appears.
+ */
+export const REFERENCE_SPINE_HEIGHT = 180;
+
+/** Covers, boards and endpapers — a book has width before it has any pages. */
+const SPINE_BOARDS = 16;
+/** Width per page, at REFERENCE_SPINE_HEIGHT. */
+const SPINE_PER_PAGE = 0.05;
+/** Reached around 960 pages; the few books past it are all "very long" alike. */
+const MAX_SPINE = 64;
+/** Below this a scaled-down spine stops reading as a book and becomes a rule. */
+const MIN_DRAWN_SPINE = 8;
 
 /**
- * Spine width from page count.
+ * An ordinary book, drawn wherever the real length is unknown.
  *
- * Square root rather than linear: page counts span an order of magnitude, and
- * proportional widths give the long books so much of the row that the short ones
- * stop being distinguishable from each other. The compressed scale still orders
- * every book correctly and still shows a doorstop as a doorstop — it just does
- * not spend forty pixels saying so.
+ * A book with no page count is still a book of some size, and the honest guess
+ * is the unremarkable one. The alternative — a hairline, or a dashed outline —
+ * spends the most conspicuous spine on the shelf advertising a gap in the
+ * metadata, which is the least interesting thing about that book.
+ */
+const DEFAULT_PAGES = 250;
+
+/**
+ * Spine width from page count, linear, at a given drawn height.
+ *
+ * Linear rather than the square root this used to use. The compressed scale was
+ * tuned for an 11px spine standing beside a row of text, where the long books
+ * would otherwise have run away with the row. At shelf size that reasoning
+ * inverts: sqrt packs every 150–450 page book — which is most of a library —
+ * into a few pixels of each other, so the shelf shows one repeated width and
+ * says nothing. Linear spreads exactly the range the collection actually
+ * occupies, and the cap handles the doorstops.
  *
  * WHICH page count matters. `ol_pages` is the printed edition's; `total_pages`
  * is KOReader's repagination of the file, which runs about three times higher
  * and shifts with the font size on the device. Mixing them puts two scales in
  * one picture, so the printed length wins wherever it is known — migration 0026.
+ *
+ * `height` is the CONTEXT's height, not an individual book's. The shelves draw
+ * books at randomized heights; passing those in would give two books of equal
+ * length different widths and break the one thing the width is supposed to mean.
  */
-export function spineWidth(pages: number | null, editionPages: number | null = null): number {
-	const length = editionPages ?? pages;
-	if (!length) return 14;
-	return Math.max(MIN_SPINE, Math.min(MAX_SPINE, Math.round(Math.sqrt(length) * SPINE_SCALE)));
+export function spineWidth(
+	pages: number | null,
+	editionPages: number | null = null,
+	height: number = SPINE_HEIGHT,
+): number {
+	const known = editionPages ?? pages ?? 0;
+	const length = known > 0 ? known : DEFAULT_PAGES;
+	const width = Math.min(MAX_SPINE, SPINE_BOARDS + length * SPINE_PER_PAGE);
+	const drawn = Math.max(MIN_DRAWN_SPINE, (width * height) / REFERENCE_SPINE_HEIGHT);
+	// Half-pixel steps rather than whole ones. At the small end of the scale a
+	// whole-pixel round quantises away most of the difference the linear scale was
+	// adopted to show — 90 pages and 150 pages would come out the same width.
+	return Math.round(drawn * 2) / 2;
 }
 
 export interface BookFact {
@@ -152,6 +187,13 @@ export interface BookView {
 	author: string | null;
 	/** 0–1, or null when the book's page count is unknown. */
 	progress: number | null;
+	/**
+	 * The printed length the spine is drawn from — `ol_pages` where it is known,
+	 * KOReader's count otherwise, null when neither is. Carried alongside the
+	 * pre-computed `spineWidth` because the shelves draw the same book at a
+	 * different height and have to run the width formula again themselves.
+	 */
+	pages: number | null;
 	spineWidth: number;
 	spineFill: number;
 	/** "627 / 628", or "page 106" when there is no total to divide by. */
@@ -249,6 +291,7 @@ export function toBookView(book: BookProgress, todayDay = today()): BookView {
 		sub,
 		author,
 		progress,
+		pages: book.ol_pages ?? total,
 		spineWidth: spineWidth(total, book.ol_pages),
 		spineFill: progress === null ? 0 : Math.max(2, Math.round(progress * SPINE_HEIGHT)),
 		pagesLabel: total
@@ -319,6 +362,7 @@ export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
 		sub,
 		author,
 		progress: null,
+		pages: book.ol_pages ?? book.total_pages,
 		spineWidth: spineWidth(book.total_pages, book.ol_pages),
 		spineFill: SPINE_HEIGHT,
 		pagesLabel: '—',
@@ -357,6 +401,7 @@ export function toManualView(book: ManualRead, todayDay = today()): BookView {
 		sub,
 		author: book.authors,
 		progress: null,
+		pages: book.ol_pages ?? book.total_pages,
 		spineWidth: spineWidth(book.total_pages, book.ol_pages),
 		spineFill: 0,
 		pagesLabel: '—',
