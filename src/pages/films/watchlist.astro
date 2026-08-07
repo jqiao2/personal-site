@@ -3,6 +3,7 @@ import FilmLayout from '../../layouts/FilmLayout.astro';
 import { listAllWatchlist } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import { siteDay } from '../../lib/day';
+import { formatWatchedDate } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
@@ -11,8 +12,8 @@ export const prerender = false;
 // The tiles, and nothing the filter panel needs. Genres, directors and cast are a
 // separate read the browser makes after paint (/api/films/watchlist/facets): they
 // roughly double the query and, written out as per-tile data attributes, more than
-// double this page — all for a panel that starts collapsed. See applyFacets in the
-// script for where they're attached.
+// double this page — all for a panel that starts collapsed. Nothing on a tile shows
+// them; they only ever feed the filters. See applyFacets in the script.
 const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Astro.cookies)]);
 
 // The whole watchlist ships to the browser, which does the filtering and sorting
@@ -33,6 +34,14 @@ const addedLabel = (iso: string) =>
 // the HTML, so there's no client to ask what day it is: the site's zone it is.
 const today = siteDay();
 const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.release_date > today;
+
+// "Out Mar 6, 2026" — the opening date on an upcoming film's hover overlay, where a
+// released film shows nothing. `release_date` is the cached *US* opening (see
+// preferredReleaseDate): the earliest of its theatrical, limited or digital dates,
+// falling back to a non-US one only for films with no US release at all. That's the
+// theatrical date for anything with a theatrical run, which is why the label stays
+// "Out" rather than claiming a screen.
+const releaseLabel = (iso: string) => `Out ${formatWatchedDate(iso)}`;
 
 // Whether the watchlist holds anything still ahead of us. The "Include upcoming"
 // toggle is only worth drawing when there's something for it to exclude.
@@ -208,9 +217,9 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 					const poster = imageUrl(f.poster_path, 'w342');
 					const upcoming = isUpcoming(f);
 					// No genres / directors / cast / language on the tile: across ~500 of
-					// them they'd be most of this page's HTML, for values nothing shows
-					// until the filter panel opens. applyFacets attaches them to the
-					// matching Item once the facet payload lands.
+					// them they'd be most of this page's HTML, and nothing here displays
+					// them. applyFacets attaches them to the matching Item once the facet
+					// payload lands, for the filters to read.
 					return (
 						<div
 							class="item"
@@ -234,9 +243,12 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 								<div class="tile__overlay">
 									<div class="tile__title">{f.title}</div>
 									<div class="tile__year">{f.release_year}</div>
-									{/* Filled in by applyFacets — the film's primary genre isn't
-									    known until the facet payload arrives. */}
-									<div class="tile__genre" data-tile-genre hidden></div>
+									{/* Only upcoming films carry a date here: for one already out,
+									    the year above is the whole story, and the day it opened
+									    isn't what you're scanning the watchlist for. */}
+									{upcoming && f.release_date && (
+										<div class="tile__release">{releaseLabel(f.release_date)}</div>
+									)}
 									<div class="tile__added">Added {addedLabel(f.added_at)}</div>
 								</div>
 							</a>
@@ -922,7 +934,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			color: #d9b45a;
 			margin-top: 5px;
 		}
-		.tile__genre {
+		.tile__release {
 			font-size: 12px;
 			color: #a2857a;
 			margin-top: 4px;
@@ -1979,13 +1991,6 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 					item.directors = row.directors;
 					item.actors = row.actors;
 					item.language = row.language ?? '';
-					// The hover overlay's primary-genre line, which had nothing to show
-					// until now.
-					const slot = item.el.querySelector<HTMLElement>('[data-tile-genre]');
-					if (slot && row.genres[0]) {
-						slot.textContent = row.genres[0];
-						slot.hidden = false;
-					}
 				}
 
 				const genres = byFrequency((r) => r.genres, rows);
