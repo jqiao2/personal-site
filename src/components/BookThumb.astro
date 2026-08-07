@@ -1,0 +1,117 @@
+---
+// The picture of a book beside its card on /books: the jacket where one is on
+// file, and the hatched spine — width from the page count, fill from how far in
+// — where none is.
+//
+// The cover REPLACES the spine rather than standing next to it. The fill that
+// gives up was never the only reading of the progress: every card this appears
+// on already carries a bar and a percentage, so against a cover the spine was
+// spending the one slot that could show the book on a third drawing of a number.
+// Where there is no cover it is still the better of the two things available,
+// which is why it stays as the fallback rather than being dropped.
+import { SPINE_HEIGHT, type BookView } from '../lib/books-view';
+
+interface Props {
+	book: BookView;
+	href: string;
+}
+
+const { book, href } = Astro.props;
+
+/** A jacket at the spine's height, at the 2:3 most of them are printed at. */
+const COVER_WIDTH = 70;
+
+const box = `width:${COVER_WIDTH}px; height:${SPINE_HEIGHT}px`;
+---
+
+{/*
+	The title beside this links to the same place. One destination is one link,
+	so the picture stays out of the tab order and off the accessibility tree.
+*/}
+<a class="thumb" href={href} tabindex="-1" aria-hidden="true">
+	{
+		book.coverUrl ? (
+			<span class="cover" style={box}>
+				<img
+					class="cover__art"
+					src={book.coverUrl}
+					alt=""
+					width={COVER_WIDTH}
+					height={SPINE_HEIGHT}
+					loading="lazy"
+					decoding="async"
+				/>
+				<span class="cover__edge" />
+			</span>
+		) : (
+			<span class="spine" style={`width:${book.spineWidth}px; height:${SPINE_HEIGHT}px`}>
+				<span class="spine__fill" style={`height:${book.spineFill}px`} />
+			</span>
+		)
+	}
+</a>
+
+<style>
+	.thumb {
+		flex: none;
+		display: block;
+	}
+
+	.cover {
+		position: relative;
+		display: block;
+		border: 1px solid #45341f;
+		/* Square at the hinge, rounded at the fore-edge — the shelf's convention. */
+		border-radius: 2px 4px 4px 2px;
+		overflow: hidden;
+		/* Stands in while the jacket loads, and shows through a transparent one. */
+		background: #241a10;
+		transition:
+			border-color 0.14s ease,
+			box-shadow 0.14s ease;
+	}
+	.cover__art {
+		display: block;
+		width: 100%;
+		height: 100%;
+		/* Jackets are not all 2:3. Cropping a sliver off the long edge beats
+		   letterboxing every one of them into a box of its own width. */
+		object-fit: cover;
+	}
+	/* The hinge, so 70px of artwork still reads as a book and not a poster. */
+	.cover__edge {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 6px;
+		background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.28));
+	}
+
+	/* No cover on file: width tracks the page count, fill tracks the progress. */
+	.spine {
+		display: block;
+		position: relative;
+		border-radius: 2px;
+		border: 1px solid #45341f;
+		overflow: hidden;
+		background-image: repeating-linear-gradient(135deg, #33261a 0 6px, #2a1c0c 6px 12px);
+		transition:
+			border-color 0.14s ease,
+			box-shadow 0.14s ease;
+	}
+	.spine__fill {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: #cfa452;
+		opacity: 0.9;
+	}
+
+	.thumb:hover .cover,
+	.thumb:hover .spine {
+		border-color: #cfa452;
+		box-shadow: 0 0 0 3px rgba(207, 164, 82, 0.16);
+	}
+</style>

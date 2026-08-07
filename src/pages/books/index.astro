@@ -1,5 +1,6 @@
 ---
 import BookShelf from '../../components/BookShelf.astro';
+import BookThumb from '../../components/BookThumb.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import {
@@ -25,7 +26,6 @@ import {
 	HEAT_LEVELS,
 	prefersHeatmap,
 	readDays,
-	SPINE_HEIGHT,
 	today,
 	type BookView,
 } from '../../lib/books-view';
@@ -106,11 +106,9 @@ const metrics = [
 	{ value: formatDuration(stats.total_seconds), label: 'Time read' },
 ];
 
-const spineStyle = (b: BookView) => `width:${b.spineWidth}px; height:${SPINE_HEIGHT}px`;
-const fillStyle = (b: BookView) => `height:${b.spineFill}px`;
-// Every book on the shelf is a page of its own. The spine is the strongest tie
-// between the two views, so it links as well as the title does — but it is the
-// same destination, so it stays out of the tab order and off the a11y tree.
+// Every book here is a page of its own. The picture of it is the strongest tie
+// between the two views, so it links as well as the title does — see BookThumb
+// for why that link is hidden from the keyboard and the screen reader.
 const bookHref = (b: BookView) => `/books/${b.id}`;
 
 // A heatmap with no reading in it has no scale to place the legend against, so
@@ -139,10 +137,7 @@ const hasActivity = days.length > 0;
 			<div class="col">
 				<header class="head">
 					<h1 class="head__title">Books</h1>
-					<p class="head__note">
-						Logged automatically, one page turn at a time. The older entries carry a
-						date and a rating and nothing else.
-					</p>
+					<p class="head__note">Logged automatically via Kindle</p>
 				</header>
 
 				<div class="metrics">
@@ -166,11 +161,7 @@ const hasActivity = days.length > 0;
 							<div class="stack">
 								{current.map((b) => (
 									<article class="book">
-										<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
-											<div class="spine" style={spineStyle(b)}>
-												<div class="spine__fill" style={fillStyle(b)} />
-											</div>
-										</a>
+										<BookThumb book={b} href={bookHref(b)} />
 										<div class="book__main">
 											<h3 class="book__title">
 												<a class="book__link" href={bookHref(b)}>{b.main}</a>
@@ -224,7 +215,7 @@ const hasActivity = days.length > 0;
 									{days.length ? 'Between books right now.' : 'No reading logged yet.'}
 								</div>
 								<div class="empty__sub">
-									The next page turn starts a new entry here.
+									The next page turn on the Kindle starts a new entry here.
 								</div>
 							</div>
 						)
@@ -240,11 +231,7 @@ const hasActivity = days.length > 0;
 							</div>
 							{setAside.map((b) => (
 								<div class="row">
-									<a class="spine-link" href={bookHref(b)} tabindex="-1" aria-hidden="true">
-										<div class="spine" style={spineStyle(b)}>
-											<div class="spine__fill" style={fillStyle(b)} />
-										</div>
-									</a>
+									<BookThumb book={b} href={bookHref(b)} />
 									<div class="row__main">
 										<div class="row__title">
 											<a class="book__link" href={bookHref(b)}>{b.main}</a>
@@ -422,6 +409,16 @@ const hasActivity = days.length > 0;
 					<BookShelf spines={done} emptyLine="Nothing finished yet." />
 				</section>
 
+				{/*
+					The one thing the two shelves cannot say for themselves. Every list on
+					this page is filtered to `is_public`, and every number at the top is
+					not — reading_stats aggregates across the lot, because hiding a book
+					should not silently break a two-hundred-day streak.
+				*/}
+				<p class="foot">
+					Some books are read privately. They are counted in the totals and streaks
+					above but never listed.
+				</p>
 			</div>
 		</div>
 	</div>
@@ -645,39 +642,11 @@ const hasActivity = days.length > 0;
 			font-weight: 600;
 		}
 
-		/* Book spine — width tracks page count, fill tracks progress. */
-		.spine {
-			flex: none;
-			position: relative;
-			border-radius: 2px;
-			border: 1px solid #45341f;
-			overflow: hidden;
-			background-image: repeating-linear-gradient(135deg, #33261a 0 6px, #2a1c0c 6px 12px);
-			transition:
-				border-color 0.14s ease,
-				box-shadow 0.14s ease;
-		}
-		.spine-link {
-			flex: none;
-			display: block;
-		}
-		.spine-link:hover .spine {
-			border-color: #cfa452;
-			box-shadow: 0 0 0 3px rgba(207, 164, 82, 0.16);
-		}
 		.book__link {
 			color: inherit;
 		}
 		.book__link:hover {
 			color: #ecc87c;
-		}
-		.spine__fill {
-			position: absolute;
-			left: 0;
-			right: 0;
-			bottom: 0;
-			background: #cfa452;
-			opacity: 0.9;
 		}
 		/* A book in flight that nothing is counting. */
 		.untracked-note {
@@ -1025,6 +994,14 @@ const hasActivity = days.length > 0;
 		.none[hidden] {
 			display: none;
 		}
+		.foot {
+			font-size: 11.5px;
+			color: #8a745a;
+			padding-top: 4px;
+			line-height: 1.6;
+			margin: 0;
+		}
+
 		@media (max-width: 640px) {
 			.tabs__link {
 				padding: 18px 10px 16px;
