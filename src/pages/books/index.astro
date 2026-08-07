@@ -328,11 +328,11 @@ const hasActivity = days.length > 0;
 								</div>
 
 								<div class="view" data-panel="heatmap" hidden={defaultView !== 'heatmap'}>
-									<div class="heat-scroll">
-										<div class="heat">
+									<div class="heat-scroll" data-heat-scroll>
+										<div class="heat" data-heat>
 											<div class="heat__months">
 												{heatmap.columns.map((col) => (
-													<div class="heat__month">{col.month}</div>
+													<div class="heat__month" data-heat-label>{col.month}</div>
 												))}
 											</div>
 											<div class="heat__body">
@@ -343,7 +343,7 @@ const hasActivity = days.length > 0;
 												</div>
 												<div class="heat__grid">
 													{heatmap.columns.map((col) => (
-														<div class="heat__col">
+														<div class="heat__col" data-heat-col>
 															{col.cells.map((c) => (
 																<div
 																	class:list={[
@@ -440,6 +440,52 @@ const hasActivity = days.length > 0;
 				// is describing something that is no longer on screen.
 				autoNote?.remove();
 			});
+		}
+
+		// Fitting the year calendar to its column.
+		//
+		// The squares are sized by CSS — they take whatever width the column
+		// gives them. That alone would shrink them to a few pixels on a phone,
+		// so below the width a full year needs, this crops weeks off the left
+		// until the rest are legible again. Cropping rather than scrolling: the
+		// recent weeks are the ones being read, and a January parked off the
+		// side of a scroll container is a January nobody ever sees.
+		//
+		// Both numbers are also in the stylesheet, in .heat's min-width.
+		const CELL_MIN = 11;
+		const CELL_GAP = 3;
+		/** The day-label column plus the gap after it. */
+		const GUTTER = 26;
+
+		const heatScroll = document.querySelector<HTMLElement>('[data-heat-scroll]');
+		const heat = document.querySelector<HTMLElement>('[data-heat]');
+		const heatCols = document.querySelectorAll<HTMLElement>('[data-heat-col]');
+		const heatLabels = document.querySelectorAll<HTMLElement>('[data-heat-label]');
+
+		if (heatScroll && heat && heatCols.length) {
+			const fit = () => {
+				// Zero while the panel is hidden, which it is whenever the page
+				// opened on the spells view. Measuring then would crop the grid to
+				// its floor of eight weeks and leave it there.
+				const available = heatScroll.clientWidth - GUTTER;
+				if (available <= 0) return;
+
+				const fits = Math.floor((available + CELL_GAP) / (CELL_MIN + CELL_GAP));
+				// Eight weeks even if they have to go under 11px. Narrower than a
+				// phone there is no width at which this reads well, and two months
+				// is the least that still looks like a calendar.
+				const weeks = Math.max(8, Math.min(heatCols.length, fits));
+				const dropped = heatCols.length - weeks;
+
+				heatCols.forEach((col, i) => (col.hidden = i < dropped));
+				heatLabels.forEach((label, i) => (label.hidden = i < dropped));
+				// Hands the width over to the flex fill. Dropping the min-width can
+				// remove the scrollbar and so change clientWidth — the observer
+				// picks that up and settles on the next pass.
+				heat.classList.add('heat--fit');
+			};
+
+			new ResizeObserver(fit).observe(heatScroll);
 		}
 	</script>
 
@@ -918,13 +964,29 @@ const hasActivity = days.length > 0;
 			white-space: nowrap;
 		}
 
-		/* Year heatmap */
+		/* Year heatmap.
+
+		   The grid fills the column rather than standing at a fixed square size,
+		   so a wide screen gets a bigger, more readable calendar instead of a
+		   band of 11px squares with empty space beside it. Everything below is
+		   proportional for that reason — the only fixed sizes are the gaps and
+		   the day-label gutter.
+
+		   Where the column is too narrow for a full year of 11px squares, the
+		   fit script drops the oldest weeks; the min-width and the scrollbar
+		   here are what stands in for it before that script runs, and with
+		   JavaScript off. */
 		.heat-scroll {
 			overflow-x: auto;
 			padding-bottom: 6px;
 		}
+		/* 53 columns and their gaps at the smallest legible square, plus the
+		   gutter. Kept in step with CELL_MIN and CELL_GAP in the fit script. */
 		.heat {
-			min-width: 680px;
+			min-width: 765px;
+		}
+		.heat--fit {
+			min-width: 0;
 		}
 		.heat__months {
 			display: flex;
@@ -932,9 +994,14 @@ const hasActivity = days.length > 0;
 			margin-left: 26px;
 			margin-bottom: 6px;
 		}
+		/* One week wide, which the name overruns — deliberately. It leans over
+		   the columns after it, which are unlabelled until the month is out.
+		   buildHeatmap drops the last couple, where there is nothing to lean
+		   into. min-width lets the box shrink under its text so the leaning
+		   never pushes the row wider than the grid it labels. */
 		.heat__month {
-			width: 11px;
-			flex: none;
+			flex: 1 1 0;
+			min-width: 0;
 			font-size: 9.5px;
 			color: #8a745a;
 			white-space: nowrap;
@@ -951,19 +1018,39 @@ const hasActivity = days.length > 0;
 			flex: none;
 		}
 		.heat__dow {
-			height: 11px;
+			/* Takes a seventh of the grid's height rather than a square's worth
+			   of pixels, so a label stays on its row at whatever size the
+			   squares come out. */
+			flex: 1 1 0;
+			display: flex;
+			align-items: center;
 			font-size: 9px;
 			color: #8a745a;
-			line-height: 11px;
 		}
 		.heat__grid {
 			display: flex;
 			gap: 3px;
+			flex: 1;
+			min-width: 0;
 		}
 		.heat__col {
 			display: flex;
 			flex-direction: column;
 			gap: 3px;
+			flex: 1 1 0;
+			min-width: 0;
+		}
+		/* A week cropped off the left by the fit script. The rule is needed
+		   because the display above would otherwise beat the [hidden] default. */
+		.heat__col[hidden] {
+			display: none;
+		}
+		/* Calendar squares are sized by their column, not by .cell's fixed 11px:
+		   the width comes from the flex stretch and the height follows it. */
+		.heat__col .cell {
+			width: auto;
+			height: auto;
+			aspect-ratio: 1;
 		}
 		.legend {
 			display: flex;

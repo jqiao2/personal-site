@@ -652,25 +652,45 @@ export interface Heatmap {
 /** Row labels down the side of the heatmap; the blanks keep it from crowding. */
 export const DOW_LABELS = ['M', '', 'W', '', 'F', '', 'S'];
 
-/** The last twelve months as week columns, Monday at the top. */
+/**
+ * Columns at the right edge that give up their month name.
+ *
+ * A month label is wider than the column it sits on and leans into the ones
+ * after it, which is fine mid-grid — the next column is empty for as long as the
+ * month lasts. At the end of the grid there is nothing to lean into, so the name
+ * either overflows the card or gets clipped mid-word.
+ */
+const LABEL_EDGE_COLUMNS = 2;
+
+/**
+ * The last year as week columns, Monday at the top.
+ *
+ * The window opens on a Monday rather than exactly 364 days back. Starting mid
+ * week leaves the first column with its top cells missing, and a hole in the
+ * corner of a calendar reads as missing data rather than as the edge of the
+ * window. The three or four extra days cost nothing: this view claims to be a
+ * year of reading, not a precise count of days.
+ *
+ * The right edge stays ragged, because there the missing cells are days that
+ * have not happened yet.
+ */
 export function buildHeatmap(
 	days: ActivityDay[],
 	maxPages: number,
 	todayDay = today(),
 ): Heatmap {
-	const start = addDays(todayDay, -364);
-	// Back up to the Monday on or before the start, so every column is a full week.
-	const weekStart = addDays(start, -((new Date(dayMs(start)).getUTCDay() + 6) % 7));
+	const yearAgo = addDays(todayDay, -364);
+	const start = addDays(yearAgo, -((new Date(dayMs(yearAgo)).getUTCDay() + 6) % 7));
 	const byDay = new Map(days.map((d) => [d.day, d]));
 
 	const columns: HeatColumn[] = [];
 	let labelled = -1;
-	for (let week = 0; week * 7 <= daysBetween(weekStart, todayDay) + 6; week++) {
-		const columnStart = addDays(weekStart, week * 7);
+	for (let week = 0; week * 7 <= daysBetween(start, todayDay); week++) {
+		const columnStart = addDays(start, week * 7);
 		const cells: ActivityCell[] = [];
 		for (let dow = 0; dow < 7; dow++) {
 			const day = addDays(columnStart, dow);
-			if (day < start || day > todayDay) {
+			if (day > todayDay) {
 				cells.push({ title: '', level: 0, read: false, inRange: false });
 			} else {
 				cells.push(cellFor(day, byDay.get(day), maxPages));
@@ -683,6 +703,10 @@ export function buildHeatmap(
 		if (showLabel) labelled = month;
 		columns.push({ month: showLabel ? MONTHS[month - 1] : '', cells });
 	}
+
+	// Dropped rather than clipped: half a month name is a typo, and the column
+	// under it is still dated by the ones to its left.
+	for (const column of columns.slice(-LABEL_EDGE_COLUMNS)) column.month = '';
 
 	return { columns, span: `${formatMonth(start)} → ${formatMonth(todayDay)}` };
 }
