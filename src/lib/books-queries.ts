@@ -8,6 +8,9 @@
 //
 // Write side lives in src/lib/books-sync.ts.
 import { supabaseAdmin } from './supabase';
+import { siteDay } from './day';
+import { monthOf, shiftMonth } from './share-card';
+import type { MonthBook, ReadingDay } from './reading-month-view';
 
 export interface HeatmapDay {
 	day: string; // YYYY-MM-DD, local (America/New_York — see migration 0020)
@@ -139,6 +142,111 @@ export async function getHeatmap(from: string, to: string): Promise<HeatmapDay[]
 	});
 	if (error) throw new Error(`heatmap query failed: ${error.message}`);
 	return (data ?? []) as HeatmapDay[];
+}
+
+/**
+ * Everything the month card needs for one "YYYY-MM": the day rows, the books
+ * behind them, and how many books were finished that month.
+ *
+ * Three round trips rather than an embed, because `book_days` is a GROUP BY view
+ * and PostgREST can't be relied on to infer a relationship through one.
+ *
+ * A private book comes back with its title and cover stripped here rather than
+ * in the page: the card draws it as a blank print, and what a redacted book is
+ * called has no business travelling to the browser at all.
+ *
+ * `markedFinished` are the books whose `finished_at` falls in the month. It is a
+ * separate query because a book finished by hand can have no page turns behind
+ * it at all — a paper read, or a StoryGraph import — and still belongs in the
+ * month's count despite having no cell to sit in. Books finished the other way,
+ * by reaching the end, are found from the day rows by the caller.
+ */
+export async function getReadingMonth(key: string): Promise<{
+	days: ReadingDay[];
+	books: MonthBook[];
+	markedFinished: number[];
+}> {
+	const from = `${key}-01`;
+	const to = `${shiftMonth(key, 1)}-01`;
+
+	const [dayRows, marked] = await Promise.all([
+		supabaseAdmin
+			.from('book_days')
+			.select('book_id, day, pages, seconds')
+			.gte('day', from)
+			.lt('day', to)
+			.order('day', { ascending: true }),
+		supabaseAdmin
+			.from('books')
+			.select('id')
+			.gte('finished_at', from)
+			.lt('finished_at', to),
+	]);
+	if (dayRows.error) throw new Error(`reading month query failed: ${dayRows.error.message}`);
+	if (marked.error) throw new Error(`finished books query failed: ${marked.error.message}`);
+	const markedFinished = ((marked.data ?? []) as { id: number }[]).map((row) => Number(row.id));
+
+	const days = ((dayRows.data ?? []) as ReadingDay[]).map((row) => ({
+		book_id: Number(row.book_id),
+		day: String(row.day).slice(0, 10),
+		pages: Number(row.pages),
+		seconds: Number(row.seconds),
+	}));
+	if (days.length === 0) return { days, books: [], markedFinished };
+
+	const ids = [...new Set(days.map((d) => d.book_id))];
+	const { data, error } = await supabaseAdmin
+		.from('book_detail')
+		.select(
+			'id, title, authors, cover_url, total_pages, furthest_page, finished_at, is_public, last_read_at',
+		)
+		.in('id', ids);
+	if (error) throw new Error(`month books query failed: ${error.message}`);
+
+	const books = ((data ?? []) as Record<string, unknown>[]).map((row) => {
+		const isPublic = row.is_public === true;
+		return {
+			id: Number(row.id),
+			title: isPublic ? String(row.title ?? '') : '',
+			authors: isPublic ? ((row.authors as string | null) ?? null) : null,
+			cover_url: isPublic ? ((row.cover_url as string | null) ?? null) : null,
+			total_pages: row.total_pages === null ? null : Number(row.total_pages),
+			furthest_page: Number(row.furthest_page ?? 0),
+			finished_at: (row.finished_at as string | null) ?? null,
+			is_public: isPublic,
+			// `last_read_at` is max(started_at) and `book_days.day` buckets the same
+			// column into the same zone, so this is the last day the book holds a cell on.
+			last_day: row.last_read_at ? siteDay(row.last_read_at as string) : null,
+		} satisfies MonthBook;
+	});
+
+	return { days, books, markedFinished };
+}
+
+/**
+ * Distinct books read per "YYYY-MM", for the month picker's counts. Pages
+ * explicitly: PostgREST caps an unbounded select at 1000 rows, and a truncated
+ * count reads as a month with nothing in it.
+ */
+export async function countReadingByMonth(): Promise<Record<string, number>> {
+	const PAGE = 1000;
+	const seen: Record<string, Set<number>> = {};
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabaseAdmin
+			.from('book_days')
+			.select('book_id, day')
+			.order('day', { ascending: true })
+			.range(offset, offset + PAGE - 1);
+		if (error) throw new Error(`countReadingByMonth failed: ${error.message}`);
+		const rows = (data ?? []) as { book_id: number; day: string }[];
+		for (const row of rows) {
+			const month = monthOf(String(row.day));
+			(seen[month] ??= new Set()).add(Number(row.book_id));
+		}
+		if (rows.length < PAGE) {
+			return Object.fromEntries(Object.entries(seen).map(([month, ids]) => [month, ids.size]));
+		}
+	}
 }
 
 /**

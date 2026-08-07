@@ -1,0 +1,1053 @@
+---
+// "The Month in reading" — one month of the book log as a shareable card.
+//
+// The film card's sibling: same 1080 artboard scaled down for the screen, same
+// stack of prints per day. What differs is what a day means. A book is read
+// across a fortnight, so the same cover recurs all month and the finishes are
+// the punctuation — which is why a book finished that day sits on top of the
+// stack however few pages it took, and why the seal is the one thing that is
+// never optional.
+import BookLayout from '../../../layouts/BookLayout.astro';
+import { getReadingMonth, countReadingByMonth } from '../../../lib/books-queries';
+import { siteDay } from '../../../lib/day';
+import {
+	ASPECTS,
+	CARD_WIDTH,
+	MONTH_ABBR,
+	WEEKDAYS,
+	aspectBySlug,
+	buildCells,
+	finishDay,
+	geometries,
+	monthKey,
+	monthLabel,
+	monthOf,
+	monthQuery,
+	parseMonthKey,
+	shiftMonth,
+	summarise,
+	weekRows,
+	type MonthBook,
+} from '../../../lib/reading-month-view';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const key = Astro.params.month ?? '';
+const parsed = parseMonthKey(key);
+// Anything that isn't a YYYY-MM lands on the current month rather than 404ing.
+if (!parsed) return Astro.redirect(`/books/month/${siteDay().slice(0, 7)}`, 302);
+
+const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+const query = monthQuery(aspect);
+
+const [month, counts] = await Promise.all([getReadingMonth(key), countReadingByMonth()]);
+
+const books = new Map<number, MonthBook>(month.books.map((b) => [b.id, b]));
+// Which day each finished book's seal belongs on — the date it was marked, else
+// the last day it was touched. Books that aren't finished aren't in here.
+const finished = new Map<number, string>();
+for (const book of month.books) {
+	const day = finishDay(book);
+	if (day) finished.set(book.id, day);
+}
+
+// The Finished figure counts the same finishes the seals mark, so a book that
+// got there by reaching the end counts as much as one marked by hand. The books
+// marked finished this month join them: those can have no page turns at all, so
+// they never appear in the grid but did finish in the month.
+const finishedThisMonth = new Set<number>(month.markedFinished);
+for (const [id, day] of finished) if (monthOf(day) === key) finishedThisMonth.add(id);
+
+const rows = weekRows(key);
+const geometry = geometries(rows);
+const initial = geometry[aspect.id];
+const cells = buildCells(key, month.days, books, finished);
+const figures = summarise(key, month.days, finishedThisMonth.size);
+const label = monthLabel(key);
+const isEmpty = month.days.length === 0;
+
+const pickerMonths = MONTH_ABBR.map((abbr, i) => {
+	const id = monthKey(parsed.year, i + 1);
+	const count = counts[id] ?? 0;
+	return {
+		abbr,
+		key: id,
+		count: count ? `${count} ${count === 1 ? 'book' : 'books'}` : '—',
+		current: id === key,
+	};
+});
+
+const clientData = JSON.stringify({
+	key,
+	width: CARD_WIDTH,
+	counts,
+	geometry,
+	aspect: aspect.slug,
+	slugs: Object.fromEntries(ASPECTS.map((a) => [a.id, a.slug])),
+});
+---
+
+<BookLayout title={`${label} in reading — Jason's book log`}>
+	<div class="page">
+		<div class="wrap">
+			<header class="topbar">
+				<a class="back" href="/books">
+					<span class="back__arrow">←</span><span>Books</span>
+				</a>
+				<span class="topbar__tag">Share</span>
+			</header>
+
+			<div class="titleblock">
+				<h1>Month in reading</h1>
+				<span class="dims" data-dims>{CARD_WIDTH} × {aspect.height} · {aspect.id}</span>
+			</div>
+
+			<!-- Controls: screen only, never part of the exported card. -->
+			<div class="controls">
+				<div class="stepper" data-picker>
+					<a
+						class="step"
+						href={`/books/month/${shiftMonth(key, -1)}${query}`}
+						data-month-link={`/books/month/${shiftMonth(key, -1)}`}
+						aria-label="Previous month">←</a
+					>
+					<button class="step step--month" type="button" data-picker-toggle>
+						<span>{label}</span><span class="step__caret">▾</span>
+					</button>
+					<a
+						class="step"
+						href={`/books/month/${shiftMonth(key, 1)}${query}`}
+						data-month-link={`/books/month/${shiftMonth(key, 1)}`}
+						aria-label="Next month">→</a
+					>
+
+					<div class="picker" hidden data-picker-panel>
+						<div class="picker__head">
+							<button type="button" data-picker-year="-1" aria-label="Previous year">←</button>
+							<span data-picker-label>{parsed.year}</span>
+							<button type="button" data-picker-year="1" aria-label="Next year">→</button>
+						</div>
+						<div class="picker__grid">
+							{
+								pickerMonths.map((m) => (
+									<a
+										class:list={['picker__month', m.current && 'is-on']}
+										href={`/books/month/${m.key}${query}`}
+										data-picker-month
+									>
+										<span class="picker__abbr">{m.abbr}</span>
+										<span class="picker__count">{m.count}</span>
+									</a>
+								))
+							}
+						</div>
+					</div>
+				</div>
+
+				<div class="aspects">
+					{
+						ASPECTS.map((a) => (
+							<button
+								class:list={['aspect', a.id === aspect.id && 'is-on']}
+								type="button"
+								data-aspect={a.id}
+							>
+								{a.label}
+							</button>
+						))
+					}
+				</div>
+
+				<div class="actions">
+					<button class="btn" type="button" data-copy>Copy link</button>
+					<button class="btn btn--primary" type="button" data-download>Download image</button>
+				</div>
+			</div>
+
+			<!-- The card. -->
+			<div class="stage">
+				<div class="viewport" data-viewport>
+					<div class="scaler">
+						<div
+							class:list={['card', initial.figures && 'card--figures']}
+							data-card
+							style={`--cell:${initial.cell}px; --card-h:${initial.height}px; --grid-w:${initial.grid}px`}
+						>
+							<div class="card__head">
+								<div class="eyebrow">Jason's book log</div>
+								<div class="card__month">{label}</div>
+							</div>
+
+							<div class="calendar">
+								<div class="weekdays">
+									{WEEKDAYS.map((w) => <div>{w}</div>)}
+								</div>
+
+								<div class="grid">
+									{
+										cells.map((cell) =>
+											cell.outside ? (
+												<div class="cell" />
+											) : (
+												<div class="cell">
+													{cell.count === 0 && <div class="numeral">{cell.date}</div>}
+													{cell.behind.map((print) => (
+														<div
+															class:list={[
+																'print',
+																'print--behind',
+																print.finished && 'print--done',
+																!print.cover && 'print--blank',
+															]}
+															style={`--k:${print.layer}; --rot:${print.rotation}deg`}
+														>
+															{print.cover && (
+																<img class="cover" src={print.cover} alt="" decoding="async" />
+															)}
+														</div>
+													))}
+													{cell.count > 0 && (
+														<div
+															class:list={[
+																'print',
+																'print--top',
+																cell.prints[0].finished && 'print--done',
+																!cell.prints[0].cover && 'print--blank',
+															]}
+															style={`--lift:${5 + cell.depth * 2}px; --blur:${14 + cell.depth * 5}px`}
+														>
+															{cell.prints[0].cover && (
+																<img
+																	class="cover"
+																	src={cell.prints[0].cover}
+																	alt={cell.prints[0].title}
+																	decoding="async"
+																/>
+															)}
+															{cell.prints[0].finished && <div class="seal">✓</div>}
+															{cell.count > 1 && <div class="badge">{cell.count}</div>}
+														</div>
+													)}
+													{cell.count > 0 && (
+														<div class="tip">
+															{cell.lines.map((line) => (
+																<div class:list={[line.finished && 'tip__done']}>{line.text}</div>
+															))}
+														</div>
+													)}
+												</div>
+											),
+										)
+									}
+								</div>
+							</div>
+
+							{isEmpty && <div class="card__empty">Nothing read in {label}</div>}
+
+							<div class="figures">
+								{
+									figures.map((figure) => (
+										<div class="figure">
+											<div class="figure__label">{figure.label}</div>
+											<div class="figure__value">{figure.value}</div>
+										</div>
+									))
+								}
+							</div>
+
+							<div class="card__foot">
+								<span>jqiao.vercel.app</span>
+								<span>Covers from Open Library</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="toast" hidden data-toast></div>
+
+	<script type="application/json" data-month-data set:html={clientData} />
+</BookLayout>
+
+<style>
+	.page {
+		min-height: 100vh;
+		display: flex;
+		justify-content: center;
+		padding: 0 24px 90px;
+	}
+	.wrap {
+		width: 100%;
+		max-width: 900px;
+	}
+
+	/* ---- chrome ---- */
+	.topbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 26px 0 22px;
+		border-bottom: 1px solid #45341f;
+		margin-bottom: 30px;
+	}
+	.back {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 13px;
+		color: #a68f6e;
+	}
+	.back:hover {
+		color: #f2e6cd;
+	}
+	.back__arrow {
+		font-size: 15px;
+	}
+	.topbar__tag {
+		font-size: 11.5px;
+		text-transform: uppercase;
+		letter-spacing: 2px;
+		color: #8a745a;
+	}
+	.titleblock {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 16px;
+		flex-wrap: wrap;
+		margin-bottom: 22px;
+	}
+	h1 {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: 44px;
+		color: #f2e6cd;
+		letter-spacing: -0.5px;
+		line-height: 1;
+		margin: 0;
+	}
+	.dims {
+		font-size: 12.5px;
+		color: #8a745a;
+		padding-bottom: 6px;
+	}
+
+	/* ---- controls ---- */
+	.controls {
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 12px;
+		padding: 16px 18px;
+		display: flex;
+		align-items: center;
+		gap: 26px;
+		flex-wrap: wrap;
+		margin-bottom: 30px;
+	}
+	.stepper {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.step {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		border: 1px solid #45341f;
+		background: #2a1c0c;
+		color: #bfa886;
+		font-size: 14px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.step:hover {
+		border-color: #cfa452;
+		color: #f2e6cd;
+	}
+	.step--month {
+		justify-content: space-between;
+		gap: 10px;
+		min-width: 168px;
+		width: auto;
+		padding: 0 12px;
+		color: #f2e6cd;
+		font-size: 13px;
+	}
+	.step__caret {
+		font-size: 9px;
+		color: #a68f6e;
+	}
+	.picker {
+		position: absolute;
+		left: 0;
+		top: calc(100% + 8px);
+		z-index: 40;
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 10px;
+		padding: 12px;
+		width: 300px;
+		box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.75);
+	}
+	.picker__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+		font-family: 'Newsreader', serif;
+		font-size: 19px;
+		color: #f2e6cd;
+	}
+	.picker__head button {
+		width: 24px;
+		height: 24px;
+		border: none;
+		background: none;
+		color: #a68f6e;
+		cursor: pointer;
+		font-size: 13px;
+	}
+	.picker__head button:hover {
+		color: #f2e6cd;
+	}
+	.picker__grid {
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		gap: 5px;
+	}
+	.picker__month {
+		display: block;
+		text-align: center;
+		padding: 8px 0;
+		border-radius: 7px;
+		border: 1px solid transparent;
+		color: #e9dcc4;
+	}
+	.picker__month:hover {
+		background: #2a1c0c;
+		color: #f2e6cd;
+	}
+	.picker__month.is-on {
+		color: #ecc87c;
+		background: #33261a;
+		border-color: #5c4526;
+	}
+	.picker__abbr {
+		display: block;
+		font-size: 12px;
+	}
+	.picker__count {
+		display: block;
+		font-size: 10px;
+		color: #8a745a;
+		margin-top: 2px;
+	}
+	.aspects {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		border: 1px solid #45341f;
+		border-radius: 8px;
+		padding: 3px;
+		background: #2a1c0c;
+	}
+	.aspect {
+		padding: 6px 13px;
+		border: none;
+		border-radius: 6px;
+		background: transparent;
+		color: #a68f6e;
+		font-size: 12.5px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.aspect.is-on {
+		color: #ecc87c;
+		background: #33261a;
+	}
+	.actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-left: auto;
+	}
+	.btn {
+		height: 34px;
+		padding: 0 15px;
+		border-radius: 8px;
+		border: 1px solid #45341f;
+		background: transparent;
+		color: #bfa886;
+		font-size: 12.5px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.btn:hover {
+		border-color: #cfa452;
+		color: #f2e6cd;
+	}
+	/* Fixed width: the label swaps to the shorter "Save image" on a phone. */
+	.btn--primary {
+		width: 152px;
+		padding: 0;
+		border: none;
+		background: #cfa452;
+		color: #241a10;
+		font-weight: 700;
+	}
+	.btn--primary:hover {
+		background: #ecc87c;
+	}
+
+	/* ---- the artboard ---- */
+	.stage {
+		display: flex;
+		justify-content: center;
+	}
+	.viewport {
+		position: relative;
+		width: calc(1080px * var(--s, 0.5));
+		height: calc(var(--card-h, 1350px) * var(--s, 0.5));
+	}
+	.scaler {
+		transform: scale(var(--s, 0.5));
+		transform-origin: 0 0;
+		width: 1080px;
+	}
+	.card {
+		width: 1080px;
+		height: var(--card-h);
+		background: #1a120a;
+		padding: 42px 46px 38px;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		/* Derived from the print size, so one number moves the whole drawing. */
+		--step: max(3px, calc(var(--cell) * 0.033));
+		--seal: max(24px, calc(var(--cell) * 0.24));
+		--badge: max(22px, calc(var(--cell) * 0.235));
+		--fan: 1;
+		--fan-rot: 1;
+	}
+	.card__head {
+		text-align: center;
+	}
+	.eyebrow {
+		font-size: 25px;
+		letter-spacing: 5px;
+		color: #cfa452;
+		text-transform: uppercase;
+	}
+	.card__month {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: 80px;
+		line-height: 1.02;
+		color: #f2e6cd;
+		letter-spacing: -1.4px;
+		margin-top: 10px;
+	}
+	.calendar {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex: 1;
+		justify-content: center;
+		gap: 18px;
+	}
+	.weekdays {
+		width: var(--grid-w);
+		display: grid;
+		grid-template-columns: repeat(7, var(--cell));
+		column-gap: 10px;
+		text-align: center;
+		font-size: 22px;
+		letter-spacing: 3px;
+		color: #a68f6e;
+	}
+	.grid {
+		width: var(--grid-w);
+		display: grid;
+		grid-template-columns: repeat(7, var(--cell));
+		gap: 10px;
+	}
+
+	/* ---- a day ---- */
+	.cell {
+		position: relative;
+		width: var(--cell);
+		height: calc(var(--cell) * 1.5);
+	}
+	/* Hovering fans the stack open and lifts it over its neighbours. Screen only. */
+	.cell:hover {
+		z-index: 30;
+		--fan: 2.4;
+		--fan-rot: 2;
+	}
+	.numeral {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-family: 'Newsreader', serif;
+		font-size: calc(var(--cell) * 0.28);
+		line-height: 1;
+		color: #4b3a23;
+	}
+	.print {
+		position: absolute;
+		inset: 0;
+		border-radius: 3px;
+		background: #241a10;
+	}
+	/* A private book, or one Open Library has no art for: hatched ground and an
+	   empty disc, so it reads as a withheld print rather than a broken one. */
+	.print--blank {
+		background:
+			radial-gradient(
+				circle at 50% 50%,
+				transparent calc(var(--cell) * 0.11 - 1.5px),
+				rgba(207, 164, 82, 0.3) calc(var(--cell) * 0.11 - 1.5px) calc(var(--cell) * 0.11),
+				transparent calc(var(--cell) * 0.11)
+			),
+			repeating-linear-gradient(135deg, #33261a 0 7px, #291d10 7px 14px);
+	}
+	.print--behind {
+		overflow: hidden;
+		border: 2px solid #e8dbc0;
+		box-shadow: 0 3px 10px -4px rgba(0, 0, 0, 0.75);
+		z-index: calc(10 - var(--k));
+		transform: translate(
+				calc(var(--k) * var(--step) * var(--fan)),
+				calc(var(--k) * var(--step) * var(--fan))
+			)
+			rotate(calc(var(--rot) * var(--fan-rot)));
+		transition: transform 0.18s ease;
+	}
+	.print--top {
+		border: 2px solid #f2e6cd;
+		z-index: 12;
+		box-shadow: 0 var(--lift) var(--blur) -6px rgba(0, 0, 0, 0.85);
+	}
+	/* Finished that day: the edge is gilt, and the seal sits on the corner. Both,
+	   so the mark survives being a thumbnail. */
+	.print--done {
+		border-color: #ecc87c;
+	}
+	.cover {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		object-position: center;
+		display: block;
+		background: #241a10;
+	}
+	/* Open Library answers a missing cover with a 1×1 image rather than a 404, so
+	   the client retires those — see the audit in the script below. */
+	.print--blank .cover {
+		display: none;
+	}
+	.seal {
+		position: absolute;
+		right: calc(var(--seal) * -0.3);
+		top: calc(var(--seal) * -0.3);
+		z-index: 16;
+		width: var(--seal);
+		height: var(--seal);
+		border-radius: 50%;
+		background: #ecc87c;
+		color: #241a10;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: calc(var(--seal) * 0.56);
+		line-height: 1;
+		font-weight: 700;
+		box-shadow:
+			0 2px 7px -1px rgba(0, 0, 0, 0.7),
+			inset 0 0 0 1.5px rgba(36, 26, 16, 0.28);
+	}
+	.badge {
+		position: absolute;
+		right: calc(var(--badge) * -0.3);
+		bottom: calc(var(--badge) * -0.3);
+		z-index: 16;
+		min-width: var(--badge);
+		height: var(--badge);
+		padding: 0 calc(var(--badge) * 0.16);
+		border-radius: calc(var(--badge) * 0.28);
+		background: #cfa452;
+		color: #241a10;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: calc(var(--badge) * 0.56);
+		font-weight: 700;
+		box-shadow: 0 2px 7px -1px rgba(0, 0, 0, 0.65);
+	}
+	.tip {
+		position: absolute;
+		left: 50%;
+		bottom: calc(var(--cell) * 1.5 + 14px);
+		transform: translateX(-50%);
+		z-index: 40;
+		display: none;
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 8px;
+		padding: 12px 16px;
+		box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.85);
+		font-size: 17px;
+		line-height: 1.5;
+		color: #f2e6cd;
+		white-space: nowrap;
+	}
+	.tip__done {
+		color: #ecc87c;
+	}
+	.cell:hover .tip {
+		display: block;
+	}
+
+	/* ---- under the grid ---- */
+	/* Four figures under a five-row grid leaves the prints too small to see a
+	   cover in, so only the tall aspect carries them. */
+	.figures {
+		display: none;
+		align-items: flex-start;
+		border-top: 1px solid #45341f;
+		margin-top: 30px;
+		padding-top: 26px;
+	}
+	.card--figures .figures {
+		display: flex;
+	}
+	.figure {
+		flex: 1;
+		padding: 0 4px 0 26px;
+		border-left: 1px solid #45341f;
+	}
+	.figure:first-child {
+		padding-left: 0;
+		border-left: none;
+	}
+	.figure__label {
+		font-size: 25px;
+		letter-spacing: 2.6px;
+		text-transform: uppercase;
+		color: #bfa886;
+	}
+	.figure__value {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: 62px;
+		line-height: 1.05;
+		color: #cfa452;
+		margin-top: 8px;
+		white-space: nowrap;
+	}
+	.card__empty {
+		text-align: center;
+		margin-top: 26px;
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 28px;
+		color: #8a745a;
+	}
+	.card__foot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		border-top: 1px solid #392a19;
+		margin-top: 26px;
+		padding-top: 20px;
+		font-size: 27px;
+		color: #a68f6e;
+	}
+
+	.toast {
+		position: fixed;
+		left: 50%;
+		bottom: 34px;
+		transform: translateX(-50%);
+		background: #2a1c0c;
+		border: 1px solid #45341f;
+		border-radius: 9px;
+		padding: 11px 18px;
+		font-size: 13px;
+		color: #f2e6cd;
+		box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.75);
+		z-index: 60;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.print--behind {
+			transition: none;
+		}
+	}
+	@media (max-width: 720px) {
+		.controls {
+			gap: 16px;
+		}
+		.actions {
+			margin-left: 0;
+		}
+	}
+</style>
+
+<script>
+	interface Geometry {
+		height: number;
+		cell: number;
+		grid: number;
+		figures: boolean;
+	}
+	interface MonthData {
+		key: string;
+		width: number;
+		counts: Record<string, number>;
+		geometry: Record<string, Geometry>;
+		aspect: string;
+		slugs: Record<string, string>;
+	}
+
+	const dataEl = document.querySelector('[data-month-data]');
+	const card = document.querySelector<HTMLElement>('[data-card]');
+	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+	if (dataEl?.textContent && card && viewport) {
+		const data = JSON.parse(dataEl.textContent) as MonthData;
+		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
+		const defaultSlug = data.slugs[Object.keys(data.geometry)[0]];
+
+		// ---- fit the 1080px artboard to the room the column has ----
+		const stage = viewport.parentElement;
+		function fit(): void {
+			const width = stage?.clientWidth ?? data.width;
+			viewport!.style.setProperty(
+				'--s',
+				String(Math.max(0.2, Math.min(0.62, width / data.width))),
+			);
+		}
+		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
+		else window.addEventListener('resize', fit);
+		fit();
+		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
+
+		// ---- carry the aspect across a month step ----
+		function query(): string {
+			return data.slugs[aspect] === defaultSlug ? '' : `?fmt=${data.slugs[aspect]}`;
+		}
+		function syncLinks(): void {
+			const q = query();
+			for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-month-link]'))
+				link.href = `${link.dataset.monthLink}${q}`;
+			for (const tile of document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]'))
+				tile.href = `${tile.pathname}${q}`;
+			history.replaceState(null, '', `${location.pathname}${q}`);
+		}
+
+		// ---- toast ----
+		let toastTimer: ReturnType<typeof setTimeout> | undefined;
+		const toastEl = document.querySelector<HTMLElement>('[data-toast]');
+		function flash(message: string): void {
+			if (!toastEl) return;
+			toastEl.textContent = message;
+			toastEl.hidden = false;
+			clearTimeout(toastTimer);
+			toastTimer = setTimeout(() => {
+				toastEl.hidden = true;
+			}, 2600);
+		}
+
+		// ---- aspect ----
+		const dims = document.querySelector<HTMLElement>('[data-dims]');
+		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
+			button.addEventListener('click', () => {
+				const id = button.dataset.aspect;
+				const geometry = id ? data.geometry[id] : undefined;
+				if (!id || !geometry) return;
+				aspect = id;
+				card.style.setProperty('--cell', `${geometry.cell}px`);
+				card.style.setProperty('--card-h', `${geometry.height}px`);
+				card.style.setProperty('--grid-w', `${geometry.grid}px`);
+				viewport.style.setProperty('--card-h', `${geometry.height}px`);
+				// The summary is only drawn on the tall aspect; the grid has already
+				// been sized for its presence or absence.
+				card.classList.toggle('card--figures', geometry.figures);
+				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
+				for (const other of document.querySelectorAll('[data-aspect]'))
+					other.classList.toggle('is-on', other === button);
+				syncLinks();
+			});
+		}
+
+		// ---- covers Open Library doesn't really have ----
+		// A missing cover comes back as a 1×1 image with a 200 on it rather than a
+		// 404, so a load event is not proof of a cover. Anything that lands smaller
+		// than a couple of pixels is retired to the blank print.
+		function audit(img: HTMLImageElement): void {
+			if (img.naturalWidth > 2) return;
+			img.closest('.print')?.classList.add('print--blank');
+		}
+		for (const img of document.querySelectorAll<HTMLImageElement>('img.cover')) {
+			if (img.complete) audit(img);
+			else {
+				img.addEventListener('load', () => audit(img), { once: true });
+				img.addEventListener(
+					'error',
+					() => img.closest('.print')?.classList.add('print--blank'),
+					{ once: true },
+				);
+			}
+		}
+
+		// ---- month picker ----
+		const picker = document.querySelector<HTMLElement>('[data-picker]');
+		const panel = document.querySelector<HTMLElement>('[data-picker-panel]');
+		const yearLabel = document.querySelector<HTMLElement>('[data-picker-label]');
+		const tiles = document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]');
+		let pickerYear = Number(data.key.slice(0, 4));
+
+		function paintPicker(): void {
+			if (yearLabel) yearLabel.textContent = String(pickerYear);
+			tiles.forEach((tile, i) => {
+				const id = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
+				const count = data.counts[id] ?? 0;
+				tile.href = `/books/month/${id}${query()}`;
+				tile.classList.toggle('is-on', id === data.key);
+				const countEl = tile.querySelector('.picker__count');
+				if (countEl) countEl.textContent = count ? `${count} ${count === 1 ? 'book' : 'books'}` : '—';
+			});
+		}
+		document.querySelector('[data-picker-toggle]')?.addEventListener('click', () => {
+			if (!panel) return;
+			panel.hidden = !panel.hidden;
+			if (!panel.hidden) {
+				pickerYear = Number(data.key.slice(0, 4));
+				paintPicker();
+			}
+		});
+		for (const button of document.querySelectorAll<HTMLElement>('[data-picker-year]')) {
+			button.addEventListener('click', (event) => {
+				event.stopPropagation();
+				pickerYear += Number(button.dataset.pickerYear);
+				paintPicker();
+			});
+		}
+		document.addEventListener('mousedown', (event) => {
+			if (!panel || panel.hidden) return;
+			if (!picker?.contains(event.target as Node)) panel.hidden = true;
+		});
+
+		// ---- share ----
+		document.querySelector('[data-copy]')?.addEventListener('click', () => {
+			const url = `${location.origin}/books/month/${data.key}${query()}`;
+			if (navigator.clipboard)
+				navigator.clipboard.writeText(url).then(
+					() => flash(`Link copied · ${url}`),
+					() => flash(url),
+				);
+			else flash(url);
+		});
+
+		// On a phone a downloaded file goes to Files, and Photos is where a picture
+		// you meant to post belongs — the share sheet's "Save Image" is the way in.
+		const download = document.querySelector<HTMLElement>('[data-download]');
+		const shareFile =
+			matchMedia('(pointer: coarse)').matches &&
+			typeof navigator.share === 'function' &&
+			(() => {
+				try {
+					return !!navigator.canShare?.({
+						files: [new File([new Blob()], 'card.png', { type: 'image/png' })],
+					});
+				} catch {
+					return false;
+				}
+			})();
+		if (shareFile && download) download.textContent = 'Save image';
+
+		const webkit =
+			/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+		let rendered: { state: string; file: File } | null = null;
+		const renderState = (): string => `${data.key}|${aspect}`;
+
+		/**
+		 * The card as a PNG blob.
+		 *
+		 * WebKit paints a foreignObject clone's text and borders on a cold pass
+		 * while sometimes dropping its images, so it gets a second pass — cheap,
+		 * because html-to-image keeps the inlined data URLs from the first.
+		 */
+		async function render(height: number): Promise<Blob | null> {
+			const { toBlob } = await import('html-to-image');
+			const options = {
+				width: data.width,
+				height,
+				backgroundColor: '#1a120a',
+				pixelRatio: 1,
+				// The card sits inside a scaled wrapper; the clone must not inherit it.
+				style: { transform: 'none' },
+				// Covers are drawn by plain <img>, so the copy in the cache may have
+				// come back without the CORS header on it. Inlining them here is a
+				// real cross-origin fetch — bust the URL and get a fresh one.
+				cacheBust: true,
+			};
+			const first = await toBlob(card, options);
+			return webkit ? await toBlob(card, options) : first;
+		}
+
+		download?.addEventListener('click', async () => {
+			const height = data.geometry[aspect].height;
+			const name = `book-log-${data.key}.png`;
+
+			if (shareFile && rendered?.state === renderState()) {
+				try {
+					await navigator.share({ files: [rendered.file] });
+				} catch (error) {
+					if ((error as DOMException)?.name !== 'AbortError') flash('Could not open the share sheet');
+				}
+				return;
+			}
+
+			flash(`Rendering ${data.width}×${height}…`);
+			try {
+				const blob = await render(height);
+				if (!blob) throw new Error('nothing was rendered');
+
+				if (shareFile) {
+					const file = new File([blob], name, { type: 'image/png' });
+					rendered = { state: renderState(), file };
+					try {
+						await navigator.share({ files: [file] });
+					} catch (error) {
+						const kind = (error as DOMException)?.name;
+						if (kind === 'NotAllowedError') flash('Ready — tap Save image again');
+						else if (kind !== 'AbortError') flash('Could not open the share sheet');
+					}
+					return;
+				}
+
+				const url = URL.createObjectURL(blob);
+				const link = document.createElement('a');
+				link.href = url;
+				link.download = name;
+				link.click();
+				setTimeout(() => URL.revokeObjectURL(url), 10_000);
+				flash(`Saved ${name}`);
+			} catch {
+				flash('Could not render the image — covers may have blocked the export');
+			}
+		});
+	}
+</script>
