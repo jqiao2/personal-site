@@ -186,12 +186,29 @@ export interface MonthCell {
 /** How many prints peek out behind the top one. Deeper stacks just cast more shadow. */
 const LAYERS = 3;
 
+/**
+ * Which TMDB size a print asks for.
+ *
+ * A cell is 120–133px on the 1080 artboard, and about 62% of that on screen, so
+ * w342 was arriving at three to four times the size it gets drawn at — and a
+ * poster resampled that far down aliases, especially the type on it. w185 still
+ * exceeds the biggest cell, so the export never upscales, while roughly halving
+ * how far the browser has to squeeze it.
+ *
+ * A print behind the top one shows a few pixels of margin and nothing else,
+ * so it gets the small size: sharper for its size, and a third of the bytes on
+ * a page that can hold forty of them.
+ */
+function posterSize(layer: number) {
+	return layer === 0 ? 'w185' : 'w92';
+}
+
 function toCellFilm(watch: MonthWatch, layer: number): CellFilm {
 	return {
 		tmdbId: watch.tmdb_id,
 		title: watch.title,
 		year: watch.release_year,
-		poster: imageUrl(watch.poster_path, 'w342'),
+		poster: imageUrl(watch.poster_path, posterSize(layer)),
 		liked: watch.liked,
 		layer,
 		rotation: layer % 2 ? 1.5 : -1.7,
