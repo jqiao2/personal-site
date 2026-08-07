@@ -168,7 +168,7 @@ const clientData = JSON.stringify({
 				<div class="viewport" data-viewport>
 					<div class="scaler">
 						<div
-							class:list={['card', !showLikes && 'no-likes']}
+							class:list={['card', !showLikes && 'no-likes', initial.figures && 'card--figures']}
 							data-card
 							style={`--cell:${initial.cell}px; --card-h:${initial.height}px; --grid-w:${initial.grid}px`}
 						>
@@ -243,20 +243,18 @@ const clientData = JSON.stringify({
 								</div>
 							</div>
 
-							{
-								isEmpty ? (
-									<div class="card__empty">No films logged in {label}</div>
-								) : (
-									<div class="summary">
-										{summary.map((stat) => (
-											<div class="summary__item">
-												<div class="summary__label">{stat.label}</div>
-												<div class="summary__value">{stat.value}</div>
-											</div>
-										))}
-									</div>
-								)
-							}
+							{isEmpty && <div class="card__empty">No films logged in {label}</div>}
+
+							<div class="summary">
+								{
+									summary.map((stat) => (
+										<div class="summary__item">
+											<div class="summary__label">{stat.label}</div>
+											<div class="summary__value">{stat.value}</div>
+										</div>
+									))
+								}
+							</div>
 
 							<div class="card__foot">
 								<span>jqiao.vercel.app</span>
@@ -581,8 +579,8 @@ const clientData = JSON.stringify({
 		text-align: center;
 	}
 	.eyebrow {
-		font-size: 15px;
-		letter-spacing: 3.4px;
+		font-size: 25px;
+		letter-spacing: 5px;
 		color: #d9b45a;
 		text-transform: uppercase;
 	}
@@ -609,9 +607,9 @@ const clientData = JSON.stringify({
 		grid-template-columns: repeat(7, var(--cell));
 		column-gap: 10px;
 		text-align: center;
-		font-size: 14px;
-		letter-spacing: 2px;
-		color: #8a6f63;
+		font-size: 22px;
+		letter-spacing: 3px;
+		color: #a3877a;
 	}
 	.grid {
 		width: var(--grid-w);
@@ -752,36 +750,50 @@ const clientData = JSON.stringify({
 	}
 
 	/* ---- under the grid ---- */
+	/* Four figures under a five-row grid leaves the posters too small to read a
+	   title off, so only the tall aspect carries them — the geometry has already
+	   been sized for their presence or absence. */
 	.summary {
-		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		display: none;
+		align-items: flex-start;
+		border-top: 1px solid #4a2529;
 		margin-top: 30px;
+		padding-top: 26px;
+	}
+	.card--figures .summary {
+		display: flex;
 	}
 	.summary__item {
-		padding: 0 26px;
-	}
-	.summary__item + .summary__item {
+		flex: 1;
+		padding-left: 22px;
+		padding-right: 16px;
 		border-left: 1px solid #4a2529;
 	}
 	.summary__item:first-child {
 		padding-left: 0;
+		border-left: none;
+	}
+	.summary__item:last-child {
+		padding-right: 0;
 	}
 	.summary__label {
-		font-size: 12.5px;
+		font-size: 23px;
 		letter-spacing: 2.2px;
 		text-transform: uppercase;
-		color: #8a6f63;
+		color: #bd9c8c;
 	}
 	.summary__value {
 		font-family: 'Newsreader', serif;
-		font-size: 40px;
-		line-height: 1;
+		font-weight: 500;
+		font-size: 50px;
+		line-height: 1.05;
 		color: #d9b45a;
-		margin-top: 9px;
+		margin-top: 8px;
+		white-space: nowrap;
 	}
 	.card__empty {
 		text-align: center;
-		margin-top: 30px;
+		margin-top: 26px;
 		font-family: 'Newsreader', serif;
 		font-style: italic;
 		font-size: 28px;
@@ -792,10 +804,10 @@ const clientData = JSON.stringify({
 		align-items: center;
 		justify-content: space-between;
 		border-top: 1px solid #4a2529;
-		margin-top: 30px;
-		padding-top: 18px;
-		font-size: 13px;
-		color: #8a6f63;
+		margin-top: 26px;
+		padding-top: 20px;
+		font-size: 27px;
+		color: #a3877a;
 	}
 
 	.toast {
@@ -835,6 +847,7 @@ const clientData = JSON.stringify({
 		height: number;
 		cell: number;
 		grid: number;
+		figures: boolean;
 	}
 	interface MonthData {
 		key: string;
@@ -931,6 +944,7 @@ const clientData = JSON.stringify({
 				card.style.setProperty('--card-h', `${geometry.height}px`);
 				card.style.setProperty('--grid-w', `${geometry.grid}px`);
 				viewport.style.setProperty('--card-h', `${geometry.height}px`);
+				card.classList.toggle('card--figures', geometry.figures);
 				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
