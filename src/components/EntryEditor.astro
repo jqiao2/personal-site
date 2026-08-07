@@ -1312,9 +1312,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				rewatch = true;
 				rewatchBtn.classList.add('on');
 				if (prior.rating != null) {
-					rating = prior.rating;
-					setFill(rating);
-					ratingLabel.textContent = labelFor(rating);
+					const priorRating: number = prior.rating;
+					rating = priorRating;
+					setFill(priorRating);
+					ratingLabel.textContent = labelFor(priorRating);
 				}
 				liked = Boolean(prior.liked);
 				likeBtn.classList.toggle('on', liked);

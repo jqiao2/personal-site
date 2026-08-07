@@ -1971,7 +1971,7 @@ const summary = hasFilters
 					values.map((v) => ({ value: v, label: v }));
 				renderChipGroup('tag', plain(f.tags));
 				renderChipGroup('friend', plain(f.friends));
-				renderChipGroup('medium', f.mediums.map((m) => ({ value: m, label: mediumLabel(m) })));
+				renderChipGroup('medium', f.mediums.map((m) => ({ value: m, label: mediumLabel(m) ?? m })));
 				renderChipGroup(
 					'venue',
 					f.venues.map((v) => ({ value: v.value, label: v.label, title: v.value })),

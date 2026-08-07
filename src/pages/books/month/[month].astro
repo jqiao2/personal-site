@@ -1018,6 +1018,7 @@ const clientData = JSON.stringify({
 		 * because html-to-image keeps the inlined data URLs from the first.
 		 */
 		async function render(height: number): Promise<Blob | null> {
+			if (!card) return null; // unreachable: the block below only runs with a card
 			const { toBlob } = await import('html-to-image');
 			const options = {
 				width: data.width,

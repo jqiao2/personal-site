@@ -152,7 +152,7 @@ const clientData = JSON.stringify({
 					}
 				</div>
 
-				<button class="likes" type="button" data-likes aria-pressed={String(showLikes)}>
+				<button class="likes" type="button" data-likes aria-pressed={String(showLikes) as 'true' | 'false'}>
 					<span class="switch"><span class="switch__knob"></span></span>
 					<span>Show likes</span>
 				</button>
@@ -1073,6 +1073,7 @@ const clientData = JSON.stringify({
 		 * cached from the first pass) and the failure it guards against is silent.
 		 */
 		async function render(height: number): Promise<Blob | null> {
+			if (!card) return null; // unreachable: the block below only runs with a card
 			const { toBlob } = await import('html-to-image');
 			const options = {
 				width: data.width,
