@@ -877,6 +877,22 @@ const clientData = JSON.stringify({
 			history.replaceState(null, '', `${location.pathname}${q}`);
 		}
 
+		// Stepping to another month is a navigation, but the card is one place —
+		// so it replaces the history entry rather than stacking one per month.
+		// Otherwise Back walks you through every month you looked at instead of
+		// leaving for the page that sent you here.
+		for (const link of document.querySelectorAll<HTMLAnchorElement>(
+			'[data-month-link], [data-picker-month]',
+		)) {
+			link.addEventListener('click', (event) => {
+				// Anything but a plain left click still means "open this somewhere else".
+				if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+					return;
+				event.preventDefault();
+				location.replace(link.href);
+			});
+		}
+
 		// ---- fit the 1080px artboard to whatever room the column has ----
 		// Capped at 0.62 so the card doesn't outgrow the controls above it on a
 		// wide screen, and floored so it stays a picture on a phone.

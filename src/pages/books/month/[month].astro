@@ -92,7 +92,7 @@ const clientData = JSON.stringify({
 	<div class="page">
 		<div class="wrap">
 			<header class="topbar">
-				<a class="back" href="/books">
+				<a class="back" href="/books" data-back>
 					<span class="back__arrow">←</span><span>Books</span>
 				</a>
 				<span class="topbar__tag">Share</span>
@@ -855,6 +855,34 @@ const clientData = JSON.stringify({
 				tile.href = `${tile.pathname}${q}`;
 			history.replaceState(null, '', `${location.pathname}${q}`);
 		}
+
+		// Stepping to another month is a navigation, but the card is one place —
+		// so it replaces the history entry rather than stacking one per month.
+		// Otherwise Back walks you through every month you looked at instead of
+		// leaving for the page that sent you here.
+		for (const link of document.querySelectorAll<HTMLAnchorElement>(
+			'[data-month-link], [data-picker-month]',
+		)) {
+			link.addEventListener('click', (event) => {
+				// Anything but a plain left click still means "open this somewhere else".
+				if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+					return;
+				event.preventDefault();
+				location.replace(link.href);
+			});
+		}
+
+		// "Back" means the page that sent you here, not /books — the href is the
+		// fallback for a direct load or a shared link. Because a month step replaces
+		// its history entry, one step back is always out of the card. (The film card
+		// gets this from FilmLayout; the book layout has no such script, and
+		// /books/[id] does the same thing for itself.)
+		document.querySelector<HTMLAnchorElement>('[data-back]')?.addEventListener('click', (event) => {
+			if (document.referrer && new URL(document.referrer).origin === location.origin) {
+				event.preventDefault();
+				history.back();
+			}
+		});
 
 		// ---- toast ----
 		let toastTimer: ReturnType<typeof setTimeout> | undefined;
