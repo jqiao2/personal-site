@@ -677,8 +677,37 @@ const nav = siteNav(Astro.url.pathname);
 			.main {
 				padding: 28px 22px 34px;
 			}
+			/* Four posters across on a phone too, tightened rather than halved: a
+			   section reads as one row you can take in at a glance instead of a
+			   two-row block that pushes the next section off screen. */
 			.grid4 {
-				grid-template-columns: repeat(2, 1fr);
+				grid-template-columns: repeat(4, 1fr);
+				gap: 8px;
+			}
+			.tile__cap {
+				padding: 7px;
+				font-size: 12px;
+			}
+			/* A ~80px tile has no room for stars and a date side by side, and the
+			   line the date would wrap onto costs more than the date is worth —
+			   the diary page and each entry still carry it. */
+			.tile__date {
+				display: none;
+			}
+			.tile__meta {
+				margin-top: 6px;
+			}
+			/* Marks shrink with the viewport, and the heart/rewatch drop below the
+			   stars rather than overflowing the column when both are present. */
+			.tile__marks {
+				flex-wrap: wrap;
+				gap: 0 4px;
+				min-width: 0;
+			}
+			.stars,
+			.tile__like,
+			.tile__rewatch {
+				font-size: clamp(9px, 2.4vw, 13px);
 			}
 			/* Tighten the tabs so the action button still fits; it wraps to its own
 			   row rather than overflowing, since the page clips horizontally. */
