@@ -189,13 +189,34 @@ export function buildCells(key: string, watches: MonthWatch[]): MonthCell[] {
 	return cells;
 }
 
-/** Vertical space the header, summary and footer take, whatever the aspect. */
-const CHROME = 404;
+/**
+ * Vertical space the header, summary and footer take.
+ *
+ * Only the tall aspect has the room for the summary; Feed and Square give that
+ * band back to the grid, which is worth more than the numbers at those heights.
+ */
+const CHROME_WITH_FIGURES = 470;
+const CHROME_BARE = 300;
+
+export interface FilmGeometry extends Geometry {
+	/** Whether the summary is drawn at this aspect. */
+	figures: boolean;
+}
+
+export function hasFigures(aspect: Aspect): boolean {
+	return aspect.id === '9:16';
+}
 
 /** Geometry for every aspect, keyed by id — the aspect toggle just swaps these in. */
-export function geometries(rows: number): Record<string, Geometry> {
-	const out: Record<string, Geometry> = {};
-	for (const aspect of ASPECTS) out[aspect.id] = cardGeometry(rows, aspect.height, CHROME);
+export function geometries(rows: number): Record<string, FilmGeometry> {
+	const out: Record<string, FilmGeometry> = {};
+	for (const aspect of ASPECTS) {
+		const figures = hasFigures(aspect);
+		out[aspect.id] = {
+			...cardGeometry(rows, aspect.height, figures ? CHROME_WITH_FIGURES : CHROME_BARE),
+			figures,
+		};
+	}
 	return out;
 }
 
@@ -210,21 +231,25 @@ export interface SummaryStat {
 }
 
 /**
- * The three figures under the grid.
+ * The four figures under the grid.
  *
  * **Films** counts distinct `tmdb_id`, so a film watched twice in the month is
- * one film even though it holds two cells in the grid above. **In the seat**
+ * one film even though it holds two cells in the grid above. **Hours**
  * deliberately does not: every watch is time spent, so a rewatch is counted
- * again. The labels carry that difference.
+ * again, and the two numbers are allowed to disagree.
  */
 export function summarise(key: string, watches: MonthWatch[]): SummaryStat[] {
+	const parsed = parseMonthKey(key);
+	const inMonth = parsed ? daysInMonth(parsed.year, parsed.month) : 0;
 	const distinct = new Set(watches.map((w) => w.tmdb_id));
+	const days = new Set(watches.map((w) => w.watched_date));
 	const minutes = watches.reduce((total, w) => total + (w.runtime ?? 0), 0);
 	const streak = longestStreak(key, watches);
 	return [
 		{ label: 'Films', value: String(distinct.size) },
-		{ label: 'In the seat', value: `${Math.round(minutes / 60)}h` },
-		{ label: 'Longest streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` },
+		{ label: 'Hours', value: `${Math.round(minutes / 60)}h` },
+		{ label: 'Days', value: `${days.size} of ${inMonth}` },
+		{ label: 'Streak', value: `${streak} ${streak === 1 ? 'day' : 'days'}` },
 	];
 }
 
