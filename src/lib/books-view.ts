@@ -232,7 +232,7 @@ export interface BookView {
  * approximately the real one. A book marked finished by hand still wins, whatever
  * its progress.
  */
-const FINISHED_PROGRESS = 0.97;
+export const FINISHED_PROGRESS = 0.97;
 
 /**
  * Percentages carry a decimal at the ends of the range and none in the middle:

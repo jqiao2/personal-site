@@ -6,11 +6,40 @@
 // artboard down to fit the screen; the element itself stays 1080px so the export
 // is the same drawing at full size.
 //
-// DAYS ARE STRINGS. `watched_date` is a calendar day, never an instant, so the
-// weekday of the 1st is computed arithmetically (see `firstWeekdayIndex`) and no
-// `Date` is constructed from a day string anywhere in this file.
+// The calendar arithmetic and the artboard itself are shared with the reading
+// card and live in share-card.ts; this file re-exports what the page needs so
+// there is one import for the page to reach for. What's genuinely film's own —
+// the stack order, the poster sizes, the summary — is here.
 
 import { imageUrl } from './tmdb';
+import {
+	ASPECTS,
+	daysInMonth,
+	firstWeekdayIndex,
+	geometry as cardGeometry,
+	longestStreak as runOfDays,
+	monthQuery as cardQuery,
+	parseMonthKey,
+	weekRows,
+	type Aspect,
+	type Geometry,
+} from './share-card';
+
+export {
+	ASPECTS,
+	CARD_WIDTH,
+	MONTH_ABBR,
+	WEEKDAYS,
+	aspectBySlug,
+	monthKey,
+	monthLabel,
+	monthOf,
+	parseMonthKey,
+	shiftMonth,
+	weekRows,
+	type Aspect,
+	type Geometry,
+} from './share-card';
 
 /** A diary watch as the card needs it — one row per watch, not per film. */
 export interface MonthWatch {
@@ -25,100 +54,6 @@ export interface MonthWatch {
 	release_year: number | null;
 	poster_path: string | null;
 	runtime: number | null;
-}
-
-const MONTHS = [
-	'January',
-	'February',
-	'March',
-	'April',
-	'May',
-	'June',
-	'July',
-	'August',
-	'September',
-	'October',
-	'November',
-	'December',
-];
-
-export const MONTH_ABBR = [
-	'Jan',
-	'Feb',
-	'Mar',
-	'Apr',
-	'May',
-	'Jun',
-	'Jul',
-	'Aug',
-	'Sep',
-	'Oct',
-	'Nov',
-	'Dec',
-];
-
-/** Monday-first, to match the card. */
-export const WEEKDAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
-const pad2 = (n: number) => String(n).padStart(2, '0');
-
-/** A "YYYY-MM" key, or null if it isn't one. Rejects month 00 and 13. */
-export function parseMonthKey(value: string | undefined): { year: number; month: number } | null {
-	if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
-	const year = Number(value.slice(0, 4));
-	const month = Number(value.slice(5, 7));
-	if (month < 1 || month > 12) return null;
-	return { year, month };
-}
-
-export function monthKey(year: number, month: number): string {
-	return `${year}-${pad2(month)}`;
-}
-
-/** The month a "YYYY-MM-DD" day falls in. */
-export function monthOf(day: string): string {
-	return day.slice(0, 7);
-}
-
-export function monthLabel(key: string): string {
-	const parsed = parseMonthKey(key);
-	if (!parsed) return key;
-	return `${MONTHS[parsed.month - 1]} ${parsed.year}`;
-}
-
-/** `key` moved `delta` months, wrapping the year. */
-export function shiftMonth(key: string, delta: number): string {
-	const parsed = parseMonthKey(key);
-	if (!parsed) return key;
-	const total = parsed.year * 12 + (parsed.month - 1) + delta;
-	return monthKey(Math.floor(total / 12), (((total % 12) + 12) % 12) + 1);
-}
-
-export function daysInMonth(year: number, month: number): number {
-	if (month === 2) {
-		const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
-		return leap ? 29 : 28;
-	}
-	return [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
-}
-
-/**
- * Which column the 1st sits in, Monday-first (0 = Monday). Sakamoto's method —
- * pure arithmetic on the calendar, so it can't drift with the runtime's zone the
- * way `new Date('2026-07-01').getDay()` does.
- */
-export function firstWeekdayIndex(year: number, month: number): number {
-	const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
-	const y = month < 3 ? year - 1 : year;
-	const sunFirst =
-		(y +
-			Math.floor(y / 4) -
-			Math.floor(y / 100) +
-			Math.floor(y / 400) +
-			t[month - 1] +
-			1) %
-		7;
-	return (sunFirst + 6) % 7;
 }
 
 /**
@@ -254,77 +189,19 @@ export function buildCells(key: string, watches: MonthWatch[]): MonthCell[] {
 	return cells;
 }
 
-/** Rows of the grid — 4, 5 or 6, depending on where the 1st lands. */
-export function weekRows(key: string): number {
-	const parsed = parseMonthKey(key);
-	if (!parsed) return 5;
-	const { year, month } = parsed;
-	return Math.ceil((firstWeekdayIndex(year, month) + daysInMonth(year, month)) / 7);
-}
-
-export interface Aspect {
-	id: string;
-	/** What it's called in a URL — the id has a colon in it. */
-	slug: string;
-	label: string;
-	height: number;
-}
-
-/** The three share sizes. All 1080 wide; only the height changes. */
-export const ASPECTS: readonly Aspect[] = [
-	{ id: '4:5', slug: 'feed', label: 'Feed', height: 1350 },
-	{ id: '1:1', slug: 'square', label: 'Square', height: 1080 },
-	{ id: '9:16', slug: 'story', label: 'Story', height: 1920 },
-];
-
-/** The aspect a `?fmt=` names, or the default for anything unrecognised. */
-export function aspectBySlug(slug: string | null): Aspect {
-	return ASPECTS.find((a) => a.slug === slug) ?? ASPECTS[0];
-}
-
-/**
- * The card's settings as a query string, so stepping to another month keeps
- * them — each step is a real navigation, and a copied link should reproduce the
- * card that was on screen. Defaults are left out, so the plain URL stays clean.
- *
- * The client mirrors this when it rewrites the month links; keep the two in step.
- */
-export function monthQuery(aspect: Aspect, showLikes: boolean): string {
-	const parts: string[] = [];
-	if (aspect.slug !== ASPECTS[0].slug) parts.push(`fmt=${aspect.slug}`);
-	if (!showLikes) parts.push('likes=0');
-	return parts.length ? `?${parts.join('&')}` : '';
-}
-
-export const CARD_WIDTH = 1080;
-const PAD = 46;
-const GUTTER = 10;
 /** Vertical space the header, summary and footer take, whatever the aspect. */
 const CHROME = 404;
-
-export interface Geometry {
-	height: number;
-	cell: number;
-	grid: number;
-}
-
-/**
- * The poster size that fits both ways: seven across the artboard's width, and
- * `rows` down whatever height the chosen aspect leaves after the chrome. The
- * short aspects are height-bound, the story aspect is width-bound.
- */
-export function geometry(rows: number, height: number): Geometry {
-	const byWidth = (CARD_WIDTH - 2 * PAD - 6 * GUTTER) / 7;
-	const byHeight = (height - CHROME - (rows - 1) * GUTTER) / rows / 1.5;
-	const cell = Math.min(byWidth, byHeight);
-	return { height, cell, grid: cell * 7 + GUTTER * 6 };
-}
 
 /** Geometry for every aspect, keyed by id — the aspect toggle just swaps these in. */
 export function geometries(rows: number): Record<string, Geometry> {
 	const out: Record<string, Geometry> = {};
-	for (const aspect of ASPECTS) out[aspect.id] = geometry(rows, aspect.height);
+	for (const aspect of ASPECTS) out[aspect.id] = cardGeometry(rows, aspect.height, CHROME);
 	return out;
+}
+
+/** The film card's settings in a query string: the aspect, and the likes switch. */
+export function monthQuery(aspect: Aspect, showLikes: boolean): string {
+	return cardQuery(aspect, showLikes ? {} : { likes: '0' });
 }
 
 export interface SummaryStat {
@@ -353,14 +230,8 @@ export function summarise(key: string, watches: MonthWatch[]): SummaryStat[] {
 
 /** The longest run of consecutive days with at least one watch, within the month. */
 export function longestStreak(key: string, watches: MonthWatch[]): number {
-	const parsed = parseMonthKey(key);
-	if (!parsed) return 0;
-	const seen = new Set(watches.map((w) => Number(w.watched_date.slice(8, 10))));
-	let longest = 0;
-	let run = 0;
-	for (let day = 1; day <= daysInMonth(parsed.year, parsed.month); day++) {
-		run = seen.has(day) ? run + 1 : 0;
-		if (run > longest) longest = run;
-	}
-	return longest;
+	return runOfDays(
+		key,
+		watches.map((w) => w.watched_date),
+	);
 }
