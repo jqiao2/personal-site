@@ -147,7 +147,11 @@ const nav = siteNav(Astro.url.pathname);
 										</div>
 									</div>
 									<div class="tile__meta">
-										<span class="stars">{starText(f.rating) ?? ''}</span>
+										<span class="tile__marks">
+											<span class="stars">{starText(f.rating) ?? ''}</span>
+											{f.liked && <span class="tile__like">♥</span>}
+											{f.rewatched && <span class="tile__rewatch">↻</span>}
+										</span>
 										<span class="tile__date">{shortDate(f.watched_date ?? f.created_at)}</span>
 									</div>
 								</a>
@@ -487,21 +491,43 @@ const nav = siteNav(Astro.url.pathname);
 			color: #b0917f;
 			font-style: italic;
 		}
+		/* Stars, heart and rewatch stay together as one group; the date sits
+		   opposite and drops to its own line rather than colliding, since four
+		   tiles across leaves the row little width. */
 		.tile__meta {
 			display: flex;
+			flex-wrap: wrap;
 			justify-content: space-between;
 			align-items: center;
+			gap: 2px 7px;
 			margin-top: 9px;
+		}
+		.tile__marks {
+			display: flex;
+			align-items: center;
+			gap: 5px;
+			white-space: nowrap;
 		}
 		.stars {
 			color: #d9b45a;
-			font-size: 13px;
-			letter-spacing: 0.5px;
+			font-size: clamp(11px, 1.15vw, 13px);
+			letter-spacing: 0.3px;
 			white-space: nowrap;
+		}
+		.tile__like {
+			color: #d9b45a;
+			font-size: clamp(11px, 1.15vw, 13px);
+			line-height: 1;
+		}
+		.tile__rewatch {
+			color: #8d6a60;
+			font-size: clamp(11px, 1.15vw, 13px);
+			line-height: 1;
 		}
 		.tile__date {
 			color: #a2857a;
-			font-size: 12px;
+			font-size: clamp(10.5px, 1.05vw, 12px);
+			white-space: nowrap;
 		}
 
 		/* Histogram */
