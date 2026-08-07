@@ -88,9 +88,9 @@ const nav = siteNav(Astro.url.pathname);
 					<a class="navrow navrow--link" href="/films/watchlist">
 						<span>Watchlist</span><span class="navrow__n">{num(stats.watchlist)}</span>
 					</a>
-					<div class="navrow">
+					<a class="navrow navrow--link" href="/films/watched?liked=1">
 						<span>Liked films</span><span class="navrow__n">{num(stats.liked)}</span>
-					</div>
+					</a>
 					<a class="navrow navrow--link" href="/films/stats">
 						<span>Stats</span><span class="navrow__n">→</span>
 					</a>
