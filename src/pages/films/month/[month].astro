@@ -728,6 +728,8 @@ const clientData = JSON.stringify({
 		font-weight: 700;
 		box-shadow: 0 2px 7px -1px rgba(0, 0, 0, 0.6);
 	}
+	/* The card clips its overflow, so the preview has to stay inside it: a title
+	   long enough to outgrow three cells wraps instead of running off the edge. */
 	.tip {
 		position: absolute;
 		left: 50%;
@@ -735,6 +737,8 @@ const clientData = JSON.stringify({
 		transform: translateX(-50%);
 		z-index: 40;
 		display: none;
+		width: max-content;
+		max-width: calc(var(--cell) * 3);
 		background: #20100f;
 		border: 1px solid #4a2529;
 		border-radius: 8px;
@@ -743,7 +747,18 @@ const clientData = JSON.stringify({
 		font-size: 17px;
 		color: #f2e5cd;
 		line-height: 1.45;
-		white-space: nowrap;
+		text-wrap: pretty;
+	}
+	/* Centring is what pushes it out in the outer columns — there, hang it off the
+	   grid edge instead. The columns either side have room to stay centred. */
+	.cell:nth-child(7n + 1) .tip {
+		left: 0;
+		transform: none;
+	}
+	.cell:nth-child(7n) .tip {
+		left: auto;
+		right: 0;
+		transform: none;
 	}
 	.cell:hover .tip {
 		display: block;
