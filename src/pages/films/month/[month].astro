@@ -1012,6 +1012,106 @@ const clientData = JSON.stringify({
 		let rendered: { state: string; file: File } | null = null;
 		const renderState = (): string => `${data.key}|${aspect}|${showLikes}`;
 
+		// Safari and every iOS browser, which is Safari underneath.
+		const webkit =
+			/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+
+		/** Anything html-to-image warned about while rasterising — see the panel below. */
+		let warnings: string[] = [];
+
+		/**
+		 * The card as a PNG blob.
+		 *
+		 * html-to-image rasterises by dropping a clone into an SVG <foreignObject>.
+		 * WebKit paints the text and the borders of that clone on a cold pass but
+		 * drops the <img>s, which is how an export comes back as a full calendar of
+		 * empty prints. A second pass draws them, and costs almost nothing: the
+		 * inlined data URLs are cached from the first.
+		 */
+		async function render(height: number): Promise<Blob | null> {
+			const { toBlob } = await import('html-to-image');
+			const options = {
+				width: data.width,
+				height,
+				backgroundColor: '#1c0d0e',
+				pixelRatio: 1,
+				// The card sits inside a scaled wrapper; the clone must not inherit it.
+				style: { transform: 'none' },
+				// A poster is drawn by a plain <img>, so the copy in the browser cache
+				// came back without an Access-Control-Allow-Origin header on it (TMDB
+				// only sends one when asked, and caches for a year). Inlining it here
+				// is a real CORS fetch, which that copy can't satisfy — so bust the URL.
+				cacheBust: true,
+			};
+			const warn = console.warn;
+			warnings = [];
+			console.warn = (...args: unknown[]) => {
+				warnings.push(args.map(String).join(' '));
+				warn(...args);
+			};
+			try {
+				const first = await toBlob(card, options);
+				return webkit ? await toBlob(card, options) : first;
+			} finally {
+				console.warn = warn;
+			}
+		}
+
+		/**
+		 * `?debug=1` — what the export actually did, printed on the page.
+		 *
+		 * A phone has no console to read and no inspector to attach from Windows, so
+		 * the export reports on itself: whether the posters are on the page at all,
+		 * whether they can be fetched the way the exporter fetches them, and what it
+		 * warned about. Screenshot it. Delete this once the export is trusted.
+		 */
+		async function report(blob: Blob | null): Promise<void> {
+			if (!new URLSearchParams(location.search).has('debug')) return;
+			const posters = [...card.querySelectorAll<HTMLImageElement>('img.art')];
+			const painted = posters.filter((img) => img.naturalWidth > 0).length;
+
+			// The same request html-to-image makes, on one poster, so a failure here
+			// separates "the network said no" from "WebKit didn't draw it".
+			let probe = 'no posters to probe';
+			const first = posters[0]?.src;
+			if (first) {
+				try {
+					const res = await fetch(`${first}?${Date.now()}`);
+					probe = `${res.status} ${res.headers.get('content-type') ?? '?'} · acao=${
+						res.headers.get('access-control-allow-origin') ?? 'none'
+					}`;
+				} catch (error) {
+					probe = `threw ${(error as Error)?.name}: ${(error as Error)?.message}`;
+				}
+			}
+
+			const lines = [
+				`ua        ${navigator.userAgent}`,
+				`webkit    ${webkit} · share=${shareFile}`,
+				`posters   ${posters.length} in card, ${painted} painted on the page`,
+				`probe     ${probe}`,
+				`png       ${blob ? `${Math.round(blob.size / 1024)} KB` : 'null'}`,
+				`warnings  ${warnings.length}`,
+				...warnings.slice(0, 6).map((w) => `          ${w}`),
+			];
+
+			let panel = document.getElementById('month-debug');
+			if (!panel) {
+				panel = document.createElement('pre');
+				panel.id = 'month-debug';
+				// Inline styles: this element is built in JS, so the page's scoped
+				// rules would never match it.
+				panel.style.cssText =
+					'position:fixed;left:8px;right:8px;bottom:8px;z-index:100;margin:0;padding:12px;' +
+					'max-height:52vh;overflow:auto;background:#20100f;border:1px solid #d9b45a;' +
+					'border-radius:10px;color:#f4e8d1;font:11px/1.5 ui-monospace,Menlo,monospace;' +
+					'white-space:pre-wrap;word-break:break-all;-webkit-user-select:text;user-select:text';
+				panel.addEventListener('click', () => panel?.remove());
+				document.body.appendChild(panel);
+			}
+			panel.textContent = lines.join('\n');
+		}
+
 		download?.addEventListener('click', async () => {
 			const height = data.geometry[aspect].height;
 			const name = `film-log-${data.key}.png`;
@@ -1027,26 +1127,13 @@ const clientData = JSON.stringify({
 
 			flash(`Rendering ${data.width}×${height}…`);
 			try {
-				const { toBlob } = await import('html-to-image');
-				const blob = await toBlob(card, {
-					width: data.width,
-					height,
-					backgroundColor: '#1c0d0e',
-					pixelRatio: 1,
-					// The card sits inside a scaled wrapper; the clone must not inherit it.
-					style: { transform: 'none' },
-					// The posters are drawn by <img> without CORS, so what's in the cache is
-					// a response with no Access-Control-Allow-Origin on it (TMDB only sends
-					// that header when asked, and sets a year of max-age). Inlining them for
-					// the export needs a real CORS fetch, which that cached copy can't
-					// satisfy — so bust the URL and get a fresh one.
-					cacheBust: true,
-				});
+				const blob = await render(height);
 				if (!blob) throw new Error('nothing was rendered');
 
 				if (shareFile) {
 					const file = new File([blob], name, { type: 'image/png' });
 					rendered = { state: renderState(), file };
+					report(blob);
 					try {
 						await navigator.share({ files: [file] });
 					} catch (error) {
@@ -1067,6 +1154,7 @@ const clientData = JSON.stringify({
 				// Revoked late: some browsers are still reading the blob when click() returns.
 				setTimeout(() => URL.revokeObjectURL(url), 10_000);
 				flash(`Saved ${name}`);
+				report(blob);
 			} catch {
 				flash('Could not render the image — posters may have blocked the export');
 			}
