@@ -375,42 +375,30 @@ function readDates(from: string, to: string): string {
 	return `${formatDay(from)} → ${formatDay(to)}`;
 }
 
-/** Verbs for the roles worth printing, in the order they are printed. */
-const CONTRIBUTOR_ROLES: [string, string][] = [
-	['translator', 'Translated by'],
-	['illustrator', 'Illustrated by'],
-	['narrator', 'Narrated by'],
-	['editor', 'Edited by'],
-];
-
 /**
  * "Ken Liu (Translator), Joel Martinsen (Translator)" → "Translated by Ken Liu
  * & Joel Martinsen".
  *
- * Names with no role in brackets are dropped rather than guessed at. A StoryGraph
- * export carries plenty of them — Frankenstein lists Lord Byron and Mary
+ * The translator is the only credit printed. Everyone else on a StoryGraph
+ * export — narrators, illustrators, editors — says something about an edition
+ * rather than about the book that was read.
+ *
+ * Names with no role in brackets are dropped rather than guessed at. An export
+ * carries plenty of them — Frankenstein lists Lord Byron and Mary
  * Wollstonecraft as bare names — and printing an unlabelled name under a byline
  * reads as a claim about authorship that nothing here can support.
  */
 function buildContributorLine(contributors: string[]): string | null {
-	const byRole = new Map<string, string[]>();
+	const names: string[] = [];
 	for (const entry of contributors) {
 		const parsed = entry.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
 		if (!parsed) continue;
-		const role = parsed[2].trim().toLowerCase();
+		if (parsed[2].trim().toLowerCase() !== 'translator') continue;
 		const name = parsed[1].trim();
-		if (!name) continue;
-		const names = byRole.get(role) ?? [];
-		// The export repeats a person under two roles; within one role it can also
-		// simply repeat them.
-		if (!names.includes(name)) names.push(name);
-		byRole.set(role, names);
+		// The export repeats the same person under a role more than once.
+		if (name && !names.includes(name)) names.push(name);
 	}
-
-	const parts = CONTRIBUTOR_ROLES.filter(([role]) => byRole.has(role)).map(
-		([role, verb]) => `${verb} ${byRole.get(role)!.join(' & ')}`,
-	);
-	return parts.length ? parts.join(' · ') : null;
+	return names.length ? `Translated by ${names.join(' & ')}` : null;
 }
 
 export function buildBookPage(input: BookPageInput): BookPageView {
@@ -463,9 +451,8 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		furthest > 0 &&
 		furthest / total! < FINISHED_PROGRESS;
 
-	// "Ken Liu (Translator)" reads as a database row. Grouped by role it reads as
-	// a credit — and the translator is the one that matters, so it goes first and
-	// the rest fall in behind it in whatever order they arrived.
+	// "Ken Liu (Translator)" reads as a database row; "Translated by Ken Liu"
+	// reads as a credit.
 	const contributorLine = buildContributorLine(book.contributors ?? []);
 
 	// ---- pace and projection -------------------------------------------------
