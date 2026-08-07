@@ -1374,7 +1374,9 @@ export async function listFavorites(limit = 4): Promise<FilmTile[]> {
 	try {
 		// Prefer the user-defined order; fall back to newest-watched if favorite_rank
 		// (0007) isn't there yet.
-		let { data, error } = await supabasePublic
+		// Widened, because the fallback below selects one column fewer — the two
+		// result shapes differ and only the columns read at `rows` matter.
+		let { data, error }: { data: unknown; error: unknown } = await supabasePublic
 			.from('watched')
 			.select(
 				'movie_id, rating, first_watched, favorite_rank, movies!inner(tmdb_id, title, release_year, poster_path)',
@@ -2371,7 +2373,9 @@ export async function reorderFavorites(orderedTmdbIds: number[]): Promise<void> 
 	}
 
 	let rank = 0;
-	const updates: Promise<void>[] = [];
+	// PromiseLike, not Promise: a Supabase query builder is thenable but not a real
+	// Promise until awaited. Promise.all takes either.
+	const updates: PromiseLike<void>[] = [];
 	for (const tmdbId of orderedTmdbIds) {
 		const watchedId = idByTmdb.get(tmdbId);
 		if (watchedId == null) continue;
