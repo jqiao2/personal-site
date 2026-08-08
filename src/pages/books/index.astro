@@ -1093,12 +1093,13 @@ const hasActivity = days.length > 0;
 			.tabs__link {
 				padding: 18px 10px 16px;
 			}
+			/*
+				The facts are a desktop aside. Wrapped below the progress bar they
+				push the next book off the screen for four lines nobody came for,
+				and the bar above them already tells the story.
+			*/
 			.facts {
-				flex: 1 1 100%;
-				border-left: none;
-				border-top: 1px solid #392a19;
-				padding-left: 0;
-				padding-top: 16px;
+				display: none;
 			}
 		}
 	</style>
