@@ -108,6 +108,8 @@ const spines = Array.from({ length: 18 }, () => ({
 						<div class="cover">
 							<img class="cover__art" src={v.coverUrl} alt={`${v.title} cover`} fetchpriority="high" />
 							<div class="cover__edge" />
+							{/* Where the jacket came from, at the size a credit belongs. */}
+							<div class="cover__credit">cover · open library</div>
 							{v.badge && !!v.isPublic && <div class:list={['badge', `badge--${v.shelf}`]}>{v.badge}</div>}
 							{
 								!v.isPublic && (
@@ -150,15 +152,7 @@ const spines = Array.from({ length: 18 }, () => ({
 										<div class="status__pages">{v.railPageLine}</div>
 									</Fragment>
 								) : (
-									<Fragment>
-										<div class="status__pages">{v.railPageLine}</div>
-										{!v.knowsTotal && (
-											<div class="status__note">
-												No page count on file, so there is no percentage and the automatic
-												finish will never fire.
-											</div>
-										)}
-									</Fragment>
+									<div class="status__pages">{v.railPageLine}</div>
 								)
 							}
 							{v.statusNote && <div class="status__note">{v.statusNote}</div>}
@@ -257,13 +251,6 @@ const spines = Array.from({ length: 18 }, () => ({
 									{v.isPublic ? 'Private' : 'Private — only you can see this'}
 								</span>
 							</button>
-							<div class="priv__caption">
-								{
-									v.isPublic
-										? 'Hides the book, its reviews and its highlights from the public shelf. Your streak and totals keep counting it.'
-										: 'Visitors get a 404, not a redacted page. The reading still counts: your streak, days read, pages and time all include it — the numbers say how much you read, not what.'
-								}
-							</div>
 						</div>
 					)
 				}
@@ -292,7 +279,7 @@ const spines = Array.from({ length: 18 }, () => ({
 				{v.contributorLine && <div class="credits">{v.contributorLine}</div>}
 
 				{
-					(v.metaBits.length > 0 || isOwner) && (
+					(v.metaBits.length > 0 || (isOwner && v.matched)) && (
 						<div class="meta">
 							{
 								v.metaBits.map((m, i) => (
@@ -346,7 +333,6 @@ const spines = Array.from({ length: 18 }, () => ({
 					!v.matched && (
 						<div class="invite">
 							<div class="invite__head">Nothing is known about this book yet.</div>
-							<div class="invite__body">{v.missingLine}</div>
 							<div class="invite__raw">{v.sourceTitle}</div>
 							{
 								isOwner && (
@@ -434,7 +420,6 @@ const spines = Array.from({ length: 18 }, () => ({
 											<span class="pace__unit">{v.pace.unit}</span>
 										</div>
 										<div class="pace__projection">{v.pace.projection}</div>
-										<div class="pace__basis">{v.pace.basis}</div>
 									</div>
 								)
 							}
@@ -913,6 +898,15 @@ const spines = Array.from({ length: 18 }, () => ({
 		width: 9px;
 		background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.28));
 	}
+	.cover__credit {
+		position: absolute;
+		top: 11px;
+		left: 12px;
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		font-size: 9px;
+		letter-spacing: 0.6px;
+		color: rgba(255, 244, 222, 0.42);
+	}
 	.cover__hatch {
 		position: absolute;
 		inset: 0;
@@ -1253,12 +1247,6 @@ const spines = Array.from({ length: 18 }, () => ({
 		font-weight: 600;
 		color: #ecc87c;
 	}
-	.priv__caption {
-		font-size: 11px;
-		color: #75603f;
-		line-height: 1.55;
-		margin-top: 9px;
-	}
 
 	/* Identity */
 	.title {
@@ -1404,12 +1392,6 @@ const spines = Array.from({ length: 18 }, () => ({
 		font-size: 19px;
 		color: #ead9b6;
 		line-height: 1.35;
-	}
-	.invite__body {
-		font-size: 13px;
-		color: #8a745a;
-		margin-top: 8px;
-		line-height: 1.6;
 	}
 	.invite__raw {
 		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
@@ -1604,13 +1586,6 @@ const spines = Array.from({ length: 18 }, () => ({
 		color: #f2e6cd;
 		line-height: 1.45;
 		margin-top: 12px;
-		max-width: 520px;
-	}
-	.pace__basis {
-		font-size: 12px;
-		color: #8a745a;
-		margin-top: 9px;
-		line-height: 1.55;
 		max-width: 520px;
 	}
 	.nopace {
