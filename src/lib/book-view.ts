@@ -235,8 +235,6 @@ export interface BookPageView {
 
 	/** Meta row / tags / blurb */
 	metaBits: string[];
-	/** The unmatched notice, naming only what is genuinely absent. */
-	missingLine: string;
 	kind: string | null;
 	genres: string[];
 	description: string[];
@@ -258,6 +256,7 @@ export interface BookPageView {
 	spineFill: number;
 	railPageLine: string;
 	railFacts: Fact[];
+	/** "Logged automatically", and only while a book is actually being logged. */
 	autoNote: string | null;
 	finishedLong: string | null;
 	byHand: boolean;
@@ -275,7 +274,7 @@ export interface BookPageView {
 	pageLine: string;
 	pagesLeftLine: string;
 	stats: Stat[];
-	pace: { value: string; unit: string; projection: string; basis: string } | null;
+	pace: { value: string; unit: string; projection: string } | null;
 	noPaceLine: string | null;
 
 	/** When you read it */
@@ -729,16 +728,6 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		matched ? [printedPages ? `${formatNumber(printedPages)} pages` : null, book.first_published, book.language] : []
 	).filter(Boolean) as string[];
 
-	// What the unmatched notice apologises for, listed from what is actually
-	// absent. A fixed sentence would tell you there is no page count on the same
-	// screen as the progress bar counting down from one.
-	const missing = [
-		!book.cover_url ? 'no cover' : null,
-		!knowsTotal ? 'no page count' : null,
-		!book.first_published ? 'no publication date' : null,
-		!book.genres.length ? 'no subjects' : null,
-	].filter(Boolean) as string[];
-
 	return {
 		id: book.id,
 		shelf,
@@ -762,12 +751,6 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		heroDotClass: `dot--${shelf}`,
 
 		metaBits,
-		// Two different absences, and saying "sideloaded EPUB" about a book that was
-		// never a file at all is the kind of wrong detail that makes a reader stop
-		// trusting the rest of the page.
-		missingLine: book.md5
-			? `It came in as a sideloaded EPUB, so all this page has is what the Kindle reported and what you read${missing.length ? `: ${missing.join(', ')}` : ''}.`
-			: `It was typed in rather than opened on a device, so all this page has is a title, an author and whatever you made of it${missing.length ? `: ${missing.join(', ')}` : ''}.`,
 		kind: book.kind,
 		genres: book.genres,
 		description: book.description,
@@ -786,11 +769,14 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 								? 'To read'
 								: null,
 		statusLabel,
+		// One sentence, naming the date and nothing else. How the shelf got set —
+		// thirty quiet days for one, a decision for the other — is a thing the page
+		// used to explain here and no longer does.
 		statusNote:
 			shelf === 'aside'
-				? `Untouched since ${lastDay ? formatDay(lastDay) : ''}. The site set this itself after thirty quiet days — it is drift, not a decision.`
+				? `Untouched since ${lastDay ? formatDay(lastDay) : ''}.`
 				: shelf === 'gaveup'
-					? `Stopped on purpose${book.gave_up_at ? ` on ${formatDay(zonedDay(book.gave_up_at))}` : ''}. One page turn puts it back in progress by itself.`
+					? `Stopped on purpose${book.gave_up_at ? ` on ${formatDay(zonedDay(book.gave_up_at))}` : ''}.`
 					: null,
 		knowsTotal,
 		showProgress: knowsTotal && !noPageData,
@@ -805,17 +791,11 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 				? `page ${formatNumber(furthest)} · total unknown`
 				: `${shelf === 'gaveup' ? 'Gave up at page ' : 'page '}${formatNumber(furthest)} of ${formatNumber(total!)} · ${percent}`,
 		railFacts,
-		autoNote: noPageData
-			? inProgress
-				? 'Read without tracking, so nothing here is counting. A synced page turn would take over.'
-				: 'Read without tracking, so there are no page turns behind this — the dates and the rating are the whole record.'
-			: shelf === 'reading'
-				? 'Logged automatically by the Kindle, one page turn at a time.'
-				: shelf === 'aside'
-					? 'Nothing was decided here — the Kindle simply stopped sending page turns.'
-					: shelf === 'toread'
-						? 'It moves itself to reading the first time the Kindle sends a page turn.'
-						: null,
+		// Three words under the rail, and only where they are true: a book being
+		// read with page turns arriving for it. A book read off the device has
+		// nothing logging it, and saying so at this size would be a claim about the
+		// record rather than the quiet footnote this line is.
+		autoNote: shelf === 'reading' && !noPageData ? 'Logged automatically' : null,
 		finishedLong: isFinished
 			? book.finished_at
 				? formatDayLong(zonedDay(book.finished_at))
@@ -853,7 +833,6 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 					value: String(Math.round(pagesPerHour)),
 					unit: 'pages an hour',
 					projection: `Roughly ${formatDuration(hoursLeft * 3600)} of reading left — ${rhythm}.`,
-					basis: `Based on the last ${recent.length} sittings only: about ${sessionsPerWeek.toFixed(1).replace(/\.0$/, '')} a week, ${Math.round(averageMinutes)} minutes each. It moves every time you pick the book up.`,
 				}
 			: null,
 		noPaceLine,
