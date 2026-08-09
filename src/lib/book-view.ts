@@ -143,6 +143,12 @@ export interface ActivityCell {
 	title: string;
 	level: number;
 	read: boolean;
+	/**
+	 * Read that day, but under the minimum — so it counts for nothing anywhere
+	 * else on the site. Drawn as its own mark rather than a shade of the scale:
+	 * the question it answers is "did this count", which is not a quantity.
+	 */
+	light: boolean;
 }
 
 export interface StretchRow {
@@ -428,7 +434,14 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	const lastDay = days.length ? days[days.length - 1].day : null;
 	const totalSeconds = days.reduce((sum, d) => sum + d.seconds, 0);
 	const totalPagesTurned = days.reduce((sum, d) => sum + d.pages, 0);
-	const maxPages = Math.max(1, ...days.map((d) => d.pages));
+	// Days that cleared the minimum. Everything measured in pages, time or dates
+	// still counts every day — you read those pages, and `days` holds them all.
+	// This is only for the two things the threshold governs: the day COUNT, and
+	// the scale the squares are shaded against, which a light day should not be
+	// allowed to compress (a book whose busiest day is six pages would otherwise
+	// shade a five-page day as its darkest square).
+	const countingDays = days.filter((d) => d.counts);
+	const maxPages = Math.max(1, ...countingDays.map((d) => d.pages));
 
 	const { main, sub } = splitTitle(book.title);
 	const title = main;
@@ -503,7 +516,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	const stats: Stat[] = [];
 	if (isFinished) {
 		stats.push({ value: formatDuration(totalSeconds), label: 'Time read' });
-		stats.push({ value: String(days.length), label: 'Days read' });
+		stats.push({ value: String(countingDays.length), label: 'Days read' });
 		stats.push({ value: formatNumber(totalPagesTurned), label: 'Pages turned' });
 		stats.push({
 			value: book.finished_at
@@ -515,7 +528,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		});
 	} else if (inProgress) {
 		stats.push({ value: formatDuration(totalSeconds), label: 'Time read' });
-		stats.push({ value: String(days.length), label: 'Days read' });
+		stats.push({ value: String(countingDays.length), label: 'Days read' });
 		stats.push({ value: firstDay ? formatDay(firstDay) : '—', label: 'First opened' });
 		stats.push({ value: lastDay ? ago(lastDay, todayDay) : '—', label: 'Last read' });
 	}
@@ -535,14 +548,20 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		for (let offset = 0; offset <= daysBetween(from, to); offset++) {
 			const day = addDays(from, offset);
 			const record = byDay.get(day);
+			const light = !!record && !record.counts;
 			cells.push({
 				title:
 					formatDay(day) +
 					(record
-						? ` · ${formatNumber(record.pages)} pages · ${formatDuration(record.seconds)}`
+						? ` · ${formatNumber(record.pages)} pages · ${formatDuration(record.seconds)}` +
+							// Said on the square itself, because this is the only page on the
+							// site that draws one — a reader comparing it against the shelf
+							// grid should not have to guess why the day is missing there.
+							(light ? ' · too little to count towards the day' : '')
 						: ' · nothing read'),
-				level: record ? heatLevel(record.pages, maxPages) : 0,
+				level: record && !light ? heatLevel(record.pages, maxPages) : 0,
 				read: !!record,
+				light,
 			});
 		}
 

@@ -44,20 +44,31 @@ comment on function public.reading_day_min_pages() is
 -- book_days_all: the rollup before the threshold
 -- ---------------------------------------------------------------------------
 -- What `book_days` used to be, verbatim, plus the raw event count `reading_daily`
--- reports. Splitting it out gives both of the views below one honest base to
--- filter, instead of two copies of the same GROUP BY drifting apart.
+-- reports and a `counts` flag saying which side of the line the row falls on.
+-- Splitting it out gives the views below one honest base to filter, instead of
+-- copies of the same GROUP BY drifting apart.
+--
+-- The flag is what the book's own page reads. A minimum is the right rule for
+-- every number that aggregates ACROSS books — the grid, the streaks, the month
+-- card — because there the small days are noise drowning the signal. On one
+-- book's own page they are the opposite: that is the record of when you actually
+-- had it open, and a day you know you read on going missing from it would be the
+-- page lying about its own subject. So the page draws them, marked, and computes
+-- `counts` here rather than comparing page numbers in TypeScript — the threshold
+-- has exactly one definition and it is the function above.
 create or replace view public.book_days_all with (security_invoker = true) as
 select
 	s.book_id,
 	(s.started_at at time zone 'America/New_York')::date as day,
 	count(distinct s.page)  as pages,
 	sum(s.duration_seconds) as seconds,
-	count(*)                as events
+	count(*)                as events,
+	count(distinct s.page) > public.reading_day_min_pages() as counts
 from public.reading_sessions s
 group by 1, 2;
 
 comment on view public.book_days_all is
-	'Per-book daily rollup with no minimum applied. Almost nothing should read this: book_days is the one that answers "was this book read that day". Here for the views that need the unfiltered denominator, and for working out why a day is missing.';
+	'Per-book daily rollup with no minimum applied, `counts` saying whether the row clears it. Read by the book''s own activity strip, which draws every day and marks the ones that do not count. Anything aggregating across books wants book_days instead.';
 
 -- ---------------------------------------------------------------------------
 -- book_days: the same rows, minus the ones that do not count
@@ -68,7 +79,7 @@ comment on view public.book_days_all is
 create or replace view public.book_days with (security_invoker = true) as
 select d.book_id, d.day, d.pages, d.seconds
 from public.book_days_all d
-where d.pages > public.reading_day_min_pages();
+where d.counts;
 
 comment on view public.book_days is
 	'Per-book daily rollup, days under reading_day_min_pages() dropped. Timezone must match reading_daily or a book''s days will not line up with the shelf''s. Use book_days_all for the unfiltered rows.';
@@ -96,7 +107,7 @@ select
 	count(*)::bigint       as books_touched,
 	sum(d.events)::bigint  as raw_events
 from public.book_days_all d
-where d.pages > public.reading_day_min_pages()
+where d.counts
 group by 1;
 
 comment on view public.reading_daily is
