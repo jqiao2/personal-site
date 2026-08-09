@@ -89,6 +89,10 @@ export interface BookRow {
 	seconds_read: number;
 	first_read_at: string | null;
 	last_read_at: string | null;
+	/**
+	 * Days that cleared the minimum, so this matches the activity strip rather
+	 * than `last_read_at` — the page counts beside it still count every page.
+	 */
 	days_read: number;
 }
 
@@ -147,7 +151,10 @@ export async function getBook(id: number, includePrivate = false): Promise<BookR
 	};
 }
 
-/** Every day this book was read on, oldest first. */
+/**
+ * Every day this book was properly read on, oldest first. Days under the
+ * minimum are not in `book_days` at all — see migration 0027.
+ */
 export async function getBookDays(bookId: number): Promise<BookDay[]> {
 	const { data, error } = await supabaseAdmin
 		.from('book_days')

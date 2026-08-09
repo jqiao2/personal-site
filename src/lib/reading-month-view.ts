@@ -60,7 +60,7 @@ export interface MonthBook {
 	furthest_page: number;
 	finished_at: string | null;
 	is_public: boolean;
-	/** The last day this book was read on, across all months. */
+	/** The last day this book holds a cell on, across all months. */
 	last_day: string | null;
 }
 
@@ -80,10 +80,14 @@ export function isFinished(book: MonthBook): boolean {
 
 /**
  * The day a finish belongs on: the date it was marked, else the last day the
- * book was touched. Null for a book that isn't finished.
+ * book holds a cell on. Null for a book that isn't finished.
  *
  * `finished_at` is an instant, and a day here is a calendar day in the site's
  * zone — the same zone `book_days` buckets sessions into, so the two line up.
+ *
+ * The fallback is the last COUNTED day, not the last session: a book finished on
+ * a two-page morning has a final session that the minimum drops, and dating the
+ * seal from it would put it on a square the grid never draws.
  */
 export function finishDay(book: MonthBook): string | null {
 	if (!isFinished(book)) return null;

@@ -6,9 +6,14 @@
 // What ships to the browser is what these helpers return: aggregates, and books
 // that have opted in via `is_public`.
 //
+// Every day-level number below has a minimum applied under it: a book counts
+// towards a day only if more than `reading_day_min_pages()` pages of it were
+// turned that day, so opening something to check a reference no longer lights a
+// heatmap square or holds a streak together. It is enforced once, in the views
+// (migration 0027), and nothing here re-checks it.
+//
 // Write side lives in src/lib/books-sync.ts.
 import { supabaseAdmin } from './supabase';
-import { siteDay } from './day';
 import { monthOf, shiftMonth } from './share-card';
 import type { MonthBook, ReadingDay } from './reading-month-view';
 
@@ -40,6 +45,7 @@ export interface BookProgress {
 	seconds_read: number;
 	first_read_at: string;
 	last_read_at: string;
+	/** Days that cleared the minimum. The page and time totals above do not. */
 	days_read: number;
 	/** 0–1, clamped. Null when the book's page count is unknown. */
 	progress: number | null;
@@ -134,6 +140,9 @@ export const CURRENTLY_READING_DAYS = 30;
  *
  * The gap-filling happens in SQL (`reading_heatmap`): reading_daily has no row
  * for a day with no reading, and a heatmap that skips its blanks is a bar chart.
+ *
+ * A day whose only reading fell under the minimum comes back as a zero, the same
+ * as a day nothing was opened at all — which is the point of having a minimum.
  */
 export async function getHeatmap(from: string, to: string): Promise<HeatmapDay[]> {
 	const { data, error } = await supabaseAdmin.rpc('reading_heatmap', {
@@ -154,6 +163,10 @@ export async function getHeatmap(from: string, to: string): Promise<HeatmapDay[]
  * A private book comes back with its title and cover stripped here rather than
  * in the page: the card draws it as a blank print, and what a redacted book is
  * called has no business travelling to the browser at all.
+ *
+ * A book that was barely opened on a day holds no cell there: `book_days` has
+ * the minimum applied (migration 0027), so a day of it never reaches the card.
+ * A book below the line on every day of the month is absent from it entirely.
  *
  * `markedFinished` are the books whose `finished_at` falls in the month. It is a
  * separate query because a book finished by hand can have no page turns behind
@@ -198,7 +211,7 @@ export async function getReadingMonth(key: string): Promise<{
 	const { data, error } = await supabaseAdmin
 		.from('book_detail')
 		.select(
-			'id, title, authors, cover_url, total_pages, furthest_page, finished_at, is_public, last_read_at',
+			'id, title, authors, cover_url, total_pages, furthest_page, finished_at, is_public, last_counted_day',
 		)
 		.in('id', ids);
 	if (error) throw new Error(`month books query failed: ${error.message}`);
@@ -214,9 +227,11 @@ export async function getReadingMonth(key: string): Promise<{
 			furthest_page: Number(row.furthest_page ?? 0),
 			finished_at: (row.finished_at as string | null) ?? null,
 			is_public: isPublic,
-			// `last_read_at` is max(started_at) and `book_days.day` buckets the same
-			// column into the same zone, so this is the last day the book holds a cell on.
-			last_day: row.last_read_at ? siteDay(row.last_read_at as string) : null,
+			// `last_counted_day` is max(book_days.day), so this is literally the last
+			// day the book holds a cell on — not the day of its last session, which
+			// since migration 0027 can be a two-page morning the grid never draws. An
+			// inferred finish is dated from this, and has to land on a square.
+			last_day: row.last_counted_day ? String(row.last_counted_day).slice(0, 10) : null,
 		} satisfies MonthBook;
 	});
 
