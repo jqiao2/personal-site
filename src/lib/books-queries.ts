@@ -10,7 +10,7 @@
 // towards a day only if more than `reading_day_min_pages()` pages of it were
 // turned that day, so opening something to check a reference no longer lights a
 // heatmap square or holds a streak together. It is enforced once, in the views
-// (migration 0027), and nothing here re-checks it.
+// (migration 0028), and nothing here re-checks it.
 //
 // Write side lives in src/lib/books-sync.ts.
 import { supabaseAdmin } from './supabase';
@@ -165,7 +165,7 @@ export async function getHeatmap(from: string, to: string): Promise<HeatmapDay[]
  * called has no business travelling to the browser at all.
  *
  * A book that was barely opened on a day holds no cell there: `book_days` has
- * the minimum applied (migration 0027), so a day of it never reaches the card.
+ * the minimum applied (migration 0028), so a day of it never reaches the card.
  * A book below the line on every day of the month is absent from it entirely.
  *
  * `markedFinished` are the books whose `finished_at` falls in the month. It is a
@@ -229,7 +229,7 @@ export async function getReadingMonth(key: string): Promise<{
 			is_public: isPublic,
 			// `last_counted_day` is max(book_days.day), so this is literally the last
 			// day the book holds a cell on — not the day of its last session, which
-			// since migration 0027 can be a two-page morning the grid never draws. An
+			// since migration 0028 can be a two-page morning the grid never draws. An
 			// inferred finish is dated from this, and has to land on a square.
 			last_day: row.last_counted_day ? String(row.last_counted_day).slice(0, 10) : null,
 		} satisfies MonthBook;

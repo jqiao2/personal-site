@@ -102,7 +102,7 @@ export interface BookDay {
 	pages: number;
 	seconds: number;
 	/**
-	 * Whether the day cleared the minimum (migration 0027) and so counts towards
+	 * Whether the day cleared the minimum (migration 0028) and so counts towards
 	 * the shelf-wide grid, the streaks and the month card. False days are drawn
 	 * on this page and nowhere else. Decided in SQL — the threshold has one home.
 	 */
