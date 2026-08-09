@@ -244,7 +244,7 @@ export const FINISHED_PROGRESS = 0.97;
  * towards the day. Strictly greater than: at 5, six pages count and five do not.
  *
  * DISPLAY ONLY. Nothing in TypeScript filters on this — the rule is enforced once
- * in SQL, by `reading_day_min_pages()` in migration 0027, and every day-level
+ * in SQL, by `reading_day_min_pages()` in migration 0028, and every day-level
  * number arrives already thresholded. This copy exists so the page can say what
  * the number is, and must be changed with the migration or it will lie.
  */
