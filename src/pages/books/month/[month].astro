@@ -45,7 +45,7 @@ const [month, counts] = await Promise.all([getReadingMonth(key), countReadingByM
 
 const books = new Map<number, MonthBook>(month.books.map((b) => [b.id, b]));
 // Which day each finished book's seal belongs on — the date it was marked, else
-// the last day it was touched. Books that aren't finished aren't in here.
+// the last day it holds a cell on. Books that aren't finished aren't in here.
 const finished = new Map<number, string>();
 for (const book of month.books) {
 	const day = finishDay(book);

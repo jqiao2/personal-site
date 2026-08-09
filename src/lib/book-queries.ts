@@ -89,6 +89,10 @@ export interface BookRow {
 	seconds_read: number;
 	first_read_at: string | null;
 	last_read_at: string | null;
+	/**
+	 * Days that cleared the minimum, so this matches the activity strip rather
+	 * than `last_read_at` — the page counts beside it still count every page.
+	 */
 	days_read: number;
 }
 
@@ -97,6 +101,12 @@ export interface BookDay {
 	day: string;
 	pages: number;
 	seconds: number;
+	/**
+	 * Whether the day cleared the minimum (migration 0027) and so counts towards
+	 * the shelf-wide grid, the streaks and the month card. False days are drawn
+	 * on this page and nowhere else. Decided in SQL — the threshold has one home.
+	 */
+	counts: boolean;
 }
 
 export interface ReviewRow {
@@ -147,11 +157,18 @@ export async function getBook(id: number, includePrivate = false): Promise<BookR
 	};
 }
 
-/** Every day this book was read on, oldest first. */
+/**
+ * Every day this book was opened on, oldest first — the small ones included.
+ *
+ * Reads `book_days_all` rather than `book_days`, which is the one place on the
+ * site that does. Everything that aggregates across books applies the minimum
+ * and drops the two-page mornings; a book's own page is the record of when it
+ * was open, so it keeps them and says which ones did not count.
+ */
 export async function getBookDays(bookId: number): Promise<BookDay[]> {
 	const { data, error } = await supabaseAdmin
-		.from('book_days')
-		.select('day, pages, seconds')
+		.from('book_days_all')
+		.select('day, pages, seconds, counts')
 		.eq('book_id', bookId)
 		.order('day', { ascending: true });
 	if (error) throw new Error(`book days query failed: ${error.message}`);
@@ -160,6 +177,7 @@ export async function getBookDays(bookId: number): Promise<BookDay[]> {
 		day: String(d.day).slice(0, 10),
 		pages: Number(d.pages),
 		seconds: Number(d.seconds),
+		counts: d.counts === true,
 	}));
 }
 

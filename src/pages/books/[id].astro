@@ -458,7 +458,12 @@ const spines = Array.from({ length: 18 }, () => ({
 													{
 														row.cells.map((c) => (
 															<div
-																class:list={['cell', `cell--l${c.level}`, !c.read && 'cell--off']}
+																class:list={[
+																	'cell',
+																	`cell--l${c.level}`,
+																	!c.read && 'cell--off',
+																	c.light && 'cell--light',
+																]}
 																title={c.title}
 															/>
 														))
@@ -1688,6 +1693,22 @@ const spines = Array.from({ length: 18 }, () => ({
 	}
 	.cell--l4 {
 		background: #cfa452;
+	}
+	/*
+		A day that was read on and counted for nothing — under the minimum, so it
+		is absent from the shelf grid, the streaks and the month card, and present
+		here because this page is the record of when the book was actually open.
+
+		Deliberately not a fifth step on the gold scale: the scale measures how much
+		was read, and this mark answers a different question. An empty square with a
+		dot in it reads as "something, but not enough" at 17px, and cannot be
+		mistaken for the faintest real day (.cell--l1) beside it.
+	*/
+	.cell--light {
+		background:
+			radial-gradient(circle at 50% 50%, rgba(207, 164, 82, 0.85) 1.6px, transparent 1.7px),
+			#241a10;
+		border-color: #3d2e1c;
 	}
 
 	/* Highlights */
