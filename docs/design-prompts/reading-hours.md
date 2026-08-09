@@ -27,9 +27,9 @@ controls — a month stepper, an aspect toggle — that are deliberately *not* p
 of the exported card.
 
 Add an hour-by-hour histogram for the month: across these ~30 days, when was I
-actually reading? It must be **toggleable** — hidden by default, revealed by a
-control, and the page has to look composed in both states rather than leaving a
-hole where it was.
+actually reading? It is **hidden by default and revealed by a show/hide
+control** — that is the only toggle, and the page has to look composed in both
+states rather than leaving a hole where it was.
 
 **The decision I want you to make and defend:** does the histogram belong
 *inside* the exported card, or is it a screen-only panel below it? Inside means
@@ -49,9 +49,9 @@ a row of stat blocks, a reading-pace line.
 
 Add the same hour histogram, scoped to this one book, in or beside "When you
 read it" — it's the natural home, since that section is already the record of
-*when*. Toggleable in the same way, and it should read as the same component as
-the month's, not a cousin. A book is often read in a handful of sittings, so
-this one is frequently working with very little data.
+*when*. Same show/hide toggle, and it should read as the same component as the
+month's, not a cousin. A book is often read in a handful of sittings, so this
+one is frequently working with very little data.
 
 ## The visual language
 
@@ -86,18 +86,22 @@ So the hour data is genuinely there and genuinely precise. What makes it awkward
    duration across boundaries is right and more work. Say which the design
    assumes.
 
-2. **Midnight is the middle of the reading day, not its edge.** Most of this
-   reading happens late at night. A plain 0→23 axis cuts the busiest stretch in
-   half and puts the two halves at opposite ends of the chart. Consider an axis
-   that starts somewhere like 4am, or some other treatment that keeps a night
-   session contiguous — but whatever you do, the reader has to be able to tell
-   at a glance that they're not looking at a normal midnight-to-midnight day.
+2. **Midnight is the middle of the reading day, not its edge.** This is not a
+   hypothetical — see the real distribution below. A plain 0→23 axis cuts the
+   busiest stretch in half and puts the two halves at opposite ends of the
+   chart. Use an axis that keeps a night session contiguous (starting around
+   4am, or some better idea), and make it legible at a glance that this is not
+   a normal midnight-to-midnight day.
 
-3. **Two possible measures: minutes read, or pages turned.** They tell different
-   stories — slow attentive reading versus fast page-flipping. Pick one as the
-   default and justify it. If you want a second toggle to switch measures, show
-   it, but the show/hide toggle is the required one and shouldn't get lost next
-   to it.
+3. **The y axis is pages, not time.** Settled — don't design a measure switch.
+   A bar is the number of page turns whose timestamp falls in that hour. Pages
+   are the currency everywhere else on this site (the month card's Pages
+   figure, the day cells, the threshold that decides whether a day counts), so
+   the histogram should speak the same unit. Time was the alternative and is
+   the weaker one: KOReader caps dwell at 120 seconds per page, so any page
+   dwelt on longer is recorded as exactly two minutes — about 3% of rows sit
+   pinned at the cap — which makes "minutes" quietly truncated at precisely the
+   slow, attentive end it would exist to capture.
 
 4. **The data is sparse and lumpy.** Design for these three states explicitly:
    - **Rich** — a month of daily reading, most hours occupied, a clear evening peak.
@@ -115,6 +119,29 @@ So the hour data is genuinely there and genuinely precise. What makes it awkward
 6. Everything on the site buckets days in **America/New_York**, and the hours
    must use the same zone or this histogram won't agree with the calendar grid
    sitting next to it.
+
+## The shape of the real data
+
+Not invented — this is every page turn in the database, bucketed by local hour.
+Base the "rich" mockup on something like it rather than on a tidy bell curve.
+
+| Hour | 23 | 00 | 01 | 02 | 03 | 07 | 08 | 09 | 10 | 15 | 16 | 17 | 18 | 19 | 20 | 22 |
+|------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Pages | 52 | 42 | 211 | 250 | 95 | 1 | 19 | 9 | 3 | 4 | 11 | 3 | 27 | 13 | 1 | 5 |
+
+Three things to take from it:
+
+- **Eight of the twenty-four hours are completely empty** (04–06, 11–14, 21).
+  Empty hours are the majority experience in the middle of the chart, not an
+  edge case. They need a resting state that isn't a row of sad gaps.
+- **87% of all reading falls in the 23:00–03:00 window**, peaking at 2am. On a
+  midnight-to-midnight axis that single contiguous habit is torn in two and
+  hung at opposite ends of the chart. This is the whole argument for point 2.
+- **The long tail is one-day noise.** Several of those small hours are a single
+  day's reading — hour 07 is literally one page turn, once. At month scope
+  they're specks; on a book page they may be a third of the chart. Decide
+  whether a 1-page hour deserves a visible bar, and what the minimum legible
+  bar height is so it doesn't vanish or lie.
 
 ## Constraints
 
@@ -136,6 +163,5 @@ So the hour data is genuinely there and genuinely precise. What makes it awkward
 2. Both placements for the month card (the one you'd ship, larger; the
    alternative, smaller).
 3. Book-page version in all three data states, at desktop and phone widths.
-4. A short written rationale: the axis decision, the measure decision, the
-   card-placement decision, and the sparse-data threshold. A paragraph each,
-   not an essay.
+4. A short written rationale: the axis decision, the card-placement decision,
+   and the sparse-data threshold. A paragraph each, not an essay.
