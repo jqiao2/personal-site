@@ -86,12 +86,19 @@ So the hour data is genuinely there and genuinely precise. What makes it awkward
    duration across boundaries is right and more work. Say which the design
    assumes.
 
-2. **Midnight is the middle of the reading day, not its edge.** This is not a
-   hypothetical — see the real distribution below. A plain 0→23 axis cuts the
-   busiest stretch in half and puts the two halves at opposite ends of the
-   chart. Use an axis that keeps a night session contiguous (starting around
-   4am, or some better idea), and make it legible at a glance that this is not
-   a normal midnight-to-midnight day.
+2. **The x axis is a plain 0→23 clock.** Settled, and not up for
+   reinterpretation: twenty-four hour slots, midnight on the left, 23:00 on the
+   right, one bar per real hour. Do not rotate the axis to start at 4am, do not
+   wrap it, and above all do not merge the small hours into a single "night"
+   bucket — each hour keeps its own bar, and the reader wants to see 1am and
+   2am as distinct.
+
+   The consequence, which you should design around rather than design away:
+   most of this reading happens late at night, so the tallest bars land at both
+   ends of the chart with a long empty middle. That is the true shape of the
+   habit on a real clock. Make that read as deliberate — an axis that is
+   obviously a full day, with both ends anchored — rather than as a chart that
+   has fallen over.
 
 3. **The y axis is pages, not time.** Settled — don't design a measure switch.
    A bar is the number of page turns whose timestamp falls in that hour. Pages
@@ -104,7 +111,8 @@ So the hour data is genuinely there and genuinely precise. What makes it awkward
    slow, attentive end it would exist to capture.
 
 4. **The data is sparse and lumpy.** Design for these three states explicitly:
-   - **Rich** — a month of daily reading, most hours occupied, a clear evening peak.
+   - **Rich** — a month of daily reading, most hours occupied, the late-night
+     peak of the real distribution below.
    - **Thin** — a book read in four sittings, so four bars and twenty empty
      hours. This must not look broken or embarrassing.
    - **Single** — one sitting, one bar. Does the histogram even appear? If it
@@ -125,18 +133,45 @@ So the hour data is genuinely there and genuinely precise. What makes it awkward
 Not invented — this is every page turn in the database, bucketed by local hour.
 Base the "rich" mockup on something like it rather than on a tidy bell curve.
 
-| Hour | 23 | 00 | 01 | 02 | 03 | 07 | 08 | 09 | 10 | 15 | 16 | 17 | 18 | 19 | 20 | 22 |
-|------|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Pages | 52 | 42 | 211 | 250 | 95 | 1 | 19 | 9 | 3 | 4 | 11 | 3 | 27 | 13 | 1 | 5 |
+Pages turned, by hour, on the 0→23 clock the design will use:
+
+```
+00  ███████                                   42
+01  ██████████████████████████████████       211
+02  ████████████████████████████████████████ 250
+03  ███████████████                           95
+04                                             0
+05                                             0
+06                                             0
+07  ▏                                          1
+08  ███                                       19
+09  █                                          9
+10  ▏                                          3
+11                                             0
+12                                             0
+13                                             0
+14                                             0
+15  ▏                                          4
+16  ██                                        11
+17  ▏                                          3
+18  ████                                      27
+19  ██                                        13
+20  ▏                                          1
+21                                             0
+22  ▏                                          5
+23  ████████                                  52
+```
 
 Three things to take from it:
 
+- **The shape is two tall ends and a hollow middle.** 87% of all reading falls
+  between 23:00 and 03:00, peaking at 2am. On the 0→23 axis that reads as a
+  cliff at the left edge and a rising bar at the right, with daylight nearly
+  flat between them. This is the real silhouette — design the chart that wears
+  it well.
 - **Eight of the twenty-four hours are completely empty** (04–06, 11–14, 21).
-  Empty hours are the majority experience in the middle of the chart, not an
-  edge case. They need a resting state that isn't a row of sad gaps.
-- **87% of all reading falls in the 23:00–03:00 window**, peaking at 2am. On a
-  midnight-to-midnight axis that single contiguous habit is torn in two and
-  hung at opposite ends of the chart. This is the whole argument for point 2.
+  Empty hours are the majority experience across the middle of the chart, not
+  an edge case. They need a resting state that isn't a row of sad gaps.
 - **The long tail is one-day noise.** Several of those small hours are a single
   day's reading — hour 07 is literally one page turn, once. At month scope
   they're specks; on a book page they may be a third of the chart. Decide
@@ -163,5 +198,6 @@ Three things to take from it:
 2. Both placements for the month card (the one you'd ship, larger; the
    alternative, smaller).
 3. Book-page version in all three data states, at desktop and phone widths.
-4. A short written rationale: the axis decision, the card-placement decision,
-   and the sparse-data threshold. A paragraph each, not an essay.
+4. A short written rationale: the card-placement decision, how you handled the
+   two-tall-ends silhouette on a fixed 0→23 axis, and the sparse-data
+   threshold. A paragraph each, not an essay.
