@@ -8,7 +8,13 @@
 // stack however few pages it took, and why the seal is the one thing that is
 // never optional.
 import BookLayout from '../../../layouts/BookLayout.astro';
-import { getReadingMonth, countReadingByMonth } from '../../../lib/books-queries';
+import HourHistogram from '../../../components/HourHistogram.astro';
+import {
+	getReadingMonth,
+	getReadingMonthHours,
+	countReadingByMonth,
+} from '../../../lib/books-queries';
+import { MIN_OCCUPIED_HOURS } from '../../../lib/reading-hours';
 import { siteDay } from '../../../lib/day';
 import {
 	ASPECTS,
@@ -19,6 +25,7 @@ import {
 	buildCells,
 	finishDay,
 	geometries,
+	geometryKey,
 	monthKey,
 	monthLabel,
 	monthOf,
@@ -39,9 +46,17 @@ const parsed = parseMonthKey(key);
 if (!parsed) return Astro.redirect(`/books/month/${siteDay().slice(0, 7)}`, 302);
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
-const query = monthQuery(aspect);
+// Both bands default on; only their absence rides in the URL, so the plain link
+// stays clean and an old link keeps meaning what it meant.
+const summaryOn = Astro.url.searchParams.get('summary') !== '0';
+const hoursOn = Astro.url.searchParams.get('hours') !== '0';
+const query = monthQuery(aspect, { summary: summaryOn, hours: hoursOn });
 
-const [month, counts] = await Promise.all([getReadingMonth(key), countReadingByMonth()]);
+const [month, counts, monthHours] = await Promise.all([
+	getReadingMonth(key),
+	countReadingByMonth(),
+	getReadingMonthHours(key),
+]);
 
 const books = new Map<number, MonthBook>(month.books.map((b) => [b.id, b]));
 // Which day each finished book's seal belongs on — the date it was marked, else
@@ -60,8 +75,12 @@ const finishedThisMonth = new Set<number>(month.markedFinished);
 for (const [id, day] of finished) if (monthOf(day) === key) finishedThisMonth.add(id);
 
 const rows = weekRows(key);
-const geometry = geometries(rows);
-const initial = geometry[aspect.id];
+// Three occupied hours is the same threshold the histogram itself applies. It
+// is asked here as well because the band's absence changes the artboard, and
+// the geometry has to be settled before anything is drawn.
+const hoursAvailable = monthHours.filter((pages) => pages > 0).length >= MIN_OCCUPIED_HOURS;
+const geometry = geometries(rows, hoursAvailable);
+const initial = geometry[geometryKey(aspect.id, summaryOn, hoursOn)];
 const cells = buildCells(key, month.days, books, finished);
 const figures = summarise(key, month.days, finishedThisMonth.size);
 const label = monthLabel(key);
@@ -84,6 +103,8 @@ const clientData = JSON.stringify({
 	counts,
 	geometry,
 	aspect: aspect.slug,
+	summary: summaryOn,
+	hours: hoursOn,
 	slugs: Object.fromEntries(ASPECTS.map((a) => [a.id, a.slug])),
 });
 ---
@@ -159,6 +180,21 @@ const clientData = JSON.stringify({
 					}
 				</div>
 
+				{/* Unlike the stepper and the aspect buttons, these two change what
+				    the card exports — hence the switch, and hence the URL. Story is
+				    the only aspect with room for either band, so they hide elsewhere
+				    rather than sit there doing nothing. */}
+				<div class="switches" hidden={aspect.id !== '9:16'} data-switches>
+					<button class="switch" type="button" data-switch="hours" aria-pressed={hoursOn}>
+						<span class="switch__track"><span class="switch__knob"></span></span>
+						<span class="switch__label">Hours</span>
+					</button>
+					<button class="switch" type="button" data-switch="summary" aria-pressed={summaryOn}>
+						<span class="switch__track"><span class="switch__knob"></span></span>
+						<span class="switch__label">Summary</span>
+					</button>
+				</div>
+
 				<div class="actions">
 					<button class="btn" type="button" data-copy>Copy link</button>
 					<button class="btn btn--primary" type="button" data-download>Download image</button>
@@ -170,7 +206,11 @@ const clientData = JSON.stringify({
 				<div class="viewport" data-viewport>
 					<div class="scaler">
 						<div
-							class:list={['card', initial.figures && 'card--figures']}
+							class:list={[
+								'card',
+								initial.figures && 'card--figures',
+								initial.hours && 'card--hours',
+							]}
 							data-card
 							style={`--cell:${initial.cell}px; --card-h:${initial.height}px; --grid-w:${initial.grid}px`}
 						>
@@ -244,6 +284,20 @@ const clientData = JSON.stringify({
 							</div>
 
 							{isEmpty && <div class="card__empty">Nothing read in {label}</div>}
+
+							{
+								hoursAvailable && (
+									<div class="hoursband">
+										<div class="hoursband__label">When I read</div>
+										<HourHistogram
+											hours={monthHours}
+											size="mini"
+											scale={2.5}
+											scopeWord="the month"
+										/>
+									</div>
+								)
+							}
 
 							<div class="figures">
 								{
@@ -448,6 +502,58 @@ const clientData = JSON.stringify({
 		font-size: 10px;
 		color: #8a745a;
 		margin-top: 2px;
+	}
+	.switches {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+	}
+	.switches[hidden] {
+		display: none;
+	}
+	.switch {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.switch__track {
+		position: relative;
+		flex: none;
+		width: 30px;
+		height: 17px;
+		border-radius: 9px;
+		background: #3d2d1a;
+		transition: background 0.15s ease;
+	}
+	.switch__knob {
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 13px;
+		height: 13px;
+		border-radius: 50%;
+		background: #8a745a;
+		transition: left 0.15s ease;
+	}
+	.switch__label {
+		font-size: 12px;
+		font-weight: 600;
+		color: #8a745a;
+	}
+	.switch[aria-pressed='true'] .switch__track {
+		background: #cfa452;
+	}
+	.switch[aria-pressed='true'] .switch__knob {
+		left: 15px;
+		background: #241a10;
+	}
+	.switch[aria-pressed='true'] .switch__label {
+		color: #ecc87c;
 	}
 	.aspects {
 		display: flex;
@@ -722,6 +828,25 @@ const clientData = JSON.stringify({
 	/* ---- under the grid ---- */
 	/* Four figures under a five-row grid leaves the prints too small to see a
 	   cover in, so only the tall aspect carries them. */
+	/* Both optional bands are always in the DOM and shown by class: the switches
+	   change the card without a navigation, and the geometry they pick from is
+	   precomputed, so there is nothing to re-render — only to reveal. */
+	.hoursband {
+		display: none;
+		border-top: 1px solid #392a19;
+		margin-top: 30px;
+		padding-top: 26px;
+	}
+	.card--hours .hoursband {
+		display: block;
+	}
+	.hoursband__label {
+		font-size: 25px;
+		letter-spacing: 2.6px;
+		text-transform: uppercase;
+		color: #bfa886;
+		margin-bottom: 22px;
+	}
 	.figures {
 		display: none;
 		align-items: flex-start;
@@ -811,13 +936,17 @@ const clientData = JSON.stringify({
 		cell: number;
 		grid: number;
 		figures: boolean;
+		hours: boolean;
 	}
 	interface MonthData {
 		key: string;
 		width: number;
 		counts: Record<string, number>;
+		/** Keyed by aspect and both switches — see geometryKey in reading-month-view. */
 		geometry: Record<string, Geometry>;
 		aspect: string;
+		summary: boolean;
+		hours: boolean;
 		slugs: Record<string, string>;
 	}
 
@@ -826,8 +955,17 @@ const clientData = JSON.stringify({
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
 	if (dataEl?.textContent && card && viewport) {
 		const data = JSON.parse(dataEl.textContent) as MonthData;
-		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
-		const defaultSlug = data.slugs[Object.keys(data.geometry)[0]];
+		const aspectIds = Object.keys(data.slugs);
+		let aspect = aspectIds.find((id) => data.slugs[id] === data.aspect) ?? aspectIds[0];
+		const defaultSlug = data.slugs[aspectIds[0]];
+		let summaryOn = data.summary;
+		let hoursOn = data.hours;
+
+		// Mirrors geometryKey on the server. Both sides have to agree on the shape
+		// of this string or the card silently keeps the geometry it loaded with.
+		function geometryFor(): Geometry {
+			return data.geometry[`${aspect}|${summaryOn ? 's' : ''}|${hoursOn ? 'h' : ''}`];
+		}
 
 		// ---- fit the 1080px artboard to the room the column has ----
 		const stage = viewport.parentElement;
@@ -843,9 +981,15 @@ const clientData = JSON.stringify({
 		fit();
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 
-		// ---- carry the aspect across a month step ----
+		// ---- carry the aspect and the bands across a month step ----
+		// Mirrors monthQuery on the server: defaults are left out, so the plain
+		// link stays clean.
 		function query(): string {
-			return data.slugs[aspect] === defaultSlug ? '' : `?fmt=${data.slugs[aspect]}`;
+			const parts: string[] = [];
+			if (data.slugs[aspect] !== defaultSlug) parts.push(`fmt=${data.slugs[aspect]}`);
+			if (!hoursOn) parts.push('hours=0');
+			if (!summaryOn) parts.push('summary=0');
+			return parts.length ? `?${parts.join('&')}` : '';
 		}
 		function syncLinks(): void {
 			const q = query();
@@ -897,25 +1041,49 @@ const clientData = JSON.stringify({
 			}, 2600);
 		}
 
-		// ---- aspect ----
+		// ---- aspect and the two bands ----
+		// One repaint for all three controls: each of them only picks a different
+		// precomputed geometry, and the bands are already in the DOM waiting on a
+		// class. Nothing here re-measures or re-renders the card.
 		const dims = document.querySelector<HTMLElement>('[data-dims]');
+		const switches = document.querySelector<HTMLElement>('[data-switches]');
+
+		function paintCard(): void {
+			const geometry = geometryFor();
+			if (!geometry) return;
+			card!.style.setProperty('--cell', `${geometry.cell}px`);
+			card!.style.setProperty('--card-h', `${geometry.height}px`);
+			card!.style.setProperty('--grid-w', `${geometry.grid}px`);
+			viewport!.style.setProperty('--card-h', `${geometry.height}px`);
+			// The grid has already been sized for whichever bands are drawn.
+			card!.classList.toggle('card--figures', geometry.figures);
+			card!.classList.toggle('card--hours', geometry.hours);
+			if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${aspect}`;
+			// Neither band fits anywhere but Story, so the switches go away rather
+			// than sit there inert.
+			if (switches) switches.hidden = aspect !== '9:16';
+			syncLinks();
+		}
+
 		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
 			button.addEventListener('click', () => {
 				const id = button.dataset.aspect;
-				const geometry = id ? data.geometry[id] : undefined;
-				if (!id || !geometry) return;
+				if (!id || !data.slugs[id]) return;
 				aspect = id;
-				card.style.setProperty('--cell', `${geometry.cell}px`);
-				card.style.setProperty('--card-h', `${geometry.height}px`);
-				card.style.setProperty('--grid-w', `${geometry.grid}px`);
-				viewport.style.setProperty('--card-h', `${geometry.height}px`);
-				// The summary is only drawn on the tall aspect; the grid has already
-				// been sized for its presence or absence.
-				card.classList.toggle('card--figures', geometry.figures);
-				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
-				syncLinks();
+				paintCard();
+			});
+		}
+
+		for (const button of document.querySelectorAll<HTMLElement>('[data-switch]')) {
+			button.addEventListener('click', () => {
+				const which = button.dataset.switch;
+				if (which === 'hours') hoursOn = !hoursOn;
+				else if (which === 'summary') summaryOn = !summaryOn;
+				else return;
+				button.setAttribute('aria-pressed', String(which === 'hours' ? hoursOn : summaryOn));
+				paintCard();
 			});
 		}
 
@@ -1008,7 +1176,10 @@ const clientData = JSON.stringify({
 		const webkit =
 			/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
 		let rendered: { state: string; file: File } | null = null;
-		const renderState = (): string => `${data.key}|${aspect}`;
+		// The bands belong in here with the aspect: flipping one changes the image,
+		// and a cached render keyed without them would be shared as the old card.
+		const renderState = (): string =>
+			`${data.key}|${aspect}|${summaryOn ? 's' : ''}|${hoursOn ? 'h' : ''}`;
 
 		/**
 		 * The card as a PNG blob.
@@ -1037,7 +1208,7 @@ const clientData = JSON.stringify({
 		}
 
 		download?.addEventListener('click', async () => {
-			const height = data.geometry[aspect].height;
+			const height = geometryFor().height;
 			const name = `book-log-${data.key}.png`;
 
 			if (shareFile && rendered?.state === renderState()) {

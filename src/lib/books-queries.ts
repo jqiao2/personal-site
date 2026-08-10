@@ -239,6 +239,31 @@ export async function getReadingMonth(key: string): Promise<{
 }
 
 /**
+ * One month's page turns by local hour, midnight first.
+ *
+ * Reads `reading_hours_daily`, which applies the day minimum, so the band counts
+ * exactly the reading the calendar grid above it draws. A card that disagreed
+ * with itself between two panels an inch apart would be worse than no band.
+ */
+export async function getReadingMonthHours(key: string): Promise<number[]> {
+	const { data, error } = await supabaseAdmin
+		.from('reading_hours_daily')
+		.select('hour, pages')
+		.gte('day', `${key}-01`)
+		.lt('day', `${shiftMonth(key, 1)}-01`);
+	if (error) throw new Error(`reading month hours query failed: ${error.message}`);
+
+	// A day-and-hour grid, so one hour arrives once per day it was read in.
+	const hours = new Array<number>(24).fill(0);
+	for (const row of data ?? []) {
+		const hour = Number(row.hour);
+		if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
+		hours[hour] += Number(row.pages);
+	}
+	return hours;
+}
+
+/**
  * Distinct books read per "YYYY-MM", for the month picker's counts. Pages
  * explicitly: PostgREST caps an unbounded select at 1000 rows, and a truncated
  * count reads as a month with nothing in it.

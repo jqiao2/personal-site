@@ -1,0 +1,278 @@
+---
+// Twenty-four bars over one local day. See src/lib/reading-hours.ts for the
+// shape of it; this is the markup, the chrome, and the pointer handling.
+//
+// Two callers, deliberately one component. On the month card it is `mini` and
+// part of an exported image, so it has no toggle and no tooltip — an image
+// cannot be hovered. On the book page it is `lg`, shut until asked for, and the
+// tooltip is the whole reason it is worth opening.
+import { buildHistogram, type HourSize } from '../lib/reading-hours';
+
+interface Props {
+	hours: number[];
+	size: HourSize;
+	scopeWord: string;
+	scale?: number;
+	title?: string;
+	/** Adds the Show/Hide control. Off on the card, which cannot be clicked. */
+	toggle?: boolean;
+	startOpen?: boolean;
+	spread?: number[] | null;
+	spreadTotal?: number;
+	spreadUnit?: string;
+	fallback?: string;
+}
+
+const {
+	hours,
+	size,
+	scopeWord,
+	scale = 1,
+	title = '',
+	toggle = false,
+	startOpen = true,
+	spread = null,
+	spreadTotal = 0,
+	spreadUnit = 'sittings',
+	fallback,
+} = Astro.props;
+
+const chart = buildHistogram({ hours, size, scale, scopeWord, spread, spreadTotal, spreadUnit, fallback });
+const { geom } = chart;
+
+// The header carries the title and the toggle. `mini` has neither: on the card
+// the band's own heading sits above it and there is nothing to click.
+const showHeader = size !== 'mini' && (!!title || chart.enough);
+const hasToggle = toggle && chart.enough;
+const open = chart.enough && startOpen;
+const gap = Math.round(11 * (size === 'mini' ? scale : 1));
+---
+
+<div class="hours" style={`gap:${gap}px`} data-hourchart={chart.geom.chrome ? '' : null}>
+	{
+		showHeader && (
+			<div class="hours__head">
+				<div class:list={['hours__title', size === 'sm' && 'hours__title--sm']}>{title}</div>
+				{hasToggle && (
+					<button class="hours__toggle" type="button" data-hours-toggle aria-expanded={open}>
+						{open ? 'Hide hours' : 'Show hours'}
+					</button>
+				)}
+			</div>
+		)
+	}
+
+	{
+		!chart.enough && (
+			<div class:list={['hours__fallback', size === 'sm' && 'hours__fallback--sm']}>
+				{chart.fallback}
+			</div>
+		)
+	}
+
+	{
+		chart.enough && (
+			<div class="hours__body" data-hours-body hidden={!open}>
+				<div class="hours__plot" style={`height:${geom.H}px`} data-hours-plot>
+					<div class="hours__cols" style={`gap:${geom.gap}px`}>
+						{chart.columns.map((c) => (
+							<div class="hours__col" data-hour={c.hour} data-tip={c.tip}>
+								<div
+									class="hours__bar"
+									data-empty={c.pages ? null : ''}
+									style={`height:${c.height}px;background:${c.background};border-radius:${c.radius}`}
+								/>
+							</div>
+						))}
+					</div>
+					<div class="hours__baseline" />
+					{geom.chrome && <div class="hours__tip" data-hours-tip hidden />}
+				</div>
+
+				<div
+					class="hours__axis"
+					style={`height:${Math.round(geom.type * 1.5)}px;margin-top:${Math.round(7 * scale)}px`}
+				>
+					{chart.labels.map((l) => (
+						<div
+							class="hours__label"
+							style={`left:${l.left.toFixed(2)}%;transform:translateX(${l.shift});font-size:${geom.type}px`}
+						>
+							{l.text}
+						</div>
+					))}
+				</div>
+			</div>
+		)
+	}
+</div>
+
+<style>
+	.hours {
+		display: flex;
+		flex-direction: column;
+	}
+	.hours__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 14px;
+	}
+	.hours__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 19px;
+		color: #ead9b6;
+		line-height: 1.2;
+	}
+	.hours__title--sm {
+		font-size: 17px;
+	}
+	.hours__toggle {
+		font-size: 12px;
+		color: #a68f6e;
+		background: transparent;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+		text-decoration: underline;
+		text-decoration-color: #4d3a22;
+		text-underline-offset: 4px;
+		white-space: nowrap;
+	}
+	.hours__toggle:hover {
+		color: #ecc87c;
+	}
+	.hours__fallback {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 17px;
+		color: #8a745a;
+		line-height: 1.55;
+	}
+	.hours__fallback--sm {
+		font-size: 15.5px;
+	}
+	.hours__plot {
+		position: relative;
+		touch-action: none;
+		cursor: crosshair;
+	}
+	.hours__cols {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: flex-end;
+	}
+	.hours__col {
+		flex: 1 1 0;
+		min-width: 0;
+		height: 100%;
+		display: flex;
+		align-items: flex-end;
+	}
+	/* The hovered hour lights its whole column, not just the bar — an empty hour
+	   has to be hoverable too, or the tooltip goes quiet exactly where "nothing
+	   read" is the interesting answer. */
+	.hours__col[data-on] {
+		background: rgba(207, 164, 82, 0.07);
+	}
+	.hours__col[data-on] .hours__bar:not([data-empty]) {
+		box-shadow: 0 0 0 1px #ecc87c;
+	}
+	.hours__baseline {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 1px;
+		background: #45341f;
+	}
+	.hours__bar {
+		width: 100%;
+	}
+	.hours__tip {
+		position: absolute;
+		bottom: calc(100% + 8px);
+		white-space: nowrap;
+		z-index: 20;
+		background: #241a10;
+		border: 1px solid #45341f;
+		border-radius: 7px;
+		padding: 7px 11px;
+		font-size: 11.5px;
+		color: #f2e6cd;
+		box-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.85);
+		pointer-events: none;
+	}
+	.hours__axis {
+		position: relative;
+	}
+	.hours__label {
+		position: absolute;
+		top: 0;
+		letter-spacing: 0.6px;
+		color: #8a745a;
+		white-space: nowrap;
+	}
+</style>
+
+<script>
+	const HOURS = 24;
+
+	function wire(root: HTMLElement) {
+		const plot = root.querySelector<HTMLElement>('[data-hours-plot]');
+		const tip = root.querySelector<HTMLElement>('[data-hours-tip]');
+		const cols = Array.from(root.querySelectorAll<HTMLElement>('.hours__col'));
+		if (!plot || !tip || cols.length === 0) return;
+
+		let shown = -1;
+
+		const clear = () => {
+			if (shown < 0) return;
+			cols[shown]?.removeAttribute('data-on');
+			tip.hidden = true;
+			shown = -1;
+		};
+
+		const move = (clientX: number) => {
+			const r = plot.getBoundingClientRect();
+			if (r.width === 0) return;
+			const i = Math.floor(((clientX - r.left) / r.width) * HOURS);
+			if (i < 0 || i >= HOURS || i === shown) return;
+			cols[shown]?.removeAttribute('data-on');
+			shown = i;
+			const col = cols[i];
+			col.setAttribute('data-on', '');
+			tip.textContent = col.dataset.tip ?? '';
+			// Centre on the column, then pull the tooltip inside the plot at the
+			// ends — at 2am the box is wider than the space left of it.
+			const left = (i / HOURS) * 100 + 100 / (HOURS * 2);
+			tip.style.left = `${left.toFixed(2)}%`;
+			tip.style.transform = `translateX(${left < 22 ? '0%' : left > 78 ? '-100%' : '-50%'})`;
+			tip.hidden = false;
+		};
+
+		plot.addEventListener('mousemove', (e) => move(e.clientX));
+		plot.addEventListener('pointerdown', (e) => move(e.clientX));
+		plot.addEventListener('mouseleave', clear);
+	}
+
+	function wireToggle(root: HTMLElement) {
+		const button = root.querySelector<HTMLElement>('[data-hours-toggle]');
+		const body = root.querySelector<HTMLElement>('[data-hours-body]');
+		if (!button || !body) return;
+		button.addEventListener('click', () => {
+			const open = body.hidden;
+			body.hidden = !open;
+			button.textContent = open ? 'Hide hours' : 'Show hours';
+			button.setAttribute('aria-expanded', String(open));
+		});
+	}
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-hourchart]')) {
+		wire(root);
+		wireToggle(root);
+	}
+</script>
