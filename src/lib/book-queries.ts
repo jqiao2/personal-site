@@ -181,6 +181,41 @@ export async function getBookDays(bookId: number): Promise<BookDay[]> {
 	}));
 }
 
+/** A book's page turns by local hour, with the sittings behind each one. */
+export interface BookHours {
+	/** 24 counts, midnight first. */
+	hours: number[];
+	/** How many sittings touched each hour. Sums to more than `sittings`. */
+	spread: number[];
+	/** Sittings over the book's whole life — the tooltip's denominator. */
+	sittings: number;
+}
+
+/**
+ * When this book was read, on the clock.
+ *
+ * Unfiltered by the day minimum, matching `getBookDays` above and for the same
+ * reason: the small mornings are part of the record of when the book was open.
+ */
+export async function getBookHours(bookId: number): Promise<BookHours> {
+	const [rows, total] = await Promise.all([
+		supabaseAdmin.from('book_hours').select('hour, pages, sittings').eq('book_id', bookId),
+		supabaseAdmin.from('book_sitting_counts').select('sittings').eq('book_id', bookId).maybeSingle(),
+	]);
+	if (rows.error) throw new Error(`book hours query failed: ${rows.error.message}`);
+	if (total.error) throw new Error(`book sittings query failed: ${total.error.message}`);
+
+	const hours = new Array<number>(24).fill(0);
+	const spread = new Array<number>(24).fill(0);
+	for (const row of rows.data ?? []) {
+		const hour = Number(row.hour);
+		if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
+		hours[hour] = Number(row.pages);
+		spread[hour] = Number(row.sittings);
+	}
+	return { hours, spread, sittings: Number(total.data?.sittings ?? 0) };
+}
+
 /** Reviews for a book, newest read first. */
 export async function getBookReviews(bookId: number): Promise<ReviewRow[]> {
 	const { data, error } = await supabaseAdmin

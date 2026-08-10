@@ -249,31 +249,85 @@ export function buildCells(
 const CHROME_WITH_FIGURES = 470;
 const CHROME_BARE = 330;
 
-export interface ReadingGeometry extends Geometry {
-	/** Whether the summary is drawn at this aspect. */
-	figures: boolean;
-}
+/** What the hour band costs the grid when it is drawn. */
+const CHROME_HOURS = 200;
 
-export function hasFigures(aspect: Aspect): boolean {
+/**
+ * Whether an aspect has the vertical slack for the optional bands.
+ *
+ * Story only, and not as a stylistic preference: the hour band costs 200px of
+ * artboard, which on Feed is a fifth of the cover size and on Square better
+ * than a quarter. The card is covers first — a band that shrinks them to buy
+ * itself room has taken more than it gives.
+ */
+export function hasBands(aspect: Aspect): boolean {
 	return aspect.id === '9:16';
 }
 
-/** Geometry for every aspect, keyed by id — the aspect toggle just swaps these in. */
-export function geometries(rows: number): Record<string, ReadingGeometry> {
+export interface ReadingGeometry extends Geometry {
+	/** Whether the summary is drawn in this combination. */
+	figures: boolean;
+	/** Whether the hour band is drawn in this combination. */
+	hours: boolean;
+}
+
+/**
+ * Key into the geometry map.
+ *
+ * Both bands change the artboard's arithmetic, and both can be switched on
+ * screen without a navigation, so every combination is precomputed here rather
+ * than recomputed in the browser. Three aspects times two switches is twelve
+ * small objects — cheaper to ship than a second copy of the arithmetic that can
+ * drift from this one.
+ */
+export function geometryKey(aspectId: string, summary: boolean, hours: boolean): string {
+	return `${aspectId}|${summary ? 's' : ''}|${hours ? 'h' : ''}`;
+}
+
+/**
+ * Geometry for every aspect and switch combination.
+ *
+ * `hoursAvailable` is the month's own answer to whether there is a distribution
+ * worth drawing. With it false the hour key still exists and simply costs
+ * nothing, so the client can flip the switch without having to know why the
+ * band never appears.
+ */
+export function geometries(rows: number, hoursAvailable: boolean): Record<string, ReadingGeometry> {
 	const out: Record<string, ReadingGeometry> = {};
 	for (const aspect of ASPECTS) {
-		const figures = hasFigures(aspect);
-		out[aspect.id] = {
-			...cardGeometry(rows, aspect.height, figures ? CHROME_WITH_FIGURES : CHROME_BARE),
-			figures,
-		};
+		const bands = hasBands(aspect);
+		for (const summary of [true, false]) {
+			for (const hours of [true, false]) {
+				const figures = bands && summary;
+				const band = bands && hours && hoursAvailable;
+				const chrome =
+					(figures ? CHROME_WITH_FIGURES : CHROME_BARE) + (band ? CHROME_HOURS : 0);
+				out[geometryKey(aspect.id, summary, hours)] = {
+					...cardGeometry(rows, aspect.height, chrome),
+					figures,
+					hours: band,
+				};
+			}
+		}
 	}
 	return out;
 }
 
-/** The reading card's settings in a query string. Only the aspect, for now. */
-export function monthQuery(aspect: Aspect): string {
-	return cardQuery(aspect);
+/**
+ * The reading card's settings in a query string.
+ *
+ * The two switches go in alongside the aspect because, unlike the month stepper
+ * and the picker, they change what the card EXPORTS — a shared link has to
+ * render the card that was shared.
+ */
+export function monthQuery(
+	aspect: Aspect,
+	opts: { summary?: boolean; hours?: boolean } = {},
+): string {
+	const extra: Record<string, string> = {};
+	if (opts.hours === false) extra.hours = '0';
+	if (opts.summary === false) extra.summary = '0';
+	return cardQuery(aspect, extra);
 }
 
 export interface Figure {

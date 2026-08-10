@@ -1,10 +1,12 @@
 ---
 import BookReviewEditor from '../../components/BookReviewEditor.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
+import HourHistogram from '../../components/HourHistogram.astro';
 import {
 	getBook,
 	getBookDays,
 	getBookHighlights,
+	getBookHours,
 	getBookReviews,
 } from '../../lib/book-queries';
 import { buildBookPage } from '../../lib/book-view';
@@ -46,13 +48,19 @@ if (!book) {
 	);
 }
 
-const [days, reviews, highlights] = await Promise.all([
+const [days, reviews, highlights, bookHours] = await Promise.all([
 	getBookDays(book.id),
 	getBookReviews(book.id),
 	getBookHighlights(book.id),
+	getBookHours(book.id),
 ]);
 
 const v = buildBookPage({ book, days, reviews, highlights, isOwner });
+
+// Every day on this page comes from a session, so activity implies page turns
+// with a clock on them — but a book imported without them would otherwise draw
+// twenty-four empty bars and call it a chart.
+const hasHours = bookHours.hours.some((pages) => pages > 0);
 
 // Decorative shelf behind the hero: the spines from /books, out of focus. A
 // fixed seed rather than Math.random so the same book draws the same shelf on
@@ -436,6 +444,22 @@ const spines = Array.from({ length: 18 }, () => ({
 								<h2 class="sec-head__title">When you read it</h2>
 								<span class="sec-head__meta">{v.activityMeta}</span>
 							</div>
+							{
+								hasHours && (
+									<div class="hourblock">
+										<HourHistogram
+											hours={bookHours.hours}
+											size="lg"
+											scopeWord="this book"
+											toggle
+											startOpen={false}
+											spread={bookHours.spread}
+											spreadTotal={bookHours.sittings}
+											spreadUnit="sittings"
+										/>
+									</div>
+								)
+							}
 							<div class="stretches">
 								{
 									v.stretches.map((row) =>
@@ -1606,6 +1630,9 @@ const spines = Array.from({ length: 18 }, () => ({
 	}
 
 	/* When you read it */
+	.hourblock {
+		margin-bottom: 22px;
+	}
 	.stretches {
 		display: flex;
 		flex-direction: column;
