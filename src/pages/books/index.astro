@@ -16,7 +16,6 @@ import {
 import { finishedShelf, shelfSpan, toReadShelf } from '../../lib/shelf-view';
 import { buildPile } from '../../lib/to-read-view';
 import {
-	activityMeta,
 	buildHeatmap,
 	buildShelf,
 	buildSpells,
@@ -26,7 +25,6 @@ import {
 	HEAT_LEVELS,
 	prefersHeatmap,
 	readDays,
-	READING_DAY_MIN_PAGES,
 	today,
 	type BookView,
 } from '../../lib/books-view';
@@ -88,10 +86,10 @@ const spells = buildSpells(days, shelf, maxPages);
 const heatmap = buildHeatmap(days, maxPages, todayDay);
 
 // The data picks the instrument. A year of near-daily reading is what a calendar
-// is for; a fortnight in April surrounded by nothing is not.
+// is for; a fortnight in April surrounded by nothing is not. The choice used to
+// announce itself in a line above the pills; the pills already show which view
+// is on, so it was narrating what the reader could see.
 const defaultView = days.length && prefersHeatmap(days, todayDay) ? 'heatmap' : 'spells';
-const autoNote =
-	defaultView === 'heatmap' ? 'dense enough for a calendar' : 'shown as spells';
 
 // Everything read, newest finish at the left. There is no year filter: scrolling
 // back along the shelf is the time axis, and a row of year pills would only let
@@ -262,10 +260,6 @@ const hasActivity = days.length > 0;
 						{
 							hasActivity && (
 								<div class="sec-head__tools">
-									<span class="sec-head__meta">
-										{activityMeta(days)}
-										<span class="auto-note" data-auto-note> · {autoNote}</span>
-									</span>
 									<a class="month-link" href="/books/month">
 										Month in reading →
 									</a>
@@ -410,23 +404,6 @@ const hasActivity = days.length > 0;
 					<BookShelf spines={done} emptyLine="Nothing finished yet." />
 				</section>
 
-				{/*
-					The two things the shelves cannot say for themselves. Every list on
-					this page is filtered to `is_public`, and every number at the top is
-					not — reading_stats aggregates across the lot, because hiding a book
-					should not silently break a two-hundred-day streak.
-
-					The second is the minimum from migration 0028, which is the reason a
-					day you know you opened a book on can be blank up there. Worth stating
-					plainly: a number that quietly disagrees with the reader's memory is
-					worse than one that explains itself.
-				*/}
-				<p class="foot">
-					Some books are read privately. They are counted in the totals and streaks
-					above but never listed. A book counts towards a day once more than{' '}
-					{READING_DAY_MIN_PAGES} of its pages have been turned — opening one to
-					check a reference is not a day's reading.
-				</p>
 			</div>
 		</div>
 	</div>
@@ -437,16 +414,12 @@ const hasActivity = days.length > 0;
 		// reads correctly with JavaScript off, showing whichever view fits the data.
 		const panels = document.querySelectorAll<HTMLElement>('[data-panel]');
 		const viewButtons = document.querySelectorAll<HTMLButtonElement>('[data-view]');
-		const autoNote = document.querySelector<HTMLElement>('[data-auto-note]');
 
 		for (const button of viewButtons) {
 			button.addEventListener('click', () => {
 				const wanted = button.dataset.view;
 				for (const panel of panels) panel.hidden = panel.dataset.panel !== wanted;
 				for (const other of viewButtons) other.classList.toggle('pill--on', other === button);
-				// The note explains an automatic choice. Once it's been overruled it
-				// is describing something that is no longer on screen.
-				autoNote?.remove();
 			});
 		}
 
@@ -1088,13 +1061,6 @@ const hasActivity = days.length > 0;
 		}
 		.none[hidden] {
 			display: none;
-		}
-		.foot {
-			font-size: 11.5px;
-			color: #8a745a;
-			padding-top: 4px;
-			line-height: 1.6;
-			margin: 0;
 		}
 
 		@media (max-width: 640px) {

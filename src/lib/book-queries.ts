@@ -181,14 +181,9 @@ export async function getBookDays(bookId: number): Promise<BookDay[]> {
 	}));
 }
 
-/** A book's page turns by local hour, with the sittings behind each one. */
+/** A book's page turns by local hour, midnight first. */
 export interface BookHours {
-	/** 24 counts, midnight first. */
 	hours: number[];
-	/** How many sittings touched each hour. Sums to more than `sittings`. */
-	spread: number[];
-	/** Sittings over the book's whole life — the tooltip's denominator. */
-	sittings: number;
 }
 
 /**
@@ -196,24 +191,25 @@ export interface BookHours {
  *
  * Unfiltered by the day minimum, matching `getBookDays` above and for the same
  * reason: the small mornings are part of the record of when the book was open.
+ *
+ * `book_hours` also carries a per-hour sitting count, and `book_sitting_counts`
+ * the total behind it. Both are left in the schema and read by nothing: the
+ * tooltip that wanted them now says only the hour and the pages.
  */
 export async function getBookHours(bookId: number): Promise<BookHours> {
-	const [rows, total] = await Promise.all([
-		supabaseAdmin.from('book_hours').select('hour, pages, sittings').eq('book_id', bookId),
-		supabaseAdmin.from('book_sitting_counts').select('sittings').eq('book_id', bookId).maybeSingle(),
-	]);
-	if (rows.error) throw new Error(`book hours query failed: ${rows.error.message}`);
-	if (total.error) throw new Error(`book sittings query failed: ${total.error.message}`);
+	const { data, error } = await supabaseAdmin
+		.from('book_hours')
+		.select('hour, pages')
+		.eq('book_id', bookId);
+	if (error) throw new Error(`book hours query failed: ${error.message}`);
 
 	const hours = new Array<number>(24).fill(0);
-	const spread = new Array<number>(24).fill(0);
-	for (const row of rows.data ?? []) {
+	for (const row of data ?? []) {
 		const hour = Number(row.hour);
 		if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
 		hours[hour] = Number(row.pages);
-		spread[hour] = Number(row.sittings);
 	}
-	return { hours, spread, sittings: Number(total.data?.sittings ?? 0) };
+	return { hours };
 }
 
 /** Reviews for a book, newest read first. */
