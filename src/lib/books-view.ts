@@ -239,16 +239,10 @@ export interface BookView {
  */
 export const FINISHED_PROGRESS = 0.97;
 
-/**
- * Pages of one book that have to be turned in a day before that book counts
- * towards the day. Strictly greater than: at 5, six pages count and five do not.
- *
- * DISPLAY ONLY. Nothing in TypeScript filters on this — the rule is enforced once
- * in SQL, by `reading_day_min_pages()` in migration 0028, and every day-level
- * number arrives already thresholded. This copy exists so the page can say what
- * the number is, and must be changed with the migration or it will lie.
- */
-export const READING_DAY_MIN_PAGES = 5;
+// The day minimum itself lives only in SQL, in `reading_day_min_pages()` from
+// migration 0028. There was a copy of the number here so the shelves could
+// explain themselves in a footnote; the footnote is gone, and a second copy of a
+// threshold that nothing reads is just something else to keep in step.
 
 /**
  * Percentages carry a decimal at the ends of the range and none in the middle:

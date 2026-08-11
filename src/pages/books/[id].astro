@@ -447,16 +447,7 @@ const spines = Array.from({ length: 18 }, () => ({
 							{
 								hasHours && (
 									<div class="hourblock">
-										<HourHistogram
-											hours={bookHours.hours}
-											size="lg"
-											scopeWord="this book"
-											toggle
-											startOpen={false}
-											spread={bookHours.spread}
-											spreadTotal={bookHours.sittings}
-											spreadUnit="sittings"
-										/>
+										<HourHistogram hours={bookHours.hours} size="lg" />
 									</div>
 								)
 							}

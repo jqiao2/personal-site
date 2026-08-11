@@ -289,12 +289,7 @@ const clientData = JSON.stringify({
 								hoursAvailable && (
 									<div class="hoursband">
 										<div class="hoursband__label">When I read</div>
-										<HourHistogram
-											hours={monthHours}
-											size="mini"
-											scale={2.5}
-											scopeWord="the month"
-										/>
+										<HourHistogram hours={monthHours} size="mini" scale={2.5} />
 									</div>
 								)
 							}

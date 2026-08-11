@@ -1,8 +1,8 @@
 // The hour histogram, as pure functions — twenty-four bars over one local day.
 //
 // One component, two scopes. The month card draws it at `mini` on the artboard,
-// where it is part of the exported image and so has no hover and no toggle; the
-// book page draws it at `lg`, closed until asked for, with a tooltip.
+// where it is part of the exported image and so has no hover; the book page
+// draws it at `lg`, open, with a tooltip naming the hour and its pages.
 //
 // The axis is a plain 0→23 clock and stays one. Most of this reading happens
 // after midnight, which on a real clock means the tall bars sit at both ends
@@ -115,7 +115,6 @@ export interface HourHistogram {
 	geom: Geom;
 	columns: HourColumn[];
 	labels: HourAxisLabel[];
-	total: number;
 	occupied: number;
 	/** Whether there is enough of a day to draw. False means show `fallback`. */
 	enough: boolean;
@@ -127,12 +126,6 @@ export interface HourInput {
 	hours: number[];
 	size: HourSize;
 	scale?: number;
-	/** "this book" or "the month" — the tail of "34% of …". */
-	scopeWord: string;
-	/** Per-hour count of the sittings or days that touched it, for the tooltip. */
-	spread?: number[] | null;
-	spreadTotal?: number;
-	spreadUnit?: string;
 	/** Overrides the default "not enough of a day" line. */
 	fallback?: string;
 }
@@ -147,7 +140,6 @@ export function buildHistogram(input: HourInput): HourHistogram {
 	const geom = geometry(size, input.scale ?? 1);
 	const hours = Array.from({ length: HOURS_IN_DAY }, (_, h) => Math.max(0, input.hours[h] ?? 0));
 
-	const total = hours.reduce((sum, v) => sum + v, 0);
 	const occupied = hours.filter((v) => v > 0).length;
 	// Guard the divisor: an all-zero day would otherwise make every ratio NaN.
 	const max = Math.max(1, ...hours);
@@ -164,7 +156,7 @@ export function buildHistogram(input: HourInput): HourHistogram {
 			height: pages ? Math.max(3, Math.round(ratio * geom.H)) : 2,
 			background: RAMP[level],
 			radius: pages ? '2px 2px 0 0' : '1px',
-			tip: tipFor(hour, pages, total, input),
+			tip: tipFor(hour, pages),
 		};
 	});
 
@@ -182,7 +174,6 @@ export function buildHistogram(input: HourInput): HourHistogram {
 		geom,
 		columns,
 		labels,
-		total,
 		occupied,
 		enough: occupied >= MIN_OCCUPIED_HOURS,
 		fallback: input.fallback || tooFewLine(hours),
@@ -190,23 +181,15 @@ export function buildHistogram(input: HourInput): HourHistogram {
 }
 
 /**
- * One hour's tooltip: what was read, what share of the whole it was, and how
- * much of the reading it was spread across.
+ * One hour's tooltip: the hour, and what was read in it.
  *
- * The share is what stops a tall bar being read as "a lot" in isolation, and the
- * spread is what stops it being read as a habit when it was really one long
- * night: "250 pages · 34% of this book · 2 of 20 sittings" says both at once.
+ * Nothing more. The share of the whole and the spread of sittings behind a bar
+ * both used to sit here, and both were answering a question the chart had not
+ * been asked — the bar's own height already says how this hour compares to the
+ * others, which is the only comparison a reader is making at the moment they
+ * point at one.
  */
-function tipFor(hour: number, pages: number, total: number, input: HourInput): string {
+function tipFor(hour: number, pages: number): string {
 	if (!pages) return `${clockLabel(hour)} — nothing read`;
-	const pct = Math.round((pages / total) * 100);
-	const touched = input.spread?.[hour] ?? 0;
-	const spread =
-		touched && input.spreadTotal
-			? ` · ${touched} of ${input.spreadTotal} ${input.spreadUnit ?? 'sittings'}`
-			: '';
-	return (
-		`${clockLabel(hour)} — ${pages.toLocaleString('en-US')} ${pages === 1 ? 'page' : 'pages'}` +
-		` · ${pct < 1 ? '<1' : pct}% of ${input.scopeWord}${spread}`
-	);
+	return `${clockLabel(hour)} — ${pages.toLocaleString('en-US')} ${pages === 1 ? 'page' : 'pages'}`;
 }

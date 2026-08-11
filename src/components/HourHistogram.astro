@@ -3,48 +3,31 @@
 // shape of it; this is the markup, the chrome, and the pointer handling.
 //
 // Two callers, deliberately one component. On the month card it is `mini` and
-// part of an exported image, so it has no toggle and no tooltip — an image
-// cannot be hovered. On the book page it is `lg`, shut until asked for, and the
-// tooltip is the whole reason it is worth opening.
+// part of an exported image, so it has no tooltip — an image cannot be hovered.
+// On the book page it is `lg` and does.
+//
+// The chart is always drawn. It had a Show/Hide control once, on the theory that
+// twenty-four bars are an imposition on a page that has plenty to say already;
+// they are not, at this size, and a reader who has scrolled to "When you read
+// it" has already asked the question the chart answers.
 import { buildHistogram, type HourSize } from '../lib/reading-hours';
 
 interface Props {
 	hours: number[];
 	size: HourSize;
-	scopeWord: string;
 	scale?: number;
 	title?: string;
-	/** Adds the Show/Hide control. Off on the card, which cannot be clicked. */
-	toggle?: boolean;
-	startOpen?: boolean;
-	spread?: number[] | null;
-	spreadTotal?: number;
-	spreadUnit?: string;
 	fallback?: string;
 }
 
-const {
-	hours,
-	size,
-	scopeWord,
-	scale = 1,
-	title = '',
-	toggle = false,
-	startOpen = true,
-	spread = null,
-	spreadTotal = 0,
-	spreadUnit = 'sittings',
-	fallback,
-} = Astro.props;
+const { hours, size, scale = 1, title = '', fallback } = Astro.props;
 
-const chart = buildHistogram({ hours, size, scale, scopeWord, spread, spreadTotal, spreadUnit, fallback });
+const chart = buildHistogram({ hours, size, scale, fallback });
 const { geom } = chart;
 
-// The header carries the title and the toggle. `mini` has neither: on the card
-// the band's own heading sits above it and there is nothing to click.
-const showHeader = size !== 'mini' && (!!title || chart.enough);
-const hasToggle = toggle && chart.enough;
-const open = chart.enough && startOpen;
+// Only a title puts a header on the chart. `mini` never has one: on the card the
+// band's own heading sits above it.
+const showHeader = size !== 'mini' && !!title;
 const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 ---
 
@@ -53,11 +36,6 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 		showHeader && (
 			<div class="hours__head">
 				<div class:list={['hours__title', size === 'sm' && 'hours__title--sm']}>{title}</div>
-				{hasToggle && (
-					<button class="hours__toggle" type="button" data-hours-toggle aria-expanded={open}>
-						{open ? 'Hide hours' : 'Show hours'}
-					</button>
-				)}
 			</div>
 		)
 	}
@@ -72,7 +50,7 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 
 	{
 		chart.enough && (
-			<div class="hours__body" data-hours-body hidden={!open}>
+			<div class="hours__body">
 				<div class="hours__plot" style={`height:${geom.H}px`} data-hours-plot>
 					<div class="hours__cols" style={`gap:${geom.gap}px`}>
 						{chart.columns.map((c) => (
@@ -127,22 +105,6 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 	}
 	.hours__title--sm {
 		font-size: 17px;
-	}
-	.hours__toggle {
-		font-size: 12px;
-		color: #a68f6e;
-		background: transparent;
-		border: none;
-		padding: 0;
-		cursor: pointer;
-		font-family: 'Archivo', sans-serif;
-		text-decoration: underline;
-		text-decoration-color: #4d3a22;
-		text-underline-offset: 4px;
-		white-space: nowrap;
-	}
-	.hours__toggle:hover {
-		color: #ecc87c;
 	}
 	.hours__fallback {
 		font-family: 'Newsreader', serif;
@@ -259,20 +221,7 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 		plot.addEventListener('mouseleave', clear);
 	}
 
-	function wireToggle(root: HTMLElement) {
-		const button = root.querySelector<HTMLElement>('[data-hours-toggle]');
-		const body = root.querySelector<HTMLElement>('[data-hours-body]');
-		if (!button || !body) return;
-		button.addEventListener('click', () => {
-			const open = body.hidden;
-			body.hidden = !open;
-			button.textContent = open ? 'Hide hours' : 'Show hours';
-			button.setAttribute('aria-expanded', String(open));
-		});
-	}
-
 	for (const root of document.querySelectorAll<HTMLElement>('[data-hourchart]')) {
 		wire(root);
-		wireToggle(root);
 	}
 </script>
