@@ -728,10 +728,6 @@ export function prefersHeatmap(days: ActivityDay[], todayDay = today()): boolean
 	return recent.length >= 60 && weeks.size >= 14;
 }
 
-/** "12 days read across 16 months" — the caption over the activity view. */
-export function activityMeta(days: ActivityDay[]): string {
-	if (!days.length) return 'nothing logged yet';
-	const span = daysBetween(days[0].day, days[days.length - 1].day) + 1;
-	const spanLabel = span >= 60 ? `${Math.round(span / 30.4)} months` : `${span} days`;
-	return `${plural(days.length, 'day')} read across ${spanLabel}`;
-}
+// "12 days read across 16 months" used to caption the activity view. The spells
+// carry their own dates and the year calendar is self-evidently a year, so the
+// caption was counting up what the thing below it already showed.
