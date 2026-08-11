@@ -225,40 +225,54 @@ state/region and country are the guaranteed floor.
 
 ### The return verdict
 
-A six-step scale answering **"would I go back?"**, best to worst. It is the
-signature primitive of this section — films get a heart and a rewatch arrow,
-books get a shelf; this gets a ladder.
+A six-step scale, strictly ordered, best at the top. It is the signature
+primitive of this section — films get a heart and a rewatch arrow, books get a
+shelf; this gets a ladder.
 
 | verdict | what it means |
 | --- | --- |
-| **Definitely return** | I'd get this food again |
-| **Worth returning** | I liked it, but circumstances make me unlikely to choose it myself |
-| **Try something else** | Didn't love what I ordered, but the restaurant itself seems worth another attempt |
-| **Happy to go** | Would go again if someone else suggested it |
+| **Definitely return** | I'd come back and order the same thing again |
+| **Worth returning** | I'd come back of my own accord, but it's too expensive or too far to be likely |
+| **Try something else** | I'd come back, but I wouldn't order what I ordered |
+| **Happy to go** | I wouldn't pick it myself, but I'd go if someone else suggested it |
 | **No return** | Would not go again |
 | **Avoid** | Would actively recommend that others not go |
+
+**The axis is how much I want to go back, and how much of the visit I'd
+repeat** — not how likely a return actually is. That distinction is what
+orders the middle four, so don't reinterpret it:
+
+- *Worth returning* sits above *Happy to go* because the wanting is there and
+  only cost or distance is in the way. *Happy to go* has no wanting in it at
+  all; the occasion has to come from someone else. Fewer barriers, higher rung.
+- *Definitely return* sits above *Try something else* because it repeats the
+  whole visit, dish included. *Try something else* keeps the restaurant and
+  throws out the order, which is strictly less enthusiasm about the meal I
+  actually had.
+
+Settled, and not up for reinterpretation. Design the ladder in this order.
 
 The heart is **not** a seventh step. It's a separate button that can sit on any
 verdict, including a low one, and it means something different — love, not
 likelihood.
 
-**One thing to know before you design the control:** the two ends of this scale
-are strictly ordered, and the middle isn't. "Worth returning" and "Happy to go"
-are close to the same statement — positive, but I won't be the one picking the
-place — and "Try something else" isn't on the return-likelihood axis at all; it
-says the problem was my order, not the restaurant. So the compact badge **must
-not** render as a filled progress track or an N-of-6 meter, because that would
-claim an ordering the middle three don't have.
+Design the six as **marks that ascend**: a distinct glyph per verdict, but a
+set you can tell the rank of without reading the label, because the ladder is
+real and the badge should carry it. The marginal symbols a menu puts next to
+the house specials and the spicy dishes are the right reference. Drawn, not
+emoji. They need to read at badge size next to a restaurant name, and to line
+up as an obviously ordered series when all six are shown together in the
+composer. A filled track or a rank meter is legitimate here if you can make it
+feel like print rather than a UI widget — but six ranked marks will probably
+carry the menu brief further, so make the argument either way.
 
-Design them instead as **six marks**: a distinct glyph per verdict, in the
-section's visual language — the marginal symbols a menu puts next to the house
-specials and the spicy dishes are the right reference. Drawn, not emoji. They
-need to read at badge size next to a restaurant name, and to line up as a
-legible set when all six are shown together in the composer.
-
-If, having designed it, you think the scale itself should change — merging the
-two near-duplicates, or lifting "Try something else" out into its own flag —
-say so in the rationale. Don't silently redesign it; I want the argument.
+**One consequence of the axis to design around:** because the verdict is partly
+about the dish, it belongs to a *visit* and it moves. A place can be *Try
+something else* in March and *Definitely return* in June, and that's the system
+working, not a contradiction. So a restaurant's headline verdict is its
+**latest**, never a maximum or an average — and on the detail page for a place
+I've been to eleven times, the way the verdict has moved over those visits is
+worth showing rather than flattening.
 
 ## The sharp edges
 
@@ -295,11 +309,11 @@ Every visit can carry a **five-star half-step rating**, a **six-step verdict**,
 and a **heart**. That's three overlapping opinions, and a naïve design gives me
 three rows of widgets stacked in a modal, which is awful.
 
-They're not redundant — stars are "how good was it", verdict is "will I
-return", heart is "do I love it" — but the design has to make that legible
-rather than making me read a manual. Establish a hierarchy. Decide which one is
-the headline on a tile, which survives into a map pin, and which only appears
-on the entry itself.
+They're not redundant — stars are "how good was it", verdict is "how much do I
+want to go back and repeat it", heart is "do I love it" — but the design has to
+make that legible rather than making me read a manual. Establish a hierarchy.
+Decide which one is the headline on a tile, which survives into a map pin, and
+which only appears on the entry itself.
 
 And design the verdict control **three times**: as an input in the composer
 (where the labels are visible and I'm choosing), as a compact read-only badge
