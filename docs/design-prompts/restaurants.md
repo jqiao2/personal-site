@@ -4,9 +4,6 @@ Paste everything below the rule into Claude. It asks for a design, not an
 implementation: the output is HTML/CSS mockups to react to, which then get
 rebuilt against the real data in this repo.
 
-**Before pasting:** fill in the six verdict labels under "The return verdict"
-— they're the one thing in here that is still a placeholder.
-
 ---
 
 ## What I want designed
@@ -228,25 +225,40 @@ state/region and country are the guaranteed floor.
 
 ### The return verdict
 
-A six-step ordinal scale, negative to positive, answering **"would I go back?"**
-It is the signature primitive of this section — films get a heart and a rewatch
-arrow, books get a shelf; this gets a ladder.
+A six-step scale answering **"would I go back?"**, best to worst. It is the
+signature primitive of this section — films get a heart and a rewatch arrow,
+books get a shelf; this gets a ladder.
 
-> **← PASTE THE SIX LABELS HERE.**
->
-> Until then, design against this stand-in, which is the right shape but
-> probably not my wording:
->
-> 1. Never again
-> 2. Wouldn't go back
-> 3. Only if someone else picks
-> 4. Would go back
-> 5. Would go out of my way
-> 6. In the rotation
+| verdict | what it means |
+| --- | --- |
+| **Definitely return** | I'd get this food again |
+| **Worth returning** | I liked it, but circumstances make me unlikely to choose it myself |
+| **Try something else** | Didn't love what I ordered, but the restaurant itself seems worth another attempt |
+| **Happy to go** | Would go again if someone else suggested it |
+| **No return** | Would not go again |
+| **Avoid** | Would actively recommend that others not go |
 
 The heart is **not** a seventh step. It's a separate button that can sit on any
 verdict, including a low one, and it means something different — love, not
 likelihood.
+
+**One thing to know before you design the control:** the two ends of this scale
+are strictly ordered, and the middle isn't. "Worth returning" and "Happy to go"
+are close to the same statement — positive, but I won't be the one picking the
+place — and "Try something else" isn't on the return-likelihood axis at all; it
+says the problem was my order, not the restaurant. So the compact badge **must
+not** render as a filled progress track or an N-of-6 meter, because that would
+claim an ordering the middle three don't have.
+
+Design them instead as **six marks**: a distinct glyph per verdict, in the
+section's visual language — the marginal symbols a menu puts next to the house
+specials and the spicy dishes are the right reference. Drawn, not emoji. They
+need to read at badge size next to a restaurant name, and to line up as a
+legible set when all six are shown together in the composer.
+
+If, having designed it, you think the scale itself should change — merging the
+two near-duplicates, or lifting "Try something else" out into its own flag —
+say so in the rationale. Don't silently redesign it; I want the argument.
 
 ## The sharp edges
 
