@@ -1,0 +1,537 @@
+---
+// The month in eating — a shareable card, at the same 1080px artboard and the
+// same three aspects as the film and book cards.
+//
+// THE PROBLEM THIS CARD HAS THAT THE OTHERS DON'T. A good month of films is
+// thirty posters and a good month of reading is a shelf; a good month of eating
+// is EIGHT MEALS, and there is no artwork to tile. Filling the artboard with a
+// 31-cell calendar that has eight marks in it would be mostly empty grid, and
+// the film card's poster wall has no equivalent at all.
+//
+// But this card has something the other two don't: my own photographs. So the
+// hierarchy is inverted. The photographs are the card — a hero and a mosaic
+// taking the largest block — and the calendar is demoted to a narrow strip that
+// reads as a rhythm rather than a grid, marked with the verdict needles so the
+// strip says how the month went as well as when. The four figures and the
+// closing line sit between them, as on the siblings.
+//
+// A MONTH WITH NO PHOTOGRAPHS still has to work, and it is a normal month. Then
+// the mosaic gives way and the calendar strip expands to take the space back,
+// which is the layout the film card would have had all along.
+import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
+import VerdictMark from '../../../components/VerdictMark.astro';
+import { requireOwner } from '../../../lib/auth';
+import { listMonthKeys, listMonthVisits, type VisitDetail } from '../../../lib/restaurants';
+import { monthCalendar, monthFigures, placeLine } from '../../../lib/restaurant-view';
+import {
+	ASPECTS,
+	aspectBySlug,
+	monthLabel,
+	monthQuery,
+	parseMonthKey,
+	shiftMonth,
+	WEEKDAYS,
+} from '../../../lib/share-card';
+
+export const prerender = false;
+
+const key = Astro.params.month ?? '';
+if (!parseMonthKey(key)) return Astro.redirect('/restaurants/month');
+
+const [visits, allKeys, isOwner] = await Promise.all([
+	listMonthVisits(key),
+	listMonthKeys(),
+	requireOwner(Astro.cookies),
+]);
+
+const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+const cells = monthCalendar(key, visits);
+
+// "New" means the first visit to that place ever, not the first this month, so
+// a place I've been going to for years never counts as new again.
+const firstEver = new Map<number, string>();
+for (const v of visits) {
+	const seen = firstEver.get(v.restaurant_id);
+	if (!seen || v.visited_on < seen) firstEver.set(v.restaurant_id, v.visited_on);
+}
+const newIds = new Set(firstEver.keys());
+const figures = monthFigures(visits, newIds);
+
+// The hero is the photograph from the best-rated visit that has one; the rest
+// fill the mosaic. Picking by rating rather than by recency means the card
+// leads with the meal worth leading with.
+const withPhotos = visits.filter((v) => v.photos.length > 0);
+const ranked = [...withPhotos].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
+const hero: VisitDetail | null = ranked[0] ?? null;
+const mosaic = ranked
+	.slice(1)
+	.flatMap((v) => v.photos)
+	.concat(hero?.photos.slice(1) ?? [])
+	.slice(0, 4);
+
+const prev = shiftMonth(key, -1);
+const next = shiftMonth(key, 1);
+const has = (k: string) => allKeys.includes(k);
+const query = monthQuery(aspect);
+
+const placesThisMonth = new Set(visits.map((v) => v.restaurant_id)).size;
+const boroughs = new Set(visits.map((v) => v.city)).size;
+const summary = visits.length
+	? `${visits.length} meal${visits.length === 1 ? '' : 's'}, ${placesThisMonth} place${
+			placesThisMonth === 1 ? '' : 's'
+		}, ${boroughs} cit${boroughs === 1 ? 'y' : 'ies'}.`
+	: 'Nothing logged this month.';
+---
+
+<RestaurantLayout
+	title={`${monthLabel(key)} · Jason's restaurant log`}
+	pathname="/restaurants"
+	isOwner={isOwner}
+>
+	<div class="rl-page">
+		<div class="rl-head">
+			<div>
+				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<div class="rl-head__title">Month in review</div>
+			</div>
+			<div class="controls">
+				<span class="rl-label">Export</span>
+				{
+					ASPECTS.map((a) => (
+						<a
+							class:list={['fmt', a.slug === aspect.slug && 'fmt--on']}
+							href={`/restaurants/month/${key}${monthQuery(a)}`}
+						>
+							{a.id}
+						</a>
+					))
+				}
+				<button type="button" class="rl-btn" data-save-card>Save image</button>
+			</div>
+		</div>
+
+		<nav class="stepper">
+			{
+				has(prev) ? (
+					<a class="stepper__go" href={`/restaurants/month/${prev}${query}`}>
+						&larr; {monthLabel(prev)}
+					</a>
+				) : (
+					<span class="stepper__go stepper__go--off">&larr;</span>
+				)
+			}
+			<a class="stepper__all" href="/restaurants/month">All months</a>
+			{
+				has(next) ? (
+					<a class="stepper__go" href={`/restaurants/month/${next}${query}`}>
+						{monthLabel(next)} &rarr;
+					</a>
+				) : (
+					<span class="stepper__go stepper__go--off">&rarr;</span>
+				)
+			}
+		</nav>
+
+		<div class="stage">
+			<div class="card" data-card style={`--h:${aspect.height}px`}>
+				<div class="card__head">
+					<div>
+						<div class="card__kicker">The month in eating</div>
+						<div class="card__month">{monthLabel(key)}</div>
+					</div>
+					<div class="card__count">
+						<div class="card__countn">{visits.length}</div>
+						<div class="card__countl">{visits.length === 1 ? 'meal out' : 'meals out'}</div>
+					</div>
+				</div>
+
+				<!-- The calendar as a strip: seven columns, the marks doing the work
+				     rather than the cells. Eight meals in a month reads as a rhythm
+				     here and would read as an empty grid at full size. -->
+				<div class="strip">
+					<div class="strip__days">
+						{WEEKDAYS.map((d) => <span>{d}</span>)}
+					</div>
+					<div class="strip__grid">
+						{
+							cells.map((c) => (
+								<div class:list={['cell', c.day == null && 'cell--pad', c.verdict != null && 'cell--hit']}>
+									{c.day != null && <span class="cell__n">{c.day}</span>}
+									{c.verdict != null && (
+										<span class="cell__mark">
+											<VerdictMark verdict={c.verdict} size={16} ring={false} />
+										</span>
+									)}
+								</div>
+							))
+						}
+					</div>
+				</div>
+
+				<div class="figures">
+					{
+						figures.map((f) => (
+							<div class="figure">
+								<div class="figure__v">{f.value}</div>
+								<div class="figure__l">{f.label}</div>
+							</div>
+						))
+					}
+				</div>
+
+				{
+					hero ? (
+						<div class="plates">
+							<div class="plates__hero">
+								<img src={hero.photos[0].url} alt="" />
+								<div class="plates__cap">
+									<div class="plates__name">{hero.restaurant_name}</div>
+									<div class="plates__where">{placeLine(hero)}</div>
+								</div>
+							</div>
+							{mosaic.length > 0 && (
+								<div class="plates__rest">
+									{mosaic.map((p) => (
+										<span class="plates__cell">
+											<img src={p.url} alt="" />
+										</span>
+									))}
+								</div>
+							)}
+						</div>
+					) : (
+						visits.length > 0 && (
+							<div class="noplates">
+								{visits.slice(0, 6).map((v) => (
+									<div class="noplates__row">
+										<span class="noplates__name">{v.restaurant_name}</span>
+										<span class="rl-leader" />
+										<span class="noplates__where">{placeLine(v)}</span>
+									</div>
+								))}
+							</div>
+						)
+					)
+				}
+
+				<div class="card__foot">
+					<span class="card__summary">{summary}</span>
+					<span class="card__url">jasonqiao.com/restaurants</span>
+				</div>
+			</div>
+		</div>
+	</div>
+</RestaurantLayout>
+
+<script>
+	import { toPng } from 'html-to-image';
+
+	const button = document.querySelector<HTMLButtonElement>('[data-save-card]');
+	const card = document.querySelector<HTMLElement>('[data-card]');
+	button?.addEventListener('click', async () => {
+		if (!card) return;
+		const label = button.textContent;
+		button.disabled = true;
+		button.textContent = 'Drawing…';
+		try {
+			// Drawn at the artboard's own size rather than the scaled-down preview,
+			// so the export is 1080 wide whatever the screen is.
+			const url = await toPng(card, {
+				pixelRatio: 1,
+				width: card.offsetWidth,
+				height: card.offsetHeight,
+				cacheBust: true,
+			});
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = `${document.title.split(' ·')[0].replace(/\s+/g, '-').toLowerCase()}-eating.png`;
+			a.click();
+		} catch {
+			window.alert('Could not draw the card.');
+		} finally {
+			button.disabled = false;
+			button.textContent = label;
+		}
+	});
+</script>
+
+<style>
+	.controls {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.fmt {
+		background: var(--card);
+		border: 1px solid var(--dashed);
+		font-family: var(--mono);
+		font-size: 11.5px;
+		padding: 5px 10px;
+		color: var(--ink-2);
+	}
+	.fmt--on {
+		background: var(--ink);
+		color: var(--ground);
+		border-color: var(--ink);
+	}
+	.fmt--on:hover {
+		color: var(--ground);
+	}
+
+	.stepper {
+		margin-top: 14px;
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		font-size: 12.5px;
+	}
+	.stepper__all {
+		margin-left: auto;
+		color: var(--ink-3);
+	}
+	.stepper__go--off {
+		color: var(--rule);
+	}
+
+	/* The artboard is 1080 wide and scaled down to fit; the export takes the
+	   real thing, not the preview. */
+	.stage {
+		margin-top: 20px;
+		overflow-x: auto;
+	}
+	.card {
+		width: 1080px;
+		min-height: var(--h);
+		background: var(--card);
+		border: 1px solid var(--rule);
+		padding: 56px 56px 48px;
+		display: flex;
+		flex-direction: column;
+		transform-origin: top left;
+	}
+	@media (max-width: 1180px) {
+		.card {
+			transform: scale(min(1, calc((100vw - 2 * var(--gutter)) / 1080)));
+		}
+		.stage {
+			height: calc(var(--h) * min(1, (100vw - 2 * 32px) / 1080));
+		}
+	}
+
+	.card__head {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		border-bottom: 3px solid var(--ink);
+		padding-bottom: 18px;
+	}
+	.card__kicker {
+		font-size: 13px;
+		font-weight: 700;
+		letter-spacing: 2.6px;
+		text-transform: uppercase;
+		color: var(--terracotta);
+	}
+	.card__month {
+		margin-top: 10px;
+		font-family: var(--display);
+		font-size: 66px;
+		line-height: 0.98;
+		letter-spacing: -1px;
+	}
+	.card__count {
+		text-align: right;
+	}
+	.card__countn {
+		font-family: var(--display);
+		font-size: 52px;
+		line-height: 1;
+	}
+	.card__countl {
+		font-size: 13px;
+		letter-spacing: 1.8px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+	}
+
+	.strip {
+		margin-top: 26px;
+	}
+	.strip__days {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 8px;
+		font-size: 11px;
+		letter-spacing: 1.6px;
+		color: var(--ink-4);
+		text-transform: uppercase;
+		padding-bottom: 6px;
+	}
+	.strip__grid {
+		display: grid;
+		grid-template-columns: repeat(7, 1fr);
+		gap: 8px;
+	}
+	.cell {
+		height: 46px;
+		background: #faf3e2;
+		border: 1px solid var(--rule-4);
+		position: relative;
+	}
+	.cell--pad {
+		background: none;
+		border-color: transparent;
+	}
+	.cell--hit {
+		background: var(--sunk);
+		border-color: var(--rule);
+	}
+	.cell__n {
+		position: absolute;
+		left: 6px;
+		top: 4px;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: #bda98a;
+	}
+	.cell--hit .cell__n {
+		color: var(--ink);
+	}
+	.cell__mark {
+		position: absolute;
+		right: 5px;
+		bottom: 4px;
+	}
+
+	.figures {
+		margin-top: 30px;
+		display: grid;
+		grid-template-columns: repeat(4, 1fr);
+		border-top: 1px solid var(--rule);
+		border-bottom: 1px solid var(--rule);
+	}
+	.figure {
+		padding: 20px 22px;
+		border-left: 1px solid var(--rule-4);
+	}
+	.figure:first-child {
+		border-left: none;
+		padding-left: 0;
+	}
+	.figure__v {
+		font-family: var(--display);
+		font-size: 38px;
+		line-height: 1;
+	}
+	.figure__l {
+		margin-top: 8px;
+		font-size: 12px;
+		letter-spacing: 1.6px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+	}
+
+	/* The photographs are the card, but they are not the whole card: capped so
+	   a tall artboard (9:16 is 1920) doesn't hand them six hundred spare pixels
+	   and turn the block into a poster. The slack goes below them instead. */
+	.plates {
+		margin-top: 28px;
+		flex: 1 1 auto;
+		display: flex;
+		gap: 10px;
+		min-height: 250px;
+		max-height: 460px;
+	}
+	.plates__hero {
+		flex: 2;
+		position: relative;
+		overflow: hidden;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+	}
+	.plates__hero img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+	.plates__cap {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		padding: 16px 18px;
+		background: linear-gradient(transparent, rgba(36, 24, 18, 0.86));
+	}
+	.plates__name {
+		font-size: 19px;
+		font-weight: 600;
+		color: var(--card);
+	}
+	.plates__where {
+		margin-top: 3px;
+		font-size: 13px;
+		color: #e0c9a4;
+	}
+	.plates__rest {
+		flex: 1;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(46%, 1fr));
+		gap: 10px;
+	}
+	.plates__cell {
+		overflow: hidden;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+	}
+	.plates__cell img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+
+	/* No photographs this month: the block that would have held them lists the
+	   meals instead, on dot leaders, which is the same card without a hole. */
+	.noplates {
+		margin-top: 28px;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 10px;
+	}
+	.noplates__row {
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+	}
+	.noplates__name {
+		font-family: var(--display);
+		font-size: 22px;
+	}
+	.noplates__where {
+		font-size: 14px;
+		color: var(--ink-3);
+	}
+
+	.card__foot {
+		margin-top: auto;
+		padding-top: 24px;
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 16px;
+	}
+	.card__summary {
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 19px;
+		color: var(--ink-2);
+	}
+	.card__url {
+		font-size: 12px;
+		letter-spacing: 1.8px;
+		text-transform: uppercase;
+		color: var(--ink-4);
+	}
+</style>

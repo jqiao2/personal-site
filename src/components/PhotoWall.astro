@@ -1,0 +1,108 @@
+---
+// Photographs, laid out.
+//
+// The constraints, in the order they bite:
+//   * ZERO is common and must not look like a failure — so the caller decides
+//     whether to render this at all, and there is no empty state in here to
+//     accidentally show.
+//   * ONE is the commonest non-zero case, so a single photo is given real size
+//     rather than being stranded in the first cell of a four-column grid.
+//   * ORIENTATIONS MIX inside one entry — a phone portrait of a sandwich next
+//     to a landscape of the dining room — so this is not a grid. Each photo's
+//     flex-basis is its own aspect ratio at a shared row height: portraits come
+//     out narrow, landscapes wide, and every photo in a row shares a baseline
+//     with nothing cropped to a common ratio it doesn't have.
+//   * CAPTIONS ARE THE EXCEPTION. Nothing reserves room for one. A caption
+//     appears under its own photo when it exists and the row closes up when it
+//     doesn't, so the usual case has no empty strip running under it.
+//
+// Photos whose dimensions were never recorded fall back to 3:2, which is close
+// enough that one unmeasured photo in a row of measured ones doesn't stand out.
+import type { LaidOutPhoto } from '../lib/restaurant-view';
+
+interface Props {
+	photos: LaidOutPhoto[];
+	/** Row height. Shorter where photos are history than where they are content. */
+	height?: number;
+	/**
+	 * Let a lone photograph fill the width at its own ratio.
+	 *
+	 * On ONE VISIT that is right — a single photo is the commonest non-zero case
+	 * and stranding it in a thumbnail slot wastes it. On a PLACE with eleven
+	 * visits it is wrong: six groups of one, each given the full width, is the
+	 * undifferentiated wall the grouping was supposed to prevent, just taller.
+	 * So the place page leaves this off and every group keeps the same rhythm.
+	 */
+	hero?: boolean;
+}
+
+const { photos, height = 190, hero = false } = Astro.props;
+const single = hero && photos.length === 1;
+---
+
+<div class:list={['wall', single && 'wall--single']} style={`--row-h:${height}px`}>
+	{
+		photos.map((p) => (
+			<figure class="wall__cell" style={`flex-grow:${p.grow}; flex-basis:${p.ratio * height}px`}>
+				<img
+					src={p.url}
+					alt={p.caption ?? ''}
+					width={p.width ?? undefined}
+					height={p.height ?? undefined}
+					loading="lazy"
+					decoding="async"
+					style={`aspect-ratio:${p.ratio}`}
+				/>
+				{p.caption && <figcaption class="wall__caption">{p.caption}</figcaption>}
+			</figure>
+		))
+	}
+</div>
+
+<style>
+	.wall {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		align-items: flex-start;
+	}
+	.wall__cell {
+		margin: 0;
+		min-width: 120px;
+		/* The last row is allowed to be short rather than stretched: one photo
+		   left over should not become an enormous one because it happened not to
+		   fill a fourth slot. The cap is proportional to the row height, so a
+		   wall of thumbnails and a wall of full-size photos both keep their
+		   rhythm without a second breakpoint. */
+		max-width: min(100%, calc(var(--row-h) * 2.4));
+	}
+	.wall__cell img {
+		display: block;
+		width: 100%;
+		height: auto;
+		max-height: calc(var(--row-h) * 1.9);
+		object-fit: cover;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+		background: var(--panel);
+	}
+	.wall__caption {
+		margin-top: 6px;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 13.5px;
+		line-height: 1.4;
+		color: var(--ink-2);
+	}
+
+	/* One photo gets the width it deserves — but not more height than the page
+	   can hold, so a tall portrait doesn't push the review off the screen. */
+	.wall--single .wall__cell {
+		flex-basis: 100%;
+		max-width: 100%;
+	}
+	.wall--single .wall__cell img {
+		max-height: min(64vh, 520px);
+		width: auto;
+		max-width: 100%;
+	}
+</style>

@@ -1,0 +1,305 @@
+---
+// The restaurant log's landing page. Sidebar + main column, the same anatomy
+// the film log's front page has, restyled as a menu: the section rules are the
+// heavy rules a menu puts under "TACOS", the counts hang off dot leaders, and
+// the boxed special in the sidebar is a boxed special.
+//
+// DAY ONE. The three main blocks are all empty for the first month, and the
+// page still has to look composed rather than like a form nobody filled in. So
+// each block states what it is for in its own voice on the same paper — the
+// favourites row draws its four numbered slots as empty places at a table, and
+// the other two say what will arrive there. Nothing apologises, nothing shows a
+// spinner, and there is no margarita glass.
+import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
+import RestaurantTile from '../../components/RestaurantTile.astro';
+import MealEditor from '../../components/MealEditor.astro';
+import { requireOwner } from '../../lib/auth';
+import {
+	getRestaurantStats,
+	listFavorites,
+	listFriends,
+	listRecentVisits,
+	listTags,
+	listToTry,
+} from '../../lib/restaurants';
+import { coverUrl, placeLine, shortDate, visitMarks } from '../../lib/restaurant-view';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const [stats, favorites, recent, toTry, isOwner] = await Promise.all([
+	getRestaurantStats(),
+	listFavorites(),
+	listRecentVisits(4),
+	listToTry(4),
+	requireOwner(Astro.cookies),
+]);
+
+const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+
+const num = (n: number) => n.toLocaleString('en-US');
+
+// Holes in the top four. Two favourites picked out of four is a normal state,
+// not an error, so the empty ranks are drawn as places set at a table.
+const holes = Array.from({ length: Math.max(0, 4 - favorites.length) }, (_, i) => favorites.length + i + 1);
+
+const yearLine =
+	stats.places === 0
+		? 'nothing logged yet'
+		: `${num(stats.thisYear)} restaurant${stats.thisYear === 1 ? '' : 's'} this year`;
+
+const navRows = [
+	{ label: 'Restaurants', href: '/restaurants/places', count: num(stats.places) },
+	{ label: 'Diary', href: '/restaurants/diary', count: num(stats.visits) },
+	{ label: 'To try', href: '/restaurants/to-try', count: num(stats.toTry) },
+	{ label: 'Stats', href: '/restaurants/stats', count: '—' },
+	{
+		label: 'Month in review',
+		href: stats.latestMonth ? `/restaurants/month/${stats.latestMonth}` : '/restaurants/month',
+		count: stats.latestMonth
+			? new Date(Number(stats.latestMonth.slice(0, 4)), Number(stats.latestMonth.slice(5, 7)) - 1, 1)
+					.toLocaleDateString('en-US', { month: 'short' })
+			: '—',
+	},
+];
+---
+
+<RestaurantLayout title="Jason's restaurant log" pathname={Astro.url.pathname} isOwner={isOwner}>
+	<div class="rl-page rl-split">
+		<aside class="rl-side">
+			<div class="rl-brand">Jason&rsquo;s<br />restaurant log</div>
+			<div class="rl-brand__sub">{yearLine}</div>
+			<div class="rl-rule"></div>
+
+			<nav>
+				{
+					navRows.map((row) => (
+						<a class="rl-navrow" href={row.href}>
+							<span class="rl-navrow__label">{row.label}</span>
+							<span class="rl-leader" />
+							<span class="rl-navrow__n">{row.count}</span>
+						</a>
+					))
+				}
+			</nav>
+
+			{
+				stats.mostVisited && (
+					<a class="rl-box special" href={`/restaurants/place/${stats.mostVisited.id}`}>
+						<div class="rl-label">The house regular</div>
+						<div class="special__name">{stats.mostVisited.name}</div>
+						<div class="special__meta">
+							{stats.mostVisited.visits} visit{stats.mostVisited.visits === 1 ? '' : 's'}
+						</div>
+					</a>
+				)
+			}
+		</aside>
+
+		<main class="rl-main">
+			<section>
+				<div class="rl-sec-head">
+					<span class="rl-sec-head__title">Favourites</span>
+					{
+						favorites.length > 0 && (
+							<span class="rl-sec-head__sub">picked by hand, ranked</span>
+						)
+					}
+				</div>
+				<div class="grid4">
+					{
+						favorites.map((p) => (
+							<RestaurantTile
+								name={p.name}
+								href={`/restaurants/place/${p.id}`}
+								cuisines={p.cuisines}
+								priceBand={p.price_band}
+								where={placeLine(p)}
+								verdict={p.latest_verdict}
+								photo={coverUrl(p)}
+								hearted={p.hearted}
+								tall
+							/>
+						))
+					}
+					{
+						holes.map((rank) => (
+							<div class="hole">
+								<span class="hole__rank">{String(rank).padStart(2, '0')}</span>
+								{isOwner ? (
+									<a class="rl-btn" href="/restaurants/places?sort=rating">
+										Pick one
+									</a>
+								) : (
+									<span class="hole__note">unfilled</span>
+								)}
+							</div>
+						))
+					}
+				</div>
+			</section>
+
+			<section>
+				<div class="rl-sec-head">
+					<span class="rl-sec-head__title">Recently visited</span>
+					<a class="rl-sec-head__link" href="/restaurants/diary">See more &rarr;</a>
+				</div>
+				{
+					recent.length > 0 ? (
+						<div class="grid4">
+							{recent.map((v) => (
+								<RestaurantTile
+									name={v.restaurant_name}
+									href={`/restaurants/diary/${v.id}`}
+									cuisines={v.cuisines}
+									priceBand={v.price_band}
+									where={placeLine(v)}
+									verdict={v.verdict}
+									rating={v.rating}
+									photo={v.photos[0]?.url ?? null}
+									date={shortDate(v.visited_on)}
+									marks={visitMarks(v)}
+								/>
+							))}
+						</div>
+					) : (
+						<p class="rl-empty">
+							No meals logged yet. The four most recent will sit here, newest first.
+						</p>
+					)
+				}
+			</section>
+
+			<section>
+				<div class="rl-sec-head">
+					<span class="rl-sec-head__title">To try</span>
+					<a class="rl-sec-head__link" href="/restaurants/to-try">See more &rarr;</a>
+				</div>
+				{
+					toTry.length > 0 ? (
+						<div class="rl-box trylist">
+							{toTry.map((p) => (
+								<a class="tryrow" href={`/restaurants/place/${p.id}`}>
+									<span class="tryrow__name">{p.name}</span>
+									<span class="tryrow__hood">{placeLine(p)}</span>
+									<span class="rl-leader" />
+									<span class="rl-why tryrow__why">{p.to_try_reason}</span>
+									<span class="tryrow__price">{p.price_band ?? ''}</span>
+								</a>
+							))}
+						</div>
+					) : (
+						<p class="rl-empty">
+							Nothing on the list. Somewhere you mean to go, and one line about why.
+						</p>
+					)
+				}
+			</section>
+		</main>
+	</div>
+
+	{
+		isOwner && (
+			<MealEditor
+				redirect="/restaurants"
+				tagOptions={tagOptions}
+				friendOptions={friendOptions}
+			/>
+		)
+	}
+</RestaurantLayout>
+
+<style>
+	/* auto-fill rather than a fixed four: on a phone this becomes two, and at
+	   380px it becomes one, without a media query deciding it. */
+	.grid4 {
+		margin-top: 16px;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(198px, 1fr));
+		gap: 16px;
+	}
+
+	.hole {
+		border: 1px dashed var(--rule);
+		background: rgba(253, 247, 232, 0.4);
+		min-height: 222px;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		padding: 16px;
+	}
+	.hole__rank {
+		font-family: var(--display);
+		font-size: 26px;
+		color: #d8c39c;
+	}
+	.hole__note {
+		font-size: 11.5px;
+		letter-spacing: 1.4px;
+		text-transform: uppercase;
+		color: var(--ink-4);
+	}
+
+	.special {
+		display: block;
+		margin-top: 22px;
+		padding: 14px 15px;
+		color: var(--ink);
+	}
+	.special:hover {
+		border-color: var(--terracotta);
+		color: var(--ink);
+	}
+	.special__name {
+		margin-top: 7px;
+		font-family: var(--display);
+		font-size: 17px;
+		line-height: 1.2;
+	}
+	.special__meta {
+		margin-top: 4px;
+		font-size: 12px;
+		color: var(--ink-3);
+	}
+
+	.trylist {
+		margin-top: 6px;
+	}
+	.tryrow {
+		display: flex;
+		align-items: baseline;
+		gap: 6px 10px;
+		flex-wrap: wrap;
+		padding: 12px 16px;
+		border-bottom: 1px solid var(--rule-4);
+		color: var(--ink);
+	}
+	.tryrow:last-child {
+		border-bottom: none;
+	}
+	.tryrow:hover {
+		background: var(--wash-2);
+		color: var(--ink);
+	}
+	.tryrow__name {
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.tryrow__hood {
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.tryrow__why {
+		font-size: 14px;
+		text-align: right;
+		max-width: 340px;
+	}
+	.tryrow__price {
+		font-family: var(--mono);
+		font-size: 11.5px;
+		width: 34px;
+		text-align: right;
+	}
+</style>

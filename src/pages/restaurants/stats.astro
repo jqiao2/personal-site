@@ -1,0 +1,332 @@
+---
+// Stats — the honest stub.
+//
+// This isn't built yet, and the design problem is a page that says "not yet"
+// without looking broken. Three things do that: it states what it HAS (the
+// visits are logged, the fields are there), it shows where it's going as small
+// grey sketches rather than as empty chart frames waiting to be filled, and it
+// offers the two pages that can answer questions today. An empty axis with no
+// data on it would read as a bug; a sketch reads as a plan.
+//
+// DOES THE DATA MODEL SUPPORT THESE? Three of the four, cleanly:
+//   * Cuisine breakdown — yes, from `restaurants.cuisines`, but a place with
+//     two cuisines counts in both, so the bars sum to more than the number of
+//     restaurants. That has to be said on the chart or the chart lies.
+//   * Price mix — yes, from `price_band`. Four values, no nulls worth worrying
+//     about.
+//   * Where I eat — yes, from `city` / `neighborhood`, though `neighborhood` is
+//     null outside New York, so this is really two charts: neighbourhoods
+//     within New York, cities everywhere else.
+//   * Visits over time — yes, from `visited_on`.
+// The one thing the model CANNOT answer is what anything cost: `price_band` is
+// a band for the restaurant, not a bill for the meal, so "spend over time" is
+// not available and shouldn't be sketched as if it were.
+import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
+import MealEditor from '../../components/MealEditor.astro';
+import { requireOwner } from '../../lib/auth';
+import {
+	getRestaurantStats,
+	listCuisineFacets,
+	listFriends,
+	listPlaces,
+	listTags,
+} from '../../lib/restaurants';
+
+export const prerender = false;
+
+const [stats, cuisines, places, isOwner] = await Promise.all([
+	getRestaurantStats(),
+	listCuisineFacets(),
+	listPlaces(),
+	requireOwner(Astro.cookies),
+]);
+const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+
+// The sketches are drawn from the real numbers where the real numbers are one
+// line away — a sketch of a lie would be worse than a sketch.
+const headCuisines = cuisines.slice(0, 5);
+const tailCount = cuisines.slice(5).reduce((n, c) => n + c.count, 0);
+const maxCuisine = Math.max(1, ...cuisines.map((c) => c.count));
+
+const priceCounts = (['$', '$$', '$$$', '$$$$'] as const).map((band) => ({
+	band,
+	n: places.filter((p) => p.price_band === band).length,
+}));
+const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
+---
+
+<RestaurantLayout title="Stats · Jason's restaurant log" pathname="/restaurants" isOwner={isOwner}>
+	<div class="rl-page">
+		<div class="rl-head">
+			<div>
+				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<div class="rl-head__title">Stats</div>
+			</div>
+			<span class="rl-tag">Not built yet</span>
+		</div>
+
+		<div class="stub">
+			<div class="stub__say">
+				<div class="stub__title">Not drawn yet.</div>
+				<p class="stub__body">
+					{stats.visits} visit{stats.visits === 1 ? '' : 's'} across {stats.places} place{
+						stats.places === 1 ? '' : 's'
+					} are logged, and every field these charts need is already on them. The
+					drawing is the part that isn&rsquo;t done.
+				</p>
+				<div class="stub__actions">
+					<a class="stub__go" href="/restaurants/diary">Go to the diary</a>
+					<a class="stub__go stub__go--quiet" href="/restaurants/places?view=map">Go to the map</a>
+				</div>
+			</div>
+
+			<div class="stub__planned">
+				<div class="rl-label">Planned</div>
+				<div class="sketches">
+					<div class="sketch">
+						<div class="sketch__name">Cuisine breakdown</div>
+						<div class="sketch__bars">
+							{
+								headCuisines.map((c) => (
+									<div class="bar">
+										<span class="bar__label">{c.name}</span>
+										<span class="bar__fill" style={`width:${(c.count / maxCuisine) * 100}%`} />
+									</div>
+								))
+							}
+							{
+								tailCount > 0 && (
+									<div class="bar">
+										<span class="bar__label">{cuisines.length - 5} others</span>
+										<span class="bar__fill bar__fill--tail" style={`width:${(tailCount / maxCuisine) * 100}%`} />
+									</div>
+								)
+							}
+						</div>
+						<p class="sketch__note">
+							A place with two cuisines counts in both, so these will sum to more
+							than {stats.places}.
+						</p>
+					</div>
+
+					<div class="sketch">
+						<div class="sketch__name">Price mix</div>
+						<div class="sketch__cols">
+							{
+								priceCounts.map((p) => (
+									<span class="col" style={`height:${Math.max(4, (p.n / maxPrice) * 66)}px`} />
+								))
+							}
+						</div>
+						<div class="sketch__axis">
+							{priceCounts.map((p) => <span>{p.band}</span>)}
+						</div>
+					</div>
+
+					<div class="sketch">
+						<div class="sketch__name">Where I eat</div>
+						<div class="sketch__map">
+							<span class="blob" style="left:18%; top:34%; width:26px; height:26px"></span>
+							<span class="blob" style="left:44%; top:18%; width:15px; height:15px"></span>
+							<span class="blob" style="left:70%; top:52%; width:10px; height:10px"></span>
+						</div>
+						<p class="sketch__note">
+							Neighbourhoods inside New York; cities everywhere else, because
+							outside New York the neighbourhood is usually null.
+						</p>
+					</div>
+
+					<div class="sketch">
+						<div class="sketch__name">Visits over time</div>
+						<div class="sketch__spark">
+							{
+								[14, 22, 30, 18, 40, 52, 36, 44, 58, 30, 24, 46].map((h) => (
+									<span style={`height:${h}%`} />
+								))
+							}
+						</div>
+						<p class="sketch__note">
+							From <code>visited_on</code>. What a meal cost is not on the model —
+							the price band belongs to the restaurant, not the bill.
+						</p>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	{
+		isOwner && (
+			<MealEditor redirect="/restaurants/stats" tagOptions={tagOptions} friendOptions={friendOptions} />
+		)
+	}
+</RestaurantLayout>
+
+<style>
+	.stub {
+		margin-top: 20px;
+		background: var(--card);
+		border: 1px solid var(--rule);
+		padding: clamp(20px, 4vw, 40px);
+		display: flex;
+		gap: 28px 44px;
+		align-items: flex-start;
+		flex-wrap: wrap;
+	}
+	.stub__say {
+		flex: 1 1 300px;
+		max-width: 520px;
+	}
+	.stub__title {
+		font-family: var(--display);
+		font-size: 26px;
+		line-height: 1.15;
+	}
+	.stub__body {
+		margin: 12px 0 0;
+		font-family: var(--prose);
+		font-size: 16px;
+		line-height: 1.5;
+		color: var(--ink-2);
+	}
+	.stub__actions {
+		margin-top: 18px;
+		display: flex;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.stub__go {
+		background: var(--terracotta);
+		color: var(--card);
+		font-size: 12.5px;
+		font-weight: 600;
+		padding: 9px 15px;
+	}
+	.stub__go:hover {
+		color: var(--card);
+		background: var(--terracotta-deep);
+	}
+	.stub__go--quiet {
+		background: none;
+		border: 1px solid var(--rule);
+		color: var(--ink-2);
+		font-weight: 400;
+	}
+	.stub__go--quiet:hover {
+		background: none;
+		color: var(--terracotta-deep);
+	}
+
+	.stub__planned {
+		flex: 1 1 320px;
+		min-width: 0;
+	}
+	.sketches {
+		margin-top: 14px;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+		gap: 22px 26px;
+	}
+	.sketch__name {
+		font-size: 12.5px;
+		font-weight: 600;
+	}
+	.sketch__note {
+		margin: 7px 0 0;
+		font-size: 10.5px;
+		line-height: 1.45;
+		color: var(--ink-4);
+	}
+	.sketch__note code {
+		font-family: var(--mono);
+		font-size: 10px;
+	}
+
+	.sketch__bars {
+		margin-top: 8px;
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
+	}
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+	}
+	.bar__label {
+		width: 68px;
+		flex: none;
+		font-size: 10px;
+		color: var(--ink-3);
+		text-align: right;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bar__fill {
+		height: 9px;
+		background: var(--terracotta);
+		min-width: 3px;
+	}
+	.bar__fill--tail {
+		background: var(--rule-2);
+	}
+
+	.sketch__cols {
+		margin-top: 8px;
+		display: flex;
+		height: 66px;
+		align-items: flex-end;
+		gap: 9px;
+	}
+	.col {
+		width: 26px;
+		background: var(--marigold);
+		display: block;
+	}
+	.col:nth-child(2) {
+		background: var(--marigold-deep);
+	}
+	.col:nth-child(3) {
+		background: var(--terracotta);
+	}
+	.col:nth-child(4) {
+		background: var(--terracotta-deep);
+	}
+	.sketch__axis {
+		margin-top: 5px;
+		display: flex;
+		gap: 9px;
+		font-family: var(--mono);
+		font-size: 10px;
+		color: var(--ink-3);
+	}
+	.sketch__axis span {
+		width: 26px;
+	}
+
+	.sketch__map {
+		margin-top: 8px;
+		height: 74px;
+		background: repeating-linear-gradient(90deg, #f2e7d2 0 14px, var(--rule-4) 14px 15px);
+		border: 1px solid var(--rule-2);
+		position: relative;
+	}
+	.blob {
+		position: absolute;
+		border-radius: 50%;
+		background: rgba(179, 67, 40, 0.45);
+	}
+
+	.sketch__spark {
+		margin-top: 8px;
+		display: flex;
+		align-items: flex-end;
+		gap: 3px;
+		height: 66px;
+	}
+	.sketch__spark span {
+		flex: 1;
+		background: var(--avocado);
+	}
+</style>

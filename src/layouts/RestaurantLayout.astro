@@ -1,0 +1,481 @@
+---
+// Shell for "Jason's restaurant log" — the third section of the family, and the
+// one that breaks the dark.
+//
+// THE LIGHT/DARK DECISION. The film log is wine-red on near-black and the book
+// log is paper-brown on near-black, so a third dark section would have been the
+// safe move. It ships light anyway. The brief's reference set is a printed
+// object — a laminated taqueria menu, a placemat, butcher paper taped over
+// yesterday's prices — and every one of those is dark ink on cheap warm paper.
+// A dark rendering of that is a photograph of a menu at night, not a menu: you
+// lose the paper, and the paper is the whole reference. What holds the family
+// together instead is the anatomy — the same nav, the same 288px sidebar of
+// label-and-count rows, the same `sec-head`, the same chips and pills — so the
+// section reads as a sibling from the second you touch a control, even though
+// the ground is cream.
+//
+// THE DISPLAY FACE. Exactly one, as the brief allows: Ultra, a fat Egyptian
+// slab used only for menu headers and the wordmark. It was picked over the
+// distressed "Mexican-look" faces on purpose — those are costume, and a real
+// taqueria menu isn't about being Mexican, it's about telling you what the
+// tacos cost. Ultra is what a printer with one heavy face and a deadline sets a
+// header in. Archivo carries every control, count and chip so the three
+// sections agree on what a control looks like; Newsreader carries prose.
+//
+// Chrome styles are global here rather than per-page (the film log's habit)
+// because eight pages share one typographic vocabulary — the dot leader, the
+// price column, the section rule — and eight copies of it would drift apart by
+// the third page.
+import { siteNav } from '../lib/nav';
+
+interface Props {
+	title: string;
+	/** Pathname used to light the active site-nav tab. */
+	pathname: string;
+	isOwner?: boolean;
+}
+
+const { title, pathname, isOwner = false } = Astro.props;
+const nav = siteNav(pathname);
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Ultra&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body>
+		<div class="rl-nav">
+			<div class="rl-nav__inner">
+				{nav.map((n) => (
+					<a
+						class:list={['rl-nav__link', n.active && 'rl-nav__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
+				<div class="rl-nav__actions">
+					{isOwner ? (
+						<>
+							<button type="button" class="rl-btn" data-open-try-editor>+ To try</button>
+							<button type="button" class="rl-btn rl-btn--primary" data-open-meal-editor>+ Log meal</button>
+						</>
+					) : (
+						<a class="rl-btn" href="/films/login">Log in</a>
+					)}
+				</div>
+			</div>
+		</div>
+
+		<slot />
+
+		<script>
+			// "Back" links return to the actual previous page when you arrived from
+			// inside the site; the href stays a fallback for direct loads and new
+			// tabs, where history.back() would leave the site entirely.
+			for (const a of document.querySelectorAll('a.rl-back')) {
+				a.addEventListener('click', (e) => {
+					const ref = document.referrer;
+					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+					if (history.length > 1 && sameOrigin) {
+						e.preventDefault();
+						history.back();
+					}
+				});
+			}
+		</script>
+
+		<style is:global>
+			/* ---------------------------------------------------------------
+			   The palette — a printed Cal-Mex menu, as a token list.
+			   Manila ground, ink brown, and three accents that a two-colour
+			   press could actually have run: terracotta, marigold, avocado.
+			   --------------------------------------------------------------- */
+			:root {
+				--ground: #f7eed9; /* the paper */
+				--panel: #efe1c3; /* heavier stock: nav, filter bar, sidecar */
+				--card: #fdf7e8; /* the boxed special, tiles, popups */
+
+				--ink: #2f1e12; /* body ink */
+				--ink-soft: #4a3626; /* long prose */
+				--ink-2: #6d5740; /* secondary */
+				--ink-3: #8d7357; /* labels, small caps */
+				--ink-4: #a8927a; /* faint — captions, disabled numerals */
+
+				--rule: #c4ad86; /* the printed rule */
+				--rule-2: #ddcaa6;
+				--rule-3: #e3d5b6;
+				--rule-4: #eadfc4;
+				--leader: #cbb389; /* dot leaders */
+				--dashed: #b09873;
+
+				--terracotta: #b34328; /* the accent: active tab, primary button */
+				--terracotta-deep: #8e3220; /* link ink dark enough for paper */
+				--marigold: #d38b1a; /* stars */
+				--marigold-deep: #c07d14;
+				--avocado: #556b2a;
+				--chile: #a83a22;
+
+				--wash: #fbf3e1; /* row hover */
+				--wash-2: #f6ecd6;
+				--sunk: #f0e2c2; /* pressed / locked field */
+				--disabled: #e0d1b2;
+
+				--display: 'Ultra', Georgia, serif;
+				--ui: 'Archivo', Helvetica, Arial, sans-serif;
+				--prose: 'Newsreader', Georgia, serif;
+				--mono: ui-monospace, Menlo, Consolas, monospace;
+
+				--gutter: clamp(14px, 4vw, 32px);
+				--column: 1264px;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				min-height: 100vh;
+				background: var(--ground);
+				color: var(--ink);
+				font-family: var(--ui);
+				-webkit-font-smoothing: antialiased;
+			}
+			a {
+				color: var(--terracotta-deep);
+				text-decoration: none;
+			}
+			a:hover {
+				color: var(--terracotta);
+			}
+			button {
+				font-family: var(--ui);
+			}
+
+			/* --- Site nav ------------------------------------------------- */
+			.rl-nav {
+				background: var(--panel);
+				border-bottom: 1px solid var(--rule);
+			}
+			.rl-nav__inner {
+				max-width: var(--column);
+				margin: 0 auto;
+				padding: 9px var(--gutter);
+				min-height: 54px;
+				display: flex;
+				align-items: center;
+				gap: 10px 18px;
+				flex-wrap: wrap;
+			}
+			.rl-nav__link {
+				font-size: 13px;
+				color: var(--ink-2);
+				padding-bottom: 3px;
+				border-bottom: 2px solid transparent;
+			}
+			.rl-nav__link--active {
+				color: var(--ink);
+				font-weight: 600;
+				border-bottom-color: var(--terracotta);
+			}
+			.rl-nav__actions {
+				margin-left: auto;
+				display: flex;
+				gap: 8px;
+			}
+			/* Owner-only affordances: visible, but quiet — an outline on the
+			   paper rather than a filled button competing with the content. */
+			.rl-btn {
+				background: none;
+				border: 1px solid var(--rule);
+				color: var(--ink-2);
+				font-size: 12.5px;
+				padding: 7px 13px;
+				cursor: pointer;
+				line-height: 1.2;
+			}
+			.rl-btn:hover {
+				border-color: var(--terracotta);
+				color: var(--terracotta-deep);
+			}
+			.rl-btn--primary {
+				background: #f6e7d4;
+				border-color: var(--terracotta);
+				color: var(--terracotta-deep);
+				font-weight: 600;
+			}
+			.rl-btn--primary:hover {
+				background: var(--terracotta);
+				color: var(--card);
+			}
+
+			/* --- Page frame ----------------------------------------------- */
+			.rl-page {
+				max-width: var(--column);
+				margin: 0 auto;
+				padding: 30px var(--gutter) 80px;
+			}
+			.rl-page--flush {
+				padding-top: 0;
+			}
+			.rl-split {
+				display: flex;
+				gap: 28px 44px;
+				align-items: flex-start;
+				flex-wrap: wrap;
+			}
+			/* The sidebar is 288px on the film log; here it is a flexible 258–340
+			   so the main column can take the whole width on a phone without a
+			   breakpoint doing it by hand. */
+			.rl-side {
+				flex: 1 1 258px;
+				min-width: 0;
+				max-width: 340px;
+			}
+			.rl-main {
+				flex: 999 1 460px;
+				min-width: 0;
+				display: flex;
+				flex-direction: column;
+				gap: 36px;
+			}
+
+			/* --- Wordmark + page heads ------------------------------------ */
+			.rl-brand {
+				font-family: var(--display);
+				font-size: 29px;
+				line-height: 1.06;
+				letter-spacing: -0.4px;
+				color: var(--ink);
+			}
+			.rl-brand__sub {
+				margin-top: 9px;
+				font-size: 12.5px;
+				font-weight: 600;
+				color: var(--terracotta);
+			}
+			.rl-head {
+				display: flex;
+				align-items: flex-end;
+				justify-content: space-between;
+				gap: 12px 20px;
+				flex-wrap: wrap;
+				border-bottom: 2px solid var(--ink);
+				padding-bottom: 10px;
+			}
+			.rl-head__title {
+				margin-top: 6px;
+				font-family: var(--display);
+				font-size: 30px;
+				line-height: 1;
+				color: var(--ink);
+			}
+			.rl-back {
+				font-size: 12px;
+				color: var(--ink-3);
+			}
+			.rl-topbar {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 14px 0;
+				border-bottom: 1px solid var(--rule-2);
+			}
+			.rl-tag {
+				font-size: 10.5px;
+				font-weight: 700;
+				letter-spacing: 1.6px;
+				text-transform: uppercase;
+				color: var(--ink-3);
+			}
+			.rl-count {
+				font-family: var(--mono);
+				font-size: 11.5px;
+				color: var(--ink-3);
+				font-variant-numeric: tabular-nums;
+			}
+
+			/* --- Section heads: a menu's section rule --------------------- */
+			.rl-sec-head {
+				display: flex;
+				align-items: baseline;
+				justify-content: space-between;
+				gap: 10px 16px;
+				flex-wrap: wrap;
+				border-bottom: 2px solid var(--ink);
+				padding-bottom: 8px;
+			}
+			.rl-sec-head--thin {
+				border-bottom-width: 1px;
+			}
+			.rl-sec-head__title {
+				font-family: var(--display);
+				font-size: 20px;
+				color: var(--ink);
+			}
+			.rl-sec-head--thin .rl-sec-head__title {
+				font-size: 17px;
+			}
+			.rl-sec-head__link {
+				font-size: 12.5px;
+				font-weight: 600;
+				color: var(--terracotta);
+			}
+			.rl-sec-head__sub {
+				font-size: 11px;
+				letter-spacing: 1.5px;
+				text-transform: uppercase;
+				color: var(--ink-3);
+			}
+
+			/* --- The dot leader ------------------------------------------
+			   The single most useful thing a printed menu has to lend: it ties
+			   a dish on the left to a price on the right across whatever gap
+			   the line happens to leave. Used for nav counts, tile meta, list
+			   rows and the sidecar's stats. It collapses to a minimum width
+			   rather than disappearing, so a narrow row still reads as a line
+			   of a menu and not as two crushed columns. */
+			.rl-leader {
+				flex: 1;
+				border-bottom: 1px dotted var(--leader);
+				transform: translateY(-4px);
+				min-width: 16px;
+			}
+
+			/* --- Sidebar nav rows ----------------------------------------- */
+			.rl-navrow {
+				display: flex;
+				align-items: baseline;
+				gap: 10px;
+				padding: 11px 2px;
+				border-bottom: 1px solid var(--rule-2);
+				color: var(--ink);
+			}
+			.rl-navrow:hover {
+				background: #f1e5cb;
+				color: var(--ink);
+			}
+			.rl-navrow__label {
+				font-size: 13.5px;
+			}
+			.rl-navrow__n {
+				font-family: var(--mono);
+				font-size: 12px;
+				color: var(--ink-3);
+				font-variant-numeric: tabular-nums;
+			}
+			.rl-rule {
+				margin-top: 16px;
+				border-top: 1px solid var(--rule);
+			}
+
+			/* --- Boxed special -------------------------------------------- */
+			.rl-box {
+				background: var(--card);
+				border: 1px solid var(--rule);
+			}
+			.rl-box--panel {
+				background: var(--panel);
+			}
+			.rl-box__pad {
+				padding: 14px 16px;
+			}
+			.rl-label {
+				font-size: 10.5px;
+				font-weight: 700;
+				letter-spacing: 1.5px;
+				text-transform: uppercase;
+				color: var(--ink-3);
+			}
+
+			/* --- Chips and pills ------------------------------------------ */
+			.rl-chip {
+				background: var(--card);
+				color: var(--ink);
+				border: 1px solid var(--dashed);
+				font-size: 12px;
+				padding: 5px 11px;
+				cursor: pointer;
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				line-height: 1.2;
+			}
+			.rl-chip:hover {
+				border-color: var(--terracotta);
+			}
+			.rl-chip[aria-pressed='true'] {
+				background: var(--ink);
+				color: var(--ground);
+				border-color: var(--ink);
+			}
+			.rl-chip__n {
+				font-family: var(--mono);
+				font-size: 10px;
+				opacity: 0.7;
+			}
+			.rl-chip--mono {
+				font-family: var(--mono);
+			}
+			.rl-chip--more {
+				background: none;
+				border-style: dashed;
+				color: var(--ink-3);
+			}
+
+			/* --- Stars ---------------------------------------------------- */
+			.rl-stars {
+				font-size: 12.5px;
+				letter-spacing: 0.8px;
+				color: var(--marigold);
+				line-height: 1;
+				white-space: nowrap;
+			}
+			.rl-marks {
+				font-size: 12px;
+				color: var(--terracotta-deep);
+				white-space: nowrap;
+			}
+
+			/* --- Prose ---------------------------------------------------- */
+			.rl-prose {
+				font-family: var(--prose);
+				font-size: 17px;
+				line-height: 1.62;
+				color: var(--ink);
+				text-wrap: pretty;
+			}
+			.rl-why {
+				font-family: var(--prose);
+				font-style: italic;
+				color: var(--ink-2);
+			}
+
+			/* --- Empty states --------------------------------------------
+			   No margarita glasses. An empty section says what is missing in
+			   the same voice the full one uses, on the same paper. */
+			.rl-empty {
+				border: 1px dashed var(--rule);
+				background: rgba(253, 247, 232, 0.4);
+				padding: 22px 20px;
+				font-family: var(--prose);
+				font-size: 15.5px;
+				color: var(--ink-2);
+			}
+		</style>
+	</body>
+</html>

@@ -1,0 +1,342 @@
+---
+// One visit.
+//
+// The three rating signals get their hierarchy here, in the sidecar, and this
+// is the only screen where all three are shown at full size: stars first and
+// largest, the verdict under them with its gloss spelled out, and the heart and
+// the revisit mark as two small stamps at the bottom. On a tile only the stars
+// survive; on a map pin only the verdict does; the heart never leaves the entry
+// except as a ♥ beside a name. That ordering is the whole answer to "three
+// overlapping opinions" — they are ranked by how far they travel.
+import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
+import MealEditor from '../../../components/MealEditor.astro';
+import PhotoWall from '../../../components/PhotoWall.astro';
+import VerdictMark from '../../../components/VerdictMark.astro';
+import { requireOwner } from '../../../lib/auth';
+import { getVisit, listFriends, listTags } from '../../../lib/restaurants';
+import { layoutPhotos, longDate, placeLine } from '../../../lib/restaurant-view';
+import { verdictAt } from '../../../lib/verdict';
+import { starText } from '../../../lib/format';
+
+export const prerender = false;
+
+const id = Number(Astro.params.id);
+if (!Number.isInteger(id) || id <= 0) return Astro.redirect('/restaurants/diary');
+
+const visit = await getVisit(id);
+if (!visit) return new Response('Not found', { status: 404 });
+
+const isOwner = await requireOwner(Astro.cookies);
+const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+
+const verdict = verdictAt(visit.verdict);
+const stars = starText(visit.rating);
+const photos = layoutPhotos(visit.photos);
+const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+---
+
+<RestaurantLayout
+	title={`${visit.restaurant_name}, ${visit.visited_on} · Jason's restaurant log`}
+	pathname="/restaurants"
+	isOwner={isOwner}
+>
+	<div class="rl-page rl-page--flush">
+		<div class="rl-topbar">
+			<a class="rl-back" href="/restaurants/diary">&larr; Jason&rsquo;s restaurant log</a>
+			<span class="rl-tag">Diary</span>
+		</div>
+
+		<div class="rl-split entry">
+			<div class="rl-main entry__main">
+				<header class="entry__head">
+					<div class="entry__date">{longDate(visit.visited_on).toUpperCase()}</div>
+					<a class="entry__name" href={`/restaurants/place/${visit.restaurant_id}`}>
+						{visit.restaurant_name}
+					</a>
+					<div class="entry__facts">
+						{visit.cuisines.length > 0 && <span>{visit.cuisines.join(', ')}</span>}
+						{visit.cuisines.length > 0 && visit.price_band && <span class="dot">·</span>}
+						{visit.price_band && <span class="mono">{visit.price_band}</span>}
+						<span class="dot">·</span>
+						<span>{placeLine(visit)}</span>
+						{
+							visit.friends.length > 0 && (
+								<span class="entry__with">with {visit.friends.join(', ')}</span>
+							)
+						}
+					</div>
+				</header>
+
+				{photos.length > 0 && <PhotoWall photos={photos} height={230} hero />}
+
+				{
+					paragraphs.length > 0 && (
+						<div class="entry__review">
+							{paragraphs.map((p) => (
+								<p class="rl-prose">{p}</p>
+							))}
+						</div>
+					)
+				}
+
+				{
+					visit.tags.length > 0 && (
+						<div class="entry__tags">
+							{visit.tags.map((t) => (
+								<span class="entry__tag">{t}</span>
+							))}
+						</div>
+					)
+				}
+			</div>
+
+			<aside class="rl-side">
+				<div class="rl-box entry__card">
+					<div class="rl-label">How was it</div>
+					{
+						stars ? (
+							<div class="entry__stars">
+								<span class="entry__starglyphs">{stars}</span>
+								<span class="entry__starnum">{visit.rating}</span>
+							</div>
+						) : (
+							<p class="entry__unrated">Not rated. Not every meal gets a number.</p>
+						)
+					}
+
+					<div class="rl-label entry__label2">Would I go back</div>
+					<div class="entry__verdict">
+						<VerdictMark verdict={visit.verdict} size={34} />
+						<div>
+							<div class="entry__verdict-name">{verdict?.label ?? 'Not recorded'}</div>
+							{verdict && <div class="entry__verdict-gloss">{verdict.gloss}</div>}
+						</div>
+					</div>
+
+					<div class="entry__stamps">
+						<span class:list={['stamp', visit.hearted && 'stamp--heart']}>
+							♥ {visit.hearted ? 'Loved' : 'Not loved'}
+						</span>
+						<span class:list={['stamp', visit.revisit && 'stamp--on']}>
+							↻ {visit.revisit ? 'Been before' : 'First time'}
+						</span>
+					</div>
+				</div>
+
+				{
+					isOwner && (
+						<div class="rl-box rl-box--panel rl-box__pad owner">
+							<div class="rl-label">Owner</div>
+							<button type="button" class="owner__link" data-open-meal-editor>
+								Edit this entry
+							</button>
+						</div>
+					)
+				}
+			</aside>
+		</div>
+	</div>
+
+	{
+		isOwner && (
+			<MealEditor
+				redirect={`/restaurants/diary/${visit.id}`}
+				deleteRedirect="/restaurants/diary"
+				visitId={visit.id}
+				place={{
+					id: visit.restaurant_id,
+					name: visit.restaurant_name,
+					meta: `${visit.cuisines[0] ?? ''}${visit.cuisines[0] ? ' · ' : ''}${placeLine(visit)}`,
+					visits: 1,
+				}}
+				initial={{
+					visitedOn: visit.visited_on,
+					rating: visit.rating,
+					verdict: visit.verdict,
+					hearted: visit.hearted,
+					revisit: visit.revisit,
+					friends: visit.friends,
+					review: visit.review ?? '',
+					tags: visit.tags,
+				}}
+				tagOptions={tagOptions}
+				friendOptions={friendOptions}
+			/>
+		)
+	}
+</RestaurantLayout>
+
+<style>
+	.entry {
+		margin-top: 26px;
+	}
+	.entry__main {
+		flex: 999 1 440px;
+		min-width: min(100%, 440px);
+		gap: 24px;
+	}
+	.entry__head {
+		border-bottom: 2px solid var(--ink);
+		padding-bottom: 13px;
+	}
+	.entry__date {
+		font-family: var(--mono);
+		font-size: 12px;
+		letter-spacing: 1.2px;
+		color: var(--ink-3);
+	}
+	.entry__name {
+		display: block;
+		margin-top: 8px;
+		font-family: var(--display);
+		font-size: clamp(28px, 5.5vw, 40px);
+		line-height: 1.04;
+		color: var(--ink);
+	}
+	.entry__name:hover {
+		color: var(--terracotta);
+	}
+	.entry__facts {
+		margin-top: 9px;
+		display: flex;
+		align-items: baseline;
+		gap: 11px;
+		flex-wrap: wrap;
+		font-size: 13px;
+		color: var(--ink-2);
+	}
+	.dot {
+		color: var(--rule);
+	}
+	.mono {
+		font-family: var(--mono);
+		color: var(--ink);
+	}
+	.entry__with {
+		margin-left: auto;
+		font-size: 12px;
+		color: var(--ink-3);
+	}
+
+	.entry__review {
+		max-width: 660px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+	}
+	.entry__review p {
+		margin: 0;
+	}
+	.entry__review p + p {
+		color: var(--ink-soft);
+	}
+
+	.entry__tags {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.entry__tag {
+		border: 1px solid var(--rule);
+		background: var(--card);
+		font-size: 12px;
+		color: var(--ink-2);
+		padding: 4px 10px;
+	}
+
+	.entry__card {
+		padding: 16px 18px;
+	}
+	.entry__stars {
+		margin-top: 10px;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding-bottom: 14px;
+		border-bottom: 1px solid var(--rule-2);
+	}
+	.entry__starglyphs {
+		font-size: 24px;
+		letter-spacing: 2px;
+		color: var(--marigold);
+		line-height: 1;
+	}
+	.entry__starnum {
+		font-family: var(--mono);
+		font-size: 12.5px;
+		color: var(--ink-2);
+	}
+	.entry__unrated {
+		margin: 10px 0 14px;
+		padding-bottom: 14px;
+		border-bottom: 1px solid var(--rule-2);
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 14px;
+		color: var(--ink-3);
+	}
+	.entry__label2 {
+		display: block;
+		margin-top: 14px;
+	}
+	.entry__verdict {
+		margin-top: 9px;
+		display: flex;
+		align-items: flex-start;
+		gap: 12px;
+	}
+	.entry__verdict-name {
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.entry__verdict-gloss {
+		margin-top: 3px;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 13px;
+		line-height: 1.4;
+		color: var(--ink-3);
+	}
+
+	.entry__stamps {
+		margin-top: 16px;
+		padding-top: 14px;
+		border-top: 1px solid var(--rule-2);
+		display: flex;
+		gap: 8px;
+	}
+	.stamp {
+		flex: 1;
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		color: var(--ink-4);
+		font-size: 12px;
+		padding: 7px 0;
+		text-align: center;
+	}
+	.stamp--on {
+		background: var(--ink);
+		border-color: var(--ink);
+		color: var(--ground);
+	}
+	.stamp--heart {
+		background: var(--terracotta);
+		border-color: var(--terracotta);
+		color: var(--card);
+	}
+
+	.owner {
+		margin-top: 14px;
+	}
+	.owner__link {
+		display: block;
+		margin-top: 9px;
+		border: none;
+		background: none;
+		padding: 0;
+		font-size: 12.5px;
+		color: var(--terracotta-deep);
+		cursor: pointer;
+		text-align: left;
+	}
+</style>

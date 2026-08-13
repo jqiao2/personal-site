@@ -1,0 +1,206 @@
+---
+// To try — the same components with two thirds of their content removed.
+//
+// A place I haven't been has no rating, no verdict, no photographs and no
+// history. What survives is a name, a neighbourhood, a price band and the one
+// line about why I want to go — which is, as it happens, exactly the shape a
+// menu row already had. So the list row is the SAME row as the Restaurants
+// list, with the right-hand price column and the leader intact and the reason
+// set in italic prose where the cuisine and rating used to sit. The empty ring
+// in the left margin is where the verdict mark goes, marking the slot as
+// unfilled rather than removing it.
+//
+// AND THE MAP MEANS SOMETHING DIFFERENT. Every pin here is an intention rather
+// than an opinion, so the pins are drawn open — the same shape with nothing
+// inside it. Set against the visited map, the difference reads without a
+// legend: a full pin is a verdict, an open one is a plan.
+import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
+import RestaurantMap from '../../components/RestaurantMap.astro';
+import MealEditor from '../../components/MealEditor.astro';
+import { requireOwner } from '../../lib/auth';
+import { listFriends, listTags, listToTry } from '../../lib/restaurants';
+import { placeLine } from '../../lib/restaurant-view';
+import type { MapPoint } from '../../lib/restaurant-map';
+
+export const prerender = false;
+
+const params = Astro.url.searchParams;
+const isMap = params.get('view') === 'map';
+const city = params.get('city');
+
+const [places, isOwner] = await Promise.all([listToTry(), requireOwner(Astro.cookies)]);
+const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+
+const points: MapPoint[] = places
+	.filter((p) => p.lat != null && p.lng != null)
+	.map((p) => ({
+		id: p.id,
+		name: p.name,
+		lat: p.lat as number,
+		lng: p.lng as number,
+		verdict: null,
+		visited: false,
+		price: p.price_band,
+		cuisine: p.cuisines[0] ?? '',
+		city: p.city,
+		where: placeLine(p),
+		rating: null,
+		visits: 0,
+		hearted: false,
+	}));
+
+const cities = [...new Set(places.map((p) => p.city))].map((name) => ({
+	name,
+	count: places.filter((p) => p.city === name).length,
+}));
+cities.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
+
+function href(changes: Record<string, string | null>): string {
+	const next = new URLSearchParams(params);
+	for (const [k, v] of Object.entries(changes)) {
+		next.delete(k);
+		if (v != null) next.set(k, v);
+	}
+	const qs = next.toString();
+	return qs ? `/restaurants/to-try?${qs}` : '/restaurants/to-try';
+}
+---
+
+<RestaurantLayout title="To try · Jason's restaurant log" pathname="/restaurants" isOwner={isOwner}>
+	<div class="rl-page">
+		<div class="rl-head">
+			<div>
+				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<div class="rl-head__title">To try</div>
+			</div>
+			<div class="head-right">
+				<span class="rl-count">{places.length} place{places.length === 1 ? '' : 's'}</span>
+				{isOwner && <button type="button" class="rl-btn rl-btn--primary" data-open-try-editor>+ Add place</button>}
+				<div class="viewtoggle">
+					<a class:list={['viewtoggle__b', !isMap && 'viewtoggle__b--on']} href={href({ view: null })}>List</a>
+					<a class:list={['viewtoggle__b', isMap && 'viewtoggle__b--on']} href={href({ view: 'map' })}>Map</a>
+				</div>
+			</div>
+		</div>
+
+		{
+			places.length === 0 ? (
+				<p class="rl-empty empty">
+					Nothing on the list yet. A name, roughly where it is, and one line about why
+					you want to go — that is the whole entry.
+				</p>
+			) : isMap ? (
+				<RestaurantMap
+					points={points}
+					cities={cities}
+					activeCity={city}
+					cityHref={(c) => href({ city: c, view: 'map' })}
+					caption={`${points.length} of ${places.length} placed`}
+				/>
+			) : (
+				<div class="rl-box list">
+					{places.map((p) => (
+						<a class="trow" href={`/restaurants/place/${p.id}`}>
+							<span class="trow__ring" aria-hidden="true" />
+							<span class="trow__name">{p.name}</span>
+							<span class="trow__hood">{placeLine(p)}</span>
+							<span class="rl-leader" />
+							<span class="rl-why trow__why">{p.to_try_reason}</span>
+							<span class="trow__price">{p.price_band ?? ''}</span>
+						</a>
+					))}
+				</div>
+			)
+		}
+	</div>
+
+	{
+		isOwner && (
+			<MealEditor
+				redirect="/restaurants/to-try"
+				tagOptions={tagOptions}
+				friendOptions={friendOptions}
+			/>
+		)
+	}
+</RestaurantLayout>
+
+<style>
+	.head-right {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+		flex-wrap: wrap;
+	}
+	.viewtoggle {
+		display: flex;
+		border: 1px solid var(--rule);
+	}
+	.viewtoggle__b {
+		background: var(--card);
+		color: var(--ink-2);
+		font-size: 12px;
+		padding: 7px 14px;
+	}
+	.viewtoggle__b + .viewtoggle__b {
+		border-left: 1px solid var(--rule);
+	}
+	.viewtoggle__b--on {
+		background: var(--ink);
+		color: var(--ground);
+		font-weight: 600;
+	}
+	.viewtoggle__b--on:hover {
+		color: var(--ground);
+	}
+
+	.list,
+	.empty {
+		margin-top: 16px;
+	}
+	.trow {
+		display: flex;
+		align-items: baseline;
+		gap: 6px 11px;
+		flex-wrap: wrap;
+		padding: 15px 18px;
+		border-bottom: 1px solid var(--rule-4);
+		color: var(--ink);
+	}
+	.trow:last-child {
+		border-bottom: none;
+	}
+	.trow:hover {
+		background: var(--wash-2);
+		color: var(--ink);
+	}
+	/* Where the verdict mark sits on a visited row. Kept, empty, so the two
+	   lists line up when you flip between them. */
+	.trow__ring {
+		width: 9px;
+		height: 9px;
+		flex: none;
+		border: 1.4px solid var(--ink-3);
+		border-radius: 50%;
+		transform: translateY(-1px);
+	}
+	.trow__name {
+		font-size: 15px;
+		font-weight: 600;
+	}
+	.trow__hood {
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.trow__why {
+		font-size: 14.5px;
+		text-align: right;
+		max-width: 330px;
+	}
+	.trow__price {
+		font-family: var(--mono);
+		font-size: 12.5px;
+		width: 38px;
+		text-align: right;
+	}
+</style>
