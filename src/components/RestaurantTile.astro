@@ -84,14 +84,14 @@ const cuisine = cuisines[0] ?? '';
 			date ? (
 				<div class="tile__row tile__row--foot">
 					{stars && <span class="rl-stars">{stars}</span>}
-					<span class="rl-leader" />
+					<span class="rl-gap" />
 					<VerdictMark verdict={verdict} size={17} />
 				</div>
 			) : (
 				<>
 					<div class="tile__row tile__row--foot">
 						<span class="tile__cuisines">{cuisines.join(', ')}</span>
-						<span class="rl-leader" />
+						<span class="rl-gap" />
 						<span class="tile__band">{priceBand ?? ''}</span>
 					</div>
 					<div class="tile__row tile__row--where">

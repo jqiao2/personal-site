@@ -750,12 +750,43 @@ export async function setPlaceHearted(id: number, hearted: boolean): Promise<voi
 	if (error) throw new Error(error.message);
 }
 
-export async function removeFromToTry(id: number): Promise<void> {
+/**
+ * Take a place off the to-try list.
+ *
+ * There are two ways to leave that list and they want different things done.
+ * A place you have now EATEN AT leaves it by having a visit — the view's
+ * `on_to_try` already goes false on its own — and the row has to stay, because
+ * it is the restaurant every one of those visits points at. A place you have
+ * simply CHANGED YOUR MIND ABOUT has no visits, no photographs and no history:
+ * clearing the two to-try columns would leave a row that appears on no page in
+ * the section, since the Restaurants list is `visit_count > 0` and the to-try
+ * list is `to_try_added_at is not null`. That is not removal, it is a leak.
+ *
+ * So the visit count decides. Any visit at all — including a soft-deleted one,
+ * whose row is still there and still points here — and the place is unlisted
+ * and kept. None, and the row goes, which is what "remove it" meant.
+ *
+ * Returns which of the two happened, so a caller can say so.
+ */
+export async function removeFromToTry(id: number): Promise<'deleted' | 'unlisted'> {
+	const { count, error: countError } = await supabaseAdmin
+		.from('restaurant_visits')
+		.select('id', { count: 'exact', head: true })
+		.eq('restaurant_id', id);
+	if (countError) throw new Error(countError.message);
+
+	if ((count ?? 0) === 0) {
+		const { error } = await supabaseAdmin.from('restaurants').delete().eq('id', id);
+		if (error) throw new Error(error.message);
+		return 'deleted';
+	}
+
 	const { error } = await supabaseAdmin
 		.from('restaurants')
 		.update({ to_try_added_at: null, to_try_reason: null })
 		.eq('id', id);
 	if (error) throw new Error(error.message);
+	return 'unlisted';
 }
 
 export interface PhotoInput {

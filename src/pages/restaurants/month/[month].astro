@@ -205,7 +205,7 @@ const summary = visits.length
 								{visits.slice(0, 6).map((v) => (
 									<div class="noplates__row">
 										<span class="noplates__name">{v.restaurant_name}</span>
-										<span class="rl-leader" />
+										<span class="rl-gap" />
 										<span class="noplates__where">{placeLine(v)}</span>
 									</div>
 								))}
@@ -491,7 +491,7 @@ const summary = visits.length
 	}
 
 	/* No photographs this month: the block that would have held them lists the
-	   meals instead, on dot leaders, which is the same card without a hole. */
+	   meals instead, as menu rows, which is the same card without a hole. */
 	.noplates {
 		margin-top: 28px;
 		flex: 1;
