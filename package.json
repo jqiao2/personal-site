@@ -23,6 +23,7 @@
     "graphology-gexf": "^0.13.2",
     "graphology-layout-forceatlas2": "^0.10.1",
     "html-to-image": "^1.11.13",
+    "maplibre-gl": "^6.3.0",
     "sigma": "^3.0.3"
   },
   "allowScripts": {
