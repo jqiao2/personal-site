@@ -327,6 +327,8 @@ const config = {
 		stateRegion: string | null;
 		country: string | null;
 		kind: string | null;
+		cuisines: string[];
+		address: string;
 		/** True only when lat/lng is the place itself, not the middle of an area. */
 		precise: boolean;
 	}
@@ -677,22 +679,28 @@ const config = {
 					return;
 				}
 				for (const hit of hits) {
+					// Two lines, not three spans on one: the name, then everything
+					// that distinguishes this hit from the next one. At 380px the
+					// old single row ran the name, the street and the OSM type
+					// together into one unbroken string.
 					const row = document.createElement('div');
 					row.className = hit.precise ? 'me__sug' : 'me__sug me__sug--vague';
-					row.innerHTML =
-						'<span class="me__sug-name"></span><span class="me__sug-meta"></span><span class="me__sug-tail"></span>';
-					row.querySelector('.me__sug-name')!.textContent = hit.name || hit.display.split(',')[0];
-					row.querySelector('.me__sug-meta')!.textContent = hit.display
-						.split(',')
-						.slice(1, 4)
-						.join(',')
-						.trim();
+					const name = document.createElement('span');
+					name.className = 'me__sug-name';
+					name.textContent = hit.name || hit.display.split(',')[0];
+					const meta = document.createElement('span');
+					meta.className = 'me__sug-meta';
 					// An area is offered — it still fills the location fields — but
 					// it is named as what it is, so nobody pins a restaurant to the
 					// middle of a neighbourhood by accident.
-					row.querySelector('.me__sug-tail')!.textContent = hit.precise
-						? (hit.kind ?? '')
-						: `${hit.kind ?? 'area'} · no exact point`;
+					meta.textContent = [
+						hit.address || hit.display.split(',').slice(1, 3).join(',').trim(),
+						hit.cuisines.join(', ') || hit.kind,
+						hit.precise ? '' : 'no exact point',
+					]
+						.filter(Boolean)
+						.join(' · ');
+					row.append(name, meta);
 					row.addEventListener('mousedown', (e) => {
 						e.preventDefault();
 						pick(hit);
@@ -706,11 +714,24 @@ const config = {
 		function pick(hit: GeoHit) {
 			state.geo = hit;
 			$('[data-me-geo]')!.hidden = true;
-			// Fill "Where" from the hit, but leave it editable: OSM files Ba Xuyên
-			// under Dyker Heights when anyone who goes there says Sunset Park, so
-			// the geocode is a suggestion and the field is the record.
+
+			// Picking a hit means "this is the place", so the form becomes that
+			// place: its real name — properly spelled and accented, which is the
+			// half you can't type on a phone — then where it is and what it
+			// serves. Every field stays editable; OSM files Ba Xuyên under Dyker
+			// Heights when anyone who goes there says Sunset Park, so the geocode
+			// is a suggestion and the field is the record.
+			if (hit.name) ($('[data-me-try-name]') as HTMLInputElement).value = hit.name;
+
 			const where = [hit.neighborhood, hit.city].filter(Boolean).join(', ');
 			if (where) ($('[data-me-try-where]') as HTMLInputElement).value = where;
+
+			// Only fill a cuisine that is empty — a typed one is a choice, and
+			// OSM's is a guess.
+			const cuisineField = $('[data-me-try-cuisine]') as HTMLInputElement;
+			if (hit.cuisines.length > 0 && !cuisineField.value.trim()) {
+				cuisineField.value = hit.cuisines.join(', ');
+			}
 			render();
 		}
 
@@ -1167,68 +1188,8 @@ const config = {
 		padding: 5px 10px;
 		font-size: 11.5px;
 	}
-	.me__suggest {
-		position: absolute;
-		left: 0;
-		right: 0;
-		top: 100%;
-		margin-top: 4px;
-		background: var(--card);
-		border: 1px solid var(--ink);
-		box-shadow: 0 12px 26px rgba(47, 30, 18, 0.24);
-		z-index: 10;
-	}
-	.me__suggest[hidden] {
-		display: none;
-	}
-	.me__sug {
-		display: flex;
-		align-items: baseline;
-		gap: 4px 9px;
-		flex-wrap: wrap;
-		padding: 9px 11px;
-		border-bottom: 1px solid var(--rule-4);
-		cursor: pointer;
-	}
-	.me__sug:hover {
-		background: var(--sunk);
-	}
-	.me__sug-name {
-		font-size: 13.5px;
-		font-weight: 600;
-	}
-	.me__sug-meta {
-		flex: 1 1 auto;
-		min-width: 0;
-		font-size: 11.5px;
-		color: var(--ink-3);
-	}
-	.me__sug-tail {
-		margin-left: auto;
-		font-family: var(--mono);
-		font-size: 11px;
-		color: var(--ink-3);
-	}
 	/* An area, offered but marked: it can fill the location fields, it cannot
 	   become the pin. */
-	.me__sug--vague .me__sug-name {
-		font-weight: 400;
-		color: var(--ink-2);
-	}
-	.me__sug--vague .me__sug-tail {
-		color: var(--marigold-deep);
-	}
-	.me__sug--none {
-		padding: 10px 11px;
-		font-family: var(--prose);
-		font-style: italic;
-		font-size: 13px;
-		color: var(--ink-3);
-		cursor: default;
-	}
-	.me__sug--none:hover {
-		background: none;
-	}
 
 	/* What the geocoder attached, stated plainly under the field. It is a
 	   receipt, not a control — the only thing you can do to it is refuse it. */
@@ -1403,30 +1364,6 @@ const config = {
 	.me__photos:empty {
 		display: none;
 	}
-	.me__photo {
-		position: relative;
-		width: 74px;
-		height: 56px;
-	}
-	.me__photo img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
-	}
-	.me__photo-x {
-		position: absolute;
-		top: 2px;
-		right: 2px;
-		width: 17px;
-		height: 17px;
-		border: none;
-		background: rgba(36, 24, 18, 0.72);
-		color: var(--ground);
-		font-size: 11px;
-		line-height: 1;
-		cursor: pointer;
-	}
 	.me__addphoto {
 		width: 74px;
 		height: 56px;
@@ -1450,25 +1387,6 @@ const config = {
 	}
 	.me__tags:empty {
 		display: none;
-	}
-	.me__tag {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid var(--rule);
-		background: var(--sunk);
-		font-size: 12px;
-		color: var(--ink-soft);
-		padding: 4px 9px;
-	}
-	.me__tag-x {
-		border: none;
-		background: none;
-		color: var(--ink-3);
-		font-size: 12px;
-		line-height: 1;
-		cursor: pointer;
-		padding: 0;
 	}
 
 	.me__foot {
@@ -1517,5 +1435,130 @@ const config = {
 		background: var(--disabled);
 		color: var(--ink-4);
 		cursor: not-allowed;
+	}
+</style>
+
+<!-- Styles for the parts of this component that are BUILT IN JAVASCRIPT.
+     Astro scopes a component's CSS by stamping a data attribute onto the
+     elements in its template — and elements created at runtime never get that
+     attribute, so scoped rules simply do not reach them. The suggestion rows,
+     the tag chips and the photo thumbnails are all created in the script below,
+     which is why they render unstyled unless their rules live out here. The
+     `me__` prefix is what keeps that safe. -->
+<style is:global>
+	.me__suggest {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		margin-top: 4px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		box-shadow: 0 12px 26px rgba(47, 30, 18, 0.24);
+		z-index: 10;
+		max-height: 260px;
+		overflow-y: auto;
+	}
+	.me__suggest[hidden] {
+		display: none;
+	}
+	/* Two lines: the name, then everything that tells this hit from the next.
+	   One flex row put the name, the street and the OSM type into a single
+	   unbroken string on a phone. */
+	.me__sug {
+		display: block;
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--rule-4);
+		cursor: pointer;
+	}
+	.me__sug:last-child {
+		border-bottom: none;
+	}
+	.me__sug:hover {
+		background: var(--sunk);
+	}
+	.me__sug-name {
+		display: block;
+		font-size: 14px;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--ink);
+	}
+	.me__sug-meta {
+		display: block;
+		margin-top: 2px;
+		font-size: 11.5px;
+		line-height: 1.4;
+		color: var(--ink-3);
+	}
+	.me__sug-tail {
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
+	}
+	/* An area, offered but marked: it can fill the location fields, it cannot
+	   become the pin. */
+	.me__sug--vague .me__sug-name {
+		font-weight: 400;
+		color: var(--ink-2);
+	}
+	.me__sug--vague .me__sug-meta {
+		color: var(--marigold-deep);
+	}
+	.me__sug--none {
+		padding: 10px 12px;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 13px;
+		color: var(--ink-3);
+		cursor: default;
+	}
+	.me__sug--none:hover {
+		background: none;
+	}
+
+	.me__tag {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--rule);
+		background: var(--sunk);
+		font-size: 12px;
+		color: var(--ink-soft);
+		padding: 4px 9px;
+	}
+	.me__tag-x {
+		border: none;
+		background: none;
+		color: var(--ink-3);
+		font-size: 12px;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.me__photo {
+		position: relative;
+		width: 74px;
+		height: 56px;
+	}
+	.me__photo img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+	}
+	.me__photo-x {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		width: 17px;
+		height: 17px;
+		border: none;
+		background: rgba(36, 24, 18, 0.72);
+		color: var(--ground);
+		font-size: 11px;
+		line-height: 1;
+		cursor: pointer;
 	}
 </style>

@@ -52,8 +52,19 @@ export interface GeocodeHit {
 	stateRegion: string | null;
 	/** ISO-3166-1 alpha-2, upper-cased — the shape `restaurants.country` wants. */
 	country: string | null;
-	/** OSM's own classification: "restaurant", "fast_food", "cafe", "house"… */
+	/** OSM's own classification, humanised: "restaurant", "fast food", "cafe"… */
 	kind: string | null;
+	/**
+	 * The cuisines OSM records, title-cased — "Vietnamese", "Sandwich".
+	 *
+	 * Free with the lookup and exactly the field the composer is asking you to
+	 * fill in next, so there is no reason to make you type it again. OSM stores
+	 * them semicolon-separated and lower-cased with underscores; they come out
+	 * of here in the shape `restaurants.cuisines` wants.
+	 */
+	cuisines: string[];
+	/** "83 Elizabeth Street, Chinatown, New York" — short enough to read in a row. */
+	address: string;
 	/**
 	 * Whether lat/lng is THE RESTAURANT, or merely the middle of an area.
 	 *
@@ -85,6 +96,17 @@ interface NominatimRow {
 	addresstype?: string;
 	place_rank?: number;
 	address?: Record<string, string>;
+	extratags?: Record<string, string> | null;
+}
+
+/** "fast_food" → "fast food", "vietnamese" → "Vietnamese". */
+function humanise(value: string): string {
+	return value.trim().replace(/_/g, ' ');
+}
+
+function titleCase(value: string): string {
+	const v = humanise(value);
+	return v ? v[0].toUpperCase() + v.slice(1) : v;
 }
 
 /**
@@ -101,6 +123,9 @@ export async function geocode(query: string, limit = 5): Promise<GeocodeHit[]> {
 	url.searchParams.set('q', q);
 	url.searchParams.set('format', 'jsonv2');
 	url.searchParams.set('addressdetails', '1');
+	// The cuisine lives in extratags, and it is the next field the composer
+	// would otherwise ask you to type by hand.
+	url.searchParams.set('extratags', '1');
 	url.searchParams.set('limit', String(Math.min(10, Math.max(1, limit))));
 
 	try {
@@ -136,7 +161,14 @@ function toHit(row: NominatimRow): GeocodeHit {
 		city,
 		stateRegion,
 		country: a.country_code ? a.country_code.toUpperCase() : null,
-		kind: row.type ?? null,
+		kind: row.type ? humanise(row.type) : null,
+		cuisines: (row.extratags?.cuisine ?? '')
+			.split(';')
+			.map((c) => titleCase(c))
+			.filter(Boolean),
+		address: [[a.house_number, a.road].filter(Boolean).join(' '), neighborhood, city]
+			.filter(Boolean)
+			.join(', '),
 		// `boundary` results are administrative outlines and carry a rank of 30
 		// at street level, so rank alone would let one through.
 		precise: (row.place_rank ?? 0) >= PRECISE_PLACE_RANK && row.category !== 'boundary',
