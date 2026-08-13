@@ -1,61 +1,82 @@
 ---
 // The map view, for both Restaurants and To try.
 //
+// MapLibre GL over MapTiler's vector tiles, on a basemap styled entirely by us
+// (see src/lib/map-style.ts). Everything that made the earlier hand-drawn
+// version work is kept — what changes is that the pins now sit on streets and
+// water instead of on ruled paper, which is the difference between knowing a
+// pin is in Sunset Park and being told so.
+//
 // THE PIN CARRIES THE VERDICT. Of the three rating signals, the verdict is the
 // one that survives to this scale, because the question you ask a map is the
 // question the verdict answers: I am standing here, would I go back in? Stars
 // would need a number rendered at 12px, and a heart would collapse a hundred
-// places into two states. The needle's angle carries the rung and its ink
-// carries the band, so a glance over Sunset Park reads as "mostly green,
-// pointing up" without a legend — though there is a legend anyway, bottom left,
-// because the ink bands are worth naming once.
+// places into two states. So the pins stay DOM markers holding the same needle
+// the rest of the section uses — the angle carries the rung, the ink carries
+// the band — rather than becoming circle layers, which would have thrown the
+// mark away at exactly the size it was designed for.
 //
 // TO-TRY PINS ARE DIFFERENT ON PURPOSE. A place you haven't been has no verdict
-// and can't have one, so its pin is an empty ring rather than a needle. Set
-// against the visited map, the difference reads without being explained: a full
-// pin is an opinion, an open one is an intention.
+// and can't have one, so its pin is an empty ring. Set against the visited map,
+// the difference reads without being explained: a full pin is an opinion, an
+// open one is an intention.
+//
+// WHAT HAPPENS ON FIRST LOAD. Not fit-to-bounds over everything — four fifths
+// of the pins are one dense New York cluster and the rest are in Mexico City,
+// Austin, LA and Tokyo, so that gives a world map with five specks. Not a
+// hardcoded New York either, which silently hides a fifth of the collection.
+// The map fits the bounds of whichever city holds the most of it, and the panel
+// beside it names every other city with its count — both the affordance that
+// says the rest of the world is there and the control that goes to it.
 //
 // MOBILE. A map wants full height on a phone, which leaves nowhere for the city
-// list. Below 760px the list becomes a horizontal strip of chips above the map
-// and the map takes the rest, rather than the two of them splitting a screen
-// neither can use.
-import { cluster, frameFor, plot, type MapPoint } from '../lib/restaurant-map';
-import { verdictAt } from '../lib/verdict';
-import { starText } from '../lib/format';
+// list. Below 760px the list becomes a horizontal strip of chips above the map.
+import { verdictAt, VERDICTS } from '../lib/verdict';
+import { MAP_TOKENS } from '../lib/map-style';
+import type { MapPoint } from '../lib/restaurant-map';
 
 interface Props {
 	points: MapPoint[];
 	cities: { name: string; count: number }[];
-	/** The city currently framed. Null frames everything that's placed. */
+	/** The city currently framed. Null means "the one with the most pins". */
 	activeCity: string | null;
 	/** Builds the href for a city chip; the page owns the rest of the query. */
 	cityHref: (city: string | null) => string;
-	/** "31 of 96" — how much of the collection is in frame. */
 	caption?: string;
 }
 
 const { points, cities, activeCity, cityHref, caption } = Astro.props;
 
-// THE FIRST LOAD. Not fit-to-bounds — that is a world map with five specks on
-// it — and not a hardcoded New York either, which would silently hide a fifth
-// of the collection. The map opens on whichever city holds the most of it, and
-// the list beside it names every other one with its count, so what is off the
-// edge is legible before you click anything. `cities` arrives sorted by count.
 const framedCity = activeCity ?? cities[0]?.name ?? null;
-const chosen = framedCity ? points.filter((p) => p.city === framedCity) : points;
-const framed = chosen.length > 0 ? chosen : points;
-const frame = frameFor(framed);
+const placed = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
 
-// The chosen city SETS the frame; everything gets plotted against it. So a
-// frame on Brooklyn also shows the Manhattan and Queens pins that genuinely
-// fall inside it, and the New York cluster coheres without this file having to
-// know that those three are one city — which it can't, since the data models
-// them as three. Anything that lands outside is dropped and counted as
-// elsewhere rather than squashed onto the edge.
-const plotted = plot(points, frame);
-const { pins, clusters } = cluster(plotted, (v) => verdictAt(v)?.ink ?? 'var(--rule)');
+const config = {
+	key: import.meta.env.PUBLIC_MAPTILER_KEY ?? '',
+	framedCity,
+	points: placed.map((p) => ({
+		id: p.id,
+		name: p.name,
+		lat: p.lat,
+		lng: p.lng,
+		verdict: p.verdict,
+		visited: p.visited,
+		price: p.price,
+		cuisine: p.cuisine,
+		city: p.city,
+		where: p.where,
+		rating: p.rating,
+		visits: p.visits,
+		hearted: p.hearted,
+		ink: verdictAt(p.verdict)?.ink ?? MAP_TOKENS.pinRing,
+		verdictLabel: verdictAt(p.verdict)?.label ?? 'No verdict yet',
+		rot: (p.verdict ?? 0) * 36,
+	})),
+	tokens: MAP_TOKENS,
+	bands: VERDICTS.map((v) => v.ink),
+};
 
-const elsewhere = points.length - plotted.length;
+const unplaced = points.length - placed.length;
+const hasKey = Boolean(config.key);
 ---
 
 <div class="map">
@@ -79,105 +100,429 @@ const elsewhere = points.length - plotted.length;
 	</div>
 
 	<div class="map__canvas">
-		<!-- The ground. Not a basemap: a sheet of the same paper, ruled into a
-		     grid so distance is readable, with no roads pretending to be roads. -->
-		<div class="map__paper"></div>
+		<div class="map__gl" data-map></div>
 
 		{
-			plotted.length === 0 && (
-				<p class="map__none">
-					Nothing here has coordinates yet. A place gets onto the map when its
-					location is confirmed.
+			!hasKey && (
+				<p class="map__note">
+					The basemap needs <code>PUBLIC_MAPTILER_KEY</code> set. The pins are still
+					plotted; only the streets under them are missing.
+				</p>
+			)
+		}
+		{
+			hasKey && placed.length === 0 && (
+				<p class="map__note">
+					Nothing here has coordinates yet. A place lands on the map once its
+					location is confirmed in the composer.
 				</p>
 			)
 		}
 
-		{
-			clusters.map((c) => (
-				<button
-					class="clust"
-					style={`left:${c.x}%; top:${c.y}%`}
-					title={c.names.slice(0, 8).join(', ') + (c.names.length > 8 ? `, and ${c.names.length - 8} more` : '')}
-					type="button"
-				>
-					<span class="clust__n">{c.count}</span>
-					<span class="clust__label">places</span>
-					<span class="clust__mix">
-						{c.mix.map((m) => (
-							<span style={`background:${m.ink}; flex:${m.fraction}`} />
-						))}
-					</span>
-				</button>
-			))
-		}
-
-		{
-			pins.map((p) => (
-				<a
-					class="pin"
-					style={`left:${p.x}%; top:${p.y}%`}
-					href={`/restaurants/place/${p.id}`}
-					data-pin
-					data-name={p.name}
-					data-where={p.where}
-					data-cuisine={p.cuisine}
-					data-price={p.price ?? ''}
-					data-stars={starText(p.rating) ?? ''}
-					data-verdict={p.verdict ?? ''}
-					data-verdict-label={verdictAt(p.verdict)?.label ?? 'No verdict yet'}
-					data-visits={p.visits}
-					data-hearted={p.hearted ? '1' : ''}
-				>
-					<svg viewBox="0 0 26 34" width="26" height="34" aria-hidden="true">
-						<path
-							d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z"
-							fill="var(--card)"
-							stroke="var(--ink)"
-							stroke-width="1.6"
-						/>
-						{
-							p.visited ? (
-								<g transform="translate(4.2,4.2) scale(0.74)">
-									<g transform={`rotate(${(p.verdict ?? 0) * 36} 12 12)`}>
-										<path
-											d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z"
-											fill={verdictAt(p.verdict)?.ink ?? 'var(--ink-4)'}
-										/>
-										<rect
-											x="11.2"
-											y="9.2"
-											width="1.6"
-											height="10"
-											fill={verdictAt(p.verdict)?.ink ?? 'var(--ink-4)'}
-										/>
-									</g>
-								</g>
-							) : (
-								<circle cx="13" cy="13" r="4.4" fill="none" stroke="var(--ink-3)" stroke-width="1.6" />
-							)
-						}
-					</svg>
-					<span class="pin__name">{p.name}</span>
-				</a>
-			))
-		}
-
 		<div class="legend">
 			<span class="rl-label">Pin ink</span>
-			<span class="legend__item"><i style="background:#556b2a"></i>want to go back</span>
-			<span class="legend__item"><i style="background:#c07d14"></i>with reservations</span>
-			<span class="legend__item"><i style="background:#a83a22"></i>no</span>
+			<span class="legend__item"><i style={`background:${VERDICTS[0].ink}`}></i>want to go back</span>
+			<span class="legend__item"><i style={`background:${VERDICTS[2].ink}`}></i>with reservations</span>
+			<span class="legend__item"><i style={`background:${VERDICTS[4].ink}`}></i>no</span>
 			<span class="legend__item"><i class="legend__ring"></i>not been yet</span>
 		</div>
 
 		<div class="map__caption">
 			{framedCity ?? 'Everywhere'}
-			<span class="map__off"> · {plotted.length} here</span>
-			{elsewhere > 0 && <span class="map__off"> · {elsewhere} elsewhere</span>}
+			<span class="map__off"> · {placed.length} placed</span>
+			{unplaced > 0 && <span class="map__off"> · {unplaced} without coordinates</span>}
 			{caption && <span class="map__cap2"> · {caption}</span>}
 		</div>
 	</div>
 </div>
+
+<script type="application/json" id="restaurant-map-config" set:html={JSON.stringify(config)} is:inline />
+
+<script>
+	import * as maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	import { menuBasemap, MAP_TOKENS } from '../lib/map-style';
+	import { clusterByScreen, verdictMix } from '../lib/restaurant-map';
+
+	interface Pin {
+		id: number;
+		name: string;
+		lat: number;
+		lng: number;
+		verdict: number | null;
+		visited: boolean;
+		price: string | null;
+		cuisine: string;
+		city: string;
+		where: string;
+		rating: number | null;
+		visits: number;
+		hearted: boolean;
+		ink: string;
+		verdictLabel: string;
+		rot: number;
+	}
+
+	const tag = document.getElementById('restaurant-map-config');
+	const host = document.querySelector<HTMLElement>('[data-map]');
+	if (tag && host) {
+		const cfg = JSON.parse(tag.textContent || '{}') as {
+			key: string;
+			framedCity: string | null;
+			points: Pin[];
+			tokens: typeof MAP_TOKENS;
+		};
+
+		const map = new maplibregl.Map({
+			container: host,
+			// Without a key there are no tiles, but the pins are still worth
+			// plotting — so the map falls back to a bare cream ground rather than
+			// refusing to render.
+			style: cfg.key
+				? (menuBasemap(cfg.key) as maplibregl.StyleSpecification)
+				: {
+						version: 8,
+						sources: {},
+						layers: [
+							{ id: 'ground', type: 'background', paint: { 'background-color': cfg.tokens.land } },
+						],
+					},
+			center: [-73.99, 40.71],
+			zoom: 11,
+			attributionControl: { compact: true },
+			// The section is a printed object; a tilted, spinning map is not.
+			pitchWithRotate: false,
+			dragRotate: false,
+			touchZoomRotate: false,
+		});
+		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+		/** Frame the chosen city, or everything if it has no pins. */
+		function frame() {
+			const inCity = cfg.framedCity
+				? cfg.points.filter((p) => p.city === cfg.framedCity)
+				: cfg.points;
+			const use = inCity.length ? inCity : cfg.points;
+			if (use.length === 0) return;
+			if (use.length === 1) {
+				map.jumpTo({ center: [use[0].lng, use[0].lat], zoom: 14.5 });
+				return;
+			}
+			const b = new maplibregl.LngLatBounds();
+			for (const p of use) b.extend([p.lng, p.lat]);
+			map.fitBounds(b, { padding: 64, maxZoom: 15, animate: false });
+		}
+
+		function pinEl(p: Pin): HTMLElement {
+			const el = document.createElement('a');
+			el.className = 'gl-pin';
+			el.href = `/restaurants/place/${p.id}`;
+			el.title = `${p.name} — ${p.verdictLabel}`;
+			// The same needle the badges use, so the mark means one thing
+			// everywhere it appears.
+			const inner = p.visited
+				? `<g transform="translate(4.2,4.2) scale(0.74)"><g transform="rotate(${p.rot} 12 12)">
+					 <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="${p.ink}"></path>
+					 <rect x="11.2" y="9.2" width="1.6" height="10" fill="${p.ink}"></rect></g></g>`
+				: `<circle cx="13" cy="13" r="4.4" fill="none" stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6" opacity=".65"></circle>`;
+			el.innerHTML = `<svg viewBox="0 0 26 34" width="26" height="34" aria-hidden="true">
+					<path d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z"
+						fill="#fdf7e8" stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6"></path>${inner}
+				</svg><span class="gl-pin__name">${escape(p.name)}</span>`;
+			return el;
+		}
+
+		function escape(s: string): string {
+			const d = document.createElement('span');
+			d.textContent = s;
+			return d.innerHTML;
+		}
+
+		function popupHtml(p: Pin): string {
+			const stars = p.rating ? '★'.repeat(Math.floor(p.rating)) + (p.rating % 1 >= 0.5 ? '½' : '') : '';
+			const visits = p.visits === 1 ? '1 visit' : `${p.visits} visits`;
+			return `<div class="gl-pop">
+				<div class="gl-pop__top">
+					<span class="gl-pop__name">${escape(p.name)}</span>
+					${p.hearted ? '<span class="gl-pop__heart">♥</span>' : ''}
+					<span class="gl-pop__leader"></span>
+					<span class="gl-pop__price">${escape(p.price ?? '')}</span>
+				</div>
+				<div class="gl-pop__meta">${escape(p.cuisine)}${stars ? ` <span class="gl-pop__stars">${stars}</span>` : ''}</div>
+				<div class="gl-pop__foot">
+					<span>${escape(p.verdictLabel)}</span>
+					<span class="gl-pop__visits">${p.visited ? visits : 'not been yet'}</span>
+				</div>
+				<a class="gl-pop__go" href="/restaurants/place/${p.id}">${escape(p.where)} →</a>
+			</div>`;
+		}
+
+		// A tile failure must not take the pins with it.
+		//
+		// 'load' waits for the style AND its sources, so if MapTiler is
+		// unreachable — an outage, a blown quota, a key restricted to the wrong
+		// domain — it never fires, and hanging the markers off it would leave a
+		// blank rectangle where the whole map used to be. 'styledata' fires as
+		// soon as the style is parsed, which is all that is needed to add a
+		// source, so the pins come up on the cream ground with or without
+		// streets under them. Degrading to a worse map is fine; degrading to no
+		// map is not.
+		map.on('error', (e) => {
+			// Tile 404s are routine at the edges of a fitBounds; only say
+			// something once, and never throw.
+			console.warn('map:', e.error?.message ?? 'tile or style request failed');
+		});
+
+		function whenStyleReady(fn: () => void) {
+			if (map.isStyleLoaded()) fn();
+			else map.once('styledata', fn);
+		}
+
+		whenStyleReady(() => {
+			frame();
+
+			const markers = new Map<string, maplibregl.Marker>();
+			let popup: maplibregl.Popup | null = null;
+
+			// Re-projected and re-clustered on every camera change. The marks are
+			// computed from cfg.points and the current camera alone, so they do
+			// not depend on a tile ever arriving.
+			function sync() {
+				const projected = cfg.points.map((p) => {
+					const pt = map.project([p.lng, p.lat]);
+					return { ...p, x: pt.x, y: pt.y };
+				});
+				const { loose, clusters } = clusterByScreen(projected, 34);
+
+				const wanted = new Set<string>();
+
+				for (const c of clusters) {
+					const ids = c.members
+						.map((m) => m.id)
+						.sort((a, b) => a - b)
+						.join('-');
+					const key = `c${ids}`;
+					wanted.add(key);
+					if (markers.has(key)) continue;
+
+					const { good, mid, bad } = verdictMix(c.members);
+					const known = good + mid + bad || 1;
+					const button = document.createElement('button');
+					button.type = 'button';
+					button.className = 'gl-clust';
+					button.innerHTML = `<span class="gl-clust__n">${c.members.length}</span>
+						<span class="gl-clust__l">places</span>
+						<span class="gl-clust__mix">
+							<i style="flex:${good};background:#556b2a"></i>
+							<i style="flex:${mid};background:#c07d14"></i>
+							<i style="flex:${bad};background:#a83a22"></i>
+						</span>`;
+					button.title =
+						`${c.members.length} places · ${Math.round((good / known) * 100)}% worth going back to\n` +
+						c.members
+							.slice(0, 8)
+							.map((m) => m.name)
+							.join(', ');
+					const at = map.unproject([c.x, c.y]);
+					button.addEventListener('click', () => {
+						map.easeTo({ center: at, zoom: Math.min(map.getZoom() + 2.2, 17) });
+					});
+					markers.set(
+						key,
+						new maplibregl.Marker({ element: button, anchor: 'center' }).setLngLat(at).addTo(map),
+					);
+				}
+
+				for (const p of loose) {
+					const key = `p${p.id}`;
+					wanted.add(key);
+					if (markers.has(key)) continue;
+					const el = pinEl(p);
+					el.addEventListener('click', (e) => {
+						e.preventDefault();
+						popup?.remove();
+						popup = new maplibregl.Popup({ closeButton: false, offset: 30, maxWidth: '266px' })
+							.setLngLat([p.lng, p.lat])
+							.setHTML(popupHtml(p))
+							.addTo(map);
+					});
+					markers.set(
+						key,
+						new maplibregl.Marker({ element: el, anchor: 'bottom' })
+							.setLngLat([p.lng, p.lat])
+							.addTo(map),
+					);
+				}
+
+				for (const [key, marker] of markers) {
+					if (!wanted.has(key)) {
+						marker.remove();
+						markers.delete(key);
+					}
+				}
+			}
+
+			map.on('move', sync);
+			map.on('zoom', sync);
+			sync();
+		});
+	}
+</script>
+
+<style is:global>
+	/* The vendor's chrome, restyled to the section's palette rather than left
+	   in its default blue-grey — the giveaway that a map was dropped in. */
+	.map__gl .maplibregl-ctrl-group {
+		background: #fdf7e8;
+		border: 1px solid var(--ink);
+		border-radius: 0;
+		box-shadow: none;
+	}
+	.map__gl .maplibregl-ctrl-group button + button {
+		border-top: 1px solid var(--rule);
+	}
+	.map__gl .maplibregl-ctrl-attrib {
+		background: rgba(253, 247, 232, 0.86);
+		font-family: var(--ui);
+		font-size: 10px;
+	}
+	.map__gl .maplibregl-ctrl-attrib a {
+		color: var(--ink-3);
+	}
+
+	.gl-pin {
+		display: block;
+		cursor: pointer;
+		filter: drop-shadow(0 1px 1px rgba(47, 30, 18, 0.35));
+	}
+	.gl-pin__name {
+		position: absolute;
+		left: 50%;
+		top: 100%;
+		transform: translateX(-50%);
+		white-space: nowrap;
+		font-family: var(--ui);
+		font-size: 10.5px;
+		color: var(--ink);
+		background: rgba(253, 247, 232, 0.9);
+		padding: 1px 4px;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 90ms;
+	}
+	.gl-pin:hover .gl-pin__name {
+		opacity: 1;
+	}
+
+	.gl-clust {
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		background: #f0e2c2;
+		border: 1.6px solid var(--ink);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 1px 3px rgba(47, 30, 18, 0.3);
+		cursor: pointer;
+		position: relative;
+		font-family: var(--ui);
+	}
+	.gl-clust__n {
+		font-family: var(--mono);
+		font-size: 17px;
+		font-weight: 700;
+		color: var(--ink);
+		line-height: 1;
+	}
+	.gl-clust__l {
+		font-size: 8px;
+		letter-spacing: 0.9px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+		margin-top: 2px;
+	}
+	.gl-clust__mix {
+		position: absolute;
+		bottom: -3px;
+		display: flex;
+		width: 26px;
+		height: 3px;
+	}
+	.gl-clust__mix i {
+		display: block;
+	}
+
+	/* The popup is the tile's anatomy at popup size: name, heart, leader, price. */
+	.maplibregl-popup-content {
+		background: #fdf7e8;
+		border: 1px solid var(--ink);
+		border-radius: 0;
+		box-shadow: 0 4px 12px rgba(47, 30, 18, 0.22);
+		padding: 11px 13px 12px;
+		font-family: var(--ui);
+	}
+	.maplibregl-popup-tip {
+		border-top-color: var(--ink) !important;
+	}
+	.gl-pop__top {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+	}
+	.gl-pop__name {
+		font-size: 14.5px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+	.gl-pop__heart {
+		font-size: 12px;
+		color: var(--terracotta-deep);
+	}
+	.gl-pop__leader {
+		flex: 1;
+		border-bottom: 1px dotted var(--leader);
+		transform: translateY(-4px);
+		min-width: 12px;
+	}
+	.gl-pop__price {
+		font-family: var(--mono);
+		font-size: 12.5px;
+		color: var(--ink);
+	}
+	.gl-pop__meta {
+		margin-top: 4px;
+		font-size: 11.5px;
+		color: var(--ink-2);
+	}
+	.gl-pop__stars {
+		color: var(--marigold);
+		letter-spacing: 0.6px;
+	}
+	.gl-pop__foot {
+		margin-top: 9px;
+		padding-top: 9px;
+		border-top: 1px solid var(--rule-4);
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		font-size: 12.5px;
+		color: var(--ink);
+	}
+	.gl-pop__visits {
+		margin-left: auto;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
+	}
+	.gl-pop__go {
+		display: block;
+		margin-top: 8px;
+		font-size: 11.5px;
+		color: var(--terracotta-deep);
+	}
+</style>
 
 <style>
 	.map {
@@ -194,97 +539,35 @@ const elsewhere = points.length - plotted.length;
 		min-height: 360px;
 		overflow: hidden;
 	}
-	/* Ruled ground, not a basemap. The grid gives distance something to be
-	   measured against; drawing fake streets would be decoration claiming to
-	   be data. */
-	.map__paper {
+	.map__gl {
 		position: absolute;
 		inset: 0;
-		background:
-			repeating-linear-gradient(90deg, transparent 0 59px, #efe4cd 59px 62px),
-			repeating-linear-gradient(transparent 0 59px, #efe4cd 59px 62px);
 	}
-	.map__none {
+	.map__note {
 		position: absolute;
 		left: 50%;
 		top: 50%;
+		z-index: 2;
 		transform: translate(-50%, -50%);
-		max-width: 300px;
+		max-width: 320px;
 		text-align: center;
 		font-family: var(--prose);
 		font-size: 15px;
 		color: var(--ink-2);
+		background: rgba(253, 247, 232, 0.92);
+		border: 1px solid var(--rule);
+		padding: 14px 16px;
 	}
-
-	.pin {
-		position: absolute;
-		transform: translate(-50%, -100%);
-		filter: drop-shadow(0 1px 1px rgba(47, 30, 18, 0.35));
-		cursor: pointer;
-	}
-	.pin__name {
-		position: absolute;
-		left: 50%;
-		top: 100%;
-		transform: translateX(-50%);
-		white-space: nowrap;
-		font-size: 10.5px;
-		color: var(--ink);
-		background: rgba(253, 247, 232, 0.86);
-		padding: 1px 4px;
-		opacity: 0;
-		pointer-events: none;
-		transition: opacity 90ms;
-	}
-	.pin:hover .pin__name,
-	.pin:focus-visible .pin__name {
-		opacity: 1;
-	}
-
-	.clust {
-		position: absolute;
-		transform: translate(-50%, -50%);
-		width: 56px;
-		height: 56px;
-		border-radius: 50%;
-		background: var(--sunk);
-		border: 1.6px solid var(--ink);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 1px 3px rgba(47, 30, 18, 0.3);
-		cursor: pointer;
-		font-family: var(--ui);
-	}
-	.clust__n {
+	.map__note code {
 		font-family: var(--mono);
-		font-size: 17px;
-		font-weight: 700;
-		color: var(--ink);
-		line-height: 1;
-	}
-	.clust__label {
-		font-size: 8px;
-		letter-spacing: 0.9px;
-		text-transform: uppercase;
-		color: var(--ink-3);
-		margin-top: 2px;
-	}
-	/* The verdict mix, as a strip: a cluster of twelve says how many of the
-	   twelve you'd go back to without being opened. */
-	.clust__mix {
-		position: absolute;
-		bottom: -3px;
-		display: flex;
-		width: 26px;
-		height: 3px;
+		font-size: 12.5px;
 	}
 
 	.legend {
 		position: absolute;
 		left: 14px;
-		bottom: 14px;
+		bottom: 30px;
+		z-index: 2;
 		max-width: calc(100% - 28px);
 		background: rgba(253, 247, 232, 0.94);
 		border: 1px solid var(--rule);
@@ -293,6 +576,7 @@ const elsewhere = points.length - plotted.length;
 		align-items: center;
 		gap: 8px 14px;
 		flex-wrap: wrap;
+		pointer-events: none;
 	}
 	.legend__item {
 		display: flex;
@@ -315,13 +599,15 @@ const elsewhere = points.length - plotted.length;
 	.map__caption {
 		position: absolute;
 		right: 14px;
-		bottom: 14px;
+		top: 14px;
+		z-index: 2;
 		background: rgba(253, 247, 232, 0.94);
 		border: 1px solid var(--rule);
 		padding: 6px 10px;
 		font-family: var(--mono);
 		font-size: 11px;
 		color: var(--ink-3);
+		pointer-events: none;
 	}
 	.map__off {
 		color: var(--terracotta-deep);
@@ -366,8 +652,6 @@ const elsewhere = points.length - plotted.length;
 		color: var(--ink-3);
 	}
 
-	/* A phone gives the map the whole height and turns the city list into a
-	   strip of chips above it. */
 	@media (max-width: 760px) {
 		.map {
 			flex-direction: column;

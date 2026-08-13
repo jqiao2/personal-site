@@ -111,6 +111,14 @@ const config = {
 					placeholder="Search or type a new place"
 				/>
 				<div class="me__suggest" data-me-suggest hidden></div>
+				<!-- A new place gets looked up as soon as it's named, and what was
+				     found is shown rather than attached silently — seeing it is the
+				     confirmation, and clearing it is how you refuse it. -->
+				<div class="me__pinned" data-me-log-pinned hidden>
+					<span class="me__pinned-mark">◎</span>
+					<span class="me__pinned-text" data-me-log-pinned-text></span>
+					<button type="button" class="me__pinned-x" data-me-unpin>clear</button>
+				</div>
 			</div>
 
 			<div class="me__field">
@@ -241,9 +249,18 @@ const config = {
 
 		<!-- ----------------------------------------------- add to-try -->
 		<div class="me__body" data-me-pane="try" hidden>
-			<div class="me__field">
+			<div class="me__field me__field--rel">
 				<label class="rl-label" for="me-try-name">Place</label>
 				<input class="me__input" id="me-try-name" data-me-try-name type="text" autocomplete="off" placeholder="Wu's Wonton King" />
+				<!-- Candidates from the geocoder. Picking one fills the location
+				     fields and pins the place; everything stays editable after,
+				     because OSM's idea of a neighbourhood is often not yours. -->
+				<div class="me__suggest" data-me-geo hidden></div>
+				<div class="me__pinned" data-me-pinned hidden>
+					<span class="me__pinned-mark">◎</span>
+					<span class="me__pinned-text" data-me-pinned-text></span>
+					<button type="button" class="me__pinned-x" data-me-unpin>clear</button>
+				</div>
 			</div>
 			<div class="me__grid">
 				<div class="me__field">
@@ -300,6 +317,19 @@ const config = {
 		meta: string;
 		visits: number;
 	}
+	interface GeoHit {
+		name: string;
+		display: string;
+		lat: number;
+		lng: number;
+		neighborhood: string | null;
+		city: string | null;
+		stateRegion: string | null;
+		country: string | null;
+		kind: string | null;
+		/** True only when lat/lng is the place itself, not the middle of an area. */
+		precise: boolean;
+	}
 	interface Config {
 		redirect: string;
 		place: PlaceSpec | null;
@@ -348,6 +378,8 @@ const config = {
 			tags: [...(cfg.initial?.tags ?? [])],
 			photos: [] as PendingPhoto[],
 			tryPrice: null as string | null,
+			/** A confirmed point from the geocoder, or null for an unplaced entry. */
+			geo: null as GeoHit | null,
 			saving: false,
 		};
 
@@ -355,6 +387,9 @@ const config = {
 		function open(pane: Pane) {
 			state.pane = pane;
 			state.open = true;
+			// A point belongs to the place you were naming, not to the dialog, so
+			// it does not survive being closed and reopened on something else.
+			state.geo = null;
 			root.hidden = false;
 			document.body.style.overflow = 'hidden';
 			$('[data-me-pane="log"]')!.hidden = pane !== 'log';
@@ -498,6 +533,25 @@ const config = {
 			if (state.photos.length) bits.push(`${state.photos.length} photo${state.photos.length === 1 ? '' : 's'}`);
 			$('[data-me-summary]')!.textContent = state.pane === 'try' ? '' : bits.join(' · ');
 
+			// What the geocoder pinned, in whichever pane is open.
+			const g = state.geo;
+			const where = g ? [g.neighborhood, g.city, g.stateRegion].filter(Boolean).join(', ') : '';
+			const pinnedText = !g
+				? ''
+				: g.precise
+					? `${where} · ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`
+					: `${where} · area only — no point, so it stays off the map`;
+			for (const [box, text] of [
+				['[data-me-pinned]', '[data-me-pinned-text]'],
+				['[data-me-log-pinned]', '[data-me-log-pinned-text]'],
+			]) {
+				const el = $(box);
+				if (!el) continue;
+				el.hidden = !g;
+				const label = $(text);
+				if (label) label.textContent = pinnedText;
+			}
+
 			const save = $('[data-me-save]') as HTMLButtonElement;
 			save.disabled = state.saving || !canSave();
 		}
@@ -554,18 +608,110 @@ const config = {
 					row.className = 'me__sug';
 					row.innerHTML = `<span class="me__sug-name"></span><span class="me__sug-meta">new place</span><span class="me__sug-tail">add</span>`;
 					row.querySelector('.me__sug-name')!.textContent = `“${q}”`;
-					row.addEventListener('mousedown', (e) => {
+					row.addEventListener('mousedown', async (e) => {
 						e.preventDefault();
 						state.placeId = null;
 						state.placeName = q;
 						state.locked = { id: 0, name: q, meta: 'new place', visits: 0 };
 						box.hidden = true;
+						state.geo = null;
+						render();
+						// Place it while you fill the rest of the form in. The top
+						// hit is taken rather than offered as a list, because here
+						// you are logging a meal and the location is a detail — but
+						// it is shown, and "clear" is how you reject it.
+						try {
+							const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
+							if (res.ok) {
+								const [hit] = (await res.json()).hits ?? [];
+								// Attached without being chosen, so it must be an exact
+								// point — an area's centroid is not worth guessing with.
+								if (hit?.precise && state.locked && !state.placeId) state.geo = hit;
+							}
+						} catch {
+							// Unplaced is a supported state; carry on.
+						}
 						render();
 					});
 					box.append(row);
 				}
 				box.hidden = false;
 			}, 160);
+		}
+
+		// -- geocoding ---------------------------------------------------------
+		// A restaurant's coordinates come from looking its NAME up, not its
+		// address — you know what a place is called, and you are usually adding
+		// it because someone said the name out loud. Whatever is in "Where" is
+		// appended as a hint, which is what disambiguates the four Tacos El
+		// Bronco from each other.
+		let geoTimer = 0;
+		function lookupPlace() {
+			window.clearTimeout(geoTimer);
+			const box = $('[data-me-geo]')!;
+			const name = value('[data-me-try-name]');
+			if (name.length < 3) {
+				box.hidden = true;
+				return;
+			}
+			const hint = value('[data-me-try-where]');
+			const q = hint ? `${name}, ${hint}` : name;
+			geoTimer = window.setTimeout(async () => {
+				let hits: GeoHit[] = [];
+				try {
+					const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
+					if (res.ok) hits = (await res.json()).hits ?? [];
+				} catch {
+					// A geocoder being unreachable must never block adding a place;
+					// it just means this one goes on the list unplaced.
+				}
+				box.replaceChildren();
+				if (hits.length === 0) {
+					// Nothing in OSM by that name. Saying so beats an empty box —
+					// the place is still perfectly addable, just without a point.
+					const row = document.createElement('div');
+					row.className = 'me__sug me__sug--none';
+					row.textContent = 'No exact match — it will be added without a point on the map.';
+					box.append(row);
+					box.hidden = false;
+					return;
+				}
+				for (const hit of hits) {
+					const row = document.createElement('div');
+					row.className = hit.precise ? 'me__sug' : 'me__sug me__sug--vague';
+					row.innerHTML =
+						'<span class="me__sug-name"></span><span class="me__sug-meta"></span><span class="me__sug-tail"></span>';
+					row.querySelector('.me__sug-name')!.textContent = hit.name || hit.display.split(',')[0];
+					row.querySelector('.me__sug-meta')!.textContent = hit.display
+						.split(',')
+						.slice(1, 4)
+						.join(',')
+						.trim();
+					// An area is offered — it still fills the location fields — but
+					// it is named as what it is, so nobody pins a restaurant to the
+					// middle of a neighbourhood by accident.
+					row.querySelector('.me__sug-tail')!.textContent = hit.precise
+						? (hit.kind ?? '')
+						: `${hit.kind ?? 'area'} · no exact point`;
+					row.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						pick(hit);
+					});
+					box.append(row);
+				}
+				box.hidden = false;
+			}, 420);
+		}
+
+		function pick(hit: GeoHit) {
+			state.geo = hit;
+			$('[data-me-geo]')!.hidden = true;
+			// Fill "Where" from the hit, but leave it editable: OSM files Ba Xuyên
+			// under Dyker Heights when anyone who goes there says Sunset Park, so
+			// the geocode is a suggestion and the field is the record.
+			const where = [hit.neighborhood, hit.city].filter(Boolean).join(', ');
+			if (where) ($('[data-me-try-where]') as HTMLInputElement).value = where;
+			render();
 		}
 
 		// -- saving ------------------------------------------------------------
@@ -590,12 +736,22 @@ const config = {
 			// field, because that is how you say where a place is. The comma
 			// splits neighbourhood from city; without one, it is all city.
 			const [first, ...rest] = where.split(',').map((s) => s.trim()).filter(Boolean);
+			const g = state.geo;
 			const body = {
 				name: value('[data-me-try-name]'),
 				cuisines: value('[data-me-try-cuisine]') ? [value('[data-me-try-cuisine]')] : [],
 				priceBand: state.tryPrice,
+				// What you typed wins over what the geocoder guessed — you edited
+				// it after picking, or you never picked at all. The coordinates
+				// and the country are the parts only the geocoder knows.
 				neighborhood: rest.length ? first : null,
-				city: rest.length ? rest.join(', ') : first || null,
+				city: rest.length ? rest.join(', ') : first || g?.city || null,
+				stateRegion: g?.stateRegion ?? null,
+				country: g?.country ?? null,
+				// A neighbourhood centroid is not where the restaurant is, so an
+				// imprecise hit contributes its NAMES and nothing else.
+				lat: g?.precise ? g.lat : null,
+				lng: g?.precise ? g.lng : null,
 				toTryReason: value('[data-me-try-why]'),
 				toTry: true,
 			};
@@ -617,7 +773,18 @@ const config = {
 				restaurantId: state.placeId ?? undefined,
 				place: state.placeId
 					? { name: state.locked?.name ?? '', priceBand: state.price }
-					: { name: state.locked?.name || value('[data-me-place]'), priceBand: state.price },
+					: {
+							name: state.locked?.name || value('[data-me-place]'),
+							priceBand: state.price,
+							// Only a NEW place carries a location; picking an existing
+							// one must never overwrite the location already on record.
+							neighborhood: state.geo?.neighborhood ?? null,
+							city: state.geo?.city ?? null,
+							stateRegion: state.geo?.stateRegion ?? null,
+							country: state.geo?.country ?? null,
+							lat: state.geo?.precise ? state.geo.lat : null,
+							lng: state.geo?.precise ? state.geo.lng : null,
+						},
 				visitedOn: value('[data-me-date]') || cfg.fallbackDate,
 				rating: state.rating || null,
 				verdict: state.verdictSet ? state.verdict : null,
@@ -785,6 +952,25 @@ const config = {
 		$('[data-me-delete]')?.addEventListener('click', remove);
 		$$('[data-me-try-name], [data-me-notes], [data-me-friends]').forEach((el) =>
 			el.addEventListener('input', render),
+		);
+
+		// The to-try composer looks a place up as you name it; editing "Where"
+		// re-runs it, because the hint is what separates two places of the name.
+		$('[data-me-try-name]')!.addEventListener('input', () => {
+			state.geo = null;
+			lookupPlace();
+		});
+		$('[data-me-try-where]')!.addEventListener('input', lookupPlace);
+		$('[data-me-try-name]')!.addEventListener('blur', () => {
+			window.setTimeout(() => {
+				$('[data-me-geo]')!.hidden = true;
+			}, 160);
+		});
+		$$('[data-me-unpin]').forEach((el) =>
+			el.addEventListener('click', () => {
+				state.geo = null;
+				render();
+			}),
 		);
 
 		function measure(url: string): Promise<{ width: number; height: number }> {
@@ -1022,6 +1208,67 @@ const config = {
 		font-family: var(--mono);
 		font-size: 11px;
 		color: var(--ink-3);
+	}
+	/* An area, offered but marked: it can fill the location fields, it cannot
+	   become the pin. */
+	.me__sug--vague .me__sug-name {
+		font-weight: 400;
+		color: var(--ink-2);
+	}
+	.me__sug--vague .me__sug-tail {
+		color: var(--marigold-deep);
+	}
+	.me__sug--none {
+		padding: 10px 11px;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 13px;
+		color: var(--ink-3);
+		cursor: default;
+	}
+	.me__sug--none:hover {
+		background: none;
+	}
+
+	/* What the geocoder attached, stated plainly under the field. It is a
+	   receipt, not a control — the only thing you can do to it is refuse it. */
+	.me__pinned {
+		display: flex;
+		align-items: baseline;
+		gap: 8px;
+		margin-top: 6px;
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.me__pinned[hidden] {
+		display: none;
+	}
+	.me__pinned-mark {
+		color: var(--avocado);
+		font-size: 13px;
+		line-height: 1;
+	}
+	.me__pinned-text {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-family: var(--mono);
+		font-size: 11px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.me__pinned-x {
+		border: none;
+		background: none;
+		color: var(--ink-3);
+		font-size: 11.5px;
+		cursor: pointer;
+		text-decoration: underline;
+		padding: 0;
+		flex: none;
+	}
+	.me__pinned-x:hover {
+		color: var(--terracotta-deep);
 	}
 
 	.me__stars {
