@@ -1,8 +1,8 @@
 ---
 // The restaurant log's landing page. Sidebar + main column, the same anatomy
 // the film log's front page has, restyled as a menu: the section rules are the
-// heavy rules a menu puts under "TACOS", the counts hang off dot leaders, and
-// the boxed special in the sidebar is a boxed special.
+// heavy rules a menu puts under "TACOS", the counts sit in a right-hand column,
+// and the boxed special in the sidebar is a boxed special.
 //
 // DAY ONE. The three main blocks are all empty for the first month, and the
 // page still has to look composed rather than like a form nobody filled in. So
@@ -76,7 +76,7 @@ const navRows = [
 					navRows.map((row) => (
 						<a class="rl-navrow" href={row.href}>
 							<span class="rl-navrow__label">{row.label}</span>
-							<span class="rl-leader" />
+							<span class="rl-gap" />
 							<span class="rl-navrow__n">{row.count}</span>
 						</a>
 					))
@@ -182,7 +182,7 @@ const navRows = [
 								<a class="tryrow" href={`/restaurants/place/${p.id}`}>
 									<span class="tryrow__name">{p.name}</span>
 									<span class="tryrow__hood">{placeLine(p)}</span>
-									<span class="rl-leader" />
+									<span class="rl-gap" />
 									<span class="rl-why tryrow__why">{p.to_try_reason}</span>
 									<span class="tryrow__price">{p.price_band ?? ''}</span>
 								</a>

@@ -91,7 +91,7 @@ const hasKey = Boolean(config.key);
 						aria-current={c.name === framedCity ? 'true' : undefined}
 					>
 						<span class="cityrow__name">{c.name}</span>
-						<span class="rl-leader" />
+						<span class="rl-gap" />
 						<span class="cityrow__n">{c.count}</span>
 					</a>
 				))
@@ -263,7 +263,7 @@ const hasKey = Boolean(config.key);
 				<div class="gl-pop__top">
 					<span class="gl-pop__name">${escape(p.name)}</span>
 					${p.hearted ? '<span class="gl-pop__heart">♥</span>' : ''}
-					<span class="gl-pop__leader"></span>
+					<span class="gl-pop__gap"></span>
 					<span class="gl-pop__price">${escape(p.price ?? '')}</span>
 				</div>
 				<div class="gl-pop__meta">${escape(p.cuisine)}${stars ? ` <span class="gl-pop__stars">${stars}</span>` : ''}</div>
@@ -472,7 +472,7 @@ const hasKey = Boolean(config.key);
 		display: block;
 	}
 
-	/* The popup is the tile's anatomy at popup size: name, heart, leader, price. */
+	/* The popup is the tile's anatomy at popup size: name, heart, gap, price. */
 	.maplibregl-popup-content {
 		background: #fdf7e8;
 		border: 1px solid var(--ink);
@@ -498,10 +498,8 @@ const hasKey = Boolean(config.key);
 		font-size: 12px;
 		color: var(--terracotta-deep);
 	}
-	.gl-pop__leader {
+	.gl-pop__gap {
 		flex: 1;
-		border-bottom: 1px dotted var(--leader);
-		transform: translateY(-4px);
 		min-width: 12px;
 	}
 	.gl-pop__price {
@@ -705,7 +703,7 @@ const hasKey = Boolean(config.key);
 			color: var(--ground);
 			border-color: var(--ink);
 		}
-		.cityrow .rl-leader {
+		.cityrow .rl-gap {
 			display: none;
 		}
 		.map__canvas {

@@ -4,16 +4,14 @@
 // A list of names, each with a cuisine, a price, a neighbourhood and a rating,
 // IS ALREADY A MENU, so this page takes the most from the brief's typographic
 // vocabulary: sections with a rule under them, the name on the left, the price
-// in a right-hand column that lines up down the page, and a dot leader running
-// between the two. The verdict mark sits in the left margin where a menu puts
-// its symbol for the house specials.
+// in a right-hand column that lines up down the page. The verdict mark sits in
+// the left margin where a menu puts its symbol for the house specials.
 //
-// WHAT THE LEADER COSTS AT 380px. The row is one flex line at desktop width and
-// wraps to two on a phone, with the price staying pinned right on the first
-// line — so the leader keeps tying a name to a price and never squeezes the
-// name to fit. What it costs is the second line's alignment, which is why the
-// meta line under it is allowed to run free rather than pretending to be a
-// column.
+// WHAT THE PRICE COLUMN COSTS AT 380px. The row is one flex line at desktop
+// width and wraps to two on a phone, with the price staying pinned right on the
+// first line — so a name is always tied to its price and never squeezed to fit.
+// What it costs is the second line's alignment, which is why the meta line
+// under it is allowed to run free rather than pretending to be a column.
 //
 // FILTERS ARE LINKS, not scripts, so they survive a reload, a share and a back
 // button, and both views read the same query string. Toggling list ⇄ map keeps
@@ -269,7 +267,7 @@ const sorts: { key: PlaceSort; label: string }[] = [
 									<div class="row__line">
 										<span class="row__name">{p.name}</span>
 										{p.hearted && <span class="row__heart">♥</span>}
-										<span class="rl-leader" />
+										<span class="rl-gap" />
 										<span class="row__price">{p.price_band ?? ''}</span>
 									</div>
 									<div class="row__meta">

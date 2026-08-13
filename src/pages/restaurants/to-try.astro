@@ -5,10 +5,21 @@
 // history. What survives is a name, a neighbourhood, a price band and the one
 // line about why I want to go — which is, as it happens, exactly the shape a
 // menu row already had. So the list row is the SAME row as the Restaurants
-// list, with the right-hand price column and the leader intact and the reason
-// set in italic prose where the cuisine and rating used to sit. The empty ring
-// in the left margin is where the verdict mark goes, marking the slot as
-// unfilled rather than removing it.
+// list, with the right-hand price column intact and the reason set in italic
+// prose where the cuisine and rating used to sit. The empty ring in the left
+// margin is where the verdict mark goes, marking the slot as unfilled rather
+// than removing it.
+//
+// THE PRICE COLUMN IS THE OWNER'S DELETE. A list of intentions is only useful
+// if changing your mind is as cheap as adding — otherwise it silts up with
+// places you decided against and stops being a shortlist. So for me the price
+// band gives up its slot to a × in the same column, right-aligned to the same
+// edge: nothing moves, the row keeps its rhythm, and the one control the list
+// was missing is where the eye already ends up. Visitors still see the price.
+//
+// The row is a container with a stretched link rather than an <a> wrapping
+// everything, because a button inside a link is not valid HTML and the whole
+// row should still be clickable.
 //
 // AND THE MAP MEANS SOMETHING DIFFERENT. Every pin here is an intention rather
 // than an opinion, so the pins are drawn open — the same shape with nothing
@@ -74,7 +85,7 @@ function href(changes: Record<string, string | null>): string {
 				<div class="rl-head__title">To try</div>
 			</div>
 			<div class="head-right">
-				<span class="rl-count">{places.length} place{places.length === 1 ? '' : 's'}</span>
+				<span class="rl-count" data-try-count>{places.length} place{places.length === 1 ? '' : 's'}</span>
 				{isOwner && <button type="button" class="rl-btn rl-btn--primary" data-open-try-editor>+ Add place</button>}
 				<div class="viewtoggle">
 					<a class:list={['viewtoggle__b', !isMap && 'viewtoggle__b--on']} href={href({ view: null })}>List</a>
@@ -100,14 +111,28 @@ function href(changes: Record<string, string | null>): string {
 			) : (
 				<div class="rl-box list">
 					{places.map((p) => (
-						<a class="trow" href={`/restaurants/place/${p.id}`}>
+						<div class="trow" data-try-row>
+							<a class="trow__link" href={`/restaurants/place/${p.id}`} aria-label={p.name} />
 							<span class="trow__ring" aria-hidden="true" />
 							<span class="trow__name">{p.name}</span>
 							<span class="trow__hood">{placeLine(p)}</span>
-							<span class="rl-leader" />
+							<span class="rl-gap" />
 							<span class="rl-why trow__why">{p.to_try_reason}</span>
-							<span class="trow__price">{p.price_band ?? ''}</span>
-						</a>
+							{isOwner ? (
+								<button
+									type="button"
+									class="trow__drop"
+									data-try-drop={p.id}
+									data-try-name={p.name}
+									aria-label={`Remove ${p.name} from the list`}
+									title={`Remove ${p.name} from the list`}
+								>
+									×
+								</button>
+							) : (
+								<span class="trow__price">{p.price_band ?? ''}</span>
+							)}
+						</div>
 					))}
 				</div>
 			)
@@ -124,6 +149,41 @@ function href(changes: Record<string, string | null>): string {
 		)
 	}
 </RestaurantLayout>
+
+<script>
+	// Dropping a place off the list. The row goes without a reload — the count
+	// is the only other thing on the page that knows how long the list is, and
+	// it is one string — but an emptied list falls back to a reload, because the
+	// "nothing on the list yet" copy is the server's to write.
+	const count = document.querySelector('[data-try-count]');
+
+	for (const button of document.querySelectorAll<HTMLButtonElement>('[data-try-drop]')) {
+		button.addEventListener('click', async () => {
+			const name = button.dataset.tryName ?? 'this place';
+			if (!window.confirm(`Remove ${name} from the to-try list?`)) return;
+
+			button.disabled = true;
+			const res = await fetch(`/api/restaurants/places/${button.dataset.tryDrop}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ toTry: false }),
+			});
+			if (!res.ok) {
+				button.disabled = false;
+				window.alert(`Could not remove ${name}.`);
+				return;
+			}
+
+			button.closest('[data-try-row]')?.remove();
+			const left = document.querySelectorAll('[data-try-row]').length;
+			if (left === 0) {
+				location.reload();
+				return;
+			}
+			if (count) count.textContent = `${left} place${left === 1 ? '' : 's'}`;
+		});
+	}
+</script>
 
 <style>
 	.head-right {
@@ -159,6 +219,7 @@ function href(changes: Record<string, string | null>): string {
 		margin-top: 16px;
 	}
 	.trow {
+		position: relative;
 		display: flex;
 		align-items: baseline;
 		gap: 6px 11px;
@@ -166,6 +227,16 @@ function href(changes: Record<string, string | null>): string {
 		padding: 15px 18px;
 		border-bottom: 1px solid var(--rule-4);
 		color: var(--ink);
+	}
+	/* The whole row is the link. Out of flow, so the flex line above is laid
+	   out exactly as it was when the row itself was an <a>. */
+	.trow__link {
+		position: absolute;
+		inset: 0;
+	}
+	.trow:has(.trow__link:focus-visible) {
+		outline: 2px solid var(--terracotta);
+		outline-offset: -2px;
 	}
 	.trow:last-child {
 		border-bottom: none;
@@ -202,5 +273,59 @@ function href(changes: Record<string, string | null>): string {
 		font-size: 12.5px;
 		width: 38px;
 		text-align: right;
+	}
+	/* The price column's width, so an owner's list and a visitor's list rule
+	   down the same edge. Quiet until the row is under the cursor — a delete
+	   that shouts on every row of a list of things you like is wrong. */
+	.trow__drop {
+		position: relative;
+		width: 38px;
+		flex: none;
+		/* Padded for a thumb, then pulled back by the same amount so the row is
+		   the height it was and the × still sits on the price band's baseline. */
+		padding: 11px 0;
+		margin: -11px 0;
+		border: none;
+		background: none;
+		font-family: var(--ui);
+		font-size: 17px;
+		line-height: 1;
+		text-align: right;
+		color: var(--ink-4);
+		cursor: pointer;
+		transition: color 0.12s;
+	}
+	.trow:hover .trow__drop {
+		color: var(--ink-3);
+	}
+	/* Both selectors out-specify the row-hover rule above, which would
+	   otherwise keep the × at --ink-3 while the cursor is on it. */
+	.trow:hover .trow__drop:hover,
+	.trow .trow__drop:focus-visible {
+		color: var(--terracotta);
+	}
+	.trow__drop[disabled] {
+		cursor: default;
+		opacity: 0.4;
+	}
+
+	/* On a phone the row wraps and the reason drops to a second line. The ×
+	   must not go with it — wrapped, it lands under the name at the LEFT
+	   margin, pointing at nothing. So it leaves the flex line and pins to the
+	   row's right edge, centred on however many lines the row ended up with,
+	   and the row reserves the width it used to occupy. */
+	@media (max-width: 620px) {
+		.trow {
+			padding-right: 46px;
+		}
+		.trow__drop {
+			position: absolute;
+			top: 50%;
+			right: 6px;
+			width: auto;
+			margin: 0;
+			padding: 11px 12px;
+			transform: translateY(-50%);
+		}
 	}
 </style>

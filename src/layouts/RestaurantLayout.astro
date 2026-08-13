@@ -23,9 +23,9 @@
 // sections agree on what a control looks like; Newsreader carries prose.
 //
 // Chrome styles are global here rather than per-page (the film log's habit)
-// because eight pages share one typographic vocabulary — the dot leader, the
-// price column, the section rule — and eight copies of it would drift apart by
-// the third page.
+// because eight pages share one typographic vocabulary — the price column, the
+// section rule, the verdict mark in the left margin — and eight copies of it
+// would drift apart by the third page.
 import { siteNav } from '../lib/nav';
 
 interface Props {
@@ -116,7 +116,6 @@ const nav = siteNav(pathname);
 				--rule-2: #ddcaa6;
 				--rule-3: #e3d5b6;
 				--rule-4: #eadfc4;
-				--leader: #cbb389; /* dot leaders */
 				--dashed: #b09873;
 
 				--terracotta: #b34328; /* the accent: active tab, primary button */
@@ -342,17 +341,16 @@ const nav = siteNav(pathname);
 				color: var(--ink-3);
 			}
 
-			/* --- The dot leader ------------------------------------------
-			   The single most useful thing a printed menu has to lend: it ties
-			   a dish on the left to a price on the right across whatever gap
-			   the line happens to leave. Used for nav counts, tile meta, list
-			   rows and the sidecar's stats. It collapses to a minimum width
-			   rather than disappearing, so a narrow row still reads as a line
-			   of a menu and not as two crushed columns. */
-			.rl-leader {
+			/* --- The gap between a label and its number -------------------
+			   This was a printed menu's dot leader, tying a dish on the left to
+			   a price on the right. It was doing too much: at these row heights
+			   the dots read as texture rather than as a line to follow, and on
+			   a phone, where rows wrap, they trailed off into nothing. The
+			   spacer stays — it is what pushes the right-hand column right and
+			   keeps a narrow row from crushing into two columns — but it is
+			   only a gap now, so it is named one. */
+			.rl-gap {
 				flex: 1;
-				border-bottom: 1px dotted var(--leader);
-				transform: translateY(-4px);
 				min-width: 16px;
 			}
 

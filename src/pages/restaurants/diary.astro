@@ -4,7 +4,7 @@
 // The film log's diary is a dense table-ish list and this one wants to be too,
 // except it has photographs to contend with. Rather than letting them set the
 // row height, the thumbnails ride INSIDE the row at its existing height — up to
-// three, 38×30, sitting between the leader and the rating. A month of meals
+// three, 38×30, sitting between the name and the rating. A month of meals
 // stays scannable, the photos say which visits have any, and a row with none
 // is the same height as a row with three.
 import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
@@ -72,7 +72,7 @@ const months = groupByMonth(visits);
 					<section class="month">
 						<div class="rl-sec-head rl-sec-head--thin">
 							<span class="rl-sec-head__title">{m.label}</span>
-							<span class="rl-leader" />
+							<span class="rl-gap" />
 							<span class="rl-sec-head__sub">
 								{m.visits.length} visit{m.visits.length === 1 ? '' : 's'} · {m.places} place
 								{m.places === 1 ? '' : 's'}
@@ -84,7 +84,7 @@ const months = groupByMonth(visits);
 								<VerdictMark verdict={v.verdict} size={21} />
 								<span class="drow__name">{v.restaurant_name}</span>
 								<span class="drow__hood">{placeLine(v)}</span>
-								<span class="rl-leader" />
+								<span class="rl-gap" />
 								<span class="drow__thumbs">
 									{(thumbs.get(v.id) ?? []).map((url) => (
 										<img src={url} alt="" loading="lazy" decoding="async" />
@@ -175,7 +175,7 @@ const months = groupByMonth(visits);
 
 	/* On a phone the row wraps: the date, mark and name hold the first line and
 	   everything measurable drops to the second, still right-aligned as a
-	   column. The leader goes with them rather than splitting the name. */
+	   column. The spacer goes with them rather than splitting the name. */
 	@media (max-width: 620px) {
 		.drow__name {
 			white-space: normal;

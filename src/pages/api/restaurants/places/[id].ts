@@ -30,6 +30,11 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 		return apiError('expected JSON body', 400);
 	}
 
+	// What `toTry: false` did to the row — "deleted" or "unlisted". See
+	// removeFromToTry: a place with no visits is removed outright, one with a
+	// history is only unlisted.
+	let toTry: string | undefined;
+
 	try {
 		if ('hearted' in body) await setPlaceHearted(id, Boolean(body.hearted));
 
@@ -41,7 +46,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 			await setFavoriteRank(id, rank);
 		}
 
-		if (body.toTry === false) await removeFromToTry(id);
+		if (body.toTry === false) toTry = await removeFromToTry(id);
 
 		if (typeof body.name === 'string' || hasPlaceEdit(body)) {
 			if (body.priceBand != null && !isPriceBand(body.priceBand)) {
@@ -65,7 +70,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 			});
 		}
 
-		return json({ ok: true });
+		return json({ ok: true, ...(toTry ? { toTry } : {}) });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to update the place', 500);
 	}
