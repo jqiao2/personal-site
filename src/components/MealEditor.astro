@@ -327,6 +327,8 @@ const config = {
 		stateRegion: string | null;
 		country: string | null;
 		kind: string | null;
+		/** True only when lat/lng is the place itself, not the middle of an area. */
+		precise: boolean;
 	}
 	interface Config {
 		redirect: string;
@@ -533,9 +535,12 @@ const config = {
 
 			// What the geocoder pinned, in whichever pane is open.
 			const g = state.geo;
-			const pinnedText = g
-				? `${[g.neighborhood, g.city, g.stateRegion].filter(Boolean).join(', ')} · ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`
-				: '';
+			const where = g ? [g.neighborhood, g.city, g.stateRegion].filter(Boolean).join(', ') : '';
+			const pinnedText = !g
+				? ''
+				: g.precise
+					? `${where} · ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`
+					: `${where} · area only — no point, so it stays off the map`;
 			for (const [box, text] of [
 				['[data-me-pinned]', '[data-me-pinned-text]'],
 				['[data-me-log-pinned]', '[data-me-log-pinned-text]'],
@@ -619,7 +624,9 @@ const config = {
 							const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
 							if (res.ok) {
 								const [hit] = (await res.json()).hits ?? [];
-								if (hit && state.locked && !state.placeId) state.geo = hit;
+								// Attached without being chosen, so it must be an exact
+								// point — an area's centroid is not worth guessing with.
+								if (hit?.precise && state.locked && !state.placeId) state.geo = hit;
 							}
 						} catch {
 							// Unplaced is a supported state; carry on.
@@ -660,12 +667,18 @@ const config = {
 				}
 				box.replaceChildren();
 				if (hits.length === 0) {
-					box.hidden = true;
+					// Nothing in OSM by that name. Saying so beats an empty box —
+					// the place is still perfectly addable, just without a point.
+					const row = document.createElement('div');
+					row.className = 'me__sug me__sug--none';
+					row.textContent = 'No exact match — it will be added without a point on the map.';
+					box.append(row);
+					box.hidden = false;
 					return;
 				}
 				for (const hit of hits) {
 					const row = document.createElement('div');
-					row.className = 'me__sug';
+					row.className = hit.precise ? 'me__sug' : 'me__sug me__sug--vague';
 					row.innerHTML =
 						'<span class="me__sug-name"></span><span class="me__sug-meta"></span><span class="me__sug-tail"></span>';
 					row.querySelector('.me__sug-name')!.textContent = hit.name || hit.display.split(',')[0];
@@ -674,7 +687,12 @@ const config = {
 						.slice(1, 4)
 						.join(',')
 						.trim();
-					row.querySelector('.me__sug-tail')!.textContent = hit.kind ?? '';
+					// An area is offered — it still fills the location fields — but
+					// it is named as what it is, so nobody pins a restaurant to the
+					// middle of a neighbourhood by accident.
+					row.querySelector('.me__sug-tail')!.textContent = hit.precise
+						? (hit.kind ?? '')
+						: `${hit.kind ?? 'area'} · no exact point`;
 					row.addEventListener('mousedown', (e) => {
 						e.preventDefault();
 						pick(hit);
@@ -730,8 +748,10 @@ const config = {
 				city: rest.length ? rest.join(', ') : first || g?.city || null,
 				stateRegion: g?.stateRegion ?? null,
 				country: g?.country ?? null,
-				lat: g?.lat ?? null,
-				lng: g?.lng ?? null,
+				// A neighbourhood centroid is not where the restaurant is, so an
+				// imprecise hit contributes its NAMES and nothing else.
+				lat: g?.precise ? g.lat : null,
+				lng: g?.precise ? g.lng : null,
 				toTryReason: value('[data-me-try-why]'),
 				toTry: true,
 			};
@@ -762,8 +782,8 @@ const config = {
 							city: state.geo?.city ?? null,
 							stateRegion: state.geo?.stateRegion ?? null,
 							country: state.geo?.country ?? null,
-							lat: state.geo?.lat ?? null,
-							lng: state.geo?.lng ?? null,
+							lat: state.geo?.precise ? state.geo.lat : null,
+							lng: state.geo?.precise ? state.geo.lng : null,
 						},
 				visitedOn: value('[data-me-date]') || cfg.fallbackDate,
 				rating: state.rating || null,
@@ -1188,6 +1208,26 @@ const config = {
 		font-family: var(--mono);
 		font-size: 11px;
 		color: var(--ink-3);
+	}
+	/* An area, offered but marked: it can fill the location fields, it cannot
+	   become the pin. */
+	.me__sug--vague .me__sug-name {
+		font-weight: 400;
+		color: var(--ink-2);
+	}
+	.me__sug--vague .me__sug-tail {
+		color: var(--marigold-deep);
+	}
+	.me__sug--none {
+		padding: 10px 11px;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 13px;
+		color: var(--ink-3);
+		cursor: default;
+	}
+	.me__sug--none:hover {
+		background: none;
 	}
 
 	/* What the geocoder attached, stated plainly under the field. It is a

@@ -52,9 +52,28 @@ export interface GeocodeHit {
 	stateRegion: string | null;
 	/** ISO-3166-1 alpha-2, upper-cased — the shape `restaurants.country` wants. */
 	country: string | null;
-	/** OSM's own classification: "restaurant", "fast_food", "cafe", "address"… */
+	/** OSM's own classification: "restaurant", "fast_food", "cafe", "house"… */
 	kind: string | null;
+	/**
+	 * Whether lat/lng is THE RESTAURANT, or merely the middle of an area.
+	 *
+	 * This is the difference between a pin on a door and a pin floating in the
+	 * centre of Sunset Park, and only the first is worth putting on a map. OSM
+	 * grades every result with a `place_rank`: an actual object at a point — a
+	 * restaurant node, a building, a house number — is 30, while a
+	 * neighbourhood is 24, a city lower still. So 30 is the line, and anything
+	 * under it is an area whose centroid must never be stored as a location.
+	 *
+	 * The neighbourhood is still read off these results, because that is what
+	 * it is for: categorising a place, not locating it. The two come from
+	 * different parts of the same answer — the point from the object, the
+	 * neighbourhood from its address — and only the point has to be exact.
+	 */
+	precise: boolean;
 }
+
+/** Below this, a result is an area and its coordinates are a centroid. */
+const PRECISE_PLACE_RANK = 30;
 
 interface NominatimRow {
 	name?: string;
@@ -62,6 +81,9 @@ interface NominatimRow {
 	lat: string;
 	lon: string;
 	type?: string;
+	category?: string;
+	addresstype?: string;
+	place_rank?: number;
 	address?: Record<string, string>;
 }
 
@@ -86,7 +108,11 @@ export async function geocode(query: string, limit = 5): Promise<GeocodeHit[]> {
 		const res = await fetch(url, { headers: { 'user-agent': USER_AGENT, accept: 'application/json' } });
 		if (!res.ok) return [];
 		const rows = (await res.json()) as NominatimRow[];
-		return rows.map(toHit);
+		// Exact points first. A neighbourhood that happens to share a name with
+		// the restaurant you meant should never be the first thing offered.
+		return rows
+			.map(toHit)
+			.sort((a, b) => Number(b.precise) - Number(a.precise));
 	} catch {
 		return [];
 	}
@@ -111,5 +137,8 @@ function toHit(row: NominatimRow): GeocodeHit {
 		stateRegion,
 		country: a.country_code ? a.country_code.toUpperCase() : null,
 		kind: row.type ?? null,
+		// `boundary` results are administrative outlines and carry a rank of 30
+		// at street level, so rank alone would let one through.
+		precise: (row.place_rank ?? 0) >= PRECISE_PLACE_RANK && row.category !== 'boundary',
 	};
 }
