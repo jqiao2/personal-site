@@ -141,6 +141,24 @@ const hasKey = Boolean(config.key);
 <script>
 	import * as maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
+	// MapLibre 6 decodes tiles in a module worker that it loads as a SIBLING of
+	// whatever file it is bundled into — it builds the URL at runtime from
+	// `import.meta.url`, which a bundler cannot see, so the worker is never
+	// emitted and the request 404s. The map then looks like it is working:
+	// the style and the TileJSON load on the main thread, so the attribution
+	// appears and the controls draw, while every tile silently fails to decode
+	// and not one road, river or label is ever painted.
+	//
+	// `?worker&url` rather than plain `?url`: the worker is not a single file.
+	// It does `import {...} from './maplibre-gl-shared.mjs'`, so copying it
+	// alone emits something that loads and then fails to resolve its own
+	// import — the same blank map, one layer further down. `?worker` runs it
+	// through Vite's worker build so that dependency is bundled in, and `&url`
+	// hands back the path instead of a constructor, which is what
+	// setWorkerUrl takes. astro.config.mjs sets worker.format to 'es' so the
+	// emitted file is the module worker MapLibre asks for.
+	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+	maplibregl.setWorkerUrl(maplibreWorkerUrl);
 	import { menuBasemap, MAP_TOKENS } from '../lib/map-style';
 	import { clusterByScreen, verdictMix } from '../lib/restaurant-map';
 
@@ -657,6 +675,11 @@ const hasKey = Boolean(config.key);
 			flex-direction: column;
 		}
 		.map__cities {
+			/* In the row layout `flex: 1 1 190px` is a width. Here the container
+			   is a column, so that same basis becomes a 190px HEIGHT that also
+			   grows — an empty band above the map. The strip should be exactly
+			   as tall as its chips. */
+			flex: 0 0 auto;
 			border-left: none;
 			border-bottom: 1px solid var(--rule);
 			order: 0;

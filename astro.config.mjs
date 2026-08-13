@@ -8,6 +8,10 @@ import vercel from '@astrojs/vercel';
 // https://astro.build/config
 export default defineConfig({
 	adapter: vercel(),
+	// MapLibre loads its tile-decoding worker as an ES module worker. Vite's
+	// default worker format is a classic IIFE, which that would fail to parse —
+	// so the worker build emits ESM to match.
+	vite: { worker: { format: 'es' } },
 	// The book log used to live at /reading; keep the old addresses working for
 	// anything already linking to them.
 	redirects: {
