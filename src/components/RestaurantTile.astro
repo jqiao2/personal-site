@@ -1,0 +1,240 @@
+---
+// The tile — the answer to "there are no posters".
+//
+// See the long note on tileHead() in src/lib/restaurant-view.ts for why this is
+// typographic rather than photographic. The short version: the head is a fixed
+// height whether or not a photograph exists, and when one doesn't, the price
+// band set large on ruled paper fills the slot. A row of four never goes ragged
+// and the no-photo case is a tile rather than a hole.
+//
+// It takes loose fields rather than a Place because both things that need a
+// tile — a restaurant, and one visit to it — carry the same handful of strings
+// under different names.
+import VerdictMark from './VerdictMark.astro';
+import { starText } from '../lib/format';
+
+interface Props {
+	name: string;
+	href: string;
+	cuisines: string[];
+	priceBand: string | null;
+	/** "Sunset Park, Brooklyn" or "Austin, TX". */
+	where: string;
+	verdict: number | null;
+	rating?: number | null;
+	photo?: string | null;
+	hearted?: boolean;
+	/** Head height. The favourites row is taller than the diary row beneath it. */
+	tall?: boolean;
+	/** Shown above the name — the visit date, on the "recently visited" row. */
+	date?: string | null;
+	/** "♥ ↻" for a diary tile. */
+	marks?: string | null;
+}
+
+const {
+	name,
+	href,
+	cuisines,
+	priceBand,
+	where,
+	verdict,
+	rating = null,
+	photo = null,
+	hearted = false,
+	tall = false,
+	date = null,
+	marks = null,
+} = Astro.props;
+
+const stars = starText(rating);
+const cuisine = cuisines[0] ?? '';
+---
+
+<a class="tile" href={href}>
+	{
+		photo ? (
+			<div class:list={['tile__head', tall && 'tile__head--tall']}>
+				<img src={photo} alt={`A photograph taken at ${name}`} loading="lazy" decoding="async" />
+			</div>
+		) : (
+			<div class:list={['tile__head', 'tile__head--plate', tall && 'tile__head--tall']}>
+				<span class="tile__price">{priceBand ?? '—'}</span>
+				{cuisine && <span class="tile__cuisine">{cuisine}</span>}
+			</div>
+		)
+	}
+
+	<div class="tile__body">
+		{
+			(date || marks) && (
+				<div class="tile__row tile__row--meta">
+					{date && <span class="tile__date">{date}</span>}
+					{marks && <span class="rl-marks tile__push">{marks}</span>}
+				</div>
+			)
+		}
+
+		<div class="tile__row tile__row--name">
+			<span class="tile__name">{name}</span>
+			{!date && hearted && <span class="tile__heart">♥</span>}
+		</div>
+
+		{
+			date ? (
+				<div class="tile__row tile__row--foot">
+					{stars && <span class="rl-stars">{stars}</span>}
+					<span class="rl-leader" />
+					<VerdictMark verdict={verdict} size={17} />
+				</div>
+			) : (
+				<>
+					<div class="tile__row tile__row--foot">
+						<span class="tile__cuisines">{cuisines.join(', ')}</span>
+						<span class="rl-leader" />
+						<span class="tile__band">{priceBand ?? ''}</span>
+					</div>
+					<div class="tile__row tile__row--where">
+						<VerdictMark verdict={verdict} size={19} />
+						<span class="tile__hood">{where}</span>
+					</div>
+				</>
+			)
+		}
+	</div>
+</a>
+
+<style>
+	.tile {
+		background: var(--card);
+		border: 1px solid var(--rule);
+		display: flex;
+		flex-direction: column;
+		color: var(--ink);
+	}
+	.tile:hover {
+		border-color: var(--terracotta);
+		color: var(--ink);
+	}
+
+	.tile__head {
+		height: 106px;
+		overflow: hidden;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.16);
+	}
+	.tile__head--tall {
+		height: 126px;
+	}
+	.tile__head img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+	/* Ruled paper: the lined stock a specials board is written on, and the
+	   thing that keeps a photo-less tile from reading as a broken image. */
+	.tile__head--plate {
+		background: repeating-linear-gradient(
+			var(--panel),
+			var(--panel) 21px,
+			#e3d2ae 21px,
+			#e3d2ae 22px
+		);
+		border-bottom: 1px solid var(--rule);
+		box-shadow: none;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 2px;
+	}
+	.tile__price {
+		font-family: var(--display);
+		font-size: 30px;
+		line-height: 1;
+		color: var(--ink);
+	}
+	.tile__head--tall .tile__price {
+		font-size: 34px;
+	}
+	.tile__cuisine {
+		font-size: 9.5px;
+		font-weight: 600;
+		letter-spacing: 2px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+		text-align: center;
+		padding: 0 8px;
+	}
+
+	.tile__body {
+		padding: 10px 13px 12px;
+	}
+	.tile__row {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+	}
+	.tile__row--meta {
+		align-items: center;
+	}
+	.tile__row--name {
+		margin-top: 4px;
+		align-items: flex-start;
+	}
+	.tile__row--foot {
+		margin-top: 6px;
+		align-items: center;
+	}
+	.tile__row--where {
+		margin-top: 8px;
+		align-items: center;
+		gap: 8px;
+	}
+	.tile__date {
+		font-family: var(--mono);
+		font-size: 10.5px;
+		letter-spacing: 0.4px;
+		color: var(--ink-3);
+	}
+	.tile__push {
+		margin-left: auto;
+	}
+	/* A long name is the common case ("Xi'an Famous Foods", "Taquería
+	   Ramírez"), so it wraps to as many lines as it needs and the tile grows.
+	   Truncating the one thing a restaurant reliably has would be perverse. */
+	.tile__name {
+		font-size: 14.5px;
+		font-weight: 600;
+		line-height: 1.25;
+		color: var(--ink);
+		text-wrap: pretty;
+	}
+	.tile__heart {
+		margin-left: auto;
+		font-size: 13px;
+		line-height: 1;
+		color: var(--terracotta);
+	}
+	.tile__cuisines {
+		font-size: 11.5px;
+		color: var(--ink-2);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 118px;
+	}
+	.tile__band {
+		font-family: var(--mono);
+		font-size: 11.5px;
+		color: var(--ink);
+	}
+	.tile__hood {
+		font-size: 11px;
+		color: var(--ink-3);
+		letter-spacing: 0.2px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+</style>

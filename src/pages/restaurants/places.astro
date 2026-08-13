@@ -1,0 +1,496 @@
+---
+// Restaurants — everywhere I've eaten, as a list or as a map.
+//
+// A list of names, each with a cuisine, a price, a neighbourhood and a rating,
+// IS ALREADY A MENU, so this page takes the most from the brief's typographic
+// vocabulary: sections with a rule under them, the name on the left, the price
+// in a right-hand column that lines up down the page, and a dot leader running
+// between the two. The verdict mark sits in the left margin where a menu puts
+// its symbol for the house specials.
+//
+// WHAT THE LEADER COSTS AT 380px. The row is one flex line at desktop width and
+// wraps to two on a phone, with the price staying pinned right on the first
+// line — so the leader keeps tying a name to a price and never squeezes the
+// name to fit. What it costs is the second line's alignment, which is why the
+// meta line under it is allowed to run free rather than pretending to be a
+// column.
+//
+// FILTERS ARE LINKS, not scripts, so they survive a reload, a share and a back
+// button, and both views read the same query string. Toggling list ⇄ map keeps
+// every active filter for exactly that reason.
+import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
+import RestaurantMap from '../../components/RestaurantMap.astro';
+import MealEditor from '../../components/MealEditor.astro';
+import VerdictMark from '../../components/VerdictMark.astro';
+import { requireOwner } from '../../lib/auth';
+import {
+	groupPlaces,
+	isPlaceSort,
+	isPriceBand,
+	listCityFacets,
+	listCuisineFacets,
+	listFriends,
+	listPlaces,
+	listTags,
+	PRICE_BANDS,
+	type PlaceSort,
+	type PriceBand,
+} from '../../lib/restaurants';
+import { coverUrl, placeLine, visitCountLabel } from '../../lib/restaurant-view';
+import { thresholdLabel, verdictAt, VERDICTS } from '../../lib/verdict';
+import { starText } from '../../lib/format';
+import type { MapPoint } from '../../lib/restaurant-map';
+
+export const prerender = false;
+
+const params = Astro.url.searchParams;
+const selectedCuisines = params.getAll('cuisine');
+const selectedPrices = params.getAll('price').filter(isPriceBand) as PriceBand[];
+const rawVerdict = params.get('verdict');
+const verdictAtLeast = rawVerdict != null && /^[0-5]$/.test(rawVerdict) ? Number(rawVerdict) : null;
+const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'recent';
+const isMap = params.get('view') === 'map';
+const city = params.get('city');
+
+const [all, filtered, cuisineFacets, cityFacets, isOwner] = await Promise.all([
+	listPlaces(),
+	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, city, sort }),
+	listCuisineFacets(),
+	listCityFacets(),
+	requireOwner(Astro.cookies),
+]);
+
+const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+
+const groups = groupPlaces(filtered);
+
+/** Rebuild the query string with one parameter changed. */
+function href(changes: Record<string, string | string[] | null>): string {
+	const next = new URLSearchParams(params);
+	for (const [key, value] of Object.entries(changes)) {
+		next.delete(key);
+		if (value == null) continue;
+		for (const v of Array.isArray(value) ? value : [value]) next.append(key, v);
+	}
+	const qs = next.toString();
+	return qs ? `/restaurants/places?${qs}` : '/restaurants/places';
+}
+
+const toggle = (list: string[], value: string) =>
+	list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+
+// CUISINE IS LONG-TAILED. Sixty distinct values across a hundred places, most
+// of them appearing once, so a flat row of sixty chips is unusable. The head —
+// everything that names more than one place, capped at eight — is shown as
+// chips; the tail goes behind a <details> that names its own size, so the rare
+// ones are reachable without being in the way.
+const HEAD_CHIPS = 8;
+const head = cuisineFacets.filter((c) => c.count > 1).slice(0, HEAD_CHIPS);
+const tail = cuisineFacets.filter((c) => !head.some((h) => h.name === c.name));
+
+const mapPoints: MapPoint[] = filtered
+	.filter((p) => p.lat != null && p.lng != null)
+	.map((p) => ({
+		id: p.id,
+		name: p.name,
+		lat: p.lat as number,
+		lng: p.lng as number,
+		verdict: p.latest_verdict,
+		visited: true,
+		price: p.price_band,
+		cuisine: p.cuisines[0] ?? '',
+		city: p.city,
+		where: placeLine(p),
+		rating: p.avg_rating,
+		visits: p.visit_count,
+		hearted: p.hearted,
+	}));
+
+const activeFilters = [
+	...selectedCuisines.map((c) => ({ label: c, href: href({ cuisine: toggle(selectedCuisines, c) }) })),
+	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
+	...(verdictAtLeast != null ? [{ label: thresholdLabel(verdictAtLeast), href: href({ verdict: null }) }] : []),
+	...(city ? [{ label: city, href: href({ city: null }) }] : []),
+];
+
+const countLine = `${filtered.length} of ${all.length}`;
+const sorts: { key: PlaceSort; label: string }[] = [
+	{ key: 'recent', label: 'Latest visit' },
+	{ key: 'rating', label: 'Rating' },
+	{ key: 'verdict', label: 'Verdict' },
+	{ key: 'name', label: 'A–Z' },
+];
+---
+
+<RestaurantLayout title="Restaurants · Jason's restaurant log" pathname="/restaurants" isOwner={isOwner}>
+	<div class="rl-page">
+		<div class="rl-head">
+			<div>
+				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<div class="rl-head__title">Restaurants</div>
+			</div>
+			<div class="head-right">
+				<span class="rl-count">{countLine}</span>
+				<div class="viewtoggle">
+					<a class:list={['viewtoggle__b', !isMap && 'viewtoggle__b--on']} href={href({ view: null })}>List</a>
+					<a class:list={['viewtoggle__b', isMap && 'viewtoggle__b--on']} href={href({ view: 'map' })}>Map</a>
+				</div>
+			</div>
+		</div>
+
+		<!-- The filter bar reads identically in both views; only the thing under
+		     it changes. -->
+		<div class="filters">
+			<div class="filters__row">
+				<span class="filters__legend">Cuisine</span>
+				{
+					head.map((c) => (
+						<a
+							class="rl-chip"
+							href={href({ cuisine: toggle(selectedCuisines, c.name) })}
+							aria-pressed={selectedCuisines.includes(c.name) ? 'true' : 'false'}
+						>
+							<span>{c.name}</span>
+							<span class="rl-chip__n">{c.count}</span>
+						</a>
+					))
+				}
+				{
+					tail.length > 0 && (
+						<details class="more">
+							<summary class="rl-chip rl-chip--more">{tail.length} more</summary>
+							<div class="more__panel">
+								{tail.map((c) => (
+									<a
+										class="rl-chip"
+										href={href({ cuisine: toggle(selectedCuisines, c.name) })}
+										aria-pressed={selectedCuisines.includes(c.name) ? 'true' : 'false'}
+									>
+										<span>{c.name}</span>
+										<span class="rl-chip__n">{c.count}</span>
+									</a>
+								))}
+							</div>
+						</details>
+					)
+				}
+			</div>
+
+			<div class="filters__row filters__row--split">
+				<span class="filters__legend">Price</span>
+				{
+					PRICE_BANDS.map((p) => (
+						<a
+							class="rl-chip rl-chip--mono"
+							href={href({ price: toggle(selectedPrices, p) })}
+							aria-pressed={selectedPrices.includes(p) ? 'true' : 'false'}
+						>
+							{p}
+						</a>
+					))
+				}
+
+				<span class="filters__legend filters__legend--gap">Verdict</span>
+				<details class="more">
+					<summary class="rl-chip" aria-pressed={verdictAtLeast != null ? 'true' : 'false'}>
+						<VerdictMark verdict={verdictAtLeast} size={15} />
+						{verdictAtLeast == null ? 'Any' : thresholdLabel(verdictAtLeast)}
+					</summary>
+					<div class="more__panel more__panel--col">
+						<a class="rl-chip" href={href({ verdict: null })}>Any verdict</a>
+						{
+							VERDICTS.map((v) => (
+								<a
+									class="rl-chip"
+									href={href({ verdict: String(v.rank) })}
+									aria-pressed={verdictAtLeast === v.rank ? 'true' : 'false'}
+								>
+									<VerdictMark verdict={v.rank} size={15} />
+									{thresholdLabel(v.rank)}
+								</a>
+							))
+						}
+					</div>
+				</details>
+
+				<span class="filters__sorts">
+					<span class="filters__legend">Sort</span>
+					{
+						sorts.map((s) => (
+							<a class="rl-chip" href={href({ sort: s.key })} aria-pressed={sort === s.key ? 'true' : 'false'}>
+								{s.label}
+							</a>
+						))
+					}
+				</span>
+			</div>
+
+			{
+				activeFilters.length > 0 && (
+					<div class="filters__row filters__row--active">
+						<span class="filters__legend">Active</span>
+						{activeFilters.map((f) => (
+							<a class="rl-chip" href={f.href} aria-pressed="true">
+								{f.label} <span class="filters__x">×</span>
+							</a>
+						))}
+						<a class="filters__clear" href="/restaurants/places">Clear all</a>
+					</div>
+				)
+			}
+		</div>
+
+		{
+			isMap ? (
+				<RestaurantMap
+					points={mapPoints}
+					cities={cityFacets.map((c) => ({ name: c.name, count: c.count }))}
+					activeCity={city}
+					cityHref={(c) => href({ city: c, view: 'map' })}
+					caption={countLine}
+				/>
+			) : filtered.length === 0 ? (
+				<p class="rl-empty empty">
+					Nothing matches that combination. <a href="/restaurants/places">Clear the filters</a> to
+					see all {all.length}.
+				</p>
+			) : (
+				groups.map((g) => (
+					<section class="group">
+						<div class="rl-sec-head rl-sec-head--thin">
+							<span class="rl-sec-head__title">{g.title}</span>
+							<span class="rl-sec-head__sub">{g.subtitle}</span>
+							<span class="rl-count group__n">{g.places.length} places</span>
+						</div>
+						{g.places.map((p) => (
+							<a class="row" href={`/restaurants/place/${p.id}`}>
+								<VerdictMark verdict={p.latest_verdict} size={22} />
+								<div class="row__body">
+									<div class="row__line">
+										<span class="row__name">{p.name}</span>
+										{p.hearted && <span class="row__heart">♥</span>}
+										<span class="rl-leader" />
+										<span class="row__price">{p.price_band ?? ''}</span>
+									</div>
+									<div class="row__meta">
+										<span class="row__cuisines">{p.cuisines.join(', ')}</span>
+										{starText(p.avg_rating) && <span class="rl-stars">{starText(p.avg_rating)}</span>}
+										{p.latest_verdict != null && (
+											<span class="row__verdict">{verdictAt(p.latest_verdict)?.label}</span>
+										)}
+										<span class="row__visits">{visitCountLabel(p.visit_count)}</span>
+									</div>
+								</div>
+								{coverUrl(p) && (
+									<img class="row__thumb" src={coverUrl(p)} alt="" loading="lazy" decoding="async" />
+								)}
+							</a>
+						))}
+					</section>
+				))
+			)
+		}
+	</div>
+
+	{
+		isOwner && (
+			<MealEditor redirect={Astro.url.pathname + Astro.url.search} tagOptions={tagOptions} friendOptions={friendOptions} />
+		)
+	}
+</RestaurantLayout>
+
+<style>
+	.head-right {
+		display: flex;
+		align-items: center;
+		gap: 14px;
+	}
+	.viewtoggle {
+		display: flex;
+		border: 1px solid var(--rule);
+	}
+	.viewtoggle__b {
+		background: var(--card);
+		color: var(--ink-2);
+		font-size: 12px;
+		padding: 7px 14px;
+	}
+	.viewtoggle__b + .viewtoggle__b {
+		border-left: 1px solid var(--rule);
+	}
+	.viewtoggle__b--on {
+		background: var(--ink);
+		color: var(--ground);
+		font-weight: 600;
+	}
+	.viewtoggle__b--on:hover {
+		color: var(--ground);
+	}
+
+	.filters {
+		margin-top: 14px;
+		background: var(--panel);
+		border: 1px solid var(--rule);
+		padding: 12px 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.filters__row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.filters__row--split,
+	.filters__row--active {
+		border-top: 1px solid var(--rule-2);
+		padding-top: 10px;
+	}
+	.filters__legend {
+		font-size: 10.5px;
+		font-weight: 700;
+		letter-spacing: 1.4px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+		flex: none;
+	}
+	.filters__row:first-child .filters__legend {
+		width: 74px;
+	}
+	.filters__legend--gap {
+		margin-left: 12px;
+	}
+	.filters__sorts {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.filters__x {
+		opacity: 0.6;
+	}
+	.filters__clear {
+		font-size: 12px;
+		text-decoration: underline;
+	}
+
+	.more {
+		position: relative;
+	}
+	.more summary {
+		list-style: none;
+	}
+	.more summary::-webkit-details-marker {
+		display: none;
+	}
+	.more__panel {
+		position: absolute;
+		z-index: 20;
+		top: calc(100% + 4px);
+		left: 0;
+		width: max-content;
+		max-width: min(420px, 80vw);
+		max-height: 320px;
+		overflow: auto;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		box-shadow: 0 12px 26px rgba(47, 30, 18, 0.24);
+		padding: 10px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.more__panel--col {
+		flex-direction: column;
+		flex-wrap: nowrap;
+	}
+
+	.group {
+		margin-top: 30px;
+	}
+	.group__n {
+		margin-left: auto;
+	}
+
+	.row {
+		display: flex;
+		align-items: flex-start;
+		gap: 13px;
+		padding: 13px 6px 13px 0;
+		border-bottom: 1px solid var(--rule-3);
+		color: var(--ink);
+	}
+	.row:hover {
+		background: var(--wash);
+		color: var(--ink);
+	}
+	.row__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.row__line {
+		display: flex;
+		align-items: baseline;
+		gap: 9px;
+	}
+	.row__name {
+		font-size: 15.5px;
+		font-weight: 600;
+		letter-spacing: 0.1px;
+	}
+	.row__heart {
+		font-size: 12.5px;
+		color: var(--terracotta-deep);
+	}
+	.row__price {
+		font-family: var(--mono);
+		font-size: 13px;
+		width: 44px;
+		text-align: right;
+		flex: none;
+	}
+	.row__meta {
+		margin-top: 4px;
+		display: flex;
+		align-items: baseline;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+	.row__cuisines {
+		font-size: 12px;
+		color: var(--ink-2);
+	}
+	.row__verdict {
+		font-family: var(--prose);
+		font-size: 13.5px;
+		color: var(--ink-3);
+	}
+	.row__visits {
+		margin-left: auto;
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.row__thumb {
+		width: 52px;
+		height: 40px;
+		object-fit: cover;
+		flex: none;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+	}
+
+	.empty {
+		margin-top: 24px;
+	}
+
+	@media (max-width: 560px) {
+		.row__visits {
+			margin-left: 0;
+		}
+		.filters__sorts {
+			margin-left: 0;
+			width: 100%;
+		}
+	}
+</style>

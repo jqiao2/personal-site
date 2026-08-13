@@ -1,0 +1,63 @@
+---
+// The return verdict, drawn.
+//
+// A needle in a ring, rotated 36° per rung: straight up for "Definitely
+// return", straight down for "Avoid", four evenly-spaced positions between. The
+// rank is in the ANGLE rather than in a shape you have to learn, which is what
+// lets the badge work at 20px beside a restaurant name with no label — and what
+// makes six of them, shown together in the composer, read as one ordered series
+// instead of six unrelated icons. The ink adds a second, coarser reading:
+// avocado for the two rungs I'd go back to, marigold for the two I'd hesitate
+// over, chile red for the two I wouldn't.
+//
+// The reference is the marginal symbol a menu puts beside the house specials —
+// drawn, printed, part of the type. Not an emoji, which the brief rules out and
+// which would render as somebody else's artwork anyway.
+import { verdictAt, verdictRotation, verdictTooltip } from '../lib/verdict';
+
+interface Props {
+	verdict: number | null;
+	size?: number;
+	/** Draw the surrounding ring. Off inside the month card's calendar cells,
+	    where the cell border already does that job. */
+	ring?: boolean;
+	/** Hover text. Defaults to "Label — the gloss"; pass a string to prefix it. */
+	title?: string | null;
+}
+
+const { verdict, size = 22, ring = true, title = null } = Astro.props;
+const v = verdictAt(verdict);
+const label = title ?? verdictTooltip(verdict);
+---
+
+<svg
+	class="verdict"
+	viewBox="0 0 24 24"
+	width={size}
+	height={size}
+	role="img"
+	aria-label={label}
+>
+	<title>{label}</title>
+	{ring && <circle cx="12" cy="12" r="11" fill="none" stroke="var(--rule)" stroke-width="1.2" />}
+	{
+		v && (
+			<g transform={verdictRotation(v.rank)}>
+				<path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill={v.ink} />
+				<rect x="11.2" y="9.2" width="1.6" height="10" fill={v.ink} />
+			</g>
+		)
+	}
+	{
+		/* No verdict recorded: an empty ring, which is a legible absence rather
+		   than a needle pointing somewhere it doesn't mean. */
+		!v && ring && <circle cx="12" cy="12" r="2.4" fill="var(--rule-2)" />
+	}
+</svg>
+
+<style>
+	.verdict {
+		display: block;
+		flex: none;
+	}
+</style>

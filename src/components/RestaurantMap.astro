@@ -1,0 +1,408 @@
+---
+// The map view, for both Restaurants and To try.
+//
+// THE PIN CARRIES THE VERDICT. Of the three rating signals, the verdict is the
+// one that survives to this scale, because the question you ask a map is the
+// question the verdict answers: I am standing here, would I go back in? Stars
+// would need a number rendered at 12px, and a heart would collapse a hundred
+// places into two states. The needle's angle carries the rung and its ink
+// carries the band, so a glance over Sunset Park reads as "mostly green,
+// pointing up" without a legend — though there is a legend anyway, bottom left,
+// because the ink bands are worth naming once.
+//
+// TO-TRY PINS ARE DIFFERENT ON PURPOSE. A place you haven't been has no verdict
+// and can't have one, so its pin is an empty ring rather than a needle. Set
+// against the visited map, the difference reads without being explained: a full
+// pin is an opinion, an open one is an intention.
+//
+// MOBILE. A map wants full height on a phone, which leaves nowhere for the city
+// list. Below 760px the list becomes a horizontal strip of chips above the map
+// and the map takes the rest, rather than the two of them splitting a screen
+// neither can use.
+import { cluster, frameFor, plot, type MapPoint } from '../lib/restaurant-map';
+import { verdictAt } from '../lib/verdict';
+import { starText } from '../lib/format';
+
+interface Props {
+	points: MapPoint[];
+	cities: { name: string; count: number }[];
+	/** The city currently framed. Null frames everything that's placed. */
+	activeCity: string | null;
+	/** Builds the href for a city chip; the page owns the rest of the query. */
+	cityHref: (city: string | null) => string;
+	/** "31 of 96" — how much of the collection is in frame. */
+	caption?: string;
+}
+
+const { points, cities, activeCity, cityHref, caption } = Astro.props;
+
+// THE FIRST LOAD. Not fit-to-bounds — that is a world map with five specks on
+// it — and not a hardcoded New York either, which would silently hide a fifth
+// of the collection. The map opens on whichever city holds the most of it, and
+// the list beside it names every other one with its count, so what is off the
+// edge is legible before you click anything. `cities` arrives sorted by count.
+const framedCity = activeCity ?? cities[0]?.name ?? null;
+const chosen = framedCity ? points.filter((p) => p.city === framedCity) : points;
+const framed = chosen.length > 0 ? chosen : points;
+const frame = frameFor(framed);
+
+// The chosen city SETS the frame; everything gets plotted against it. So a
+// frame on Brooklyn also shows the Manhattan and Queens pins that genuinely
+// fall inside it, and the New York cluster coheres without this file having to
+// know that those three are one city — which it can't, since the data models
+// them as three. Anything that lands outside is dropped and counted as
+// elsewhere rather than squashed onto the edge.
+const plotted = plot(points, frame);
+const { pins, clusters } = cluster(plotted, (v) => verdictAt(v)?.ink ?? 'var(--rule)');
+
+const elsewhere = points.length - plotted.length;
+---
+
+<div class="map">
+	<div class="map__cities">
+		<div class="map__cities-head rl-label">Elsewhere</div>
+		<div class="map__cities-list">
+			{
+				cities.map((c) => (
+					<a
+						class:list={['cityrow', c.name === framedCity && 'cityrow--on']}
+						href={cityHref(c.name)}
+						aria-current={c.name === framedCity ? 'true' : undefined}
+					>
+						<span class="cityrow__name">{c.name}</span>
+						<span class="rl-leader" />
+						<span class="cityrow__n">{c.count}</span>
+					</a>
+				))
+			}
+		</div>
+	</div>
+
+	<div class="map__canvas">
+		<!-- The ground. Not a basemap: a sheet of the same paper, ruled into a
+		     grid so distance is readable, with no roads pretending to be roads. -->
+		<div class="map__paper"></div>
+
+		{
+			plotted.length === 0 && (
+				<p class="map__none">
+					Nothing here has coordinates yet. A place gets onto the map when its
+					location is confirmed.
+				</p>
+			)
+		}
+
+		{
+			clusters.map((c) => (
+				<button
+					class="clust"
+					style={`left:${c.x}%; top:${c.y}%`}
+					title={c.names.slice(0, 8).join(', ') + (c.names.length > 8 ? `, and ${c.names.length - 8} more` : '')}
+					type="button"
+				>
+					<span class="clust__n">{c.count}</span>
+					<span class="clust__label">places</span>
+					<span class="clust__mix">
+						{c.mix.map((m) => (
+							<span style={`background:${m.ink}; flex:${m.fraction}`} />
+						))}
+					</span>
+				</button>
+			))
+		}
+
+		{
+			pins.map((p) => (
+				<a
+					class="pin"
+					style={`left:${p.x}%; top:${p.y}%`}
+					href={`/restaurants/place/${p.id}`}
+					data-pin
+					data-name={p.name}
+					data-where={p.where}
+					data-cuisine={p.cuisine}
+					data-price={p.price ?? ''}
+					data-stars={starText(p.rating) ?? ''}
+					data-verdict={p.verdict ?? ''}
+					data-verdict-label={verdictAt(p.verdict)?.label ?? 'No verdict yet'}
+					data-visits={p.visits}
+					data-hearted={p.hearted ? '1' : ''}
+				>
+					<svg viewBox="0 0 26 34" width="26" height="34" aria-hidden="true">
+						<path
+							d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z"
+							fill="var(--card)"
+							stroke="var(--ink)"
+							stroke-width="1.6"
+						/>
+						{
+							p.visited ? (
+								<g transform="translate(4.2,4.2) scale(0.74)">
+									<g transform={`rotate(${(p.verdict ?? 0) * 36} 12 12)`}>
+										<path
+											d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z"
+											fill={verdictAt(p.verdict)?.ink ?? 'var(--ink-4)'}
+										/>
+										<rect
+											x="11.2"
+											y="9.2"
+											width="1.6"
+											height="10"
+											fill={verdictAt(p.verdict)?.ink ?? 'var(--ink-4)'}
+										/>
+									</g>
+								</g>
+							) : (
+								<circle cx="13" cy="13" r="4.4" fill="none" stroke="var(--ink-3)" stroke-width="1.6" />
+							)
+						}
+					</svg>
+					<span class="pin__name">{p.name}</span>
+				</a>
+			))
+		}
+
+		<div class="legend">
+			<span class="rl-label">Pin ink</span>
+			<span class="legend__item"><i style="background:#556b2a"></i>want to go back</span>
+			<span class="legend__item"><i style="background:#c07d14"></i>with reservations</span>
+			<span class="legend__item"><i style="background:#a83a22"></i>no</span>
+			<span class="legend__item"><i class="legend__ring"></i>not been yet</span>
+		</div>
+
+		<div class="map__caption">
+			{framedCity ?? 'Everywhere'}
+			<span class="map__off"> · {plotted.length} here</span>
+			{elsewhere > 0 && <span class="map__off"> · {elsewhere} elsewhere</span>}
+			{caption && <span class="map__cap2"> · {caption}</span>}
+		</div>
+	</div>
+</div>
+
+<style>
+	.map {
+		margin-top: 16px;
+		display: flex;
+		flex-wrap: wrap-reverse;
+		border: 1px solid var(--rule);
+	}
+	.map__canvas {
+		flex: 999 1 380px;
+		position: relative;
+		background: #f2e7d2;
+		height: min(70vh, 560px);
+		min-height: 360px;
+		overflow: hidden;
+	}
+	/* Ruled ground, not a basemap. The grid gives distance something to be
+	   measured against; drawing fake streets would be decoration claiming to
+	   be data. */
+	.map__paper {
+		position: absolute;
+		inset: 0;
+		background:
+			repeating-linear-gradient(90deg, transparent 0 59px, #efe4cd 59px 62px),
+			repeating-linear-gradient(transparent 0 59px, #efe4cd 59px 62px);
+	}
+	.map__none {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		max-width: 300px;
+		text-align: center;
+		font-family: var(--prose);
+		font-size: 15px;
+		color: var(--ink-2);
+	}
+
+	.pin {
+		position: absolute;
+		transform: translate(-50%, -100%);
+		filter: drop-shadow(0 1px 1px rgba(47, 30, 18, 0.35));
+		cursor: pointer;
+	}
+	.pin__name {
+		position: absolute;
+		left: 50%;
+		top: 100%;
+		transform: translateX(-50%);
+		white-space: nowrap;
+		font-size: 10.5px;
+		color: var(--ink);
+		background: rgba(253, 247, 232, 0.86);
+		padding: 1px 4px;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 90ms;
+	}
+	.pin:hover .pin__name,
+	.pin:focus-visible .pin__name {
+		opacity: 1;
+	}
+
+	.clust {
+		position: absolute;
+		transform: translate(-50%, -50%);
+		width: 56px;
+		height: 56px;
+		border-radius: 50%;
+		background: var(--sunk);
+		border: 1.6px solid var(--ink);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		box-shadow: 0 1px 3px rgba(47, 30, 18, 0.3);
+		cursor: pointer;
+		font-family: var(--ui);
+	}
+	.clust__n {
+		font-family: var(--mono);
+		font-size: 17px;
+		font-weight: 700;
+		color: var(--ink);
+		line-height: 1;
+	}
+	.clust__label {
+		font-size: 8px;
+		letter-spacing: 0.9px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+		margin-top: 2px;
+	}
+	/* The verdict mix, as a strip: a cluster of twelve says how many of the
+	   twelve you'd go back to without being opened. */
+	.clust__mix {
+		position: absolute;
+		bottom: -3px;
+		display: flex;
+		width: 26px;
+		height: 3px;
+	}
+
+	.legend {
+		position: absolute;
+		left: 14px;
+		bottom: 14px;
+		max-width: calc(100% - 28px);
+		background: rgba(253, 247, 232, 0.94);
+		border: 1px solid var(--rule);
+		padding: 9px 11px;
+		display: flex;
+		align-items: center;
+		gap: 8px 14px;
+		flex-wrap: wrap;
+	}
+	.legend__item {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 11.5px;
+		color: var(--ink-2);
+	}
+	.legend__item i {
+		width: 11px;
+		height: 11px;
+		display: block;
+	}
+	.legend__ring {
+		border: 1.6px solid var(--ink-3);
+		border-radius: 50%;
+		background: none;
+	}
+
+	.map__caption {
+		position: absolute;
+		right: 14px;
+		bottom: 14px;
+		background: rgba(253, 247, 232, 0.94);
+		border: 1px solid var(--rule);
+		padding: 6px 10px;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
+	}
+	.map__off {
+		color: var(--terracotta-deep);
+	}
+	.map__cap2 {
+		color: var(--ink-4);
+	}
+
+	.map__cities {
+		flex: 1 1 190px;
+		min-width: 0;
+		background: var(--panel);
+		border-left: 1px solid var(--rule);
+		order: 2;
+	}
+	.map__cities-head {
+		padding: 14px 14px 10px;
+		border-bottom: 1px solid var(--rule);
+	}
+	.cityrow {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		padding: 11px 14px;
+		border-bottom: 1px solid var(--rule-2);
+		color: var(--ink-2);
+	}
+	.cityrow:hover {
+		background: #e6d5b4;
+		color: var(--ink);
+	}
+	.cityrow--on {
+		color: var(--ink);
+		font-weight: 700;
+	}
+	.cityrow__name {
+		font-size: 13px;
+	}
+	.cityrow__n {
+		font-family: var(--mono);
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+
+	/* A phone gives the map the whole height and turns the city list into a
+	   strip of chips above it. */
+	@media (max-width: 760px) {
+		.map {
+			flex-direction: column;
+		}
+		.map__cities {
+			border-left: none;
+			border-bottom: 1px solid var(--rule);
+			order: 0;
+		}
+		.map__cities-head {
+			display: none;
+		}
+		.map__cities-list {
+			display: flex;
+			gap: 8px;
+			overflow-x: auto;
+			padding: 10px 12px;
+		}
+		.cityrow {
+			border: 1px solid var(--rule);
+			background: var(--card);
+			padding: 6px 11px;
+			white-space: nowrap;
+			flex: none;
+		}
+		.cityrow--on {
+			background: var(--ink);
+			color: var(--ground);
+			border-color: var(--ink);
+		}
+		.cityrow .rl-leader {
+			display: none;
+		}
+		.map__canvas {
+			height: min(76vh, 620px);
+		}
+	}
+</style>

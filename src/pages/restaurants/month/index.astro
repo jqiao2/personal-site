@@ -1,0 +1,95 @@
+---
+// Every month that has a meal in it, newest first — the index the month card
+// steps through.
+import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
+import { requireOwner } from '../../../lib/auth';
+import { groupByMonth, listDiary } from '../../../lib/restaurants';
+
+export const prerender = false;
+
+const [visits, isOwner] = await Promise.all([listDiary(), requireOwner(Astro.cookies)]);
+const months = groupByMonth(visits);
+const years = [...new Set(months.map((m) => m.key.slice(0, 4)))];
+---
+
+<RestaurantLayout title="Month in review · Jason's restaurant log" pathname="/restaurants" isOwner={isOwner}>
+	<div class="rl-page">
+		<div class="rl-head">
+			<div>
+				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<div class="rl-head__title">Month in review</div>
+			</div>
+			<span class="rl-count">{months.length} month{months.length === 1 ? '' : 's'}</span>
+		</div>
+
+		{
+			months.length === 0 ? (
+				<p class="rl-empty empty">
+					No months yet. One shareable card per month, once there are meals in one.
+				</p>
+			) : (
+				years.map((year) => (
+					<section class="year">
+						<div class="rl-sec-head rl-sec-head--thin">
+							<span class="rl-sec-head__title">{year}</span>
+						</div>
+						<div class="grid">
+							{months
+								.filter((m) => m.key.startsWith(year))
+								.map((m) => (
+									<a class="mcard" href={`/restaurants/month/${m.key}`}>
+										<div class="mcard__name">{m.label.split(' ')[0]}</div>
+										<div class="mcard__meta">
+											{m.visits.length} meal{m.visits.length === 1 ? '' : 's'}
+										</div>
+										<div class="mcard__meta mcard__meta--faint">
+											{m.places} place{m.places === 1 ? '' : 's'}
+										</div>
+									</a>
+								))}
+						</div>
+					</section>
+				))
+			)
+		}
+	</div>
+</RestaurantLayout>
+
+<style>
+	.year {
+		margin-top: 26px;
+	}
+	.empty {
+		margin-top: 24px;
+	}
+	.grid {
+		margin-top: 14px;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+		gap: 12px;
+	}
+	.mcard {
+		background: var(--card);
+		border: 1px solid var(--rule);
+		padding: 16px 16px 18px;
+		color: var(--ink);
+	}
+	.mcard:hover {
+		border-color: var(--terracotta);
+		color: var(--ink);
+	}
+	.mcard__name {
+		font-family: var(--display);
+		font-size: 21px;
+		line-height: 1;
+	}
+	.mcard__meta {
+		margin-top: 8px;
+		font-size: 12px;
+		color: var(--ink-2);
+	}
+	.mcard__meta--faint {
+		margin-top: 2px;
+		color: var(--ink-3);
+	}
+</style>

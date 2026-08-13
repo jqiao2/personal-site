@@ -1,0 +1,1274 @@
+---
+// The owner's two composers, in one component: "log a meal" and "add to
+// to-try". Any element carrying [data-open-meal-editor] opens the first;
+// [data-open-try-editor] opens the second. Both are inert for a visitor,
+// because the component is only rendered for an owner session.
+//
+// THE THREE RATING SIGNALS. Every visit can carry a half-step star rating, a
+// six-step verdict and a heart, and the naïve form gives you three rows of
+// widgets stacked in a modal. They are not redundant — stars are "how good was
+// it", the verdict is "how much do I want to go back and repeat it", the heart
+// is "do I love it" — so the form ranks them rather than flattening them:
+//
+//   1. Stars come first and are the largest control. They are the question you
+//      can always answer, and the one a tile leads with.
+//   2. The verdict is a SLIDER, not six buttons. Six radio buttons would be six
+//      equal choices; a slider says out loud that the scale is ordered, and the
+//      needle beside it turns as you drag, so you learn the mark's angles by
+//      using the control rather than by reading a legend.
+//   3. The heart is a single toggle sitting beside the revisit mark, below
+//      both. It is deliberately small: it is not a seventh rung of the verdict,
+//      and giving it equal weight would imply it were.
+//
+// Only the stars survive onto a tile, only the verdict survives onto a map pin,
+// and the heart appears on the entry and as a small mark next to a name.
+import { VERDICTS } from '../lib/verdict';
+import { PRICE_BANDS } from '../lib/restaurants';
+import { verdictRotation } from '../lib/verdict';
+import { localDay } from '../lib/day';
+
+interface Props {
+	/** Where to return after saving. */
+	redirect: string;
+	/** Pre-selected place, when the composer is opened from a place page. */
+	place?: { id: number; name: string; meta: string; visits: number } | null;
+	/** Editing an existing visit rather than logging a new one. */
+	visitId?: number | null;
+	initial?: {
+		visitedOn: string;
+		rating: number | null;
+		verdict: number | null;
+		hearted: boolean;
+		revisit: boolean;
+		friends: string[];
+		review: string;
+		tags: string[];
+	} | null;
+	tagOptions?: string[];
+	friendOptions?: string[];
+	deleteRedirect?: string;
+}
+
+const {
+	redirect,
+	place = null,
+	visitId = null,
+	initial = null,
+	tagOptions = [],
+	friendOptions = [],
+	deleteRedirect = '/restaurants/diary',
+} = Astro.props;
+
+const config = {
+	redirect,
+	place,
+	visitId,
+	initial,
+	tagOptions,
+	friendOptions,
+	verdicts: VERDICTS.map((v) => ({ label: v.label, gloss: v.gloss, ink: v.ink })),
+	// The composer opens on today, and today is the browser's day rather than
+	// the server's: a Vercel function in UTC calls it tomorrow all evening.
+	fallbackDate: localDay(),
+};
+---
+
+<script type="application/json" id="meal-editor-config" set:html={JSON.stringify(config)} />
+
+<div class="me" id="meal-editor" hidden>
+	<div class="me__backdrop" data-me-backdrop></div>
+	<div class="me__sheet" role="dialog" aria-modal="true" aria-labelledby="me-title">
+		<div class="me__bar">
+			<span class="me__title" id="me-title" data-me-title>Log a meal</span>
+			<button type="button" class="me__x" data-me-close aria-label="Close">×</button>
+		</div>
+
+		<div class="me__confirm" data-me-confirm hidden>
+			<div class="me__confirm-box">
+				<div class="me__confirm-title">Discard?</div>
+				<div class="me__confirm-actions">
+					<button type="button" class="rl-btn" data-me-keep>Keep</button>
+					<button type="button" class="me__danger" data-me-discard>Discard</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- ------------------------------------------------ log a meal -->
+		<div class="me__body" data-me-pane="log">
+			<div class="me__field me__field--rel">
+				<label class="rl-label" for="me-place">Place</label>
+				<div class="me__locked" data-me-locked hidden>
+					<span class="me__locked-name" data-me-locked-name></span>
+					<span class="me__locked-meta" data-me-locked-meta></span>
+					<button type="button" class="rl-btn me__change" data-me-unlock>Change</button>
+				</div>
+				<input
+					class="me__input"
+					id="me-place"
+					data-me-place
+					type="text"
+					autocomplete="off"
+					placeholder="Search or type a new place"
+				/>
+				<div class="me__suggest" data-me-suggest hidden></div>
+			</div>
+
+			<div class="me__field">
+				<label class="rl-label" for="me-date">Visited</label>
+				<input class="me__input me__input--mono" id="me-date" data-me-date type="date" />
+			</div>
+
+			<div class="me__field">
+				<span class="rl-label">Rating</span>
+				<div class="me__stars" data-me-stars>
+					{
+						[1, 2, 3, 4, 5].map((n) => (
+							<button
+								type="button"
+								class="me__star"
+								data-me-star={n}
+								aria-label={`${n} stars`}
+								title={`${n} stars`}
+							>
+								★
+							</button>
+						))
+					}
+					<button type="button" class="me__half" data-me-half title="Half star">½</button>
+					<button type="button" class="me__clear" data-me-clear-stars>clear</button>
+				</div>
+			</div>
+
+			<div class="me__field">
+				<label class="rl-label" for="me-verdict">Would I go back</label>
+				<div class="me__verdict">
+					<svg class="me__needle" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+						<circle cx="12" cy="12" r="11" fill="none" stroke="var(--rule)" stroke-width="1.2"></circle>
+						<g data-me-needle transform={verdictRotation(0)}>
+							<path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="var(--avocado)"></path>
+							<rect x="11.2" y="9.2" width="1.6" height="10" fill="var(--avocado)"></rect>
+						</g>
+					</svg>
+					<input
+						class="me__range"
+						id="me-verdict"
+						data-me-verdict
+						type="range"
+						min="0"
+						max="5"
+						step="1"
+						value="0"
+					/>
+					<span class="me__verdict-name" data-me-verdict-name>Definitely return</span>
+				</div>
+				<p class="me__gloss" data-me-verdict-gloss></p>
+				<label class="me__unset">
+					<input type="checkbox" data-me-verdict-unset checked />
+					<span>No verdict yet</span>
+				</label>
+			</div>
+
+			<div class="me__toggles">
+				<button type="button" class="me__toggle me__toggle--heart" data-me-heart>♥ Loved it</button>
+				<button type="button" class="me__toggle" data-me-revisit>↻ Been before</button>
+			</div>
+
+			<div class="me__field">
+				<label class="rl-label" for="me-friends">With</label>
+				<input
+					class="me__input"
+					id="me-friends"
+					data-me-friends
+					type="text"
+					list="me-friend-options"
+					autocomplete="off"
+					placeholder="Priya, Dan"
+				/>
+				<datalist id="me-friend-options">
+					{friendOptions.map((f) => <option value={f} />)}
+				</datalist>
+			</div>
+
+			<div class="me__field">
+				<span class="rl-label">Price</span>
+				<div class="me__prices" data-me-prices>
+					{
+						PRICE_BANDS.map((p) => (
+							<button type="button" class="me__price" data-me-price={p}>
+								{p}
+							</button>
+						))
+					}
+				</div>
+			</div>
+
+			<div class="me__field">
+				<label class="rl-label" for="me-notes">Notes</label>
+				<textarea
+					class="me__textarea"
+					id="me-notes"
+					data-me-notes
+					rows="3"
+					placeholder="What you ate, what to order next time"></textarea>
+			</div>
+
+			<div class="me__field">
+				<span class="rl-label">Photos</span>
+				<div class="me__photos" data-me-photos></div>
+				<label class="me__addphoto">
+					+
+					<input type="file" accept="image/*" multiple data-me-photo-input hidden />
+				</label>
+			</div>
+
+			<div class="me__field">
+				<label class="rl-label" for="me-tags">Tags</label>
+				<div class="me__tags" data-me-tags></div>
+				<input
+					class="me__input"
+					id="me-tags"
+					data-me-tag-input
+					type="text"
+					list="me-tag-options"
+					autocomplete="off"
+					placeholder="Enter to add"
+				/>
+				<datalist id="me-tag-options">
+					{tagOptions.map((t) => <option value={t} />)}
+				</datalist>
+			</div>
+		</div>
+
+		<!-- ----------------------------------------------- add to-try -->
+		<div class="me__body" data-me-pane="try" hidden>
+			<div class="me__field">
+				<label class="rl-label" for="me-try-name">Place</label>
+				<input class="me__input" id="me-try-name" data-me-try-name type="text" autocomplete="off" placeholder="Wu's Wonton King" />
+			</div>
+			<div class="me__grid">
+				<div class="me__field">
+					<label class="rl-label" for="me-try-where">Where</label>
+					<input class="me__input" id="me-try-where" data-me-try-where type="text" autocomplete="off" placeholder="Two Bridges, Manhattan" />
+				</div>
+				<div class="me__field">
+					<label class="rl-label" for="me-try-cuisine">Cuisine</label>
+					<input class="me__input" id="me-try-cuisine" data-me-try-cuisine type="text" autocomplete="off" placeholder="Cantonese" />
+				</div>
+			</div>
+			<div class="me__field">
+				<span class="rl-label">Price</span>
+				<div class="me__prices" data-me-try-prices>
+					{
+						PRICE_BANDS.map((p) => (
+							<button type="button" class="me__price" data-me-try-price={p}>
+								{p}
+							</button>
+						))
+					}
+				</div>
+			</div>
+			<div class="me__field">
+				<label class="rl-label" for="me-try-why">Why</label>
+				<input class="me__input me__input--prose" id="me-try-why" data-me-try-why type="text" autocomplete="off" placeholder="Peking duck, BYOB, a big table" />
+			</div>
+		</div>
+
+		<div class="me__foot">
+			<span class="me__summary" data-me-summary></span>
+			{
+				visitId && (
+					<button type="button" class="me__delete" data-me-delete data-redirect={deleteRedirect}>
+						Delete
+					</button>
+				)
+			}
+			<button type="button" class="rl-btn me__cancel" data-me-close>Cancel</button>
+			<button type="button" class="me__save" data-me-save disabled>Log visit</button>
+		</div>
+	</div>
+</div>
+
+<script>
+	interface VerdictSpec {
+		label: string;
+		gloss: string;
+		ink: string;
+	}
+	interface PlaceSpec {
+		id: number;
+		name: string;
+		meta: string;
+		visits: number;
+	}
+	interface Config {
+		redirect: string;
+		place: PlaceSpec | null;
+		visitId: number | null;
+		initial: {
+			visitedOn: string;
+			rating: number | null;
+			verdict: number | null;
+			hearted: boolean;
+			revisit: boolean;
+			friends: string[];
+			review: string;
+			tags: string[];
+		} | null;
+		tagOptions: string[];
+		friendOptions: string[];
+		verdicts: VerdictSpec[];
+		fallbackDate: string;
+	}
+
+	const configTag = document.getElementById('meal-editor-config');
+	const editor = document.getElementById('meal-editor');
+	if (configTag && editor) {
+		// Bound once so the narrowing survives into the callbacks below.
+		const root: HTMLElement = editor;
+		const cfg = JSON.parse(configTag.textContent || '{}') as Config;
+		const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel);
+		const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
+
+		type Pane = 'log' | 'try';
+		type PendingPhoto = { file: File; url: string; width: number; height: number };
+
+		const state = {
+			pane: 'log' as Pane,
+			open: false,
+			placeId: cfg.place?.id ?? null,
+			placeName: '',
+			locked: cfg.place,
+			rating: cfg.initial?.rating ?? 0,
+			half: (cfg.initial?.rating ?? 0) % 1 !== 0,
+			verdict: cfg.initial?.verdict ?? 0,
+			verdictSet: cfg.initial?.verdict != null,
+			hearted: cfg.initial?.hearted ?? false,
+			revisit: cfg.initial?.revisit ?? (cfg.place ? cfg.place.visits > 0 : false),
+			price: null as string | null,
+			tags: [...(cfg.initial?.tags ?? [])],
+			photos: [] as PendingPhoto[],
+			tryPrice: null as string | null,
+			saving: false,
+		};
+
+		// -- opening / closing ------------------------------------------------
+		function open(pane: Pane) {
+			state.pane = pane;
+			state.open = true;
+			root.hidden = false;
+			document.body.style.overflow = 'hidden';
+			$('[data-me-pane="log"]')!.hidden = pane !== 'log';
+			$('[data-me-pane="try"]')!.hidden = pane !== 'try';
+			$('[data-me-title]')!.textContent =
+				pane === 'try' ? 'Add to to-try' : cfg.visitId ? 'Edit this visit' : state.locked ? 'Log a visit' : 'Log a meal';
+			$('[data-me-save]')!.textContent = pane === 'try' ? 'Add' : cfg.visitId ? 'Save' : 'Log visit';
+			render();
+			window.setTimeout(() => {
+				const focus = pane === 'try' ? $('[data-me-try-name]') : state.locked ? $('[data-me-date]') : $('[data-me-place]');
+				(focus as HTMLInputElement | null)?.focus();
+			}, 20);
+		}
+
+		function close() {
+			state.open = false;
+			root.hidden = true;
+			$('[data-me-confirm]')!.hidden = true;
+			document.body.style.overflow = '';
+		}
+
+		/** Anything typed that would be lost. Drives the discard confirmation. */
+		function dirty(): boolean {
+			if (state.pane === 'try') {
+				return Boolean(
+					value('[data-me-try-name]') ||
+						value('[data-me-try-where]') ||
+						value('[data-me-try-cuisine]') ||
+						value('[data-me-try-why]') ||
+						state.tryPrice,
+				);
+			}
+			if (cfg.visitId) return true;
+			return Boolean(
+				state.placeId ||
+					value('[data-me-place]') ||
+					state.rating ||
+					state.verdictSet ||
+					value('[data-me-friends]') ||
+					value('[data-me-notes]') ||
+					state.tags.length ||
+					state.photos.length,
+			);
+		}
+
+		function askClose() {
+			if (dirty()) $('[data-me-confirm]')!.hidden = false;
+			else close();
+		}
+
+		function value(sel: string): string {
+			return ($(sel) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() ?? '';
+		}
+
+		// -- rendering --------------------------------------------------------
+		function render() {
+			const locked = state.locked;
+			$('[data-me-locked]')!.hidden = !locked;
+			($('[data-me-place]') as HTMLInputElement).hidden = Boolean(locked);
+			if (locked) {
+				$('[data-me-locked-name]')!.textContent = locked.name;
+				$('[data-me-locked-meta]')!.textContent = locked.meta;
+			}
+
+			// Stars. The half toggle changes what the next click means, so the
+			// fill has to re-read after every change rather than on click alone.
+			const filled = Math.ceil(state.rating);
+			$$('[data-me-star]').forEach((el) => {
+				const n = Number(el.dataset.meStar);
+				const on = n <= filled;
+				el.textContent = state.half && n === filled ? '½' : '★';
+				el.classList.toggle('me__star--on', on);
+			});
+			$('[data-me-half]')!.classList.toggle('me__toggle--on', state.half);
+
+			const v = cfg.verdicts[state.verdict] ?? cfg.verdicts[0];
+			const needle = $('[data-me-needle]')!;
+			needle.setAttribute('transform', `rotate(${state.verdict * 36} 12 12)`);
+			needle.querySelectorAll('path, rect').forEach((n) => n.setAttribute('fill', v.ink));
+			needle.parentElement!.style.opacity = state.verdictSet ? '1' : '0.35';
+			$('[data-me-verdict-name]')!.textContent = state.verdictSet ? v.label : 'Not recorded';
+			$('[data-me-verdict-gloss]')!.textContent = state.verdictSet ? v.gloss : '';
+			($('[data-me-verdict]') as HTMLInputElement).value = String(state.verdict);
+			($('[data-me-verdict-unset]') as HTMLInputElement).checked = !state.verdictSet;
+
+			$('[data-me-heart]')!.classList.toggle('me__toggle--on', state.hearted);
+			$('[data-me-revisit]')!.classList.toggle('me__toggle--on', state.revisit);
+			$$('[data-me-price]').forEach((el) =>
+				el.classList.toggle('me__price--on', el.dataset.mePrice === state.price),
+			);
+			$$('[data-me-try-price]').forEach((el) =>
+				el.classList.toggle('me__price--on', el.dataset.meTryPrice === state.tryPrice),
+			);
+
+			const tags = $('[data-me-tags]')!;
+			tags.replaceChildren(
+				...state.tags.map((name, i) => {
+					const chip = document.createElement('span');
+					chip.className = 'me__tag';
+					chip.textContent = name;
+					const x = document.createElement('button');
+					x.type = 'button';
+					x.className = 'me__tag-x';
+					x.textContent = '×';
+					x.setAttribute('aria-label', `Remove ${name}`);
+					x.addEventListener('click', () => {
+						state.tags.splice(i, 1);
+						render();
+					});
+					chip.append(x);
+					return chip;
+				}),
+			);
+
+			const photos = $('[data-me-photos]')!;
+			photos.replaceChildren(
+				...state.photos.map((p, i) => {
+					const cell = document.createElement('span');
+					cell.className = 'me__photo';
+					const img = document.createElement('img');
+					img.src = p.url;
+					img.alt = '';
+					const x = document.createElement('button');
+					x.type = 'button';
+					x.className = 'me__photo-x';
+					x.textContent = '×';
+					x.setAttribute('aria-label', 'Remove photo');
+					x.addEventListener('click', () => {
+						URL.revokeObjectURL(p.url);
+						state.photos.splice(i, 1);
+						render();
+					});
+					cell.append(img, x);
+					return cell;
+				}),
+			);
+
+			const bits: string[] = [];
+			if (state.rating) bits.push(`${state.rating}★`);
+			if (state.verdictSet) bits.push(v.label.toLowerCase());
+			if (state.photos.length) bits.push(`${state.photos.length} photo${state.photos.length === 1 ? '' : 's'}`);
+			$('[data-me-summary]')!.textContent = state.pane === 'try' ? '' : bits.join(' · ');
+
+			const save = $('[data-me-save]') as HTMLButtonElement;
+			save.disabled = state.saving || !canSave();
+		}
+
+		function canSave(): boolean {
+			if (state.pane === 'try') return Boolean(value('[data-me-try-name]'));
+			return Boolean(state.placeId || value('[data-me-place]'));
+		}
+
+		// -- place autocomplete ----------------------------------------------
+		let searchTimer = 0;
+		function searchPlaces(q: string) {
+			window.clearTimeout(searchTimer);
+			const box = $('[data-me-suggest]')!;
+			if (!q) {
+				box.hidden = true;
+				return;
+			}
+			searchTimer = window.setTimeout(async () => {
+				let places: { id: number; name: string; cuisines: string[]; visit_count: number; neighborhood: string | null; city: string }[] = [];
+				try {
+					const res = await fetch(`/api/restaurants/places?q=${encodeURIComponent(q)}`);
+					if (res.ok) places = (await res.json()).places ?? [];
+				} catch {
+					// A failed lookup must not block typing a new place; the "add
+					// as new" row below is always offered regardless.
+				}
+				box.replaceChildren();
+				for (const p of places) {
+					const row = document.createElement('div');
+					row.className = 'me__sug';
+					row.innerHTML = `<span class="me__sug-name"></span><span class="me__sug-meta"></span><span class="me__sug-tail"></span>`;
+					row.querySelector('.me__sug-name')!.textContent = p.name;
+					row.querySelector('.me__sug-meta')!.textContent =
+						`${p.cuisines[0] ?? ''}${p.cuisines[0] ? ' · ' : ''}${p.neighborhood ? `${p.neighborhood}, ${p.city}` : p.city}`;
+					row.querySelector('.me__sug-tail')!.textContent = `${p.visit_count} visit${p.visit_count === 1 ? '' : 's'}`;
+					row.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						state.placeId = p.id;
+						state.locked = {
+							id: p.id,
+							name: p.name,
+							meta: `${p.cuisines[0] ?? ''}${p.cuisines[0] ? ' · ' : ''}${p.neighborhood ? `${p.neighborhood}, ${p.city}` : p.city}`,
+							visits: p.visit_count,
+						};
+						state.revisit = p.visit_count > 0;
+						box.hidden = true;
+						render();
+					});
+					box.append(row);
+				}
+				if (!places.some((p) => p.name.toLowerCase() === q.toLowerCase())) {
+					const row = document.createElement('div');
+					row.className = 'me__sug';
+					row.innerHTML = `<span class="me__sug-name"></span><span class="me__sug-meta">new place</span><span class="me__sug-tail">add</span>`;
+					row.querySelector('.me__sug-name')!.textContent = `“${q}”`;
+					row.addEventListener('mousedown', (e) => {
+						e.preventDefault();
+						state.placeId = null;
+						state.placeName = q;
+						state.locked = { id: 0, name: q, meta: 'new place', visits: 0 };
+						box.hidden = true;
+						render();
+					});
+					box.append(row);
+				}
+				box.hidden = false;
+			}, 160);
+		}
+
+		// -- saving ------------------------------------------------------------
+		async function save() {
+			if (!canSave() || state.saving) return;
+			state.saving = true;
+			render();
+			try {
+				if (state.pane === 'try') return await saveToTry();
+				return await saveVisit();
+			} catch (e) {
+				window.alert(e instanceof Error ? e.message : 'Something went wrong saving that.');
+			} finally {
+				state.saving = false;
+				render();
+			}
+		}
+
+		async function saveToTry() {
+			const where = value('[data-me-try-where]');
+			// "Two Bridges, Manhattan" and plain "Austin" both arrive in one
+			// field, because that is how you say where a place is. The comma
+			// splits neighbourhood from city; without one, it is all city.
+			const [first, ...rest] = where.split(',').map((s) => s.trim()).filter(Boolean);
+			const body = {
+				name: value('[data-me-try-name]'),
+				cuisines: value('[data-me-try-cuisine]') ? [value('[data-me-try-cuisine]')] : [],
+				priceBand: state.tryPrice,
+				neighborhood: rest.length ? first : null,
+				city: rest.length ? rest.join(', ') : first || null,
+				toTryReason: value('[data-me-try-why]'),
+				toTry: true,
+			};
+			const res = await fetch('/api/restaurants/places', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'could not add the place');
+			location.href = '/restaurants/to-try';
+		}
+
+		async function saveVisit() {
+			const friends = value('[data-me-friends]')
+				.split(',')
+				.map((s) => s.trim())
+				.filter(Boolean);
+			const payload = {
+				restaurantId: state.placeId ?? undefined,
+				place: state.placeId
+					? { name: state.locked?.name ?? '', priceBand: state.price }
+					: { name: state.locked?.name || value('[data-me-place]'), priceBand: state.price },
+				visitedOn: value('[data-me-date]') || cfg.fallbackDate,
+				rating: state.rating || null,
+				verdict: state.verdictSet ? state.verdict : null,
+				hearted: state.hearted,
+				revisit: state.revisit,
+				friends,
+				review: value('[data-me-notes]'),
+				tags: state.tags,
+			};
+
+			const url = cfg.visitId ? `/api/restaurants/visits/${cfg.visitId}` : '/api/restaurants/visits';
+			const res = await fetch(url, {
+				method: cfg.visitId ? 'PATCH' : 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload),
+			});
+			if (res.status === 401) {
+				location.href = `/films/login?next=${encodeURIComponent(cfg.redirect)}`;
+				return;
+			}
+			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'could not log that visit');
+			const saved = await res.json();
+			const visitId = cfg.visitId ?? saved.id;
+
+			// Photographs go up after the visit exists, because the storage path
+			// is keyed on its id. A failed upload leaves a logged visit with
+			// fewer photos rather than losing the whole entry.
+			if (state.photos.length > 0) {
+				const form = new FormData();
+				for (const p of state.photos) {
+					form.append('photo', p.file, p.file.name);
+					form.append('width', String(p.width));
+					form.append('height', String(p.height));
+					form.append('caption', '');
+				}
+				const up = await fetch(`/api/restaurants/visits/${visitId}/photos`, { method: 'POST', body: form });
+				if (!up.ok) window.alert('The visit was logged, but the photographs did not upload.');
+			}
+
+			location.href = cfg.redirect;
+		}
+
+		async function remove() {
+			if (!cfg.visitId) return;
+			if (!window.confirm('Delete this visit?')) return;
+			const res = await fetch(`/api/restaurants/visits/${cfg.visitId}`, { method: 'DELETE' });
+			if (!res.ok) {
+				window.alert('Could not delete that visit.');
+				return;
+			}
+			location.href = ($('[data-me-delete]') as HTMLElement).dataset.redirect ?? '/restaurants/diary';
+		}
+
+		// -- wiring -------------------------------------------------------------
+		document.querySelectorAll('[data-open-meal-editor]').forEach((el) =>
+			el.addEventListener('click', () => open('log')),
+		);
+		document.querySelectorAll('[data-open-try-editor]').forEach((el) =>
+			el.addEventListener('click', () => open('try')),
+		);
+		$$('[data-me-close]').forEach((el) => el.addEventListener('click', askClose));
+		$('[data-me-backdrop]')!.addEventListener('click', askClose);
+		$('[data-me-keep]')!.addEventListener('click', () => {
+			$('[data-me-confirm]')!.hidden = true;
+		});
+		$('[data-me-discard]')!.addEventListener('click', close);
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && state.open) askClose();
+		});
+
+		$('[data-me-place]')!.addEventListener('input', (e) => {
+			searchPlaces((e.target as HTMLInputElement).value.trim());
+			render();
+		});
+		$('[data-me-place]')!.addEventListener('blur', () => {
+			window.setTimeout(() => {
+				$('[data-me-suggest]')!.hidden = true;
+			}, 140);
+		});
+		$('[data-me-unlock]')!.addEventListener('click', () => {
+			state.locked = null;
+			state.placeId = null;
+			render();
+			($('[data-me-place]') as HTMLInputElement).focus();
+		});
+
+		$$('[data-me-star]').forEach((el) =>
+			el.addEventListener('click', () => {
+				const n = Number(el.dataset.meStar);
+				state.rating = state.half ? n - 0.5 : n;
+				render();
+			}),
+		);
+		$('[data-me-half]')!.addEventListener('click', () => {
+			state.half = !state.half;
+			if (state.rating) state.rating = state.half ? Math.ceil(state.rating) - 0.5 : Math.ceil(state.rating);
+			render();
+		});
+		$('[data-me-clear-stars]')!.addEventListener('click', () => {
+			state.rating = 0;
+			state.half = false;
+			render();
+		});
+
+		$('[data-me-verdict]')!.addEventListener('input', (e) => {
+			state.verdict = Number((e.target as HTMLInputElement).value);
+			// Touching the slider is the act of recording a verdict; making you
+			// also untick a box would be a second step for one decision.
+			state.verdictSet = true;
+			render();
+		});
+		$('[data-me-verdict-unset]')!.addEventListener('change', (e) => {
+			state.verdictSet = !(e.target as HTMLInputElement).checked;
+			render();
+		});
+
+		$('[data-me-heart]')!.addEventListener('click', () => {
+			state.hearted = !state.hearted;
+			render();
+		});
+		$('[data-me-revisit]')!.addEventListener('click', () => {
+			state.revisit = !state.revisit;
+			render();
+		});
+		$$('[data-me-price]').forEach((el) =>
+			el.addEventListener('click', () => {
+				const p = el.dataset.mePrice ?? null;
+				state.price = state.price === p ? null : p;
+				render();
+			}),
+		);
+		$$('[data-me-try-price]').forEach((el) =>
+			el.addEventListener('click', () => {
+				const p = el.dataset.meTryPrice ?? null;
+				state.tryPrice = state.tryPrice === p ? null : p;
+				render();
+			}),
+		);
+
+		$('[data-me-tag-input]')!.addEventListener('keydown', (e) => {
+			const input = e.target as HTMLInputElement;
+			if (e.key !== 'Enter' || !input.value.trim()) return;
+			e.preventDefault();
+			const tag = input.value.trim();
+			if (!state.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) state.tags.push(tag);
+			input.value = '';
+			render();
+		});
+
+		$('[data-me-photo-input]')!.addEventListener('change', async (e) => {
+			const input = e.target as HTMLInputElement;
+			for (const file of Array.from(input.files ?? [])) {
+				const url = URL.createObjectURL(file);
+				// Measured here rather than server-side: the browser has to decode
+				// the image to show the thumbnail anyway, so the dimensions the
+				// mixed-orientation grid needs are already paid for.
+				const { width, height } = await measure(url);
+				state.photos.push({ file, url, width, height });
+			}
+			input.value = '';
+			render();
+		});
+
+		$('[data-me-save]')!.addEventListener('click', save);
+		$('[data-me-delete]')?.addEventListener('click', remove);
+		$$('[data-me-try-name], [data-me-notes], [data-me-friends]').forEach((el) =>
+			el.addEventListener('input', render),
+		);
+
+		function measure(url: string): Promise<{ width: number; height: number }> {
+			return new Promise((resolve) => {
+				const img = new Image();
+				img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+				img.onerror = () => resolve({ width: 0, height: 0 });
+				img.src = url;
+			});
+		}
+
+		// Seed from the server: an edit opens on the stored visit, and a fresh
+		// log opens on today.
+		($('[data-me-date]') as HTMLInputElement).value = cfg.initial?.visitedOn ?? cfg.fallbackDate;
+		if (cfg.initial) {
+			($('[data-me-notes]') as HTMLTextAreaElement).value = cfg.initial.review;
+			($('[data-me-friends]') as HTMLInputElement).value = cfg.initial.friends.join(', ');
+		}
+		render();
+	}
+</script>
+
+<style>
+	.me {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		padding: clamp(12px, 4vh, 44px) 14px;
+		overflow: auto;
+	}
+	.me[hidden] {
+		display: none;
+	}
+	.me__backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(47, 30, 18, 0.58);
+	}
+	.me__sheet {
+		position: relative;
+		width: 100%;
+		max-width: 620px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		box-shadow: 0 20px 48px rgba(47, 30, 18, 0.36);
+	}
+	.me__bar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 15px 20px;
+		border-bottom: 1px solid var(--rule);
+		background: var(--panel);
+	}
+	.me__title {
+		font-family: var(--display);
+		font-size: 19px;
+		color: var(--ink);
+	}
+	.me__x {
+		width: 28px;
+		height: 28px;
+		border: 1px solid var(--rule);
+		background: var(--card);
+		color: var(--ink-2);
+		font-size: 14px;
+		line-height: 1;
+		cursor: pointer;
+	}
+	.me__x:hover {
+		border-color: var(--terracotta);
+		color: var(--terracotta-deep);
+	}
+
+	.me__confirm {
+		position: absolute;
+		inset: 0;
+		background: rgba(247, 238, 217, 0.94);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 24px;
+		z-index: 20;
+	}
+	.me__confirm[hidden] {
+		display: none;
+	}
+	.me__confirm-box {
+		width: 100%;
+		max-width: 320px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		padding: 20px;
+		text-align: center;
+	}
+	.me__confirm-title {
+		font-family: var(--display);
+		font-size: 17px;
+	}
+	.me__confirm-actions {
+		margin-top: 16px;
+		display: flex;
+		gap: 9px;
+		justify-content: center;
+	}
+	.me__danger {
+		border: none;
+		background: var(--terracotta);
+		color: var(--card);
+		font-size: 12.5px;
+		font-weight: 700;
+		padding: 8px 15px;
+		cursor: pointer;
+	}
+
+	.me__body {
+		padding: 18px 20px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		max-height: calc(100vh - 190px);
+		overflow: auto;
+	}
+	.me__body[hidden] {
+		display: none;
+	}
+	.me__field {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+	}
+	.me__field--rel {
+		position: relative;
+	}
+	.me__grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+		gap: 14px;
+	}
+	.me__input,
+	.me__textarea {
+		width: 100%;
+		background: var(--ground);
+		border: 1px solid var(--rule);
+		padding: 9px 11px;
+		font-size: 13.5px;
+		color: var(--ink);
+		font-family: var(--ui);
+	}
+	.me__input[hidden] {
+		display: none;
+	}
+	.me__input--mono {
+		font-family: var(--mono);
+	}
+	.me__input--prose {
+		font-family: var(--prose);
+		font-size: 14px;
+	}
+	.me__textarea {
+		font-family: var(--prose);
+		font-size: 14px;
+		line-height: 1.5;
+		resize: vertical;
+	}
+	.me__locked {
+		display: flex;
+		align-items: center;
+		gap: 6px 10px;
+		flex-wrap: wrap;
+		background: var(--sunk);
+		border: 1px solid var(--rule);
+		padding: 9px 11px;
+	}
+	.me__locked[hidden] {
+		display: none;
+	}
+	.me__locked-name {
+		font-size: 14.5px;
+		font-weight: 600;
+	}
+	.me__locked-meta {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.me__change {
+		margin-left: auto;
+		padding: 5px 10px;
+		font-size: 11.5px;
+	}
+	.me__suggest {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 100%;
+		margin-top: 4px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		box-shadow: 0 12px 26px rgba(47, 30, 18, 0.24);
+		z-index: 10;
+	}
+	.me__suggest[hidden] {
+		display: none;
+	}
+	.me__sug {
+		display: flex;
+		align-items: baseline;
+		gap: 4px 9px;
+		flex-wrap: wrap;
+		padding: 9px 11px;
+		border-bottom: 1px solid var(--rule-4);
+		cursor: pointer;
+	}
+	.me__sug:hover {
+		background: var(--sunk);
+	}
+	.me__sug-name {
+		font-size: 13.5px;
+		font-weight: 600;
+	}
+	.me__sug-meta {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+	.me__sug-tail {
+		margin-left: auto;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
+	}
+
+	.me__stars {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.me__star {
+		border: none;
+		background: none;
+		font-size: 22px;
+		line-height: 1;
+		padding: 0;
+		color: #dbc7a2;
+		cursor: pointer;
+	}
+	.me__star--on {
+		color: var(--marigold);
+	}
+	.me__half {
+		border: 1px solid var(--rule);
+		background: var(--ground);
+		color: var(--ink-2);
+		font-size: 12px;
+		padding: 3px 8px;
+		cursor: pointer;
+	}
+	.me__clear {
+		margin-left: auto;
+		border: none;
+		background: none;
+		color: var(--ink-3);
+		font-size: 11.5px;
+		cursor: pointer;
+		text-decoration: underline;
+	}
+
+	.me__verdict {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.me__needle {
+		flex: none;
+	}
+	.me__range {
+		flex: 1;
+		min-width: 0;
+		accent-color: var(--terracotta);
+		height: 20px;
+		cursor: pointer;
+	}
+	.me__verdict-name {
+		flex: 0 1 132px;
+		min-width: 70px;
+		font-size: 13px;
+		text-align: right;
+		text-wrap: pretty;
+	}
+	.me__gloss {
+		margin: 0;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 13px;
+		color: var(--ink-3);
+		min-height: 1em;
+	}
+	.me__unset {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 12px;
+		color: var(--ink-3);
+		cursor: pointer;
+	}
+
+	.me__toggles {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.me__toggle {
+		border: 1px solid var(--rule);
+		background: none;
+		color: var(--ink-soft);
+		font-size: 12.5px;
+		font-weight: 600;
+		padding: 8px 13px;
+		cursor: pointer;
+	}
+	.me__toggle--heart {
+		border-color: var(--terracotta);
+		color: var(--terracotta-deep);
+	}
+	.me__toggle--on {
+		background: var(--ink);
+		color: var(--ground);
+		border-color: var(--ink);
+	}
+	.me__toggle--heart.me__toggle--on {
+		background: var(--terracotta);
+		border-color: var(--terracotta);
+		color: var(--card);
+	}
+
+	.me__prices {
+		display: flex;
+		gap: 6px;
+		max-width: 260px;
+	}
+	.me__price {
+		flex: 1;
+		border: 1px solid var(--rule);
+		background: var(--ground);
+		color: var(--ink-soft);
+		font-family: var(--mono);
+		font-size: 12.5px;
+		padding: 8px 0;
+		cursor: pointer;
+	}
+	.me__price--on {
+		background: var(--ink);
+		color: var(--ground);
+		border-color: var(--ink);
+	}
+
+	.me__photos {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
+	.me__photos:empty {
+		display: none;
+	}
+	.me__photo {
+		position: relative;
+		width: 74px;
+		height: 56px;
+	}
+	.me__photo img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+	}
+	.me__photo-x {
+		position: absolute;
+		top: 2px;
+		right: 2px;
+		width: 17px;
+		height: 17px;
+		border: none;
+		background: rgba(36, 24, 18, 0.72);
+		color: var(--ground);
+		font-size: 11px;
+		line-height: 1;
+		cursor: pointer;
+	}
+	.me__addphoto {
+		width: 74px;
+		height: 56px;
+		border: 1px dashed var(--dashed);
+		color: var(--ink-3);
+		font-size: 18px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+	}
+	.me__addphoto:hover {
+		border-color: var(--terracotta);
+		color: var(--terracotta-deep);
+	}
+
+	.me__tags {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+	}
+	.me__tags:empty {
+		display: none;
+	}
+	.me__tag {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		border: 1px solid var(--rule);
+		background: var(--sunk);
+		font-size: 12px;
+		color: var(--ink-soft);
+		padding: 4px 9px;
+	}
+	.me__tag-x {
+		border: none;
+		background: none;
+		color: var(--ink-3);
+		font-size: 12px;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.me__foot {
+		display: flex;
+		align-items: center;
+		gap: 8px 10px;
+		flex-wrap: wrap;
+		padding: 14px 20px;
+		border-top: 1px solid var(--rule);
+		background: var(--panel);
+	}
+	.me__summary {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.me__cancel {
+		margin-left: auto;
+		font-size: 13px;
+		font-weight: 600;
+		padding: 9px 17px;
+	}
+	.me__delete {
+		border: none;
+		background: none;
+		color: var(--chile);
+		font-size: 12.5px;
+		cursor: pointer;
+		text-decoration: underline;
+	}
+	.me__save {
+		border: none;
+		background: var(--terracotta);
+		color: var(--card);
+		font-size: 13px;
+		font-weight: 700;
+		padding: 9px 19px;
+		cursor: pointer;
+	}
+	.me__save:disabled {
+		background: var(--disabled);
+		color: var(--ink-4);
+		cursor: not-allowed;
+	}
+</style>
