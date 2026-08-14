@@ -36,3 +36,6 @@ scripts/.cache/
 
 .vercel
 .env*
+
+# enrichment source cache — re-downloadable, never committed
+.cache/
