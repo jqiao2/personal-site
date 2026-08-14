@@ -972,16 +972,36 @@ const config = {
 			// Photographs go up after the visit exists, because the storage path
 			// is keyed on its id. A failed upload leaves a logged visit with
 			// fewer photos rather than losing the whole entry.
-			if (state.photos.length > 0) {
+			//
+			// ONE REQUEST PER PHOTOGRAPH. Vercel caps a serverless request body
+			// at 4.5 MB and enforces it in the platform, before the function is
+			// entered — so the endpoint's own limit never sees an oversized body
+			// and the browser gets a 413 it cannot explain. Batching four photos
+			// into one request trips that cap on the sum, which is how three
+			// perfectly acceptable photos fail because of a fourth.
+			const failures: string[] = [];
+			for (const p of state.photos) {
 				const form = new FormData();
-				for (const p of state.photos) {
-					form.append('photo', p.file, p.file.name);
-					form.append('width', String(p.width));
-					form.append('height', String(p.height));
-					form.append('caption', '');
+				form.append('photo', p.file, p.file.name);
+				form.append('width', String(p.width));
+				form.append('height', String(p.height));
+				form.append('caption', '');
+				try {
+					const up = await fetch(`/api/restaurants/visits/${visitId}/photos`, { method: 'POST', body: form });
+					if (!up.ok) {
+						// A 413 comes from the platform as HTML, not from the
+						// endpoint as JSON, so it is named here rather than parsed.
+						const body = up.status === 413 ? null : await up.json().catch(() => null);
+						failures.push(body?.error ?? (up.status === 413 ? 'it was too large to send' : `HTTP ${up.status}`));
+					}
+				} catch {
+					failures.push('the upload did not complete');
 				}
-				const up = await fetch(`/api/restaurants/visits/${visitId}/photos`, { method: 'POST', body: form });
-				if (!up.ok) window.alert('The visit was logged, but the photographs did not upload.');
+			}
+			if (failures.length > 0) {
+				window.alert(
+					`The visit was saved, but ${failures.length} photograph${failures.length === 1 ? '' : 's'} did not upload: ${failures[0]}.`,
+				);
 			}
 
 			location.href = cfg.redirect;
@@ -1123,12 +1143,7 @@ const config = {
 		$('[data-me-photo-input]')!.addEventListener('change', async (e) => {
 			const input = e.target as HTMLInputElement;
 			for (const file of Array.from(input.files ?? [])) {
-				const url = URL.createObjectURL(file);
-				// Measured here rather than server-side: the browser has to decode
-				// the image to show the thumbnail anyway, so the dimensions the
-				// mixed-orientation grid needs are already paid for.
-				const { width, height } = await measure(url);
-				state.photos.push({ file, url, width, height });
+				state.photos.push(await prepare(file));
 			}
 			input.value = '';
 			render();
@@ -1159,13 +1174,68 @@ const config = {
 			}),
 		);
 
-		function measure(url: string): Promise<{ width: number; height: number }> {
-			return new Promise((resolve) => {
-				const img = new Image();
-				img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
-				img.onerror = () => resolve({ width: 0, height: 0 });
-				img.src = url;
-			});
+		// -- photographs --------------------------------------------------------
+		//
+		// A photograph is decoded, measured and shrunk here, in the browser,
+		// before it is ever sent.
+		//
+		// MEASURED here because the mixed-orientation wall needs each photo's
+		// aspect ratio and the browser has to decode the image to show the
+		// thumbnail anyway — measuring it again on the server would mean
+		// decoding every upload twice.
+		//
+		// SHRUNK here because a phone photograph does not fit through the door.
+		// A modern iPhone writes 5–12 MB per frame; Vercel refuses a serverless
+		// request body over 4.5 MB with a platform-level 413, so the full-size
+		// original could never reach the endpoint no matter what the endpoint
+		// permitted. Nothing on the site renders a photo taller than ~520 CSS
+		// pixels, so a 2200 px long edge is already more than is displayed.
+		/** Long edge, in pixels, of a stored photograph. */
+		const MAX_EDGE = 2200;
+		/** Re-encode anything above this, even when its dimensions are fine. */
+		const REENCODE_OVER = 3 * 1024 * 1024;
+
+		async function prepare(file: File): Promise<PendingPhoto> {
+			// `from-image` so a portrait held sideways is stored the way up it
+			// was taken: the EXIF rotation a phone records is applied to the
+			// pixels here, and canvas would otherwise drop it on re-encoding.
+			let bitmap: ImageBitmap | null = null;
+			try {
+				bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+			} catch {
+				// A format this browser cannot decode still goes up as it arrived,
+				// unmeasured. Refusing it here would be guessing on the server's
+				// behalf about what it can store.
+				return { file, url: URL.createObjectURL(file), width: 0, height: 0 };
+			}
+
+			const { width, height } = bitmap;
+			const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+			// Small enough already: keep the file the camera wrote rather than
+			// paying a second lossy encode for nothing.
+			if (scale === 1 && file.size <= REENCODE_OVER) {
+				bitmap.close();
+				return { file, url: URL.createObjectURL(file), width, height };
+			}
+
+			const w = Math.round(width * scale);
+			const h = Math.round(height * scale);
+			const canvas = document.createElement('canvas');
+			canvas.width = w;
+			canvas.height = h;
+			canvas.getContext('2d')?.drawImage(bitmap, 0, 0, w, h);
+			bitmap.close();
+			const blob = await new Promise<Blob | null>((resolve) =>
+				canvas.toBlob(resolve, 'image/jpeg', 0.82),
+			);
+			if (!blob) return { file, url: URL.createObjectURL(file), width, height };
+
+			// The extension has to follow the re-encode: the server derives the
+			// stored object's name from this one, and a JPEG called .heic would
+			// be served with the wrong type for the rest of its life.
+			const name = `${file.name.replace(/\.[^.]+$/, '') || 'photo'}.jpg`;
+			const shrunk = new File([blob], name, { type: 'image/jpeg' });
+			return { file: shrunk, url: URL.createObjectURL(shrunk), width: w, height: h };
 		}
 
 		// Seed from the server: an edit opens on the stored visit, and a fresh
