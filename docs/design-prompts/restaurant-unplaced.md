@@ -47,7 +47,22 @@ Work in `Jason's Restaurant Log.dc.html` — the nine-screen file. Not
   and show why.
 - **The dialog** should become a third option on the existing `dialog` enum
   (`Closed` / `Log meal` / `Add to to-try`), so it is reachable from the props
-  panel the same way the other two are.
+  panel the same way the other two are. **Inherit the chrome exactly**, because
+  both existing dialogs share it: max-width 520px (the Log meal one is wider),
+  `#fdf7e8` panel on a full `#2f1e12` border, header bar in `#efe1c3` with an
+  Ultra 19px title and a 28px square × on the right, body at `18px 20px` with
+  15px gaps between fields, and a footer in `#efe1c3` carrying a truncating
+  mono summary line on the left, then Cancel, then the primary button whose
+  colours come from a `saveBg`/`saveFg` pair so the disabled state is a real
+  state. Backdrop click and × both go through `askClose`, which checks
+  `dirty()` and raises the centred **Discard?** card (Keep / Discard) rather
+  than throwing work away. Saving closes and calls `flash(…)` — the bottom
+  toast, `#2f1e12` on `#f7eed9`, gone after 3.2s. A panel that skips any of
+  this will read as imported from another section.
+- **The Add to to-try dialog is already the form the confirming step wants**:
+  Place / Where (`Two Bridges, Manhattan`) / Cuisine (`Cantonese`) / Price as
+  four `$` buttons / Why in Newsreader. Whatever a confirm asks for should look
+  like that, not like a new invention.
 - **The greyed-link idiom already exists** in the header's link row: Google
   Maps, Website and Beli render as links, Yelp renders in `#bda98a` with
   `title="No Yelp link on record"`. That is the file's existing vocabulary for
@@ -70,6 +85,21 @@ Work in `Jason's Restaurant Log.dc.html` — the nine-screen file. Not
   **Ba Xuyên** under *Dyker Heights*, and the file says *Sunset Park, Brooklyn*
   — which is what anyone who goes there says. The geocode is a suggestion; the
   field is the record.
+
+## The house rule this feature is a test of
+
+The spec sheet states it about the tile, and it is the standard to hold this
+panel to: a restaurant has no canonical image, so the tile's top band is a
+slot — a photograph when one exists, and a **set plate** (price band at 34px
+Ultra over ruled paper, cuisine in small caps) when one doesn't. Same card,
+same height, same density either way, so *"the photoless case is the designed
+case rather than the degraded one."*
+
+Note what that fallback assumes, though: it sets the **price and the cuisine**,
+and an unplaced place has neither. The section's existing answer to missing
+data quietly runs out exactly where this feature starts, which is the argument
+for designing this state rather than letting it be the absence of the other
+one.
 
 ## How the book page does it, exactly
 
@@ -196,10 +226,11 @@ Short paragraphs, not essays. These are the ones I don't want defaulted:
 
 4. **What the confirming step asks for.** The book asks two fields (shown as,
    author) and states what stays underneath as the identifier. The restaurant
-   equivalent is at most name / where / cuisine, and OSM has opinions about all
-   three. Decide which are pre-filled, which are blank, and what the
-   "underneath" note says here — a restaurant has no filename, so what is the
-   evidence line?
+   equivalent is the Add to to-try dialog's own field set — Place, Where,
+   Cuisine, Price — and OSM has an opinion about the first three. Decide which
+   are pre-filled from the hit, which stay blank, and what the "underneath"
+   note says here: a restaurant has no Kindle filename, so what is the evidence
+   line? The name as typed into the importer is the closest thing on record.
 
 5. **The area-only hit.** A hit with `precise: false` fills the words and not
    the point. Say how the row is marked in the list, and what the page looks
