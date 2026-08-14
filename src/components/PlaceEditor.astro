@@ -236,6 +236,9 @@ const config = {
 	} from '../lib/plus-code';
 
 	interface GeoHit {
+		/** Which body said so. Absent means the live geocoder. */
+		source?: string;
+		sourceLabel?: string;
 		name: string;
 		display: string;
 		lat: number;
@@ -361,9 +364,47 @@ const config = {
 				let hits: GeoHit[] = [];
 				let reachable = true;
 				try {
-					const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
-					if (res.ok) hits = ((await res.json()).hits ?? []) as GeoHit[];
-					else reachable = res.status !== 502;
+					// The imported gazetteer answers first and offline; the live
+					// geocoder still runs, because it knows everywhere that is not
+					// New York. Both are labelled, because a place page is exactly
+					// where you want to know whether the point came from the health
+					// department or from whoever last edited the map.
+					const [local, geo] = await Promise.all([
+						fetch(`/api/restaurants/gazetteer?q=${encodeURIComponent(name)}`)
+							.then((r) => (r.ok ? r.json() : { hits: [] }))
+							.catch(() => ({ hits: [] })),
+						fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`)
+							.then((r) => (r.ok ? r : Promise.reject(new Error(String(r.status)))))
+							.then((r) => r.json())
+							.catch((e) => {
+								if (String(e.message) !== '502') reachable = false;
+								return { hits: [] };
+							}),
+					]);
+					const mine: GeoHit[] = (local.hits ?? []).map((h: Record<string, unknown>) => ({
+						source: h.source as string,
+						sourceLabel: h.sourceLabel as string,
+						name: h.name as string,
+						display: [h.name, h.address, h.locality].filter(Boolean).join(', '),
+						lat: h.lat as number,
+						lng: h.lng as number,
+						neighborhood: (h.locality as string) ?? null,
+						city: (h.city as string) ?? null,
+						stateRegion: (h.region as string) ?? null,
+						country: (h.country as string) ?? null,
+						kind: null,
+						cuisines: (h.cuisines as string[]) ?? [],
+						address: (h.address as string) ?? '',
+						precise: true,
+					}));
+					const geoHits: GeoHit[] = ((geo.hits ?? []) as GeoHit[]).map((h) => ({
+						...h,
+						source: 'osm',
+						sourceLabel: 'OpenStreetMap',
+					}));
+					if (mine.length > 0) reachable = true;
+					const seen = new Set(mine.map((h) => h.name.toLowerCase()));
+					hits = [...mine, ...geoHits.filter((h) => !seen.has(h.name.toLowerCase()))];
 				} catch {
 					reachable = false;
 				}
@@ -535,7 +576,7 @@ const config = {
 				const meta = state.searching
 					? 'Looking…'
 					: state.hits.length
-						? `${state.hits.length} results from OpenStreetMap. It searches names, so the where field is what separates the first two.`
+						? `${state.hits.length} results, from ${[...new Set(state.hits.map((h) => h.sourceLabel ?? 'OpenStreetMap'))].join(' and ')}. They search names, so the where field is what separates the first two.`
 						: '';
 				$('[data-pe-result-meta]').textContent = meta;
 				renderHits();
@@ -546,7 +587,7 @@ const config = {
 				$('[data-pe-picked-name]').textContent = h.name || cfg.name;
 				$('[data-pe-picked-line]').textContent = h.address || h.display;
 				const tail = $('[data-pe-picked-tail]');
-				tail.textContent = h.precise ? (h.kind ?? 'exact point') : 'no exact point';
+				tail.textContent = h.precise ? (h.sourceLabel ?? 'OpenStreetMap') : 'no exact point';
 				tail.classList.toggle('pe__picked-tail--area', !h.precise);
 				show('[data-pe-area-warn]', !h.precise);
 				show('[data-pe-point]', h.precise);
@@ -599,12 +640,15 @@ const config = {
 				name.textContent = hit.name || hit.display.split(',')[0];
 				const meta = document.createElement('span');
 				meta.className = 'pe__hit-meta';
-				meta.textContent = [hit.cuisines.length ? `${hit.kind} · ${hit.cuisines[0]}` : hit.kind, hit.address]
-					.filter(Boolean)
-					.join(' · ');
+				// An imported row has a cuisine and no OSM "kind"; a geocoded one
+				// often has the kind and nothing else. Build the line from what is
+				// actually there rather than assuming both.
+				meta.textContent = [hit.kind, hit.cuisines[0], hit.address].filter(Boolean).join(' · ');
 				const tail = document.createElement('span');
 				tail.className = hit.precise ? 'pe__hit-tail' : 'pe__hit-tail pe__hit-tail--area';
-				tail.textContent = hit.precise ? (hit.kind ?? 'exact point') : 'no exact point';
+				// Who said so, except when the more urgent thing to say is that
+				// this one is an area and will not place the restaurant.
+				tail.textContent = hit.precise ? (hit.sourceLabel ?? 'OpenStreetMap') : 'no exact point';
 				row.append(name, meta, tail);
 				row.addEventListener('click', () => pick(hit));
 				box.append(row);

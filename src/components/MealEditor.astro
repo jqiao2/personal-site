@@ -359,6 +359,9 @@ const config = {
 		trip?: boolean;
 	}
 	interface GeoHit {
+		/** Which body said so. Absent means the live geocoder. */
+		source?: string;
+		sourceLabel?: string;
 		name: string;
 		display: string;
 		lat: number;
@@ -717,13 +720,51 @@ const config = {
 			const hint = value('[data-me-try-where]');
 			const q = hint ? `${name}, ${hint}` : name;
 			geoTimer = window.setTimeout(async () => {
+				// OUR OWN COPIES FIRST, and not only because they are faster. The
+				// imported gazetteer has the places this city is actually made of
+				// — every permitted kitchen in the five boroughs — where the live
+				// geocoder has whatever a mapper got round to. The geocoder still
+				// runs, because it covers everywhere that is not New York.
 				let hits: GeoHit[] = [];
 				try {
-					const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
-					if (res.ok) hits = (await res.json()).hits ?? [];
+					const [local, geo] = await Promise.all([
+						fetch(`/api/restaurants/gazetteer?q=${encodeURIComponent(name)}`)
+							.then((r) => (r.ok ? r.json() : { hits: [] }))
+							.catch(() => ({ hits: [] })),
+						fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`)
+							.then((r) => (r.ok ? r.json() : { hits: [] }))
+							.catch(() => ({ hits: [] })),
+					]);
+					const mine: GeoHit[] = (local.hits ?? []).map((h: Record<string, unknown>) => ({
+						source: h.source as string,
+						sourceLabel: h.sourceLabel as string,
+						name: h.name as string,
+						display: [h.name, h.address, h.locality].filter(Boolean).join(', '),
+						lat: h.lat as number,
+						lng: h.lng as number,
+						neighborhood: (h.locality as string) ?? null,
+						city: (h.city as string) ?? null,
+						stateRegion: (h.region as string) ?? null,
+						country: (h.country as string) ?? null,
+						kind: null,
+						cuisines: (h.cuisines as string[]) ?? [],
+						address: (h.address as string) ?? '',
+						// An imported row is a point on a building, which is the
+						// thing `precise` exists to distinguish.
+						precise: true,
+					}));
+					const geoHits: GeoHit[] = (geo.hits ?? []).map((h: GeoHit) => ({
+						...h,
+						source: 'osm',
+						sourceLabel: 'OpenStreetMap',
+					}));
+					// Same place from two sources is one row: ours wins, because it
+					// is the one with the health department's geocode on it.
+					const seen = new Set(mine.map((h) => h.name.toLowerCase()));
+					hits = [...mine, ...geoHits.filter((h) => !seen.has(h.name.toLowerCase()))];
 				} catch {
-					// A geocoder being unreachable must never block adding a place;
-					// it just means this one goes on the list unplaced.
+					// Both unreachable must never block adding a place; it just
+					// means this one goes on the list unplaced.
 				}
 				box.replaceChildren();
 				if (hits.length === 0) {
@@ -758,7 +799,13 @@ const config = {
 					]
 						.filter(Boolean)
 						.join(' · ');
-					row.append(name, meta);
+					// WHO SAID SO, on every row. Two sources disagree about a
+					// Chinatown noodle shop more often than they agree, and the
+					// only way to choose between them is to know who is speaking.
+					const tail = document.createElement('span');
+					tail.className = 'me__sug-tail';
+					tail.textContent = hit.sourceLabel ?? 'OpenStreetMap';
+					row.append(name, meta, tail);
 					row.addEventListener('mousedown', (e) => {
 						e.preventDefault();
 						pick(hit);
