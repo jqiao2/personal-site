@@ -127,18 +127,25 @@ const config = {
 					<div class="pe__note">Saved as the record. The place stays off the map until it has a point.</div>
 				</div>
 				<div class="pe__field">
-					<label class="rl-label" for="pe-paste">Or paste a link or a pair of coordinates</label>
+					<label class="rl-label" for="pe-paste">Or paste a plus code, a link, or coordinates</label>
 					<input
 						class="pe__input pe__input--mono"
 						id="pe-paste"
 						data-pe-paste
 						type="text"
 						autocomplete="off"
-						placeholder="maps.app.goo.gl/…  or  40.72174, -73.95809"
+						placeholder="Q2MM+2C Brooklyn  ·  40.72174, -73.95809  ·  maps.app.goo.gl/…"
 					/>
 					<div class="pe__note" data-pe-paste-note>
-						A link is read for its coordinates and nothing else. Anything it fills in stays editable.
+						A plus code places it exactly; Google shows one on the place page. A share link usually
+						carries only an address.
 					</div>
+					{/* The one thing left to try with an address: hand it to the
+					    geocoder. It often finds the street and not the door, which
+					    is why it is offered rather than done. */}
+					<button type="button" class="pe__linkish" data-pe-try-address hidden>
+						look that address up in OpenStreetMap
+					</button>
 				</div>
 				<button type="button" class="pe__linkish" data-pe-back-to-search hidden>
 					search OpenStreetMap instead
@@ -221,6 +228,13 @@ const config = {
 </div>
 
 <script>
+	import {
+		decodePlusCode,
+		findPlusCode,
+		isFullPlusCode,
+		recoverPlusCode,
+	} from '../lib/plus-code';
+
 	interface GeoHit {
 		name: string;
 		display: string;
@@ -270,6 +284,7 @@ const config = {
 			paste: '',
 			coords: null as { lat: number; lng: number } | null,
 			pasteNote: '',
+			linkAddress: '',
 		};
 
 		const $ = <T extends HTMLElement>(sel: string) => node.querySelector<T>(sel)!;
@@ -292,6 +307,7 @@ const config = {
 			state.paste = '';
 			state.coords = null;
 			state.pasteNote = '';
+			state.linkAddress = '';
 			($('[data-pe-q]') as HTMLInputElement).value = cfg.query;
 			($('[data-pe-where]') as HTMLInputElement).value = cfg.where;
 			($('[data-pe-hand-field]') as HTMLInputElement).value = cfg.state === 'unplaced' ? '' : cfg.current;
@@ -407,6 +423,8 @@ const config = {
 				render();
 				return;
 			}
+
+			// A pair of numbers is already the answer.
 			const direct = coordsIn(text);
 			if (direct) {
 				state.coords = direct;
@@ -414,28 +432,91 @@ const config = {
 				render();
 				return;
 			}
+
+			// A plus code IS the coordinates, so it needs nothing and nobody —
+			// unless it is the short form, whose first four characters were
+			// dropped and only mean anything near the locality printed after it.
+			const plus = findPlusCode(text);
+			if (plus) {
+				if (isFullPlusCode(plus.code)) {
+					const point = decodePlusCode(plus.code);
+					if (point) {
+						state.coords = point;
+						state.pasteNote = `Plus code — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`;
+						render();
+						return;
+					}
+				}
+				const near = plus.locality || val('[data-pe-hand-field]') || val('[data-pe-where]') || cfg.current;
+				if (!near) {
+					state.pasteNote = 'A short plus code needs its town after it — “Q2MM+2C Brooklyn”.';
+					render();
+					return;
+				}
+				state.pasteNote = `Looking up ${near}…`;
+				render();
+				pasteTimer = window.setTimeout(() => resolveShortCode(plus.code, near), 400);
+				return;
+			}
+
 			if (!/^https?:\/\//i.test(text)) {
-				state.pasteNote = 'No coordinates in that yet.';
+				state.pasteNote = 'No coordinates, plus code or link in that yet.';
 				render();
 				return;
 			}
 			state.pasteNote = 'Following the link…';
 			render();
-			pasteTimer = window.setTimeout(async () => {
-				try {
-					const res = await fetch(`/api/restaurants/resolve-link?url=${encodeURIComponent(text)}`);
-					const body = await res.json();
-					if (res.ok && body.lat != null && body.lng != null) {
-						state.coords = { lat: body.lat, lng: body.lng };
-						state.pasteNote = `Reads as ${body.lat.toFixed(5)}, ${body.lng.toFixed(5)}.`;
-					} else {
-						state.pasteNote = 'That link has no coordinates in it. Open it and copy the pair instead.';
-					}
-				} catch {
-					state.pasteNote = 'Could not follow that link.';
-				}
+			pasteTimer = window.setTimeout(() => resolveLink(text), 500);
+		}
+
+		/** The locality gives the reference the dropped characters are relative to. */
+		async function resolveShortCode(code: string, near: string) {
+			let ref: GeoHit | undefined;
+			try {
+				const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(near)}`);
+				if (res.ok) ref = ((await res.json()).hits ?? [])[0] as GeoHit | undefined;
+			} catch {
+				// handled below, as "could not"
+			}
+			if (!ref) {
+				state.pasteNote = `Could not find ${near}, so the short code cannot be placed. Paste the full code, or the pair of coordinates.`;
 				render();
-			}, 500);
+				return;
+			}
+			// An imprecise hit is the right kind of reference here: recovery only
+			// needs somewhere within half a degree, and a town centre is that.
+			const full = recoverPlusCode(code, ref.lat, ref.lng);
+			const point = full ? decodePlusCode(full) : null;
+			if (!point) {
+				state.pasteNote = 'That plus code could not be read.';
+				render();
+				return;
+			}
+			state.coords = point;
+			state.pasteNote = `${full} near ${near} — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`;
+			render();
+		}
+
+		async function resolveLink(url: string) {
+			try {
+				const res = await fetch(`/api/restaurants/resolve-link?url=${encodeURIComponent(url)}`);
+				const body = await res.json();
+				if (res.ok && body.lat != null && body.lng != null) {
+					state.coords = { lat: body.lat, lng: body.lng };
+					state.pasteNote = `Reads as ${body.lat.toFixed(5)}, ${body.lng.toFixed(5)}.`;
+				} else if (res.ok && body.address) {
+					// The common case, and the one worth explaining: Google's share
+					// links name the place and its street and keep the point in
+					// their own JavaScript.
+					state.linkAddress = body.address;
+					state.pasteNote = `No point in that link — it names “${body.address}”. Its plus code will place it exactly.`;
+				} else {
+					state.pasteNote = 'That link has nothing in it to place the restaurant by.';
+				}
+			} catch {
+				state.pasteNote = 'Could not follow that link.';
+			}
+			render();
 		}
 
 		// -- render ------------------------------------------------------------
@@ -479,7 +560,9 @@ const config = {
 			}
 
 			$('[data-pe-paste-note]').textContent =
-				state.pasteNote || 'A link is read for its coordinates and nothing else. Anything it fills in stays editable.';
+				state.pasteNote ||
+				'A plus code places it exactly; Google shows one on the place page. A share link usually carries only an address.';
+			show('[data-pe-try-address]', !!state.linkAddress && !state.coords);
 
 			// The footer says what saving will do, and the two outcomes are
 			// genuinely different: one puts the place on the map, one does not.
@@ -623,6 +706,13 @@ const config = {
 		$('[data-pe-hand]').addEventListener('click', () => {
 			state.mode = 'hand';
 			render();
+		});
+		$('[data-pe-try-address]').addEventListener('click', () => {
+			($('[data-pe-q]') as HTMLInputElement).value = state.linkAddress;
+			($('[data-pe-where]') as HTMLInputElement).value = '';
+			state.mode = 'search';
+			render();
+			lookup();
 		});
 		$('[data-pe-back-to-search]').addEventListener('click', () => {
 			state.mode = 'search';
