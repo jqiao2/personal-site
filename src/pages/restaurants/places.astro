@@ -138,9 +138,9 @@ const sorts: { key: PlaceSort; label: string }[] = [
 
 		<!-- The filter bar reads identically in both views; only the thing under
 		     it changes. -->
-		<div class="filters">
-			<div class="filters__row">
-				<span class="filters__legend">Cuisine</span>
+		<div class="rl-filters">
+			<div class="rl-filters__row">
+				<span class="rl-filters__legend">Cuisine</span>
 				{
 					head.map((c) => (
 						<a
@@ -155,9 +155,9 @@ const sorts: { key: PlaceSort; label: string }[] = [
 				}
 				{
 					tail.length > 0 && (
-						<details class="more">
+						<details class="rl-more">
 							<summary class="rl-chip rl-chip--more">{tail.length} more</summary>
-							<div class="more__panel">
+							<div class="rl-more__panel">
 								{tail.map((c) => (
 									<a
 										class="rl-chip"
@@ -174,8 +174,8 @@ const sorts: { key: PlaceSort; label: string }[] = [
 				}
 			</div>
 
-			<div class="filters__row filters__row--split">
-				<span class="filters__legend">Price</span>
+			<div class="rl-filters__row rl-filters__row--split">
+				<span class="rl-filters__legend">Price</span>
 				{
 					PRICE_BANDS.map((p) => (
 						<a
@@ -188,13 +188,13 @@ const sorts: { key: PlaceSort; label: string }[] = [
 					))
 				}
 
-				<span class="filters__legend filters__legend--gap">Verdict</span>
-				<details class="more">
+				<span class="rl-filters__legend rl-filters__legend--gap">Verdict</span>
+				<details class="rl-more">
 					<summary class="rl-chip" aria-pressed={verdictAtLeast != null ? 'true' : 'false'}>
 						<VerdictMark verdict={verdictAtLeast} size={15} />
 						{verdictAtLeast == null ? 'Any' : thresholdLabel(verdictAtLeast)}
 					</summary>
-					<div class="more__panel more__panel--col">
+					<div class="rl-more__panel rl-more__panel--col">
 						<a class="rl-chip" href={href({ verdict: null })}>Any verdict</a>
 						{
 							VERDICTS.map((v) => (
@@ -211,8 +211,8 @@ const sorts: { key: PlaceSort; label: string }[] = [
 					</div>
 				</details>
 
-				<span class="filters__sorts">
-					<span class="filters__legend">Sort</span>
+				<span class="rl-filters__sorts">
+					<span class="rl-filters__legend">Sort</span>
 					{
 						sorts.map((s) => (
 							<a class="rl-chip" href={href({ sort: s.key })} aria-pressed={sort === s.key ? 'true' : 'false'}>
@@ -225,14 +225,14 @@ const sorts: { key: PlaceSort; label: string }[] = [
 
 			{
 				activeFilters.length > 0 && (
-					<div class="filters__row filters__row--active">
-						<span class="filters__legend">Active</span>
+					<div class="rl-filters__row rl-filters__row--active">
+						<span class="rl-filters__legend">Active</span>
 						{activeFilters.map((f) => (
 							<a class="rl-chip" href={f.href} aria-pressed="true">
-								{f.label} <span class="filters__x">×</span>
+								{f.label} <span class="rl-filters__x">×</span>
 							</a>
 						))}
-						<a class="filters__clear" href="/restaurants/places">Clear all</a>
+						<a class="rl-filters__clear" href="/restaurants/places">Clear all</a>
 					</div>
 				)
 			}
@@ -325,86 +325,6 @@ const sorts: { key: PlaceSort; label: string }[] = [
 		color: var(--ground);
 	}
 
-	.filters {
-		margin-top: 14px;
-		background: var(--panel);
-		border: 1px solid var(--rule);
-		padding: 12px 14px;
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-	.filters__row {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex-wrap: wrap;
-	}
-	.filters__row--split,
-	.filters__row--active {
-		border-top: 1px solid var(--rule-2);
-		padding-top: 10px;
-	}
-	.filters__legend {
-		font-size: 10.5px;
-		font-weight: 700;
-		letter-spacing: 1.4px;
-		text-transform: uppercase;
-		color: var(--ink-3);
-		flex: none;
-	}
-	.filters__row:first-child .filters__legend {
-		width: 74px;
-	}
-	.filters__legend--gap {
-		margin-left: 12px;
-	}
-	.filters__sorts {
-		margin-left: auto;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex-wrap: wrap;
-	}
-	.filters__x {
-		opacity: 0.6;
-	}
-	.filters__clear {
-		font-size: 12px;
-		text-decoration: underline;
-	}
-
-	.more {
-		position: relative;
-	}
-	.more summary {
-		list-style: none;
-	}
-	.more summary::-webkit-details-marker {
-		display: none;
-	}
-	.more__panel {
-		position: absolute;
-		z-index: 20;
-		top: calc(100% + 4px);
-		left: 0;
-		width: max-content;
-		max-width: min(420px, 80vw);
-		max-height: 320px;
-		overflow: auto;
-		background: var(--card);
-		border: 1px solid var(--ink);
-		box-shadow: 0 12px 26px rgba(47, 30, 18, 0.24);
-		padding: 10px;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px;
-	}
-	.more__panel--col {
-		flex-direction: column;
-		flex-wrap: nowrap;
-	}
-
 	.group {
 		margin-top: 30px;
 	}
@@ -485,10 +405,6 @@ const sorts: { key: PlaceSort; label: string }[] = [
 	@media (max-width: 560px) {
 		.row__visits {
 			margin-left: 0;
-		}
-		.filters__sorts {
-			margin-left: 0;
-			width: 100%;
 		}
 	}
 </style>

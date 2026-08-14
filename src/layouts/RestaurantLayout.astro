@@ -242,6 +242,98 @@ const nav = siteNav(pathname);
 				max-width: calc(100vw - 28px);
 			}
 
+			/* --- The filter bar --------------------------------------------
+			   Shared by the two lists — Restaurants and To try — which read
+			   the same query string and differ only in which rows they draw.
+			   Global for the reason the rest of this sheet is: two copies of
+			   it would be one copy by the second edit. */
+			.rl-filters {
+			margin-top: 14px;
+			background: var(--panel);
+			border: 1px solid var(--rule);
+			padding: 12px 14px;
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			}
+			.rl-filters__row {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+			}
+			.rl-filters__row--split,
+			.rl-filters__row--active {
+			border-top: 1px solid var(--rule-2);
+			padding-top: 10px;
+			}
+			.rl-filters__legend {
+			font-size: 10.5px;
+			font-weight: 700;
+			letter-spacing: 1.4px;
+			text-transform: uppercase;
+			color: var(--ink-3);
+			flex: none;
+			}
+			.rl-filters__row:first-child .rl-filters__legend {
+			width: 74px;
+			}
+			.rl-filters__legend--gap {
+			margin-left: 12px;
+			}
+			.rl-filters__sorts {
+			margin-left: auto;
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			flex-wrap: wrap;
+			}
+			.rl-filters__x {
+			opacity: 0.6;
+			}
+			.rl-filters__clear {
+			font-size: 12px;
+			text-decoration: underline;
+			}
+
+			.rl-more {
+			position: relative;
+			}
+			.rl-more summary {
+			list-style: none;
+			}
+			.rl-more summary::-webkit-details-marker {
+			display: none;
+			}
+			.rl-more__panel {
+			position: absolute;
+			z-index: 20;
+			top: calc(100% + 4px);
+			left: 0;
+			width: max-content;
+			max-width: min(420px, 80vw);
+			max-height: 320px;
+			overflow: auto;
+			background: var(--card);
+			border: 1px solid var(--ink);
+			box-shadow: 0 12px 26px rgba(47, 30, 18, 0.24);
+			padding: 10px;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 6px;
+			}
+			.rl-more__panel--col {
+			flex-direction: column;
+			flex-wrap: nowrap;
+			}
+
+			@media (max-width: 560px) {
+				.rl-filters__sorts {
+					margin-left: 0;
+					width: 100%;
+				}
+			}
+
 			/* --- Page frame ----------------------------------------------- */
 			.rl-page {
 				max-width: var(--column);

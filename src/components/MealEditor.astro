@@ -760,7 +760,13 @@ const config = {
 			const g = state.geo;
 			const body = {
 				name: value('[data-me-try-name]'),
-				cuisines: value('[data-me-try-cuisine]') ? [value('[data-me-try-cuisine]')] : [],
+				// One field, but the column is an array and a place is legitimately
+				// "Vietnamese, Sandwich". Stored whole, that becomes a single
+				// cuisine nothing can filter by and a chip the width of the row.
+				cuisines: value('[data-me-try-cuisine]')
+					.split(',')
+					.map((c) => c.trim())
+					.filter(Boolean),
 				priceBand: state.tryPrice,
 				// What you typed wins over what the geocoder guessed — you edited
 				// it after picking, or you never picked at all. The coordinates
