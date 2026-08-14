@@ -222,13 +222,27 @@ export async function listToTry(limit?: number): Promise<Place[]> {
 // The list view
 // ---------------------------------------------------------------------------
 
-export type PlaceSort = 'recent' | 'rating' | 'verdict' | 'name';
+/**
+ * Which half of the log is being listed.
+ *
+ * They are the same rows in the same table — a place you mean to go to is a
+ * restaurant with no visits yet — so every list and facet here takes the scope
+ * rather than existing twice. The two halves want different sorts and, on the
+ * to-try side, a couple of the filters have nothing to bite on: a place you
+ * haven't been to has no rating and no verdict.
+ */
+export type PlaceScope = 'visited' | 'to-try';
+
+export type PlaceSort = 'recent' | 'rating' | 'verdict' | 'name' | 'added' | 'price';
 
 export function isPlaceSort(v: unknown): v is PlaceSort {
-	return v === 'recent' || v === 'rating' || v === 'verdict' || v === 'name';
+	return (
+		v === 'recent' || v === 'rating' || v === 'verdict' || v === 'name' || v === 'added' || v === 'price'
+	);
 }
 
 export interface PlaceQuery {
+	scope?: PlaceScope;
 	cuisines?: string[];
 	prices?: PriceBand[];
 	/** "This rung or better", as a rank. 5 (Avoid) means no threshold at all. */
@@ -244,16 +258,17 @@ export interface PlaceQuery {
  * readable place instead of split across PostgREST operators.
  */
 export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
-	const { data, error } = await supabasePublic
-		.from('restaurant_places')
-		.select(PLACE_COLUMNS)
-		.gt('visit_count', 0);
+	const scope = query.scope ?? 'visited';
+	const { data, error } = await inScope(
+		supabasePublic.from('restaurant_places').select(PLACE_COLUMNS),
+		scope,
+	);
 	if (error) throw new Error(error.message);
 	let rows = (data ?? []) as Place[];
 
 	if (query.cuisines?.length) {
 		const want = new Set(query.cuisines.map((c) => c.toLowerCase()));
-		rows = rows.filter((r) => r.cuisines.some((c) => want.has(c.toLowerCase())));
+		rows = rows.filter((r) => cuisineTerms(r.cuisines).some((c) => want.has(c.toLowerCase())));
 	}
 	if (query.prices?.length) {
 		const want = new Set<string>(query.prices);
@@ -268,13 +283,36 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 		rows = rows.filter((r) => r.city.toLowerCase() === want);
 	}
 
-	return sortPlaces(rows, query.sort ?? 'recent');
+	return sortPlaces(rows, query.sort ?? (scope === 'to-try' ? 'added' : 'recent'));
+}
+
+/**
+ * The two halves of the table, as a filter on a query builder.
+ *
+ * `on_to_try` is computed by the view — marked, and not yet been — so a place
+ * leaves the to-try list by being visited rather than by anything remembering
+ * to take it off.
+ */
+function inScope<T>(query: T, scope: PlaceScope): T {
+	const q = query as { eq: (c: string, v: unknown) => T; gt: (c: string, v: unknown) => T };
+	return scope === 'to-try' ? q.eq('on_to_try', true) : q.gt('visit_count', 0);
 }
 
 function sortPlaces(rows: Place[], sort: PlaceSort): Place[] {
 	const byName = (a: Place, b: Place) => a.name.localeCompare(b.name, 'en');
 	const copy = [...rows];
 	switch (sort) {
+		case 'added':
+			return copy.sort(
+				(a, b) => (b.to_try_added_at ?? '').localeCompare(a.to_try_added_at ?? '') || byName(a, b),
+			);
+		case 'price':
+			// Cheapest first, and a place with no price band sorts last rather
+			// than as free — the same reading an absent rating gets below.
+			return copy.sort(
+				(a, b) =>
+					(a.price_band?.length ?? 99) - (b.price_band?.length ?? 99) || byName(a, b),
+			);
 		case 'rating':
 			// Unrated places sort last rather than as zero — an absent rating is
 			// not a bad one.
@@ -336,19 +374,35 @@ export interface CuisineFacet {
  * the tail behind a disclosure rather than printing sixty chips; this returns
  * the whole ordered list and lets the caller decide where to cut.
  */
-export async function listCuisineFacets(): Promise<CuisineFacet[]> {
-	const { data, error } = await supabasePublic
-		.from('restaurant_places')
-		.select('cuisines')
-		.gt('visit_count', 0);
+export async function listCuisineFacets(scope: PlaceScope = 'visited'): Promise<CuisineFacet[]> {
+	const { data, error } = await inScope(
+		supabasePublic.from('restaurant_places').select('cuisines'),
+		scope,
+	);
 	if (error) throw new Error(error.message);
 	const counts = new Map<string, number>();
 	for (const row of (data ?? []) as { cuisines: string[] }[]) {
-		for (const c of row.cuisines) counts.set(c, (counts.get(c) ?? 0) + 1);
+		// De-duplicated per place: a row storing "Pizza" and "Pizza, Pasta" must
+		// not count Pizza twice.
+		for (const c of new Set(cuisineTerms(row.cuisines))) counts.set(c, (counts.get(c) ?? 0) + 1);
 	}
 	return [...counts.entries()]
 		.map(([name, count]) => ({ name, count }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
+}
+
+/**
+ * The cuisines on a place, one per value.
+ *
+ * The column is an array and the composer's cuisine field is one line of text,
+ * which it stored WHOLE: rows exist reading `["Vietnamese, Sandwich"]` and
+ * `["American, Burger, Soup, Salad, Omelette, Sandwich, Breakfast"]`. Splitting
+ * on read keeps those rows filterable — and their chips legible — without a
+ * migration, and costs nothing on a row that was stored properly. The composer
+ * splits on save now too, so this is for what is already in the table.
+ */
+export function cuisineTerms(cuisines: string[]): string[] {
+	return cuisines.flatMap((c) => c.split(',').map((part) => part.trim()).filter(Boolean));
 }
 
 export interface CityFacet {
@@ -366,11 +420,11 @@ export interface CityFacet {
  * cities, so fitting the bounds gives a world map with five specks. The map
  * opens on the biggest city and lists the others beside it.
  */
-export async function listCityFacets(): Promise<CityFacet[]> {
-	const { data, error } = await supabasePublic
-		.from('restaurant_places')
-		.select('city,lat,lng,visit_count')
-		.gt('visit_count', 0);
+export async function listCityFacets(scope: PlaceScope = 'visited'): Promise<CityFacet[]> {
+	const { data, error } = await inScope(
+		supabasePublic.from('restaurant_places').select('city,lat,lng,visit_count'),
+		scope,
+	);
 	if (error) throw new Error(error.message);
 	const rows = (data ?? []) as { city: string; lat: number | null; lng: number | null }[];
 	const cities = new Map<string, { count: number; lat: number; lng: number; placed: number }>();
