@@ -30,6 +30,7 @@ import RestaurantMap from '../../components/RestaurantMap.astro';
 import MealEditor from '../../components/MealEditor.astro';
 import { requireOwner } from '../../lib/auth';
 import {
+	isMapFilter,
 	isPlaceSort,
 	isPriceBand,
 	isTripFilter,
@@ -41,6 +42,7 @@ import {
 	listWhyTagFacets,
 	PRICE_BANDS,
 	WHY_TAGS,
+	type MapFilter,
 	type PlaceSort,
 	type PriceBand,
 	type TripFilter,
@@ -64,6 +66,7 @@ const selectedPrices = params.getAll('price').filter(isPriceBand) as PriceBand[]
 // shortlist is read from the top, and the top is what you just thought of.
 const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'added';
 const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
+const onMap: MapFilter | null = isMapFilter(params.get('map')) ? (params.get('map') as MapFilter) : null;
 const selectedTags = params.getAll('why').filter((t) => (WHY_TAGS as readonly string[]).includes(t));
 
 const [all, places, cuisineFacets, cityFacets, whyFacets, isOwner] = await Promise.all([
@@ -75,6 +78,7 @@ const [all, places, cuisineFacets, cityFacets, whyFacets, isOwner] = await Promi
 		city,
 		trip,
 		tags: selectedTags,
+		onMap,
 		sort,
 	}),
 	listCuisineFacets('to-try'),
@@ -102,6 +106,11 @@ const sorts: { key: PlaceSort; label: string }[] = [
 	{ key: 'name', label: 'A–Z' },
 ];
 
+// A count on the chip, because this filter is a job queue rather than a taste:
+// the number IS the reason to click it, and when it reaches zero the chip says
+// so instead of pretending there is work left.
+const unplacedCount = all.filter((p) => p.lat == null || p.lng == null).length;
+
 const trips: { key: TripFilter | null; label: string }[] = [
 	{ key: null, label: 'All' },
 	{ key: 'trip', label: 'Worth the trip †' },
@@ -113,6 +122,7 @@ const activeFilters = [
 	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
 	...selectedTags.map((t) => ({ label: t, href: href({ why: toggle(selectedTags, t) }) })),
 	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
+	...(onMap ? [{ label: onMap === 'off' ? 'Not on the map' : 'On the map', href: href({ map: null }) }] : []),
 	...(city ? [{ label: city, href: href({ city: null }) }] : []),
 ];
 
@@ -242,6 +252,18 @@ function href(changes: Record<string, string | string[] | null>): string {
 								{t.label}
 							</a>
 						))}
+
+						{isOwner && unplacedCount > 0 && (
+							<a
+								class="rl-chip"
+								href={href({ map: onMap === 'off' ? null : 'off' })}
+								aria-pressed={onMap === 'off' ? 'true' : 'false'}
+								title="Places with no point on the map — the ones the map screen cannot draw"
+							>
+								<span>Not on the map</span>
+								<span class="rl-chip__n">{unplacedCount}</span>
+							</a>
+						)}
 
 						<span class="rl-filters__sorts">
 							<span class="rl-filters__legend">Sort</span>
