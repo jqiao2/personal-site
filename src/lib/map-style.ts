@@ -33,8 +33,7 @@ export const MAP_TOKENS = {
 	boundary: '#b8a180', // borough / state, dashed
 	label: '#4a3626', // place and street labels
 	labelHalo: '#f7f0e0', // 1.5px halo
-	pinRing: '#2f1e12', // pin outline — always ink, never accent
-	cluster: '#f0e2c2', // cluster disc fill
+	pinRing: '#2f1e12', // pin outline, and the fill of a worth-the-trip pin
 } as const;
 
 const TILES = 'https://api.maptiler.com/tiles/v3/tiles.json';
