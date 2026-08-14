@@ -5,8 +5,17 @@ import { addPhotos, uploadPhoto } from '../../../../../lib/restaurants';
 
 export const prerender = false;
 
-/** 12 MB. Comfortably over a phone photo, well under the serverless body cap. */
-const MAX_BYTES = 12 * 1024 * 1024;
+/**
+ * 4 MB, and it is a ceiling inherited rather than chosen.
+ *
+ * Vercel refuses a serverless request body over 4.5 MB with a platform-level
+ * 413 — the function is never entered, so a limit above that would be a number
+ * this file states and cannot enforce, and the browser would get an
+ * unexplained HTML error page instead of the message below. The composer
+ * downscales before sending and posts one photograph per request, so a real
+ * upload arrives at roughly a megabyte; this catches what skipped that path.
+ */
+const MAX_BYTES = 4 * 1024 * 1024;
 
 // POST /api/restaurants/visits/:id/photos  (owner only)
 //
