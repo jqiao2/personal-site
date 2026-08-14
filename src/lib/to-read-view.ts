@@ -21,6 +21,16 @@ import {
 export const PILE_SPINE_HEIGHT = 84;
 
 /**
+ * The jacket that stands in for the spine where one is on file, at the same
+ * height and the 2:3 most books are printed at — the /books cards' proportions,
+ * scaled to this page's shorter row.
+ *
+ * It doubles as the width of the slot every picture sits in, cover or spine, so
+ * a pile of half-jacketed books still has one straight edge down the titles.
+ */
+export const PILE_COVER_WIDTH = Math.round((PILE_SPINE_HEIGHT * 2) / 3);
+
+/**
  * The shelf's own scale, so the same book is the same object on both pages —
  * imported rather than reimplemented, because two spine widths that agree by
  * coincidence stop agreeing the first time one is tuned.
@@ -57,6 +67,12 @@ export interface PileView {
 	author: string | null;
 	href: string;
 	isPrivate: boolean;
+	/**
+	 * The jacket, where the book came from Open Library with one. Null for a
+	 * hand-typed book, which falls back to the drawn spine — see the picture in
+	 * the row markup, and BookThumb, which makes the same trade on /books.
+	 */
+	coverUrl: string | null;
 	/**
 	 * The printed length the spine is drawn from, or null when neither source
 	 * knows it. The /books shelf draws the same book at its own height and has to
@@ -115,6 +131,7 @@ export function toPileView(book: PileBook, todayDay = today()): PileView {
 		author,
 		href: `/books/${book.id}`,
 		isPrivate: !book.is_public,
+		coverUrl: book.cover_url,
 		pages: book.ol_pages ?? book.total_pages,
 		spineWidth: pileSpineWidth(book, PILE_SPINE_HEIGHT),
 		hasSpine: book.total_pages !== null || book.ol_pages !== null,
