@@ -234,24 +234,8 @@ const config = {
 		isFullPlusCode,
 		recoverPlusCode,
 	} from '../lib/plus-code';
+	import { hitWhere, lookupPlaces, type GeoHit } from '../lib/place-lookup';
 
-	interface GeoHit {
-		/** Which body said so. Absent means the live geocoder. */
-		source?: string;
-		sourceLabel?: string;
-		name: string;
-		display: string;
-		lat: number;
-		lng: number;
-		neighborhood: string | null;
-		city: string | null;
-		stateRegion: string | null;
-		country: string | null;
-		kind: string | null;
-		cuisines: string[];
-		address: string;
-		precise: boolean;
-	}
 	interface Config {
 		placeId: number;
 		state: 'placed' | 'located' | 'unplaced';
@@ -295,10 +279,6 @@ const config = {
 		const show = (sel: string, on: boolean) => {
 			$(sel).hidden = !on;
 		};
-
-		function hitWhere(h: GeoHit): string {
-			return [h.neighborhood, h.city].filter(Boolean).join(', ');
-		}
 
 		function open(mode: Mode) {
 			state.open = true;
@@ -357,57 +337,15 @@ const config = {
 				return;
 			}
 			const where = val('[data-pe-where]');
-			const q = where ? `${name}, ${where}` : name;
 			state.searching = true;
 			render();
 			timer = window.setTimeout(async () => {
-				let hits: GeoHit[] = [];
-				let reachable = true;
-				try {
-					// The imported gazetteer answers first and offline; the live
-					// geocoder still runs, because it knows everywhere that is not
-					// New York. Both are labelled, because a place page is exactly
-					// where you want to know whether the point came from the health
-					// department or from whoever last edited the map.
-					const [local, geo] = await Promise.all([
-						fetch(`/api/restaurants/gazetteer?q=${encodeURIComponent(name)}`)
-							.then((r) => (r.ok ? r.json() : { hits: [] }))
-							.catch(() => ({ hits: [] })),
-						fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`)
-							.then((r) => (r.ok ? r : Promise.reject(new Error(String(r.status)))))
-							.then((r) => r.json())
-							.catch((e) => {
-								if (String(e.message) !== '502') reachable = false;
-								return { hits: [] };
-							}),
-					]);
-					const mine: GeoHit[] = (local.hits ?? []).map((h: Record<string, unknown>) => ({
-						source: h.source as string,
-						sourceLabel: h.sourceLabel as string,
-						name: h.name as string,
-						display: [h.name, h.address, h.locality].filter(Boolean).join(', '),
-						lat: h.lat as number,
-						lng: h.lng as number,
-						neighborhood: (h.locality as string) ?? null,
-						city: (h.city as string) ?? null,
-						stateRegion: (h.region as string) ?? null,
-						country: (h.country as string) ?? null,
-						kind: null,
-						cuisines: (h.cuisines as string[]) ?? [],
-						address: (h.address as string) ?? '',
-						precise: true,
-					}));
-					const geoHits: GeoHit[] = ((geo.hits ?? []) as GeoHit[]).map((h) => ({
-						...h,
-						source: 'osm',
-						sourceLabel: 'OpenStreetMap',
-					}));
-					if (mine.length > 0) reachable = true;
-					const seen = new Set(mine.map((h) => h.name.toLowerCase()));
-					hits = [...mine, ...geoHits.filter((h) => !seen.has(h.name.toLowerCase()))];
-				} catch {
-					reachable = false;
-				}
+				// The imported gazetteer answers first and offline; the live
+				// geocoder still runs, because it knows everywhere that is not
+				// New York. Both are labelled, because a place page is exactly
+				// where you want to know whether the point came from the health
+				// department or from whoever last edited the map.
+				const { hits, reachable } = await lookupPlaces(name, where);
 				state.searching = false;
 				state.searched = true;
 				state.hits = hits;
