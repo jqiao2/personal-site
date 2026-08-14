@@ -110,10 +110,11 @@ const config = {
 					autocomplete="off"
 					placeholder="Search or type a new place"
 				/>
+				<!-- Places already in the log, then the same candidates the to-try
+				     composer offers, then "add it anyway". See searchPlaces. -->
 				<div class="me__suggest" data-me-suggest hidden></div>
-				<!-- A new place gets looked up as soon as it's named, and what was
-				     found is shown rather than attached silently — seeing it is the
-				     confirmation, and clearing it is how you refuse it. -->
+				<!-- What a picked candidate attached, stated plainly: seeing it is
+				     the confirmation, and clearing it is how you refuse it. -->
 				<div class="me__pinned" data-me-log-pinned hidden>
 					<span class="me__pinned-mark">◎</span>
 					<span class="me__pinned-text" data-me-log-pinned-text></span>
@@ -346,6 +347,8 @@ const config = {
 </div>
 
 <script>
+	import { hitWhere, lookupPlaces, type GeoHit } from '../lib/place-lookup';
+
 	interface VerdictSpec {
 		label: string;
 		gloss: string;
@@ -358,23 +361,14 @@ const config = {
 		visits: number;
 		trip?: boolean;
 	}
-	interface GeoHit {
-		/** Which body said so. Absent means the live geocoder. */
-		source?: string;
-		sourceLabel?: string;
+	/** A place already in the log, as the autocomplete route returns it. */
+	interface LoggedPlace {
+		id: number;
 		name: string;
-		display: string;
-		lat: number;
-		lng: number;
-		neighborhood: string | null;
-		city: string | null;
-		stateRegion: string | null;
-		country: string | null;
-		kind: string | null;
 		cuisines: string[];
-		address: string;
-		/** True only when lat/lng is the place itself, not the middle of an area. */
-		precise: boolean;
+		visit_count: number;
+		neighborhood: string | null;
+		city: string;
 	}
 	interface Config {
 		redirect: string;
@@ -625,92 +619,198 @@ const config = {
 		}
 
 		// -- place autocomplete ----------------------------------------------
-		let searchTimer = 0;
+		// ONE FIELD, TWO QUESTIONS. Where you ate is usually somewhere already in
+		// the log and sometimes somewhere that has never been in it, and you do
+		// not know which until the name is typed. So the field answers both at
+		// once: the places already logged, then the SAME candidate list the
+		// to-try composer offers — our own gazetteer and the geocoder, with the
+		// source named on every row — then "add it anyway" underneath.
+		//
+		// IT USED TO GUESS. Choosing "new place" silently took the geocoder's
+		// top hit and attached it, on the grounds that when you are logging a
+		// meal the location is a detail. It is a detail right up to the moment it
+		// is wrong: two restaurants of a name are common, and a wrong pin is
+		// invisible here and has to be found and fixed on the place page later.
+		// Picking from the list is one more click and no guessing, and it is a
+		// list you already know how to read from adding a place to try.
+		//
+		// THE TWO LOOKUPS ARE DEBOUNCED APART, not together. Ours is instant and
+		// should feel it; the geocoder is a volunteer service paced to a request
+		// a second. So the logged places land first and the map's candidates
+		// arrive underneath them a moment later.
+		const suggest = {
+			q: '',
+			places: [] as LoggedPlace[],
+			geo: [] as GeoHit[],
+			looking: false,
+		};
+		/** Answers to a query that is no longer what's typed are dropped. */
+		let queryId = 0;
+		let placeTimer = 0;
+		let geoTimer = 0;
+
 		function searchPlaces(q: string) {
-			window.clearTimeout(searchTimer);
-			const box = $('[data-me-suggest]')!;
+			window.clearTimeout(placeTimer);
+			window.clearTimeout(geoTimer);
+			suggest.q = q;
+			suggest.places = [];
+			suggest.geo = [];
+			// Under three characters the geocode route answers nothing by design,
+			// so there is nothing to wait for and nothing to say about waiting.
+			suggest.looking = q.length >= 3;
 			if (!q) {
-				box.hidden = true;
+				$('[data-me-suggest]')!.hidden = true;
 				return;
 			}
-			searchTimer = window.setTimeout(async () => {
-				let places: { id: number; name: string; cuisines: string[]; visit_count: number; neighborhood: string | null; city: string }[] = [];
+			const mine = ++queryId;
+
+			placeTimer = window.setTimeout(async () => {
+				let places: LoggedPlace[] = [];
 				try {
 					const res = await fetch(`/api/restaurants/places?q=${encodeURIComponent(q)}`);
 					if (res.ok) places = (await res.json()).places ?? [];
 				} catch {
-					// A failed lookup must not block typing a new place; the "add
-					// as new" row below is always offered regardless.
+					// A failed lookup must not block typing a new place; the rows
+					// below are offered regardless.
 				}
-				box.replaceChildren();
-				for (const p of places) {
-					const row = document.createElement('div');
-					row.className = 'me__sug';
-					row.innerHTML = `<span class="me__sug-name"></span><span class="me__sug-meta"></span><span class="me__sug-tail"></span>`;
-					row.querySelector('.me__sug-name')!.textContent = p.name;
-					row.querySelector('.me__sug-meta')!.textContent =
-						`${p.cuisines[0] ?? ''}${p.cuisines[0] ? ' · ' : ''}${p.neighborhood ? `${p.neighborhood}, ${p.city}` : p.city}`;
-					row.querySelector('.me__sug-tail')!.textContent = `${p.visit_count} visit${p.visit_count === 1 ? '' : 's'}`;
-					row.addEventListener('mousedown', (e) => {
-						e.preventDefault();
-						state.placeId = p.id;
-						state.locked = {
-							id: p.id,
-							name: p.name,
-							meta: `${p.cuisines[0] ?? ''}${p.cuisines[0] ? ' · ' : ''}${p.neighborhood ? `${p.neighborhood}, ${p.city}` : p.city}`,
-							visits: p.visit_count,
-						};
-						state.revisit = p.visit_count > 0;
-						box.hidden = true;
-						render();
-					});
-					box.append(row);
-				}
-				if (!places.some((p) => p.name.toLowerCase() === q.toLowerCase())) {
-					const row = document.createElement('div');
-					row.className = 'me__sug';
-					row.innerHTML = `<span class="me__sug-name"></span><span class="me__sug-meta">new place</span><span class="me__sug-tail">add</span>`;
-					row.querySelector('.me__sug-name')!.textContent = `“${q}”`;
-					row.addEventListener('mousedown', async (e) => {
-						e.preventDefault();
-						state.placeId = null;
-						state.placeName = q;
-						state.locked = { id: 0, name: q, meta: 'new place', visits: 0 };
-						box.hidden = true;
-						state.geo = null;
-						render();
-						// Place it while you fill the rest of the form in. The top
-						// hit is taken rather than offered as a list, because here
-						// you are logging a meal and the location is a detail — but
-						// it is shown, and "clear" is how you reject it.
-						try {
-							const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
-							if (res.ok) {
-								const [hit] = (await res.json()).hits ?? [];
-								// Attached without being chosen, so it must be an exact
-								// point — an area's centroid is not worth guessing with.
-								if (hit?.precise && state.locked && !state.placeId) state.geo = hit;
-							}
-						} catch {
-							// Unplaced is a supported state; carry on.
-						}
-						render();
-					});
-					box.append(row);
-				}
-				box.hidden = false;
+				if (mine !== queryId) return;
+				suggest.places = places;
+				renderSuggest();
 			}, 160);
+
+			if (suggest.looking) {
+				geoTimer = window.setTimeout(async () => {
+					const { hits } = await lookupPlaces(q);
+					if (mine !== queryId) return;
+					suggest.geo = hits;
+					suggest.looking = false;
+					renderSuggest();
+				}, 420);
+			}
 		}
 
-		// -- geocoding ---------------------------------------------------------
-		// A restaurant's coordinates come from looking its NAME up, not its
-		// address — you know what a place is called, and you are usually adding
-		// it because someone said the name out loud. Whatever is in "Where" is
-		// appended as a hint, which is what disambiguates the four Tacos El
-		// Bronco from each other.
-		let geoTimer = 0;
+		function renderSuggest() {
+			const box = $('[data-me-suggest]')!;
+			box.replaceChildren();
+			for (const p of suggest.places) box.append(loggedRow(p));
+
+			// A candidate that is already in the log is offered above with its
+			// visits on it; offering it again as new is how one restaurant ends
+			// up as two rows that can never be added back together.
+			const known = new Set(suggest.places.map((p) => p.name.toLowerCase()));
+			for (const hit of suggest.geo) {
+				if (!known.has(hit.name.toLowerCase())) box.append(geoRow(hit, () => pickNew(hit.name || suggest.q, hit)));
+			}
+
+			if (suggest.looking) {
+				const row = document.createElement('div');
+				row.className = 'me__sug me__sug--none';
+				row.textContent = 'Looking for it on the map…';
+				box.append(row);
+			}
+
+			// The last row needs nobody to have heard of the place, which is the
+			// whole point of it: a stall, a place that opened last week, a place
+			// only Google knows. Absent only when the name is already in the log,
+			// where adding it again would be a duplicate.
+			if (!suggest.places.some((p) => p.name.toLowerCase() === suggest.q.toLowerCase())) {
+				box.append(
+					sugRow(`“${suggest.q}”`, 'new place · no point on the map', 'add', () => pickNew(suggest.q, null)),
+				);
+			}
+			box.hidden = false;
+		}
+
+		function loggedRow(p: LoggedPlace): HTMLElement {
+			const meta = `${p.cuisines[0] ?? ''}${p.cuisines[0] ? ' · ' : ''}${p.neighborhood ? `${p.neighborhood}, ${p.city}` : p.city}`;
+			return sugRow(p.name, meta, `${p.visit_count} visit${p.visit_count === 1 ? '' : 's'}`, () => {
+				state.placeId = p.id;
+				state.locked = { id: p.id, name: p.name, meta, visits: p.visit_count };
+				state.revisit = p.visit_count > 0;
+				// A place on record has whatever location it has, and a visit must
+				// never rewrite it — so a candidate picked before changing your
+				// mind does not follow you here.
+				state.geo = null;
+			});
+		}
+
+		/** A candidate from the gazetteer or the geocoder, in either pane. */
+		function geoRow(hit: GeoHit, onPick: () => void): HTMLElement {
+			// An area is offered — it still fills in the words — but it is named
+			// as what it is, so nobody pins a restaurant to the middle of a
+			// neighbourhood by accident.
+			const meta = [
+				hit.address || hit.display.split(',').slice(1, 3).join(',').trim(),
+				hit.cuisines.join(', ') || hit.kind,
+				hit.precise ? '' : 'no exact point',
+			]
+				.filter(Boolean)
+				.join(' · ');
+			// WHO SAID SO, on every row. Two sources disagree about a Chinatown
+			// noodle shop more often than they agree, and the only way to choose
+			// between them is to know who is speaking.
+			const row = sugRow(hit.name || hit.display.split(',')[0], meta, hit.sourceLabel ?? 'OpenStreetMap', onPick);
+			if (!hit.precise) row.classList.add('me__sug--vague');
+			return row;
+		}
+
+		// Two lines, not three spans on one: the name, then everything that
+		// distinguishes this row from the next. At 380px a single flex line ran
+		// the name, the street and the OSM type together into one string.
+		//
+		// Chosen on mousedown rather than click, because the field's blur fires
+		// first and would take the box away before the click landed.
+		function sugRow(name: string, meta: string, tail: string, onPick: () => void): HTMLElement {
+			const row = document.createElement('div');
+			row.className = 'me__sug';
+			for (const [part, text] of [
+				['name', name],
+				['meta', meta],
+				['tail', tail],
+			] as const) {
+				const span = document.createElement('span');
+				span.className = `me__sug-${part}`;
+				span.textContent = text;
+				row.append(span);
+			}
+			row.addEventListener('mousedown', (e) => {
+				e.preventDefault();
+				// Whichever box this row was put in — the two panes have one each.
+				const box = row.parentElement as HTMLElement | null;
+				if (box) box.hidden = true;
+				onPick();
+				render();
+			});
+			return row;
+		}
+
+		/**
+		 * A place the log has never seen: named, and placed only if a candidate
+		 * was picked. The point rides in state.geo, where the receipt under the
+		 * field shows it and "clear" refuses it.
+		 */
+		function pickNew(name: string, hit: GeoHit | null) {
+			state.placeId = null;
+			state.placeName = name;
+			state.geo = hit;
+			// The meta stays "new place" even when a hit came with it, because
+			// the receipt below states the location and is the thing that can be
+			// cleared — a line up here claiming a neighbourhood would go on
+			// claiming it after the point was refused.
+			state.locked = { id: 0, name, meta: 'new place', visits: 0 };
+			// So Change reopens on the name that will be saved: a picked hit
+			// carries the proper spelling and the accents, which is the half you
+			// cannot type on a phone.
+			($('[data-me-place]') as HTMLInputElement).value = name;
+		}
+
+		// -- the to-try composer's lookup --------------------------------------
+		// The same candidates, in the pane that has a Where field to narrow them
+		// with — which is what separates the four Tacos El Bronco from each
+		// other.
+		let tryTimer = 0;
 		function lookupPlace() {
-			window.clearTimeout(geoTimer);
+			window.clearTimeout(tryTimer);
 			const box = $('[data-me-geo]')!;
 			const name = value('[data-me-try-name]');
 			if (name.length < 3) {
@@ -718,58 +818,12 @@ const config = {
 				return;
 			}
 			const hint = value('[data-me-try-where]');
-			const q = hint ? `${name}, ${hint}` : name;
-			geoTimer = window.setTimeout(async () => {
-				// OUR OWN COPIES FIRST, and not only because they are faster. The
-				// imported gazetteer has the places this city is actually made of
-				// — every permitted kitchen in the five boroughs — where the live
-				// geocoder has whatever a mapper got round to. The geocoder still
-				// runs, because it covers everywhere that is not New York.
-				let hits: GeoHit[] = [];
-				try {
-					const [local, geo] = await Promise.all([
-						fetch(`/api/restaurants/gazetteer?q=${encodeURIComponent(name)}`)
-							.then((r) => (r.ok ? r.json() : { hits: [] }))
-							.catch(() => ({ hits: [] })),
-						fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`)
-							.then((r) => (r.ok ? r.json() : { hits: [] }))
-							.catch(() => ({ hits: [] })),
-					]);
-					const mine: GeoHit[] = (local.hits ?? []).map((h: Record<string, unknown>) => ({
-						source: h.source as string,
-						sourceLabel: h.sourceLabel as string,
-						name: h.name as string,
-						display: [h.name, h.address, h.locality].filter(Boolean).join(', '),
-						lat: h.lat as number,
-						lng: h.lng as number,
-						neighborhood: (h.locality as string) ?? null,
-						city: (h.city as string) ?? null,
-						stateRegion: (h.region as string) ?? null,
-						country: (h.country as string) ?? null,
-						kind: null,
-						cuisines: (h.cuisines as string[]) ?? [],
-						address: (h.address as string) ?? '',
-						// An imported row is a point on a building, which is the
-						// thing `precise` exists to distinguish.
-						precise: true,
-					}));
-					const geoHits: GeoHit[] = (geo.hits ?? []).map((h: GeoHit) => ({
-						...h,
-						source: 'osm',
-						sourceLabel: 'OpenStreetMap',
-					}));
-					// Same place from two sources is one row: ours wins, because it
-					// is the one with the health department's geocode on it.
-					const seen = new Set(mine.map((h) => h.name.toLowerCase()));
-					hits = [...mine, ...geoHits.filter((h) => !seen.has(h.name.toLowerCase()))];
-				} catch {
-					// Both unreachable must never block adding a place; it just
-					// means this one goes on the list unplaced.
-				}
+			tryTimer = window.setTimeout(async () => {
+				const { hits } = await lookupPlaces(name, hint);
 				box.replaceChildren();
 				if (hits.length === 0) {
-					// Nothing in OSM by that name. Saying so beats an empty box —
-					// the place is still perfectly addable, just without a point.
+					// Nothing by that name. Saying so beats an empty box — the place
+					// is still perfectly addable, just without a point.
 					const row = document.createElement('div');
 					row.className = 'me__sug me__sug--none';
 					row.textContent = 'No exact match — it will be added without a point on the map.';
@@ -777,41 +831,7 @@ const config = {
 					box.hidden = false;
 					return;
 				}
-				for (const hit of hits) {
-					// Two lines, not three spans on one: the name, then everything
-					// that distinguishes this hit from the next one. At 380px the
-					// old single row ran the name, the street and the OSM type
-					// together into one unbroken string.
-					const row = document.createElement('div');
-					row.className = hit.precise ? 'me__sug' : 'me__sug me__sug--vague';
-					const name = document.createElement('span');
-					name.className = 'me__sug-name';
-					name.textContent = hit.name || hit.display.split(',')[0];
-					const meta = document.createElement('span');
-					meta.className = 'me__sug-meta';
-					// An area is offered — it still fills the location fields — but
-					// it is named as what it is, so nobody pins a restaurant to the
-					// middle of a neighbourhood by accident.
-					meta.textContent = [
-						hit.address || hit.display.split(',').slice(1, 3).join(',').trim(),
-						hit.cuisines.join(', ') || hit.kind,
-						hit.precise ? '' : 'no exact point',
-					]
-						.filter(Boolean)
-						.join(' · ');
-					// WHO SAID SO, on every row. Two sources disagree about a
-					// Chinatown noodle shop more often than they agree, and the
-					// only way to choose between them is to know who is speaking.
-					const tail = document.createElement('span');
-					tail.className = 'me__sug-tail';
-					tail.textContent = hit.sourceLabel ?? 'OpenStreetMap';
-					row.append(name, meta, tail);
-					row.addEventListener('mousedown', (e) => {
-						e.preventDefault();
-						pick(hit);
-					});
-					box.append(row);
-				}
+				for (const hit of hits) box.append(geoRow(hit, () => pick(hit)));
 				box.hidden = false;
 			}, 420);
 		}
@@ -828,7 +848,7 @@ const config = {
 			// is a suggestion and the field is the record.
 			if (hit.name) ($('[data-me-try-name]') as HTMLInputElement).value = hit.name;
 
-			const where = [hit.neighborhood, hit.city].filter(Boolean).join(', ');
+			const where = hitWhere(hit);
 			if (where) ($('[data-me-try-where]') as HTMLInputElement).value = where;
 
 			// Only fill a cuisine that is empty — a typed one is a choice, and
@@ -1002,8 +1022,11 @@ const config = {
 		$('[data-me-unlock]')!.addEventListener('click', () => {
 			state.locked = null;
 			state.placeId = null;
+			// The point belonged to the place being unpicked, so it goes with it.
+			state.geo = null;
 			render();
 			($('[data-me-place]') as HTMLInputElement).focus();
+			searchPlaces(value('[data-me-place]'));
 		});
 
 		$$('[data-me-star]').forEach((el) =>
