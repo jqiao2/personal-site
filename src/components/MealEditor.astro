@@ -931,6 +931,11 @@ const config = {
 							name: state.locked?.name || value('[data-me-place]'),
 							priceBand: state.price,
 							trip: state.trip,
+							// A picked candidate's cuisines come along with its names.
+							// This pane has no cuisine field, so nothing is overwritten
+							// and nothing was typed to disagree with — the place page is
+							// where it gets corrected, like every other guess.
+							cuisines: state.geo?.cuisines ?? [],
 							// Only a NEW place carries a location; picking an existing
 							// one must never overwrite the location already on record.
 							neighborhood: state.geo?.neighborhood ?? null,
