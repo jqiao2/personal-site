@@ -22,7 +22,7 @@ import PlaceEditor from '../../../components/PlaceEditor.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import PhotoWall from '../../../components/PhotoWall.astro';
 import { requireOwner } from '../../../lib/auth';
-import { getPlace, listFriends, listTags } from '../../../lib/restaurants';
+import { getPlace, listFriends, listTags, WHY_TAGS } from '../../../lib/restaurants';
 import {
 	groupPhotosByVisit,
 	locationState,
@@ -214,6 +214,31 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 						<section class="totry">
 							<div class="rl-label">On the to-try list</div>
 							<p class="totry__why">{place.to_try_reason ?? 'No reason written down.'}</p>
+							{/* The kind of why, beside the sentence. For an owner they
+							    are the control as well as the display — eighty places
+							    were imported without any, and a filter nothing is
+							    tagged for is a filter that never works. */}
+							{isOwner ? (
+								<div class="totry__tags" data-why-tags data-place={place.id}>
+									{WHY_TAGS.map((t) => (
+										<button
+											type="button"
+											class:list={['totry__tag', place.to_try_tags.includes(t) && 'totry__tag--on']}
+											data-why-tag={t}
+										>
+											{t}
+										</button>
+									))}
+								</div>
+							) : (
+								place.to_try_tags.length > 0 && (
+									<div class="totry__tags">
+										{place.to_try_tags.map((t) => (
+											<span class="totry__tag totry__tag--on totry__tag--static">{t}</span>
+										))}
+									</div>
+								)
+							)}
 							{isOwner && (
 								<button type="button" class="rl-btn rl-btn--primary" data-open-meal-editor>
 									+ Log the first visit
@@ -369,6 +394,40 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 					</div>
 
 					{
+						/* The one field on this page you can only set here: the
+						   composer asks it when you log or add, and this is where
+						   it gets changed afterwards. Writes straight through, like
+						   the heart and the rank. */
+						isOwner ? (
+							<button
+								type="button"
+								class="sidecar__row sidecar__trip"
+								data-trip
+								data-place={place.id}
+								data-on={place.trip ? '1' : ''}
+								title="click to change"
+							>
+								<span class="rl-label">Trip</span>
+								<span class="rl-gap" />
+								<span
+									class:list={['sidecar__tripv', place.trip && 'sidecar__tripv--on']}
+									data-trip-label
+								>
+									{place.trip ? 'Worth the trip †' : 'If I’m nearby'}
+								</span>
+							</button>
+						) : (
+							place.trip && (
+								<div class="sidecar__row">
+									<span class="rl-label">Trip</span>
+									<span class="rl-gap" />
+									<span class="sidecar__tripv sidecar__tripv--on">Worth the trip †</span>
+								</div>
+							)
+						)
+					}
+
+					{
 						/* Only drawn when the answer is no. A row saying "on it" on
 						   every other page would be a row about nothing. */
 						!isPlaced && (
@@ -456,6 +515,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 					name: place.name,
 					meta: `${place.cuisines[0] ?? ''}${place.cuisines[0] ? ' · ' : ''}${placeLine(place)}`,
 					visits: place.visit_count,
+					trip: place.trip,
 				}}
 				tagOptions={tagOptions}
 				friendOptions={friendOptions}
@@ -509,6 +569,51 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		heart.classList.toggle('heartbtn--on', !on);
 		heart.querySelector('[data-heart-label]')!.textContent = on ? 'Love it' : 'Loved';
 	});
+
+	// Two more single-field controls on the same pattern: write through, then
+	// show the new state. Neither reloads — nothing else on the page changes.
+	const trip = document.querySelector<HTMLButtonElement>('[data-trip]');
+	trip?.addEventListener('click', async () => {
+		const on = trip.dataset.on === '1';
+		trip.disabled = true;
+		const res = await fetch(`/api/restaurants/places/${trip.dataset.place}`, {
+			method: 'PATCH',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ trip: !on }),
+		});
+		trip.disabled = false;
+		if (!res.ok) {
+			window.alert('Could not change that.');
+			return;
+		}
+		trip.dataset.on = on ? '' : '1';
+		const label = trip.querySelector('[data-trip-label]')!;
+		label.textContent = on ? 'If I\u2019m nearby' : 'Worth the trip \u2020';
+		label.classList.toggle('sidecar__tripv--on', !on);
+	});
+
+	const tagBox = document.querySelector<HTMLElement>('[data-why-tags]');
+	for (const button of tagBox?.querySelectorAll<HTMLButtonElement>('[data-why-tag]') ?? []) {
+		button.addEventListener('click', async () => {
+			// The whole set goes up, not a delta: the column is an array and the
+			// buttons on screen are the truth about what it should contain.
+			const wanted = [...tagBox!.querySelectorAll<HTMLButtonElement>('[data-why-tag]')]
+				.filter((b) => (b === button ? !b.classList.contains('totry__tag--on') : b.classList.contains('totry__tag--on')))
+				.map((b) => b.dataset.whyTag!);
+			button.disabled = true;
+			const res = await fetch(`/api/restaurants/places/${tagBox!.dataset.place}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ toTryTags: wanted }),
+			});
+			button.disabled = false;
+			if (!res.ok) {
+				window.alert('Could not change that.');
+				return;
+			}
+			button.classList.toggle('totry__tag--on');
+		});
+	}
 
 	for (const button of document.querySelectorAll<HTMLButtonElement>('[data-rank]')) {
 		button.addEventListener('click', async () => {
@@ -708,6 +813,33 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		font-size: 16px;
 		color: var(--ink-soft);
 	}
+	.totry__tags {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+		margin-bottom: 14px;
+	}
+	.totry__tag {
+		background: var(--card);
+		border: 1px solid var(--rule);
+		color: var(--ink-soft);
+		font-family: var(--ui);
+		font-size: 12px;
+		padding: 4px 10px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.totry__tag:hover {
+		border-color: var(--terracotta);
+	}
+	.totry__tag--on {
+		background: var(--ink);
+		border-color: var(--ink);
+		color: var(--ground);
+	}
+	.totry__tag--static {
+		cursor: default;
+	}
 
 	.hist {
 		margin-top: 14px;
@@ -876,6 +1008,29 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		font-size: 12.5px;
 		color: var(--ink);
 	}
+	/* A button that has to sit in a row of rows: everything the div rows do,
+	   plus enough reset that it doesn't announce itself as a control until
+	   you're over it. */
+	.sidecar__trip {
+		width: 100%;
+		background: none;
+		border: none;
+		border-bottom: 1px solid var(--rule-2);
+		font-family: var(--ui);
+		text-align: left;
+		cursor: pointer;
+	}
+	.sidecar__trip:hover {
+		background: var(--wash);
+	}
+	.sidecar__tripv {
+		font-size: 12.5px;
+		color: var(--ink-2);
+	}
+	.sidecar__tripv--on {
+		color: var(--terracotta-deep);
+	}
+
 	.sidecar__off {
 		font-size: 12.5px;
 		color: #bda98a;

@@ -32,14 +32,18 @@ import { requireOwner } from '../../lib/auth';
 import {
 	isPlaceSort,
 	isPriceBand,
+	isTripFilter,
 	listCityFacets,
 	listCuisineFacets,
 	listFriends,
 	listPlaces,
 	listTags,
+	listWhyTagFacets,
 	PRICE_BANDS,
+	WHY_TAGS,
 	type PlaceSort,
 	type PriceBand,
+	type TripFilter,
 } from '../../lib/restaurants';
 import { placeLine } from '../../lib/restaurant-view';
 import type { MapPoint } from '../../lib/restaurant-map';
@@ -59,12 +63,23 @@ const selectedPrices = params.getAll('price').filter(isPriceBand) as PriceBand[]
 // "Recently added" is the list's own order and the only sensible default: a
 // shortlist is read from the top, and the top is what you just thought of.
 const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'added';
+const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
+const selectedTags = params.getAll('why').filter((t) => (WHY_TAGS as readonly string[]).includes(t));
 
-const [all, places, cuisineFacets, cityFacets, isOwner] = await Promise.all([
+const [all, places, cuisineFacets, cityFacets, whyFacets, isOwner] = await Promise.all([
 	listPlaces({ scope: 'to-try' }),
-	listPlaces({ scope: 'to-try', cuisines: selectedCuisines, prices: selectedPrices, city, sort }),
+	listPlaces({
+		scope: 'to-try',
+		cuisines: selectedCuisines,
+		prices: selectedPrices,
+		city,
+		trip,
+		tags: selectedTags,
+		sort,
+	}),
 	listCuisineFacets('to-try'),
 	listCityFacets('to-try'),
+	listWhyTagFacets('to-try'),
 	requireOwner(Astro.cookies),
 ]);
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
@@ -82,13 +97,22 @@ const toggle = (list: string[], value: string) =>
 
 const sorts: { key: PlaceSort; label: string }[] = [
 	{ key: 'added', label: 'Recently added' },
+	{ key: 'trip', label: 'Worth the trip first' },
 	{ key: 'price', label: 'Price' },
 	{ key: 'name', label: 'A–Z' },
+];
+
+const trips: { key: TripFilter | null; label: string }[] = [
+	{ key: null, label: 'All' },
+	{ key: 'trip', label: 'Worth the trip †' },
+	{ key: 'nearby', label: 'If I’m nearby' },
 ];
 
 const activeFilters = [
 	...selectedCuisines.map((c) => ({ label: c, href: href({ cuisine: toggle(selectedCuisines, c) }) })),
 	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
+	...selectedTags.map((t) => ({ label: t, href: href({ why: toggle(selectedTags, t) }) })),
+	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
 	...(city ? [{ label: city, href: href({ city: null }) }] : []),
 ];
 
@@ -179,6 +203,22 @@ function href(changes: Record<string, string | string[] | null>): string {
 						)}
 					</div>
 
+					{whyFacets.length > 0 && (
+						<div class="rl-filters__row rl-filters__row--split">
+							<span class="rl-filters__legend">Why</span>
+							{whyFacets.map((t) => (
+								<a
+									class="rl-chip"
+									href={href({ why: toggle(selectedTags, t.name) })}
+									aria-pressed={selectedTags.includes(t.name) ? 'true' : 'false'}
+								>
+									<span>{t.name}</span>
+									<span class="rl-chip__n">{t.count}</span>
+								</a>
+							))}
+						</div>
+					)}
+
 					<div class="rl-filters__row rl-filters__row--split">
 						<span class="rl-filters__legend">Price</span>
 						{PRICE_BANDS.map((p) => (
@@ -188,6 +228,17 @@ function href(changes: Record<string, string | string[] | null>): string {
 								aria-pressed={selectedPrices.includes(p) ? 'true' : 'false'}
 							>
 								{p}
+							</a>
+						))}
+
+						<span class="rl-filters__legend rl-filters__legend--gap">Trip</span>
+						{trips.map((t) => (
+							<a
+								class="rl-chip"
+								href={href({ trip: t.key })}
+								aria-pressed={trip === t.key ? 'true' : 'false'}
+							>
+								{t.label}
 							</a>
 						))}
 
@@ -242,8 +293,17 @@ function href(changes: Record<string, string | string[] | null>): string {
 							<a class="trow__link" href={`/restaurants/place/${p.id}`} aria-label={p.name} />
 							<span class="trow__ring" aria-hidden="true" />
 							<span class="trow__name">{p.name}</span>
+							{/* The mark, not the words: on a list this long "worth the
+							    trip" nine times is noise, and a dagger is what a menu
+							    uses to say the same thing once. */}
+							{p.trip && (
+								<span class="trow__trip" title="Worth the trip">
+									†
+								</span>
+							)}
 							<span class="trow__hood">{placeLine(p)}</span>
 							<span class="rl-gap" />
+							{p.to_try_tags.length > 0 && <span class="trow__tags">{p.to_try_tags.join(' · ')}</span>}
 							<span class="rl-why trow__why">{p.to_try_reason}</span>
 							{isOwner ? (
 								<button
@@ -389,6 +449,21 @@ function href(changes: Record<string, string | string[] | null>): string {
 	.trow__hood {
 		font-size: 11.5px;
 		color: var(--ink-3);
+	}
+	.trow__trip {
+		font-family: var(--prose);
+		font-size: 15px;
+		line-height: 1;
+		color: var(--terracotta);
+		flex: none;
+	}
+	.trow__tags {
+		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 1.4px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+		white-space: nowrap;
 	}
 	.trow__why {
 		font-size: 14.5px;

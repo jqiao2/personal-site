@@ -16,6 +16,46 @@ export function isPriceBand(v: unknown): v is PriceBand {
 	return typeof v === 'string' && (PRICE_BANDS as readonly string[]).includes(v);
 }
 
+/**
+ * The kind of why, for a place on the to-try list.
+ *
+ * FIXED, AND SHORT ON PURPOSE. `to_try_reason` is the record — one line of
+ * prose, and better prose than any taxonomy — but prose cannot be filtered,
+ * and at eighty-odd places "the ones someone recommended" and "the ones I
+ * walked past" are different lists. A free tag field would answer that with
+ * synonyms: recommendation, rec, recommended, someone said. Eight words that
+ * cover the reasons a place gets written down keep the filter meaning
+ * something.
+ */
+export const WHY_TAGS = [
+	'a dish',
+	'a recommendation',
+	'the room',
+	'a group',
+	'walked past',
+	'press',
+	'cheap eats',
+	'late night',
+] as const;
+export type WhyTag = (typeof WHY_TAGS)[number];
+
+export function isWhyTag(v: unknown): v is WhyTag {
+	return typeof v === 'string' && (WHY_TAGS as readonly string[]).includes(v);
+}
+
+/**
+ * "Would I go out of my way for it", as a filter.
+ *
+ * Three states rather than a checkbox: the interesting question on a long list
+ * is as often "what's near me" as "what's worth the journey", and a checkbox
+ * can only ask one of them.
+ */
+export type TripFilter = 'trip' | 'nearby';
+
+export function isTripFilter(v: unknown): v is TripFilter {
+	return v === 'trip' || v === 'nearby';
+}
+
 // ---------------------------------------------------------------------------
 // Rows
 // ---------------------------------------------------------------------------
@@ -53,6 +93,10 @@ export interface Place {
 	photo_count: number;
 	on_to_try: boolean;
 	created_at: string;
+	/** Would I go out of my way for it — the place's own answer, not a visit's. */
+	trip: boolean;
+	/** The kind of why, from WHY_TAGS. Beside to_try_reason, never instead of it. */
+	to_try_tags: string[];
 }
 
 /** A row of the `restaurant_diary` view: one visit, with its place inlined. */
@@ -233,11 +277,17 @@ export async function listToTry(limit?: number): Promise<Place[]> {
  */
 export type PlaceScope = 'visited' | 'to-try';
 
-export type PlaceSort = 'recent' | 'rating' | 'verdict' | 'name' | 'added' | 'price';
+export type PlaceSort = 'recent' | 'rating' | 'verdict' | 'name' | 'added' | 'price' | 'trip';
 
 export function isPlaceSort(v: unknown): v is PlaceSort {
 	return (
-		v === 'recent' || v === 'rating' || v === 'verdict' || v === 'name' || v === 'added' || v === 'price'
+		v === 'recent' ||
+		v === 'rating' ||
+		v === 'verdict' ||
+		v === 'name' ||
+		v === 'added' ||
+		v === 'price' ||
+		v === 'trip'
 	);
 }
 
@@ -248,6 +298,10 @@ export interface PlaceQuery {
 	/** "This rung or better", as a rank. 5 (Avoid) means no threshold at all. */
 	verdictAtLeast?: number | null;
 	city?: string | null;
+	/** Worth the trip, or only if I'm nearby. Absent means both. */
+	trip?: TripFilter | null;
+	/** Any of these why-tags. Absent means all. */
+	tags?: string[];
 	sort?: PlaceSort;
 }
 
@@ -282,6 +336,11 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 		const want = query.city.toLowerCase();
 		rows = rows.filter((r) => r.city.toLowerCase() === want);
 	}
+	if (query.trip) rows = rows.filter((r) => (query.trip === 'trip' ? r.trip : !r.trip));
+	if (query.tags?.length) {
+		const want = new Set(query.tags);
+		rows = rows.filter((r) => r.to_try_tags.some((t) => want.has(t)));
+	}
 
 	return sortPlaces(rows, query.sort ?? (scope === 'to-try' ? 'added' : 'recent'));
 }
@@ -305,6 +364,15 @@ function sortPlaces(rows: Place[], sort: PlaceSort): Place[] {
 		case 'added':
 			return copy.sort(
 				(a, b) => (b.to_try_added_at ?? '').localeCompare(a.to_try_added_at ?? '') || byName(a, b),
+			);
+		case 'trip':
+			// Worth the trip first, and within each half the order the list
+			// already had, so marking one place does not reshuffle the rest.
+			return copy.sort(
+				(a, b) =>
+					Number(b.trip) - Number(a.trip) ||
+					(b.to_try_added_at ?? '').localeCompare(a.to_try_added_at ?? '') ||
+					byName(a, b),
 			);
 		case 'price':
 			// Cheapest first, and a place with no price band sorts last rather
@@ -612,6 +680,23 @@ export async function listCuisines(): Promise<string[]> {
 // Writes (owner only — every caller checks requireOwner first)
 // ---------------------------------------------------------------------------
 
+/** Counts per why-tag, in the fixed vocabulary's order, zeroes dropped. */
+export async function listWhyTagFacets(scope: PlaceScope = 'to-try'): Promise<CuisineFacet[]> {
+	const { data, error } = await inScope(
+		supabasePublic.from('restaurant_places').select('to_try_tags'),
+		scope,
+	);
+	if (error) throw new Error(error.message);
+	const counts = new Map<string, number>();
+	for (const row of (data ?? []) as { to_try_tags: string[] }[]) {
+		for (const t of new Set(row.to_try_tags)) counts.set(t, (counts.get(t) ?? 0) + 1);
+	}
+	// The vocabulary's own order, not frequency: it is eight fixed words in a
+	// row, and a row that reorders itself as you tag things is a row you have
+	// to re-read every time.
+	return WHY_TAGS.filter((t) => counts.has(t)).map((name) => ({ name, count: counts.get(name) ?? 0 }));
+}
+
 export interface PlaceInput {
 	/**
 	 * OPTIONAL, AND OMITTING IT MEANS "LEAVE THE NAME ALONE".
@@ -640,6 +725,8 @@ export interface PlaceInput {
 	yelpUrl?: string | null;
 	beliUrl?: string | null;
 	toTryReason?: string | null;
+	trip?: boolean;
+	toTryTags?: string[];
 	/** Put the place on the to-try list (a place with no visits yet). */
 	toTry?: boolean;
 }
@@ -661,6 +748,8 @@ function placePayload(input: PlaceInput): Record<string, unknown> {
 	if (input.yelpUrl !== undefined) payload.yelp_url = emptyToNull(input.yelpUrl);
 	if (input.beliUrl !== undefined) payload.beli_url = emptyToNull(input.beliUrl);
 	if (input.toTryReason !== undefined) payload.to_try_reason = emptyToNull(input.toTryReason);
+	if (input.trip !== undefined) payload.trip = input.trip;
+	if (input.toTryTags !== undefined) payload.to_try_tags = input.toTryTags.filter(isWhyTag);
 	if (input.toTry) payload.to_try_added_at = new Date().toISOString();
 	return payload;
 }

@@ -23,7 +23,7 @@
 // Only the stars survive onto a tile, only the verdict survives onto a map pin,
 // and the heart appears on the entry and as a small mark next to a name.
 import { VERDICTS } from '../lib/verdict';
-import { PRICE_BANDS } from '../lib/restaurants';
+import { PRICE_BANDS, WHY_TAGS } from '../lib/restaurants';
 import { verdictRotation } from '../lib/verdict';
 import { localDay } from '../lib/day';
 
@@ -31,7 +31,7 @@ interface Props {
 	/** Where to return after saving. */
 	redirect: string;
 	/** Pre-selected place, when the composer is opened from a place page. */
-	place?: { id: number; name: string; meta: string; visits: number } | null;
+	place?: { id: number; name: string; meta: string; visits: number; trip?: boolean } | null;
 	/** Editing an existing visit rather than logging a new one. */
 	visitId?: number | null;
 	initial?: {
@@ -210,6 +210,20 @@ const config = {
 				</div>
 			</div>
 
+			{/*
+				A property of the PLACE, asked here because a meal is when you find
+				out. It is not a sixth rung of the verdict: the verdict is "would I
+				come back", this is "would I cross town to", and a place can easily
+				earn one and not the other.
+			*/}
+			<div class="me__field">
+				<span class="rl-label">Would I go out of my way</span>
+				<div class="me__trip" data-me-trips>
+					<button type="button" class="me__trip-b" data-me-trip="0">If I&rsquo;m nearby</button>
+					<button type="button" class="me__trip-b" data-me-trip="1">Worth the trip †</button>
+				</div>
+			</div>
+
 			<div class="me__field">
 				<label class="rl-label" for="me-notes">Notes</label>
 				<textarea
@@ -285,6 +299,32 @@ const config = {
 				</div>
 			</div>
 			<div class="me__field">
+				<span class="rl-label">Would I go out of my way</span>
+				<div class="me__trip" data-me-try-trips>
+					<button type="button" class="me__trip-b" data-me-try-trip="0">If I&rsquo;m nearby</button>
+					<button type="button" class="me__trip-b" data-me-try-trip="1">Worth the trip †</button>
+				</div>
+			</div>
+
+			{/*
+				Beside the sentence, never instead of it. The line you write is the
+				record; these eight words are what makes eighty of them a list you
+				can cut down.
+			*/}
+			<div class="me__field">
+				<span class="rl-label">What kind of why</span>
+				<div class="me__whytags" data-me-why-tags>
+					{
+						WHY_TAGS.map((t) => (
+							<button type="button" class="me__whytag" data-me-why-tag={t}>
+								{t}
+							</button>
+						))
+					}
+				</div>
+			</div>
+
+			<div class="me__field">
 				<label class="rl-label" for="me-try-why">Why</label>
 				<input class="me__input me__input--prose" id="me-try-why" data-me-try-why type="text" autocomplete="off" placeholder="Peking duck, BYOB, a big table" />
 			</div>
@@ -316,6 +356,7 @@ const config = {
 		name: string;
 		meta: string;
 		visits: number;
+		trip?: boolean;
 	}
 	interface GeoHit {
 		name: string;
@@ -380,6 +421,12 @@ const config = {
 			tags: [...(cfg.initial?.tags ?? [])],
 			photos: [] as PendingPhoto[],
 			tryPrice: null as string | null,
+			// The place's own answer, in both panes. Seeded from the place when
+			// the composer opens on one, so logging a meal doesn't quietly
+			// un-mark somewhere already marked.
+			trip: cfg.place?.trip ?? false,
+			tryTrip: false,
+			whyTags: [] as string[],
 			/** A confirmed point from the geocoder, or null for an unplaced entry. */
 			geo: null as GeoHit | null,
 			saving: false,
@@ -421,7 +468,9 @@ const config = {
 						value('[data-me-try-where]') ||
 						value('[data-me-try-cuisine]') ||
 						value('[data-me-try-why]') ||
-						state.tryPrice,
+						state.tryPrice ||
+						state.tryTrip ||
+						state.whyTags.length,
 				);
 			}
 			if (cfg.visitId) return true;
@@ -484,6 +533,15 @@ const config = {
 			);
 			$$('[data-me-try-price]').forEach((el) =>
 				el.classList.toggle('me__price--on', el.dataset.meTryPrice === state.tryPrice),
+			);
+			$$('[data-me-trip]').forEach((el) =>
+				el.classList.toggle('me__trip-b--on', (el.dataset.meTrip === '1') === state.trip),
+			);
+			$$('[data-me-try-trip]').forEach((el) =>
+				el.classList.toggle('me__trip-b--on', (el.dataset.meTryTrip === '1') === state.tryTrip),
+			);
+			$$('[data-me-why-tag]').forEach((el) =>
+				el.classList.toggle('me__whytag--on', state.whyTags.includes(el.dataset.meWhyTag ?? '')),
 			);
 
 			const tags = $('[data-me-tags]')!;
@@ -768,6 +826,8 @@ const config = {
 					.map((c) => c.trim())
 					.filter(Boolean),
 				priceBand: state.tryPrice,
+				trip: state.tryTrip,
+				toTryTags: state.whyTags,
 				// What you typed wins over what the geocoder guessed — you edited
 				// it after picking, or you never picked at all. The coordinates
 				// and the country are the parts only the geocoder knows.
@@ -799,10 +859,11 @@ const config = {
 			const payload = {
 				restaurantId: state.placeId ?? undefined,
 				place: state.placeId
-					? { name: state.locked?.name ?? '', priceBand: state.price }
+					? { name: state.locked?.name ?? '', priceBand: state.price, trip: state.trip }
 					: {
 							name: state.locked?.name || value('[data-me-place]'),
 							priceBand: state.price,
+							trip: state.trip,
 							// Only a NEW place carries a location; picking an existing
 							// one must never overwrite the location already on record.
 							neighborhood: state.geo?.neighborhood ?? null,
@@ -947,6 +1008,29 @@ const config = {
 			el.addEventListener('click', () => {
 				const p = el.dataset.meTryPrice ?? null;
 				state.tryPrice = state.tryPrice === p ? null : p;
+				render();
+			}),
+		);
+		// Two buttons rather than one toggle, because "if I'm nearby" is an
+		// answer and not the absence of one.
+		$$('[data-me-trip]').forEach((el) =>
+			el.addEventListener('click', () => {
+				state.trip = el.dataset.meTrip === '1';
+				render();
+			}),
+		);
+		$$('[data-me-try-trip]').forEach((el) =>
+			el.addEventListener('click', () => {
+				state.tryTrip = el.dataset.meTryTrip === '1';
+				render();
+			}),
+		);
+		$$('[data-me-why-tag]').forEach((el) =>
+			el.addEventListener('click', () => {
+				const tag = el.dataset.meWhyTag ?? '';
+				state.whyTags = state.whyTags.includes(tag)
+					? state.whyTags.filter((t) => t !== tag)
+					: [...state.whyTags, tag];
 				render();
 			}),
 		);
@@ -1339,6 +1423,58 @@ const config = {
 		background: var(--terracotta);
 		border-color: var(--terracotta);
 		color: var(--card);
+	}
+
+	/* Two answers side by side, the same shape as the price row: an unmarked
+	   place has said "if I'm nearby", not said nothing. */
+	.me__trip {
+		display: flex;
+		gap: 6px;
+		max-width: 340px;
+		margin-top: 6px;
+	}
+	.me__trip-b {
+		flex: 1;
+		border: 1px solid var(--rule);
+		background: var(--ground);
+		color: var(--ink-soft);
+		font-family: var(--ui);
+		font-size: 12.5px;
+		padding: 8px 6px;
+		cursor: pointer;
+	}
+	.me__trip-b:hover {
+		border-color: var(--terracotta);
+	}
+	.me__trip-b--on {
+		background: var(--ink);
+		border-color: var(--ink);
+		color: var(--ground);
+	}
+
+	.me__whytags {
+		display: flex;
+		gap: 6px;
+		flex-wrap: wrap;
+		margin-top: 6px;
+	}
+	.me__whytag {
+		background: var(--card);
+		border: 1px solid var(--rule);
+		color: var(--ink-soft);
+		font-family: var(--ui);
+		font-size: 12px;
+		padding: 4px 10px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.me__whytag:hover {
+		border-color: var(--terracotta);
+	}
+	.me__whytag--on {
+		background: var(--ink);
+		border-color: var(--ink);
+		color: var(--ground);
 	}
 
 	.me__prices {
