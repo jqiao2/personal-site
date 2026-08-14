@@ -1,0 +1,1163 @@
+---
+// "Place it" — the dialog that gives a restaurant a location, or corrects one.
+//
+// WHY THIS EXISTS. A place can be added by name alone: the composer's fast path
+// takes a name and nothing else, and the bulk to-try importer adds a place it
+// cannot find rather than dropping it. Those rows have no point, so the map
+// screen cannot draw them, and — because `city` is NOT NULL — they carry a "New
+// York" nobody chose. Until now there was no way to fix one after the fact.
+//
+// WHY A DIALOG RATHER THAN AN INLINE PANEL. The composer already does this
+// lookup inline, under the name field, and doing it that way here was the
+// tempting reuse. It reads calmer right up to the moment a result is picked:
+// the confirming step is three fields, a coordinate line and an area warning,
+// and unfolding all of that in the body of the page pushes the verdict history
+// down every time it opens. Placing a restaurant is a digression from reading
+// about it, so it gets a digression's furniture — the same 620px card, header
+// bar, mono summary and Discard? guard the other two dialogs use.
+//
+// THE FOUR STATES ARE NOT ERROR STATES. Nominatim finding nothing, and
+// Nominatim being unreachable, are both ordinary outcomes here: OpenStreetMap
+// simply does not have every restaurant, and a volunteer-run service is
+// allowed to be down. Neither may cost you the trip to the dialog, so both
+// land on the same by-hand form rather than a dead end — the location gets
+// written in words, and the point stays missing, which is a real improvement
+// over a place that claims a city nobody confirmed.
+import type { LocationState } from '../lib/restaurant-view';
+
+interface Props {
+	place: {
+		id: number;
+		name: string;
+		/** What the location line says now — the words being corrected. */
+		where: string;
+		cuisines: string[];
+	};
+	/** Drives the header and the opening query; see lib/restaurant-view. */
+	state: LocationState;
+	/** The record as it stands, shown under the heading and again at the foot. */
+	evidence: string;
+}
+
+const { place, state, evidence } = Astro.props;
+
+// The lookup opens on the name as recorded, minus the city that was appended
+// to it by whoever wrote the list down: "Laser Wolf Brooklyn" finds nothing in
+// OSM, "Laser Wolf" + "Brooklyn" finds it. The split is a guess and both
+// fields stay editable, which is the whole reason it is safe to make one.
+const CITY_SUFFIXES = ['Brooklyn', 'Queens', 'Manhattan', 'Bronx', 'Staten Island', 'NYC', 'New York'];
+const suffix = CITY_SUFFIXES.find((c) => place.name.toLowerCase().endsWith(` ${c.toLowerCase()}`));
+const config = {
+	placeId: place.id,
+	state,
+	evidence,
+	name: place.name,
+	query: suffix ? place.name.slice(0, -suffix.length - 1) : place.name,
+	// An unplaced place's words are the assumed city, so they are not
+	// offered back as a hint; anything else on record is real enough to use.
+	where: suffix ?? (state === 'unplaced' ? '' : place.where),
+	current: place.where,
+	cuisine: place.cuisines[0] ?? '',
+};
+---
+
+<script type="application/json" id="place-editor-config" set:html={JSON.stringify(config)} />
+
+<div class="pe" id="place-editor" hidden>
+	<div class="pe__backdrop" data-pe-backdrop></div>
+	<div class="pe__sheet" role="dialog" aria-modal="true" aria-labelledby="pe-title">
+		<div class="pe__head">
+			<div class="pe__heading">
+				<div class="pe__title" id="pe-title">
+					{state === 'placed' ? 'Check this location' : 'Place this restaurant'}
+				</div>
+				<div class="pe__evidence">{evidence}</div>
+			</div>
+			<button type="button" class="pe__x" data-pe-close aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pe__body">
+			{/* -------------------------------------------------- search */}
+			<div class="pe__grid" data-pe-query hidden>
+				<div class="pe__field">
+					<label class="rl-label" for="pe-q">Name</label>
+					<input class="pe__input" id="pe-q" data-pe-q type="text" autocomplete="off" />
+				</div>
+				<div class="pe__field">
+					<label class="rl-label" for="pe-where">Where</label>
+					<input class="pe__input" id="pe-where" data-pe-where type="text" autocomplete="off" placeholder="Brooklyn" />
+				</div>
+			</div>
+
+			<div data-pe-results hidden>
+				<div class="pe__meta" data-pe-result-meta></div>
+				<div class="pe__hits" data-pe-hits></div>
+			</div>
+
+			<div class="pe__none" data-pe-none hidden>
+				Nothing in OpenStreetMap matches that. Try the name on its own, or leave it unplaced — the log
+				works without a point.
+			</div>
+
+			{/* -------------------------------------------------- geocoder down */}
+			<div class="pe__down" data-pe-down hidden>
+				<div class="pe__down-title">OpenStreetMap didn’t answer.</div>
+				<p class="pe__down-body">
+					Nothing has been lost and nothing has been written. Try again in a minute, or write the
+					location in by hand and leave the point for later.
+				</p>
+				<div class="pe__down-actions">
+					<button type="button" class="pe__retry" data-pe-retry>Try again</button>
+					<button type="button" class="pe__linkish" data-pe-hand>write the location in by hand</button>
+				</div>
+			</div>
+
+			{/* -------------------------------------------------- by hand */}
+			<div class="pe__hand" data-pe-hand-form hidden>
+				<div class="pe__field">
+					<label class="rl-label" for="pe-hand">Location, in words</label>
+					<input
+						class="pe__input"
+						id="pe-hand"
+						data-pe-hand-field
+						type="text"
+						autocomplete="off"
+						placeholder="Williamsburg, Brooklyn"
+					/>
+					<div class="pe__note">Saved as the record. The place stays off the map until it has a point.</div>
+				</div>
+				<div class="pe__field">
+					<label class="rl-label" for="pe-paste">Or paste a link or a pair of coordinates</label>
+					<input
+						class="pe__input pe__input--mono"
+						id="pe-paste"
+						data-pe-paste
+						type="text"
+						autocomplete="off"
+						placeholder="maps.app.goo.gl/…  or  40.72174, -73.95809"
+					/>
+					<div class="pe__note" data-pe-paste-note>
+						A link is read for its coordinates and nothing else. Anything it fills in stays editable.
+					</div>
+				</div>
+				<button type="button" class="pe__linkish" data-pe-back-to-search hidden>
+					search OpenStreetMap instead
+				</button>
+			</div>
+
+			{/* -------------------------------------------------- confirming */}
+			<div class="pe__confirm" data-pe-confirm hidden>
+				<div class="pe__picked">
+					<div class="pe__picked-head">
+						<span class="pe__picked-name" data-pe-picked-name></span>
+						<span class="pe__picked-tail" data-pe-picked-tail></span>
+					</div>
+					<div class="pe__picked-line" data-pe-picked-line></div>
+					<button type="button" class="pe__linkish pe__linkish--quiet" data-pe-unpick>
+						Pick a different result
+					</button>
+				</div>
+
+				{/* An area's centroid is not where the restaurant is, so it is never
+				    stored as one. Saying that out loud at the moment of confirming
+				    beats a place silently staying off the map. */}
+				<div class="pe__warn" data-pe-area-warn hidden>
+					This result is the centre of an area, not a door. Confirming it fills in the words and leaves
+					the place off the map.
+				</div>
+
+				<div class="pe__grid">
+					<div class="pe__field">
+						<label class="rl-label" for="pe-name">Shown as</label>
+						<input class="pe__input" id="pe-name" data-pe-name type="text" autocomplete="off" />
+					</div>
+					<div class="pe__field">
+						<label class="rl-label" for="pe-cuisine">Cuisine</label>
+						<input class="pe__input" id="pe-cuisine" data-pe-cuisine type="text" autocomplete="off" placeholder="—" />
+					</div>
+				</div>
+				<div class="pe__field">
+					<label class="rl-label" for="pe-loc">Where</label>
+					<input class="pe__input" id="pe-loc" data-pe-loc type="text" autocomplete="off" />
+				</div>
+
+				{/* Offered, never applied: a typed cuisine is a choice and OSM's is a
+				    guess, so the guess has to be accepted by hand. */}
+				<button type="button" class="pe__guess" data-pe-cuisine-offer hidden>
+					<span class="pe__guess-word" data-pe-cuisine-guess></span>
+					<span class="pe__guess-note">— OpenStreetMap’s guess, tap to use it</span>
+				</button>
+
+				<div class="pe__point" data-pe-point hidden>
+					<span class="rl-label">Point</span>
+					<span class="pe__coords" data-pe-coords></span>
+					<span class="pe__point-note" data-pe-point-note>the door, per OpenStreetMap</span>
+				</div>
+
+				<div class="pe__underneath">
+					Everything above is a suggestion until you save it, and editable after. What you typed stays in
+					the record underneath:<br />
+					<span class="pe__underneath-raw">{evidence}</span>
+				</div>
+			</div>
+		</div>
+
+		<div class="pe__foot">
+			<span class="pe__summary" data-pe-summary></span>
+			<button type="button" class="rl-btn pe__cancel" data-pe-close>Cancel</button>
+			<button type="button" class="pe__save" data-pe-save hidden disabled>Save the location</button>
+		</div>
+
+		<div class="pe__discard" data-pe-discard hidden>
+			<div class="pe__discard-card">
+				<div class="pe__discard-title">Discard?</div>
+				<div class="pe__discard-actions">
+					<button type="button" class="rl-btn" data-pe-keep>Keep</button>
+					<button type="button" class="pe__discard-go" data-pe-discard-go>Discard</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	interface GeoHit {
+		name: string;
+		display: string;
+		lat: number;
+		lng: number;
+		neighborhood: string | null;
+		city: string | null;
+		stateRegion: string | null;
+		country: string | null;
+		kind: string | null;
+		cuisines: string[];
+		address: string;
+		precise: boolean;
+	}
+	interface Config {
+		placeId: number;
+		state: 'placed' | 'located' | 'unplaced';
+		evidence: string;
+		name: string;
+		query: string;
+		where: string;
+		current: string;
+		cuisine: string;
+	}
+
+	const node = document.getElementById('place-editor');
+	const configNode = document.getElementById('place-editor-config');
+	if (node && configNode) {
+		const cfg = JSON.parse(configNode.textContent ?? '{}') as Config;
+
+		type Mode = 'search' | 'confirm' | 'none' | 'down' | 'hand';
+		const state = {
+			open: false,
+			mode: 'search' as Mode,
+			hits: [] as GeoHit[],
+			picked: null as GeoHit | null,
+			searched: false,
+			searching: false,
+			saving: false,
+			// The confirming form, once a result is picked. Held apart from the
+			// hit so that editing a field and then picking a different result
+			// does not silently keep the old text.
+			name: '',
+			loc: '',
+			cuisine: '',
+			hand: '',
+			paste: '',
+			coords: null as { lat: number; lng: number } | null,
+			pasteNote: '',
+		};
+
+		const $ = <T extends HTMLElement>(sel: string) => node.querySelector<T>(sel)!;
+		const val = (sel: string) => ($(sel) as HTMLInputElement).value.trim();
+		const show = (sel: string, on: boolean) => {
+			$(sel).hidden = !on;
+		};
+
+		function hitWhere(h: GeoHit): string {
+			return [h.neighborhood, h.city].filter(Boolean).join(', ');
+		}
+
+		function open(mode: Mode) {
+			state.open = true;
+			state.mode = mode;
+			state.picked = null;
+			state.hits = [];
+			state.searched = false;
+			state.hand = '';
+			state.paste = '';
+			state.coords = null;
+			state.pasteNote = '';
+			($('[data-pe-q]') as HTMLInputElement).value = cfg.query;
+			($('[data-pe-where]') as HTMLInputElement).value = cfg.where;
+			($('[data-pe-hand-field]') as HTMLInputElement).value = cfg.state === 'unplaced' ? '' : cfg.current;
+			($('[data-pe-paste]') as HTMLInputElement).value = '';
+			node.hidden = false;
+			document.body.style.overflow = 'hidden';
+			render();
+			if (mode === 'search') {
+				lookup();
+				window.setTimeout(() => $('[data-pe-q]').focus(), 0);
+			}
+		}
+
+		function close() {
+			state.open = false;
+			node.hidden = true;
+			$('[data-pe-discard]').hidden = true;
+			document.body.style.overflow = '';
+		}
+
+		/** Anything typed that a close would throw away. */
+		function dirty(): boolean {
+			if (state.mode === 'confirm') return true;
+			return !!(val('[data-pe-hand-field]') || val('[data-pe-paste]'));
+		}
+
+		function askClose() {
+			if (dirty()) $('[data-pe-discard]').hidden = false;
+			else close();
+		}
+
+		// -- the lookup --------------------------------------------------------
+		// Same route the composer uses: owner-gated, paced to one request a
+		// second, and searching NAMES rather than addresses — which is why the
+		// "where" field exists at all, to separate the two Ba Xuyêns.
+		let timer = 0;
+		function lookup() {
+			window.clearTimeout(timer);
+			const name = val('[data-pe-q]');
+			if (name.length < 3) {
+				state.hits = [];
+				state.searched = false;
+				render();
+				return;
+			}
+			const where = val('[data-pe-where]');
+			const q = where ? `${name}, ${where}` : name;
+			state.searching = true;
+			render();
+			timer = window.setTimeout(async () => {
+				let hits: GeoHit[] = [];
+				let reachable = true;
+				try {
+					const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(q)}`);
+					if (res.ok) hits = ((await res.json()).hits ?? []) as GeoHit[];
+					else reachable = res.status !== 502;
+				} catch {
+					reachable = false;
+				}
+				state.searching = false;
+				state.searched = true;
+				state.hits = hits;
+				// A geocoder that cannot be reached is not a geocoder that found
+				// nothing, and the two want different words. Retyping after either
+				// one has to be able to lead back to results, so the mode is
+				// recomputed here rather than only ever moved away from search.
+				// The by-hand form is the exception: having chosen to type the
+				// location, you don't get pulled back out of it by a late reply.
+				if (state.mode !== 'hand') {
+					state.mode = !reachable ? 'down' : hits.length === 0 ? 'none' : 'search';
+				}
+				render();
+			}, 420);
+		}
+
+		function pick(hit: GeoHit) {
+			state.picked = hit;
+			state.mode = 'confirm';
+			state.name = hit.name || cfg.name;
+			state.loc = hitWhere(hit) || cfg.current;
+			state.cuisine = cfg.cuisine;
+			render();
+		}
+
+		// -- pasted links and coordinates --------------------------------------
+		// A pasted link is read for its coordinates and nothing else. Google's
+		// long URLs carry them in two or three places; the short ones carry
+		// nothing until they are followed, which only the server can do.
+		function coordsIn(text: string): { lat: number; lng: number } | null {
+			const patterns = [
+				/@(-?\d+\.\d+),(-?\d+\.\d+)/,
+				/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,
+				/[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
+				/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/,
+			];
+			for (const re of patterns) {
+				const m = text.match(re);
+				if (!m) continue;
+				const lat = Number(m[1]);
+				const lng = Number(m[2]);
+				if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
+			}
+			return null;
+		}
+
+		let pasteTimer = 0;
+		function readPaste() {
+			window.clearTimeout(pasteTimer);
+			const text = val('[data-pe-paste]');
+			state.coords = null;
+			if (!text) {
+				state.pasteNote = '';
+				render();
+				return;
+			}
+			const direct = coordsIn(text);
+			if (direct) {
+				state.coords = direct;
+				state.pasteNote = `Reads as ${direct.lat.toFixed(5)}, ${direct.lng.toFixed(5)}.`;
+				render();
+				return;
+			}
+			if (!/^https?:\/\//i.test(text)) {
+				state.pasteNote = 'No coordinates in that yet.';
+				render();
+				return;
+			}
+			state.pasteNote = 'Following the link…';
+			render();
+			pasteTimer = window.setTimeout(async () => {
+				try {
+					const res = await fetch(`/api/restaurants/resolve-link?url=${encodeURIComponent(text)}`);
+					const body = await res.json();
+					if (res.ok && body.lat != null && body.lng != null) {
+						state.coords = { lat: body.lat, lng: body.lng };
+						state.pasteNote = `Reads as ${body.lat.toFixed(5)}, ${body.lng.toFixed(5)}.`;
+					} else {
+						state.pasteNote = 'That link has no coordinates in it. Open it and copy the pair instead.';
+					}
+				} catch {
+					state.pasteNote = 'Could not follow that link.';
+				}
+				render();
+			}, 500);
+		}
+
+		// -- render ------------------------------------------------------------
+		function render() {
+			const m = state.mode;
+			show('[data-pe-query]', m === 'search' || m === 'none');
+			show('[data-pe-results]', m === 'search' && state.hits.length > 0);
+			show('[data-pe-none]', m === 'none');
+			show('[data-pe-down]', m === 'down');
+			show('[data-pe-hand-form]', m === 'none' || m === 'hand');
+			show('[data-pe-confirm]', m === 'confirm');
+			$('[data-pe-back-to-search]').hidden = m !== 'hand';
+			$('[data-pe-hand-form]').classList.toggle('pe__hand--alone', m === 'hand');
+
+			if (m === 'search') {
+				const meta = state.searching
+					? 'Looking…'
+					: state.hits.length
+						? `${state.hits.length} results from OpenStreetMap. It searches names, so the where field is what separates the first two.`
+						: '';
+				$('[data-pe-result-meta]').textContent = meta;
+				renderHits();
+			}
+
+			if (m === 'confirm' && state.picked) {
+				const h = state.picked;
+				$('[data-pe-picked-name]').textContent = h.name || cfg.name;
+				$('[data-pe-picked-line]').textContent = h.address || h.display;
+				const tail = $('[data-pe-picked-tail]');
+				tail.textContent = h.precise ? (h.kind ?? 'exact point') : 'no exact point';
+				tail.classList.toggle('pe__picked-tail--area', !h.precise);
+				show('[data-pe-area-warn]', !h.precise);
+				show('[data-pe-point]', h.precise);
+				$('[data-pe-coords]').textContent = `${h.lat.toFixed(5)}, ${h.lng.toFixed(5)}`;
+				($('[data-pe-name]') as HTMLInputElement).value = state.name;
+				($('[data-pe-loc]') as HTMLInputElement).value = state.loc;
+				($('[data-pe-cuisine]') as HTMLInputElement).value = state.cuisine;
+				const guess = h.cuisines[0] ?? '';
+				show('[data-pe-cuisine-offer]', !!guess && !state.cuisine.trim());
+				$('[data-pe-cuisine-guess]').textContent = guess;
+			}
+
+			$('[data-pe-paste-note]').textContent =
+				state.pasteNote || 'A link is read for its coordinates and nothing else. Anything it fills in stays editable.';
+
+			// The footer says what saving will do, and the two outcomes are
+			// genuinely different: one puts the place on the map, one does not.
+			const save = $('[data-pe-save]') as HTMLButtonElement;
+			const showSave = m === 'confirm' || m === 'hand' || m === 'none';
+			save.hidden = !showSave;
+			if (m === 'confirm') {
+				const precise = !!state.picked?.precise;
+				save.textContent = precise ? 'Place it here' : 'Save the location';
+				save.disabled = !val('[data-pe-name]') || state.saving;
+				$('[data-pe-summary]').textContent = precise ? 'will save a point' : 'will save the words, no point';
+			} else if (showSave) {
+				const hand = val('[data-pe-hand-field]');
+				save.textContent = state.coords ? 'Place it here' : 'Save the location';
+				save.disabled = (!hand && !state.coords) || state.saving;
+				$('[data-pe-summary]').textContent = state.coords
+					? 'will save a point'
+					: hand
+						? 'will save the words, no point'
+						: '';
+			} else {
+				$('[data-pe-summary]').textContent = '';
+			}
+		}
+
+		function renderHits() {
+			const box = $('[data-pe-hits]');
+			box.replaceChildren();
+			for (const hit of state.hits) {
+				const row = document.createElement('div');
+				row.className = 'pe__hit';
+				const name = document.createElement('span');
+				name.className = 'pe__hit-name';
+				name.textContent = hit.name || hit.display.split(',')[0];
+				const meta = document.createElement('span');
+				meta.className = 'pe__hit-meta';
+				meta.textContent = [hit.cuisines.length ? `${hit.kind} · ${hit.cuisines[0]}` : hit.kind, hit.address]
+					.filter(Boolean)
+					.join(' · ');
+				const tail = document.createElement('span');
+				tail.className = hit.precise ? 'pe__hit-tail' : 'pe__hit-tail pe__hit-tail--area';
+				tail.textContent = hit.precise ? (hit.kind ?? 'exact point') : 'no exact point';
+				row.append(name, meta, tail);
+				row.addEventListener('click', () => pick(hit));
+				box.append(row);
+			}
+		}
+
+		// -- saving ------------------------------------------------------------
+		async function save() {
+			if (state.saving) return;
+			const body: Record<string, unknown> = {};
+
+			if (state.mode === 'confirm' && state.picked) {
+				const h = state.picked;
+				const where = val('[data-pe-loc]');
+				const [first, ...rest] = where.split(',').map((s) => s.trim()).filter(Boolean);
+				const cuisine = val('[data-pe-cuisine]');
+				body.name = val('[data-pe-name]');
+				body.neighborhood = rest.length ? first : null;
+				body.city = rest.length ? rest.join(', ') : first || h.city;
+				body.stateRegion = h.stateRegion;
+				if (h.country) body.country = h.country;
+				if (cuisine) body.cuisines = cuisine.split(',').map((c) => c.trim()).filter(Boolean);
+				// Only a point-precise hit contributes coordinates. An area's
+				// centroid is a pin floating in the middle of a neighbourhood.
+				body.lat = h.precise ? h.lat : null;
+				body.lng = h.precise ? h.lng : null;
+			} else {
+				const where = val('[data-pe-hand-field]');
+				if (where) {
+					const [first, ...rest] = where.split(',').map((s) => s.trim()).filter(Boolean);
+					body.neighborhood = rest.length ? first : null;
+					body.city = rest.length ? rest.join(', ') : first;
+				}
+				if (state.coords) {
+					body.lat = state.coords.lat;
+					body.lng = state.coords.lng;
+				}
+			}
+
+			state.saving = true;
+			render();
+			const res = await fetch(`/api/restaurants/places/${cfg.placeId}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			state.saving = false;
+			if (!res.ok) {
+				render();
+				window.alert('Could not save that location.');
+				return;
+			}
+
+			// The page is re-read rather than patched in place: the header, the
+			// invitation, the sidecar row and the map link all move together, and
+			// three of them are server-rendered. The toast rides across in
+			// sessionStorage so the outcome is still stated on the other side.
+			const placed = body.lat != null;
+			const words = [body.neighborhood, body.city].filter(Boolean).join(', ');
+			const name = typeof body.name === 'string' && body.name ? body.name : cfg.name;
+			sessionStorage.setItem(
+				'rl-toast',
+				placed ? `Placed ${name} — ${words}` : `Located ${name} — ${words} · still no point on the map`,
+			);
+			location.reload();
+		}
+
+		// -- wiring ------------------------------------------------------------
+		for (const b of document.querySelectorAll('[data-open-place-editor]')) {
+			b.addEventListener('click', (e) => {
+				e.preventDefault();
+				open('search');
+			});
+		}
+		for (const b of document.querySelectorAll('[data-open-place-by-hand]')) {
+			b.addEventListener('click', (e) => {
+				e.preventDefault();
+				open('hand');
+			});
+		}
+
+		node.querySelectorAll('[data-pe-close]').forEach((b) => b.addEventListener('click', askClose));
+		$('[data-pe-backdrop]').addEventListener('click', askClose);
+		$('[data-pe-keep]').addEventListener('click', () => {
+			$('[data-pe-discard]').hidden = true;
+		});
+		$('[data-pe-discard-go]').addEventListener('click', close);
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && state.open) askClose();
+		});
+
+		$('[data-pe-q]').addEventListener('input', lookup);
+		$('[data-pe-where]').addEventListener('input', lookup);
+		$('[data-pe-retry]').addEventListener('click', () => {
+			state.mode = 'search';
+			render();
+			lookup();
+		});
+		$('[data-pe-hand]').addEventListener('click', () => {
+			state.mode = 'hand';
+			render();
+		});
+		$('[data-pe-back-to-search]').addEventListener('click', () => {
+			state.mode = 'search';
+			render();
+			lookup();
+		});
+		$('[data-pe-unpick]').addEventListener('click', () => {
+			state.picked = null;
+			state.mode = 'search';
+			render();
+		});
+		$('[data-pe-cuisine-offer]').addEventListener('click', () => {
+			state.cuisine = state.picked?.cuisines[0] ?? '';
+			render();
+		});
+		$('[data-pe-name]').addEventListener('input', () => {
+			state.name = val('[data-pe-name]');
+			render();
+		});
+		$('[data-pe-loc]').addEventListener('input', () => {
+			state.loc = val('[data-pe-loc]');
+		});
+		$('[data-pe-cuisine]').addEventListener('input', () => {
+			state.cuisine = val('[data-pe-cuisine]');
+			render();
+		});
+		$('[data-pe-hand-field]').addEventListener('input', render);
+		$('[data-pe-paste]').addEventListener('input', readPaste);
+		$('[data-pe-save]').addEventListener('click', save);
+	}
+</script>
+
+<style is:global>
+	/* GLOBAL, LIKE THE COMPOSER'S. Half of what this dialog draws — the result
+	   rows — is built in a script, and scoped styles only reach elements Astro
+	   rendered, so a scoped block would leave the hits unstyled. Every class
+	   here is namespaced `pe__` for the same reason the composer's are `me__`.
+
+	   And `hidden` has to outrank the layout: several panes set `display`, which
+	   beats the browser's own `[hidden]` rule, and the dialog toggles all of
+	   them by that attribute. */
+	.pe [hidden] {
+		display: none !important;
+	}
+
+	/* The dialog wears the same clothes as the other two: 620px of cream on a
+	   full-ink border, an Ultra header bar, a footer that states the outcome. */
+	.pe {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		padding: clamp(12px, 4vh, 44px) 14px;
+		overflow: auto;
+	}
+
+	.pe[hidden] {
+		display: none;
+	}
+
+	.pe__backdrop {
+		position: fixed;
+		inset: 0;
+		background: rgba(47, 30, 18, 0.58);
+	}
+
+	.pe__sheet {
+		position: relative;
+		width: 100%;
+		max-width: 620px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		box-shadow: 0 20px 48px rgba(47, 30, 18, 0.36);
+	}
+
+	.pe__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 15px 20px;
+		border-bottom: 1px solid var(--rule);
+		background: var(--panel);
+	}
+
+	.pe__heading {
+		min-width: 0;
+	}
+
+	.pe__title {
+		font-family: var(--display);
+		font-size: 19px;
+		line-height: 1.15;
+		color: var(--ink);
+	}
+
+	.pe__evidence {
+		margin-top: 6px;
+		font-family: var(--mono);
+		font-size: 10.5px;
+		color: var(--ink-3);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.pe__x {
+		flex: none;
+		width: 28px;
+		height: 28px;
+		border: 1px solid var(--rule);
+		background: var(--card);
+		color: var(--ink-2);
+		font-size: 14px;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.pe__x:hover {
+		border-color: var(--terracotta);
+		color: var(--terracotta-deep);
+	}
+
+	.pe__body {
+		padding: 18px 20px;
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		max-height: calc(100vh - 210px);
+		overflow: auto;
+	}
+
+	.pe__grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+		gap: 10px;
+	}
+
+	.pe__field {
+		min-width: 0;
+	}
+
+	.pe__input {
+		width: 100%;
+		margin-top: 6px;
+		background: var(--ground);
+		border: 1px solid var(--rule);
+		padding: 9px 11px;
+		font-family: var(--ui);
+		font-size: 13.5px;
+		color: var(--ink);
+	}
+
+	.pe__input:focus {
+		outline: none;
+		border-color: var(--terracotta);
+	}
+
+	.pe__input--mono {
+		font-family: var(--mono);
+		font-size: 12.5px;
+	}
+
+	.pe__note {
+		margin-top: 7px;
+		font-size: 11.5px;
+		color: var(--ink-3);
+		line-height: 1.55;
+	}
+
+	.pe__meta {
+		font-size: 11.5px;
+		color: var(--ink-3);
+		line-height: 1.5;
+	}
+
+	.pe__hits {
+		margin-top: 9px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+	}
+
+	.pe__hit {
+		display: flex;
+		align-items: baseline;
+		gap: 4px 10px;
+		flex-wrap: wrap;
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--rule-4);
+		cursor: pointer;
+	}
+
+	.pe__hit:last-child {
+		border-bottom: none;
+	}
+
+	.pe__hit:hover {
+		background: var(--sunk);
+	}
+
+	.pe__hit-name {
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+
+	.pe__hit-meta {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-size: 11.5px;
+		color: var(--ink-3);
+	}
+
+	/* An area hit is offered, and named as what it is, so nobody pins a
+	   restaurant to the middle of a neighbourhood by accident. */
+	.pe__hit-tail {
+		margin-left: auto;
+		font-family: var(--mono);
+		font-size: 10.5px;
+		color: var(--ink-3);
+		padding: 2px 6px;
+		white-space: nowrap;
+		border: 1px solid transparent;
+	}
+
+	.pe__hit-tail--area {
+		color: var(--chile);
+		background: var(--sunk);
+		border-color: var(--rule-2);
+	}
+
+	.pe__none {
+		font-size: 13px;
+		color: var(--ink-2);
+		line-height: 1.62;
+		padding: 4px 0 2px;
+		max-width: 520px;
+		text-wrap: pretty;
+	}
+
+	.pe__down {
+		background: var(--sunk);
+		border: 1px solid var(--rule);
+		padding: 16px 18px;
+	}
+
+	.pe__down-title {
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 17px;
+		color: var(--ink);
+		line-height: 1.4;
+	}
+
+	.pe__down-body {
+		margin-top: 10px;
+		font-size: 13px;
+		color: var(--ink-2);
+		line-height: 1.62;
+		max-width: 480px;
+		text-wrap: pretty;
+	}
+
+	.pe__down-actions {
+		margin-top: 14px;
+		display: flex;
+		align-items: center;
+		gap: 8px 14px;
+		flex-wrap: wrap;
+	}
+
+	.pe__retry {
+		background: var(--card);
+		border: 1px solid var(--terracotta);
+		color: var(--terracotta-deep);
+		font-family: var(--ui);
+		font-size: 12.5px;
+		font-weight: 600;
+		padding: 8px 14px;
+		cursor: pointer;
+	}
+
+	.pe__retry:hover {
+		background: var(--terracotta);
+		color: var(--card);
+	}
+
+	.pe__linkish {
+		background: none;
+		border: none;
+		color: var(--terracotta-deep);
+		font-family: var(--ui);
+		font-size: 12.5px;
+		cursor: pointer;
+		padding: 0;
+		text-decoration: underline;
+		text-decoration-color: var(--rule-2);
+		text-underline-offset: 3px;
+	}
+
+	.pe__linkish:hover {
+		color: var(--terracotta);
+	}
+
+	.pe__linkish--quiet {
+		margin-top: 9px;
+		color: var(--ink-3);
+		font-size: 11.5px;
+		text-decoration-color: var(--rule);
+	}
+
+	.pe__hand {
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
+		border-top: 1px solid var(--rule-2);
+		padding-top: 16px;
+	}
+
+	.pe__hand > .pe__linkish {
+		align-self: flex-start;
+	}
+
+	/* The rule separates the by-hand form from the "nothing found" line above
+	   it. Opened straight from the invitation there is nothing above it, and a
+	   rule against the top of the body is just a scar. */
+	.pe__hand--alone {
+		border-top: none;
+		padding-top: 0;
+	}
+
+	.pe__confirm {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+
+	.pe__picked {
+		background: var(--sunk);
+		border: 1px solid var(--rule);
+		padding: 13px 15px;
+	}
+
+	.pe__picked-head {
+		display: flex;
+		align-items: baseline;
+		gap: 8px 10px;
+		flex-wrap: wrap;
+	}
+
+	.pe__picked-name {
+		font-size: 15px;
+		font-weight: 600;
+		color: var(--ink);
+	}
+
+	.pe__picked-tail {
+		margin-left: auto;
+		font-family: var(--mono);
+		font-size: 10.5px;
+		color: var(--ink-3);
+	}
+
+	.pe__picked-tail--area {
+		color: var(--chile);
+	}
+
+	.pe__picked-line {
+		margin-top: 5px;
+		font-size: 11.5px;
+		color: var(--ink-2);
+		line-height: 1.5;
+	}
+
+	.pe__warn {
+		border-left: 2px solid var(--chile);
+		background: var(--wash);
+		padding: 11px 14px;
+		font-size: 12.5px;
+		color: var(--ink-soft);
+		line-height: 1.6;
+		text-wrap: pretty;
+	}
+
+	.pe__guess {
+		align-self: flex-start;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: var(--card);
+		border: 1px dashed var(--dashed);
+		color: var(--ink-soft);
+		font-family: var(--ui);
+		font-size: 12px;
+		padding: 6px 11px;
+		cursor: pointer;
+	}
+
+	.pe__guess:hover {
+		border-color: var(--terracotta);
+		color: var(--terracotta-deep);
+	}
+
+	.pe__guess-word {
+		font-weight: 600;
+	}
+
+	.pe__guess-note {
+		color: var(--ink-3);
+	}
+
+	.pe__point {
+		display: flex;
+		align-items: baseline;
+		gap: 8px 12px;
+		flex-wrap: wrap;
+		background: var(--sunk);
+		border: 1px solid var(--rule-2);
+		padding: 9px 11px;
+	}
+
+	.pe__coords {
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--ink);
+	}
+
+	.pe__point-note {
+		margin-left: auto;
+		font-size: 11px;
+		color: var(--ink-3);
+	}
+
+	.pe__underneath {
+		font-size: 11.5px;
+		color: var(--ink-3);
+		line-height: 1.62;
+		border-top: 1px solid var(--rule-4);
+		padding-top: 12px;
+	}
+
+	.pe__underneath-raw {
+		font-family: var(--mono);
+		color: var(--ink-2);
+	}
+
+	.pe__foot {
+		display: flex;
+		align-items: center;
+		gap: 8px 10px;
+		flex-wrap: wrap;
+		padding: 14px 20px;
+		border-top: 1px solid var(--rule);
+		background: var(--panel);
+	}
+
+	.pe__summary {
+		flex: 1 1 auto;
+		min-width: 0;
+		font-family: var(--mono);
+		font-size: 11px;
+		color: var(--ink-3);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.pe__cancel {
+		margin-left: auto;
+	}
+
+	.pe__save {
+		border: none;
+		background: var(--terracotta);
+		color: var(--card);
+		font-family: var(--ui);
+		font-size: 13px;
+		font-weight: 700;
+		padding: 9px 19px;
+		cursor: pointer;
+	}
+
+	.pe__save:disabled {
+		background: var(--disabled);
+		color: var(--ink-4);
+		cursor: not-allowed;
+	}
+
+	.pe__discard {
+		position: absolute;
+		inset: 0;
+		background: rgba(247, 238, 217, 0.94);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 24px;
+		z-index: 20;
+	}
+
+	.pe__discard[hidden] {
+		display: none;
+	}
+
+	.pe__discard-card {
+		width: 100%;
+		max-width: 320px;
+		background: var(--card);
+		border: 1px solid var(--ink);
+		padding: 20px;
+		text-align: center;
+	}
+
+	.pe__discard-title {
+		font-family: var(--display);
+		font-size: 17px;
+		color: var(--ink);
+	}
+
+	.pe__discard-actions {
+		margin-top: 16px;
+		display: flex;
+		gap: 9px;
+		justify-content: center;
+	}
+
+	.pe__discard-go {
+		border: none;
+		background: var(--terracotta);
+		color: var(--card);
+		font-family: var(--ui);
+		font-size: 12.5px;
+		font-weight: 700;
+		padding: 8px 15px;
+		cursor: pointer;
+	}
+</style>

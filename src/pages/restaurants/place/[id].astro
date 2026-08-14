@@ -18,12 +18,15 @@
 // doesn't.
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../../components/MealEditor.astro';
+import PlaceEditor from '../../../components/PlaceEditor.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import PhotoWall from '../../../components/PhotoWall.astro';
 import { requireOwner } from '../../../lib/auth';
 import { getPlace, listFriends, listTags } from '../../../lib/restaurants';
 import {
 	groupPhotosByVisit,
+	locationState,
+	placeEvidence,
 	placeLine,
 	shortDate,
 	visitCountLabel,
@@ -74,6 +77,31 @@ function monthYear(iso: string): string {
 }
 
 const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_count} photographs`;
+
+// ---------------------------------------------------------------------------
+// Where this place is, and how much of that anybody confirmed
+// ---------------------------------------------------------------------------
+//
+// A place added by name alone has no point, and its city is the default the
+// insert had to write to satisfy a NOT NULL. The header said that city as
+// plainly as a confirmed one, so 34 pages asserted a location nobody chose.
+//
+// The invitation to fix it scales with how much else the page has to say. On a
+// to-try page — which is what every unplaced place is today — there is almost
+// nothing else, so it is the content: the panel states the cost, shows the
+// record, and offers both routes. On a page with a history the same fact is a
+// footnote, because eleven visits are the reason you came.
+const where = locationState(place);
+const isPlaced = where === 'placed';
+// Owner-only, both of them: an invitation is a control, and to a visitor it
+// would only be an apology for the state of somebody else's records. What a
+// visitor still sees is the header's admission and the sidecar's "not on it",
+// because those are statements about the record rather than things to do.
+const inviteLoud = isOwner && !isPlaced && visits.length <= 1;
+const inviteQuiet = isOwner && !isPlaced && visits.length > 1;
+const evidence = placeEvidence(place);
+
+const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when the place was added by name alone.`;
 ---
 
 <RestaurantLayout
@@ -95,8 +123,22 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 						{place.cuisines.length > 0 && <span>{place.cuisines.join(', ')}</span>}
 						{place.cuisines.length > 0 && place.price_band && <span class="dot">·</span>}
 						{place.price_band && <span class="mono">{place.price_band}</span>}
-						<span class="dot">·</span>
-						<span>{placeLine(place)}</span>
+						{(place.cuisines.length > 0 || place.price_band) && <span class="dot">·</span>}
+						{
+							/* An assumed city is said as an assumption. The words stay —
+							   they are the only location on record — but they stop
+							   claiming to be a fact. */
+							where === 'unplaced' ? (
+								<Fragment>
+									<span class="place__where place__where--unsure" title={UNCONFIRMED}>
+										{placeLine(place)}
+									</span>
+									<span class="place__unsure" title={UNCONFIRMED}>nobody confirmed this</span>
+								</Fragment>
+							) : (
+								<span>{placeLine(place)}</span>
+							)
+						}
 						<span class="place__links">
 							{
 								links.map((l) =>
@@ -111,9 +153,61 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 									),
 								)
 							}
+							{
+								isOwner && isPlaced && (
+									<button type="button" class="place__fix" data-open-place-editor>
+										wrong location?
+									</button>
+								)
+							}
 						</span>
 					</div>
 				</header>
+
+				{
+					inviteLoud && (
+						<div class="invite">
+							<div class="invite__title">
+								{where === 'unplaced'
+									? 'This place has no point on the map.'
+									: 'Located, but still not on the map.'}
+							</div>
+							<div class="invite__evidence">{evidence}</div>
+							<p class="invite__body">
+								{where === 'unplaced'
+									? 'It doesn’t appear on the map screen, and its city counts toward nothing in the rollup.'
+									: 'The words are on record. The map still has nothing to draw, because a neighbourhood has no door to point at.'}
+							</p>
+							{
+								isOwner && (
+									<div class="invite__actions">
+										<button type="button" class="rl-btn rl-btn--primary" data-open-place-editor>
+											Find this place on OpenStreetMap
+										</button>
+										<button type="button" class="invite__hand" data-open-place-by-hand>
+											or write the location in by hand
+										</button>
+									</div>
+								)
+							}
+						</div>
+					)
+				}
+
+				{
+					inviteQuiet && (
+						<div class="quiet">
+							<span class="quiet__line">
+								{where === 'unplaced'
+									? `${visitCountLabel(visits.length)} and no point on the map — it doesn’t appear on the map screen.`
+									: 'Located in words only. Still nothing for the map to draw.'}
+							</span>
+							<button type="button" class="quiet__cta" data-open-place-editor>
+								{where === 'unplaced' ? 'Find its point' : 'Try again for a point'}
+							</button>
+						</div>
+					)
+				}
 
 				{
 					place.on_to_try && (
@@ -275,6 +369,27 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 					</div>
 
 					{
+						/* Only drawn when the answer is no. A row saying "on it" on
+						   every other page would be a row about nothing. */
+						!isPlaced && (
+							<div class="sidecar__row">
+								<span class="rl-label">On the map</span>
+								<span class="rl-gap" />
+								<span
+									class="sidecar__off"
+									title={
+										where === 'unplaced'
+											? 'The map screen only draws places with both coordinates.'
+											: 'Located to a neighbourhood, which has no point to draw.'
+									}
+								>
+									{where === 'unplaced' ? 'not on it' : 'words only'}
+								</span>
+							</div>
+						)
+					}
+
+					{
 						isOwner && place.visit_count > 0 && (
 							<div class="sidecar__block">
 								<button
@@ -298,6 +413,9 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 							<div class="rl-label">Owner</div>
 							<button type="button" class="owner__link" data-open-meal-editor>
 								+ Log another visit
+							</button>
+							<button type="button" class="owner__link" data-open-place-editor>
+								{isPlaced ? 'Fix this location' : 'Find this place on the map'}
 							</button>
 							<div class="owner__ranks">
 								<span class="owner__ranks-label">Favourite rank</span>
@@ -344,9 +462,33 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 			/>
 		)
 	}
+
+	{
+		isOwner && (
+			<PlaceEditor
+				place={{ id: place.id, name: place.name, where: placeLine(place), cuisines: place.cuisines }}
+				state={where}
+				evidence={evidence}
+			/>
+		)
+	}
 </RestaurantLayout>
 
 <script>
+	// Saving a location re-reads the page, because the header, the invitation and
+	// the sidecar all move together and all three are rendered on the server. The
+	// sentence about what was saved rides across the reload, since "the words but
+	// still no point" is the one outcome you cannot see at a glance.
+	const pending = sessionStorage.getItem('rl-toast');
+	if (pending) {
+		sessionStorage.removeItem('rl-toast');
+		const toast = document.createElement('div');
+		toast.className = 'toast';
+		toast.textContent = pending;
+		document.body.append(toast);
+		setTimeout(() => toast.remove(), 3200);
+	}
+
 	// The two owner controls that are a single field each write straight through
 	// and re-read the page, rather than opening a form to change one value.
 	const heart = document.querySelector<HTMLButtonElement>('[data-heart]');
@@ -437,6 +579,122 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 		color: #bda98a;
 		border-bottom-color: transparent;
 		cursor: default;
+	}
+	.place__fix {
+		font-family: var(--ui);
+		font-size: 11.5px;
+		color: var(--ink-3);
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		text-decoration: underline;
+		text-decoration-color: var(--rule);
+		text-underline-offset: 3px;
+	}
+	.place__fix:hover {
+		color: var(--terracotta-deep);
+	}
+	/* Set in the faint ink the disabled links use: the words are on record, but
+	   they are the weakest thing on the line rather than a stated fact. */
+	.place__where--unsure {
+		color: #bda98a;
+		border-bottom: 1px dotted var(--rule-2);
+		cursor: help;
+	}
+	.place__unsure {
+		font-size: 10px;
+		font-weight: 600;
+		letter-spacing: 1.5px;
+		text-transform: uppercase;
+		color: #bda98a;
+		cursor: help;
+	}
+
+	/* The dashed border is the section's existing mark for "nothing here yet" —
+	   it is what the photo control wears in the composer. */
+	.invite {
+		border: 1px dashed var(--dashed);
+		padding: 20px 22px;
+		max-width: 620px;
+	}
+	.invite__title {
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 19px;
+		line-height: 1.34;
+		color: var(--ink);
+		text-wrap: pretty;
+	}
+	.invite__evidence {
+		margin-top: 13px;
+		font-family: var(--mono);
+		font-size: 11.5px;
+		line-height: 1.55;
+		color: var(--ink-2);
+		background: var(--sunk);
+		border: 1px solid var(--rule-2);
+		padding: 9px 11px;
+		overflow-wrap: anywhere;
+	}
+	.invite__body {
+		margin: 13px 0 0;
+		font-size: 13px;
+		line-height: 1.62;
+		color: var(--ink-2);
+		max-width: 520px;
+		text-wrap: pretty;
+	}
+	.invite__actions {
+		margin-top: 17px;
+		display: flex;
+		align-items: center;
+		gap: 8px 16px;
+		flex-wrap: wrap;
+	}
+	.invite__hand {
+		font-family: var(--ui);
+		font-size: 12.5px;
+		color: var(--terracotta-deep);
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+		text-decoration: underline;
+		text-decoration-color: var(--rule-2);
+		text-underline-offset: 3px;
+	}
+	.invite__hand:hover {
+		color: var(--terracotta);
+	}
+
+	/* Same fact, on a page that has better things to say. */
+	.quiet {
+		border: 1px dashed var(--dashed);
+		padding: 9px 13px;
+		display: flex;
+		align-items: baseline;
+		gap: 6px 12px;
+		flex-wrap: wrap;
+		max-width: 620px;
+	}
+	.quiet__line {
+		font-size: 12.5px;
+		color: var(--ink-2);
+		text-wrap: pretty;
+	}
+	.quiet__cta {
+		font-family: var(--ui);
+		font-size: 12.5px;
+		font-weight: 600;
+		color: var(--terracotta-deep);
+		background: none;
+		border: none;
+		padding: 0;
+		cursor: pointer;
+	}
+	.quiet__cta:hover {
+		color: var(--terracotta);
 	}
 
 	.totry {
@@ -617,6 +875,11 @@ const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_coun
 		font-family: var(--mono);
 		font-size: 12.5px;
 		color: var(--ink);
+	}
+	.sidecar__off {
+		font-size: 12.5px;
+		color: #bda98a;
+		cursor: help;
 	}
 
 	.heartbtn {

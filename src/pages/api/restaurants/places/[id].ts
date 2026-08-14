@@ -53,7 +53,9 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 				return apiError('priceBand must be $, $$, $$$ or $$$$', 400);
 			}
 			await updatePlace(id, {
-				name: typeof body.name === 'string' ? body.name : '',
+				// Absent means "leave the name alone", which is what a body
+				// carrying only a location means.
+				...(typeof body.name === 'string' ? { name: body.name } : {}),
 				...(Array.isArray(body.cuisines) ? { cuisines: body.cuisines.map(String) } : {}),
 				...('priceBand' in body ? { priceBand: (body.priceBand as PriceBand | null) ?? null } : {}),
 				...('neighborhood' in body ? { neighborhood: text(body.neighborhood) } : {}),

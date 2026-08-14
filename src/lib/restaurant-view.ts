@@ -29,6 +29,64 @@ export function cuisineLine(cuisines: string[]): string {
 	return cuisines.join(', ');
 }
 
+// ---------------------------------------------------------------------------
+// How well a place is located
+// ---------------------------------------------------------------------------
+
+/**
+ * Three states, and the page reads differently in each.
+ *
+ *   placed    — it has coordinates. The map can draw it; the location line is
+ *               a fact confirmed by whoever pinned it.
+ *   located   — no coordinates, but the words are real: a neighbourhood or a
+ *               state/region is on record, which only gets there by being
+ *               typed in or read off a geocode. The map still has nothing to
+ *               draw.
+ *   unplaced  — no coordinates and no location text beyond the bare city.
+ *
+ * WHY THE LAST TWO ARE TOLD APART BY `neighborhood`/`state_region` AND NOT BY A
+ * FLAG. `city` is NOT NULL and the composer's fast path — a name and nothing
+ * else — has to stay open, so `createPlace` writes "New York" when nothing
+ * better is known. That default is indistinguishable from a confirmed city if
+ * you look only at `city`, which is exactly why the bulk to-try importer has
+ * left 34 pages quietly asserting a city nobody chose.
+ *
+ * What IS distinguishable: a place that has been located, by any route, comes
+ * away with a neighbourhood or a region, because both the geocoder and the
+ * by-hand form write one. So their absence, together with no point, is the
+ * honest signal that nothing about this location was ever confirmed — and it
+ * flips the moment anything is, without a migration or a provenance column to
+ * keep in sync.
+ */
+export type LocationState = 'placed' | 'located' | 'unplaced';
+
+export function locationState(place: {
+	neighborhood: string | null;
+	state_region: string | null;
+	lat: number | null;
+	lng: number | null;
+}): LocationState {
+	if (place.lat != null && place.lng != null) return 'placed';
+	if (place.neighborhood || place.state_region) return 'located';
+	return 'unplaced';
+}
+
+/**
+ * The line of evidence shown under an invitation to place somewhere.
+ *
+ * It is the record as it stands, not a story about it: when the place was
+ * added, and the name it was added under. The site does not record HOW a row
+ * arrived — bulk import, composer, by hand — so this says nothing about that.
+ */
+export function placeEvidence(place: {
+	name: string;
+	created_at: string;
+	to_try_added_at: string | null;
+}): string {
+	const added = (place.to_try_added_at ?? place.created_at).slice(0, 10);
+	return `added ${shortDate(added)} ${added.slice(0, 4)} · added by name · “${place.name}”`;
+}
+
 /**
  * The cuisine a tile can afford when there is room for one word.
  *

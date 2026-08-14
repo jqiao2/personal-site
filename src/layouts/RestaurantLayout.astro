@@ -222,6 +222,26 @@ const nav = siteNav(pathname);
 				color: var(--card);
 			}
 
+			/* --- Toast ------------------------------------------------------
+			   For the outcomes a reloaded page cannot show by itself — chiefly
+			   "the words were saved and there is still no point on the map".
+			   Global because the element is built in a script and appended to
+			   the body, where a scoped rule would never reach it. */
+			.toast {
+				position: fixed;
+				left: 50%;
+				bottom: 26px;
+				transform: translateX(-50%);
+				z-index: 70;
+				background: var(--ink);
+				color: var(--ground);
+				font-family: var(--ui);
+				font-size: 13px;
+				padding: 10px 16px;
+				box-shadow: 0 10px 26px rgba(47, 30, 18, 0.4);
+				max-width: calc(100vw - 28px);
+			}
+
 			/* --- Page frame ----------------------------------------------- */
 			.rl-page {
 				max-width: var(--column);
