@@ -844,6 +844,11 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	.hist {
 		margin-top: 14px;
 		padding: 18px 20px 14px;
+		/* The needle's own box and the strip of dates below the plot. The axis
+		   and the series are both laid out against these, so a rung's label and
+		   its needles stay on the same line. */
+		--hist-mark: 20px;
+		--hist-ticks: 16px;
 	}
 	.hist__plot {
 		display: flex;
@@ -857,14 +862,24 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		flex-direction: column;
 		justify-content: space-between;
 		font-size: 10.5px;
+		line-height: 1;
 		color: var(--ink-3);
-		padding-bottom: 18px;
+		/* Half a line inside the series' padding, so each label is centred on
+		   its rung rather than hanging off the end of the ladder. */
+		padding-top: calc(var(--hist-mark) / 2 - 0.5em);
+		padding-bottom: calc(var(--hist-ticks) + var(--hist-mark) / 2 - 0.5em);
 	}
 	.hist__series {
 		flex: 1;
 		display: flex;
 		min-width: 0;
 		overflow-x: auto;
+		/* overflow-x: auto makes the vertical axis a scrollport too, so a needle
+		   sitting on the top or bottom rung — which overhangs its rung by half
+		   its own height — was being cut in half. The padding is that overhang,
+		   kept inside the box, plus the room the dates need underneath. */
+		padding-top: calc(var(--hist-mark) / 2);
+		padding-bottom: calc(var(--hist-ticks) + var(--hist-mark) / 2);
 	}
 	.hist__col {
 		flex: 1 0 44px;
@@ -883,12 +898,14 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	}
 	.hist__tick {
 		position: absolute;
-		bottom: 0;
+		/* In the series' bottom padding, clear of the lowest needle's overhang. */
+		bottom: calc(-1 * (var(--hist-ticks) + var(--hist-mark) / 2));
 		left: 0;
 		right: 0;
 		text-align: center;
 		font-family: var(--mono);
 		font-size: 9.5px;
+		line-height: var(--hist-ticks);
 		color: var(--ink-4);
 	}
 
