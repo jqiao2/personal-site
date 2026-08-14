@@ -7,19 +7,18 @@
 // water instead of on ruled paper, which is the difference between knowing a
 // pin is in Sunset Park and being told so.
 //
-// THE PIN CARRIES THE VERDICT. Of the three rating signals, the verdict is the
-// one that survives to this scale, because the question you ask a map is the
-// question the verdict answers: I am standing here, would I go back in? Stars
-// would need a number rendered at 12px, and a heart would collapse a hundred
-// places into two states. So the pins stay DOM markers holding the same needle
-// the rest of the section uses — the angle carries the rung, the ink carries
-// the band — rather than becoming circle layers, which would have thrown the
-// mark away at exactly the size it was designed for.
+// THE PIN CARRIES THE TRIP ANSWER, and nothing else. Filled means worth the
+// trip; blank means not. One question, two states, no key to memorise — which
+// is the most a 26px mark can carry and be read at a glance. The verdict's six
+// rungs and three colour bands used to live here and asked far more of the
+// mark than that, and asked it of pins that often had no verdict at all: the
+// whole to-try map is places nobody has been to. Everything else about a place
+// — verdict, stars, heart, visit count — is one click away in the popup, at a
+// size where it can actually be read.
 //
-// TO-TRY PINS ARE DIFFERENT ON PURPOSE. A place you haven't been has no verdict
-// and can't have one, so its pin is an empty ring. Set against the visited map,
-// the difference reads without being explained: a full pin is an opinion, an
-// open one is an intention.
+// NOTHING IS CLUSTERED. Pins that overlap overlap; the one on top is a hover
+// away from the one beneath, and a zoom separates them. Collapsing them into a
+// disc traded the content for a number the caption already gives.
 //
 // WHAT HAPPENS ON FIRST LOAD. Not fit-to-bounds over everything — four fifths
 // of the pins are one dense New York cluster and the rest are in Mexico City,
@@ -31,7 +30,8 @@
 //
 // MOBILE. A map wants full height on a phone, which leaves nowhere for the city
 // list. Below 760px the list becomes a horizontal strip of chips above the map.
-import { verdictAt, VERDICTS } from '../lib/verdict';
+// Pinch zooms; it does not rotate — see the handler setup in the script.
+import { verdictAt } from '../lib/verdict';
 import { MAP_TOKENS } from '../lib/map-style';
 import type { MapPoint } from '../lib/restaurant-map';
 
@@ -60,6 +60,7 @@ const config = {
 		lng: p.lng,
 		verdict: p.verdict,
 		visited: p.visited,
+		trip: p.trip,
 		price: p.price,
 		cuisine: p.cuisine,
 		city: p.city,
@@ -67,12 +68,9 @@ const config = {
 		rating: p.rating,
 		visits: p.visits,
 		hearted: p.hearted,
-		ink: verdictAt(p.verdict)?.ink ?? MAP_TOKENS.pinRing,
 		verdictLabel: verdictAt(p.verdict)?.label ?? 'No verdict yet',
-		rot: (p.verdict ?? 0) * 36,
 	})),
 	tokens: MAP_TOKENS,
-	bands: VERDICTS.map((v) => v.ink),
 };
 
 const unplaced = points.length - placed.length;
@@ -121,10 +119,8 @@ const hasKey = Boolean(config.key);
 
 		<div class="legend">
 			<span class="rl-label">Pin ink</span>
-			<span class="legend__item"><i style={`background:${VERDICTS[0].ink}`}></i>want to go back</span>
-			<span class="legend__item"><i style={`background:${VERDICTS[2].ink}`}></i>with reservations</span>
-			<span class="legend__item"><i style={`background:${VERDICTS[4].ink}`}></i>no</span>
-			<span class="legend__item"><i class="legend__ring"></i>not been yet</span>
+			<span class="legend__item"><i class="legend__full"></i>worth the trip †</span>
+			<span class="legend__item"><i class="legend__blank"></i>if I’m nearby</span>
 		</div>
 
 		<div class="map__caption">
@@ -160,7 +156,6 @@ const hasKey = Boolean(config.key);
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
 	import { menuBasemap, MAP_TOKENS } from '../lib/map-style';
-	import { clusterByScreen, verdictMix } from '../lib/restaurant-map';
 
 	interface Pin {
 		id: number;
@@ -169,6 +164,7 @@ const hasKey = Boolean(config.key);
 		lng: number;
 		verdict: number | null;
 		visited: boolean;
+		trip: boolean;
 		price: string | null;
 		cuisine: string;
 		city: string;
@@ -176,9 +172,7 @@ const hasKey = Boolean(config.key);
 		rating: number | null;
 		visits: number;
 		hearted: boolean;
-		ink: string;
 		verdictLabel: string;
-		rot: number;
 	}
 
 	const tag = document.getElementById('restaurant-map-config');
@@ -208,11 +202,19 @@ const hasKey = Boolean(config.key);
 			center: [-73.99, 40.71],
 			zoom: 11,
 			attributionControl: { compact: true },
-			// The section is a printed object; a tilted, spinning map is not.
+			// The section is a printed object; a tilted, spinning map is not. But
+			// `touchZoomRotate: false` turned off the whole two-finger handler, and
+			// pinch-to-zoom went out with the rotation — on a phone that left the
+			// +/- buttons as the only way to zoom a full-height map. Keep the
+			// handler and disable only the half that spins it, below.
 			pitchWithRotate: false,
 			dragRotate: false,
-			touchZoomRotate: false,
+			touchPitch: false,
 		});
+		// Pinch zooms, two fingers never rotate. `disableRotation` also stops the
+		// gesture from being read as a rotation at all, so a pinch that starts
+		// slightly twisted still zooms instead of doing nothing.
+		map.touchZoomRotate.disableRotation();
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
 		/** Frame the chosen city, or everything if it has no pins. */
@@ -235,17 +237,11 @@ const hasKey = Boolean(config.key);
 			const el = document.createElement('a');
 			el.className = 'gl-pin';
 			el.href = `/restaurants/place/${p.id}`;
-			el.title = `${p.name} — ${p.verdictLabel}`;
-			// The same needle the badges use, so the mark means one thing
-			// everywhere it appears.
-			const inner = p.visited
-				? `<g transform="translate(4.2,4.2) scale(0.74)"><g transform="rotate(${p.rot} 12 12)">
-					 <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="${p.ink}"></path>
-					 <rect x="11.2" y="9.2" width="1.6" height="10" fill="${p.ink}"></rect></g></g>`
-				: `<circle cx="13" cy="13" r="4.4" fill="none" stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6" opacity=".65"></circle>`;
+			el.title = p.trip ? `${p.name} — worth the trip` : p.name;
 			el.innerHTML = `<svg viewBox="0 0 26 34" width="26" height="34" aria-hidden="true">
 					<path d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z"
-						fill="#fdf7e8" stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6"></path>${inner}
+						fill="${p.trip ? MAP_TOKENS.pinRing : '#fdf7e8'}"
+						stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6"></path>
 				</svg><span class="gl-pin__name">${escape(p.name)}</span>`;
 			return el;
 		}
@@ -299,90 +295,33 @@ const hasKey = Boolean(config.key);
 		whenStyleReady(() => {
 			frame();
 
-			const markers = new Map<string, maplibregl.Marker>();
+			// Every pin, once, and then left alone. Markers are anchored to
+			// lng/lat, so MapLibre re-places them on its own as the camera moves —
+			// there is nothing to recompute per frame now that nothing is grouped,
+			// and nothing here reads a tile, so the pins come up whether or not the
+			// basemap does.
+			//
+			// Drawn far-to-near: a pin sitting lower on the screen is nearer the
+			// reader, so it belongs on top of the one behind it. That is the only
+			// thing standing in for the removed clustering, and it is what makes an
+			// overlapping stack read as a stack instead of a smear.
 			let popup: maplibregl.Popup | null = null;
+			const order = [...cfg.points].sort((a, b) => b.lat - a.lat);
 
-			// Re-projected and re-clustered on every camera change. The marks are
-			// computed from cfg.points and the current camera alone, so they do
-			// not depend on a tile ever arriving.
-			function sync() {
-				const projected = cfg.points.map((p) => {
-					const pt = map.project([p.lng, p.lat]);
-					return { ...p, x: pt.x, y: pt.y };
+			for (const p of order) {
+				const el = pinEl(p);
+				el.addEventListener('click', (e) => {
+					e.preventDefault();
+					popup?.remove();
+					popup = new maplibregl.Popup({ closeButton: false, offset: 30, maxWidth: '266px' })
+						.setLngLat([p.lng, p.lat])
+						.setHTML(popupHtml(p))
+						.addTo(map);
 				});
-				const { loose, clusters } = clusterByScreen(projected, 34);
-
-				const wanted = new Set<string>();
-
-				for (const c of clusters) {
-					const ids = c.members
-						.map((m) => m.id)
-						.sort((a, b) => a - b)
-						.join('-');
-					const key = `c${ids}`;
-					wanted.add(key);
-					if (markers.has(key)) continue;
-
-					const { good, mid, bad } = verdictMix(c.members);
-					const known = good + mid + bad || 1;
-					const button = document.createElement('button');
-					button.type = 'button';
-					button.className = 'gl-clust';
-					button.innerHTML = `<span class="gl-clust__n">${c.members.length}</span>
-						<span class="gl-clust__l">places</span>
-						<span class="gl-clust__mix">
-							<i style="flex:${good};background:#556b2a"></i>
-							<i style="flex:${mid};background:#c07d14"></i>
-							<i style="flex:${bad};background:#a83a22"></i>
-						</span>`;
-					button.title =
-						`${c.members.length} places · ${Math.round((good / known) * 100)}% worth going back to\n` +
-						c.members
-							.slice(0, 8)
-							.map((m) => m.name)
-							.join(', ');
-					const at = map.unproject([c.x, c.y]);
-					button.addEventListener('click', () => {
-						map.easeTo({ center: at, zoom: Math.min(map.getZoom() + 2.2, 17) });
-					});
-					markers.set(
-						key,
-						new maplibregl.Marker({ element: button, anchor: 'center' }).setLngLat(at).addTo(map),
-					);
-				}
-
-				for (const p of loose) {
-					const key = `p${p.id}`;
-					wanted.add(key);
-					if (markers.has(key)) continue;
-					const el = pinEl(p);
-					el.addEventListener('click', (e) => {
-						e.preventDefault();
-						popup?.remove();
-						popup = new maplibregl.Popup({ closeButton: false, offset: 30, maxWidth: '266px' })
-							.setLngLat([p.lng, p.lat])
-							.setHTML(popupHtml(p))
-							.addTo(map);
-					});
-					markers.set(
-						key,
-						new maplibregl.Marker({ element: el, anchor: 'bottom' })
-							.setLngLat([p.lng, p.lat])
-							.addTo(map),
-					);
-				}
-
-				for (const [key, marker] of markers) {
-					if (!wanted.has(key)) {
-						marker.remove();
-						markers.delete(key);
-					}
-				}
+				new maplibregl.Marker({ element: el, anchor: 'bottom' })
+					.setLngLat([p.lng, p.lat])
+					.addTo(map);
 			}
-
-			map.on('move', sync);
-			map.on('zoom', sync);
-			sync();
 		});
 	}
 </script>
@@ -413,6 +352,12 @@ const hasKey = Boolean(config.key);
 		cursor: pointer;
 		filter: drop-shadow(0 1px 1px rgba(47, 30, 18, 0.35));
 	}
+	/* Pins are allowed to overlap now, so the one being pointed at has to be
+	   able to come out from under its neighbours — otherwise the name label
+	   under it renders behind them. */
+	.gl-pin:hover {
+		z-index: 3;
+	}
 	.gl-pin__name {
 		position: absolute;
 		left: 50%;
@@ -430,46 +375,6 @@ const hasKey = Boolean(config.key);
 	}
 	.gl-pin:hover .gl-pin__name {
 		opacity: 1;
-	}
-
-	.gl-clust {
-		width: 56px;
-		height: 56px;
-		border-radius: 50%;
-		background: #f0e2c2;
-		border: 1.6px solid var(--ink);
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 1px 3px rgba(47, 30, 18, 0.3);
-		cursor: pointer;
-		position: relative;
-		font-family: var(--ui);
-	}
-	.gl-clust__n {
-		font-family: var(--mono);
-		font-size: 17px;
-		font-weight: 700;
-		color: var(--ink);
-		line-height: 1;
-	}
-	.gl-clust__l {
-		font-size: 8px;
-		letter-spacing: 0.9px;
-		text-transform: uppercase;
-		color: var(--ink-3);
-		margin-top: 2px;
-	}
-	.gl-clust__mix {
-		position: absolute;
-		bottom: -3px;
-		display: flex;
-		width: 26px;
-		height: 3px;
-	}
-	.gl-clust__mix i {
-		display: block;
 	}
 
 	/* The popup is the tile's anatomy at popup size: name, heart, gap, price. */
@@ -605,11 +510,17 @@ const hasKey = Boolean(config.key);
 		width: 11px;
 		height: 11px;
 		display: block;
-	}
-	.legend__ring {
-		border: 1.6px solid var(--ink-3);
 		border-radius: 50%;
-		background: none;
+	}
+	/* The two swatches are the two pins, minus the teardrop tail: one inked in,
+	   one left as paper. */
+	.legend__full {
+		background: var(--ink);
+		border: 1.6px solid var(--ink);
+	}
+	.legend__blank {
+		background: #fdf7e8;
+		border: 1.6px solid var(--ink);
 	}
 
 	.map__caption {

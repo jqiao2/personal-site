@@ -98,6 +98,7 @@ const mapPoints: MapPoint[] = filtered
 		lng: p.lng as number,
 		verdict: p.latest_verdict,
 		visited: true,
+		trip: p.trip,
 		price: p.price_band,
 		cuisine: p.cuisines[0] ?? '',
 		city: p.city,
