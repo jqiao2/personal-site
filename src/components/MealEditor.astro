@@ -1254,7 +1254,8 @@ const config = {
 		flex-direction: column;
 		gap: 16px;
 		max-height: calc(100vh - 190px);
-		overflow: auto;
+		overflow-y: auto;
+		overflow-x: hidden;
 	}
 	.me__body[hidden] {
 		display: none;
@@ -1275,6 +1276,8 @@ const config = {
 	.me__input,
 	.me__textarea {
 		width: 100%;
+		min-width: 0;
+		max-width: 100%;
 		background: var(--ground);
 		border: 1px solid var(--rule);
 		padding: 9px 11px;
@@ -1287,6 +1290,13 @@ const config = {
 	}
 	.me__input--mono {
 		font-family: var(--mono);
+	}
+	/* iOS sizes native date inputs from their own intrinsic width, which runs
+	   wider than the sheet and scrolls the body sideways. Dropping the native
+	   appearance lets the field honour the 100% width like every other input. */
+	.me__input[type='date'] {
+		-webkit-appearance: none;
+		appearance: none;
 	}
 	.me__input--prose {
 		font-family: var(--prose);
