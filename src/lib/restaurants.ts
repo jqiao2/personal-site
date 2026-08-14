@@ -56,6 +56,21 @@ export function isTripFilter(v: unknown): v is TripFilter {
 	return v === 'trip' || v === 'nearby';
 }
 
+/**
+ * Whether a place has a point, as a filter.
+ *
+ * NOT A PROPERTY OF THE RESTAURANT — a property of the record, which is why it
+ * reads "on the map" rather than anything about the place itself. It exists
+ * because ninety of the to-try entries arrived from a saved list with a name
+ * and nothing else, and the only way to work through them is to be able to ask
+ * for exactly those.
+ */
+export type MapFilter = 'on' | 'off';
+
+export function isMapFilter(v: unknown): v is MapFilter {
+	return v === 'on' || v === 'off';
+}
+
 // ---------------------------------------------------------------------------
 // Rows
 // ---------------------------------------------------------------------------
@@ -302,6 +317,8 @@ export interface PlaceQuery {
 	trip?: TripFilter | null;
 	/** Any of these why-tags. Absent means all. */
 	tags?: string[];
+	/** On the map, or not on it. Absent means both. */
+	onMap?: MapFilter | null;
 	sort?: PlaceSort;
 }
 
@@ -337,6 +354,10 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 		rows = rows.filter((r) => r.city.toLowerCase() === want);
 	}
 	if (query.trip) rows = rows.filter((r) => (query.trip === 'trip' ? r.trip : !r.trip));
+	if (query.onMap) {
+		const placed = (r: Place) => r.lat != null && r.lng != null;
+		rows = rows.filter((r) => (query.onMap === 'on' ? placed(r) : !placed(r)));
+	}
 	if (query.tags?.length) {
 		const want = new Set(query.tags);
 		rows = rows.filter((r) => r.to_try_tags.some((t) => want.has(t)));
