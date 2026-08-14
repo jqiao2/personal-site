@@ -52,6 +52,7 @@ export interface Place {
 	cover_height: number | null;
 	photo_count: number;
 	on_to_try: boolean;
+	created_at: string;
 }
 
 /** A row of the `restaurant_diary` view: one visit, with its place inlined. */
@@ -558,7 +559,20 @@ export async function listCuisines(): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 export interface PlaceInput {
-	name: string;
+	/**
+	 * OPTIONAL, AND OMITTING IT MEANS "LEAVE THE NAME ALONE".
+	 *
+	 * It used to be required, and `placePayload` wrote it unconditionally, so
+	 * any edit that carried something else and no name — a location, a price
+	 * band — renamed the place to the empty string on its way past. Nothing
+	 * did that until the place dialog started PATCHing coordinates by
+	 * themselves, but it was one caller away the whole time.
+	 *
+	 * Creating still needs one: see `createPlace`, which asks for it in its
+	 * own signature rather than making every edit carry a name it isn't
+	 * changing.
+	 */
+	name?: string;
 	cuisines?: string[];
 	priceBand?: PriceBand | null;
 	neighborhood?: string | null;
@@ -577,7 +591,8 @@ export interface PlaceInput {
 }
 
 function placePayload(input: PlaceInput): Record<string, unknown> {
-	const payload: Record<string, unknown> = { name: input.name.trim(), updated_at: new Date().toISOString() };
+	const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	if (input.name !== undefined) payload.name = input.name.trim();
 	if (input.cuisines !== undefined) payload.cuisines = input.cuisines.map((c) => c.trim()).filter(Boolean);
 	if (input.priceBand !== undefined) payload.price_band = input.priceBand;
 	if (input.neighborhood !== undefined) payload.neighborhood = emptyToNull(input.neighborhood);
@@ -602,7 +617,7 @@ function emptyToNull(v: string | null | undefined): string | null {
 	return trimmed === '' ? null : trimmed;
 }
 
-export async function createPlace(input: PlaceInput): Promise<Place> {
+export async function createPlace(input: PlaceInput & { name: string }): Promise<Place> {
 	const payload = placePayload(input);
 	// City is NOT NULL and the composer's fast path ("a name and nothing else")
 	// has to stay open, so an unplaced new place lands in the owner's own city

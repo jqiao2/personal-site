@@ -91,7 +91,9 @@ async function resolveRestaurant(body: Record<string, unknown>): Promise<number 
 	if (existing != null && Number.isInteger(existing) && existing > 0) {
 		const priceBand = place?.priceBand;
 		if (isPriceBand(priceBand)) {
-			await updatePlace(existing, { name: String(place?.name ?? ''), priceBand });
+			// The price band only. The composer is logging a meal at a place that
+			// already exists, and is not renaming it.
+			await updatePlace(existing, { priceBand });
 		}
 		return existing;
 	}
