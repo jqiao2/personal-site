@@ -90,11 +90,13 @@ async function resolveRestaurant(body: Record<string, unknown>): Promise<number 
 
 	if (existing != null && Number.isInteger(existing) && existing > 0) {
 		const priceBand = place?.priceBand;
-		if (isPriceBand(priceBand)) {
-			// The price band only. The composer is logging a meal at a place that
-			// already exists, and is not renaming it.
-			await updatePlace(existing, { priceBand });
-		}
+		// The price band and the trip answer only. The composer is logging a meal
+		// at a place that already exists, and is not renaming it.
+		const edit = {
+			...(isPriceBand(priceBand) ? { priceBand } : {}),
+			...(typeof place?.trip === 'boolean' ? { trip: place.trip } : {}),
+		};
+		if (Object.keys(edit).length > 0) await updatePlace(existing, edit);
 		return existing;
 	}
 
@@ -110,6 +112,7 @@ async function resolveRestaurant(body: Record<string, unknown>): Promise<number 
 		country: asText(place?.country) ?? undefined,
 		lat: asNumber(place?.lat),
 		lng: asNumber(place?.lng),
+		trip: Boolean(place?.trip),
 	});
 	return created.id;
 }

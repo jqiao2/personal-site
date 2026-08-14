@@ -52,6 +52,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			yelpUrl: text(body.yelpUrl),
 			beliUrl: text(body.beliUrl),
 			toTryReason: text(body.toTryReason),
+			trip: Boolean(body.trip),
+			toTryTags: Array.isArray(body.toTryTags) ? body.toTryTags.map(String) : [],
 			toTry: Boolean(body.toTry),
 		});
 		return json({ place }, 201);

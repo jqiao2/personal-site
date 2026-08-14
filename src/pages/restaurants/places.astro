@@ -25,6 +25,7 @@ import {
 	groupPlaces,
 	isPlaceSort,
 	isPriceBand,
+	isTripFilter,
 	listCityFacets,
 	listCuisineFacets,
 	listFriends,
@@ -33,6 +34,7 @@ import {
 	PRICE_BANDS,
 	type PlaceSort,
 	type PriceBand,
+	type TripFilter,
 } from '../../lib/restaurants';
 import { coverUrl, placeLine, visitCountLabel } from '../../lib/restaurant-view';
 import { thresholdLabel, verdictAt, VERDICTS } from '../../lib/verdict';
@@ -49,10 +51,11 @@ const verdictAtLeast = rawVerdict != null && /^[0-5]$/.test(rawVerdict) ? Number
 const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'recent';
 const isMap = params.get('view') === 'map';
 const city = params.get('city');
+const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
 
 const [all, filtered, cuisineFacets, cityFacets, isOwner] = await Promise.all([
 	listPlaces(),
-	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, city, sort }),
+	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, city, trip, sort }),
 	listCuisineFacets(),
 	listCityFacets(),
 	requireOwner(Astro.cookies),
@@ -108,10 +111,17 @@ const activeFilters = [
 	...selectedCuisines.map((c) => ({ label: c, href: href({ cuisine: toggle(selectedCuisines, c) }) })),
 	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
 	...(verdictAtLeast != null ? [{ label: thresholdLabel(verdictAtLeast), href: href({ verdict: null }) }] : []),
+	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
 	...(city ? [{ label: city, href: href({ city: null }) }] : []),
 ];
 
 const countLine = `${filtered.length} of ${all.length}`;
+const trips: { key: TripFilter | null; label: string }[] = [
+	{ key: null, label: 'All' },
+	{ key: 'trip', label: 'Worth the trip †' },
+	{ key: 'nearby', label: 'If I’m nearby' },
+];
+
 const sorts: { key: PlaceSort; label: string }[] = [
 	{ key: 'recent', label: 'Latest visit' },
 	{ key: 'rating', label: 'Rating' },
@@ -211,6 +221,15 @@ const sorts: { key: PlaceSort; label: string }[] = [
 					</div>
 				</details>
 
+				<span class="rl-filters__legend rl-filters__legend--gap">Trip</span>
+				{
+					trips.map((t) => (
+						<a class="rl-chip" href={href({ trip: t.key })} aria-pressed={trip === t.key ? 'true' : 'false'}>
+							{t.label}
+						</a>
+					))
+				}
+
 				<span class="rl-filters__sorts">
 					<span class="rl-filters__legend">Sort</span>
 					{
@@ -267,6 +286,11 @@ const sorts: { key: PlaceSort; label: string }[] = [
 									<div class="row__line">
 										<span class="row__name">{p.name}</span>
 										{p.hearted && <span class="row__heart">♥</span>}
+										{p.trip && (
+											<span class="row__trip" title="Worth the trip">
+												†
+											</span>
+										)}
 										<span class="rl-gap" />
 										<span class="row__price">{p.price_band ?? ''}</span>
 									</div>
@@ -357,6 +381,13 @@ const sorts: { key: PlaceSort; label: string }[] = [
 		font-size: 15.5px;
 		font-weight: 600;
 		letter-spacing: 0.1px;
+	}
+	.row__trip {
+		font-family: var(--prose);
+		font-size: 15px;
+		line-height: 1;
+		color: var(--terracotta);
+		flex: none;
 	}
 	.row__heart {
 		font-size: 12.5px;

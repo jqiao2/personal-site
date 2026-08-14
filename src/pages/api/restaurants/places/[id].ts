@@ -94,6 +94,8 @@ function hasPlaceEdit(body: Record<string, unknown>): boolean {
 		'yelpUrl',
 		'beliUrl',
 		'toTryReason',
+		'trip',
+		'toTryTags',
 	];
 	return keys.some((k) => k in body);
 }
