@@ -189,12 +189,18 @@ export function layoutPhotos(photos: Photo[]): LaidOutPhoto[] {
  * same from the page's point of view, which is the only way this section
  * survives the twentieth.
  *
- * ORDER IS NEWEST FIRST, left to right — the order the visits arrive in, and
- * the order the list of visits below is in. A strip that scrolls sideways only
- * shows its left-hand end without being touched, so what is nearest the left is
- * what the section is really offering: the last few meals, which are the ones
- * worth seeing. Oldest-first would agree with the verdict history above instead,
- * but it would spend that opening on the meal I had least recently.
+ * ORDER IS OLDEST FIRST, left to right, and the row OPENS AT ITS RIGHT-HAND END.
+ *
+ * Those are two different questions and the page was answering them with one
+ * answer. Which way time runs is settled by the verdict history above: it is a
+ * plot with a time axis, and a time axis that runs right to left is a chart
+ * nobody can read. Running the photographs the other way to put the newest on
+ * the left made one screen disagree with itself about which way the year goes.
+ *
+ * What actually wanted solving was where the row STARTS, which is a scroll
+ * position rather than an order, and it is solved as one — the scrollport opens
+ * at the end. So time runs the way it runs everywhere, and what you land on is
+ * still the last few meals.
  */
 export interface StripPhoto extends LaidOutPhoto {
 	/** The visit that produced it — where the photograph links to. */
@@ -204,10 +210,12 @@ export interface StripPhoto extends LaidOutPhoto {
 }
 
 export function photoStrip(visits: VisitDetail[]): StripPhoto[] {
-	// `visits` is newest first already, and photographs keep their order within a
-	// visit — the strip reads newest visit to oldest, first shot to last.
+	// `visits` arrives newest first, so it is turned around here; photographs keep
+	// their order within a visit.
 	return visits
 		.filter((v) => v.photos.length > 0)
+		.slice()
+		.reverse()
 		.flatMap((v) => v.photos.map((p) => ({ ...p, ratio: aspect(p), visitId: v.id, date: v.visited_on })));
 }
 
