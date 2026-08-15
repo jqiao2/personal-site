@@ -154,38 +154,58 @@ export function coverUrl(place: Place): string | null {
  * aspect ratio at a shared height. Portraits come out narrow, landscapes wide,
  * everything sits on one baseline, and the last row is allowed to be short
  * rather than stretched. One photo simply fills the width at its own ratio.
+ *
+ * The ratio is all this needs to hand over: the wall derives both the basis and
+ * the grow weight from it in CSS, which is also how the phone can re-scale the
+ * whole row against the viewport without a second set of numbers computed here.
  */
 export interface LaidOutPhoto extends Photo {
 	/** Aspect ratio, defaulting to 3:2 when the dimensions were never recorded. */
 	ratio: number;
-	/** flex-grow weight — wide photos claim proportionally more of the row. */
-	grow: number;
+}
+
+/** Aspect ratio, or 3:2 when the dimensions were never recorded. */
+function aspect(photo: Photo): number {
+	return photo.width && photo.height ? photo.width / photo.height : 3 / 2;
 }
 
 export function layoutPhotos(photos: Photo[]): LaidOutPhoto[] {
-	return photos.map((p) => {
-		const ratio = p.width && p.height ? p.width / p.height : 3 / 2;
-		return { ...p, ratio, grow: ratio };
-	});
+	return photos.map((p) => ({ ...p, ratio: aspect(p) }));
 }
 
 /**
- * Photographs on a place page, grouped by the visit that produced them.
+ * Every photograph taken at a place, in one strip.
  *
- * Aggregating eleven visits' photos into one undifferentiated wall loses the
- * only thing that makes them navigable — when. Grouped by date, the same wall
- * reads as a history, and the group heading is where the count goes.
+ * THIS USED TO BE GROUPED BY VISIT, with a dated heading over each group. That
+ * reads well at three visits and collapses at twelve: twelve headings, twelve
+ * walls of one-to-three photographs each, and a page whose middle third is a
+ * ragged column of near-empty rows. The grouping was buying navigability —
+ * knowing WHEN a photo was taken — at the price of the section's whole shape.
+ *
+ * A single row buys the same thing back for nothing. The date is on the photo
+ * rather than over it: point at one and it says when it was and what it was, so
+ * nothing has to be spent on a heading per visit. The section is then a fixed
+ * height no matter how many times I go back — twelve visits and forty look the
+ * same from the page's point of view, which is the only way this section
+ * survives the twentieth.
+ *
+ * ORDER IS OLDEST FIRST, left to right, matching the verdict history directly
+ * above it. Both are the same axis and disagreeing about its direction on one
+ * screen would be worse than either choice is on its own.
  */
-export interface PhotoGroup {
+export interface StripPhoto extends LaidOutPhoto {
+	/** The visit that produced it — where the photograph links to. */
 	visitId: number;
+	/** That visit's date, ISO. */
 	date: string;
-	photos: LaidOutPhoto[];
 }
 
-export function groupPhotosByVisit(visits: VisitDetail[]): PhotoGroup[] {
+export function photoStrip(visits: VisitDetail[]): StripPhoto[] {
 	return visits
 		.filter((v) => v.photos.length > 0)
-		.map((v) => ({ visitId: v.id, date: v.visited_on, photos: layoutPhotos(v.photos) }));
+		.slice()
+		.reverse()
+		.flatMap((v) => v.photos.map((p) => ({ ...p, ratio: aspect(p), visitId: v.id, date: v.visited_on })));
 }
 
 // ---------------------------------------------------------------------------
