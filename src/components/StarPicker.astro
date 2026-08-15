@@ -9,6 +9,7 @@
 //
 //   --sp-size    font size of the star row      --sp-empty  unfilled star colour
 //   --sp-fill    filled star colour             --sp-label  the "3½★" caption
+//   --sp-label-size, --sp-label-font            that caption's type
 //
 // Wire it up with `wireStarPicker` from ../lib/star-picker.
 interface Props {
@@ -61,6 +62,8 @@ const STEPS = Array.from({ length: 10 }, (_, i) => (i + 1) / 2);
 		--sp-empty: #d8d2c8;
 		--sp-fill: #d9b45a;
 		--sp-label: inherit;
+		--sp-label-size: 13px;
+		--sp-label-font: inherit;
 		display: inline-flex;
 		align-items: center;
 		gap: 10px;
@@ -108,8 +111,10 @@ const STEPS = Array.from({ length: 10 }, (_, i) => (i + 1) / 2);
 		outline-offset: 2px;
 	}
 	.sp__label {
-		font-size: 13px;
+		font-size: var(--sp-label-size);
+		font-family: var(--sp-label-font);
 		color: var(--sp-label);
+		line-height: 1;
 	}
 	.sp__clear {
 		border: none;

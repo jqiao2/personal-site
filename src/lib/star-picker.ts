@@ -27,7 +27,10 @@ export function wireStarPicker(root: HTMLElement, options: StarPickerOptions = {
 
 	let value: number | null = null;
 
-	const labelFor = (v: number | null) => (v == null ? emptyLabel : `${Math.floor(v)}${v % 1 ? '½' : ''}★`);
+	// Half a star reads "½★", not "0½★" — the leading zero is a number nobody
+	// writes down.
+	const labelFor = (v: number | null) =>
+		v == null ? emptyLabel : `${Math.floor(v) || ''}${v % 1 ? '½' : ''}★`;
 	const paint = (v: number | null) => {
 		fill.style.width = `${((v ?? 0) / 5) * 100}%`;
 		if (label) label.textContent = labelFor(v);
