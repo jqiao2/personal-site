@@ -1,15 +1,28 @@
 import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../lib/auth';
 import { json, apiError } from '../../../lib/http';
-import { createPlace, isPriceBand, searchPlaces, type PriceBand } from '../../../lib/restaurants';
+import {
+	createPlace,
+	isPriceBand,
+	previousVisits,
+	searchPlaces,
+	type PriceBand,
+} from '../../../lib/restaurants';
 
 export const prerender = false;
 
 // GET /api/restaurants/places?q=xi'an → the composer's place autocomplete.
+//
+// Each row carries `previous`: the last visit there, or null for somewhere
+// only marked to try. Picking a row is the moment the composer needs it, and
+// it arrives with the row rather than as a second request that would land
+// after the fields it fills.
 export const GET: APIRoute = async ({ url }) => {
 	const q = url.searchParams.get('q') ?? '';
 	try {
-		return json({ places: await searchPlaces(q) });
+		const places = await searchPlaces(q);
+		const previous = await previousVisits(places.map((p) => p.id));
+		return json({ places: places.map((p) => ({ ...p, previous: previous.get(p.id) ?? null })) });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'search failed', 500);
 	}

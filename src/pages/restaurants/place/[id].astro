@@ -507,6 +507,17 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 					meta: `${place.cuisines[0] ?? ''}${place.cuisines[0] ? ' · ' : ''}${placeLine(place)}`,
 					visits: place.visit_count,
 					trip: place.trip,
+					priceBand: place.price_band,
+					// Logging from here is nearly always logging ANOTHER visit, so
+					// the composer opens on the last one's answers. Already loaded
+					// and already sorted newest first — see getPlace.
+					previous: visits[0]
+						? {
+								visitedOn: visits[0].visited_on,
+								verdict: visits[0].verdict,
+								hearted: visits[0].hearted,
+							}
+						: null,
 				}}
 				tagOptions={tagOptions}
 				friendOptions={friendOptions}
