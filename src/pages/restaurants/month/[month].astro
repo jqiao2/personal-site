@@ -248,9 +248,16 @@ const summary = visits.length
 			</div>
 		</div>
 
+		{/* Zoom 14.5 puts a few blocks in a 131px cell — enough street pattern to
+		    read as a place. Closer than that and it is one intersection; the live
+		    map opens on a single pin at 14.5 as well. */}
 		{
 			usesMaps && (
-				<script type="application/json" data-map-config set:html={JSON.stringify({ key: mapKey, zoom: 16 })} />
+				<script
+					type="application/json"
+					data-map-config
+					set:html={JSON.stringify({ key: mapKey, zoom: 14.5 })}
+				/>
 			)
 		}
 	</div>
@@ -341,16 +348,29 @@ const summary = visits.length
 		]);
 		maplibregl.setWorkerUrl(workerUrl);
 
+		// THE LABELS COME OFF. menuBasemap sets street and place names for a map
+		// you look at, and a cell is 131px wide: at that size one name is wider
+		// than the whole square, so what actually lands is a word cut in half at
+		// both ends. Without them the cell reads as what it is — a street pattern
+		// with a pin in it — and the palette is doing the talking anyway.
+		const style = menuBasemap(key);
+		style.layers = style.layers.filter((layer) => !layer.id.startsWith('label-'));
+
 		// Off-screen rather than hidden: `display: none` gives the map no size to
-		// render at, and a zero-sized canvas snapshots to nothing.
+		// render at, and a zero-sized canvas snapshots to nothing. Sized to the
+		// cell it will land in — `offsetWidth` is the layout size, so the stage's
+		// scaling transform doesn't get a vote — which keeps every width in the
+		// style at the number it was authored as.
+		const cell = slots[0].closest<HTMLElement>('.cell');
 		const scratch = document.createElement('div');
-		scratch.style.cssText =
-			'position:fixed; left:-9999px; top:0; width:131px; height:190px; pointer-events:none';
+		scratch.style.cssText = `position:fixed; left:-9999px; top:0; width:${
+			cell?.offsetWidth || 131
+		}px; height:${cell?.offsetHeight || 145}px; pointer-events:none`;
 		document.body.append(scratch);
 
 		const map = new maplibregl.Map({
 			container: scratch,
-			style: menuBasemap(key) as maplibregl.StyleSpecification,
+			style: style as maplibregl.StyleSpecification,
 			center: [0, 0],
 			zoom,
 			interactive: false,
