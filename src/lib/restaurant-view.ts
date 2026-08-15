@@ -1,9 +1,9 @@
 // Presentation helpers for the restaurant log — the decisions that would
 // otherwise be repeated across eight pages, and the two that are load-bearing
 // enough to deserve their reasoning written down.
-import { photoUrl } from './restaurants';
+import { cuisineTerms, photoUrl } from './restaurants';
 import { daysInMonth, firstWeekdayIndex, parseMonthKey } from './share-card';
-import type { DiaryVisit, Photo, Place, PriceBand, VisitDetail } from './restaurants';
+import type { DiaryVisit, Photo, Place, VisitDetail } from './restaurants';
 
 /**
  * How a place is located, at whatever granularity it has.
@@ -267,35 +267,90 @@ export interface MonthFigure {
 }
 
 /**
- * The four figures on the shareable month card.
+ * The three figures on the shareable month card.
  *
  * The film and book versions both count things there are a lot of. A good month
  * of eating is eight meals, so counting harder does not help; these are chosen
- * to say something at that scale — how much I went out, how much of it was new,
- * how good it was, and what it cost.
+ * to say something at that scale — how much of the month was new, how wide it
+ * ranged, and how good it was.
+ *
+ * How MUCH I went out is deliberately not here: the meal count is set large at
+ * the top of the card, and a figure that repeats it spends a third of this row
+ * saying nothing.
  */
 export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): MonthFigure[] {
 	const rated = visits.filter((v) => v.rating != null).map((v) => v.rating as number);
 	const avg = rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : null;
+	// Case-folded, and split on the commas some rows stored a whole line under,
+	// so "Thai" and "thai" are one cuisine and "Vietnamese, Sandwich" is two.
+	const cuisines = new Set(
+		visits.flatMap((v) => cuisineTerms(v.cuisines)).map((c) => c.toLowerCase()),
+	);
 	return [
-		{ value: String(visits.length), label: visits.length === 1 ? 'meal out' : 'meals out' },
 		{ value: String(newPlaceIds.size), label: newPlaceIds.size === 1 ? 'new place' : 'new places' },
+		{ value: String(cuisines.size), label: cuisines.size === 1 ? 'cuisine' : 'cuisines' },
 		{ value: avg == null ? '—' : avg.toFixed(1), label: 'avg rating' },
-		{ value: medianPrice(visits) ?? '—', label: 'median price' },
 	];
 }
 
-function medianPrice(visits: { price_band: PriceBand | null }[]): string | null {
-	const bands = visits
-		.map((v) => v.price_band)
-		.filter((b): b is PriceBand => b != null)
-		.map((b) => b.length)
-		.sort((a, b) => a - b);
-	if (bands.length === 0) return null;
-	// Lower of the two middles on an even count: the cheaper reading is the
-	// honest one when a month straddles two bands.
-	const middle = bands[Math.floor((bands.length - 1) / 2)];
-	return '$'.repeat(middle);
+/**
+ * A photograph in a calendar cell.
+ *
+ * ONE PER SPOT, FOR THE WHOLE MONTH — not one per visit and not one per meal.
+ * Somewhere I went three times is one place I ate at, and printing its dumplings
+ * on three days would say I ate three different things somewhere I didn't.
+ *
+ * Which visit supplies it, and which photograph sits on top when two spots share
+ * a day, are the same question: the ranking. Rating first, verdict as the
+ * tiebreaker — the verdict is the finer judgement of the two and the one that
+ * survives a month of everything landing on a 7.
+ */
+export interface Plate {
+	url: string;
+	/** Position in the month's ranking, 0 = best. Drives the stacking order. */
+	rank: number;
+	restaurantId: number;
+	restaurantName: string;
+}
+
+/** Best first: rating, then verdict, then the earlier meal. */
+function byRank(a: VisitDetail, b: VisitDetail): number {
+	const rating = (b.rating ?? -1) - (a.rating ?? -1);
+	if (rating !== 0) return rating;
+	// Verdicts are ranks, 0 (definitely return) best — so this one sorts up.
+	const verdict = (a.verdict ?? Number.MAX_SAFE_INTEGER) - (b.verdict ?? Number.MAX_SAFE_INTEGER);
+	if (verdict !== 0) return verdict;
+	return a.visited_on < b.visited_on ? -1 : a.visited_on > b.visited_on ? 1 : a.id - b.id;
+}
+
+/**
+ * The month's photographs, best spot first, one per spot.
+ *
+ * A spot's plate comes from its best-ranked visit that actually has a
+ * photograph, so a bad snapshot of the best meal doesn't cost the place its
+ * showing on the card — and the photograph lands on the day of the meal it came
+ * from, which is the only day the calendar can honestly put it on.
+ */
+export function monthPlates(visits: VisitDetail[]): Map<number, Plate[]> {
+	const best = new Map<number, VisitDetail>();
+	for (const v of visits) {
+		if (v.photos.length === 0) continue;
+		const held = best.get(v.restaurant_id);
+		if (!held || byRank(v, held) < 0) best.set(v.restaurant_id, v);
+	}
+
+	const byDay = new Map<number, Plate[]>();
+	[...best.values()].sort(byRank).forEach((v, rank) => {
+		const day = Number(v.visited_on.slice(8, 10));
+		const plate: Plate = {
+			url: v.photos[0].url,
+			rank,
+			restaurantId: v.restaurant_id,
+			restaurantName: v.restaurant_name,
+		};
+		byDay.set(day, [...(byDay.get(day) ?? []), plate]);
+	});
+	return byDay;
 }
 
 /** Calendar cells for a month card, Monday-first, padded to whole weeks. */
@@ -304,9 +359,11 @@ export interface CalendarCell {
 	/** The best verdict recorded that day, or null when nothing was logged. */
 	verdict: number | null;
 	visitId: number | null;
+	/** The photographs to print in the cell, best-ranked first. */
+	plates: Plate[];
 }
 
-export function monthCalendar(monthKey: string, visits: DiaryVisit[]): CalendarCell[] {
+export function monthCalendar(monthKey: string, visits: VisitDetail[]): CalendarCell[] {
 	const parsed = parseMonthKey(monthKey);
 	if (!parsed) return [];
 	const { year, month } = parsed;
@@ -314,23 +371,30 @@ export function monthCalendar(monthKey: string, visits: DiaryVisit[]): CalendarC
 	// runtime in UTC can't shift which column the 1st lands in.
 	const days = daysInMonth(year, month);
 	const lead = firstWeekdayIndex(year, month);
+	const plates = monthPlates(visits);
+	const pad = (): CalendarCell => ({ day: null, verdict: null, visitId: null, plates: [] });
 
-	const byDay = new Map<number, DiaryVisit[]>();
+	const byDay = new Map<number, VisitDetail[]>();
 	for (const v of visits) {
 		const day = Number(v.visited_on.slice(8, 10));
 		byDay.set(day, [...(byDay.get(day) ?? []), v]);
 	}
 
 	const cells: CalendarCell[] = [];
-	for (let i = 0; i < lead; i++) cells.push({ day: null, verdict: null, visitId: null });
+	for (let i = 0; i < lead; i++) cells.push(pad());
 	for (let day = 1; day <= days; day++) {
 		const hits = byDay.get(day) ?? [];
 		const best = hits.reduce<number | null>(
 			(min, v) => (v.verdict != null && (min == null || v.verdict < min) ? v.verdict : min),
 			null,
 		);
-		cells.push({ day, verdict: best, visitId: hits[0]?.id ?? null });
+		cells.push({
+			day,
+			verdict: best,
+			visitId: hits[0]?.id ?? null,
+			plates: plates.get(day) ?? [],
+		});
 	}
-	while (cells.length % 7 !== 0) cells.push({ day: null, verdict: null, visitId: null });
+	while (cells.length % 7 !== 0) cells.push(pad());
 	return cells;
 }

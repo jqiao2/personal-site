@@ -652,6 +652,26 @@ export async function listMonthKeys(): Promise<string[]> {
 	return [...keys];
 }
 
+/**
+ * Which of `placeIds` were eaten at for the FIRST TIME EVER in `key`.
+ *
+ * "New" has to be answered against the whole diary, not against the month: a
+ * place I have been going to for years is not new in August because August is
+ * all the card can see. `first_visit` is `min(visited_on)` over every visit in
+ * the place view, so a month containing it is the month the place was new in.
+ */
+export async function newPlacesInMonth(placeIds: number[], key: string): Promise<Set<number>> {
+	const ids = [...new Set(placeIds)].filter((id) => Number.isInteger(id) && id > 0);
+	if (ids.length === 0) return new Set();
+	const { data, error } = await supabasePublic
+		.from('restaurant_places')
+		.select('id,first_visit')
+		.in('id', ids);
+	if (error) throw new Error(error.message);
+	const rows = (data ?? []) as { id: number; first_visit: string | null }[];
+	return new Set(rows.filter((r) => r.first_visit?.startsWith(key)).map((r) => r.id));
+}
+
 // ---------------------------------------------------------------------------
 // Autocomplete
 // ---------------------------------------------------------------------------

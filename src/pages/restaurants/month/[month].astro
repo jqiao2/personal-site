@@ -4,25 +4,26 @@
 //
 // THE PROBLEM THIS CARD HAS THAT THE OTHERS DON'T. A good month of films is
 // thirty posters and a good month of reading is a shelf; a good month of eating
-// is EIGHT MEALS, and there is no artwork to tile. Filling the artboard with a
-// 31-cell calendar that has eight marks in it would be mostly empty grid, and
-// the film card's poster wall has no equivalent at all.
+// is EIGHT MEALS. Filling the artboard with a 31-cell calendar that has eight
+// marks in it is mostly empty grid, and the film card's poster wall has no
+// equivalent — nobody drew a poster for dinner.
 //
-// But this card has something the other two don't: my own photographs. So the
-// hierarchy is inverted. The photographs are the card — a hero and a mosaic
-// taking the largest block — and the calendar is demoted to a narrow strip that
-// reads as a rhythm rather than a grid, marked with the verdict needles so the
-// strip says how the month went as well as when. The four figures and the
-// closing line sit between them, as on the siblings.
+// But this card has something the other two don't: my own photographs, and one
+// of them per meal. So the photographs ARE the grid. Each cell is the plate I
+// ate that day, and the calendar stops being a scaffold with marks on it and
+// becomes the thing worth looking at — a month of eating, in the order it
+// happened, at the size the month actually was. The verdict needles stay on top
+// of the photographs, so the strip still says how the month went as well as when.
 //
 // A MONTH WITH NO PHOTOGRAPHS still has to work, and it is a normal month. Then
-// the mosaic gives way and the calendar strip expands to take the space back,
-// which is the layout the film card would have had all along.
+// the same grid draws itself as ruled paper with the needles on it, which is the
+// calendar this card had before the photographs went in — no empty state, no
+// second layout.
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import { requireOwner } from '../../../lib/auth';
-import { listMonthKeys, listMonthVisits, type VisitDetail } from '../../../lib/restaurants';
-import { monthCalendar, monthFigures, placeLine } from '../../../lib/restaurant-view';
+import { listMonthKeys, listMonthVisits, newPlacesInMonth } from '../../../lib/restaurants';
+import { monthCalendar, monthFigures } from '../../../lib/restaurant-view';
 import {
 	ASPECTS,
 	aspectBySlug,
@@ -46,28 +47,16 @@ const [visits, allKeys, isOwner] = await Promise.all([
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
 const cells = monthCalendar(key, visits);
+const rows = Math.max(1, cells.length / 7);
 
 // "New" means the first visit to that place ever, not the first this month, so
-// a place I've been going to for years never counts as new again.
-const firstEver = new Map<number, string>();
-for (const v of visits) {
-	const seen = firstEver.get(v.restaurant_id);
-	if (!seen || v.visited_on < seen) firstEver.set(v.restaurant_id, v.visited_on);
-}
-const newIds = new Set(firstEver.keys());
+// a place I've been going to for years never counts as new again — which is a
+// question only the whole diary can answer, hence the second round trip.
+const newIds = await newPlacesInMonth(
+	visits.map((v) => v.restaurant_id),
+	key,
+);
 const figures = monthFigures(visits, newIds);
-
-// The hero is the photograph from the best-rated visit that has one; the rest
-// fill the mosaic. Picking by rating rather than by recency means the card
-// leads with the meal worth leading with.
-const withPhotos = visits.filter((v) => v.photos.length > 0);
-const ranked = [...withPhotos].sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
-const hero: VisitDetail | null = ranked[0] ?? null;
-const mosaic = ranked
-	.slice(1)
-	.flatMap((v) => v.photos)
-	.concat(hero?.photos.slice(1) ?? [])
-	.slice(0, 4);
 
 const prev = shiftMonth(key, -1);
 const next = shiftMonth(key, 1);
@@ -138,101 +127,87 @@ const summary = visits.length
 		</nav>
 
 		<div class="stage">
-			<div class="card" data-card style={`--h:${aspect.height}px`}>
-				<div class="card__head">
-					<div>
-						<div class="card__kicker">The month in eating</div>
-						<div class="card__month">{monthLabel(key)}</div>
-					</div>
-					<div class="card__count">
-						<div class="card__countn">{visits.length}</div>
-						<div class="card__countl">{visits.length === 1 ? 'meal out' : 'meals out'}</div>
-					</div>
-				</div>
-
-				<!-- The calendar as a strip: seven columns, the marks doing the work
-				     rather than the cells. Eight meals in a month reads as a rhythm
-				     here and would read as an empty grid at full size. -->
-				<div class="strip">
-					<div class="strip__days">
-						{WEEKDAYS.map((d) => <span>{d}</span>)}
-					</div>
-					<div class="strip__grid">
-						{
-							cells.map((c) => (
-								<div class:list={['cell', c.day == null && 'cell--pad', c.verdict != null && 'cell--hit']}>
-									{c.day != null && <span class="cell__n">{c.day}</span>}
-									{c.verdict != null && (
-										<span class="cell__mark">
-											<VerdictMark verdict={c.verdict} size={16} ring={false} />
-										</span>
-									)}
-								</div>
-							))
-						}
-					</div>
-				</div>
-
-				<div class="figures">
-					{
-						figures.map((f) => (
-							<div class="figure">
-								<div class="figure__v">{f.value}</div>
-								<div class="figure__l">{f.label}</div>
+			<div class="viewport" data-viewport style={`--h:${aspect.height}px`}>
+				<div class="scaler">
+					<div class="card" data-card style={`--h:${aspect.height}px; --rows:${rows}`}>
+						<div class="card__head">
+							<div>
+								<div class="card__kicker">The month in eating</div>
+								<div class="card__month">{monthLabel(key)}</div>
 							</div>
-						))
-					}
-				</div>
-
-				{/* THE PHOTOGRAPHS HERE ARE DELIBERATELY NOT PUT THROUGH THE IMAGE
-				    OPTIMISER, unlike every other photograph on the site — see
-				    src/lib/photo-src.ts. This card is an artboard, not a page: it
-				    is 1080px wide whatever the screen is, and `toPng` above redraws
-				    it at that size to be saved as a file. It also passes
-				    `cacheBust`, which appends a query parameter to every image URL
-				    it fetches — harmless on a storage URL, unverified against an
-				    optimiser endpoint that parses its own query string. Getting
-				    that wrong breaks the export, and the export is the whole point
-				    of the page; the saving is one hero and a few cells on the
-				    least-visited route in the section. */}
-				{
-					hero ? (
-						<div class="plates">
-							<div class="plates__hero">
-								<img src={hero.photos[0].url} alt="" />
-								<div class="plates__cap">
-									<div class="plates__name">{hero.restaurant_name}</div>
-									<div class="plates__where">{placeLine(hero)}</div>
-								</div>
+							<div class="card__count">
+								<div class="card__countn">{visits.length}</div>
+								<div class="card__countl">{visits.length === 1 ? 'meal out' : 'meals out'}</div>
 							</div>
-							{mosaic.length > 0 && (
-								<div class="plates__rest">
-									{mosaic.map((p) => (
-										<span class="plates__cell">
-											<img src={p.url} alt="" />
-										</span>
-									))}
-								</div>
-							)}
 						</div>
-					) : (
-						visits.length > 0 && (
-							<div class="noplates">
-								{visits.slice(0, 6).map((v) => (
-									<div class="noplates__row">
-										<span class="noplates__name">{v.restaurant_name}</span>
-										<span class="rl-gap" />
-										<span class="noplates__where">{placeLine(v)}</span>
-									</div>
-								))}
-							</div>
-						)
-					)
-				}
 
-				<div class="card__foot">
-					<span class="card__summary">{summary}</span>
-					<span class="card__url">jasonqiao.com/restaurants</span>
+						{/* THE PHOTOGRAPHS HERE ARE DELIBERATELY NOT PUT THROUGH THE IMAGE
+						    OPTIMISER, unlike every other photograph on the site — see
+						    src/lib/photo-src.ts. This card is an artboard, not a page: it
+						    is 1080px wide whatever the screen is, and `toPng` below redraws
+						    it at that size to be saved as a file. It also passes
+						    `cacheBust`, which appends a query parameter to every image URL
+						    it fetches — harmless on a storage URL, unverified against an
+						    optimiser endpoint that parses its own query string. Getting
+						    that wrong breaks the export, and the export is the whole point
+						    of the page.
+
+						    A DAY WITH TWO SPOTS IN IT stacks: the better-ranked plate sits
+						    on top and the one under it is turned a few degrees so its
+						    corner shows, which is how a pile of prints looks and is the
+						    only honest way to fit two meals in one square. */}
+						<div class="strip">
+							<div class="strip__days">
+								{WEEKDAYS.map((d) => <span>{d}</span>)}
+							</div>
+							<div class="strip__grid">
+								{
+									cells.map((c) => (
+										<div
+											class:list={[
+												'cell',
+												c.day == null && 'cell--pad',
+												c.verdict != null && 'cell--hit',
+												c.plates.length > 0 && 'cell--plated',
+												c.plates.length > 1 && 'cell--stack',
+											]}
+										>
+											{c.plates.map((p, i) => (
+												<img
+													class:list={['plate', i > 0 && 'plate--under']}
+													style={`--i:${i}`}
+													src={p.url}
+													alt=""
+												/>
+											))}
+											{c.day != null && <span class="cell__n">{c.day}</span>}
+											{c.verdict != null && (
+												<span class="cell__mark">
+													<VerdictMark verdict={c.verdict} size={16} ring={false} />
+												</span>
+											)}
+										</div>
+									))
+								}
+							</div>
+						</div>
+
+						<div class="figures">
+							{
+								figures.map((f) => (
+									<div class="figure">
+										<div class="figure__v">{f.value}</div>
+										<div class="figure__l">{f.label}</div>
+									</div>
+								))
+							}
+						</div>
+
+						<div class="card__foot">
+							<span class="card__summary">{summary}</span>
+							<span class="card__url">jasonqiao.com/restaurants</span>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -244,6 +219,28 @@ const summary = visits.length
 
 	const button = document.querySelector<HTMLButtonElement>('[data-save-card]');
 	const card = document.querySelector<HTMLElement>('[data-card]');
+	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+
+	// ---- fit the 1080px artboard to whatever room the column has ----
+	// The card is drawn at its real size and shrunk by a transform on the wrapper,
+	// so the export keeps its 1080 whatever the screen is. The scale is worked out
+	// here rather than in CSS because a length divided by a length is not a number
+	// as far as `scale()` is concerned — the arithmetic this replaced was invalid,
+	// which dropped the transform and left phones showing the artboard at full
+	// size. Capped at 0.62 so the card doesn't outgrow the controls above it, and
+	// floored so it stays a picture on a phone. Same fit as the film card's.
+	const stage = viewport?.parentElement;
+	function fit(): void {
+		if (!viewport) return;
+		const width = stage?.clientWidth ?? 1080;
+		viewport.style.setProperty('--s', String(Math.max(0.2, Math.min(0.62, width / 1080))));
+	}
+	if (viewport) {
+		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
+		else window.addEventListener('resize', fit);
+		fit();
+	}
+
 	button?.addEventListener('click', async () => {
 		if (!card) return;
 		const label = button.textContent;
@@ -256,6 +253,8 @@ const summary = visits.length
 				pixelRatio: 1,
 				width: card.offsetWidth,
 				height: card.offsetHeight,
+				// The card sits inside a scaled wrapper; the clone must not inherit it.
+				style: { transform: 'none' },
 				cacheBust: true,
 			});
 			const a = document.createElement('a');
@@ -310,29 +309,34 @@ const summary = visits.length
 		color: var(--rule);
 	}
 
-	/* The artboard is 1080 wide and scaled down to fit; the export takes the
-	   real thing, not the preview. */
+	/* ---- the artboard ----
+	   .viewport reserves the scaled-down footprint; .scaler shrinks the 1080px
+	   card into it. The card keeps its real size so the export renders at 1080
+	   regardless of the screen. --s is set by the script above. */
 	.stage {
 		margin-top: 20px;
-		overflow-x: auto;
+		display: flex;
+		justify-content: center;
+	}
+	.viewport {
+		position: relative;
+		width: calc(1080px * var(--s, 0.5));
+		height: calc(var(--h) * var(--s, 0.5));
+	}
+	.scaler {
+		transform: scale(var(--s, 0.5));
+		transform-origin: 0 0;
+		width: 1080px;
 	}
 	.card {
 		width: 1080px;
-		min-height: var(--h);
+		height: var(--h);
 		background: var(--card);
 		border: 1px solid var(--rule);
 		padding: 56px 56px 48px;
 		display: flex;
 		flex-direction: column;
-		transform-origin: top left;
-	}
-	@media (max-width: 1180px) {
-		.card {
-			transform: scale(min(1, calc((100vw - 2 * var(--gutter)) / 1080)));
-		}
-		.stage {
-			height: calc(var(--h) * min(1, (100vw - 2 * 32px) / 1080));
-		}
+		overflow: hidden;
 	}
 
 	.card__head {
@@ -371,8 +375,21 @@ const summary = visits.length
 		color: var(--ink-3);
 	}
 
+	/* The calendar takes everything the head, the figures and the foot don't.
+	   Rows share that height evenly, so one grid fits all three aspects without a
+	   second set of numbers — but a cell is capped at 190px so the story artboard,
+	   which has 500px more than it needs, doesn't crop every photograph into a
+	   column. Past the cap the grid centres itself in what's left. */
 	.strip {
 		margin-top: 26px;
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		/* Once the cells hit their cap the leftover height is shared out here, so
+		   the weekday letters travel with the grid instead of being stranded
+		   under the rule. */
+		justify-content: center;
 	}
 	.strip__days {
 		display: grid;
@@ -385,15 +402,18 @@ const summary = visits.length
 		padding-bottom: 6px;
 	}
 	.strip__grid {
+		flex: 1 1 auto;
+		min-height: 0;
+		max-height: calc(var(--rows) * 190px + (var(--rows) - 1) * 8px);
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
+		grid-auto-rows: 1fr;
 		gap: 8px;
 	}
 	.cell {
-		height: 46px;
+		position: relative;
 		background: #faf3e2;
 		border: 1px solid var(--rule-4);
-		position: relative;
 	}
 	.cell--pad {
 		background: none;
@@ -403,10 +423,39 @@ const summary = visits.length
 		background: var(--sunk);
 		border-color: var(--rule);
 	}
+	.cell--plated {
+		border-color: transparent;
+		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
+		z-index: 1;
+	}
+	/* A stacked cell's under-plate spills past its own square, so it paints over
+	   its neighbours rather than under whichever of them comes later in source
+	   order. Both of these also make the cell a stacking context, which is what
+	   keeps the plate layering below a matter of the cell it's in. */
+	.cell--stack {
+		z-index: 2;
+	}
+
+	.plate {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+		/* Best-ranked spot on top; the rest fall back a layer each. */
+		z-index: calc(10 - var(--i));
+	}
+	.plate--under {
+		transform: rotate(calc(var(--i) * 3.5deg));
+		box-shadow: 0 1px 6px rgba(47, 30, 18, 0.35);
+	}
+
 	.cell__n {
 		position: absolute;
 		left: 6px;
 		top: 4px;
+		z-index: 20;
 		font-family: var(--mono);
 		font-size: 12px;
 		color: #bda98a;
@@ -414,16 +463,32 @@ const summary = visits.length
 	.cell--hit .cell__n {
 		color: var(--ink);
 	}
+	/* On a photograph the numeral and the needle need their own ground — a plate
+	   can be any colour at all, and both of these are small. */
+	.cell--plated .cell__n {
+		left: 0;
+		top: 0;
+		padding: 3px 6px;
+		background: var(--card);
+		color: var(--ink);
+	}
 	.cell__mark {
 		position: absolute;
 		right: 5px;
 		bottom: 4px;
+		z-index: 20;
+	}
+	.cell--plated .cell__mark {
+		right: 0;
+		bottom: 0;
+		padding: 4px 5px 3px;
+		background: var(--card);
 	}
 
 	.figures {
 		margin-top: 30px;
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
+		grid-template-columns: repeat(3, 1fr);
 		border-top: 1px solid var(--rule);
 		border-bottom: 1px solid var(--rule);
 	}
@@ -448,90 +513,7 @@ const summary = visits.length
 		color: var(--ink-3);
 	}
 
-	/* The photographs are the card, but they are not the whole card: capped so
-	   a tall artboard (9:16 is 1920) doesn't hand them six hundred spare pixels
-	   and turn the block into a poster. The slack goes below them instead. */
-	.plates {
-		margin-top: 28px;
-		flex: 1 1 auto;
-		display: flex;
-		gap: 10px;
-		min-height: 250px;
-		max-height: 460px;
-	}
-	.plates__hero {
-		flex: 2;
-		position: relative;
-		overflow: hidden;
-		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
-	}
-	.plates__hero img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: block;
-	}
-	.plates__cap {
-		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		padding: 16px 18px;
-		background: linear-gradient(transparent, rgba(36, 24, 18, 0.86));
-	}
-	.plates__name {
-		font-size: 19px;
-		font-weight: 600;
-		color: var(--card);
-	}
-	.plates__where {
-		margin-top: 3px;
-		font-size: 13px;
-		color: #e0c9a4;
-	}
-	.plates__rest {
-		flex: 1;
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(46%, 1fr));
-		gap: 10px;
-	}
-	.plates__cell {
-		overflow: hidden;
-		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
-	}
-	.plates__cell img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: block;
-	}
-
-	/* No photographs this month: the block that would have held them lists the
-	   meals instead, as menu rows, which is the same card without a hole. */
-	.noplates {
-		margin-top: 28px;
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		justify-content: center;
-		gap: 10px;
-	}
-	.noplates__row {
-		display: flex;
-		align-items: baseline;
-		gap: 10px;
-	}
-	.noplates__name {
-		font-family: var(--display);
-		font-size: 22px;
-	}
-	.noplates__where {
-		font-size: 14px;
-		color: var(--ink-3);
-	}
-
 	.card__foot {
-		margin-top: auto;
 		padding-top: 24px;
 		display: flex;
 		align-items: baseline;
