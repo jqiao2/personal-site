@@ -12,6 +12,7 @@
 // Pages render their own trigger; any element carrying [data-open-entry-editor]
 // opens the modal. Server data reaches the client through the JSON config tag.
 import type { EntryEditorFilm, EntryEditorInitial } from '../lib/entry-editor';
+import StarPicker from './StarPicker.astro';
 
 interface Props {
 	mode: 'select' | 'log' | 'edit';
@@ -182,12 +183,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				<div>
 					<label class="lbl">Rating</label>
 					<div class="rating-row">
-						<span class="starpicker" id="ee-starpicker">
-							<span class="sp-empty">★★★★★</span>
-							<span class="sp-fill" id="ee-sp-fill"></span>
-							<span class="sp-hits" id="ee-sp-hits"></span>
-						</span>
-						<span class="rating-label" id="ee-rating-label">Not rated</span>
+						<StarPicker
+							id="ee-starpicker"
+							style="--sp-empty:#4a2529;--sp-fill:#d9b45a;--sp-label:#a2857a"
+						/>
 						<div class="toggles">
 							<button type="button" class="toggle" id="ee-like">♥ Like</button>
 							<button type="button" class="toggle" id="ee-rewatch">↻ Rewatch</button>
@@ -670,42 +669,6 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		gap: 14px;
 		flex-wrap: wrap;
 	}
-	.starpicker {
-		position: relative;
-		display: inline-block;
-		line-height: 1;
-		font-size: 26px;
-		cursor: pointer;
-		user-select: none;
-	}
-	.sp-empty {
-		color: #4a2529;
-	}
-	.sp-fill {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 0;
-		overflow: hidden;
-		white-space: nowrap;
-		color: #d9b45a;
-		pointer-events: none;
-	}
-	.sp-fill::before {
-		content: '★★★★★';
-	}
-	.sp-hits {
-		position: absolute;
-		inset: 0;
-		display: flex;
-	}
-	.sp-hits :global(span) {
-		flex: 1;
-	}
-	.rating-label {
-		font-size: 13px;
-		color: #a2857a;
-	}
 	.toggles {
 		display: flex;
 		gap: 10px;
@@ -998,6 +961,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 
 <script>
 	import { localDay } from '../lib/day';
+	import { wireStarPicker } from '../lib/star-picker';
 
 	// Owner-only. Astro always hoists this script; bail out when the modal isn't
 	// in the DOM (a non-owner viewing the page).
@@ -1079,9 +1043,13 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		const reviewInput = $<HTMLTextAreaElement>('ee-review');
 		const likeBtn = $<HTMLButtonElement>('ee-like');
 		const rewatchBtn = $<HTMLButtonElement>('ee-rewatch');
-		const fill = $<HTMLSpanElement>('ee-sp-fill');
-		const hits = $<HTMLSpanElement>('ee-sp-hits');
-		const ratingLabel = $<HTMLSpanElement>('ee-rating-label');
+		// The shared half-star picker (see StarPicker.astro). It owns its own
+		// display; this editor only mirrors the committed value into `rating`.
+		const starPicker = wireStarPicker($<HTMLSpanElement>('ee-starpicker'), {
+			onChange: (v) => {
+				rating = v;
+			},
+		});
 		const mediums = $<HTMLDivElement>('ee-mediums');
 		const theaterFields = $<HTMLDivElement>('ee-theater-fields');
 		const otherField = $<HTMLDivElement>('ee-other-field');
@@ -1287,8 +1255,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		// Clear rating / like / rewatch / prior hint, keeping film + date + review.
 		function resetEntryFields() {
 			rating = null;
-			setFill(0);
-			ratingLabel.textContent = 'Not rated';
+			starPicker.set(null);
 			liked = false;
 			likeBtn.classList.remove('on');
 			rewatch = false;
@@ -1314,8 +1281,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				if (prior.rating != null) {
 					const priorRating: number = prior.rating;
 					rating = priorRating;
-					setFill(priorRating);
-					ratingLabel.textContent = labelFor(priorRating);
+					starPicker.set(priorRating);
 				}
 				liked = Boolean(prior.liked);
 				likeBtn.classList.toggle('on', liked);
@@ -1336,30 +1302,6 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				if (tmdbId === id) cleanSnap = snap();
 			}
 		}
-
-		// ---- Half-star picker (10 hotspots over 5 stars) ----
-		const setFill = (value: number) => {
-			fill.style.width = `${(value / 5) * 100}%`;
-		};
-		const labelFor = (v: number) => (v === 0 ? 'Not rated' : `${Math.floor(v)}${v % 1 ? '½' : ''}★`);
-		for (let i = 1; i <= 10; i++) {
-			const hit = document.createElement('span');
-			const value = i / 2;
-			hit.addEventListener('mousemove', () => {
-				setFill(value);
-				ratingLabel.textContent = labelFor(value);
-			});
-			hit.addEventListener('click', () => {
-				rating = value;
-				setFill(value);
-				ratingLabel.textContent = labelFor(value);
-			});
-			hits.appendChild(hit);
-		}
-		hits.addEventListener('mouseleave', () => {
-			setFill(rating ?? 0);
-			ratingLabel.textContent = labelFor(rating ?? 0);
-		});
 
 		likeBtn.addEventListener('click', () => {
 			liked = !liked;
@@ -1616,8 +1558,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			tagInput.value = '';
 			friendInput.value = '';
 
-			setFill(rating ?? 0);
-			ratingLabel.textContent = labelFor(rating ?? 0);
+			starPicker.set(rating);
 			likeBtn.classList.toggle('on', liked);
 			rewatchBtn.classList.toggle('on', rewatch);
 			renderMedium();

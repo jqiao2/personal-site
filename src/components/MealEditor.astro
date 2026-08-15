@@ -26,6 +26,7 @@ import { VERDICTS } from '../lib/verdict';
 import { PRICE_BANDS, WHY_TAGS } from '../lib/restaurants';
 import { verdictRotation } from '../lib/verdict';
 import { localDay } from '../lib/day';
+import StarPicker from './StarPicker.astro';
 
 interface Props {
 	/** Where to return after saving. */
@@ -138,23 +139,13 @@ const config = {
 
 			<div class="me__field">
 				<span class="rl-label">Rating</span>
-				<div class="me__stars" data-me-stars>
-					{
-						[1, 2, 3, 4, 5].map((n) => (
-							<button
-								type="button"
-								class="me__star"
-								data-me-star={n}
-								aria-label={`${n} stars`}
-								title={`${n} stars`}
-							>
-								★
-							</button>
-						))
-					}
-					<button type="button" class="me__half" data-me-half title="Half star">½</button>
-					<button type="button" class="me__clear" data-me-clear-stars>clear</button>
-				</div>
+				<!-- The same picker the film composer uses, in this page's palette:
+				     a half star is a click on the left half of a star, so there is
+				     no half-step mode to arm first. -->
+				<StarPicker
+					clearable
+					style="--sp-size:22px;--sp-empty:#dbc7a2;--sp-fill:var(--marigold);--sp-label:var(--ink-3)"
+				/>
 			</div>
 
 			<div class="me__field">
@@ -357,6 +348,7 @@ const config = {
 
 <script>
 	import { hitWhere, lookupPlaces, type GeoHit } from '../lib/place-lookup';
+	import { wireStarPicker } from '../lib/star-picker';
 
 	interface VerdictSpec {
 		label: string;
@@ -424,7 +416,6 @@ const config = {
 			placeName: '',
 			locked: cfg.place,
 			rating: cfg.initial?.rating ?? 0,
-			half: (cfg.initial?.rating ?? 0) % 1 !== 0,
 			verdict: cfg.initial?.verdict ?? 0,
 			verdictSet: cfg.initial?.verdict != null,
 			hearted: cfg.initial?.hearted ?? false,
@@ -520,17 +511,6 @@ const config = {
 				$('[data-me-locked-name]')!.textContent = locked.name;
 				$('[data-me-locked-meta]')!.textContent = locked.meta;
 			}
-
-			// Stars. The half toggle changes what the next click means, so the
-			// fill has to re-read after every change rather than on click alone.
-			const filled = Math.ceil(state.rating);
-			$$('[data-me-star]').forEach((el) => {
-				const n = Number(el.dataset.meStar);
-				const on = n <= filled;
-				el.textContent = state.half && n === filled ? '½' : '★';
-				el.classList.toggle('me__star--on', on);
-			});
-			$('[data-me-half]')!.classList.toggle('me__toggle--on', state.half);
 
 			const v = cfg.verdicts[state.verdict] ?? cfg.verdicts[0];
 			const needle = $('[data-me-needle]')!;
@@ -1150,23 +1130,16 @@ const config = {
 			searchPlaces(value('[data-me-place]'));
 		});
 
-		$$('[data-me-star]').forEach((el) =>
-			el.addEventListener('click', () => {
-				const n = Number(el.dataset.meStar);
-				state.rating = state.half ? n - 0.5 : n;
+		// The shared half-star picker (see StarPicker.astro) owns its own display;
+		// the state only mirrors what it commits, so the summary line and the
+		// dirty check keep reading one number.
+		const starPicker = wireStarPicker($('[data-star-picker]')!, {
+			onChange: (v) => {
+				state.rating = v ?? 0;
 				render();
-			}),
-		);
-		$('[data-me-half]')!.addEventListener('click', () => {
-			state.half = !state.half;
-			if (state.rating) state.rating = state.half ? Math.ceil(state.rating) - 0.5 : Math.ceil(state.rating);
-			render();
+			},
 		});
-		$('[data-me-clear-stars]')!.addEventListener('click', () => {
-			state.rating = 0;
-			state.half = false;
-			render();
-		});
+		starPicker.set(cfg.initial?.rating ?? null);
 
 		$('[data-me-verdict]')!.addEventListener('input', (e) => {
 			state.verdict = Number((e.target as HTMLInputElement).value);
@@ -1571,41 +1544,6 @@ const config = {
 	}
 	.me__pinned-x:hover {
 		color: var(--terracotta-deep);
-	}
-
-	.me__stars {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.me__star {
-		border: none;
-		background: none;
-		font-size: 22px;
-		line-height: 1;
-		padding: 0;
-		color: #dbc7a2;
-		cursor: pointer;
-	}
-	.me__star--on {
-		color: var(--marigold);
-	}
-	.me__half {
-		border: 1px solid var(--rule);
-		background: var(--ground);
-		color: var(--ink-2);
-		font-size: 12px;
-		padding: 3px 8px;
-		cursor: pointer;
-	}
-	.me__clear {
-		margin-left: auto;
-		border: none;
-		background: none;
-		color: var(--ink-3);
-		font-size: 11.5px;
-		cursor: pointer;
-		text-decoration: underline;
 	}
 
 	.me__verdict {
