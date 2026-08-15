@@ -159,6 +159,7 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 					review: visit.review ?? '',
 					tags: visit.tags,
 				}}
+				photos={visit.photos.map((p) => ({ id: p.id, url: p.url }))}
 				tagOptions={tagOptions}
 				friendOptions={friendOptions}
 			/>

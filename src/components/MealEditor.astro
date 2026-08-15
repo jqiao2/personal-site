@@ -44,6 +44,13 @@ interface Props {
 		review: string;
 		tags: string[];
 	} | null;
+	/**
+	 * The photographs already on the visit being edited, in their stored order.
+	 * They are shown alongside the ones being added, because a photograph you
+	 * cannot see is one you cannot take out or move — which used to mean the
+	 * only way to fix the order of an entry was to delete the visit.
+	 */
+	photos?: { id: number; url: string }[];
 	tagOptions?: string[];
 	friendOptions?: string[];
 	deleteRedirect?: string;
@@ -54,6 +61,7 @@ const {
 	place = null,
 	visitId = null,
 	initial = null,
+	photos = [],
 	tagOptions = [],
 	friendOptions = [],
 	deleteRedirect = '/restaurants/diary',
@@ -64,6 +72,7 @@ const config = {
 	place,
 	visitId,
 	initial,
+	photos,
 	tagOptions,
 	friendOptions,
 	verdicts: VERDICTS.map((v) => ({ label: v.label, gloss: v.gloss, ink: v.ink })),
@@ -384,6 +393,7 @@ const config = {
 			review: string;
 			tags: string[];
 		} | null;
+		photos: { id: number; url: string }[];
 		tagOptions: string[];
 		friendOptions: string[];
 		verdicts: VerdictSpec[];
@@ -400,7 +410,12 @@ const config = {
 		const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
 
 		type Pane = 'log' | 'try';
-		type PendingPhoto = { file: File; url: string; width: number; height: number };
+		// One list holds both kinds, because the arrangement is one arrangement:
+		// a photograph added today can belong between two taken last month, and
+		// two lists side by side could not say that.
+		type PhotoItem =
+			| { kind: 'stored'; id: number; url: string }
+			| { kind: 'new'; file: File; url: string; width: number; height: number };
 
 		const state = {
 			pane: 'log' as Pane,
@@ -416,7 +431,11 @@ const config = {
 			revisit: cfg.initial?.revisit ?? (cfg.place ? cfg.place.visits > 0 : false),
 			price: null as string | null,
 			tags: [...(cfg.initial?.tags ?? [])],
-			photos: [] as PendingPhoto[],
+			photos: (cfg.photos ?? []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
+			// Taking a stored photograph out of the list is a decision, not yet a
+			// deletion: the file goes when the visit is saved, so Cancel leaves the
+			// entry exactly as it was found.
+			removed: [] as number[],
 			tryPrice: null as string | null,
 			// The place's own answer, in both panes. Seeded from the place when
 			// the composer opens on one, so logging a meal doesn't quietly
@@ -575,11 +594,36 @@ const config = {
 					x.textContent = '×';
 					x.setAttribute('aria-label', 'Remove photo');
 					x.addEventListener('click', () => {
-						URL.revokeObjectURL(p.url);
+						// A file the browser made for the preview is the browser's to
+						// free; a stored one is the server's, and it is only marked.
+						if (p.kind === 'new') URL.revokeObjectURL(p.url);
+						else state.removed.push(p.id);
 						state.photos.splice(i, 1);
 						render();
 					});
-					cell.append(img, x);
+					// Two arrows rather than a drag: this composer is used on a phone
+					// more than anywhere else, and HTML drag-and-drop does not exist
+					// under a finger.
+					const move = document.createElement('span');
+					move.className = 'me__photo-move';
+					for (const [glyph, to, label] of [
+						['‹', i - 1, 'Move photo earlier'],
+						['›', i + 1, 'Move photo later'],
+					] as const) {
+						const b = document.createElement('button');
+						b.type = 'button';
+						b.className = 'me__photo-move-b';
+						b.textContent = glyph;
+						b.setAttribute('aria-label', label);
+						b.disabled = to < 0 || to >= state.photos.length;
+						b.addEventListener('click', () => {
+							const [moved] = state.photos.splice(i, 1);
+							state.photos.splice(to, 0, moved);
+							render();
+						});
+						move.append(b);
+					}
+					cell.append(img, x, move);
 					return cell;
 				}),
 			);
@@ -969,6 +1013,20 @@ const config = {
 			const saved = await res.json();
 			const visitId = cfg.visitId ?? saved.id;
 
+			// A photograph taken out of the list goes now, once the rest of the
+			// edit has been accepted — before this point Save could still fail,
+			// and a file deleted for a save that never happened is gone for
+			// nothing. The storage object goes with the row; there is no undo.
+			const failures: string[] = [];
+			for (const id of state.removed) {
+				try {
+					const res = await fetch(`/api/restaurants/photos/${id}`, { method: 'DELETE' });
+					if (!res.ok) failures.push('a photograph could not be deleted');
+				} catch {
+					failures.push('a photograph could not be deleted');
+				}
+			}
+
 			// Photographs go up after the visit exists, because the storage path
 			// is keyed on its id. A failed upload leaves a logged visit with
 			// fewer photos rather than losing the whole entry.
@@ -979,8 +1037,16 @@ const config = {
 			// and the browser gets a 413 it cannot explain. Batching four photos
 			// into one request trips that cap on the sum, which is how three
 			// perfectly acceptable photos fail because of a fourth.
-			const failures: string[] = [];
+			//
+			// The ids come back as they are stored, so the arrangement below can
+			// name every photograph in the list — the ones already there and the
+			// ones that arrived a moment ago alike.
+			const order: number[] = [];
 			for (const p of state.photos) {
+				if (p.kind === 'stored') {
+					order.push(p.id);
+					continue;
+				}
 				const form = new FormData();
 				form.append('photo', p.file, p.file.name);
 				form.append('width', String(p.width));
@@ -988,20 +1054,50 @@ const config = {
 				form.append('caption', '');
 				try {
 					const up = await fetch(`/api/restaurants/visits/${visitId}/photos`, { method: 'POST', body: form });
-					if (!up.ok) {
+					if (up.ok) {
+						const added = await up.json().catch(() => null);
+						for (const id of added?.ids ?? []) order.push(Number(id));
+					} else {
 						// A 413 comes from the platform as HTML, not from the
 						// endpoint as JSON, so it is named here rather than parsed.
 						const body = up.status === 413 ? null : await up.json().catch(() => null);
-						failures.push(body?.error ?? (up.status === 413 ? 'it was too large to send' : `HTTP ${up.status}`));
+						const why = body?.error ?? (up.status === 413 ? 'it was too large to send' : `HTTP ${up.status}`);
+						failures.push(`a photograph did not upload — ${why}`);
 					}
 				} catch {
-					failures.push('the upload did not complete');
+					failures.push('a photograph did not upload — the request did not complete');
 				}
 			}
+
+			// Uploading appends, so a list that was only added to is already in
+			// the right order and needs no second request. Anything else — a
+			// photograph moved, or a new one nudged in front of the old ones — is
+			// sent whole, since the arrangement is what is being saved, not the
+			// moves that produced it.
+			const seeded = cfg.photos ?? [];
+			const stored = new Set(seeded.map((p) => p.id));
+			const kept = new Set(order.filter((id) => stored.has(id)));
+			const appended = [
+				...seeded.map((p) => p.id).filter((id) => kept.has(id)),
+				...order.filter((id) => !stored.has(id)),
+			];
+			if (order.length > 1 && order.some((id, i) => id !== appended[i])) {
+				try {
+					const res = await fetch(`/api/restaurants/visits/${visitId}/photos`, {
+						method: 'PATCH',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({ order }),
+					});
+					if (!res.ok) failures.push('the photographs kept their old order');
+				} catch {
+					failures.push('the photographs kept their old order');
+				}
+			}
+
+			// The visit itself is already saved by now, so this reports what did
+			// not happen around it rather than pretending the whole save failed.
 			if (failures.length > 0) {
-				window.alert(
-					`The visit was saved, but ${failures.length} photograph${failures.length === 1 ? '' : 's'} did not upload: ${failures[0]}.`,
-				);
+				window.alert(`The visit was saved, but: ${[...new Set(failures)].join('; ')}.`);
 			}
 
 			location.href = cfg.redirect;
@@ -1195,7 +1291,7 @@ const config = {
 		/** Re-encode anything above this, even when its dimensions are fine. */
 		const REENCODE_OVER = 3 * 1024 * 1024;
 
-		async function prepare(file: File): Promise<PendingPhoto> {
+		async function prepare(file: File): Promise<PhotoItem> {
 			// `from-image` so a portrait held sideways is stored the way up it
 			// was taken: the EXIF rotation a phone records is applied to the
 			// pixels here, and canvas would otherwise drop it on re-encoding.
@@ -1206,7 +1302,7 @@ const config = {
 				// A format this browser cannot decode still goes up as it arrived,
 				// unmeasured. Refusing it here would be guessing on the server's
 				// behalf about what it can store.
-				return { file, url: URL.createObjectURL(file), width: 0, height: 0 };
+				return { kind: 'new', file, url: URL.createObjectURL(file), width: 0, height: 0 };
 			}
 
 			const { width, height } = bitmap;
@@ -1215,7 +1311,7 @@ const config = {
 			// paying a second lossy encode for nothing.
 			if (scale === 1 && file.size <= REENCODE_OVER) {
 				bitmap.close();
-				return { file, url: URL.createObjectURL(file), width, height };
+				return { kind: 'new', file, url: URL.createObjectURL(file), width, height };
 			}
 
 			const w = Math.round(width * scale);
@@ -1228,14 +1324,14 @@ const config = {
 			const blob = await new Promise<Blob | null>((resolve) =>
 				canvas.toBlob(resolve, 'image/jpeg', 0.82),
 			);
-			if (!blob) return { file, url: URL.createObjectURL(file), width, height };
+			if (!blob) return { kind: 'new', file, url: URL.createObjectURL(file), width, height };
 
 			// The extension has to follow the re-encode: the server derives the
 			// stored object's name from this one, and a JPEG called .heic would
 			// be served with the wrong type for the rest of its life.
 			const name = `${file.name.replace(/\.[^.]+$/, '') || 'photo'}.jpg`;
 			const shrunk = new File([blob], name, { type: 'image/jpeg' });
-			return { file: shrunk, url: URL.createObjectURL(shrunk), width: w, height: h };
+			return { kind: 'new', file: shrunk, url: URL.createObjectURL(shrunk), width: w, height: h };
 		}
 
 		// Seed from the server: an edit opens on the stored visit, and a fresh
@@ -1857,5 +1953,38 @@ const config = {
 		font-size: 11px;
 		line-height: 1;
 		cursor: pointer;
+	}
+	/* Along the bottom edge rather than beside the thumbnail: the row is
+	   already as wide as the sheet at four photographs, and arrows outside
+	   the frame would halve how many fit on a phone. */
+	.me__photo-move {
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		display: flex;
+	}
+	.me__photo-move-b {
+		flex: 1;
+		border: none;
+		background: rgba(36, 24, 18, 0.72);
+		color: var(--ground);
+		font-size: 13px;
+		line-height: 1;
+		/* A finger's worth of height inside a small thumbnail. */
+		padding: 4px 0;
+		cursor: pointer;
+	}
+	.me__photo-move-b + .me__photo-move-b {
+		border-left: 1px solid rgba(247, 238, 217, 0.28);
+	}
+	.me__photo-move-b:disabled {
+		color: rgba(247, 238, 217, 0.34);
+		cursor: default;
+	}
+	/* One photograph has nowhere to go, and two arrows that do nothing read as
+	   a control that is broken rather than one that is unnecessary. */
+	.me__photo:only-child .me__photo-move {
+		display: none;
 	}
 </style>
