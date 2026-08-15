@@ -264,8 +264,6 @@ const summary = visits.length
 </RestaurantLayout>
 
 <script>
-	import { toPng } from 'html-to-image';
-
 	const button = document.querySelector<HTMLButtonElement>('[data-save-card]');
 	const card = document.querySelector<HTMLElement>('[data-card]');
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
@@ -330,9 +328,13 @@ const summary = visits.length
 	const mapConfig = document.querySelector('[data-map-config]');
 	const slots = [...document.querySelectorAll<HTMLElement>('[data-place-map]')];
 
+	// Held so the export can wait for it: a card saved while the maps are still
+	// arriving is a card with holes in it.
+	let mapsDrawn: Promise<void> = Promise.resolve();
+
 	if (mapConfig?.textContent && slots.length > 0) {
 		const { key, zoom } = JSON.parse(mapConfig.textContent) as { key: string; zoom: number };
-		drawMaps(key, zoom, slots).catch(() => {
+		mapsDrawn = drawMaps(key, zoom, slots).catch(() => {
 			for (const slot of slots) abandon(slot.closest('.plate'));
 			document.querySelector('[data-map-credit]')?.remove();
 		});
@@ -421,31 +423,122 @@ const summary = visits.length
 		}
 	}
 
+	// ---- saving the card ----
+	//
+	// THIS USED TO BE `toPng` INTO AN `<a download>`, AND ON A PHONE IT STOPPED
+	// WORKING: iOS put up its download prompt and then produced nothing. Two
+	// reasons, and the film card had already answered both.
+	//
+	// The first is that a `data:` URL of a whole 1080×1350 artboard is a string
+	// megabytes long, and longer again now the map cells carry their snapshots as
+	// data URLs of their own — a size Safari quietly declines to save. A Blob has
+	// no such ceiling.
+	//
+	// The second is where the file would land even if it saved. A download goes
+	// to Files; a picture you meant to post belongs in Photos, and the share
+	// sheet's "Save Image" is the only door into it. So on a touch device the
+	// render is handed to navigator.share, and desktop keeps the plain download,
+	// where a share sheet would be a detour.
+	const shareFile =
+		matchMedia('(pointer: coarse)').matches &&
+		typeof navigator.share === 'function' &&
+		(() => {
+			try {
+				return !!navigator.canShare?.({
+					files: [new File([new Blob()], 'card.png', { type: 'image/png' })],
+				});
+			} catch {
+				return false;
+			}
+		})();
+
+	// Rendering can outlast the tap that started it, and Safari won't open the
+	// sheet without a live user gesture. Keeping the render means the second tap
+	// can share immediately, inside its own gesture. The map snapshots are part of
+	// the state: a render made before they landed is a different card.
+	let rendered: { state: string; file: File } | null = null;
+	const renderState = (): string =>
+		`${location.pathname}${location.search}|${document.querySelectorAll('.plate__shot').length}`;
+
+	// Safari and every iOS browser, which is Safari underneath. html-to-image
+	// rasterises through an SVG <foreignObject>, and WebKit is known to paint
+	// that clone's text on a cold pass while dropping its images; the second pass
+	// costs almost nothing, since the inlined data URLs are cached from the first.
+	const webkit =
+		/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
+
+	async function render(): Promise<Blob | null> {
+		if (!card) return null;
+		const { toBlob } = await import('html-to-image');
+		const options = {
+			// Drawn at the artboard's own size rather than the scaled-down preview,
+			// so the export is 1080 wide whatever the screen is.
+			width: card.offsetWidth,
+			height: card.offsetHeight,
+			pixelRatio: 1,
+			backgroundColor: '#fdf7e8',
+			// The card sits inside a scaled wrapper; the clone must not inherit it.
+			style: { transform: 'none' },
+			cacheBust: true,
+		};
+		const first = await toBlob(card, options);
+		return webkit ? await toBlob(card, options) : first;
+	}
+
 	button?.addEventListener('click', async () => {
 		if (!card) return;
-		const label = button.textContent;
+		const idle = button.dataset.label ?? button.textContent ?? 'Save image';
+		button.dataset.label = idle;
+		const name = `${document.title.split(' ·')[0].replace(/\s+/g, '-').toLowerCase()}-eating.png`;
+
+		// A render is already in hand and still current: share it now, while the
+		// tap that asked for it is still what the browser is acting on.
+		if (shareFile && rendered?.state === renderState()) {
+			try {
+				await navigator.share({ files: [rendered.file] });
+			} catch (error) {
+				if ((error as DOMException)?.name !== 'AbortError')
+					button.textContent = 'Could not open the share sheet';
+			}
+			return;
+		}
+
+		let next = idle;
 		button.disabled = true;
 		button.textContent = 'Drawing…';
 		try {
-			// Drawn at the artboard's own size rather than the scaled-down preview,
-			// so the export is 1080 wide whatever the screen is.
-			const url = await toPng(card, {
-				pixelRatio: 1,
-				width: card.offsetWidth,
-				height: card.offsetHeight,
-				// The card sits inside a scaled wrapper; the clone must not inherit it.
-				style: { transform: 'none' },
-				cacheBust: true,
-			});
+			// A card whose maps haven't arrived yet would export with holes in it.
+			await mapsDrawn;
+			const blob = await render();
+			if (!blob) throw new Error('nothing was rendered');
+
+			if (shareFile) {
+				const file = new File([blob], name, { type: 'image/png' });
+				rendered = { state: renderState(), file };
+				try {
+					await navigator.share({ files: [file] });
+				} catch (error) {
+					const kind = (error as DOMException)?.name;
+					// The sheet needs a gesture that hasn't gone stale; the render is
+					// kept, so tapping again opens it straight away.
+					if (kind === 'NotAllowedError') next = 'Ready — tap again';
+					else if (kind !== 'AbortError') next = 'Could not open the share sheet';
+				}
+				return;
+			}
+
+			const url = URL.createObjectURL(blob);
 			const a = document.createElement('a');
 			a.href = url;
-			a.download = `${document.title.split(' ·')[0].replace(/\s+/g, '-').toLowerCase()}-eating.png`;
+			a.download = name;
 			a.click();
+			// Revoked late: some browsers are still reading the blob when click() returns.
+			setTimeout(() => URL.revokeObjectURL(url), 10_000);
 		} catch {
-			window.alert('Could not draw the card.');
+			next = 'Could not draw the card';
 		} finally {
 			button.disabled = false;
-			button.textContent = label;
+			button.textContent = next;
 		}
 	});
 </script>
