@@ -17,12 +17,14 @@ interface Props {
 	id?: string;
 	/** Adds a "clear" control that returns the rating to unrated. */
 	clearable?: boolean;
+	/** The "3½★" caption. Off for hosts whose row is stars alone. */
+	label?: boolean;
 	/** Caption shown while nothing is rated. Match it in `wireStarPicker`. */
 	emptyLabel?: string;
 	/** Palette/size overrides, as the custom properties listed above. */
 	style?: string;
 }
-const { id, clearable = false, emptyLabel = 'Not rated', style } = Astro.props;
+const { id, clearable = false, label = true, emptyLabel = 'Not rated', style } = Astro.props;
 
 // 0.5 … 5.0. Ten hotspots, laid edge to edge across the five stars.
 const STEPS = Array.from({ length: 10 }, (_, i) => (i + 1) / 2);
@@ -46,7 +48,7 @@ const STEPS = Array.from({ length: 10 }, (_, i) => (i + 1) / 2);
 			}
 		</span>
 	</span>
-	<span class="sp__label" data-sp-label>{emptyLabel}</span>
+	{label && <span class="sp__label" data-sp-label>{emptyLabel}</span>}
 	{
 		clearable && (
 			<button type="button" class="sp__clear" data-sp-clear>
