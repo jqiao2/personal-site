@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../../../lib/auth';
 import { json, apiError } from '../../../../../lib/http';
-import { addPhotos, uploadPhoto } from '../../../../../lib/restaurants';
+import { addPhotos, reorderPhotos, uploadPhoto } from '../../../../../lib/restaurants';
 
 export const prerender = false;
 
@@ -58,10 +58,43 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
 				height: toInt(heights[i]),
 			});
 		}
-		await addPhotos(visitId, stored);
-		return json({ added: stored.length }, 201);
+		// The new ids ride back so the composer can place a photograph where it
+		// was dropped: it holds the whole arrangement and sends it to PATCH.
+		const ids = await addPhotos(visitId, stored);
+		return json({ added: stored.length, ids }, 201);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to store the photographs', 500);
+	}
+};
+
+// PATCH /api/restaurants/visits/:id/photos  (owner only)
+//
+// { order: [photoId, …] } — the visit's photographs in the order they should
+// read. The whole list, not a single move: the composer already knows the
+// arrangement it wants, and sending it entire is what makes the result
+// independent of how many nudges it took to get there.
+export const PATCH: APIRoute = async ({ params, request, cookies }) => {
+	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
+	const visitId = Number(params.id);
+	if (!Number.isInteger(visitId) || visitId <= 0) return apiError('bad id', 400);
+
+	let body: Record<string, unknown>;
+	try {
+		body = (await request.json()) as Record<string, unknown>;
+	} catch {
+		return apiError('expected JSON body', 400);
+	}
+
+	if (!Array.isArray(body.order)) return apiError('order must be an array of photo ids', 400);
+	const order = body.order.map(Number);
+	if (order.some((id) => !Number.isInteger(id) || id <= 0)) return apiError('bad photo id', 400);
+	if (new Set(order).size !== order.length) return apiError('order repeats a photo', 400);
+
+	try {
+		await reorderPhotos(visitId, order);
+		return json({ ok: true });
+	} catch (e) {
+		return apiError(e instanceof Error ? e.message : 'failed to rearrange the photographs', 500);
 	}
 };
 

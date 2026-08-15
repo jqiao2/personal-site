@@ -975,8 +975,9 @@ export interface PhotoInput {
 	height?: number | null;
 }
 
-export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<void> {
-	if (photos.length === 0) return;
+/** The ids of the rows just written, in the order they were given. */
+export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<number[]> {
+	if (photos.length === 0) return [];
 	const { data, error: maxError } = await supabaseAdmin
 		.from('restaurant_photos')
 		.select('position')
@@ -986,17 +987,53 @@ export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<
 		.maybeSingle();
 	if (maxError) throw new Error(maxError.message);
 	const start = (data?.position ?? -1) + 1;
-	const { error } = await supabaseAdmin.from('restaurant_photos').insert(
-		photos.map((p, i) => ({
-			visit_id: visitId,
-			storage_path: p.storagePath,
-			caption: emptyToNull(p.caption),
-			width: p.width ?? null,
-			height: p.height ?? null,
-			position: start + i,
-		})),
-	);
+	const { data: rows, error } = await supabaseAdmin
+		.from('restaurant_photos')
+		.insert(
+			photos.map((p, i) => ({
+				visit_id: visitId,
+				storage_path: p.storagePath,
+				caption: emptyToNull(p.caption),
+				width: p.width ?? null,
+				height: p.height ?? null,
+				position: start + i,
+			})),
+		)
+		// Returned so the composer can put a just-uploaded photograph in the
+		// arrangement it was placed into, rather than only at the end.
+		.select('id, position');
 	if (error) throw new Error(error.message);
+	return ((rows ?? []) as { id: number; position: number }[])
+		.sort((a, b) => a.position - b.position)
+		.map((r) => r.id);
+}
+
+/**
+ * Rearrange a visit's photographs. `ids` is the whole visit in the order it
+ * should read — anything left out keeps whatever position it had, which is
+ * why the composer sends the complete list. An id belonging to another visit
+ * is refused rather than quietly moved.
+ */
+export async function reorderPhotos(visitId: number, ids: number[]): Promise<void> {
+	if (ids.length === 0) return;
+	const { data, error: readError } = await supabaseAdmin
+		.from('restaurant_photos')
+		.select('id')
+		.eq('visit_id', visitId);
+	if (readError) throw new Error(readError.message);
+	const mine = new Set(((data ?? []) as { id: number }[]).map((r) => r.id));
+	const stray = ids.find((id) => !mine.has(id));
+	if (stray != null) throw new Error(`photograph ${stray} does not belong to this visit`);
+
+	// One update per row: positions are a handful of small integers, and the
+	// alternative — an upsert of whole rows — would need every column resent.
+	for (let i = 0; i < ids.length; i++) {
+		const { error } = await supabaseAdmin
+			.from('restaurant_photos')
+			.update({ position: i })
+			.eq('id', ids[i]);
+		if (error) throw new Error(error.message);
+	}
 }
 
 /** Upload a photo to the bucket and return its storage path. */
