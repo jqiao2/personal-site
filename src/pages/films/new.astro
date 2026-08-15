@@ -1,5 +1,6 @@
 ---
 import Layout from '../../layouts/Layout.astro';
+import StarPicker from '../../components/StarPicker.astro';
 import { requireOwner } from '../../lib/auth';
 
 export const prerender = false;
@@ -31,11 +32,9 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 		<!-- Rating -->
 		<label class="field-label">Rating</label>
 		<div class="rating-row">
-			<span class="starpicker" id="starpicker">
-				<span class="sp-empty">★★★★★</span>
-				<span class="sp-fill" id="sp-fill"></span>
-				<span class="sp-hits" id="sp-hits"></span>
-			</span>
+			{/* Stars alone here: the caption belongs to the composer's crowded
+			    row, and this page has a whole line to itself. */}
+			<StarPicker id="starpicker" label={false} style="--sp-size:1.9rem;--sp-empty:var(--border);--sp-fill:#f5a623" />
 			<button type="button" id="clear-rating" class="link" hidden>clear</button>
 			<button type="button" id="like" class="flagbtn" aria-pressed="false">♥ Like</button>
 		</div>
@@ -109,7 +108,8 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 		border: 1px solid var(--border);
 		border-radius: 6px;
 	}
-	/* Result rows are also built in JS — same :global reason as .sp-hits above. */
+	/* Result rows are built in JS, so they lack Astro's scope attribute —
+	   target them with :global or none of this applies. */
 	.results :global(li) {
 		display: flex;
 		gap: 0.6rem;
@@ -165,43 +165,6 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 	}
 	.rating-row #like {
 		margin-left: auto;
-	}
-	.starpicker {
-		position: relative;
-		display: inline-block;
-		line-height: 1;
-		font-size: 1.9rem;
-		/* No letter-spacing: the trailing gap gets counted in the text's
-		   measured width, which skews sp-fill's width:{pct}% math (fill
-		   overshoots the true midpoint of a half-star). Zero gaps keeps it exact. */
-		cursor: pointer;
-		user-select: none;
-	}
-	.sp-empty {
-		color: var(--border);
-	}
-	.sp-fill {
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 0;
-		overflow: hidden;
-		white-space: nowrap;
-		color: #f5a623;
-		pointer-events: none;
-	}
-	.sp-fill::before {
-		content: '★★★★★';
-	}
-	.sp-hits {
-		position: absolute;
-		inset: 0;
-		display: flex;
-	}
-	/* Hotspots are created in JS, so they lack Astro's scope attribute —
-	   target them with :global so `flex: 1` actually applies (else width 0). */
-	.sp-hits :global(span) {
-		flex: 1;
 	}
 	.flags {
 		display: flex;
@@ -268,6 +231,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 
 <script>
 	import { localDay } from '../../lib/day';
+	import { wireStarPicker } from '../../lib/star-picker';
 
 	const IMG = 'https://image.tmdb.org/t/p/w92';
 
@@ -279,8 +243,6 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 	const selPoster = el<HTMLImageElement>('sel-poster');
 	const selTitle = el<HTMLSpanElement>('sel-title');
 	const searchWrap = el<HTMLDivElement>('search-wrap');
-	const fill = el<HTMLSpanElement>('sp-fill');
-	const hits = el<HTMLSpanElement>('sp-hits');
 	const clearRating = el<HTMLButtonElement>('clear-rating');
 	const like = el<HTMLButtonElement>('like');
 	const submit = el<HTMLButtonElement>('submit');
@@ -373,25 +335,18 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 		if (!searchWrap.contains(e.target as Node)) hideResults();
 	});
 
-	// --- Star picker (10 half-star hotspots) ---
-	function setFill(value: number) {
-		fill.style.width = `${(value / 5) * 100}%`;
-	}
-	for (let i = 1; i <= 10; i++) {
-		const hit = document.createElement('span');
-		const value = i / 2;
-		hit.addEventListener('mousemove', () => setFill(value));
-		hit.addEventListener('click', () => {
-			rating = value;
-			setFill(value);
-			clearRating.hidden = false;
-		});
-		hits.appendChild(hit);
-	}
-	hits.addEventListener('mouseleave', () => setFill(rating ?? 0));
+	// --- Star picker (see StarPicker.astro) ---
+	// "clear" lives outside the picker here, so it can stay hidden until there
+	// is a rating to clear.
+	const starPicker = wireStarPicker(el('starpicker'), {
+		onChange: (v) => {
+			rating = v;
+			clearRating.hidden = v == null;
+		},
+	});
 	clearRating.addEventListener('click', () => {
 		rating = null;
-		setFill(0);
+		starPicker.set(null);
 		clearRating.hidden = true;
 	});
 

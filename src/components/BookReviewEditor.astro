@@ -12,6 +12,7 @@
 // Ships hidden. Anything with `data-open-review` opens it, carrying the review
 // to edit in `data-seed` (absent means a new one).
 import { FOCUS, MOODS, PACING, TONES } from '../lib/book-queries';
+import StarPicker from './StarPicker.astro';
 
 interface Props {
 	bookId: number;
@@ -62,28 +63,10 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 					<button type="button" class="linkish" id="br-clear-rating" hidden>Clear</button>
 				</div>
 				<div class="rating-row">
-					<div class="stars" id="br-stars">
-						{
-							[1, 2, 3, 4, 5].map((n) => (
-								<span class="star">
-									★<span class="star__fill" data-fill={n}>★</span>
-									<button
-										type="button"
-										class="star__hit star__hit--half"
-										data-value={n - 0.5}
-										aria-label={`${n - 0.5} stars`}
-									/>
-									<button
-										type="button"
-										class="star__hit star__hit--full"
-										data-value={n}
-										aria-label={`${n} stars`}
-									/>
-								</span>
-							))
-						}
-					</div>
-					<span class="rating-label" id="br-rating-label">Not rated</span>
+					<StarPicker
+						id="br-starpicker"
+						style="--sp-size:29px;--sp-empty:#3d2d1a;--sp-fill:#cfa452;--sp-label:#cfa452;--sp-label-size:20px;--sp-label-font:'Newsreader', serif"
+					/>
 					<div class="toggles">
 						<button type="button" class="toggle" id="br-loved">♥ Loved</button>
 						<button type="button" class="toggle" id="br-reread" hidden>↻ Re-read</button>
@@ -322,50 +305,6 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		align-items: center;
 		gap: 14px;
 		flex-wrap: wrap;
-	}
-	.stars {
-		display: flex;
-		gap: 2px;
-	}
-	.star {
-		position: relative;
-		display: inline-block;
-		width: 30px;
-		height: 30px;
-		font-size: 29px;
-		line-height: 30px;
-		color: #3d2d1a;
-	}
-	.star__fill {
-		position: absolute;
-		left: 0;
-		top: 0;
-		height: 100%;
-		overflow: hidden;
-		color: #cfa452;
-		width: 0;
-	}
-	.star__hit {
-		position: absolute;
-		top: 0;
-		height: 100%;
-		width: 50%;
-		background: none;
-		border: none;
-		padding: 0;
-		cursor: pointer;
-	}
-	.star__hit--half {
-		left: 0;
-	}
-	.star__hit--full {
-		right: 0;
-	}
-	.rating-label {
-		font-family: 'Newsreader', serif;
-		font-size: 20px;
-		color: #cfa452;
-		line-height: 1;
 	}
 	.toggles {
 		display: flex;
@@ -651,6 +590,8 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 </style>
 
 <script>
+	import { wireStarPicker } from '../lib/star-picker';
+
 	const modal = document.getElementById('br-modal');
 	if (modal) {
 		type Seed = {
@@ -679,9 +620,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		};
 
 		const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-		const starFills = Array.from(modal.querySelectorAll<HTMLElement>('.star__fill'));
 		const readLabel = $('br-read-label');
-		const ratingLabel = $('br-rating-label');
 		const clearRating = $<HTMLButtonElement>('br-clear-rating');
 		const lovedBtn = $<HTMLButtonElement>('br-loved');
 		const rereadBtn = $<HTMLButtonElement>('br-reread');
@@ -720,8 +659,19 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		let state = empty();
 		let mode: 'write' | 'edit' = 'write';
 		let reread = false;
-		let hover = 0;
 		let saved = false;
+
+		// The shared half-star picker (see StarPicker.astro). The "Clear" control
+		// sits in the field head here rather than inside the picker, so that the
+		// row is stars and heart alone and clearing appears only once there is
+		// something to clear.
+		const starPicker = wireStarPicker($('br-starpicker'), {
+			onChange: (v) => {
+				state.rating = v ?? 0;
+				saved = false;
+				render();
+			},
+		});
 
 		const same = (a: string[], b: string[]) => a.join('|') === b.join('|');
 		const dirty = () =>
@@ -734,9 +684,6 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			!same(state.moods, seed.moods) ||
 			!same(state.tones, seed.tones);
 
-		const ratingText = (r: number) =>
-			!r ? 'Not rated' : (Math.floor(r) || '') + (r % 1 >= 0.5 ? '½' : '');
-
 		function pressed(el: HTMLElement, on: boolean) {
 			el.setAttribute('aria-pressed', on ? 'true' : 'false');
 		}
@@ -748,12 +695,9 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		}
 
 		function render() {
-			const active = hover || state.rating;
-			starFills.forEach((fill, i) => {
-				const n = i + 1;
-				fill.style.width = active >= n ? '100%' : active >= n - 0.5 ? '50%' : '0';
-			});
-			ratingLabel.textContent = ratingText(active);
+			// The picker paints its own hover; this only puts the committed value
+			// back, which is what every other caller of render() has just changed.
+			starPicker.set(state.rating || null);
 			clearRating.hidden = state.rating === 0;
 			pressed(lovedBtn, state.loved);
 			pressed(rereadBtn, reread);
@@ -805,7 +749,6 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			seed = raw ? { ...empty(), ...(JSON.parse(raw) as Seed) } : empty();
 			state = { ...seed, moods: [...seed.moods], tones: [...seed.tones] };
 			reread = false;
-			hover = 0;
 			saved = false;
 			readLabel.textContent =
 				button.dataset.readLabel ||
@@ -839,22 +782,6 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			if (e.key === 'Escape' && !modal!.hidden) attemptClose();
 		});
 
-		modal.querySelectorAll<HTMLButtonElement>('.star__hit').forEach((hit) => {
-			const value = Number(hit.dataset.value);
-			hit.addEventListener('click', () => {
-				state.rating = value;
-				saved = false;
-				render();
-			});
-			hit.addEventListener('mouseenter', () => {
-				hover = value;
-				render();
-			});
-		});
-		$('br-stars').addEventListener('mouseleave', () => {
-			hover = 0;
-			render();
-		});
 		clearRating.addEventListener('click', () => {
 			state.rating = 0;
 			saved = false;

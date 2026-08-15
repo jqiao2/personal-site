@@ -1,0 +1,130 @@
+---
+// The half-star picker, as the film composer drew it: five stars with a clipped
+// fill layer over them, and ten invisible hotspots on top, so half a star is a
+// click on the left half of a star rather than a mode you have to arm first.
+//
+// Every composer uses this one, because the rating gesture should not change
+// depending on which log you are writing in. Hosts only choose the palette and
+// the size, through the custom properties below:
+//
+//   --sp-size    font size of the star row      --sp-empty  unfilled star colour
+//   --sp-fill    filled star colour             --sp-label  the "3½★" caption
+//   --sp-label-size, --sp-label-font            that caption's type
+//
+// Wire it up with `wireStarPicker` from ../lib/star-picker.
+interface Props {
+	/** Optional id, for hosts that look the picker up by one. */
+	id?: string;
+	/** Adds a "clear" control that returns the rating to unrated. */
+	clearable?: boolean;
+	/** The "3½★" caption. Off for hosts whose row is stars alone. */
+	label?: boolean;
+	/** Caption shown while nothing is rated. Match it in `wireStarPicker`. */
+	emptyLabel?: string;
+	/** Palette/size overrides, as the custom properties listed above. */
+	style?: string;
+}
+const { id, clearable = false, label = true, emptyLabel = 'Not rated', style } = Astro.props;
+
+// 0.5 … 5.0. Ten hotspots, laid edge to edge across the five stars.
+const STEPS = Array.from({ length: 10 }, (_, i) => (i + 1) / 2);
+---
+
+<span class="sp" id={id} data-star-picker style={style}>
+	<span class="sp__stars">
+		<span class="sp__empty" aria-hidden="true">★★★★★</span>
+		<span class="sp__fill" data-sp-fill aria-hidden="true"></span>
+		<span class="sp__hits" data-sp-hits>
+			{
+				STEPS.map((v) => (
+					<button
+						type="button"
+						class="sp__hit"
+						data-sp-hit={v}
+						aria-label={`${v} star${v === 1 ? '' : 's'}`}
+						title={`${v}★`}
+					/>
+				))
+			}
+		</span>
+	</span>
+	{label && <span class="sp__label" data-sp-label>{emptyLabel}</span>}
+	{
+		clearable && (
+			<button type="button" class="sp__clear" data-sp-clear>
+				clear
+			</button>
+		)
+	}
+</span>
+
+<style>
+	.sp {
+		--sp-size: 26px;
+		--sp-empty: #d8d2c8;
+		--sp-fill: #d9b45a;
+		--sp-label: inherit;
+		--sp-label-size: 13px;
+		--sp-label-font: inherit;
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.sp__stars {
+		position: relative;
+		display: inline-block;
+		line-height: 1;
+		font-size: var(--sp-size);
+		user-select: none;
+	}
+	.sp__empty {
+		color: var(--sp-empty);
+	}
+	.sp__fill {
+		position: absolute;
+		top: 0;
+		left: 0;
+		width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		color: var(--sp-fill);
+		pointer-events: none;
+	}
+	/* The fill is a second copy of the row, clipped to a percentage of the
+	   width — which is exact only while the two rows measure the same, so no
+	   letter-spacing goes on either. */
+	.sp__fill::before {
+		content: '★★★★★';
+	}
+	.sp__hits {
+		position: absolute;
+		inset: 0;
+		display: flex;
+	}
+	.sp__hit {
+		flex: 1;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+	}
+	.sp__hit:focus-visible {
+		outline: 1px dashed var(--sp-fill);
+		outline-offset: 2px;
+	}
+	.sp__label {
+		font-size: var(--sp-label-size);
+		font-family: var(--sp-label-font);
+		color: var(--sp-label);
+		line-height: 1;
+	}
+	.sp__clear {
+		border: none;
+		background: none;
+		color: var(--sp-label);
+		font-size: 11.5px;
+		cursor: pointer;
+		text-decoration: underline;
+		padding: 0;
+	}
+</style>

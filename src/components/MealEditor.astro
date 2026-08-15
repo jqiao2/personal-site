@@ -26,6 +26,7 @@ import { VERDICTS } from '../lib/verdict';
 import { PRICE_BANDS, WHY_TAGS } from '../lib/restaurants';
 import { verdictRotation } from '../lib/verdict';
 import { localDay } from '../lib/day';
+import StarPicker from './StarPicker.astro';
 
 interface Props {
 	/** Where to return after saving. */
@@ -152,23 +153,13 @@ const config = {
 
 			<div class="me__field">
 				<span class="rl-label">Rating</span>
-				<div class="me__stars" data-me-stars>
-					{
-						[1, 2, 3, 4, 5].map((n) => (
-							<button
-								type="button"
-								class="me__star"
-								data-me-star={n}
-								aria-label={`${n} stars`}
-								title={`${n} stars`}
-							>
-								★
-							</button>
-						))
-					}
-					<button type="button" class="me__half" data-me-half title="Half star">½</button>
-					<button type="button" class="me__clear" data-me-clear-stars>clear</button>
-				</div>
+				<!-- The same picker the film composer uses, in this page's palette:
+				     a half star is a click on the left half of a star, so there is
+				     no half-step mode to arm first. -->
+				<StarPicker
+					clearable
+					style="--sp-size:22px;--sp-empty:#dbc7a2;--sp-fill:var(--marigold);--sp-label:var(--ink-3)"
+				/>
 			</div>
 
 			<div class="me__field">
@@ -371,6 +362,7 @@ const config = {
 
 <script>
 	import { hitWhere, lookupPlaces, type GeoHit } from '../lib/place-lookup';
+	import { wireStarPicker } from '../lib/star-picker';
 
 	interface VerdictSpec {
 		label: string;
@@ -380,6 +372,7 @@ const config = {
 	/** The last visit somewhere, as the composer inherits it. */
 	interface PreviousVisit {
 		visitedOn: string;
+		rating: number | null;
 		verdict: number | null;
 		hearted: boolean;
 	}
@@ -434,16 +427,17 @@ const config = {
 		const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel);
 		const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
 
-		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Five answers
+		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Six answers
 		// carry forward when a place with a history is picked: the date, the
-		// verdict, the heart, the price and whether it's worth the trip. Four of
-		// them barely move between visits — you don't stop loving a place between
-		// Tuesday and a fortnight later — and the fifth, the date, is a better
-		// guess than today when the reason you're logging a second visit is that
-		// you're catching up on several at once.
+		// rating, the verdict, the heart, the price and whether it's worth the
+		// trip. Five of them barely move between visits — you don't stop loving a
+		// place between Tuesday and a fortnight later, and somewhere you go back
+		// to is usually about as good as it was — and the sixth, the date, is a
+		// better guess than today when the reason you're logging a second visit
+		// is that you're catching up on several at once.
 		//
-		// The rating never carries. It is the one question that is about THIS
-		// meal, and a pre-filled number nobody typed is worse than a blank one.
+		// Every one of them is shown as the form's answer, not hidden in it, so
+		// disagreeing with a carried number is one click on the stars.
 		//
 		// An edit inherits nothing: it is showing a visit that happened, not
 		// proposing one, so cfg.initial wins wherever both could speak.
@@ -463,8 +457,7 @@ const config = {
 			placeId: cfg.place?.id ?? null,
 			placeName: '',
 			locked: cfg.place,
-			rating: cfg.initial?.rating ?? 0,
-			half: (cfg.initial?.rating ?? 0) % 1 !== 0,
+			rating: cfg.initial?.rating ?? inherited?.rating ?? 0,
 			verdict: cfg.initial?.verdict ?? inherited?.verdict ?? 0,
 			verdictSet: cfg.initial?.verdict != null || inherited?.verdict != null,
 			hearted: cfg.initial?.hearted ?? inherited?.hearted ?? false,
@@ -490,6 +483,18 @@ const config = {
 			geo: null as GeoHit | null,
 			saving: false,
 		};
+
+		// The shared half-star picker (see StarPicker.astro). It owns its own
+		// hover; the state only mirrors what it commits, so the summary line and
+		// the dirty check keep reading one number. render() puts the committed
+		// value back, which is how a rating carried from the last visit — or
+		// dropped again when the place is unpicked — reaches the stars.
+		const starPicker = wireStarPicker($('[data-star-picker]')!, {
+			onChange: (v) => {
+				state.rating = v ?? 0;
+				render();
+			},
+		});
 
 		// -- opening / closing ------------------------------------------------
 		function open(pane: Pane) {
@@ -564,16 +569,7 @@ const config = {
 				$('[data-me-locked-meta]')!.textContent = locked.meta;
 			}
 
-			// Stars. The half toggle changes what the next click means, so the
-			// fill has to re-read after every change rather than on click alone.
-			const filled = Math.ceil(state.rating);
-			$$('[data-me-star]').forEach((el) => {
-				const n = Number(el.dataset.meStar);
-				const on = n <= filled;
-				el.textContent = state.half && n === filled ? '½' : '★';
-				el.classList.toggle('me__star--on', on);
-			});
-			$('[data-me-half]')!.classList.toggle('me__toggle--on', state.half);
+			starPicker.set(state.rating || null);
 
 			const v = cfg.verdicts[state.verdict] ?? cfg.verdicts[0];
 			const needle = $('[data-me-needle]')!;
@@ -714,6 +710,7 @@ const config = {
 		function carryFrom(from: { priceBand: string | null; trip: boolean; previous: PreviousVisit | null }) {
 			state.price = from.priceBand;
 			state.trip = from.trip;
+			state.rating = from.previous?.rating ?? 0;
 			state.verdict = from.previous?.verdict ?? 0;
 			state.verdictSet = from.previous?.verdict != null;
 			state.hearted = from.previous?.hearted ?? false;
@@ -1233,24 +1230,6 @@ const config = {
 			searchPlaces(value('[data-me-place]'));
 		});
 
-		$$('[data-me-star]').forEach((el) =>
-			el.addEventListener('click', () => {
-				const n = Number(el.dataset.meStar);
-				state.rating = state.half ? n - 0.5 : n;
-				render();
-			}),
-		);
-		$('[data-me-half]')!.addEventListener('click', () => {
-			state.half = !state.half;
-			if (state.rating) state.rating = state.half ? Math.ceil(state.rating) - 0.5 : Math.ceil(state.rating);
-			render();
-		});
-		$('[data-me-clear-stars]')!.addEventListener('click', () => {
-			state.rating = 0;
-			state.half = false;
-			render();
-		});
-
 		$('[data-me-verdict]')!.addEventListener('input', (e) => {
 			state.verdict = Number((e.target as HTMLInputElement).value);
 			// Touching the slider is the act of recording a verdict; making you
@@ -1655,41 +1634,6 @@ const config = {
 	}
 	.me__pinned-x:hover {
 		color: var(--terracotta-deep);
-	}
-
-	.me__stars {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
-	.me__star {
-		border: none;
-		background: none;
-		font-size: 22px;
-		line-height: 1;
-		padding: 0;
-		color: #dbc7a2;
-		cursor: pointer;
-	}
-	.me__star--on {
-		color: var(--marigold);
-	}
-	.me__half {
-		border: 1px solid var(--rule);
-		background: var(--ground);
-		color: var(--ink-2);
-		font-size: 12px;
-		padding: 3px 8px;
-		cursor: pointer;
-	}
-	.me__clear {
-		margin-left: auto;
-		border: none;
-		background: none;
-		color: var(--ink-3);
-		font-size: 11.5px;
-		cursor: pointer;
-		text-decoration: underline;
 	}
 
 	.me__verdict {
