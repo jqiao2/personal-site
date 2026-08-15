@@ -6,7 +6,9 @@
 // row height, the thumbnails ride INSIDE the row at its existing height — up to
 // three, 38×30, sitting between the name and the rating. A month of meals
 // stays scannable, the photos say which visits have any, and a row with none
-// is the same height as a row with three.
+// is the same height as a row with three. That bargain only holds while the
+// row is wide enough to keep them inline, so under 780px they are dropped
+// rather than wrapped — see the media query at the foot of the stylesheet.
 //
 // NO PRICE COLUMN. It was the rightmost thing on the row, which made it read as
 // what the meal cost — and it never was: `restaurant_diary.price_band` is the
@@ -202,6 +204,26 @@ const months = groupByMonth(visits);
 		width: 12px;
 		text-align: center;
 		line-height: 1;
+	}
+
+	/* THE THUMBNAILS ARE THE FIRST THING TO GO, AND THEY GO EARLY.
+	   They only work at all because they ride inside the row's existing
+	   height — three 38×30 crops that say "this one has pictures" without
+	   costing a line. The moment the row is too narrow to hold them they stop
+	   doing that and become the line, which is the worst of both: a strip of
+	   fingernail-sized crops too small to read, on a line they were designed
+	   not to need.
+	   780px is where measurement put the cliff. A row carrying three of them
+	   needs about 690px of column and wraps below roughly 760px viewport; a
+	   row without them fits from about 600px. So under 780 they are dropped
+	   and the row goes back to one line, which is what the thumbnails were
+	   for. Being lazy and inside a hidden box, they are not fetched either —
+	   a phone stops pulling up to three images a row for something it was
+	   never going to show. */
+	@media (max-width: 780px) {
+		.drow__thumbs {
+			display: none;
+		}
 	}
 
 	/* On a phone the row wraps: the date, mark and name hold the first line and
