@@ -78,13 +78,6 @@ const next = shiftMonth(key, 1);
 const has = (k: string) => allKeys.includes(k);
 const query = monthQuery(aspect);
 
-const placesThisMonth = new Set(visits.map((v) => v.restaurant_id)).size;
-const boroughs = new Set(visits.map((v) => v.city)).size;
-const summary = visits.length
-	? `${visits.length} meal${visits.length === 1 ? '' : 's'}, ${placesThisMonth} place${
-			placesThisMonth === 1 ? '' : 's'
-		}, ${boroughs} cit${boroughs === 1 ? 'y' : 'ies'}.`
-	: 'Nothing logged this month.';
 ---
 
 <RestaurantLayout
@@ -209,7 +202,7 @@ const summary = visits.length
 											{c.day != null && <span class="cell__n">{c.day}</span>}
 											{c.verdict != null && (
 												<span class="cell__mark">
-													<VerdictMark verdict={c.verdict} size={16} ring={false} />
+													<VerdictMark verdict={c.verdict} size={22} ring={false} />
 												</span>
 											)}
 										</div>
@@ -230,18 +223,15 @@ const summary = visits.length
 						</div>
 
 						<div class="card__foot">
-							<span class="card__summary">{summary}</span>
-							<span class="card__stamp">
-								<span class="card__url">jasonqiao.com/restaurants</span>
-								{/* A calendar cell has no room for the attribution control the
-								    live map carries, so the credit is printed here instead —
-								    and taken away again if no map ends up being drawn. */}
-								{usesMaps && (
-									<span class="card__credit" data-map-credit>
-										Maps © MapTiler © OpenStreetMap
-									</span>
-								)}
-							</span>
+							<span class="card__url">jqiao.vercel.app</span>
+							{/* A calendar cell has no room for the attribution control the live
+							    map carries, so the credit is printed here instead — and taken
+							    away again if no map ends up being drawn. */}
+							{usesMaps && (
+								<span class="card__credit" data-map-credit>
+									Maps © MapTiler © OpenStreetMap
+								</span>
+							)}
 						</div>
 					</div>
 				</div>
@@ -620,16 +610,16 @@ const summary = visits.length
 		padding-bottom: 18px;
 	}
 	.card__kicker {
-		font-size: 13px;
+		font-size: 22px;
 		font-weight: 700;
-		letter-spacing: 2.6px;
+		letter-spacing: 4.4px;
 		text-transform: uppercase;
 		color: var(--terracotta);
 	}
 	.card__month {
 		margin-top: 10px;
 		font-family: var(--display);
-		font-size: 66px;
+		font-size: 72px;
 		line-height: 0.98;
 		letter-spacing: -1px;
 	}
@@ -638,12 +628,12 @@ const summary = visits.length
 	}
 	.card__countn {
 		font-family: var(--display);
-		font-size: 52px;
+		font-size: 62px;
 		line-height: 1;
 	}
 	.card__countl {
-		font-size: 13px;
-		letter-spacing: 1.8px;
+		font-size: 20px;
+		letter-spacing: 2.6px;
 		text-transform: uppercase;
 		color: var(--ink-3);
 	}
@@ -668,11 +658,11 @@ const summary = visits.length
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
 		gap: 8px;
-		font-size: 11px;
-		letter-spacing: 1.6px;
+		font-size: 20px;
+		letter-spacing: 3px;
 		color: var(--ink-4);
 		text-transform: uppercase;
-		padding-bottom: 6px;
+		padding-bottom: 10px;
 	}
 	.strip__grid {
 		flex: 1 1 auto;
@@ -759,11 +749,11 @@ const summary = visits.length
 
 	.cell__n {
 		position: absolute;
-		left: 6px;
-		top: 4px;
+		left: 7px;
+		top: 5px;
 		z-index: 20;
 		font-family: var(--mono);
-		font-size: 12px;
+		font-size: 17px;
 		color: #bda98a;
 	}
 	.cell--hit .cell__n {
@@ -774,20 +764,20 @@ const summary = visits.length
 	.cell--plated .cell__n {
 		left: 0;
 		top: 0;
-		padding: 3px 6px;
+		padding: 4px 8px;
 		background: var(--card);
 		color: var(--ink);
 	}
 	.cell__mark {
 		position: absolute;
-		right: 5px;
-		bottom: 4px;
+		right: 6px;
+		bottom: 5px;
 		z-index: 20;
 	}
 	.cell--plated .cell__mark {
 		right: 0;
 		bottom: 0;
-		padding: 4px 5px 3px;
+		padding: 5px 7px 4px;
 		background: var(--card);
 	}
 
@@ -808,47 +798,40 @@ const summary = visits.length
 	}
 	.figure__v {
 		font-family: var(--display);
-		font-size: 38px;
+		font-size: 56px;
 		line-height: 1;
 	}
 	.figure__l {
-		margin-top: 8px;
-		font-size: 12px;
-		letter-spacing: 1.6px;
+		margin-top: 10px;
+		font-size: 22px;
+		letter-spacing: 2.4px;
 		text-transform: uppercase;
 		color: var(--ink-3);
 	}
 
+	/* The film and book cards rule their footers off from the card and set them
+	   at 27px; this one keeps the figures' bottom rule as that line, so the foot
+	   only needs the room. */
 	.card__foot {
-		padding-top: 24px;
+		padding-top: 26px;
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 16px;
-	}
-	.card__summary {
-		font-family: var(--prose);
-		font-style: italic;
-		font-size: 19px;
-		color: var(--ink-2);
-	}
-	.card__stamp {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-end;
-		gap: 4px;
-		text-align: right;
+		gap: 24px;
 	}
 	.card__url {
-		font-size: 12px;
-		letter-spacing: 1.8px;
+		font-size: 26px;
+		letter-spacing: 3px;
 		text-transform: uppercase;
 		color: var(--ink-4);
 	}
+	/* Sourcing rather than signature, so it stays the quietest thing on the card
+	   while still being legible at the size everything else grew to. */
 	.card__credit {
-		font-size: 9.5px;
-		letter-spacing: 0.9px;
+		font-size: 16px;
+		letter-spacing: 1.4px;
 		text-transform: uppercase;
 		color: var(--rule);
+		text-align: right;
 	}
 </style>
