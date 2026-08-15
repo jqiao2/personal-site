@@ -39,3 +39,7 @@ scripts/.cache/
 
 # enrichment source cache — re-downloadable, never committed
 .cache/
+
+# Beli account dumps from scripts/beli-fetch.mjs — somebody's whole list, and
+# re-fetchable in a minute. Never worth committing.
+beli-*.json
