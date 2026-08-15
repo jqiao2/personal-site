@@ -670,6 +670,58 @@ export async function searchPlaces(query: string, limit = 6): Promise<Place[]> {
 	return (data ?? []) as Place[];
 }
 
+/**
+ * What logging another meal somewhere inherits from the last one there. Only
+ * the answers that tend to hold from one visit to the next: when it was is a
+ * better guess than today when you are catching up on a week of them, and the
+ * verdict and the heart are what you already decided about the place.
+ *
+ * The rating is deliberately absent. It is the question you answer about THIS
+ * meal, and a pre-filled four stars is a number nobody typed.
+ */
+export interface PreviousVisit {
+	visitedOn: string;
+	verdict: number | null;
+	hearted: boolean;
+}
+
+/**
+ * The most recent visit at each of `placeIds`.
+ *
+ * Not the place row's `latest_verdict` and `hearted`, near as they look: those
+ * answer "the last verdict I recorded" and "loved on ANY visit", so together
+ * they can describe a pair of visits that never happened. One visit's answers
+ * have to come from one visit.
+ */
+export async function previousVisits(placeIds: number[]): Promise<Map<number, PreviousVisit>> {
+	const ids = [...new Set(placeIds)].filter((id) => Number.isInteger(id) && id > 0);
+	if (ids.length === 0) return new Map();
+	const { data, error } = await supabasePublic
+		.from('restaurant_diary')
+		.select('restaurant_id, visited_on, verdict, hearted')
+		.in('restaurant_id', ids)
+		.order('visited_on', { ascending: false })
+		.order('id', { ascending: false });
+	if (error) throw new Error(error.message);
+
+	// Sorted newest first, so the first row seen for a place is its last visit.
+	const latest = new Map<number, PreviousVisit>();
+	for (const row of (data ?? []) as {
+		restaurant_id: number;
+		visited_on: string;
+		verdict: number | null;
+		hearted: boolean;
+	}[]) {
+		if (latest.has(row.restaurant_id)) continue;
+		latest.set(row.restaurant_id, {
+			visitedOn: row.visited_on,
+			verdict: row.verdict,
+			hearted: row.hearted,
+		});
+	}
+	return latest;
+}
+
 async function distinctTextArray(column: 'tags' | 'friends'): Promise<string[]> {
 	const { data, error } = await supabasePublic.from('restaurant_diary').select(column);
 	if (error) throw new Error(error.message);
