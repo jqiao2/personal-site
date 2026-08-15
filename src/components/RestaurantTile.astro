@@ -12,6 +12,7 @@
 // under different names.
 import VerdictMark from './VerdictMark.astro';
 import { starText } from '../lib/format';
+import { photoSrc, photoSrcSet, photoWidthsFor } from '../lib/photo-src';
 
 interface Props {
 	name: string;
@@ -49,13 +50,28 @@ const {
 
 const stars = starText(rating);
 const cuisine = cuisines[0] ?? '';
+
+// The head is `object-fit: cover` across the full width of a grid cell, and
+// the grid is `repeat(auto-fill, minmax(198px, 1fr))` — so a cell is a little
+// over 198px on a desktop and, since two of them will not fit a phone's
+// column, close to the whole viewport on one.
+const CAP = 300;
+const WIDTHS = photoWidthsFor(CAP);
+const SIZES = `(max-width: 560px) 94vw, ${CAP}px`;
 ---
 
 <a class="tile" href={href}>
 	{
 		photo ? (
 			<div class:list={['tile__head', tall && 'tile__head--tall']}>
-				<img src={photo} alt={`A photograph taken at ${name}`} loading="lazy" decoding="async" />
+				<img
+					src={photoSrc(photo, CAP)}
+					srcset={photoSrcSet(photo, WIDTHS)}
+					sizes={SIZES}
+					alt={`A photograph taken at ${name}`}
+					loading="lazy"
+					decoding="async"
+				/>
 			</div>
 		) : (
 			<div class:list={['tile__head', 'tile__head--plate', tall && 'tile__head--tall']}>

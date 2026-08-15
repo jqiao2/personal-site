@@ -184,6 +184,17 @@ const summary = visits.length
 					}
 				</div>
 
+				{/* THE PHOTOGRAPHS HERE ARE DELIBERATELY NOT PUT THROUGH THE IMAGE
+				    OPTIMISER, unlike every other photograph on the site — see
+				    src/lib/photo-src.ts. This card is an artboard, not a page: it
+				    is 1080px wide whatever the screen is, and `toPng` above redraws
+				    it at that size to be saved as a file. It also passes
+				    `cacheBust`, which appends a query parameter to every image URL
+				    it fetches — harmless on a storage URL, unverified against an
+				    optimiser endpoint that parses its own query string. Getting
+				    that wrong breaks the export, and the export is the whole point
+				    of the page; the saving is one hero and a few cells on the
+				    least-visited route in the section. */}
 				{
 					hero ? (
 						<div class="plates">

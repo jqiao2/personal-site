@@ -1103,6 +1103,13 @@ export async function uploadPhoto(
 	const { error } = await supabaseAdmin.storage.from(PHOTO_BUCKET).upload(path, file, {
 		contentType: file instanceof File ? file.type || undefined : undefined,
 		upsert: false,
+		// A year, against Supabase's default of an hour. The path above is
+		// unique per upload and `upsert: false` keeps it that way, so an object
+		// here can never change under a cache — the usual reason not to do this
+		// does not apply. It matters twice: a reader revisiting the diary, and
+		// the image optimiser, which re-reads this URL as its source whenever a
+		// rendition falls out of its own cache.
+		cacheControl: '31536000',
 	});
 	if (error) throw new Error(error.message);
 	return path;

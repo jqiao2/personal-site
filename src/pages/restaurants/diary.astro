@@ -15,9 +15,17 @@ import { groupByMonth, listDiary, listFriends, listTags, getRestaurantStats } fr
 import { placeLine, visitMarks } from '../../lib/restaurant-view';
 import { starText } from '../../lib/format';
 import { photoUrl } from '../../lib/restaurants';
+import { photoSrc, photoSrcSet, photoWidthsFor } from '../../lib/photo-src';
 import { supabasePublic } from '../../lib/supabase';
 
 export const prerender = false;
+
+// 38×30 in the stylesheet below, and this is the page that makes the optimiser
+// worth having: it lists every visit ever logged, three thumbnails apiece, so
+// serving the stored 1600px frame here meant a few hundred kilobytes each for
+// a picture the width of a fingernail.
+const THUMB = 38;
+const THUMB_WIDTHS = photoWidthsFor(THUMB);
 
 const [visits, stats, isOwner] = await Promise.all([
 	listDiary(),
@@ -87,7 +95,14 @@ const months = groupByMonth(visits);
 								<span class="rl-gap" />
 								<span class="drow__thumbs">
 									{(thumbs.get(v.id) ?? []).map((url) => (
-										<img src={url} alt="" loading="lazy" decoding="async" />
+										<img
+											src={photoSrc(url, THUMB)}
+											srcset={photoSrcSet(url, THUMB_WIDTHS)}
+											sizes={`${THUMB}px`}
+											alt=""
+											loading="lazy"
+											decoding="async"
+										/>
 									))}
 								</span>
 								<span class="rl-stars drow__stars">{starText(v.rating) ?? ''}</span>

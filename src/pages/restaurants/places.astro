@@ -39,11 +39,16 @@ import {
 	type TripFilter,
 } from '../../lib/restaurants';
 import { coverUrl, placeLine, visitCountLabel } from '../../lib/restaurant-view';
+import { photoSrc, photoSrcSet, photoWidthsFor } from '../../lib/photo-src';
 import { thresholdLabel, VERDICTS } from '../../lib/verdict';
 import { starText } from '../../lib/format';
 import type { MapPoint } from '../../lib/restaurant-map';
 
 export const prerender = false;
+
+/** 52×40 in the stylesheet — a cover shrunk to the size of a postage stamp. */
+const ROW_THUMB = 52;
+const ROW_THUMB_WIDTHS = photoWidthsFor(ROW_THUMB);
 
 const params = Astro.url.searchParams;
 const selectedCuisines = params.getAll('cuisine');
@@ -304,7 +309,15 @@ const sorts: { key: PlaceSort; label: string }[] = [
 									</div>
 								</div>
 								{coverUrl(p) && (
-									<img class="row__thumb" src={coverUrl(p)} alt="" loading="lazy" decoding="async" />
+									<img
+										class="row__thumb"
+										src={photoSrc(coverUrl(p)!, ROW_THUMB)}
+										srcset={photoSrcSet(coverUrl(p)!, ROW_THUMB_WIDTHS)}
+										sizes={`${ROW_THUMB}px`}
+										alt=""
+										loading="lazy"
+										decoding="async"
+									/>
 								)}
 							</a>
 						))}

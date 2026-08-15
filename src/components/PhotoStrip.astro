@@ -38,6 +38,7 @@
 // date and the words are in full — hover is the shortcut, not the only route.
 import { shortDate } from '../lib/restaurant-view';
 import type { StripPhoto } from '../lib/restaurant-view';
+import { photoSrc, photoSrcSet, photoWidthsFor } from '../lib/photo-src';
 
 interface Props {
 	photos: StripPhoto[];
@@ -45,6 +46,15 @@ interface Props {
 
 const { photos } = Astro.props;
 const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
+
+// A shot is `--shot-h` tall and as wide as its ratio makes it, so the widest
+// one here is the widest ratio at that height: 124 × 16:9 is 220px, and
+// nothing off a camera is wider than 16:9. On a phone `--shot-h` becomes a
+// sixth of the column, which puts the same photograph near a quarter of the
+// viewport.
+const CAP = 220;
+const WIDTHS = photoWidthsFor(CAP);
+const SIZES = `(max-width: 560px) 25vw, ${CAP}px`;
 ---
 
 <div class="shots">
@@ -55,7 +65,9 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 					<a class="shot" href={`/restaurants/diary/${p.visitId}`} style={`--ratio:${p.ratio}`}>
 						<img
 							class="shot__img"
-							src={p.url}
+							src={photoSrc(p.url, CAP)}
+							srcset={photoSrcSet(p.url, WIDTHS)}
+							sizes={SIZES}
 							alt={p.caption ?? when(p)}
 							width={p.width ?? undefined}
 							height={p.height ?? undefined}
