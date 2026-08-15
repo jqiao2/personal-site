@@ -20,11 +20,16 @@
 // somebody scrolls it, so whatever is there is what the section is offering:
 // the last few meals rather than the first.
 //
-// ON A PHONE THERE IS NO HOVER, and this row is what a phone sees most of. So
-// the slot is not blank when nothing is being pointed at — it holds the row's
-// own description, which is the only reading of it a touch device gets. Every
-// photograph is also a link to its visit, which is where the date and the words
-// live in full; hover is the shortcut, not the only route.
+// THE SLOT IS EMPTY UNTIL IT IS POINTED AT. It carried a standing line about
+// the row — how many visits, which way round — and that line was there the
+// whole time to be read once, so it went. What it is now is space held open, and
+// held open on purpose: the line has to arrive without the page moving under the
+// pointer, and the only way to have room for it on arrival is to have had the
+// room all along.
+//
+// WHERE A PHONE CANNOT HOVER the slot is not held open at all, since nothing can
+// ever land in it. Every photograph is a link to its visit, which is where the
+// date and the words are in full — hover is the shortcut, not the only route.
 import { shortDate } from '../lib/restaurant-view';
 import type { StripPhoto } from '../lib/restaurant-view';
 
@@ -33,7 +38,6 @@ interface Props {
 }
 
 const { photos } = Astro.props;
-const visits = new Set(photos.map((p) => p.visitId)).size;
 const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 ---
 
@@ -64,10 +68,6 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 			))
 		}
 	</div>
-	<p class="shots__rest">
-		{visits === 1 ? '1 visit' : `${visits} visits`}, most recent first · a photograph opens its
-		visit
-	</p>
 </div>
 
 <style>
@@ -124,8 +124,7 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 		outline: none;
 	}
 
-	.shot__meta,
-	.shots__rest {
+	.shot__meta {
 		position: absolute;
 		left: 0;
 		right: 0;
@@ -169,15 +168,19 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
-	.shots__rest {
-		font-size: 11px;
-		color: var(--ink-4);
-	}
-	/* The resting line steps aside for whichever photograph is being pointed at.
-	   On a phone there is no hover, so it simply stays. */
-	.shots__rail:hover + .shots__rest,
-	.shots__rail:focus-within + .shots__rest {
-		opacity: 0;
+	/* Where the pointer cannot hover, the line can never arrive, so the room
+	   kept for it is dead space at the foot of the row and the row simply ends
+	   where the photographs do. */
+	@media (hover: none) {
+		.shots {
+			padding-bottom: 0;
+		}
+		/* And with no room kept, the line must not be able to appear at all — a
+		   tap that lands as a hover would otherwise draw it over the foot of the
+		   photographs on its way to the visit. */
+		.shot__meta {
+			display: none;
+		}
 	}
 
 	@media (max-width: 560px) {
