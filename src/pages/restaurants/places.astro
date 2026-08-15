@@ -37,7 +37,7 @@ import {
 	type TripFilter,
 } from '../../lib/restaurants';
 import { coverUrl, placeLine, visitCountLabel } from '../../lib/restaurant-view';
-import { thresholdLabel, verdictAt, VERDICTS } from '../../lib/verdict';
+import { thresholdLabel, VERDICTS } from '../../lib/verdict';
 import { starText } from '../../lib/format';
 import type { MapPoint } from '../../lib/restaurant-map';
 
@@ -298,9 +298,6 @@ const sorts: { key: PlaceSort; label: string }[] = [
 									<div class="row__meta">
 										<span class="row__cuisines">{p.cuisines.join(', ')}</span>
 										{starText(p.avg_rating) && <span class="rl-stars">{starText(p.avg_rating)}</span>}
-										{p.latest_verdict != null && (
-											<span class="row__verdict">{verdictAt(p.latest_verdict)?.label}</span>
-										)}
 										<span class="row__visits">{visitCountLabel(p.visit_count)}</span>
 									</div>
 								</div>
@@ -411,11 +408,6 @@ const sorts: { key: PlaceSort; label: string }[] = [
 	.row__cuisines {
 		font-size: 12px;
 		color: var(--ink-2);
-	}
-	.row__verdict {
-		font-family: var(--prose);
-		font-size: 13.5px;
-		color: var(--ink-3);
 	}
 	.row__visits {
 		margin-left: auto;
