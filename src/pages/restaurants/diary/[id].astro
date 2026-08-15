@@ -53,11 +53,12 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 					<a class="entry__name" href={`/restaurants/place/${visit.restaurant_id}`}>
 						{visit.restaurant_name}
 					</a>
+					{/* No price band. It is the restaurant's, not this meal's — the
+					    place page states it, and repeating it over every visit made
+					    a property of the place look like a bill. */}
 					<div class="entry__facts">
 						{visit.cuisines.length > 0 && <span>{visit.cuisines.join(', ')}</span>}
-						{visit.cuisines.length > 0 && visit.price_band && <span class="dot">·</span>}
-						{visit.price_band && <span class="mono">{visit.price_band}</span>}
-						<span class="dot">·</span>
+						{visit.cuisines.length > 0 && <span class="dot">·</span>}
 						<span>{placeLine(visit)}</span>
 						{
 							visit.friends.length > 0 && (
@@ -208,10 +209,6 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 	}
 	.dot {
 		color: var(--rule);
-	}
-	.mono {
-		font-family: var(--mono);
-		color: var(--ink);
 	}
 	.entry__with {
 		margin-left: auto;

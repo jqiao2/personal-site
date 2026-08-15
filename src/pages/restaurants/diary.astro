@@ -6,13 +6,22 @@
 // row height, the thumbnails ride INSIDE the row at its existing height — up to
 // three, 38×30, sitting between the name and the rating. A month of meals
 // stays scannable, the photos say which visits have any, and a row with none
-// is the same height as a row with three.
+// is the same height as a row with three. That bargain only holds while the
+// row is wide enough to keep them inline, so under 780px they are dropped
+// rather than wrapped — see the media query at the foot of the stylesheet.
+//
+// NO PRICE COLUMN. It was the rightmost thing on the row, which made it read as
+// what the meal cost — and it never was: `restaurant_diary.price_band` is the
+// PLACE's band, inlined, so eleven meals at the same counter printed the same
+// $ eleven times. It belongs to the restaurant, and that is where it is said:
+// the place page, the places list, the tile, the map popup and the price mix on
+// the stats page.
 import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../components/MealEditor.astro';
 import VerdictMark from '../../components/VerdictMark.astro';
 import { requireOwner } from '../../lib/auth';
 import { groupByMonth, listDiary, listFriends, listTags, getRestaurantStats } from '../../lib/restaurants';
-import { placeLine, visitMarks } from '../../lib/restaurant-view';
+import { placeLine } from '../../lib/restaurant-view';
 import { starText } from '../../lib/format';
 import { photoUrl } from '../../lib/restaurants';
 import { photoSrc, photoSrcSet, photoWidthsFor } from '../../lib/photo-src';
@@ -91,6 +100,7 @@ const months = groupByMonth(visits);
 								<span class="drow__day">{Number(v.visited_on.slice(8, 10))}</span>
 								<VerdictMark verdict={v.verdict} size={21} />
 								<span class="drow__name">{v.restaurant_name}</span>
+								<span class="drow__break" aria-hidden="true" />
 								<span class="drow__hood">{placeLine(v)}</span>
 								<span class="rl-gap" />
 								<span class="drow__thumbs">
@@ -105,9 +115,11 @@ const months = groupByMonth(visits);
 										/>
 									))}
 								</span>
-								<span class="rl-stars drow__stars">{starText(v.rating) ?? ''}</span>
-								<span class="rl-marks drow__marks">{visitMarks(v)}</span>
-								<span class="drow__price">{v.price_band ?? ''}</span>
+								<span class="drow__rating">
+									<span class="rl-stars drow__stars">{starText(v.rating) ?? ''}</span>
+									<span class="rl-marks drow__mark">{v.hearted ? '♥' : ''}</span>
+									<span class="rl-marks drow__mark">{v.revisit ? '↻' : ''}</span>
+								</span>
 							</a>
 						))}
 					</section>
@@ -162,6 +174,11 @@ const months = groupByMonth(visits);
 		color: var(--ink-3);
 		white-space: nowrap;
 	}
+	/* Nothing at all until the row goes to two lines; see the phone block at the
+	   foot of this stylesheet, which is the only place it exists. */
+	.drow__break {
+		display: none;
+	}
 	.drow__thumbs {
 		display: flex;
 		gap: 5px;
@@ -173,31 +190,96 @@ const months = groupByMonth(visits);
 		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
 		display: block;
 	}
+	/* The rating and its two marks are one right-hand cluster rather than three
+	   columns with the row's 14px gap between them: they are one opinion said
+	   three ways, so they read as a group and are spaced like one. Every slot
+	   is drawn whether or not it is filled — an unhearted meal still occupies
+	   its heart's width — which is what keeps the star column landing in the
+	   same place down the month instead of shuffling left and right by a
+	   glyph. */
+	.drow__rating {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
 	.drow__stars {
 		width: 66px;
 		text-align: right;
 	}
-	.drow__marks {
-		width: 34px;
-		text-align: right;
-	}
-	.drow__price {
-		font-family: var(--mono);
-		font-size: 12.5px;
-		width: 34px;
-		text-align: right;
+	.drow__mark {
+		width: 12px;
+		text-align: center;
+		line-height: 1;
 	}
 
-	/* On a phone the row wraps: the date, mark and name hold the first line and
-	   everything measurable drops to the second, still right-aligned as a
-	   column. The spacer goes with them rather than splitting the name. */
+	/* THE THUMBNAILS ARE THE FIRST THING TO GO, AND THEY GO EARLY.
+	   They only work at all because they ride inside the row's existing
+	   height — three 38×30 crops that say "this one has pictures" without
+	   costing a line. The moment the row is too narrow to hold them they stop
+	   doing that and become the line, which is the worst of both: a strip of
+	   fingernail-sized crops too small to read, on a line they were designed
+	   not to need.
+	   780px is where measurement put the cliff. A row carrying three of them
+	   needs about 690px of column and wraps below roughly 760px viewport; a
+	   row without them fits from about 600px. So under 780 they are dropped
+	   and the row goes back to one line, which is what the thumbnails were
+	   for. Being lazy and inside a hidden box, they are not fetched either —
+	   a phone stops pulling up to three images a row for something it was
+	   never going to show. */
+	@media (max-width: 780px) {
+		.drow__thumbs {
+			display: none;
+		}
+	}
+
+	/* A PHONE ROW IS EXACTLY TWO LINES: the date, the verdict and the name, then
+	   where it was and how it went.
+
+	   It used to be three, because the neighbourhood claimed a whole line to
+	   itself (`width: 100%`) and pushed the rating onto a third — a line
+	   carrying nothing but four stars and a wide margin. What the full width was
+	   really buying was the LINE BREAK after the name, so that is bought
+	   directly instead: a zero-height item with a 100% basis, which fills the
+	   first line and starts a second without occupying any of it. The
+	   neighbourhood then shares that second line with the rating, which the
+	   spacer still pushes right, and the row costs two lines instead of three.
+
+	   The indent puts the neighbourhood under the name rather than under the
+	   date (34px column + the row's 14px gap).
+
+	   BOTH FLEXIBLE ITEMS SIT ON A ZERO BASIS, and that is the part that is easy
+	   to get wrong: a wrapping flex container wraps an item BEFORE it shrinks
+	   it, so anything sized by its own text — a long name, a long neighbourhood
+	   — takes a line of its own the moment it is wider than what is left, and
+	   the shrinking that would have avoided that happens afterwards, on a line
+	   it now has to itself. Basing them at 0 means neither can force a wrap:
+	   each takes the room its line has left and lays out inside it. The name
+	   runs on to a second line of text if it must, the neighbourhood ellipsises,
+	   and the row still costs two lines. The spacer gives up its stretch on the
+	   way past, since the neighbourhood is now what fills the line and two
+	   things fighting over the same free space would leave it truncated with
+	   room to spare. */
 	@media (max-width: 620px) {
 		.drow__name {
 			white-space: normal;
+			flex: 1 1 0;
+			min-width: 0;
+		}
+		.drow__break {
+			display: block;
+			flex-basis: 100%;
+			height: 0;
 		}
 		.drow__hood {
-			width: 100%;
+			flex: 1 1 0;
+			min-width: 0;
 			padding-left: 48px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.drow .rl-gap {
+			flex: none;
+			min-width: 0;
 		}
 	}
 </style>
