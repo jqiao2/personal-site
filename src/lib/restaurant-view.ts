@@ -189,9 +189,12 @@ export function layoutPhotos(photos: Photo[]): LaidOutPhoto[] {
  * same from the page's point of view, which is the only way this section
  * survives the twentieth.
  *
- * ORDER IS OLDEST FIRST, left to right, matching the verdict history directly
- * above it. Both are the same axis and disagreeing about its direction on one
- * screen would be worse than either choice is on its own.
+ * ORDER IS NEWEST FIRST, left to right — the order the visits arrive in, and
+ * the order the list of visits below is in. A strip that scrolls sideways only
+ * shows its left-hand end without being touched, so what is nearest the left is
+ * what the section is really offering: the last few meals, which are the ones
+ * worth seeing. Oldest-first would agree with the verdict history above instead,
+ * but it would spend that opening on the meal I had least recently.
  */
 export interface StripPhoto extends LaidOutPhoto {
 	/** The visit that produced it — where the photograph links to. */
@@ -201,10 +204,10 @@ export interface StripPhoto extends LaidOutPhoto {
 }
 
 export function photoStrip(visits: VisitDetail[]): StripPhoto[] {
+	// `visits` is newest first already, and photographs keep their order within a
+	// visit — the strip reads newest visit to oldest, first shot to last.
 	return visits
 		.filter((v) => v.photos.length > 0)
-		.slice()
-		.reverse()
 		.flatMap((v) => v.photos.map((p) => ({ ...p, ratio: aspect(p), visitId: v.id, date: v.visited_on })));
 }
 
