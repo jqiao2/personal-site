@@ -245,12 +245,28 @@ export function buildCells(
  * Feed and Square drop the summary — four figures under a five-row grid leaves
  * the prints too small to see a cover in — so the grid takes that band back and
  * only the tall aspect carries the numbers.
+ *
+ * These are measurements of the card's own CSS, not preferences, and the grid is
+ * sized with whatever is left over — so a number that reads LOW here does not
+ * make the card roomier, it makes the card overflow its artboard and the export
+ * crop. Any change to the header, the bands or the footer has to come back here.
+ * Measured against src/pages/books/month/[month].astro at 1080 wide:
+ *
+ *   bare      = 42 + 38 padding, 119 header, 24 weekdays + 18 calendar gap,
+ *               77 footer                                       ≈ 318
+ *   figures   = 30 margin, 1 rule, 26 padding, 27 label, 8, 65   ≈ 157
+ *   hour band = 30 margin, 1 rule, 26 padding, 27 label, 22,
+ *               152 histogram (mini at scale 2.5: 100 plot,
+ *               18 margin, 34 axis)                              ≈ 258
+ *
+ * Each carries a few px of slack so a font that renders a shade taller than
+ * Archivo does not put the footer over the edge.
  */
-const CHROME_WITH_FIGURES = 470;
+const CHROME_WITH_FIGURES = 480;
 const CHROME_BARE = 330;
 
 /** What the hour band costs the grid when it is drawn. */
-const CHROME_HOURS = 200;
+const CHROME_HOURS = 260;
 
 /**
  * Whether an aspect has the vertical slack for the optional bands.
