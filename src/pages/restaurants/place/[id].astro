@@ -266,6 +266,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 										<span>Avoid</span>
 									</div>
 									<div class="hist__series">
+										<div class="hist__track">
 										{withVerdicts.map((v) => (
 											<a
 												class="hist__col"
@@ -281,6 +282,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 												<span class="hist__tick">{shortDate(v.visited_on)}</span>
 											</a>
 										))}
+										</div>
 									</div>
 								</div>
 							</div>
@@ -874,7 +876,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	}
 	.hist__series {
 		flex: 1;
-		display: flex;
 		min-width: 0;
 		overflow-x: auto;
 		/* overflow-x: auto makes the vertical axis a scrollport too, so a needle
@@ -883,6 +884,24 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		   kept inside the box, plus the room the dates need underneath. */
 		padding-top: calc(var(--hist-mark) / 2);
 		padding-bottom: calc(var(--hist-ticks) + var(--hist-mark) / 2);
+		/* A phone fits about six visits beside the axis, so at twelve this plot
+		   scrolls — and it was opening on the oldest six, which is the half that
+		   has already been read. `rtl` puts the scrollport's start edge on the
+		   right, so it opens on the latest verdicts instead. The track inside is
+		   `ltr`, so the axis itself still runs forwards. Same trick, same
+		   reason, as the photograph strip. */
+		direction: rtl;
+	}
+	.hist__track {
+		direction: ltr;
+		display: flex;
+		/* As wide as the visits make it — without this the track stops at the
+		   width of the port and the columns hang out of it unscrollably, which
+		   is a plot with its later half simply missing. And no narrower than the
+		   port, so a place with three verdicts spreads them across the box
+		   rather than crowding them into its left-hand end. */
+		width: max-content;
+		min-width: 100%;
 	}
 	.hist__col {
 		flex: 1 0 44px;

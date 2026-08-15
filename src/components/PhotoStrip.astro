@@ -16,9 +16,15 @@
 // reserved slot rather than a tooltip at the pointer, so it always appears in
 // the same place and pointing along the row doesn't make the page jump.
 //
-// MOST RECENT ON THE LEFT. A sideways row only shows its left-hand end until
-// somebody scrolls it, so whatever is there is what the section is offering:
-// the last few meals rather than the first.
+// TIME RUNS LEFT TO RIGHT, AND THE ROW OPENS AT THE RIGHT. A sideways row only
+// shows one end of itself until somebody scrolls it, and the end worth showing
+// is the recent one. That was briefly done by reversing the photographs, which
+// worked and cost too much: the verdict history directly above is a plot with a
+// time axis, a time axis cannot run backwards, and one screen may not disagree
+// with itself about which way the year goes. Where a row STARTS is a scroll
+// position, not an order, so it is fixed as one — see `direction: rtl` in the
+// stylesheet, which puts a scrollport's start edge on the right and needs no
+// script and no frame in the wrong place before it corrects itself.
 //
 // THE SLOT IS EMPTY UNTIL IT IS POINTED AT. It carried a standing line about
 // the row — how many visits, which way round — and that line was there the
@@ -43,30 +49,32 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 
 <div class="shots">
 	<div class="shots__rail">
-		{
-			photos.map((p) => (
-				<a class="shot" href={`/restaurants/diary/${p.visitId}`} style={`--ratio:${p.ratio}`}>
-					<img
-						class="shot__img"
-						src={p.url}
-						alt={p.caption ?? when(p)}
-						width={p.width ?? undefined}
-						height={p.height ?? undefined}
-						loading="lazy"
-						decoding="async"
-					/>
-					{/* Positioned against `.shots` rather than against the photograph, for
-					    two reasons: every photograph's line then lands in the same slot
-					    under the row instead of the eye chasing it along the strip, and an
-					    element whose containing block sits outside the scroller is not
-					    clipped by the scroller. */}
-					<span class="shot__meta">
-						<span class="shot__when">{when(p)}</span>
-						{p.caption && <span class="shot__caption">{p.caption}</span>}
-					</span>
-				</a>
-			))
-		}
+		<div class="shots__track">
+			{
+				photos.map((p) => (
+					<a class="shot" href={`/restaurants/diary/${p.visitId}`} style={`--ratio:${p.ratio}`}>
+						<img
+							class="shot__img"
+							src={p.url}
+							alt={p.caption ?? when(p)}
+							width={p.width ?? undefined}
+							height={p.height ?? undefined}
+							loading="lazy"
+							decoding="async"
+						/>
+						{/* Positioned against `.shots` rather than against the photograph, for
+						    two reasons: every photograph's line then lands in the same slot
+						    under the row instead of the eye chasing it along the strip, and an
+						    element whose containing block sits outside the scroller is not
+						    clipped by the scroller. */}
+						<span class="shot__meta">
+							<span class="shot__when">{when(p)}</span>
+							{p.caption && <span class="shot__caption">{p.caption}</span>}
+						</span>
+					</a>
+				))
+			}
+		</div>
 	</div>
 </div>
 
@@ -88,14 +96,30 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 		padding-bottom: var(--meta-h);
 	}
 	.shots__rail {
-		display: flex;
-		flex-wrap: nowrap;
-		gap: var(--shot-gap);
 		overflow-x: auto;
 		overflow-y: hidden;
 		scrollbar-width: thin;
 		scrollbar-color: var(--rule) transparent;
 		padding-bottom: 6px;
+		/* THE ROW OPENS AT ITS RIGHT-HAND END. A scrollport starts at its start
+		   edge, and in `rtl` that edge is the right one — so the newest
+		   photographs are what you land on, with no script setting scrollLeft
+		   after the fact and so no frame of the wrong end before it corrects
+		   itself. Only the scrollport is turned around; the track inside is put
+		   back to `ltr`, so the photographs still run oldest to newest, left to
+		   right, the way the verdict history above them does. */
+		direction: rtl;
+	}
+	.shots__track {
+		direction: ltr;
+		display: flex;
+		flex-wrap: nowrap;
+		gap: var(--shot-gap);
+		/* Wide enough for the row when the row is long, and the full width of
+		   the port when it isn't — otherwise a place with three photographs
+		   would sit them against the right-hand edge. */
+		width: max-content;
+		min-width: 100%;
 	}
 	.shot {
 		flex: none;
