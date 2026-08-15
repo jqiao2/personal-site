@@ -39,6 +39,15 @@
 //   node --env-file=.env scripts/import-beli.mjs beli-jqiao.json --commit
 //   node scripts/import-beli.mjs beli-jqiao.json --sql > beli.sql
 //
+// THE INPUT DOES NOT HAVE TO COME FROM beli-fetch.mjs. That script is a
+// convenience, not the interface: what this reads is the rank-list response
+// body, in any of the three shapes it is likely to be saved in — the
+// `{user, rank_list}` file the fetcher writes, a bare `[…]` array, or a DRF
+// `{"results": […]}` envelope. So if the easiest way to get at the account is a
+// proxy in front of the phone app (Proxyman, Charles, mitmproxy, HTTP Toolkit),
+// then "save response body" on the /api/rank-list/<id>/ call produces a file
+// this reads directly, and no token ever has to leave the phone.
+//
 // A dry run needs no credentials and writes nothing; it prints every row it
 // would create. Only --commit writes, and it is safe to re-run — a place whose
 // name is already on record is reported and skipped rather than duplicated.
