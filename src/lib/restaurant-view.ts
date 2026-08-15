@@ -4,7 +4,6 @@
 import { cuisineTerms, photoUrl } from './restaurants';
 import { daysInMonth, firstWeekdayIndex, parseMonthKey } from './share-card';
 import type { DiaryVisit, Photo, Place, VisitDetail } from './restaurants';
-import type { PlaceMap } from './map-style';
 
 /**
  * How a place is located, at whatever granularity it has.
@@ -309,13 +308,18 @@ export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): Mo
  * log knows about a place, and the one that says "here" when there's no picture
  * of "what". Somewhere never pinned has neither, and keeps the paper.
  *
+ * A map cover carries only the point. What it looks like is settled on the
+ * client, by the same MapLibre and the same authored style the section's live
+ * map uses — see the card page's script, and why it can't be a picture the
+ * server asks MapTiler for.
+ *
  * The ranking — rating first, verdict as the tiebreaker, since the verdict is
  * the finer judgement of the two and the one that survives a month of
  * everything landing on a 7 — decides which cover sits on top when two meals
  * share a day.
  */
 export type Cover = { kind: 'photo'; url: string } & CoverMeta;
-export type MapCover = { kind: 'map'; map: PlaceMap } & CoverMeta;
+export type MapCover = { kind: 'map'; at: MapPoint } & CoverMeta;
 export type AnyCover = Cover | MapCover;
 
 interface CoverMeta {
@@ -326,10 +330,16 @@ interface CoverMeta {
 	restaurantName: string;
 }
 
+/** A point on the earth, which is all a map cover needs to be drawn from. */
+export interface MapPoint {
+	lat: number;
+	lng: number;
+}
+
 /** Where the covers come from, for the sources the view layer can't reach. */
 export interface CoverSources {
-	/** Place id → a map of it, for meals with no photograph. */
-	maps?: Map<number, PlaceMap>;
+	/** Place id → where it is, for meals with no photograph. */
+	maps?: Map<number, MapPoint>;
 }
 
 /** Best first: rating, then verdict, then the earlier meal. */
@@ -366,7 +376,7 @@ export function monthCovers(
 		};
 		const cover: AnyCover = photo
 			? { kind: 'photo', url: photo, ...meta }
-			: { kind: 'map', map: map as PlaceMap, ...meta };
+			: { kind: 'map', at: map as MapPoint, ...meta };
 		const day = Number(v.visited_on.slice(8, 10));
 		byDay.set(day, [...(byDay.get(day) ?? []), cover]);
 	});

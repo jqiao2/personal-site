@@ -24,7 +24,7 @@ import VerdictMark from '../../../components/VerdictMark.astro';
 import { requireOwner } from '../../../lib/auth';
 import { listMonthKeys, listMonthVisits, placesForMonth } from '../../../lib/restaurants';
 import { monthCalendar, monthFigures } from '../../../lib/restaurant-view';
-import { placeMap } from '../../../lib/map-style';
+import type { MapPoint } from '../../../lib/restaurant-view';
 import {
 	ASPECTS,
 	aspectBySlug,
@@ -55,12 +55,15 @@ const places = await placesForMonth(
 	visits.map((v) => v.restaurant_id),
 	key,
 );
+// Only places that were actually pinned, and only if there is a key to draw
+// them with — otherwise there is no map to be had and the cell keeps its paper.
 const mapKey = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 const maps = new Map(
-	[...places].flatMap(([id, place]) => {
-		const map = placeMap(place, mapKey);
-		return map ? [[id, map] as const] : [];
-	}),
+	mapKey
+		? [...places].flatMap(([id, p]) =>
+				p.lat != null && p.lng != null ? [[id, { lat: p.lat, lng: p.lng } as MapPoint] as const] : [],
+			)
+		: [],
 );
 
 const cells = monthCalendar(key, visits, { maps });
@@ -169,10 +172,9 @@ const summary = visits.length
 						    corner shows, which is how a pile of prints looks and is the
 						    only honest way to fit two meals in one square.
 
-						    The maps are drawn in grey by a stock style — see staticMapUrl
-						    — and warmed into the palette by a filter here, where the
-						    filter is on the cell rather than the image so the pin over it
-						    keeps the terracotta it was given. */}
+						    A MAP COVER IS AN EMPTY SPAN UNTIL THE CLIENT FILLS IT, which is
+						    the price of drawing it in our own palette rather than a
+						    vendor's. See the script below. */}
 						<div class="strip">
 							<div class="strip__days">
 								{WEEKDAYS.map((d) => <span>{d}</span>)}
@@ -192,24 +194,13 @@ const summary = visits.length
 											{c.covers.map((cover, i) => (
 												<span
 													class:list={['plate', `plate--${cover.kind}`, i > 0 && 'plate--under']}
-													style={`--i:${i}${cover.kind === 'map' ? `; --tile:${cover.map.size}px` : ''}`}
+													style={`--i:${i}`}
 												>
 													{cover.kind === 'photo' ? (
 														<img src={cover.url} alt="" crossorigin="anonymous" data-cover />
 													) : (
 														<Fragment>
-															{cover.map.tiles.map((t) => (
-																<img
-																	class="plate__tile"
-																	src={t.url}
-																	alt=""
-																	width={cover.map.size}
-																	height={cover.map.size}
-																	crossorigin="anonymous"
-																	data-cover
-																	style={`left:calc(50% + ${t.dx}px); top:calc(50% + ${t.dy}px)`}
-																/>
-															))}
+															<span data-place-map data-lat={cover.at.lat} data-lng={cover.at.lng} />
 															<span class="plate__pin" />
 														</Fragment>
 													)}
@@ -242,17 +233,26 @@ const summary = visits.length
 							<span class="card__summary">{summary}</span>
 							<span class="card__stamp">
 								<span class="card__url">jasonqiao.com/restaurants</span>
-								{/* The watermark is suppressed inside the map images, where it
-								    would be 6px type in the corner of a calendar cell, so the
-								    credit is printed once here — which is the condition of
-								    suppressing it. */}
-								{usesMaps && <span class="card__credit">Maps © MapTiler © OpenStreetMap</span>}
+								{/* A calendar cell has no room for the attribution control the
+								    live map carries, so the credit is printed here instead —
+								    and taken away again if no map ends up being drawn. */}
+								{usesMaps && (
+									<span class="card__credit" data-map-credit>
+										Maps © MapTiler © OpenStreetMap
+									</span>
+								)}
 							</span>
 						</div>
 					</div>
 				</div>
 			</div>
 		</div>
+
+		{
+			usesMaps && (
+				<script type="application/json" data-map-config set:html={JSON.stringify({ key: mapKey, zoom: 16 })} />
+			)
+		}
 	</div>
 </RestaurantLayout>
 
@@ -283,17 +283,122 @@ const summary = visits.length
 		fit();
 	}
 
-	// A cover that never arrives — a tile server having a bad day, a photo whose
-	// object has gone — leaves the cell as the ruled paper it would have been,
+	// A cover that never arrives — a photo whose object has gone, a map that
+	// couldn't be drawn — leaves the cell as the ruled paper it would have been,
 	// rather than as a broken image with a day number on it.
+	function abandon(plate: Element | null | undefined): void {
+		const cell = plate?.closest('.cell');
+		plate?.remove();
+		if (cell && !cell.querySelector('.plate')) cell.classList.remove('cell--plated', 'cell--stack');
+	}
+
 	for (const img of document.querySelectorAll<HTMLImageElement>('img[data-cover]')) {
-		const drop = () => {
-			const cell = img.closest('.cell');
-			img.closest('.plate')?.remove();
-			if (cell && !cell.querySelector('.plate')) cell.classList.remove('cell--plated', 'cell--stack');
-		};
+		const drop = () => abandon(img.closest('.plate'));
 		if (img.complete && img.naturalWidth === 0) drop();
 		else img.addEventListener('error', drop);
+	}
+
+	// ---- the map covers ----
+	//
+	// WHY THESE ARE DRAWN HERE RATHER THAN FETCHED AS PICTURES. Asking MapTiler
+	// for a finished image — the Static Maps API, or raster tiles of a style of
+	// our own — is server-side rendering, and this account's key is not entitled
+	// to it: those endpoints answer "Invalid key" for the key their vector tiles
+	// accept. Stock raster tiles do work, and the first version of this used
+	// them, warmed towards the palette with a sepia filter. But the map on this
+	// card should be the same map as the section's, and that style
+	// (menuBasemap — green water, ink labels, roads drawn by taking ink away)
+	// only exists as something MapLibre draws. So MapLibre draws it, once, in a
+	// hidden 131×190 map that jumps from place to place, and each frame is
+	// snapshotted to a data URL and dropped into its cell.
+	//
+	// The snapshot is what makes this survivable downstream: the export
+	// rasterises the DOM, which a live WebGL canvas comes out of blank, but a
+	// data URL is just another image by then. `preserveDrawingBuffer` is what
+	// makes the canvas readable at all, and the map is rendered at the cell's
+	// own size so the street labels land at the size they were designed for
+	// rather than at half of it.
+	//
+	// The whole thing is lazy: no map covers on this month, no MapLibre.
+	const mapConfig = document.querySelector('[data-map-config]');
+	const slots = [...document.querySelectorAll<HTMLElement>('[data-place-map]')];
+
+	if (mapConfig?.textContent && slots.length > 0) {
+		const { key, zoom } = JSON.parse(mapConfig.textContent) as { key: string; zoom: number };
+		drawMaps(key, zoom, slots).catch(() => {
+			for (const slot of slots) abandon(slot.closest('.plate'));
+			document.querySelector('[data-map-credit]')?.remove();
+		});
+	}
+
+	async function drawMaps(key: string, zoom: number, slots: HTMLElement[]): Promise<void> {
+		const [maplibregl, { default: workerUrl }, { menuBasemap }] = await Promise.all([
+			import('maplibre-gl'),
+			// The worker is loaded from a URL the bundler cannot infer; the live
+			// map has the long version of this note in RestaurantMap.astro.
+			import('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'),
+			import('../../../lib/map-style'),
+		]);
+		maplibregl.setWorkerUrl(workerUrl);
+
+		// Off-screen rather than hidden: `display: none` gives the map no size to
+		// render at, and a zero-sized canvas snapshots to nothing.
+		const scratch = document.createElement('div');
+		scratch.style.cssText =
+			'position:fixed; left:-9999px; top:0; width:131px; height:190px; pointer-events:none';
+		document.body.append(scratch);
+
+		const map = new maplibregl.Map({
+			container: scratch,
+			style: menuBasemap(key) as maplibregl.StyleSpecification,
+			center: [0, 0],
+			zoom,
+			interactive: false,
+			attributionControl: false,
+			// Read back below, so the frame has to still be there to read.
+			preserveDrawingBuffer: true,
+			// Twice the cell, so the export has something to work with; and no
+			// fade, so a snapshot can't catch a label half-way in.
+			pixelRatio: 2,
+			fadeDuration: 0,
+		});
+
+		/** Resolves when the map has nothing left to draw, or has taken too long. */
+		const settled = (event: 'load' | 'idle') =>
+			new Promise<void>((resolve) => {
+				const done = () => {
+					clearTimeout(timer);
+					map.off(event, done);
+					resolve();
+				};
+				const timer = setTimeout(done, 6000);
+				map.on(event, done);
+			});
+
+		try {
+			await settled('load');
+			let drawn = 0;
+			for (const slot of slots) {
+				const lat = Number(slot.dataset.lat);
+				const lng = Number(slot.dataset.lng);
+				if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+					abandon(slot.closest('.plate'));
+					continue;
+				}
+				map.jumpTo({ center: [lng, lat], zoom });
+				await settled('idle');
+				const shot = document.createElement('img');
+				shot.className = 'plate__shot';
+				shot.alt = '';
+				shot.src = map.getCanvas().toDataURL('image/png');
+				slot.replaceWith(shot);
+				drawn++;
+			}
+			if (drawn === 0) document.querySelector('[data-map-credit]')?.remove();
+		} finally {
+			map.remove();
+			scratch.remove();
+		}
 	}
 
 	button?.addEventListener('click', async () => {
@@ -513,22 +618,18 @@ const summary = visits.length
 		transform: rotate(calc(var(--i) * 3.5deg));
 		box-shadow: 0 1px 6px rgba(47, 30, 18, 0.35);
 	}
-	/* Four tiles laid around the place, which sits at the middle of the cell.
-	   The offsets come from the mercator arithmetic in placeMap; all this does
-	   is put them where it says. */
-	.plate__tile {
-		position: absolute;
-		width: var(--tile);
-		height: var(--tile);
-		max-width: none;
-		display: block;
+	/* The map's own ground, so the cell reads as a map that is still arriving
+	   rather than as a hole, in the moment before the snapshot lands. */
+	.plate--map {
+		background: #f2e7d2;
 	}
-	/* The stock style is a cool grey-blue; this is what puts it on the same
-	   paper as the rest of the card. Sepia does the warming, the rest keeps it
-	   from going muddy — it lands close to --land, which the live map draws its
-	   ground in. */
-	.plate--map img {
-		filter: sepia(0.5) saturate(1.15) brightness(1.04) contrast(0.96);
+	.plate__shot {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
 	}
 	.plate__pin {
 		z-index: 2;
