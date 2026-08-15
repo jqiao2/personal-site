@@ -24,7 +24,7 @@ import VerdictMark from '../../../components/VerdictMark.astro';
 import { requireOwner } from '../../../lib/auth';
 import { listMonthKeys, listMonthVisits, placesForMonth } from '../../../lib/restaurants';
 import { monthCalendar, monthFigures } from '../../../lib/restaurant-view';
-import { staticMapUrl } from '../../../lib/map-style';
+import { placeMap } from '../../../lib/map-style';
 import {
 	ASPECTS,
 	aspectBySlug,
@@ -58,8 +58,8 @@ const places = await placesForMonth(
 const mapKey = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 const maps = new Map(
 	[...places].flatMap(([id, place]) => {
-		const url = staticMapUrl(place, mapKey);
-		return url ? ([[id, url]] as [number, string][]) : [];
+		const map = placeMap(place, mapKey);
+		return map ? [[id, map] as const] : [];
 	}),
 );
 
@@ -194,8 +194,25 @@ const summary = visits.length
 													class:list={['plate', `plate--${cover.kind}`, i > 0 && 'plate--under']}
 													style={`--i:${i}`}
 												>
-													<img src={cover.url} alt="" crossorigin="anonymous" data-cover />
-													{cover.kind === 'map' && <span class="plate__pin" />}
+													{cover.kind === 'photo' ? (
+														<img src={cover.url} alt="" crossorigin="anonymous" data-cover />
+													) : (
+														<Fragment>
+															{cover.map.tiles.map((t) => (
+																<img
+																	class="plate__tile"
+																	src={t.url}
+																	alt=""
+																	width={cover.map.size}
+																	height={cover.map.size}
+																	crossorigin="anonymous"
+																	data-cover
+																	style={`left:calc(50% + ${t.dx}px); top:calc(50% + ${t.dy}px)`}
+																/>
+															))}
+															<span class="plate__pin" />
+														</Fragment>
+													)}
 												</span>
 											))}
 											{c.day != null && <span class="cell__n">{c.day}</span>}
@@ -492,13 +509,22 @@ const summary = visits.length
 		transform: rotate(calc(var(--i) * 3.5deg));
 		box-shadow: 0 1px 6px rgba(47, 30, 18, 0.35);
 	}
-	/* The stock style is grey; this is what puts it on the same paper as the
-	   rest of the card. Sepia does the warming, the rest keeps it from going
-	   muddy — and it lands close to --land, which the live map is drawn on. */
+	/* Four tiles laid around the place, which sits at the middle of the cell.
+	   The offsets come from the mercator arithmetic in placeMap; all this does
+	   is put them where it says. */
+	.plate__tile {
+		position: absolute;
+		max-width: none;
+	}
+	/* The stock style is a cool grey-blue; this is what puts it on the same
+	   paper as the rest of the card. Sepia does the warming, the rest keeps it
+	   from going muddy — it lands close to --land, which the live map draws its
+	   ground in. */
 	.plate--map img {
 		filter: sepia(0.5) saturate(1.15) brightness(1.04) contrast(0.96);
 	}
 	.plate__pin {
+		z-index: 2;
 		position: absolute;
 		left: 50%;
 		top: 50%;

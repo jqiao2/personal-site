@@ -4,6 +4,7 @@
 import { cuisineTerms, photoUrl } from './restaurants';
 import { daysInMonth, firstWeekdayIndex, parseMonthKey } from './share-card';
 import type { DiaryVisit, Photo, Place, VisitDetail } from './restaurants';
+import type { PlaceMap } from './map-style';
 
 /**
  * How a place is located, at whatever granularity it has.
@@ -313,9 +314,11 @@ export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): Mo
  * everything landing on a 7 — decides which cover sits on top when two meals
  * share a day.
  */
-export interface Cover {
-	kind: 'photo' | 'map';
-	url: string;
+export type Cover = { kind: 'photo'; url: string } & CoverMeta;
+export type MapCover = { kind: 'map'; map: PlaceMap } & CoverMeta;
+export type AnyCover = Cover | MapCover;
+
+interface CoverMeta {
 	/** Position in the month's ranking, 0 = best. Drives the stacking order. */
 	rank: number;
 	visitId: number;
@@ -325,8 +328,8 @@ export interface Cover {
 
 /** Where the covers come from, for the sources the view layer can't reach. */
 export interface CoverSources {
-	/** Place id → a static map of it, for meals with no photograph. */
-	maps?: Map<number, string>;
+	/** Place id → a map of it, for meals with no photograph. */
+	maps?: Map<number, PlaceMap>;
 }
 
 /** Best first: rating, then verdict, then the earlier meal. */
@@ -349,22 +352,22 @@ function byRank(a: VisitDetail, b: VisitDetail): number {
 export function monthCovers(
 	visits: VisitDetail[],
 	{ maps }: CoverSources = {},
-): Map<number, Cover[]> {
-	const byDay = new Map<number, Cover[]>();
+): Map<number, AnyCover[]> {
+	const byDay = new Map<number, AnyCover[]>();
 	[...visits].sort(byRank).forEach((v, rank) => {
 		const photo = v.photos[0]?.url;
 		const map = maps?.get(v.restaurant_id);
-		const url = photo ?? map;
-		if (!url) return;
-		const day = Number(v.visited_on.slice(8, 10));
-		const cover: Cover = {
-			kind: photo ? 'photo' : 'map',
-			url,
+		if (!photo && !map) return;
+		const meta: CoverMeta = {
 			rank,
 			visitId: v.id,
 			restaurantId: v.restaurant_id,
 			restaurantName: v.restaurant_name,
 		};
+		const cover: AnyCover = photo
+			? { kind: 'photo', url: photo, ...meta }
+			: { kind: 'map', map: map as PlaceMap, ...meta };
+		const day = Number(v.visited_on.slice(8, 10));
 		byDay.set(day, [...(byDay.get(day) ?? []), cover]);
 	});
 	return byDay;
@@ -377,7 +380,7 @@ export interface CalendarCell {
 	verdict: number | null;
 	visitId: number | null;
 	/** What to print in the cell, best-ranked first. */
-	covers: Cover[];
+	covers: AnyCover[];
 }
 
 export function monthCalendar(

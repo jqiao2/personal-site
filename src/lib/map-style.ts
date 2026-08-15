@@ -52,38 +52,87 @@ const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
  * for type that renders at 11px under a pin. The label COLOUR and halo are ours,
  * which is what actually makes them look set rather than default.
  */
+// ---------------------------------------------------------------------------
+// One place, as a flat picture
+// ---------------------------------------------------------------------------
+
 /**
- * A single flat image of one place, for somewhere a live map can't go.
+ * A map of a single place, assembled from raster tiles.
  *
- * The month card's calendar cells are 131px wide and there are 31 of them: a
- * MapLibre canvas per cell is a non-starter, and the card is exported as a PNG
- * by rasterising the DOM, which a WebGL canvas does not survive. So the map
- * arrives as a picture — MapTiler's Static Maps API, which serves one.
+ * WHY NOT A LIVE MAP. This is for the month card's calendar cells: 131px wide,
+ * thirty-one of them, and the card is exported as a PNG by rasterising the DOM.
+ * A MapLibre canvas per cell is a non-starter twice over — the cost, and the
+ * fact that a WebGL canvas comes out of that rasterisation blank.
  *
- * IT IS NOT THIS FILE'S BASEMAP, and it can't be: the style above is authored
- * client-side against vector tiles, and the static endpoint will only render a
- * style hosted in MapTiler's cloud. So it asks for the most neutral stock style
- * there is — light greys, no colour of its own — and the card warms it into the
- * menu palette with a filter. Near enough at 131px, and the alternative is a
- * blue-and-white map dropped into a cream page.
+ * WHY NOT THE STATIC MAPS API, which exists for exactly this and returns one
+ * image instead of four. Because this account's key is not entitled to it: the
+ * endpoint answers "Invalid key" for a key the tile endpoints accept. Tiles are
+ * what we have, so tiles are what this composes.
  *
- * Attribution is turned off IN THE IMAGE, where it would be an unreadable smear
- * of 6px type in the corner of a calendar cell, and printed once on the card
- * instead — which is what MapTiler asks for when the watermark is suppressed.
+ * WHY FOUR. A tile is a fixed square of the world, and the place can sit
+ * anywhere in it, including hard against an edge — so one tile cannot be relied
+ * on to cover a cell centred on the place. The 2×2 block is chosen around the
+ * point rather than under it, which puts at least half a tile of map on every
+ * side of it whatever the fraction works out to.
  *
- * Returns null when there is no key or the place was never pinned; both are
- * supported states, and the cell falls back to ruled paper.
+ * WHY basic-v2 RATHER THAN THIS FILE'S OWN STYLE. The style above is authored
+ * against vector tiles and drawn by MapLibre in the browser; a raster endpoint
+ * only serves the stock styles. Of those, basic-v2 warmed by a sepia filter
+ * lands closest to MAP_TOKENS — tan buildings on cream streets, no blue water,
+ * no POI icons — which is why the card's cells filter it rather than take it as
+ * it comes.
+ *
+ * Null when there is no key or the place was never pinned. Both are supported
+ * states: the cell falls back to ruled paper.
  */
-export function staticMapUrl(
+export interface MapTile {
+	url: string;
+	/** Offset of this tile's top-left from the place, in CSS px at `size`. */
+	dx: number;
+	dy: number;
+}
+
+export interface PlaceMap {
+	tiles: MapTile[];
+	/** The size each tile is drawn at, which is the size it is served at. */
+	size: number;
+}
+
+export function placeMap(
 	place: { lat: number | null; lng: number | null },
 	key: string,
-	{ zoom = 15.5, width = 260, height = 340 } = {},
-): string | null {
+	{ zoom = 16, size = 256, style = 'basic-v2' } = {},
+): PlaceMap | null {
 	const { lat, lng } = place;
-	if (!key || lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng))
-		return null;
-	const at = `${lng.toFixed(5)},${lat.toFixed(5)},${zoom}`;
-	return `https://api.maptiler.com/maps/dataviz-light/static/${at}/${width}x${height}.png?key=${key}&attribution=false`;
+	if (!key || lat == null || lng == null) return null;
+	if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 85) return null;
+
+	// Web Mercator, in tiles rather than pixels: the whole world is 2^zoom of
+	// them across, and the place lands at a fractional position among them.
+	const n = 2 ** zoom;
+	const wx = ((lng + 180) / 360) * n;
+	const rad = (lat * Math.PI) / 180;
+	const wy = ((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2) * n;
+
+	const x0 = Math.floor(wx - 0.5);
+	const y0 = Math.floor(wy - 0.5);
+	const tiles: MapTile[] = [];
+	for (let j = 0; j < 2; j++) {
+		for (let i = 0; i < 2; i++) {
+			const x = x0 + i;
+			const y = y0 + j;
+			// East-west wraps at the antimeridian; north-south does not, and a
+			// tile row off the top or bottom of the world simply isn't drawn.
+			if (y < 0 || y >= n) continue;
+			const wrapped = ((x % n) + n) % n;
+			tiles.push({
+				url: `https://api.maptiler.com/maps/${style}/${size}/${zoom}/${wrapped}/${y}.png?key=${key}`,
+				dx: Math.round((x - wx) * size),
+				dy: Math.round((y - wy) * size),
+			});
+		}
+	}
+	return { tiles, size };
 }
 
 export function menuBasemap(key: string) {
