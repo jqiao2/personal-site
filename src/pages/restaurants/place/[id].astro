@@ -20,12 +20,12 @@ import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../../components/MealEditor.astro';
 import PlaceEditor from '../../../components/PlaceEditor.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
-import PhotoWall from '../../../components/PhotoWall.astro';
+import PhotoStrip from '../../../components/PhotoStrip.astro';
 import { requireOwner } from '../../../lib/auth';
 import { getPlace, listFriends, listTags, WHY_TAGS } from '../../../lib/restaurants';
 import {
-	groupPhotosByVisit,
 	locationState,
+	photoStrip,
 	placeEvidence,
 	placeLine,
 	shortDate,
@@ -50,8 +50,7 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 // A history needs at least three points to be a shape rather than a pair.
 const withVerdicts = visits.filter((v) => v.verdict != null).slice().reverse();
 const showHistory = withVerdicts.length >= 3;
-const photoGroups = groupPhotosByVisit(visits);
-const showPhotoDates = photoGroups.length > 1;
+const shots = photoStrip(visits);
 
 const latest = verdictAt(place.latest_verdict);
 const links = [
@@ -76,7 +75,9 @@ function monthYear(iso: string): string {
 	return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 }
 
-const photoNote = place.photo_count === 1 ? '1 photograph' : `${place.photo_count} photographs`;
+// Counted off the strip rather than off `place.photo_count`, so the head can
+// never claim a photograph the row isn't showing.
+const photoNote = shots.length === 1 ? '1 photograph' : `${shots.length} photographs`;
 
 // ---------------------------------------------------------------------------
 // Where this place is, and how much of that anybody confirmed
@@ -288,31 +289,21 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 				}
 
 				{
-					photoGroups.length > 0 && (
+					shots.length > 0 && (
 						<section>
 							<div class="rl-sec-head rl-sec-head--thin">
 								<span class="rl-sec-head__title">Photographs</span>
 								<span class="rl-sec-head__sub">{photoNote}</span>
 							</div>
-							{/* Aggregated across every visit, but GROUPED BY THE VISIT that
-							    produced them: eleven visits' photos in one undifferentiated
-							    wall lose the only thing that makes them navigable. */}
-							{photoGroups.map((g) => (
-								<div class="photogroup">
-									{showPhotoDates && (
-										<div class="photogroup__head">
-											<a class="photogroup__date" href={`/restaurants/diary/${g.visitId}`}>
-												{shortDate(g.date)} {g.date.slice(0, 4)}
-											</a>
-											<span class="rl-gap" />
-											<span class="photogroup__n">
-												{g.photos.length} photo{g.photos.length === 1 ? '' : 's'}
-											</span>
-										</div>
-									)}
-									<PhotoWall photos={g.photos} height={124} />
-								</div>
-							))}
+							{/* ONE ROW, however many times I go back. Twelve visits of one to
+							    three photographs each was twelve dated headings over twelve
+							    near-empty walls: a section that grew a rung every meal and was
+							    mostly margin. The row is the same height at any count, and the
+							    heading each group used to need is now the line underneath it —
+							    point at a photograph and it says when it was taken and what it
+							    was of. The dates ride on the photographs, so nothing is spent
+							    on saying them twelve times. */}
+							<PhotoStrip photos={shots} />
 						</section>
 					)
 				}
@@ -907,25 +898,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		font-size: 9.5px;
 		line-height: var(--hist-ticks);
 		color: var(--ink-4);
-	}
-
-	.photogroup {
-		margin-top: 16px;
-	}
-	.photogroup__head {
-		display: flex;
-		align-items: baseline;
-		gap: 9px;
-		margin-bottom: 9px;
-	}
-	.photogroup__date {
-		font-family: var(--mono);
-		font-size: 11px;
-		color: var(--ink-3);
-	}
-	.photogroup__n {
-		font-size: 11px;
-		color: var(--ink-3);
 	}
 
 	.visit {

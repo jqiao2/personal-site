@@ -1,5 +1,5 @@
 ---
-// Photographs, laid out.
+// A visit's photographs, laid out.
 //
 // The constraints, in the order they bite:
 //   * ZERO is common and must not look like a failure — so the caller decides
@@ -14,7 +14,15 @@
 //     with nothing cropped to a common ratio it doesn't have.
 //   * CAPTIONS ARE THE EXCEPTION. Nothing reserves room for one. A caption
 //     appears under its own photo when it exists and the row closes up when it
-//     doesn't, so the usual case has no empty strip running under it.
+//     doesn't, so the usual case has no empty strip running under it. On a
+//     phone, where a column is 80px wide, several captions come out from under
+//     their photographs into one list under the row — again, the media query.
+//   * A PHONE IS NOT A NARROW DESKTOP. A row height in px that gives three
+//     photos a comfortable line at 900px gives each of them the whole width at
+//     375px, so a three-photo meal becomes three screenfuls you scroll past to
+//     reach the words. Below 560px the row height stops being a px constant and
+//     becomes a fraction of the column, sized so that four photographs still
+//     land on one line — see the media query.
 //
 // Photos whose dimensions were never recorded fall back to 3:2, which is close
 // enough that one unmeasured photo in a row of measured ones doesn't stand out.
@@ -24,26 +32,23 @@ interface Props {
 	photos: LaidOutPhoto[];
 	/** Row height. Shorter where photos are history than where they are content. */
 	height?: number;
-	/**
-	 * Let a lone photograph fill the width at its own ratio.
-	 *
-	 * On ONE VISIT that is right — a single photo is the commonest non-zero case
-	 * and stranding it in a thumbnail slot wastes it. On a PLACE with eleven
-	 * visits it is wrong: six groups of one, each given the full width, is the
-	 * undifferentiated wall the grouping was supposed to prevent, just taller.
-	 * So the place page leaves this off and every group keeps the same rhythm.
-	 */
-	hero?: boolean;
 }
 
-const { photos, height = 190, hero = false } = Astro.props;
-const single = hero && photos.length === 1;
+const { photos, height = 190 } = Astro.props;
+// A lone photograph fills the width at its own ratio: it is the commonest
+// non-zero case and stranding it in a thumbnail slot wastes it.
+const single = photos.length === 1;
+// Captions on a phone: see the legend rule at the bottom of the stylesheet.
+const captions = photos.map((p) => p.caption).filter((c): c is string => !!c);
 ---
 
-<div class:list={['wall', single && 'wall--single']} style={`--row-h:${height}px`}>
+<div
+	class:list={['wall', single && 'wall--single', photos.length > 1 && 'wall--many']}
+	style={`--row-h:${height}px`}
+>
 	{
 		photos.map((p) => (
-			<figure class="wall__cell" style={`flex-grow:${p.grow}; flex-basis:${p.ratio * height}px`}>
+			<figure class="wall__cell" style={`--ratio:${p.ratio}`}>
 				<img
 					src={p.url}
 					alt={p.caption ?? ''}
@@ -58,16 +63,32 @@ const single = hero && photos.length === 1;
 		))
 	}
 </div>
+{
+	captions.length > 0 && (
+		<ul class="wall__legend">
+			{captions.map((c) => (
+				<li>{c}</li>
+			))}
+		</ul>
+	)
+}
 
 <style>
 	.wall {
+		--gap: 10px;
 		display: flex;
 		flex-wrap: wrap;
-		gap: 10px;
+		gap: var(--gap);
 		align-items: flex-start;
 	}
 	.wall__cell {
 		margin: 0;
+		/* Both from the ratio: the basis decides where the row breaks, the grow
+		   weight decides how the slack is shared out. Equal weights would give a
+		   portrait as much of the leftover as a landscape and tilt the row's
+		   shared baseline. */
+		flex-grow: var(--ratio);
+		flex-basis: calc(var(--ratio) * var(--row-h));
 		min-width: 120px;
 		/* The last row is allowed to be short rather than stretched: one photo
 		   left over should not become an enormous one because it happened not to
@@ -104,5 +125,60 @@ const single = hero && photos.length === 1;
 		max-height: min(64vh, 520px);
 		width: auto;
 		max-width: 100%;
+	}
+
+	@media (max-width: 560px) {
+		/* FOUR TO A LINE ON A PHONE.
+		   `--unit` is the phone's row height, and it is a fraction of the column
+		   rather than a px value so it holds from a 320px phone to a 560px one.
+		   A 16:9 photo — the widest anything off a phone camera gets — is then
+		   1.78 units, four of them just under the seven units the line holds, so
+		   four photographs of any orientation stay on one line and a fifth
+		   wraps. Grow still spends the slack, so two photographs are two big
+		   ones rather than two small ones with a hole beside them.
+
+		   THE CAP IS A HEIGHT, NOT A WIDTH, and it has to be: a flat max-width
+		   is the same number for a portrait and a landscape, so the moment two
+		   photographs in a row hit it they come out the same width and
+		   therefore different heights, which is the shared baseline this whole
+		   layout is for, broken by the rule meant to tidy it. Scaled by the
+		   ratio it caps how TALL a cell may get — 3.4 units, which a full row
+		   never reaches and a photograph left over on its own always would. So
+		   the leftover is a photograph rather than an accidental hero, and any
+		   row that hits the cap hits it together. */
+		.wall {
+			--gap: 6px;
+			--unit: calc((100% - 3 * var(--gap)) / 7);
+		}
+		.wall__cell {
+			min-width: 0;
+			flex-basis: calc(var(--ratio) * var(--unit));
+			max-width: calc(var(--ratio) * var(--unit) * 3.4);
+		}
+		/* CAPTIONS COME OUT FROM UNDER THE PHOTOGRAPHS. A caption is a line of
+		   prose and a phone's column is 80px wide: set under its own thumbnail
+		   it becomes a six-line ribbon, and two of them of different lengths
+		   leave the row sitting on a ragged edge — the exact mess this
+		   breakpoint exists to clear up. Below one photograph there is room and
+		   the caption stays put; below several it is printed once, under the
+		   whole row, in the order the photographs are in. */
+		.wall--many .wall__caption {
+			display: none;
+		}
+		.wall--many + .wall__legend {
+			display: block;
+		}
+	}
+
+	.wall__legend {
+		display: none;
+		margin: 8px 0 0;
+		padding: 0;
+		list-style: none;
+		font-family: var(--prose);
+		font-style: italic;
+		font-size: 12.5px;
+		line-height: 1.45;
+		color: var(--ink-2);
 	}
 </style>
