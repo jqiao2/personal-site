@@ -101,8 +101,21 @@ export function splitTitle(title: string): { main: string; sub: string | null } 
 	return { main: title.slice(0, at), sub: title.slice(at + 2) };
 }
 
-/** Height of a book spine in the shelf illustrations, in px. */
-export const SPINE_HEIGHT = 104;
+/**
+ * Height of the picture of a book beside a card — /books' currently-reading and
+ * set-aside rows, in px. The shelves are the other drawing of a book and size
+ * themselves; see shelf-view.
+ */
+export const THUMB_HEIGHT = 104;
+
+/**
+ * The width a cover is drawn at for a given height: 2:3, which most books are
+ * printed at and every cover on the site is boxed to. One rule rather than a
+ * width per context, so the same book is the same shape wherever it appears.
+ */
+export function coverWidth(height: number): number {
+	return Math.round((height * 2) / 3);
+}
 
 /**
  * The height the width scale below is expressed at: the mid-height of a spine on
@@ -153,8 +166,8 @@ const DEFAULT_PAGES = 250;
  */
 export function spineWidth(
 	pages: number | null,
-	editionPages: number | null = null,
-	height: number = SPINE_HEIGHT,
+	editionPages: number | null,
+	height: number,
 ): number {
 	const known = editionPages ?? pages ?? 0;
 	const length = known > 0 ? known : DEFAULT_PAGES;
@@ -169,6 +182,72 @@ export function spineWidth(
 export interface BookFact {
 	k: string;
 	v: string;
+}
+
+/** FNV-1a. Any stable hash would do; this one is short and has no dependencies. */
+function hash32(s: string): number {
+	let h = 2166136261;
+	for (let i = 0; i < s.length; i++) {
+		h ^= s.charCodeAt(i);
+		h = Math.imul(h, 16777619);
+	}
+	return h >>> 0;
+}
+
+/** A stable number in [0,1) for one book and one purpose. */
+export function seed01(id: string, salt: string): number {
+	return (hash32(`${id}~${salt}`) % 100000) / 100000;
+}
+
+/** Round to the nearest half pixel, matching the spine width scale. */
+export function half(px: number): number {
+	return Math.round(px * 2) / 2;
+}
+
+/**
+ * The cloth a book is bound in. Deep and aged rather than saturated: these sit
+ * against #1a120a and have to hold gilt lettering.
+ *
+ * The mustard is the odd one out and carries a near-black foil — it is the only
+ * family light enough that cream lettering on it would not read.
+ *
+ * Seeded from the id, so a book is bound the same way everywhere it is drawn:
+ * the spine on the shelf and the stand-in cover on its own page are the same
+ * object seen from two sides, and a book that changed colour between them would
+ * read as two books.
+ */
+const CLOTH_FAMILIES = [
+	{ h: 27, s: 32, l: 21, foil: '#efe1c2' }, // antique tobacco
+	{ h: 152, s: 26, l: 15, foil: '#eee0c1' }, // deep forest
+	{ h: 92, s: 19, l: 24, foil: '#efe3c6' }, // withered fern
+	{ h: 355, s: 40, l: 20, foil: '#f2e4c6' }, // oxblood
+	{ h: 43, s: 48, l: 36, foil: '#33240a' }, // dark mustard
+	{ h: 189, s: 28, l: 19, foil: '#eadfc4' }, // silent-library teal
+];
+
+export interface BookCloth {
+	/** A left-to-right gradient: light at the hinge, falling away to the edge. */
+	background: string;
+	foil: string;
+}
+
+export function bookCloth(id: number | string): BookCloth {
+	const key = String(id);
+	const family = CLOTH_FAMILIES[hash32(`${key}~fam`) % CLOTH_FAMILIES.length];
+	// Jitter inside the family, so two books of the same colour standing next to
+	// each other are still visibly two books.
+	const hue = family.h + (seed01(key, 'hue') - 0.5) * 12;
+	const sat = Math.max(10, family.s + (seed01(key, 'sat') - 0.5) * 7);
+	const lit = family.l + (seed01(key, 'lit') - 0.5) * 7;
+	const at = (d: number) =>
+		`hsl(${hue.toFixed(1)} ${sat.toFixed(1)}% ${Math.max(8, lit + d).toFixed(1)}%)`;
+
+	return {
+		background:
+			`linear-gradient(90deg,${at(7)} 0%,${at(3.5)} 15%,` +
+			`${at(0)} 43%,${at(-4.5)} 79%,${at(-8.5)} 100%)`,
+		foil: family.foil,
+	};
 }
 
 /** One book, ready to render. Every field is a finished string or a number of px. */
@@ -189,19 +268,16 @@ export interface BookView {
 	/** 0–1, or null when the book's page count is unknown. */
 	progress: number | null;
 	/**
-	 * The printed length the spine is drawn from — `ol_pages` where it is known,
-	 * KOReader's count otherwise, null when neither is. Carried alongside the
-	 * pre-computed `spineWidth` because the shelves draw the same book at a
-	 * different height and have to run the width formula again themselves.
+	 * The printed length — `ol_pages` where it is known, KOReader's count
+	 * otherwise, null when neither is. It is the shelves' spine width, which they
+	 * compute themselves because they draw the book at their own height.
 	 */
 	pages: number | null;
 	/**
 	 * The jacket, where the book has been matched to an edition that has one.
-	 * Null leaves the spine to stand in — see BookThumb.
+	 * Null is drawn as a stand-in cover rather than left blank — see BookCover.
 	 */
 	coverUrl: string | null;
-	spineWidth: number;
-	spineFill: number;
 	/** "627 / 628", or "page 106" when there is no total to divide by. */
 	pagesLabel: string;
 	/** "99.8%", or null when progress is unknown. */
@@ -304,8 +380,6 @@ export function toBookView(book: BookProgress, todayDay = today()): BookView {
 		progress,
 		pages: book.ol_pages ?? total,
 		coverUrl: book.cover_url,
-		spineWidth: spineWidth(total, book.ol_pages),
-		spineFill: progress === null ? 0 : Math.max(2, Math.round(progress * SPINE_HEIGHT)),
 		pagesLabel: total
 			? `${formatNumber(furthest)} / ${formatNumber(total)}`
 			: `page ${formatNumber(furthest)}`,
@@ -378,8 +452,6 @@ export function toOfflineView(book: OfflineRead, todayDay = today()): BookView {
 		// `book_offline_reads` doesn't carry one, and these only ever appear on the
 		// finished shelf, which is spines all the way along.
 		coverUrl: null,
-		spineWidth: spineWidth(book.total_pages, book.ol_pages),
-		spineFill: SPINE_HEIGHT,
 		pagesLabel: '—',
 		percent: null,
 		facts: [],
@@ -418,8 +490,6 @@ export function toManualView(book: ManualRead, todayDay = today()): BookView {
 		progress: null,
 		pages: book.ol_pages ?? book.total_pages,
 		coverUrl: book.cover_url,
-		spineWidth: spineWidth(book.total_pages, book.ol_pages),
-		spineFill: 0,
 		pagesLabel: '—',
 		percent: null,
 		facts: [

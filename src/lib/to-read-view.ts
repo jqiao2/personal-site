@@ -7,32 +7,19 @@
 // the book has been waiting.
 import type { BookProgress, PileBook } from './books-queries';
 import {
+	coverWidth,
 	daysBetween,
 	formatDay,
 	formatNumber,
-	SPINE_HEIGHT,
-	spineWidth,
 	splitTitle,
+	THUMB_HEIGHT,
 	today,
 	zonedDay,
 } from './books-view';
 
-/** Shorter than the shelf's spine: these are a list, not an illustration. */
-export const PILE_SPINE_HEIGHT = 84;
-
-/**
- * The shelf's own scale, so the same book is the same object on both pages —
- * imported rather than reimplemented, because two spine widths that agree by
- * coincidence stop agreeing the first time one is tuned.
- *
- * The height goes in because the scale is defined at one reference height and
- * every context scales off it: passing nothing would draw these at the /books
- * shelf's proportions on a spine two thirds the height, which is a stubbier
- * book, not the same book.
- */
-function pileSpineWidth(book: PileBook, height: number): number {
-	return spineWidth(book.total_pages, book.ol_pages, height);
-}
+/** Shorter than a card's cover on /books: these are a list, not an illustration. */
+export const PILE_COVER_HEIGHT = 84;
+export const PILE_COVER_WIDTH = coverWidth(PILE_COVER_HEIGHT);
 
 /**
  * How long it has been waiting. Exact days for the first six months, then
@@ -58,15 +45,15 @@ export interface PileView {
 	href: string;
 	isPrivate: boolean;
 	/**
-	 * The printed length the spine is drawn from, or null when neither source
-	 * knows it. The /books shelf draws the same book at its own height and has to
-	 * run the width formula again, so it needs the length and not just the width.
+	 * The jacket, where the book came from Open Library with one. Null is drawn
+	 * as the binding instead — see BookCover.
+	 */
+	coverUrl: string | null;
+	/**
+	 * The printed length, or null when neither source knows it. The /books shelf
+	 * draws this book as a spine and needs the length to width it.
 	 */
 	pages: number | null;
-	spineWidth: number;
-	/** False when the book has no page count: the spine is drawn as an outline. */
-	hasSpine: boolean;
-	spineTitle: string;
 	/** "2005 · Nonfiction · 209 pages", or "Typed in" when none of that is known. */
 	meta: string;
 	/** True when `meta` is the placeholder rather than facts about the edition. */
@@ -115,12 +102,8 @@ export function toPileView(book: PileBook, todayDay = today()): PileView {
 		author,
 		href: `/books/${book.id}`,
 		isPrivate: !book.is_public,
+		coverUrl: book.cover_url,
 		pages: book.ol_pages ?? book.total_pages,
-		spineWidth: pileSpineWidth(book, PILE_SPINE_HEIGHT),
-		hasSpine: book.total_pages !== null || book.ol_pages !== null,
-		spineTitle: book.ol_pages ?? book.total_pages
-			? `${formatNumber((book.ol_pages ?? book.total_pages)!)} pages, none read`
-			: 'Length unknown',
 		meta: bits.length ? bits.join(' · ') : 'Typed in',
 		metaIsPlaceholder: bits.length === 0,
 		addedLabel: formatDay(addedDay),
@@ -224,5 +207,5 @@ export function suggestMerges(
 	return out;
 }
 
-/** Height of the ghost spine left behind by a resolved row. */
-export const GHOST_SPINE_HEIGHT = Math.round(SPINE_HEIGHT / 3);
+/** Height of the ghost left in the slot by a resolved row. */
+export const GHOST_HEIGHT = Math.round(THUMB_HEIGHT / 3);

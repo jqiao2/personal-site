@@ -1,0 +1,304 @@
+---
+// The picture of a book, everywhere in the book log except the two shelves.
+//
+// A book with no jacket on file is still drawn as a book: the binding it would
+// have, in the cloth its spine is bound in on the shelf, lettered where the
+// picture is big enough to letter. Nothing here falls back to a spine. A spine
+// and a cover are two drawings of the same object, and using both to mean "a
+// book" in one list makes a row of books look like a row of two different
+// things — so the spine is now the shelves' alone, where a rank of them is the
+// point, and everywhere else a book is a cover.
+import { bookCloth, coverWidth, THUMB_HEIGHT } from '../lib/books-view';
+
+interface Props {
+	/** Seeds the binding, so a book is bound the same on every page it appears. */
+	id: number;
+	title: string;
+	author?: string | null;
+	/** The jacket. Null draws the binding on its own. */
+	coverUrl: string | null;
+	/**
+	 * `thumb` draws at `height` beside a card or a row; `full` fills the box it
+	 * is given and letters the binding, which only reads at that size.
+	 */
+	size?: 'thumb' | 'full';
+	height?: number;
+	/**
+	 * Wraps the picture in a link to the book. Where a title beside it links to
+	 * the same place, that is one destination, so the picture stays out of the
+	 * tab order and off the accessibility tree.
+	 */
+	href?: string;
+	/** Prints where the picture came from, in the corner. `full` only. */
+	credit?: boolean;
+	/** Above the fold — the book's own page, where the cover is the hero. */
+	eager?: boolean;
+}
+
+const {
+	id,
+	title,
+	author = null,
+	coverUrl,
+	size = 'thumb',
+	height = THUMB_HEIGHT,
+	href,
+	credit = false,
+	eager = false,
+} = Astro.props;
+
+const full = size === 'full';
+const width = coverWidth(height);
+const cloth = bookCloth(id);
+
+const style = [
+	`--cloth:${cloth.background}`,
+	`--foil:${cloth.foil}`,
+	full ? null : `width:${width}px; height:${height}px`,
+]
+	.filter(Boolean)
+	.join('; ');
+
+const Tag = href ? 'a' : 'div';
+---
+
+<Tag
+	class:list={['cover', full ? 'cover--full' : 'cover--thumb']}
+	style={style}
+	data-cover
+	href={href}
+	tabindex={href ? '-1' : undefined}
+	aria-hidden={href ? 'true' : undefined}
+>
+	{/*
+		The binding, drawn whether or not a jacket lands on top of it: it is what
+		shows through a transparent jacket, what stands in while one loads, and
+		what is left when Open Library turns out not to have the cover it said it
+		had — see the audit in the script below.
+	*/}
+	<span class="board" aria-hidden="true">
+		<span class="board__frame"></span>
+		{
+			full && (
+				<span class="board__type">
+					<span class="board__title">{title}</span>
+					{author && (
+						<>
+							<span class="board__rule" />
+							<span class="board__author">{author}</span>
+						</>
+					)}
+				</span>
+			)
+		}
+	</span>
+
+	{
+		coverUrl && (
+			<img
+				class="cover__art"
+				src={coverUrl}
+				alt={href ? '' : `${title} cover`}
+				width={width}
+				height={height}
+				loading={eager ? 'eager' : 'lazy'}
+				fetchpriority={eager ? 'high' : undefined}
+				decoding="async"
+				data-cover-art
+			/>
+		)
+	}
+
+	{/* The hinge, so the picture reads as a book and not a poster. */}
+	<span class="cover__edge"></span>
+
+	{
+		credit && (
+			<Fragment>
+				{coverUrl && <span class="cover__credit cover__credit--art">cover · open library</span>}
+				<span class="cover__credit cover__credit--none">no cover on file</span>
+			</Fragment>
+		)
+	}
+
+	{/* Anything the page layers over the picture: a badge, a private banner. */}
+	<slot />
+</Tag>
+
+<script>
+	// Covers Open Library doesn't really have.
+	//
+	// A missing cover comes back as a 1×1 image with a 200 on it rather than a
+	// 404, so a load event is not proof of a jacket. Anything that lands smaller
+	// than a couple of pixels — or does not land at all — is retired, and the
+	// binding underneath becomes the picture. Same audit the month grid runs.
+	function retire(img: HTMLImageElement): void {
+		img.closest('[data-cover]')?.classList.add('cover--blank');
+	}
+
+	for (const img of document.querySelectorAll<HTMLImageElement>('[data-cover-art]')) {
+		if (img.complete) {
+			if (img.naturalWidth <= 2) retire(img);
+			continue;
+		}
+		img.addEventListener('load', () => img.naturalWidth <= 2 && retire(img), { once: true });
+		img.addEventListener('error', () => retire(img), { once: true });
+	}
+</script>
+
+<style>
+	.cover {
+		position: relative;
+		display: block;
+		flex: none;
+		overflow: hidden;
+		border: 1px solid #45341f;
+		/* Square at the hinge, rounded at the fore-edge — the shelf's convention. */
+		border-radius: 2px 4px 4px 2px;
+		background: #241a10;
+		transition:
+			transform 0.16s ease,
+			border-color 0.16s ease,
+			box-shadow 0.16s ease;
+	}
+	.cover--full {
+		width: 100%;
+		height: 100%;
+		border-radius: 4px 8px 8px 4px;
+		box-shadow: 0 24px 46px -14px rgba(0, 0, 0, 0.7);
+	}
+
+	/* The binding */
+	.board {
+		position: absolute;
+		inset: 0;
+		background: var(--cloth);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		/* The weave, at the same angle the shelf's boards carry it. */
+		background-image:
+			repeating-linear-gradient(
+				135deg,
+				rgba(255, 244, 222, 0.045) 0 7px,
+				rgba(0, 0, 0, 0.06) 7px 14px
+			),
+			var(--cloth);
+	}
+	/* A blind rule around the board, the way a plain cloth binding is finished. */
+	.board__frame {
+		position: absolute;
+		inset: 5px;
+		border: 1px solid var(--foil);
+		border-radius: 1px;
+		opacity: 0.28;
+	}
+	.cover--full .board__frame {
+		inset: 13px;
+		border-radius: 2px;
+	}
+
+	/* Lettering, at the one size it reads at. Below `full` the board is left
+	   plain rather than lettered in 6px type, which is a picture of writing
+	   rather than writing. */
+	.board__type {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		padding: 34px 26px;
+		max-width: 100%;
+	}
+	.board__title {
+		font-family: 'Newsreader', serif;
+		font-size: 22px;
+		line-height: 1.25;
+		letter-spacing: 0.2px;
+		color: var(--foil);
+		/* A long title sets smaller before it truncates; past six lines the board
+		   has stopped being lettered and is carrying a paragraph. */
+		display: -webkit-box;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 6;
+		line-clamp: 6;
+		overflow: hidden;
+	}
+	.board__rule {
+		width: 30px;
+		height: 1px;
+		background: var(--foil);
+		opacity: 0.5;
+		margin: 16px 0 14px;
+	}
+	.board__author {
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.7px;
+		line-height: 1.45;
+		color: var(--foil);
+		opacity: 0.82;
+	}
+
+	/* The jacket, over the binding */
+	.cover__art {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		/* Jackets are not all 2:3. Cropping a sliver off the long edge beats
+		   letterboxing every one of them into a box of its own width. */
+		object-fit: cover;
+	}
+	.cover--blank .cover__art {
+		display: none;
+	}
+
+	.cover__edge {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 5px;
+		background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.28));
+	}
+	.cover--full .cover__edge {
+		width: 9px;
+	}
+
+	.cover__credit {
+		position: absolute;
+		top: 11px;
+		left: 12px;
+		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+		font-size: 9px;
+		letter-spacing: 0.6px;
+		color: rgba(255, 244, 222, 0.42);
+	}
+	/* One of the two, and which one is only settled once the jacket has had its
+	   chance to fail to be a jacket. */
+	.cover--blank .cover__credit--art,
+	.cover:not(.cover--blank) .cover__credit--art ~ .cover__credit--none {
+		display: none;
+	}
+
+	/* Pulled off the shelf. Only where the picture is a link — the cover on a
+	   book's own page is not going anywhere. */
+	a.cover:hover,
+	a.cover:focus-visible {
+		transform: translateY(-7px);
+		border-color: #cfa452;
+		box-shadow:
+			0 12px 22px -8px rgba(0, 0, 0, 0.8),
+			0 0 0 1px rgba(207, 164, 82, 0.4);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.cover {
+			transition: none;
+		}
+		a.cover:hover,
+		a.cover:focus-visible {
+			transform: none;
+		}
+	}
+</style>

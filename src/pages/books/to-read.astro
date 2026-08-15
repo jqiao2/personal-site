@@ -1,9 +1,16 @@
 ---
+import BookCover from '../../components/BookCover.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import { getCurrentlyReading, getToRead } from '../../lib/books-queries';
 import { siteNav } from '../../lib/nav';
-import { buildPile, PILE_SPINE_HEIGHT, GHOST_SPINE_HEIGHT, suggestMerges } from '../../lib/to-read-view';
+import {
+	buildPile,
+	GHOST_HEIGHT,
+	PILE_COVER_HEIGHT,
+	PILE_COVER_WIDTH,
+	suggestMerges,
+} from '../../lib/to-read-view';
 
 // Rendered on demand — the pile changes from this page and from the Kindle.
 export const prerender = false;
@@ -31,7 +38,8 @@ const mechanicNote = isOwner
 	? 'A book leaves the pile by itself: the first page turn the Kindle sends moves it to Currently reading.'
 	: 'A book leaves the pile by itself, on the first page turn the Kindle sends.';
 
-const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEIGHT}px`;
+// The ghost a resolved row leaves in the cover's place.
+const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 ---
 
 <BookLayout title="To read — Jason's books">
@@ -205,13 +213,14 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 							>
 								<div data-open>
 									<div class="row__line">
-										<a class="spine-link" href={b.href} tabindex="-1" aria-hidden="true">
-											<div
-												class:list={['spine', !b.hasSpine && 'spine--unknown']}
-												style={spineStyle(b.spineWidth)}
-												title={b.spineTitle}
-											/>
-										</a>
+										<BookCover
+											id={b.id}
+											title={b.main}
+											author={b.author}
+											coverUrl={b.coverUrl}
+											height={PILE_COVER_HEIGHT}
+											href={b.href}
+										/>
 
 										<div class="row__main">
 											<div class="row__titleline">
@@ -272,7 +281,9 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 									feel like deletion.
 								*/}
 								<div class="resolved" data-resolved hidden>
-									<div class="ghost" style={`height:${GHOST_SPINE_HEIGHT}px`} />
+									{/* At the cover's width, so the line below a resolved book starts
+									    where the titles above it do. */}
+									<div class="ghost" style={ghostStyle} />
 									<div class="resolved__line" data-resolved-line />
 									<button type="button" class="pill pill--sm" data-undo>
 										Undo
@@ -1056,47 +1067,6 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 			display: none;
 		}
 
-		.spine-link {
-			flex: none;
-			display: block;
-		}
-		/* The same spine as the shelf with no gold in it: nothing has been read.
-		   A book with no page count is drawn at an ordinary length and carries the
-		   dashed outline the book page uses for something unknown — the width is
-		   a guess, so it says so rather than shrinking to a sliver. */
-		.spine {
-			flex: none;
-			border-radius: 2px;
-			border: 1px solid #45341f;
-			background-image: repeating-linear-gradient(135deg, #2c2013 0 6px, #241906 6px 12px);
-			transition:
-				transform 0.16s ease,
-				border-color 0.16s ease,
-				box-shadow 0.16s ease;
-		}
-		.spine--unknown {
-			background-image: none;
-			background: transparent;
-			border-style: dashed;
-		}
-		.spine-link:hover .spine,
-		.spine-link:focus-visible .spine {
-			transform: translateY(-7px);
-			border-color: #cfa452;
-			box-shadow:
-				0 12px 22px -8px rgba(0, 0, 0, 0.8),
-				0 0 0 1px rgba(207, 164, 82, 0.4);
-		}
-		@media (prefers-reduced-motion: reduce) {
-			.spine {
-				transition: none;
-			}
-			.spine-link:hover .spine,
-			.spine-link:focus-visible .spine {
-				transform: none;
-			}
-		}
-
 		.row__main {
 			flex: 1 1 240px;
 			min-width: 0;
@@ -1206,11 +1176,13 @@ const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEI
 		.resolved[hidden] {
 			display: none;
 		}
+		/* Where the book's cover was. An outline at the cover's width rather than
+		   a filled box: what a resolved row leaves is a space, and anything with
+		   a face on it would look like a book that is still on the pile. */
 		.ghost {
-			width: 13px;
 			flex: none;
 			border: 1px dashed #33261a;
-			border-radius: 2px;
+			border-radius: 2px 3px 3px 2px;
 		}
 		.resolved__line {
 			flex: 1 1 240px;
