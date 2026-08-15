@@ -52,6 +52,40 @@ const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
  * for type that renders at 11px under a pin. The label COLOUR and halo are ours,
  * which is what actually makes them look set rather than default.
  */
+/**
+ * A single flat image of one place, for somewhere a live map can't go.
+ *
+ * The month card's calendar cells are 131px wide and there are 31 of them: a
+ * MapLibre canvas per cell is a non-starter, and the card is exported as a PNG
+ * by rasterising the DOM, which a WebGL canvas does not survive. So the map
+ * arrives as a picture — MapTiler's Static Maps API, which serves one.
+ *
+ * IT IS NOT THIS FILE'S BASEMAP, and it can't be: the style above is authored
+ * client-side against vector tiles, and the static endpoint will only render a
+ * style hosted in MapTiler's cloud. So it asks for the most neutral stock style
+ * there is — light greys, no colour of its own — and the card warms it into the
+ * menu palette with a filter. Near enough at 131px, and the alternative is a
+ * blue-and-white map dropped into a cream page.
+ *
+ * Attribution is turned off IN THE IMAGE, where it would be an unreadable smear
+ * of 6px type in the corner of a calendar cell, and printed once on the card
+ * instead — which is what MapTiler asks for when the watermark is suppressed.
+ *
+ * Returns null when there is no key or the place was never pinned; both are
+ * supported states, and the cell falls back to ruled paper.
+ */
+export function staticMapUrl(
+	place: { lat: number | null; lng: number | null },
+	key: string,
+	{ zoom = 15.5, width = 260, height = 340 } = {},
+): string | null {
+	const { lat, lng } = place;
+	if (!key || lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng))
+		return null;
+	const at = `${lng.toFixed(5)},${lat.toFixed(5)},${zoom}`;
+	return `https://api.maptiler.com/maps/dataviz-light/static/${at}/${width}x${height}.png?key=${key}&attribution=false`;
+}
+
 export function menuBasemap(key: string) {
 	const t = MAP_TOKENS;
 	return {

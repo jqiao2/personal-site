@@ -294,23 +294,39 @@ export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): Mo
 }
 
 /**
- * A photograph in a calendar cell.
+ * What fills a calendar cell: one cover per MEAL.
  *
- * ONE PER SPOT, FOR THE WHOLE MONTH — not one per visit and not one per meal.
- * Somewhere I went three times is one place I ate at, and printing its dumplings
- * on three days would say I ate three different things somewhere I didn't.
+ * Every visit gets its own, so going back somewhere in the same month shows up
+ * as two dinners rather than as one place mentioned twice — the calendar is a
+ * record of meals and each meal is a day of its own. A visit contributes its
+ * FIRST photograph only; the rest of that night's roll belongs on the entry
+ * page, not in a 131px square.
  *
- * Which visit supplies it, and which photograph sits on top when two spots share
- * a day, are the same question: the ranking. Rating first, verdict as the
- * tiebreaker — the verdict is the finer judgement of the two and the one that
- * survives a month of everything landing on a 7.
+ * A MEAL I DIDN'T PHOTOGRAPH IS STILL A MEAL, and leaving it as ruled paper made
+ * the card read as though nothing happened. So it falls back to a map of where
+ * it happened, close enough in to show the street — which is the other thing the
+ * log knows about a place, and the one that says "here" when there's no picture
+ * of "what". Somewhere never pinned has neither, and keeps the paper.
+ *
+ * The ranking — rating first, verdict as the tiebreaker, since the verdict is
+ * the finer judgement of the two and the one that survives a month of
+ * everything landing on a 7 — decides which cover sits on top when two meals
+ * share a day.
  */
-export interface Plate {
+export interface Cover {
+	kind: 'photo' | 'map';
 	url: string;
 	/** Position in the month's ranking, 0 = best. Drives the stacking order. */
 	rank: number;
+	visitId: number;
 	restaurantId: number;
 	restaurantName: string;
+}
+
+/** Where the covers come from, for the sources the view layer can't reach. */
+export interface CoverSources {
+	/** Place id → a static map of it, for meals with no photograph. */
+	maps?: Map<number, string>;
 }
 
 /** Best first: rating, then verdict, then the earlier meal. */
@@ -324,31 +340,32 @@ function byRank(a: VisitDetail, b: VisitDetail): number {
 }
 
 /**
- * The month's photographs, best spot first, one per spot.
+ * The month's covers by day, each day's best-ranked first.
  *
- * A spot's plate comes from its best-ranked visit that actually has a
- * photograph, so a bad snapshot of the best meal doesn't cost the place its
- * showing on the card — and the photograph lands on the day of the meal it came
- * from, which is the only day the calendar can honestly put it on.
+ * Ranking is done over every visit rather than over the ones that have a
+ * photograph, so a meal's place in the month doesn't depend on whether I got my
+ * phone out — the ranks stay the ranks, and the covers fall where they fall.
  */
-export function monthPlates(visits: VisitDetail[]): Map<number, Plate[]> {
-	const best = new Map<number, VisitDetail>();
-	for (const v of visits) {
-		if (v.photos.length === 0) continue;
-		const held = best.get(v.restaurant_id);
-		if (!held || byRank(v, held) < 0) best.set(v.restaurant_id, v);
-	}
-
-	const byDay = new Map<number, Plate[]>();
-	[...best.values()].sort(byRank).forEach((v, rank) => {
+export function monthCovers(
+	visits: VisitDetail[],
+	{ maps }: CoverSources = {},
+): Map<number, Cover[]> {
+	const byDay = new Map<number, Cover[]>();
+	[...visits].sort(byRank).forEach((v, rank) => {
+		const photo = v.photos[0]?.url;
+		const map = maps?.get(v.restaurant_id);
+		const url = photo ?? map;
+		if (!url) return;
 		const day = Number(v.visited_on.slice(8, 10));
-		const plate: Plate = {
-			url: v.photos[0].url,
+		const cover: Cover = {
+			kind: photo ? 'photo' : 'map',
+			url,
 			rank,
+			visitId: v.id,
 			restaurantId: v.restaurant_id,
 			restaurantName: v.restaurant_name,
 		};
-		byDay.set(day, [...(byDay.get(day) ?? []), plate]);
+		byDay.set(day, [...(byDay.get(day) ?? []), cover]);
 	});
 	return byDay;
 }
@@ -359,11 +376,15 @@ export interface CalendarCell {
 	/** The best verdict recorded that day, or null when nothing was logged. */
 	verdict: number | null;
 	visitId: number | null;
-	/** The photographs to print in the cell, best-ranked first. */
-	plates: Plate[];
+	/** What to print in the cell, best-ranked first. */
+	covers: Cover[];
 }
 
-export function monthCalendar(monthKey: string, visits: VisitDetail[]): CalendarCell[] {
+export function monthCalendar(
+	monthKey: string,
+	visits: VisitDetail[],
+	sources: CoverSources = {},
+): CalendarCell[] {
 	const parsed = parseMonthKey(monthKey);
 	if (!parsed) return [];
 	const { year, month } = parsed;
@@ -371,8 +392,8 @@ export function monthCalendar(monthKey: string, visits: VisitDetail[]): Calendar
 	// runtime in UTC can't shift which column the 1st lands in.
 	const days = daysInMonth(year, month);
 	const lead = firstWeekdayIndex(year, month);
-	const plates = monthPlates(visits);
-	const pad = (): CalendarCell => ({ day: null, verdict: null, visitId: null, plates: [] });
+	const covers = monthCovers(visits, sources);
+	const pad = (): CalendarCell => ({ day: null, verdict: null, visitId: null, covers: [] });
 
 	const byDay = new Map<number, VisitDetail[]>();
 	for (const v of visits) {
@@ -392,7 +413,7 @@ export function monthCalendar(monthKey: string, visits: VisitDetail[]): Calendar
 			day,
 			verdict: best,
 			visitId: hits[0]?.id ?? null,
-			plates: plates.get(day) ?? [],
+			covers: covers.get(day) ?? [],
 		});
 	}
 	while (cells.length % 7 !== 0) cells.push(pad());

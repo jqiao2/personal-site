@@ -653,23 +653,46 @@ export async function listMonthKeys(): Promise<string[]> {
 }
 
 /**
- * Which of `placeIds` were eaten at for the FIRST TIME EVER in `key`.
+ * What the month card needs to know about the places it is about, beyond the
+ * visits themselves: whether each was new, and where it is.
  *
  * "New" has to be answered against the whole diary, not against the month: a
  * place I have been going to for years is not new in August because August is
  * all the card can see. `first_visit` is `min(visited_on)` over every visit in
  * the place view, so a month containing it is the month the place was new in.
+ *
+ * The point comes along for the ride because the card draws a map of a place
+ * whenever a meal there went unphotographed, and it is the same row.
  */
-export async function newPlacesInMonth(placeIds: number[], key: string): Promise<Set<number>> {
+export interface MonthPlace {
+	isNew: boolean;
+	lat: number | null;
+	lng: number | null;
+}
+
+export async function placesForMonth(
+	placeIds: number[],
+	key: string,
+): Promise<Map<number, MonthPlace>> {
 	const ids = [...new Set(placeIds)].filter((id) => Number.isInteger(id) && id > 0);
-	if (ids.length === 0) return new Set();
+	if (ids.length === 0) return new Map();
 	const { data, error } = await supabasePublic
 		.from('restaurant_places')
-		.select('id,first_visit')
+		.select('id,first_visit,lat,lng')
 		.in('id', ids);
 	if (error) throw new Error(error.message);
-	const rows = (data ?? []) as { id: number; first_visit: string | null }[];
-	return new Set(rows.filter((r) => r.first_visit?.startsWith(key)).map((r) => r.id));
+	const rows = (data ?? []) as {
+		id: number;
+		first_visit: string | null;
+		lat: number | null;
+		lng: number | null;
+	}[];
+	return new Map(
+		rows.map((r) => [
+			r.id,
+			{ isNew: r.first_visit?.startsWith(key) ?? false, lat: r.lat, lng: r.lng },
+		]),
+	);
 }
 
 // ---------------------------------------------------------------------------

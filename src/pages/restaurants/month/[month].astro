@@ -22,8 +22,9 @@
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import { requireOwner } from '../../../lib/auth';
-import { listMonthKeys, listMonthVisits, newPlacesInMonth } from '../../../lib/restaurants';
+import { listMonthKeys, listMonthVisits, placesForMonth } from '../../../lib/restaurants';
 import { monthCalendar, monthFigures } from '../../../lib/restaurant-view';
+import { staticMapUrl } from '../../../lib/map-style';
 import {
 	ASPECTS,
 	aspectBySlug,
@@ -46,16 +47,27 @@ const [visits, allKeys, isOwner] = await Promise.all([
 ]);
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
-const cells = monthCalendar(key, visits);
-const rows = Math.max(1, cells.length / 7);
 
-// "New" means the first visit to that place ever, not the first this month, so
-// a place I've been going to for years never counts as new again — which is a
-// question only the whole diary can answer, hence the second round trip.
-const newIds = await newPlacesInMonth(
+// Two things the visits themselves can't answer: whether a place was new — only
+// the whole diary knows that — and where it is, for the meals with no
+// photograph. One round trip for both.
+const places = await placesForMonth(
 	visits.map((v) => v.restaurant_id),
 	key,
 );
+const mapKey = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
+const maps = new Map(
+	[...places].flatMap(([id, place]) => {
+		const url = staticMapUrl(place, mapKey);
+		return url ? ([[id, url]] as [number, string][]) : [];
+	}),
+);
+
+const cells = monthCalendar(key, visits, { maps });
+const rows = Math.max(1, cells.length / 7);
+const usesMaps = cells.some((c) => c.covers.some((cover) => cover.kind === 'map'));
+
+const newIds = new Set([...places].filter(([, p]) => p.isNew).map(([id]) => id));
 const figures = monthFigures(visits, newIds);
 
 const prev = shiftMonth(key, -1);
@@ -152,10 +164,15 @@ const summary = visits.length
 						    that wrong breaks the export, and the export is the whole point
 						    of the page.
 
-						    A DAY WITH TWO SPOTS IN IT stacks: the better-ranked plate sits
+						    A DAY WITH TWO MEALS IN IT stacks: the better-ranked cover sits
 						    on top and the one under it is turned a few degrees so its
 						    corner shows, which is how a pile of prints looks and is the
-						    only honest way to fit two meals in one square. */}
+						    only honest way to fit two meals in one square.
+
+						    The maps are drawn in grey by a stock style — see staticMapUrl
+						    — and warmed into the palette by a filter here, where the
+						    filter is on the cell rather than the image so the pin over it
+						    keeps the terracotta it was given. */}
 						<div class="strip">
 							<div class="strip__days">
 								{WEEKDAYS.map((d) => <span>{d}</span>)}
@@ -168,17 +185,18 @@ const summary = visits.length
 												'cell',
 												c.day == null && 'cell--pad',
 												c.verdict != null && 'cell--hit',
-												c.plates.length > 0 && 'cell--plated',
-												c.plates.length > 1 && 'cell--stack',
+												c.covers.length > 0 && 'cell--plated',
+												c.covers.length > 1 && 'cell--stack',
 											]}
 										>
-											{c.plates.map((p, i) => (
-												<img
-													class:list={['plate', i > 0 && 'plate--under']}
+											{c.covers.map((cover, i) => (
+												<span
+													class:list={['plate', `plate--${cover.kind}`, i > 0 && 'plate--under']}
 													style={`--i:${i}`}
-													src={p.url}
-													alt=""
-												/>
+												>
+													<img src={cover.url} alt="" crossorigin="anonymous" data-cover />
+													{cover.kind === 'map' && <span class="plate__pin" />}
+												</span>
 											))}
 											{c.day != null && <span class="cell__n">{c.day}</span>}
 											{c.verdict != null && (
@@ -205,7 +223,14 @@ const summary = visits.length
 
 						<div class="card__foot">
 							<span class="card__summary">{summary}</span>
-							<span class="card__url">jasonqiao.com/restaurants</span>
+							<span class="card__stamp">
+								<span class="card__url">jasonqiao.com/restaurants</span>
+								{/* The watermark is suppressed inside the map images, where it
+								    would be 6px type in the corner of a calendar cell, so the
+								    credit is printed once here — which is the condition of
+								    suppressing it. */}
+								{usesMaps && <span class="card__credit">Maps © MapTiler © OpenStreetMap</span>}
+							</span>
 						</div>
 					</div>
 				</div>
@@ -239,6 +264,19 @@ const summary = visits.length
 		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
 		else window.addEventListener('resize', fit);
 		fit();
+	}
+
+	// A cover that never arrives — a tile server having a bad day, a photo whose
+	// object has gone — leaves the cell as the ruled paper it would have been,
+	// rather than as a broken image with a day number on it.
+	for (const img of document.querySelectorAll<HTMLImageElement>('img[data-cover]')) {
+		const drop = () => {
+			const cell = img.closest('.cell');
+			img.closest('.plate')?.remove();
+			if (cell && !cell.querySelector('.plate')) cell.classList.remove('cell--plated', 'cell--stack');
+		};
+		if (img.complete && img.naturalWidth === 0) drop();
+		else img.addEventListener('error', drop);
 	}
 
 	button?.addEventListener('click', async () => {
@@ -439,16 +477,37 @@ const summary = visits.length
 	.plate {
 		position: absolute;
 		inset: 0;
+		display: block;
+		overflow: hidden;
+		/* Best-ranked meal on top; the rest fall back a layer each. */
+		z-index: calc(10 - var(--i));
+	}
+	.plate img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 		display: block;
-		/* Best-ranked spot on top; the rest fall back a layer each. */
-		z-index: calc(10 - var(--i));
 	}
 	.plate--under {
 		transform: rotate(calc(var(--i) * 3.5deg));
 		box-shadow: 0 1px 6px rgba(47, 30, 18, 0.35);
+	}
+	/* The stock style is grey; this is what puts it on the same paper as the
+	   rest of the card. Sepia does the warming, the rest keeps it from going
+	   muddy — and it lands close to --land, which the live map is drawn on. */
+	.plate--map img {
+		filter: sepia(0.5) saturate(1.15) brightness(1.04) contrast(0.96);
+	}
+	.plate__pin {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 9px;
+		height: 9px;
+		margin: -4.5px 0 0 -4.5px;
+		border-radius: 50%;
+		background: var(--terracotta);
+		box-shadow: 0 0 0 2px var(--card);
 	}
 
 	.cell__n {
@@ -526,10 +585,23 @@ const summary = visits.length
 		font-size: 19px;
 		color: var(--ink-2);
 	}
+	.card__stamp {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 4px;
+		text-align: right;
+	}
 	.card__url {
 		font-size: 12px;
 		letter-spacing: 1.8px;
 		text-transform: uppercase;
 		color: var(--ink-4);
+	}
+	.card__credit {
+		font-size: 9.5px;
+		letter-spacing: 0.9px;
+		text-transform: uppercase;
+		color: var(--rule);
 	}
 </style>
