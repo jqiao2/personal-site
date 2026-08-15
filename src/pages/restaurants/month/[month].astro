@@ -110,10 +110,15 @@ const summary = visits.length
 			</div>
 		</div>
 
+		<!-- Stepping to another month is a navigation, but the card is one place, so
+		     the steps replace the history entry rather than stacking one per month
+		     (data-rl-replace; the layout does the work). Otherwise Back walks you
+		     through every month you looked at instead of leaving for the page that
+		     sent you here. The film log's month card behaves the same way. -->
 		<nav class="stepper">
 			{
 				has(prev) ? (
-					<a class="stepper__go" href={`/restaurants/month/${prev}${query}`}>
+					<a class="stepper__go" href={`/restaurants/month/${prev}${query}`} data-rl-replace>
 						&larr; {monthLabel(prev)}
 					</a>
 				) : (
@@ -123,7 +128,7 @@ const summary = visits.length
 			<a class="stepper__all" href="/restaurants/month">All months</a>
 			{
 				has(next) ? (
-					<a class="stepper__go" href={`/restaurants/month/${next}${query}`}>
+					<a class="stepper__go" href={`/restaurants/month/${next}${query}`} data-rl-replace>
 						{monthLabel(next)} &rarr;
 					</a>
 				) : (

@@ -93,6 +93,40 @@ const nav = siteNav(pathname);
 					}
 				});
 			}
+
+			// FILTERS ARE LINKS, so the server can render the narrowed list and the
+			// query string stays shareable — but a chip press is not a navigation.
+			// Left alone, every chip, sort, view toggle and "clear all" stacks its own
+			// history entry, and both Back buttons — the browser's and the one above
+			// the title — walk back through the filter states instead of leaving for
+			// the page that sent you here. A link that only re-states the page it is
+			// already on therefore replaces its history entry rather than pushing one.
+			// The film log settled on the same rule; there the filters are client-side
+			// and it falls out of replaceState, here it takes a real navigation.
+			//
+			// Delegated, so links drawn after load (the map's pins and popups) obey it
+			// too, and late enough in the bubble that a handler which already called
+			// preventDefault — the map pin opening a popup — keeps its click.
+			document.addEventListener('click', (e) => {
+				if (e.defaultPrevented) return;
+				// Anything but a plain left click still means "open this somewhere else".
+				if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+				const target = e.target;
+				if (!(target instanceof Element)) return;
+				const link = target.closest('a[href]');
+				if (!(link instanceof HTMLAnchorElement)) return;
+				if (link.target || link.hasAttribute('download')) return;
+
+				const url = new URL(link.href);
+				if (url.origin !== location.origin) return;
+				// Same page, different query — or explicitly marked as a step within one
+				// page, which is what the month card's prev/next are.
+				const restating = url.pathname === location.pathname && !url.hash;
+				if (!restating && !link.hasAttribute('data-rl-replace')) return;
+
+				e.preventDefault();
+				location.replace(link.href);
+			});
 		</script>
 
 		<style is:global>

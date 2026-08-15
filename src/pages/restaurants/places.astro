@@ -13,9 +13,11 @@
 // What it costs is the second line's alignment, which is why the meta line
 // under it is allowed to run free rather than pretending to be a column.
 //
-// FILTERS ARE LINKS, not scripts, so they survive a reload, a share and a back
-// button, and both views read the same query string. Toggling list ⇄ map keeps
-// every active filter for exactly that reason.
+// FILTERS ARE LINKS, not scripts, so they survive a reload and a share, and both
+// views read the same query string. Toggling list ⇄ map keeps every active filter
+// for exactly that reason. What they are not is history: the layout sends any
+// link that only re-states this page through location.replace, so Back leaves for
+// wherever you came from rather than unwinding the chips you pressed.
 import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
 import RestaurantMap from '../../components/RestaurantMap.astro';
 import MealEditor from '../../components/MealEditor.astro';
