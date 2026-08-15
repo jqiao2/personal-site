@@ -1,6 +1,6 @@
 ---
+import BookCover from '../../components/BookCover.astro';
 import BookShelf from '../../components/BookShelf.astro';
-import BookThumb from '../../components/BookThumb.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import {
@@ -106,7 +106,7 @@ const metrics = [
 ];
 
 // Every book here is a page of its own. The picture of it is the strongest tie
-// between the two views, so it links as well as the title does — see BookThumb
+// between the two views, so it links as well as the title does — see BookCover
 // for why that link is hidden from the keyboard and the screen reader.
 const bookHref = (b: BookView) => `/books/${b.id}`;
 
@@ -160,7 +160,13 @@ const hasActivity = days.length > 0;
 							<div class="stack">
 								{current.map((b) => (
 									<article class="book">
-										<BookThumb book={b} href={bookHref(b)} />
+										<BookCover
+											id={b.id}
+											title={b.main}
+											author={b.author}
+											coverUrl={b.coverUrl}
+											href={bookHref(b)}
+										/>
 										<div class="book__main">
 											<h3 class="book__title">
 												<a class="book__link" href={bookHref(b)}>{b.main}</a>
@@ -230,7 +236,13 @@ const hasActivity = days.length > 0;
 							</div>
 							{setAside.map((b) => (
 								<div class="row">
-									<BookThumb book={b} href={bookHref(b)} />
+									<BookCover
+										id={b.id}
+										title={b.main}
+										author={b.author}
+										coverUrl={b.coverUrl}
+										href={bookHref(b)}
+									/>
 									<div class="row__main">
 										<div class="row__title">
 											<a class="book__link" href={bookHref(b)}>{b.main}</a>

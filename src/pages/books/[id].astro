@@ -1,4 +1,5 @@
 ---
+import BookCover from '../../components/BookCover.astro';
 import BookReviewEditor from '../../components/BookReviewEditor.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import HourHistogram from '../../components/HourHistogram.astro';
@@ -111,36 +112,36 @@ const spines = Array.from({ length: 18 }, () => ({
 		<div class="wrap layout">
 			<!-- ============ LEFT RAIL ============ -->
 			<aside class="rail">
-				{
-					v.coverUrl ? (
-						<div class="cover">
-							<img class="cover__art" src={v.coverUrl} alt={`${v.title} cover`} fetchpriority="high" />
-							<div class="cover__edge" />
-							{/* Where the jacket came from, at the size a credit belongs. */}
-							<div class="cover__credit">cover · open library</div>
-							{v.badge && !!v.isPublic && <div class:list={['badge', `badge--${v.shelf}`]}>{v.badge}</div>}
-							{
-								!v.isPublic && (
-									<Fragment>
-										<div class="cover__hatch" />
-										<div class="cover__private">
-											<span class="dot dot--private" />
-											<span>Private</span>
-										</div>
-									</Fragment>
-								)
-							}
-						</div>
-					) : (
-						<div class="nocover">
-							<div class="nocover__spine">
-								<div class="nocover__fill" style={`height:${v.spineFill}px`} />
-								<span class="nocover__title">{v.title}</span>
-							</div>
-							<div class="nocover__note">no cover on file</div>
-						</div>
-					)
-				}
+				{/*
+					The jacket where there is one, and the binding the book would have where
+					there is not — never a spine. The picture is the same object here as in
+					the lists it appears in, only bigger and lettered; see BookCover, which
+					also decides which of the two the reader is actually looking at.
+				*/}
+				<div class="cover-slot">
+					<BookCover
+						id={v.id}
+						title={v.title}
+						author={v.authorLine}
+						coverUrl={v.coverUrl}
+						size="full"
+						credit
+						eager
+					>
+						{v.badge && !!v.isPublic && <div class:list={['badge', `badge--${v.shelf}`]}>{v.badge}</div>}
+						{
+							!v.isPublic && (
+								<Fragment>
+									<div class="cover__hatch" />
+									<div class="cover__private">
+										<span class="dot dot--private" />
+										<span>Private</span>
+									</div>
+								</Fragment>
+							)
+						}
+					</BookCover>
+				</div>
 
 				{/* A reading, not a control — the state is reported, never asked for. */}
 				{
@@ -888,45 +889,15 @@ const spines = Array.from({ length: 18 }, () => ({
 		padding-top: 26px;
 	}
 
-	/* Cover */
-	.cover {
-		position: relative;
+	/* Cover.
+
+	   The picture itself is BookCover — the box it fills is this page's, so the
+	   rail can change its height at a breakpoint without the component knowing
+	   anything about this layout. */
+	.cover-slot {
 		height: 354px;
-		border-radius: 4px 8px 8px 4px;
-		overflow: hidden;
-		border: 1px solid #45341f;
-		box-shadow: 0 24px 46px -14px rgba(0, 0, 0, 0.7);
-		background-color: var(--hue);
-		background-image: repeating-linear-gradient(
-			135deg,
-			rgba(255, 244, 222, 0.075) 0 9px,
-			rgba(0, 0, 0, 0.13) 9px 18px
-		);
 	}
-	.cover__art {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
-	.cover__edge {
-		position: absolute;
-		left: 0;
-		top: 0;
-		bottom: 0;
-		width: 9px;
-		background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.28));
-	}
-	.cover__credit {
-		position: absolute;
-		top: 11px;
-		left: 12px;
-		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-		font-size: 9px;
-		letter-spacing: 0.6px;
-		color: rgba(255, 244, 222, 0.42);
-	}
+
 	.cover__hatch {
 		position: absolute;
 		inset: 0;
@@ -978,56 +949,6 @@ const spines = Array.from({ length: 18 }, () => ({
 	}
 	.badge--toread {
 		background: #a68f6e;
-	}
-
-	/* No cover: the shelf's spine, standing in */
-	.nocover {
-		height: 354px;
-		display: flex;
-		align-items: flex-end;
-		justify-content: center;
-		gap: 14px;
-		border: 1px dashed #45341f;
-		border-radius: 8px;
-		padding: 20px;
-	}
-	.nocover__spine {
-		position: relative;
-		width: 52px;
-		height: 280px;
-		border-radius: 2px;
-		overflow: hidden;
-		border: 1px solid #45341f;
-		background-image: repeating-linear-gradient(135deg, #3a2c1c 0 7px, #2a1c0c 7px 14px);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-	}
-	.nocover__fill {
-		position: absolute;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: #cfa452;
-		opacity: 0.85;
-	}
-	.nocover__title {
-		position: relative;
-		writing-mode: vertical-rl;
-		font-family: 'Newsreader', serif;
-		font-size: 15px;
-		color: #f2e6cd;
-		letter-spacing: 0.4px;
-		white-space: nowrap;
-		text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
-	}
-	.nocover__note {
-		align-self: flex-end;
-		font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
-		font-size: 9.5px;
-		letter-spacing: 0.5px;
-		color: #75603f;
-		writing-mode: vertical-rl;
 	}
 
 	/* Rail status */
@@ -2203,8 +2124,7 @@ const spines = Array.from({ length: 18 }, () => ({
 		.hero__shelf {
 			left: 55%;
 		}
-		.cover,
-		.nocover {
+		.cover-slot {
 			height: 300px;
 		}
 	}

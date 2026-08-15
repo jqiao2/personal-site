@@ -259,7 +259,6 @@ export interface BookPageView {
 	showProgress: boolean;
 	percent: string | null;
 	barWidth: number;
-	spineFill: number;
 	railPageLine: string;
 	railFacts: Fact[];
 	/** "Logged automatically", and only while a book is actually being logged. */
@@ -801,7 +800,6 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		showProgress: knowsTotal && !noPageData,
 		percent,
 		barWidth: Math.max(1.5, pctNum),
-		spineFill: knowsTotal ? Math.round((pctNum / 100) * 280) : 0,
 		railPageLine: noPageData
 			? knowsTotal
 				? `${formatNumber(total!)} pages · none of them counted`

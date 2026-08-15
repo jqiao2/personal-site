@@ -1,13 +1,14 @@
 ---
+import BookCover from '../../components/BookCover.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import { getCurrentlyReading, getToRead } from '../../lib/books-queries';
 import { siteNav } from '../../lib/nav';
 import {
 	buildPile,
-	GHOST_SPINE_HEIGHT,
+	GHOST_HEIGHT,
+	PILE_COVER_HEIGHT,
 	PILE_COVER_WIDTH,
-	PILE_SPINE_HEIGHT,
 	suggestMerges,
 } from '../../lib/to-read-view';
 
@@ -37,10 +38,8 @@ const mechanicNote = isOwner
 	? 'A book leaves the pile by itself: the first page turn the Kindle sends moves it to Currently reading.'
 	: 'A book leaves the pile by itself, on the first page turn the Kindle sends.';
 
-const spineStyle = (width: number) => `width:${width}px; height:${PILE_SPINE_HEIGHT}px`;
-const coverStyle = `width:${PILE_COVER_WIDTH}px; height:${PILE_SPINE_HEIGHT}px`;
-// The slot both pictures sit in, so a spine and a jacket take the same room.
-const thumbStyle = `width:${PILE_COVER_WIDTH}px`;
+// The ghost a resolved row leaves in the cover's place.
+const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 ---
 
 <BookLayout title="To read — Jason's books">
@@ -214,43 +213,14 @@ const thumbStyle = `width:${PILE_COVER_WIDTH}px`;
 							>
 								<div data-open>
 									<div class="row__line">
-										{/*
-											The picture of the book, jacket first — the same trade BookThumb makes
-											on /books, where a cover replaces the spine rather than standing beside
-											it. The drawn spine says two things: how long the book is, and how far
-											into it the reading has got. The second is zero for everything on this
-											pile by definition, and the row's meta line already carries the first —
-											so against a cover the spine was spending the one slot that can show the
-											book on neither. It stays as the fallback, where no cover is on file.
-										*/}
-										<a
-											class="thumb"
-											style={thumbStyle}
+										<BookCover
+											id={b.id}
+											title={b.main}
+											author={b.author}
+											coverUrl={b.coverUrl}
+											height={PILE_COVER_HEIGHT}
 											href={b.href}
-											tabindex="-1"
-											aria-hidden="true"
-										>
-											{b.coverUrl ? (
-												<span class="cover" style={coverStyle}>
-													<img
-														class="cover__art"
-														src={b.coverUrl}
-														alt=""
-														width={PILE_COVER_WIDTH}
-														height={PILE_SPINE_HEIGHT}
-														loading="lazy"
-														decoding="async"
-													/>
-													<span class="cover__edge" />
-												</span>
-											) : (
-												<span
-													class:list={['spine', !b.hasSpine && 'spine--unknown']}
-													style={spineStyle(b.spineWidth)}
-													title={b.spineTitle}
-												/>
-											)}
-										</a>
+										/>
 
 										<div class="row__main">
 											<div class="row__titleline">
@@ -311,11 +281,9 @@ const thumbStyle = `width:${PILE_COVER_WIDTH}px`;
 									feel like deletion.
 								*/}
 								<div class="resolved" data-resolved hidden>
-									{/* In the picture's slot, so the line below a resolved book starts
+									{/* At the cover's width, so the line below a resolved book starts
 									    where the titles above it do. */}
-									<div class="thumb" style={thumbStyle}>
-										<div class="ghost" style={`height:${GHOST_SPINE_HEIGHT}px`} />
-									</div>
+									<div class="ghost" style={ghostStyle} />
 									<div class="resolved__line" data-resolved-line />
 									<button type="button" class="pill pill--sm" data-undo>
 										Undo
@@ -1099,92 +1067,6 @@ const thumbStyle = `width:${PILE_COVER_WIDTH}px`;
 			display: none;
 		}
 
-		/* The picture's slot, sized inline from PILE_COVER_WIDTH: a cover's width
-		   whichever of the two is drawn, so a pile that is half jacketed and half
-		   spined still has one straight edge down the titles beside it. */
-		.thumb {
-			flex: none;
-			display: flex;
-			align-items: flex-end;
-		}
-
-		.cover {
-			position: relative;
-			display: block;
-			border: 1px solid #45341f;
-			/* Square at the hinge, rounded at the fore-edge — the shelf's convention. */
-			border-radius: 2px 4px 4px 2px;
-			overflow: hidden;
-			/* Stands in while the jacket loads, and shows through a transparent one. */
-			background: #241a10;
-			transition:
-				transform 0.16s ease,
-				border-color 0.16s ease,
-				box-shadow 0.16s ease;
-		}
-		.cover__art {
-			display: block;
-			width: 100%;
-			height: 100%;
-			/* Jackets are not all 2:3. Cropping a sliver off the long edge beats
-			   letterboxing every one of them into a box of its own width. */
-			object-fit: cover;
-		}
-		/* The hinge, so the artwork still reads as a book and not a poster. */
-		.cover__edge {
-			position: absolute;
-			left: 0;
-			top: 0;
-			bottom: 0;
-			width: 5px;
-			background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.28));
-		}
-
-		/* No cover on file: the same spine as the shelf with no gold in it, because
-		   nothing has been read. A book with no page count is drawn at an ordinary
-		   length and carries the dashed outline the book page uses for something
-		   unknown — the width is a guess, so it says so rather than shrinking to a
-		   sliver. */
-		.spine {
-			flex: none;
-			border-radius: 2px;
-			border: 1px solid #45341f;
-			background-image: repeating-linear-gradient(135deg, #2c2013 0 6px, #241906 6px 12px);
-			transition:
-				transform 0.16s ease,
-				border-color 0.16s ease,
-				box-shadow 0.16s ease;
-		}
-		.spine--unknown {
-			background-image: none;
-			background: transparent;
-			border-style: dashed;
-		}
-		/* Pulled off the shelf on hover — a cover comes out the same way a spine
-		   does, since both are the same book being reached for. */
-		.thumb:hover .cover,
-		.thumb:focus-visible .cover,
-		.thumb:hover .spine,
-		.thumb:focus-visible .spine {
-			transform: translateY(-7px);
-			border-color: #cfa452;
-			box-shadow:
-				0 12px 22px -8px rgba(0, 0, 0, 0.8),
-				0 0 0 1px rgba(207, 164, 82, 0.4);
-		}
-		@media (prefers-reduced-motion: reduce) {
-			.cover,
-			.spine {
-				transition: none;
-			}
-			.thumb:hover .cover,
-			.thumb:focus-visible .cover,
-			.thumb:hover .spine,
-			.thumb:focus-visible .spine {
-				transform: none;
-			}
-		}
-
 		.row__main {
 			flex: 1 1 240px;
 			min-width: 0;
@@ -1294,14 +1176,13 @@ const thumbStyle = `width:${PILE_COVER_WIDTH}px`;
 		.resolved[hidden] {
 			display: none;
 		}
-		/* The gap on the shelf where the book was: a spine's outline, not a
-		   cover's — what is left after one is pulled out is a space, and drawing
-		   it at a jacket's width would look like a book that is still there. */
+		/* Where the book's cover was. An outline at the cover's width rather than
+		   a filled box: what a resolved row leaves is a space, and anything with
+		   a face on it would look like a book that is still on the pile. */
 		.ghost {
-			width: 13px;
 			flex: none;
 			border: 1px dashed #33261a;
-			border-radius: 2px;
+			border-radius: 2px 3px 3px 2px;
 		}
 		.resolved__line {
 			flex: 1 1 240px;

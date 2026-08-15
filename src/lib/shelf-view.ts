@@ -8,7 +8,15 @@
 // The shelves replaced two lists: a four-spine strip pointing at /books/to-read,
 // and a detailed row per finished book with its read time and finish date. Those
 // facts now live on each book's own page and in the spine's tooltip.
-import { formatNumber, REFERENCE_SPINE_HEIGHT, spineWidth, type BookView } from './books-view';
+import {
+	bookCloth,
+	formatNumber,
+	half,
+	REFERENCE_SPINE_HEIGHT,
+	seed01,
+	spineWidth,
+	type BookView,
+} from './books-view';
 import type { PileView } from './to-read-view';
 
 /**
@@ -29,26 +37,6 @@ export const SHELF_HEIGHT = 236;
  */
 export const SHELF_PULL_HEADROOM = 54;
 
-/** FNV-1a. Any stable hash would do; this one is short and has no dependencies. */
-function hash32(s: string): number {
-	let h = 2166136261;
-	for (let i = 0; i < s.length; i++) {
-		h ^= s.charCodeAt(i);
-		h = Math.imul(h, 16777619);
-	}
-	return h >>> 0;
-}
-
-/** A stable number in [0,1) for one book and one purpose. */
-function seed01(id: string, salt: string): number {
-	return (hash32(`${id}~${salt}`) % 100000) / 100000;
-}
-
-/** Round to the nearest half pixel, matching the spine width scale. */
-function half(px: number): number {
-	return Math.round(px * 2) / 2;
-}
-
 /**
  * A book's height on the shelf.
  *
@@ -61,47 +49,6 @@ function half(px: number): number {
 export function spineHeight(id: number | string): number {
 	const t = seed01(String(id), 'h');
 	return Math.round(SPINE_MIN_HEIGHT + t * (SPINE_MAX_HEIGHT - SPINE_MIN_HEIGHT));
-}
-
-/**
- * The cloth a spine is bound in. Deep and aged rather than saturated: these sit
- * against #1a120a and have to hold gilt lettering.
- *
- * The mustard is the odd one out and carries a near-black foil — it is the only
- * family light enough that cream lettering on it would not read.
- */
-const SPINE_FAMILIES = [
-	{ h: 27, s: 32, l: 21, foil: '#efe1c2' }, // antique tobacco
-	{ h: 152, s: 26, l: 15, foil: '#eee0c1' }, // deep forest
-	{ h: 92, s: 19, l: 24, foil: '#efe3c6' }, // withered fern
-	{ h: 355, s: 40, l: 20, foil: '#f2e4c6' }, // oxblood
-	{ h: 43, s: 48, l: 36, foil: '#33240a' }, // dark mustard
-	{ h: 189, s: 28, l: 19, foil: '#eadfc4' }, // silent-library teal
-];
-
-export interface SpineCloth {
-	/** A left-to-right gradient: the spine is a curve, not a flat rectangle. */
-	background: string;
-	foil: string;
-}
-
-export function spineCloth(id: number | string): SpineCloth {
-	const key = String(id);
-	const family = SPINE_FAMILIES[hash32(`${key}~fam`) % SPINE_FAMILIES.length];
-	// Jitter inside the family, so two books of the same colour standing next to
-	// each other are still visibly two books.
-	const hue = family.h + (seed01(key, 'hue') - 0.5) * 12;
-	const sat = Math.max(10, family.s + (seed01(key, 'sat') - 0.5) * 7);
-	const lit = family.l + (seed01(key, 'lit') - 0.5) * 7;
-	const at = (d: number) =>
-		`hsl(${hue.toFixed(1)} ${sat.toFixed(1)}% ${Math.max(8, lit + d).toFixed(1)}%)`;
-
-	return {
-		background:
-			`linear-gradient(90deg,${at(7)} 0%,${at(3.5)} 15%,` +
-			`${at(0)} 43%,${at(-4.5)} 79%,${at(-8.5)} 100%)`,
-		foil: family.foil,
-	};
 }
 
 /**
@@ -242,7 +189,7 @@ function toShelfSpine(book: SpineInput): ShelfSpine {
 	const printed = stripParentheticals(book.main);
 	const author = spineAuthor(book.author);
 	const type = spineType(width, height, printed, author);
-	const cloth = spineCloth(book.id);
+	const cloth = bookCloth(book.id);
 
 	const byline = book.author ? ` — ${book.author}` : '';
 	const length = book.pages ? `${formatNumber(book.pages)} pages` : 'length unknown';
