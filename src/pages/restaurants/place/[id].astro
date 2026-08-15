@@ -35,8 +35,13 @@ import {
 } from '../../../lib/restaurant-view';
 import { verdictAt } from '../../../lib/verdict';
 import { starText } from '../../../lib/format';
+import { photoSrc, photoSrcSet, photoWidthsFor } from '../../../lib/photo-src';
 
 export const prerender = false;
+
+/** 58×44 in the stylesheet — one photograph standing in for a whole visit. */
+const VISIT_THUMB = 58;
+const VISIT_THUMB_WIDTHS = photoWidthsFor(VISIT_THUMB);
 
 const id = Number(Astro.params.id);
 if (!Number.isInteger(id) || id <= 0) return Astro.redirect('/restaurants/places');
@@ -287,7 +292,15 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 										{v.review && <p class="visit__review">{v.review}</p>}
 									</div>
 									{v.photos[0] && (
-										<img class="visit__thumb" src={v.photos[0].url} alt="" loading="lazy" decoding="async" />
+										<img
+											class="visit__thumb"
+											src={photoSrc(v.photos[0].url, VISIT_THUMB)}
+											srcset={photoSrcSet(v.photos[0].url, VISIT_THUMB_WIDTHS)}
+											sizes={`${VISIT_THUMB}px`}
+											alt=""
+											loading="lazy"
+											decoding="async"
+										/>
 									)}
 								</a>
 							))

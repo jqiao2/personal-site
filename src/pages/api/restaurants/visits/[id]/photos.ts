@@ -12,8 +12,10 @@ export const prerender = false;
  * 413 — the function is never entered, so a limit above that would be a number
  * this file states and cannot enforce, and the browser would get an
  * unexplained HTML error page instead of the message below. The composer
- * downscales before sending and posts one photograph per request, so a real
- * upload arrives at roughly a megabyte; this catches what skipped that path.
+ * downscales to a 1600 px long edge before sending and posts one photograph
+ * per request, so a real upload arrives at a few hundred kilobytes; this
+ * catches what skipped that path — an undecodable format the composer passed
+ * through untouched, or a client that is not the composer.
  */
 const MAX_BYTES = 4 * 1024 * 1024;
 
@@ -43,7 +45,7 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
 	const heights = form.getAll('height').map(String);
 
 	for (const file of files) {
-		if (file.size > MAX_BYTES) return apiError(`${file.name} is larger than 12 MB`, 413);
+		if (file.size > MAX_BYTES) return apiError(`${file.name} is larger than 4 MB`, 413);
 		if (!file.type.startsWith('image/')) return apiError(`${file.name} is not an image`, 415);
 	}
 

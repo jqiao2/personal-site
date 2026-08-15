@@ -27,6 +27,7 @@
 // Photos whose dimensions were never recorded fall back to 3:2, which is close
 // enough that one unmeasured photo in a row of measured ones doesn't stand out.
 import type { LaidOutPhoto } from '../lib/restaurant-view';
+import { photoSrc, photoSrcSet, photoWidthsFor } from '../lib/photo-src';
 
 interface Props {
 	photos: LaidOutPhoto[];
@@ -38,6 +39,22 @@ const { photos, height = 190 } = Astro.props;
 // A lone photograph fills the width at its own ratio: it is the commonest
 // non-zero case and stranding it in a thumbnail slot wastes it.
 const single = photos.length === 1;
+
+// HOW WIDE THESE ACTUALLY GET, which is what `sizes` has to tell the browser
+// and what decides which rungs are worth offering. Both numbers come from the
+// stylesheet below rather than being guessed:
+//
+//   * a lone photograph is capped by height — `min(64vh, 520px)` — so its
+//     width is that height times its ratio, about 780px for a landscape and
+//     less for anything squarer. 780 is the honest upper bound.
+//   * one of several is capped by width directly, at `--row-h * 2.4`.
+//
+// On a phone the wall stops being px-based: a lone photograph takes the column
+// and several share it four to a line.
+const cap = single ? 780 : Math.round(height * 2.4);
+const sizes = single ? `(max-width: 560px) 94vw, ${cap}px` : `(max-width: 560px) 45vw, ${cap}px`;
+const widths = photoWidthsFor(cap);
+const srcset = (url: string) => photoSrcSet(url, widths);
 // Captions on a phone: see the legend rule at the bottom of the stylesheet.
 const captions = photos.map((p) => p.caption).filter((c): c is string => !!c);
 ---
@@ -50,7 +67,9 @@ const captions = photos.map((p) => p.caption).filter((c): c is string => !!c);
 		photos.map((p) => (
 			<figure class="wall__cell" style={`--ratio:${p.ratio}`}>
 				<img
-					src={p.url}
+					src={photoSrc(p.url, cap)}
+					srcset={srcset(p.url)}
+					sizes={sizes}
 					alt={p.caption ?? ''}
 					width={p.width ?? undefined}
 					height={p.height ?? undefined}
