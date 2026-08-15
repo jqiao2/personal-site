@@ -676,11 +676,13 @@ export async function searchPlaces(query: string, limit = 6): Promise<Place[]> {
  * better guess than today when you are catching up on a week of them, and the
  * verdict and the heart are what you already decided about the place.
  *
- * The rating is deliberately absent. It is the question you answer about THIS
- * meal, and a pre-filled four stars is a number nobody typed.
+ * The rating carries too. Somewhere you go back to is usually as good as it
+ * was, so the last number is a better starting point than a blank row — and
+ * the composer shows what it carried, so disagreeing with it is one click.
  */
 export interface PreviousVisit {
 	visitedOn: string;
+	rating: number | null;
 	verdict: number | null;
 	hearted: boolean;
 }
@@ -698,7 +700,7 @@ export async function previousVisits(placeIds: number[]): Promise<Map<number, Pr
 	if (ids.length === 0) return new Map();
 	const { data, error } = await supabasePublic
 		.from('restaurant_diary')
-		.select('restaurant_id, visited_on, verdict, hearted')
+		.select('restaurant_id, visited_on, rating, verdict, hearted')
 		.in('restaurant_id', ids)
 		.order('visited_on', { ascending: false })
 		.order('id', { ascending: false });
@@ -709,12 +711,14 @@ export async function previousVisits(placeIds: number[]): Promise<Map<number, Pr
 	for (const row of (data ?? []) as {
 		restaurant_id: number;
 		visited_on: string;
+		rating: number | null;
 		verdict: number | null;
 		hearted: boolean;
 	}[]) {
 		if (latest.has(row.restaurant_id)) continue;
 		latest.set(row.restaurant_id, {
 			visitedOn: row.visited_on,
+			rating: row.rating,
 			verdict: row.verdict,
 			hearted: row.hearted,
 		});

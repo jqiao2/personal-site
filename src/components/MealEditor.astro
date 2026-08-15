@@ -372,6 +372,7 @@ const config = {
 	/** The last visit somewhere, as the composer inherits it. */
 	interface PreviousVisit {
 		visitedOn: string;
+		rating: number | null;
 		verdict: number | null;
 		hearted: boolean;
 	}
@@ -426,16 +427,17 @@ const config = {
 		const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel);
 		const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
 
-		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Five answers
+		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Six answers
 		// carry forward when a place with a history is picked: the date, the
-		// verdict, the heart, the price and whether it's worth the trip. Four of
-		// them barely move between visits — you don't stop loving a place between
-		// Tuesday and a fortnight later — and the fifth, the date, is a better
-		// guess than today when the reason you're logging a second visit is that
-		// you're catching up on several at once.
+		// rating, the verdict, the heart, the price and whether it's worth the
+		// trip. Five of them barely move between visits — you don't stop loving a
+		// place between Tuesday and a fortnight later, and somewhere you go back
+		// to is usually about as good as it was — and the sixth, the date, is a
+		// better guess than today when the reason you're logging a second visit
+		// is that you're catching up on several at once.
 		//
-		// The rating never carries. It is the one question that is about THIS
-		// meal, and a pre-filled number nobody typed is worse than a blank one.
+		// Every one of them is shown as the form's answer, not hidden in it, so
+		// disagreeing with a carried number is one click on the stars.
 		//
 		// An edit inherits nothing: it is showing a visit that happened, not
 		// proposing one, so cfg.initial wins wherever both could speak.
@@ -455,7 +457,7 @@ const config = {
 			placeId: cfg.place?.id ?? null,
 			placeName: '',
 			locked: cfg.place,
-			rating: cfg.initial?.rating ?? 0,
+			rating: cfg.initial?.rating ?? inherited?.rating ?? 0,
 			verdict: cfg.initial?.verdict ?? inherited?.verdict ?? 0,
 			verdictSet: cfg.initial?.verdict != null || inherited?.verdict != null,
 			hearted: cfg.initial?.hearted ?? inherited?.hearted ?? false,
@@ -481,6 +483,18 @@ const config = {
 			geo: null as GeoHit | null,
 			saving: false,
 		};
+
+		// The shared half-star picker (see StarPicker.astro). It owns its own
+		// hover; the state only mirrors what it commits, so the summary line and
+		// the dirty check keep reading one number. render() puts the committed
+		// value back, which is how a rating carried from the last visit — or
+		// dropped again when the place is unpicked — reaches the stars.
+		const starPicker = wireStarPicker($('[data-star-picker]')!, {
+			onChange: (v) => {
+				state.rating = v ?? 0;
+				render();
+			},
+		});
 
 		// -- opening / closing ------------------------------------------------
 		function open(pane: Pane) {
@@ -554,6 +568,8 @@ const config = {
 				$('[data-me-locked-name]')!.textContent = locked.name;
 				$('[data-me-locked-meta]')!.textContent = locked.meta;
 			}
+
+			starPicker.set(state.rating || null);
 
 			const v = cfg.verdicts[state.verdict] ?? cfg.verdicts[0];
 			const needle = $('[data-me-needle]')!;
@@ -694,6 +710,7 @@ const config = {
 		function carryFrom(from: { priceBand: string | null; trip: boolean; previous: PreviousVisit | null }) {
 			state.price = from.priceBand;
 			state.trip = from.trip;
+			state.rating = from.previous?.rating ?? 0;
 			state.verdict = from.previous?.verdict ?? 0;
 			state.verdictSet = from.previous?.verdict != null;
 			state.hearted = from.previous?.hearted ?? false;
@@ -1212,17 +1229,6 @@ const config = {
 			($('[data-me-place]') as HTMLInputElement).focus();
 			searchPlaces(value('[data-me-place]'));
 		});
-
-		// The shared half-star picker (see StarPicker.astro) owns its own display;
-		// the state only mirrors what it commits, so the summary line and the
-		// dirty check keep reading one number.
-		const starPicker = wireStarPicker($('[data-star-picker]')!, {
-			onChange: (v) => {
-				state.rating = v ?? 0;
-				render();
-			},
-		});
-		starPicker.set(cfg.initial?.rating ?? null);
 
 		$('[data-me-verdict]')!.addEventListener('input', (e) => {
 			state.verdict = Number((e.target as HTMLInputElement).value);
