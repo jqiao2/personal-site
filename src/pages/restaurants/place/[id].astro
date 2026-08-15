@@ -7,15 +7,16 @@
 // INTERESTING one is a place I've been to eleven times, where the page is
 // mostly history, and the job is to not become a wall.
 //
-// The answer is that the sections are earned rather than always drawn. One
-// visit gets the header, the visit and the sidecar — no verdict history (a
-// single point is not a history), no photo grouping (one date is not a
-// grouping). Eleven visits earns both, and the history goes FIRST, because
-// with eleven of them the movement is the story: the verdict belongs to a
-// visit and it moves, so a place that was "Try something else" in March and
-// "Definitely return" in June is the system working. Flattening that into one
-// badge would throw away the only thing eleven visits tells you that one
-// doesn't.
+// The answer is that nothing here scales with the number of visits. The
+// photographs are one row however many there are, the visits are a list, and
+// the sidecar is the same handful of rows at one visit and at forty. A page
+// that grows a section every meal is a page that gets worse the more I use it.
+//
+// THERE WAS A VERDICT PLOT HERE, drawing every recorded verdict against its date
+// on the grounds that with eleven visits the movement is the story. It went
+// because it wasn't being read: the sidecar says what the verdict is now, the
+// list says what it was each time, and a chart of eleven points was a third
+// answer to a question the page had already answered twice.
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../../components/MealEditor.astro';
 import PlaceEditor from '../../../components/PlaceEditor.astro';
@@ -32,7 +33,7 @@ import {
 	visitCountLabel,
 	visitMarks,
 } from '../../../lib/restaurant-view';
-import { verdictAt, VERDICTS } from '../../../lib/verdict';
+import { verdictAt } from '../../../lib/verdict';
 import { starText } from '../../../lib/format';
 
 export const prerender = false;
@@ -47,9 +48,6 @@ const { place, visits } = detail;
 const isOwner = await requireOwner(Astro.cookies);
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 
-// A history needs at least three points to be a shape rather than a pair.
-const withVerdicts = visits.filter((v) => v.verdict != null).slice().reverse();
-const showHistory = withVerdicts.length >= 3;
 const shots = photoStrip(visits);
 
 const latest = verdictAt(place.latest_verdict);
@@ -64,16 +62,6 @@ const links = [
 	{ label: 'Yelp', href: place.yelp_url },
 	{ label: 'Beli', href: place.beli_url },
 ];
-
-const span =
-	place.first_visit && place.last_visit
-		? `${monthYear(place.first_visit)} — ${monthYear(place.last_visit)}`
-		: '';
-
-function monthYear(iso: string): string {
-	const [y, m] = iso.slice(0, 7).split('-').map(Number);
-	return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-}
 
 // Counted off the strip rather than off `place.photo_count`, so the head can
 // never claim a photograph the row isn't showing.
@@ -245,47 +233,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 									+ Log the first visit
 								</button>
 							)}
-						</section>
-					)
-				}
-
-				{
-					showHistory && (
-						<section>
-							<div class="rl-sec-head rl-sec-head--thin">
-								<span class="rl-sec-head__title">Verdict history</span>
-								<span class="rl-sec-head__sub">{span}</span>
-							</div>
-							{/* The y axis is the ladder itself, top rung at the top, so the
-							    needles both sit at their rank and point at it. */}
-							<div class="rl-box hist">
-								<div class="hist__plot">
-									<div class="hist__axis">
-										<span>Definitely</span>
-										<span>Happy to go</span>
-										<span>Avoid</span>
-									</div>
-									<div class="hist__series">
-										<div class="hist__track">
-										{withVerdicts.map((v) => (
-											<a
-												class="hist__col"
-												href={`/restaurants/diary/${v.id}`}
-												title={`${shortDate(v.visited_on)} — ${verdictAt(v.verdict)?.label}`}
-											>
-												<span
-													class="hist__dot"
-													style={`top:${((v.verdict as number) / (VERDICTS.length - 1)) * 100}%`}
-												>
-													<VerdictMark verdict={v.verdict} size={20} />
-												</span>
-												<span class="hist__tick">{shortDate(v.visited_on)}</span>
-											</a>
-										))}
-										</div>
-									</div>
-								</div>
-							</div>
 						</section>
 					)
 				}
@@ -844,91 +791,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	}
 	.totry__tag--static {
 		cursor: default;
-	}
-
-	.hist {
-		margin-top: 14px;
-		padding: 18px 20px 14px;
-		/* The needle's own box and the strip of dates below the plot. The axis
-		   and the series are both laid out against these, so a rung's label and
-		   its needles stay on the same line. */
-		--hist-mark: 20px;
-		--hist-ticks: 16px;
-	}
-	.hist__plot {
-		display: flex;
-		align-items: stretch;
-		height: 150px;
-	}
-	.hist__axis {
-		width: 92px;
-		flex: none;
-		display: flex;
-		flex-direction: column;
-		justify-content: space-between;
-		font-size: 10.5px;
-		line-height: 1;
-		color: var(--ink-3);
-		/* Half a line inside the series' padding, so each label is centred on
-		   its rung rather than hanging off the end of the ladder. */
-		padding-top: calc(var(--hist-mark) / 2 - 0.5em);
-		padding-bottom: calc(var(--hist-ticks) + var(--hist-mark) / 2 - 0.5em);
-	}
-	.hist__series {
-		flex: 1;
-		min-width: 0;
-		overflow-x: auto;
-		/* overflow-x: auto makes the vertical axis a scrollport too, so a needle
-		   sitting on the top or bottom rung — which overhangs its rung by half
-		   its own height — was being cut in half. The padding is that overhang,
-		   kept inside the box, plus the room the dates need underneath. */
-		padding-top: calc(var(--hist-mark) / 2);
-		padding-bottom: calc(var(--hist-ticks) + var(--hist-mark) / 2);
-		/* A phone fits about six visits beside the axis, so at twelve this plot
-		   scrolls — and it was opening on the oldest six, which is the half that
-		   has already been read. `rtl` puts the scrollport's start edge on the
-		   right, so it opens on the latest verdicts instead. The track inside is
-		   `ltr`, so the axis itself still runs forwards. Same trick, same
-		   reason, as the photograph strip. */
-		direction: rtl;
-	}
-	.hist__track {
-		direction: ltr;
-		display: flex;
-		/* As wide as the visits make it — without this the track stops at the
-		   width of the port and the columns hang out of it unscrollably, which
-		   is a plot with its later half simply missing. And no narrower than the
-		   port, so a place with three verdicts spreads them across the box
-		   rather than crowding them into its left-hand end. */
-		width: max-content;
-		min-width: 100%;
-	}
-	.hist__col {
-		flex: 1 0 44px;
-		position: relative;
-		border-left: 1px solid var(--rule-4);
-	}
-	.hist__dot {
-		position: absolute;
-		left: 0;
-		right: 0;
-		display: flex;
-		justify-content: center;
-		/* The needle's own height, so rank 5 lands on the axis line rather
-		   than hanging below it. */
-		margin-top: -10px;
-	}
-	.hist__tick {
-		position: absolute;
-		/* In the series' bottom padding, clear of the lowest needle's overhang. */
-		bottom: calc(-1 * (var(--hist-ticks) + var(--hist-mark) / 2));
-		left: 0;
-		right: 0;
-		text-align: center;
-		font-family: var(--mono);
-		font-size: 9.5px;
-		line-height: var(--hist-ticks);
-		color: var(--ink-4);
 	}
 
 	.visit {
