@@ -30,8 +30,22 @@ import { localDay } from '../lib/day';
 interface Props {
 	/** Where to return after saving. */
 	redirect: string;
-	/** Pre-selected place, when the composer is opened from a place page. */
-	place?: { id: number; name: string; meta: string; visits: number; trip?: boolean } | null;
+	/**
+	 * Pre-selected place, when the composer is opened from a place page.
+	 *
+	 * `priceBand` and `previous` are what a second meal here inherits: what the
+	 * place costs and whether it's worth the trip are facts about the place, and
+	 * the date, verdict and heart are what the last visit said. See carryFrom.
+	 */
+	place?: {
+		id: number;
+		name: string;
+		meta: string;
+		visits: number;
+		trip?: boolean;
+		priceBand?: string | null;
+		previous?: { visitedOn: string; verdict: number | null; hearted: boolean } | null;
+	} | null;
 	/** Editing an existing visit rather than logging a new one. */
 	visitId?: number | null;
 	initial?: {
@@ -363,12 +377,20 @@ const config = {
 		gloss: string;
 		ink: string;
 	}
+	/** The last visit somewhere, as the composer inherits it. */
+	interface PreviousVisit {
+		visitedOn: string;
+		verdict: number | null;
+		hearted: boolean;
+	}
 	interface PlaceSpec {
 		id: number;
 		name: string;
 		meta: string;
 		visits: number;
 		trip?: boolean;
+		priceBand?: string | null;
+		previous?: PreviousVisit | null;
 	}
 	/** A place already in the log, as the autocomplete route returns it. */
 	interface LoggedPlace {
@@ -378,6 +400,9 @@ const config = {
 		visit_count: number;
 		neighborhood: string | null;
 		city: string;
+		price_band: string | null;
+		trip: boolean;
+		previous: PreviousVisit | null;
 	}
 	interface Config {
 		redirect: string;
@@ -409,6 +434,21 @@ const config = {
 		const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel);
 		const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
 
+		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Five answers
+		// carry forward when a place with a history is picked: the date, the
+		// verdict, the heart, the price and whether it's worth the trip. Four of
+		// them barely move between visits — you don't stop loving a place between
+		// Tuesday and a fortnight later — and the fifth, the date, is a better
+		// guess than today when the reason you're logging a second visit is that
+		// you're catching up on several at once.
+		//
+		// The rating never carries. It is the one question that is about THIS
+		// meal, and a pre-filled number nobody typed is worse than a blank one.
+		//
+		// An edit inherits nothing: it is showing a visit that happened, not
+		// proposing one, so cfg.initial wins wherever both could speak.
+		const inherited = cfg.initial ? null : (cfg.place?.previous ?? null);
+
 		type Pane = 'log' | 'try';
 		// One list holds both kinds, because the arrangement is one arrangement:
 		// a photograph added today can belong between two taken last month, and
@@ -425,11 +465,14 @@ const config = {
 			locked: cfg.place,
 			rating: cfg.initial?.rating ?? 0,
 			half: (cfg.initial?.rating ?? 0) % 1 !== 0,
-			verdict: cfg.initial?.verdict ?? 0,
-			verdictSet: cfg.initial?.verdict != null,
-			hearted: cfg.initial?.hearted ?? false,
+			verdict: cfg.initial?.verdict ?? inherited?.verdict ?? 0,
+			verdictSet: cfg.initial?.verdict != null || inherited?.verdict != null,
+			hearted: cfg.initial?.hearted ?? inherited?.hearted ?? false,
 			revisit: cfg.initial?.revisit ?? (cfg.place ? cfg.place.visits > 0 : false),
-			price: null as string | null,
+			price: (cfg.place?.priceBand ?? null) as string | null,
+			// Whether those answers were carried over rather than given. Changing
+			// the place clears carried answers and leaves typed ones alone.
+			borrowed: Boolean(!cfg.initial && cfg.place && (inherited || cfg.place.priceBand || cfg.place.trip)),
 			tags: [...(cfg.initial?.tags ?? [])],
 			photos: (cfg.photos ?? []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
 			// Taking a stored photograph out of the list is a decision, not yet a
@@ -657,6 +700,38 @@ const config = {
 			save.disabled = state.saving || !canSave();
 		}
 
+		// -- what a second visit starts from ----------------------------------
+		/** The date field, which is the browser's to hold rather than state's. */
+		function dateField(): HTMLInputElement {
+			return $('[data-me-date]') as HTMLInputElement;
+		}
+
+		/**
+		 * Carry the last visit's answers onto a place just picked, alongside the
+		 * two the place itself answers. Called on every pick, so picking a second
+		 * place replaces the first one's answers rather than leaving them.
+		 */
+		function carryFrom(from: { priceBand: string | null; trip: boolean; previous: PreviousVisit | null }) {
+			state.price = from.priceBand;
+			state.trip = from.trip;
+			state.verdict = from.previous?.verdict ?? 0;
+			state.verdictSet = from.previous?.verdict != null;
+			state.hearted = from.previous?.hearted ?? false;
+			dateField().value = from.previous?.visitedOn ?? cfg.fallbackDate;
+			state.borrowed = Boolean(from.previous || from.priceBand || from.trip);
+		}
+
+		/**
+		 * Unpicking a place takes back what it lent. A form nobody borrowed from
+		 * is left exactly as it was typed — the guard is the whole point of the
+		 * flag: naming a new place must not wipe a verdict you sat and decided.
+		 */
+		function dropCarried() {
+			if (!state.borrowed) return;
+			// Blank on every side, which leaves borrowed false in its turn.
+			carryFrom({ priceBand: null, trip: false, previous: null });
+		}
+
 		function canSave(): boolean {
 			if (state.pane === 'try') return Boolean(value('[data-me-try-name]'));
 			return Boolean(state.placeId || value('[data-me-place]'));
@@ -771,6 +846,9 @@ const config = {
 				state.placeId = p.id;
 				state.locked = { id: p.id, name: p.name, meta, visits: p.visit_count };
 				state.revisit = p.visit_count > 0;
+				// Somewhere with a history hands over the answers it already has;
+				// somewhere only marked to try has none, and hands over a blank.
+				carryFrom({ priceBand: p.price_band, trip: Boolean(p.trip), previous: p.previous });
 				// A place on record has whatever location it has, and a visit must
 				// never rewrite it — so a candidate picked before changing your
 				// mind does not follow you here.
@@ -837,6 +915,9 @@ const config = {
 			state.placeId = null;
 			state.placeName = name;
 			state.geo = hit;
+			// A place the log has never seen has nothing to lend, so anything
+			// carried here from a place picked and reconsidered goes back.
+			dropCarried();
 			// The meta stays "new place" even when a hit came with it, because
 			// the receipt below states the location and is the thing that can be
 			// cleared — a line up here claiming a neighbourhood would go on
@@ -1143,8 +1224,10 @@ const config = {
 		$('[data-me-unlock]')!.addEventListener('click', () => {
 			state.locked = null;
 			state.placeId = null;
-			// The point belonged to the place being unpicked, so it goes with it.
+			// The point belonged to the place being unpicked, so it goes with it,
+			// and so do the answers that came off its last visit.
 			state.geo = null;
+			dropCarried();
 			render();
 			($('[data-me-place]') as HTMLInputElement).focus();
 			searchPlaces(value('[data-me-place]'));
@@ -1334,9 +1417,10 @@ const config = {
 			return { kind: 'new', file: shrunk, url: URL.createObjectURL(shrunk), width: w, height: h };
 		}
 
-		// Seed from the server: an edit opens on the stored visit, and a fresh
-		// log opens on today.
-		($('[data-me-date]') as HTMLInputElement).value = cfg.initial?.visitedOn ?? cfg.fallbackDate;
+		// Seed from the server: an edit opens on the stored visit, another meal
+		// somewhere on the date of the last one there, and everything else on
+		// today.
+		dateField().value = cfg.initial?.visitedOn ?? inherited?.visitedOn ?? cfg.fallbackDate;
 		if (cfg.initial) {
 			($('[data-me-notes]') as HTMLTextAreaElement).value = cfg.initial.review;
 			($('[data-me-friends]') as HTMLInputElement).value = cfg.initial.friends.join(', ');
