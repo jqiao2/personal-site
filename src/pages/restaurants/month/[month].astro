@@ -192,7 +192,7 @@ const summary = visits.length
 											{c.covers.map((cover, i) => (
 												<span
 													class:list={['plate', `plate--${cover.kind}`, i > 0 && 'plate--under']}
-													style={`--i:${i}`}
+													style={`--i:${i}${cover.kind === 'map' ? `; --tile:${cover.map.size}px` : ''}`}
 												>
 													{cover.kind === 'photo' ? (
 														<img src={cover.url} alt="" crossorigin="anonymous" data-cover />
@@ -499,7 +499,11 @@ const summary = visits.length
 		/* Best-ranked meal on top; the rest fall back a layer each. */
 		z-index: calc(10 - var(--i));
 	}
-	.plate img {
+	/* Scoped to the photograph: a map's tiles are drawn at their own size, and a
+	   rule that stretched them to the cell would undo the arithmetic that placed
+	   them — which is exactly what it did, leaving gaps wherever a place fell
+	   near the middle of its tile. */
+	.plate--photo img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
@@ -514,7 +518,10 @@ const summary = visits.length
 	   is put them where it says. */
 	.plate__tile {
 		position: absolute;
+		width: var(--tile);
+		height: var(--tile);
 		max-width: none;
+		display: block;
 	}
 	/* The stock style is a cool grey-blue; this is what puts it on the same
 	   paper as the rest of the card. Sepia does the warming, the rest keeps it
