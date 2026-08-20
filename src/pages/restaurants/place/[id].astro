@@ -328,7 +328,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 								</div>
 							</div>
 						</div>
-						{latest && <p class="sidecar__gloss">{latest.gloss}</p>}
 					</div>
 
 					<div class="sidecar__row">
@@ -881,14 +880,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	.sidecar__verdict-when {
 		margin-top: 2px;
 		font-size: 11px;
-		color: var(--ink-3);
-	}
-	.sidecar__gloss {
-		margin: 10px 0 0;
-		font-family: var(--prose);
-		font-style: italic;
-		font-size: 13.5px;
-		line-height: 1.45;
 		color: var(--ink-3);
 	}
 	.sidecar__row {

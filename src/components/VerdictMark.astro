@@ -13,7 +13,7 @@
 // The reference is the marginal symbol a menu puts beside the house specials —
 // drawn, printed, part of the type. Not an emoji, which the brief rules out and
 // which would render as somebody else's artwork anyway.
-import { verdictAt, verdictRotation, verdictTooltip } from '../lib/verdict';
+import { verdictAt, verdictRotation } from '../lib/verdict';
 
 interface Props {
 	verdict: number | null;
@@ -21,13 +21,13 @@ interface Props {
 	/** Draw the surrounding ring. Off inside the month card's calendar cells,
 	    where the cell border already does that job. */
 	ring?: boolean;
-	/** Hover text. Defaults to "Label — the gloss"; pass a string to prefix it. */
+	/** Hover text. Defaults to the verdict's label. */
 	title?: string | null;
 }
 
 const { verdict, size = 22, ring = true, title = null } = Astro.props;
 const v = verdictAt(verdict);
-const label = title ?? verdictTooltip(verdict);
+const label = title ?? v?.label ?? 'No verdict recorded';
 ---
 
 <svg
