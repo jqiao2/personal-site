@@ -312,7 +312,6 @@ export interface PlaceQuery {
 	prices?: PriceBand[];
 	/** "This rung or better", as a rank. 5 (Avoid) means no threshold at all. */
 	verdictAtLeast?: number | null;
-	city?: string | null;
 	/** Worth the trip, or only if I'm nearby. Absent means both. */
 	trip?: TripFilter | null;
 	/** Any of these why-tags. Absent means all. */
@@ -348,10 +347,6 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 	if (query.verdictAtLeast != null && query.verdictAtLeast < 5) {
 		const max = query.verdictAtLeast;
 		rows = rows.filter((r) => r.latest_verdict != null && r.latest_verdict <= max);
-	}
-	if (query.city) {
-		const want = query.city.toLowerCase();
-		rows = rows.filter((r) => r.city.toLowerCase() === want);
 	}
 	if (query.trip) rows = rows.filter((r) => (query.trip === 'trip' ? r.trip : !r.trip));
 	if (query.onMap) {
@@ -462,49 +457,6 @@ export async function listCuisineFacets(scope: PlaceScope = 'visited'): Promise<
  */
 export function cuisineTerms(cuisines: string[]): string[] {
 	return cuisines.flatMap((c) => c.split(',').map((part) => part.trim()).filter(Boolean));
-}
-
-export interface CityFacet {
-	name: string;
-	count: number;
-	lat: number | null;
-	lng: number | null;
-}
-
-/**
- * Cities with their counts and a centre, biggest first.
- *
- * This is what answers the map's viewport problem: eighty per cent of the pins
- * are one dense New York cluster and the rest are scattered across four other
- * cities, so fitting the bounds gives a world map with five specks. The map
- * opens on the biggest city and lists the others beside it.
- */
-export async function listCityFacets(scope: PlaceScope = 'visited'): Promise<CityFacet[]> {
-	const { data, error } = await inScope(
-		supabasePublic.from('restaurant_places').select('city,lat,lng,visit_count'),
-		scope,
-	);
-	if (error) throw new Error(error.message);
-	const rows = (data ?? []) as { city: string; lat: number | null; lng: number | null }[];
-	const cities = new Map<string, { count: number; lat: number; lng: number; placed: number }>();
-	for (const r of rows) {
-		const entry = cities.get(r.city) ?? { count: 0, lat: 0, lng: 0, placed: 0 };
-		entry.count += 1;
-		if (r.lat != null && r.lng != null) {
-			entry.lat += r.lat;
-			entry.lng += r.lng;
-			entry.placed += 1;
-		}
-		cities.set(r.city, entry);
-	}
-	return [...cities.entries()]
-		.map(([name, e]) => ({
-			name,
-			count: e.count,
-			lat: e.placed ? e.lat / e.placed : null,
-			lng: e.placed ? e.lng / e.placed : null,
-		}))
-		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
 }
 
 // ---------------------------------------------------------------------------

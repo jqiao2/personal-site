@@ -28,7 +28,6 @@ import {
 	isPlaceSort,
 	isPriceBand,
 	isTripFilter,
-	listCityFacets,
 	listCuisineFacets,
 	listFriends,
 	listPlaces,
@@ -57,14 +56,12 @@ const rawVerdict = params.get('verdict');
 const verdictAtLeast = rawVerdict != null && /^[0-5]$/.test(rawVerdict) ? Number(rawVerdict) : null;
 const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'recent';
 const isMap = params.get('view') === 'map';
-const city = params.get('city');
 const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
 
-const [all, filtered, cuisineFacets, cityFacets, isOwner] = await Promise.all([
+const [all, filtered, cuisineFacets, isOwner] = await Promise.all([
 	listPlaces(),
-	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, city, trip, sort }),
+	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, trip, sort }),
 	listCuisineFacets(),
-	listCityFacets(),
 	requireOwner(Astro.cookies),
 ]);
 
@@ -127,7 +124,6 @@ const activeFilters = [
 	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
 	...(verdictAtLeast != null ? [{ label: thresholdLabel(verdictAtLeast), href: href({ verdict: null }) }] : []),
 	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
-	...(city ? [{ label: city, href: href({ city: null }) }] : []),
 ];
 
 const countLine = `${filtered.length} of ${all.length}`;
@@ -274,13 +270,7 @@ const sorts: { key: PlaceSort; label: string }[] = [
 
 		{
 			isMap ? (
-				<RestaurantMap
-					points={mapPoints}
-					cities={cityFacets.map((c) => ({ name: c.name, count: c.count }))}
-					activeCity={city}
-					cityHref={(c) => href({ city: c, view: 'map' })}
-					caption={countLine}
-				/>
+				<RestaurantMap points={mapPoints} caption={countLine} />
 			) : filtered.length === 0 ? (
 				<p class="rl-empty empty">
 					Nothing matches that combination. <a href="/restaurants/places">Clear the filters</a> to

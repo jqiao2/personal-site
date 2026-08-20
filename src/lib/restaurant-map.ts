@@ -29,9 +29,14 @@
 // the bounds of everything. Four fifths of these pins are one dense New York
 // cluster and the rest are scattered across Mexico City, Austin, LA and Tokyo,
 // so fit-to-bounds is a world map with five specks on it — and defaulting to
-// New York would silently hide a fifth of the collection instead. The city
-// panel beside the map carries the rest, ordered by how much each holds, so
-// what is off the edge is legible before you click anything.
+// New York would silently hide a fifth of the collection instead.
+//
+// THAT FRAME IS NOT A FILTER. A city panel beside the map used to narrow the
+// pins to one city at a time, which made the map show less than the list it
+// was a view of. Every placed point goes on now and the camera decides what
+// is legible: the opening frame is the densest city, the caption names it, and
+// Tokyo is a drag away rather than a click on a list. `city` survives on the
+// point because the framing still counts by it.
 
 export interface MapPoint {
 	id: number;

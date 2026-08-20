@@ -20,35 +20,53 @@
 // away from the one beneath, and a zoom separates them. Collapsing them into a
 // disc traded the content for a number the caption already gives.
 //
+// EVERY PIN IS ON THE MAP, wherever it is. There used to be a city rail down
+// the right-hand side that filtered the map to one city at a time, inherited
+// from the paper mock where the map was a fixed drawing you could not move.
+// This one pans, so the rail was asking the reader to pick from a list what
+// they could already do by dragging, and it made "what is on the map" mean
+// something different from "what is in the collection". Now the map holds the
+// lot and the camera decides what you can see.
+//
 // WHAT HAPPENS ON FIRST LOAD. Not fit-to-bounds over everything — four fifths
 // of the pins are one dense New York cluster and the rest are in Mexico City,
 // Austin, LA and Tokyo, so that gives a world map with five specks. Not a
 // hardcoded New York either, which silently hides a fifth of the collection.
-// The map fits the bounds of whichever city holds the most of it, and the panel
-// beside it names every other city with its count — both the affordance that
-// says the rest of the world is there and the control that goes to it.
+// The map opens on the bounds of whichever city holds the most of what it was
+// handed, which is a starting frame rather than a filter: everything else is
+// still out there, a drag away, and the caption names the city you are in so
+// the frame is never mistaken for the whole.
 //
-// MOBILE. A map wants full height on a phone, which leaves nowhere for the city
-// list. Below 760px the list becomes a horizontal strip of chips above the map.
-// Pinch zooms; it does not rotate — see the handler setup in the script.
+// NAMES APPEAR AS YOU ZOOM IN. Far out, a name beside every one of a hundred
+// overlapping pins is a smear, so there are none and the pin is the whole mark.
+// From LABEL_ZOOM in, MapLibre draws the names as a symbol layer and drops any
+// that would collide, so they thin themselves out exactly as fast as the pins
+// crowd. Which name survives a collision is ours to say — see LABEL_SORT.
+//
+// MOBILE. Pinch zooms; it does not rotate — see the handler setup in the script.
 import { verdictAt } from '../lib/verdict';
 import { MAP_TOKENS } from '../lib/map-style';
 import type { MapPoint } from '../lib/restaurant-map';
 
 interface Props {
 	points: MapPoint[];
-	cities: { name: string; count: number }[];
-	/** The city currently framed. Null means "the one with the most pins". */
-	activeCity: string | null;
-	/** Builds the href for a city chip; the page owns the rest of the query. */
-	cityHref: (city: string | null) => string;
 	caption?: string;
 }
 
-const { points, cities, activeCity, cityHref, caption } = Astro.props;
+const { points, caption } = Astro.props;
 
-const framedCity = activeCity ?? cities[0]?.name ?? null;
 const placed = points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+
+/**
+ * The city holding the most placed pins — the opening frame, not a filter.
+ *
+ * Counted from the points themselves rather than from a separate facet query,
+ * so it follows the filters: narrow to Vietnamese and the map opens where the
+ * Vietnamese places are, instead of on a city the filter emptied.
+ */
+const framedCity =
+	[...placed.reduce((m, p) => m.set(p.city, (m.get(p.city) ?? 0) + 1), new Map<string, number>())]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'en'))[0]?.[0] ?? null;
 
 const config = {
 	key: import.meta.env.PUBLIC_MAPTILER_KEY ?? '',
@@ -78,25 +96,6 @@ const hasKey = Boolean(config.key);
 ---
 
 <div class="map">
-	<div class="map__cities">
-		<div class="map__cities-head rl-label">Elsewhere</div>
-		<div class="map__cities-list">
-			{
-				cities.map((c) => (
-					<a
-						class:list={['cityrow', c.name === framedCity && 'cityrow--on']}
-						href={cityHref(c.name)}
-						aria-current={c.name === framedCity ? 'true' : undefined}
-					>
-						<span class="cityrow__name">{c.name}</span>
-						<span class="rl-gap" />
-						<span class="cityrow__n">{c.count}</span>
-					</a>
-				))
-			}
-		</div>
-	</div>
-
 	<div class="map__canvas">
 		<div class="map__gl" data-map></div>
 
@@ -175,6 +174,23 @@ const hasKey = Boolean(config.key);
 		verdictLabel: string;
 	}
 
+	/** Zoom at which names start to appear beside the pins. */
+	const LABEL_ZOOM = 13;
+
+	/**
+	 * Which name wins when two labels collide. MapLibre places symbols in
+	 * ascending sort-key order and drops whatever no longer fits, so the lowest
+	 * key is the highest priority: worth-the-trip first, and within each band
+	 * the place you have been to most. Without a key it would be tile-load
+	 * order, which is to say arbitrary — and the whole point of a name at this
+	 * zoom is that the ones you would cross town for are the ones that survive.
+	 */
+	const LABEL_SORT: maplibregl.ExpressionSpecification = [
+		'-',
+		['case', ['get', 'trip'], 0, 1000],
+		['to-number', ['get', 'visits']],
+	];
+
 	const tag = document.getElementById('restaurant-map-config');
 	const host = document.querySelector<HTMLElement>('[data-map]');
 	if (tag && host) {
@@ -217,7 +233,7 @@ const hasKey = Boolean(config.key);
 		map.touchZoomRotate.disableRotation();
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
-		/** Frame the chosen city, or everything if it has no pins. */
+		/** Open on the densest city; everything else is a drag away. */
 		function frame() {
 			const inCity = cfg.framedCity
 				? cfg.points.filter((p) => p.city === cfg.framedCity)
@@ -322,7 +338,81 @@ const hasKey = Boolean(config.key);
 					.setLngLat([p.lng, p.lat])
 					.addTo(map);
 			}
+
+			addLabels();
 		});
+
+		/**
+		 * The names, as a symbol layer rather than as DOM beside each marker.
+		 *
+		 * This is the one job MapLibre does that hand-placed labels cannot: it
+		 * knows every label's box, drops the ones that overlap, and redoes it on
+		 * every frame of a zoom. Writing that against DOM markers means
+		 * measuring a hundred boxes per frame to arrive at a worse answer.
+		 *
+		 * Needs a key: glyphs come from the tile server, so on the bare-ground
+		 * fallback there is no font to set the names in. The pins and their
+		 * hover labels are unaffected, which is the graceful half of degrading.
+		 */
+		function addLabels() {
+			if (!cfg.key || cfg.points.length === 0) return;
+			if (map.getSource('place-labels')) return;
+
+			map.addSource('place-labels', {
+				type: 'geojson',
+				data: {
+					type: 'FeatureCollection',
+					features: cfg.points.map((p) => ({
+						type: 'Feature' as const,
+						geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+						properties: { name: p.name, trip: p.trip, visits: p.visits },
+					})),
+				},
+			});
+
+			map.addLayer({
+				id: 'place-labels',
+				type: 'symbol',
+				source: 'place-labels',
+				minzoom: LABEL_ZOOM,
+				layout: {
+					'text-field': ['get', 'name'],
+					'text-font': ['Noto Sans Regular'],
+					'text-size': 11.5,
+					// Under the pin's point, not over its head: the marker is 34px
+					// tall and anchored at the tip, so anything above the anchor
+					// lands on the pin itself.
+					'text-anchor': 'top',
+					'text-offset': [0, 0.5],
+					'text-padding': 4,
+					'text-max-width': 9,
+					'symbol-sort-key': LABEL_SORT,
+					// Let the basemap's own street and place names give way to
+					// these; a restaurant is what this map is for.
+					'text-allow-overlap': false,
+					'text-ignore-placement': false,
+				},
+				paint: {
+					// The pin's own ink, a shade darker than the basemap's labels,
+					// so a place name reads as the foreground and a street name as
+					// the ground it sits on.
+					'text-color': cfg.tokens.pinRing,
+					// The cream ground shows through the streets, so the name needs
+					// its own backing to stay readable over a road or a park edge.
+					'text-halo-color': cfg.tokens.labelHalo,
+					'text-halo-width': 1.6,
+				},
+			});
+
+			// Below LABEL_ZOOM the hover label is the only way to read a name; from
+			// LABEL_ZOOM up the layer says it already, and showing both would print
+			// the same name twice, half a pixel apart.
+			const syncHover = () => {
+				map.getContainer().classList.toggle('map__gl--named', map.getZoom() >= LABEL_ZOOM);
+			};
+			syncHover();
+			map.on('zoom', syncHover);
+		}
 	}
 </script>
 
@@ -375,6 +465,10 @@ const hasKey = Boolean(config.key);
 	}
 	.gl-pin:hover .gl-pin__name {
 		opacity: 1;
+	}
+	/* Zoomed in far enough for the symbol layer to be drawing the names. */
+	.map__gl--named .gl-pin:hover .gl-pin__name {
+		opacity: 0;
 	}
 
 	/* The popup is the tile's anatomy at popup size: name, heart, gap, price. */
@@ -448,12 +542,9 @@ const hasKey = Boolean(config.key);
 <style>
 	.map {
 		margin-top: 16px;
-		display: flex;
-		flex-wrap: wrap-reverse;
 		border: 1px solid var(--rule);
 	}
 	.map__canvas {
-		flex: 999 1 380px;
 		position: relative;
 		background: #f2e7d2;
 		height: min(70vh, 560px);
@@ -543,80 +634,7 @@ const hasKey = Boolean(config.key);
 		color: var(--ink-4);
 	}
 
-	.map__cities {
-		flex: 1 1 190px;
-		min-width: 0;
-		background: var(--panel);
-		border-left: 1px solid var(--rule);
-		order: 2;
-	}
-	.map__cities-head {
-		padding: 14px 14px 10px;
-		border-bottom: 1px solid var(--rule);
-	}
-	.cityrow {
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		padding: 11px 14px;
-		border-bottom: 1px solid var(--rule-2);
-		color: var(--ink-2);
-	}
-	.cityrow:hover {
-		background: #e6d5b4;
-		color: var(--ink);
-	}
-	.cityrow--on {
-		color: var(--ink);
-		font-weight: 700;
-	}
-	.cityrow__name {
-		font-size: 13px;
-	}
-	.cityrow__n {
-		font-family: var(--mono);
-		font-size: 11.5px;
-		color: var(--ink-3);
-	}
-
 	@media (max-width: 760px) {
-		.map {
-			flex-direction: column;
-		}
-		.map__cities {
-			/* In the row layout `flex: 1 1 190px` is a width. Here the container
-			   is a column, so that same basis becomes a 190px HEIGHT that also
-			   grows — an empty band above the map. The strip should be exactly
-			   as tall as its chips. */
-			flex: 0 0 auto;
-			border-left: none;
-			border-bottom: 1px solid var(--rule);
-			order: 0;
-		}
-		.map__cities-head {
-			display: none;
-		}
-		.map__cities-list {
-			display: flex;
-			gap: 8px;
-			overflow-x: auto;
-			padding: 10px 12px;
-		}
-		.cityrow {
-			border: 1px solid var(--rule);
-			background: var(--card);
-			padding: 6px 11px;
-			white-space: nowrap;
-			flex: none;
-		}
-		.cityrow--on {
-			background: var(--ink);
-			color: var(--ground);
-			border-color: var(--ink);
-		}
-		.cityrow .rl-gap {
-			display: none;
-		}
 		.map__canvas {
 			height: min(76vh, 620px);
 		}
