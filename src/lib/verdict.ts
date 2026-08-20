@@ -28,7 +28,8 @@ export interface Verdict {
 	/** Stable identifier for URLs and filter params. */
 	slug: string;
 	label: string;
-	/** The one-line meaning, shown on hover and beside the composer's slider. */
+	/** The one-line meaning. Composer only — nowhere else on the site explains
+	    a verdict; the label carries it everywhere it is read. */
 	gloss: string;
 	/** Ink for the mark. Three bands: going back, hesitating, not going back. */
 	ink: string;
@@ -97,12 +98,6 @@ export function verdictBySlug(slug: string | null | undefined): Verdict | null {
 /** The SVG transform that points the needle at `rank`. */
 export function verdictRotation(rank: number): string {
 	return `rotate(${rank * VERDICT_STEP_DEGREES} 12 12)`;
-}
-
-/** "Definitely return — I'd come back and order the same thing again", for a title attribute. */
-export function verdictTooltip(rank: number | null | undefined): string {
-	const v = verdictAt(rank);
-	return v ? `${v.label} — ${v.gloss}` : 'No verdict recorded';
 }
 
 /**
