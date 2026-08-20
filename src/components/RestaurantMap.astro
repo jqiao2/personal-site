@@ -13,8 +13,8 @@
 // rungs and three colour bands used to live here and asked far more of the
 // mark than that, and asked it of pins that often had no verdict at all: the
 // whole to-try map is places nobody has been to. Everything else about a place
-// — verdict, stars, heart, visit count — is one click away in the popup, at a
-// size where it can actually be read.
+// — verdict, stars, heart, visit count — is one click away: the pin is a link
+// to the place's own page, where all of it is at a readable size.
 //
 // NOTHING IS CLUSTERED. Pins that overlap overlap; the one on top is a hover
 // away from the one beneath, and a zoom separates them. Collapsing them into a
@@ -44,7 +44,6 @@
 // crowd. Which name survives a collision is ours to say — see LABEL_SORT.
 //
 // MOBILE. Pinch zooms; it does not rotate — see the handler setup in the script.
-import { verdictAt } from '../lib/verdict';
 import { MAP_TOKENS } from '../lib/map-style';
 import type { MapPoint } from '../lib/restaurant-map';
 
@@ -71,22 +70,16 @@ const framedCity =
 const config = {
 	key: import.meta.env.PUBLIC_MAPTILER_KEY ?? '',
 	framedCity,
+	// Only what the map itself draws with: the pin, its link, its label and
+	// the sort that decides which labels survive a collision.
 	points: placed.map((p) => ({
 		id: p.id,
 		name: p.name,
 		lat: p.lat,
 		lng: p.lng,
-		verdict: p.verdict,
-		visited: p.visited,
 		trip: p.trip,
-		price: p.price,
-		cuisine: p.cuisine,
 		city: p.city,
-		where: p.where,
-		rating: p.rating,
 		visits: p.visits,
-		hearted: p.hearted,
-		verdictLabel: verdictAt(p.verdict)?.label ?? 'No verdict yet',
 	})),
 	tokens: MAP_TOKENS,
 };
@@ -161,17 +154,9 @@ const hasKey = Boolean(config.key);
 		name: string;
 		lat: number;
 		lng: number;
-		verdict: number | null;
-		visited: boolean;
 		trip: boolean;
-		price: string | null;
-		cuisine: string;
 		city: string;
-		where: string;
-		rating: number | null;
 		visits: number;
-		hearted: boolean;
-		verdictLabel: string;
 	}
 
 	/** Zoom at which names start to appear beside the pins. */
@@ -268,25 +253,6 @@ const hasKey = Boolean(config.key);
 			return d.innerHTML;
 		}
 
-		function popupHtml(p: Pin): string {
-			const stars = p.rating ? '★'.repeat(Math.floor(p.rating)) + (p.rating % 1 >= 0.5 ? '½' : '') : '';
-			const visits = p.visits === 1 ? '1 visit' : `${p.visits} visits`;
-			return `<div class="gl-pop">
-				<div class="gl-pop__top">
-					<span class="gl-pop__name">${escape(p.name)}</span>
-					${p.hearted ? '<span class="gl-pop__heart">♥</span>' : ''}
-					<span class="gl-pop__gap"></span>
-					<span class="gl-pop__price">${escape(p.price ?? '')}</span>
-				</div>
-				<div class="gl-pop__meta">${escape(p.cuisine)}${stars ? ` <span class="gl-pop__stars">${stars}</span>` : ''}</div>
-				<div class="gl-pop__foot">
-					<span>${escape(p.verdictLabel)}</span>
-					<span class="gl-pop__visits">${p.visited ? visits : 'not been yet'}</span>
-				</div>
-				<a class="gl-pop__go" href="/restaurants/place/${p.id}">${escape(p.where)} →</a>
-			</div>`;
-		}
-
 		// A tile failure must not take the pins with it.
 		//
 		// 'load' waits for the style AND its sources, so if MapTiler is
@@ -321,20 +287,10 @@ const hasKey = Boolean(config.key);
 			// reader, so it belongs on top of the one behind it. That is the only
 			// thing standing in for the removed clustering, and it is what makes an
 			// overlapping stack read as a stack instead of a smear.
-			let popup: maplibregl.Popup | null = null;
 			const order = [...cfg.points].sort((a, b) => b.lat - a.lat);
 
 			for (const p of order) {
-				const el = pinEl(p);
-				el.addEventListener('click', (e) => {
-					e.preventDefault();
-					popup?.remove();
-					popup = new maplibregl.Popup({ closeButton: false, offset: 30, maxWidth: '266px' })
-						.setLngLat([p.lng, p.lat])
-						.setHTML(popupHtml(p))
-						.addTo(map);
-				});
-				new maplibregl.Marker({ element: el, anchor: 'bottom' })
+				new maplibregl.Marker({ element: pinEl(p), anchor: 'bottom' })
 					.setLngLat([p.lng, p.lat])
 					.addTo(map);
 			}
@@ -471,72 +427,6 @@ const hasKey = Boolean(config.key);
 		opacity: 0;
 	}
 
-	/* The popup is the tile's anatomy at popup size: name, heart, gap, price. */
-	.maplibregl-popup-content {
-		background: #fdf7e8;
-		border: 1px solid var(--ink);
-		border-radius: 0;
-		box-shadow: 0 4px 12px rgba(47, 30, 18, 0.22);
-		padding: 11px 13px 12px;
-		font-family: var(--ui);
-	}
-	.maplibregl-popup-tip {
-		border-top-color: var(--ink) !important;
-	}
-	.gl-pop__top {
-		display: flex;
-		align-items: baseline;
-		gap: 8px;
-	}
-	.gl-pop__name {
-		font-size: 14.5px;
-		font-weight: 600;
-		color: var(--ink);
-	}
-	.gl-pop__heart {
-		font-size: 12px;
-		color: var(--terracotta-deep);
-	}
-	.gl-pop__gap {
-		flex: 1;
-		min-width: 12px;
-	}
-	.gl-pop__price {
-		font-family: var(--mono);
-		font-size: 12.5px;
-		color: var(--ink);
-	}
-	.gl-pop__meta {
-		margin-top: 4px;
-		font-size: 11.5px;
-		color: var(--ink-2);
-	}
-	.gl-pop__stars {
-		color: var(--marigold);
-		letter-spacing: 0.6px;
-	}
-	.gl-pop__foot {
-		margin-top: 9px;
-		padding-top: 9px;
-		border-top: 1px solid var(--rule-4);
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		font-size: 12.5px;
-		color: var(--ink);
-	}
-	.gl-pop__visits {
-		margin-left: auto;
-		font-family: var(--mono);
-		font-size: 11px;
-		color: var(--ink-3);
-	}
-	.gl-pop__go {
-		display: block;
-		margin-top: 8px;
-		font-size: 11.5px;
-		color: var(--terracotta-deep);
-	}
 </style>
 
 <style>
