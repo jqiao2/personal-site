@@ -420,36 +420,6 @@ function sortPlaces(rows: Place[], sort: PlaceSort): Place[] {
 	}
 }
 
-/**
- * The list view's sections. Places with a neighbourhood group under it; places
- * without group under their city, which is the level of detail those places
- * warrant. Sections lead with the one visited most recently.
- */
-export interface PlaceGroup {
-	key: string;
-	title: string;
-	/** The wider place — "Brooklyn" under "Sunset Park", "TX" under "Austin". */
-	subtitle: string;
-	places: Place[];
-}
-
-export function groupPlaces(places: Place[]): PlaceGroup[] {
-	const groups = new Map<string, PlaceGroup>();
-	for (const p of places) {
-		const title = p.neighborhood ?? p.city;
-		const subtitle = p.neighborhood ? p.city : (p.state_region ?? p.country);
-		const key = `${title}|${subtitle}`;
-		const group = groups.get(key) ?? { key, title, subtitle, places: [] };
-		group.places.push(p);
-		groups.set(key, group);
-	}
-	return [...groups.values()].sort((a, b) => {
-		const recency = (g: PlaceGroup) =>
-			g.places.reduce((max, p) => (p.last_visit && p.last_visit > max ? p.last_visit : max), '');
-		return recency(b).localeCompare(recency(a)) || b.places.length - a.places.length;
-	});
-}
-
 export interface CuisineFacet {
 	name: string;
 	count: number;

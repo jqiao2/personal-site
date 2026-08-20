@@ -3,9 +3,10 @@
 //
 // A list of names, each with a cuisine, a price, a neighbourhood and a rating,
 // IS ALREADY A MENU, so this page takes the most from the brief's typographic
-// vocabulary: sections with a rule under them, the name on the left, the price
-// in a right-hand column that lines up down the page. The verdict mark sits in
-// the left margin where a menu puts its symbol for the house specials.
+// vocabulary: the name on the left, the price in a right-hand column that lines
+// up down the page. The verdict mark sits in the left margin where a menu puts
+// its symbol for the house specials. One list, in the chosen sort order — the
+// sort chips are the only thing that orders it — a hundred rows to a page.
 //
 // WHAT THE PRICE COLUMN COSTS AT 380px. The row is one flex line at desktop
 // width and wraps to two on a phone, with the price staying pinned right on the
@@ -24,7 +25,6 @@ import MealEditor from '../../components/MealEditor.astro';
 import VerdictMark from '../../components/VerdictMark.astro';
 import { requireOwner } from '../../lib/auth';
 import {
-	groupPlaces,
 	isPlaceSort,
 	isPriceBand,
 	isTripFilter,
@@ -70,11 +70,18 @@ const [all, filtered, cuisineFacets, cityFacets, isOwner] = await Promise.all([
 
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 
-const groups = groupPlaces(filtered);
+/** A hundred rows is already more scrolling than anyone does in one sitting. */
+const PAGE_SIZE = 100;
+const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+const page = Math.min(Math.max(1, Number(params.get('page')) || 1), pageCount);
+const shown = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
 /** Rebuild the query string with one parameter changed. */
 function href(changes: Record<string, string | string[] | null>): string {
 	const next = new URLSearchParams(params);
+	// Changing a filter or a sort re-orders the whole list, so page 2 of the old
+	// list means nothing in the new one: any change but the pager's starts over.
+	if (!('page' in changes)) next.delete('page');
 	for (const [key, value] of Object.entries(changes)) {
 		next.delete(key);
 		if (value == null) continue;
@@ -280,49 +287,59 @@ const sorts: { key: PlaceSort; label: string }[] = [
 					see all {all.length}.
 				</p>
 			) : (
-				groups.map((g) => (
-					<section class="group">
-						<div class="rl-sec-head rl-sec-head--thin">
-							<span class="rl-sec-head__title">{g.title}</span>
-							<span class="rl-sec-head__sub">{g.subtitle}</span>
-							<span class="rl-count group__n">{g.places.length} places</span>
-						</div>
-						{g.places.map((p) => (
-							<a class="row" href={`/restaurants/place/${p.id}`}>
-								<VerdictMark verdict={p.latest_verdict} size={22} />
-								<div class="row__body">
-									<div class="row__line">
-										<span class="row__name">{p.name}</span>
-										{p.hearted && <span class="row__heart">♥</span>}
-										{p.trip && (
-											<span class="row__trip" title="Worth the trip">
-												†
-											</span>
-										)}
-										<span class="rl-gap" />
-										<span class="row__price">{p.price_band ?? ''}</span>
-									</div>
-									<div class="row__meta">
-										<span class="row__cuisines">{p.cuisines.join(', ')}</span>
-										{starText(p.avg_rating) && <span class="rl-stars">{starText(p.avg_rating)}</span>}
-										<span class="row__visits">{visitCountLabel(p.visit_count)}</span>
-									</div>
+				<section class="list">
+					{shown.map((p) => (
+						<a class="row" href={`/restaurants/place/${p.id}`}>
+							<VerdictMark verdict={p.latest_verdict} size={22} />
+							<div class="row__body">
+								<div class="row__line">
+									<span class="row__name">{p.name}</span>
+									{p.hearted && <span class="row__heart">♥</span>}
+									{p.trip && (
+										<span class="row__trip" title="Worth the trip">
+											†
+										</span>
+									)}
+									<span class="rl-gap" />
+									<span class="row__price">{p.price_band ?? ''}</span>
 								</div>
-								{coverUrl(p) && (
-									<img
-										class="row__thumb"
-										src={photoSrc(coverUrl(p)!, ROW_THUMB)}
-										srcset={photoSrcSet(coverUrl(p)!, ROW_THUMB_WIDTHS)}
-										sizes={`${ROW_THUMB}px`}
-										alt=""
-										loading="lazy"
-										decoding="async"
-									/>
-								)}
-							</a>
-						))}
-					</section>
-				))
+								<div class="row__meta">
+									<span class="row__cuisines">{p.cuisines.join(', ')}</span>
+									{starText(p.avg_rating) && <span class="rl-stars">{starText(p.avg_rating)}</span>}
+									<span class="row__where">{placeLine(p)}</span>
+									<span class="row__visits">{visitCountLabel(p.visit_count)}</span>
+								</div>
+							</div>
+							{coverUrl(p) && (
+								<img
+									class="row__thumb"
+									src={photoSrc(coverUrl(p)!, ROW_THUMB)}
+									srcset={photoSrcSet(coverUrl(p)!, ROW_THUMB_WIDTHS)}
+									sizes={`${ROW_THUMB}px`}
+									alt=""
+									loading="lazy"
+									decoding="async"
+								/>
+							)}
+						</a>
+					))}
+
+					{pageCount > 1 && (
+						<nav class="pager">
+							{page > 1 && (
+								<a class="rl-chip" href={href({ page: page === 2 ? null : String(page - 1) })}>
+									&larr; Previous
+								</a>
+							)}
+							<span class="pager__at">{page} / {pageCount}</span>
+							{page < pageCount && (
+								<a class="rl-chip" href={href({ page: String(page + 1) })}>
+									Next &rarr;
+								</a>
+							)}
+						</nav>
+					)}
+				</section>
 			)
 		}
 	</div>
@@ -362,11 +379,22 @@ const sorts: { key: PlaceSort; label: string }[] = [
 		color: var(--ground);
 	}
 
-	.group {
-		margin-top: 30px;
+	.list {
+		margin-top: 26px;
+		border-top: 1px solid var(--rule);
 	}
-	.group__n {
-		margin-left: auto;
+
+	.pager {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 14px;
+		padding-top: 22px;
+	}
+	.pager__at {
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--ink-3);
 	}
 
 	.row {
@@ -423,6 +451,10 @@ const sorts: { key: PlaceSort; label: string }[] = [
 	.row__cuisines {
 		font-size: 12px;
 		color: var(--ink-2);
+	}
+	.row__where {
+		font-size: 12px;
+		color: var(--ink-3);
 	}
 	.row__visits {
 		margin-left: auto;
