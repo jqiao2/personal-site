@@ -13,7 +13,9 @@
     "credits:fetch": "node --env-file=.env scripts/credit-graph/fetch.mjs",
     "credits:load": "node --env-file=.env scripts/credit-graph/load.mjs",
     "credits:build": "node --env-file=.env scripts/credit-graph/build.mjs",
-    "restaurants:import": "node --env-file=.env scripts/import-to-try.mjs"
+    "restaurants:import": "node --env-file=.env scripts/import-to-try.mjs",
+    "beli:fetch": "node scripts/beli-fetch.mjs",
+    "beli:import": "node --env-file=.env scripts/import-beli.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.4",
