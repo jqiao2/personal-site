@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; color-scheme: dark; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1a120a; display:flex; justify-content:center; padding:0 clamp(16px,4vw,28px) 110px;">
+<div style="width:100%; max-width:1000px;">
+
+  <header style="padding:44px 0 24px; border-bottom:1px solid #45341f;">
+    <div style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:10.5px; letter-spacing:2.4px; text-transform:uppercase; color:#cfa452;">Book log &middot; design study</div>
+    <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:clamp(34px,5.6vw,52px); color:#f2e6cd; letter-spacing:-1px; line-height:1.03; margin-top:12px;">The hour histogram</h1>
+    <div style="display:flex; gap:26px; flex-wrap:wrap; margin-top:16px;">
+      <sc-for list="{{ facts }}" as="f" hint-placeholder-count="4">
+        <div style="font-size:12.5px; color:#a68f6e; line-height:1.5;"><span style="color:#75603f;">{{ f.k }}</span>&nbsp;&nbsp;{{ f.v }}</div>
+      </sc-for>
+    </div>
+  </header>
+
+  <!-- ===================== 01 · MONTH ===================== -->
+  <section style="margin-top:52px;">
+    <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid #392a19;">
+      <span style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; letter-spacing:1.6px; color:#75603f;">01</span>
+      <h2 style="font-family:'Newsreader',serif; font-weight:500; font-size:28px; color:#f2e6cd; letter-spacing:-.4px;">The month, in the card</h2>
+      <span style="margin-left:auto; font-size:11.5px; text-transform:uppercase; letter-spacing:1.5px; color:#9fb072;">Story only &middot; 1080 &times; 1920</span>
+    </div>
+
+    <!-- controls: the Hours switch joins the row, and it does change the export -->
+    <div style="background:#241a10; border:1px solid #45341f; border-radius:12px; padding:14px 16px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; margin-top:22px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <div style="width:30px; height:30px; border-radius:8px; border:1px solid #45341f; background:#2a1c0c; color:#bfa886; font-size:13px; display:flex; align-items:center; justify-content:center;">&larr;</div>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:158px; height:30px; padding:0 12px; border-radius:8px; border:1px solid #45341f; background:#2a1c0c; color:#f2e6cd; font-size:13px;"><span>July 2026</span><span style="font-size:9px; color:#a68f6e;">&#9662;</span></div>
+        <div style="width:30px; height:30px; border-radius:8px; border:1px solid #45341f; background:#2a1c0c; color:#bfa886; font-size:13px; display:flex; align-items:center; justify-content:center;">&rarr;</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px; border:1px solid #45341f; border-radius:8px; padding:3px; background:#2a1c0c;">
+        <sc-for list="{{ aspectChips }}" as="a" hint-placeholder-count="3">
+          <div style="{{ a.style }}">{{ a.label }}</div>
+        </sc-for>
+      </div>
+      <div style="display:flex; align-items:center; gap:9px; padding-left:18px; border-left:1px solid #45341f;">
+        <span style="position:relative; flex:none; width:30px; height:17px; border-radius:9px; background:#cfa452;"><span style="position:absolute; top:2px; left:15px; width:13px; height:13px; border-radius:50%; background:#241a10;"></span></span>
+        <span style="font-size:12px; font-weight:600; color:#ecc87c;">Reading hours</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:9px; margin-left:auto;">
+        <span style="position:relative; flex:none; width:30px; height:17px; border-radius:9px; background:#cfa452;"><span style="position:absolute; top:2px; left:15px; width:13px; height:13px; border-radius:50%; background:#241a10;"></span></span>
+        <span style="font-size:12px; font-weight:600; color:#ecc87c;">Summary</span>
+      </div>
+    </div>
+
+    <div style="margin-top:26px; display:flex; gap:30px; align-items:flex-start; flex-wrap:wrap;">
+      <sc-for list="{{ cards }}" as="k" hint-placeholder-count="4">
+        <div>
+          <div style="{{ k.viewportStyle }}">
+            <div style="{{ k.scaleStyle }}">
+              <div style="{{ k.cardStyle }}">
+                <div style="text-align:center;">
+                  <div style="font-size:25px; letter-spacing:5px; color:#cfa452; text-transform:uppercase;">Jason's book log</div>
+                  <div style="font-family:'Newsreader',serif; font-weight:500; font-size:80px; line-height:1.02; color:#f2e6cd; letter-spacing:-1.4px; margin-top:10px;">July 2026</div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; align-items:center; flex:1; justify-content:center; gap:18px;">
+                  <div style="{{ k.weekRowStyle }}">
+                    <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                      <div style="text-align:center; font-size:22px; letter-spacing:3px; color:#a68f6e;">{{ w }}</div>
+                    </sc-for>
+                  </div>
+                  <div style="{{ k.gridStyle }}">
+                    <sc-for list="{{ k.cells }}" as="c" hint-placeholder-count="35">
+                      <div style="{{ c.cellStyle }}">
+                        <sc-if value="{{ c.showNum }}" hint-placeholder-val="{{ true }}">
+                          <div style="{{ c.numStyle }}">{{ c.num }}</div>
+                        </sc-if>
+                        <sc-for list="{{ c.layers }}" as="l" hint-placeholder-count="0">
+                          <div style="{{ l.style }}"></div>
+                        </sc-for>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+
+                <sc-if value="{{ k.showHist }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-top:1px solid #392a19; margin-top:32px; padding-top:26px;">
+                    <div style="font-size:25px; letter-spacing:2.6px; text-transform:uppercase; color:#bfa886; margin-bottom:22px;">When I read</div>
+                    <dc-import name="Hour Histogram" scope="month" size="mini" scale="{{ 2.5 }}" hours="{{ monthHours }}" hint-size="100%,130px"></dc-import>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ k.showFigures }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:flex-start; border-top:1px solid #45341f; margin-top:32px; padding-top:26px;">
+                    <sc-for list="{{ figures }}" as="f" hint-placeholder-count="4">
+                      <div style="{{ f.style }}">
+                        <div style="font-size:25px; letter-spacing:2.6px; text-transform:uppercase; color:#bfa886;">{{ f.label }}</div>
+                        <div style="font-family:'Newsreader',serif; font-weight:500; font-size:62px; line-height:1.05; color:#cfa452; margin-top:8px; white-space:nowrap;">{{ f.value }}</div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; border-top:1px solid #392a19; margin-top:26px; padding-top:20px; font-size:27px; color:#a68f6e;">
+                  <span>jqiao.vercel.app</span><span>Covers from Open Library</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="{{ k.capStyle }}">{{ k.cap }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ===================== 02 · BOOK, DESKTOP ===================== -->
+  <section style="margin-top:60px;">
+    <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid #392a19;">
+      <span style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; letter-spacing:1.6px; color:#75603f;">02</span>
+      <h2 style="font-family:'Newsreader',serif; font-weight:500; font-size:28px; color:#f2e6cd; letter-spacing:-.4px;">The book, in &ldquo;When you read it&rdquo;</h2>
+      <span style="margin-left:auto; font-size:11.5px; text-transform:uppercase; letter-spacing:1.5px; color:#8a745a;">Desktop column</span>
+    </div>
+
+    <div style="margin-top:24px; display:flex; flex-direction:column; gap:22px;">
+      <sc-for list="{{ bookStates }}" as="b" hint-placeholder-count="4">
+        <div style="background:#1f1609; border:1px solid #33261a; border-radius:14px; padding:20px 22px 22px;">
+          <div style="display:flex; align-items:baseline; gap:11px; flex-wrap:wrap; margin-bottom:16px;">
+            <span style="{{ b.tagStyle }}">{{ b.tag }}</span>
+            <span style="font-size:12px; color:#75603f;">{{ b.note }}</span>
+          </div>
+          <div style="max-width:660px;">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:16px; flex-wrap:wrap;">
+              <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">When you read it</div>
+              <div style="font-size:11.5px; color:#75603f;">{{ b.meta }}</div>
+            </div>
+            <dc-import name="Hour Histogram" scope="book" size="lg" start-open="{{ b.open }}" hours="{{ b.hours }}" spread="{{ b.spread }}" spread-total="{{ b.sittings }}" spread-unit="sittings" fallback="{{ b.fallback }}" hint-size="100%,60px"></dc-import>
+            <div style="margin-top:20px; background:#201709; border:1px solid #392a19; border-radius:10px; padding:15px 17px 16px;">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <span style="font-size:13.5px; color:#efe0c2; font-weight:500;">{{ b.stretchRange }}</span>
+                <span style="font-size:12px; color:#a68f6e;">{{ b.stretchMeta }}</span>
+              </div>
+              <div style="display:flex; gap:3px; margin-top:13px; flex-wrap:wrap;">
+                <sc-for list="{{ b.cells }}" as="c" hint-placeholder-count="10">
+                  <div style="{{ c.style }}"></div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ===================== 03 · BOOK, PHONE ===================== -->
+  <section style="margin-top:60px;">
+    <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid #392a19;">
+      <span style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; letter-spacing:1.6px; color:#75603f;">03</span>
+      <h2 style="font-family:'Newsreader',serif; font-weight:500; font-size:28px; color:#f2e6cd; letter-spacing:-.4px;">On a phone</h2>
+      <span style="margin-left:auto; font-size:11.5px; text-transform:uppercase; letter-spacing:1.5px; color:#8a745a;">342px content &middot; 12.2px a bar</span>
+    </div>
+
+    <div style="margin-top:24px; display:flex; gap:24px; flex-wrap:wrap;">
+      <sc-for list="{{ phoneStates }}" as="b" hint-placeholder-count="3">
+        <div>
+          <div style="width:390px; max-width:100%; background:#1a120a; border:1px solid #45341f; border-radius:22px; padding:24px; box-shadow:0 24px 50px -22px rgba(0,0,0,.8);">
+            <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:9px; border-bottom:1px solid #392a19; margin-bottom:15px;">
+              <div style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#ead9b6;">When you read it</div>
+              <div style="font-size:10.5px; color:#75603f;">{{ b.meta }}</div>
+            </div>
+            <dc-import name="Hour Histogram" scope="book" size="sm" start-open="{{ b.open }}" hours="{{ b.hours }}" spread="{{ b.spread }}" spread-total="{{ b.sittings }}" spread-unit="sittings" fallback="{{ b.fallback }}" hint-size="100%,60px"></dc-import>
+            <div style="margin-top:17px; background:#201709; border:1px solid #392a19; border-radius:10px; padding:13px 14px 14px;">
+              <div style="font-size:12.5px; color:#efe0c2; font-weight:500;">{{ b.stretchRange }}</div>
+              <div style="display:flex; gap:3px; margin-top:11px; flex-wrap:wrap;">
+                <sc-for list="{{ b.cells }}" as="c" hint-placeholder-count="10">
+                  <div style="{{ c.style }}"></div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:10px; color:#75603f; margin-top:10px;">{{ b.tag }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <!-- ===================== 04 · DECISIONS ===================== -->
+  <section style="margin-top:60px;">
+    <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; padding-bottom:12px; border-bottom:1px solid #392a19;">
+      <span style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; letter-spacing:1.6px; color:#75603f;">04</span>
+      <h2 style="font-family:'Newsreader',serif; font-weight:500; font-size:28px; color:#f2e6cd; letter-spacing:-.4px;">Decisions</h2>
+    </div>
+
+    <div style="margin-top:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:1px; background:#33261a; border:1px solid #45341f; border-radius:12px; overflow:hidden;">
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="3">
+        <div style="background:#1f1609; padding:20px 22px 22px;">
+          <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#cfa452;">{{ n.kicker }}</div>
+          <div style="font-family:'Newsreader',serif; font-size:19px; color:#f2e6cd; line-height:1.3; margin-top:9px;">{{ n.head }}</div>
+          <p style="font-size:13px; color:#c2ab88; line-height:1.7; margin-top:10px; text-wrap:pretty;">{{ n.body }}</p>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:24px; display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:24px;">
+      <div>
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#cfa452; margin-bottom:12px;">Same in both</div>
+        <sc-for list="{{ shared }}" as="s" hint-placeholder-count="5">
+          <div style="display:flex; gap:11px; padding:10px 0; border-bottom:1px solid #2b2013;">
+            <span style="flex:none; width:5px; height:5px; border-radius:50%; background:#cfa452; margin-top:7px;"></span>
+            <span style="font-size:13px; color:#d5c3a4; line-height:1.6;">{{ s }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div>
+        <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#8a745a; margin-bottom:12px;">Different</div>
+        <sc-for list="{{ differs }}" as="s" hint-placeholder-count="5">
+          <div style="display:flex; gap:11px; padding:10px 0; border-bottom:1px solid #2b2013;">
+            <span style="flex:none; width:5px; height:5px; border-radius:50%; border:1px solid #8a745a; margin-top:7px;"></span>
+            <span style="font-size:13px; color:#d5c3a4; line-height:1.6;">{{ s }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:flex; align-items:flex-end; gap:10px; margin-top:30px; flex-wrap:wrap;">
+      <sc-for list="{{ ramp }}" as="r" hint-placeholder-count="5">
+        <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-start;">
+          <div style="{{ r.swatch }}"></div>
+          <div style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:9.5px; color:#75603f;">{{ r.label }}</div>
+        </div>
+      </sc-for>
+      <div style="font-size:12.5px; color:#8a745a; line-height:1.6; margin-left:16px; max-width:420px; padding-bottom:2px;">Height and the day-cell ramp carry the number twice, which is what makes the 3px floor honest: a one-page hour is visible but stays in the faintest step.</div>
+    </div>
+  </section>
+
+</div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+function arr(o) { const a = new Array(24).fill(0); Object.keys(o).forEach((k) => { a[+k] = o[k]; }); return a; }
+
+// Month — the real shape: eight empty hours, a one-page 7am, the peak at 2am.
+const MONTH_H = arr({ 0: 42, 1: 211, 2: 250, 3: 95, 7: 1, 8: 19, 9: 9, 10: 3, 15: 4, 16: 11, 17: 3, 18: 27, 19: 13, 20: 1, 22: 5, 23: 52 });
+const MONTH_S = arr({ 0: 11, 1: 19, 2: 22, 3: 13, 7: 1, 8: 5, 9: 3, 10: 2, 15: 2, 16: 4, 17: 2, 18: 8, 19: 5, 20: 1, 22: 3, 23: 14 });
+const BOOK_H = arr({ 0: 52, 1: 96, 2: 71, 3: 12, 8: 6, 17: 4, 18: 22, 19: 9, 22: 14, 23: 38 });
+const BOOK_S = arr({ 0: 6, 1: 9, 2: 8, 3: 3, 8: 1, 17: 1, 18: 3, 19: 2, 22: 3, 23: 6 });
+// Four sittings, five bars — one of them crossed midnight.
+const THIN_H = arr({ 0: 26, 2: 15, 20: 12, 22: 18, 23: 9 });
+const THIN_S = arr({ 0: 1, 2: 1, 20: 1, 22: 1, 23: 1 });
+const ONE_H = arr({ 1: 22 });
+const ONE_S = arr({ 1: 1 });
+
+const READ_DAYS = { 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 2, 9: 1, 10: 1, 11: 1, 12: 2, 13: 1, 14: 1, 15: 1, 17: 1, 18: 2, 19: 1, 21: 2, 22: 3, 23: 1, 24: 2, 25: 2, 26: 2, 27: 2, 29: 1, 31: 1 };
+const FINISH_DAYS = { 15: 1, 22: 1, 27: 1 };
+const HUES = ["#6d4a2a", "#4a5a4a", "#5b4a6b", "#3f5560", "#6b3a4a", "#7a5a2a", "#4a5a6b"];
+const RAMP = ["#241a10", "rgba(207,164,82,.26)", "rgba(207,164,82,.48)", "rgba(207,164,82,.74)", "#cfa452"];
+
+class Component extends DCLogic {
+  // The card's own geometry, so "does it fit" is a real answer and not a guess.
+  card(aspect, withHist, scale, withFigures) {
+    const W = 1080;
+    const H = aspect === "1:1" ? 1080 : aspect === "9:16" ? 1920 : 1350;
+    const showFigures = withFigures === undefined ? aspect === "9:16" : withFigures;
+    const PAD = 46, GUT = 10;
+    const CHROME = (showFigures ? 470 : 330) + (withHist ? 200 : 0);
+    const rows = 5, first = 2, dim = 31;
+    const cellW = Math.min((W - 2 * PAD - 6 * GUT) / 7, ((H - CHROME) - (rows - 1) * GUT) / rows / 1.5);
+    const cellH = cellW * 1.5;
+    const gridW = cellW * 7 + GUT * 6;
+
+    const cells = [];
+    for (let i = 0; i < rows * 7; i++) {
+      const d = i - first + 1;
+      const base = { cellStyle: "position:relative; width:" + cellW + "px; height:" + cellH + "px;", showNum: false, num: "", numStyle: "", layers: [] };
+      if (d < 1 || d > dim) { cells.push(base); continue; }
+      const n = READ_DAYS[d] || 0;
+      if (!n) {
+        cells.push({ ...base, showNum: true, num: d, numStyle: "position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Newsreader',serif; font-size:" + cellW * 0.28 + "px; color:#4b3a23; line-height:1;" });
+        continue;
+      }
+      const step = Math.max(3, cellW * 0.033);
+      const layers = [];
+      for (let k = n - 1; k >= 0; k--) {
+        const hue = HUES[(d + k) % HUES.length];
+        const gilt = k === 0 && FINISH_DAYS[d];
+        layers.push({ style: "position:absolute; inset:0; border-radius:3px; overflow:hidden; border:2px solid " + (gilt ? "#ecc87c" : k === 0 ? "#f2e6cd" : "#e8dbc0") + "; background-color:" + hue + "; background-image:repeating-linear-gradient(135deg,rgba(255,244,222,.10) 0 " + cellW * 0.06 + "px,rgba(0,0,0,.16) " + cellW * 0.06 + "px " + cellW * 0.12 + "px); box-shadow:0 3px 10px -4px rgba(0,0,0,.75); transform:translate(" + (k * step).toFixed(1) + "px," + (k * step).toFixed(1) + "px) rotate(" + (k === 0 ? 0 : k % 2 ? 1.6 : -1.8) + "deg); z-index:" + (12 - k) + ";" });
+      }
+      cells.push({ ...base, layers });
+    }
+
+    return {
+      showHist: withHist, showFigures,
+      viewportStyle: "width:" + Math.round(W * scale) + "px; height:" + Math.round(H * scale) + "px; position:relative;",
+      scaleStyle: "transform:scale(" + scale + "); transform-origin:0 0; width:" + W + "px; height:" + H + "px;",
+      cardStyle: "width:" + W + "px; height:" + H + "px; background:#1a120a; padding:42px " + PAD + "px 38px; display:flex; flex-direction:column; overflow:hidden;",
+      weekRowStyle: "width:" + gridW + "px; display:grid; grid-template-columns:repeat(7," + cellW + "px); column-gap:" + GUT + "px;",
+      gridStyle: "width:" + gridW + "px; display:grid; grid-template-columns:repeat(7," + cellW + "px); gap:" + GUT + "px;",
+      cells, cellW,
+    };
+  }
+
+  dayCells(list, max) {
+    return list.map((p) => {
+      const lvl = !p ? 0 : p / max <= 0.25 ? 1 : p / max <= 0.5 ? 2 : p / max <= 0.75 ? 3 : 4;
+      return { style: "width:17px; height:17px; border-radius:3px; flex:none; background:" + RAMP[lvl] + "; border:1px solid " + (p ? "transparent" : "#33261a") + ";" };
+    });
+  }
+
+  renderVals() {
+    const cap = (t, on) => "font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:10px; letter-spacing:.4px; color:" + (on ? "#cfa452" : "#75603f") + "; margin-top:11px; line-height:1.6;";
+
+    const cards = [
+      { ...this.card("9:16", true, 0.325, true), cap: "9:16 story \u00b7 both on \u00b7 grid unchanged", capStyle: cap("", true) },
+      { ...this.card("9:16", true, 0.22, false), cap: "9:16 \u00b7 hours, no summary", capStyle: cap("", false) },
+      { ...this.card("9:16", false, 0.22, true), cap: "9:16 \u00b7 summary, no hours", capStyle: cap("", false) },
+      { ...this.card("9:16", false, 0.22, false), cap: "9:16 \u00b7 both off \u00b7 calendar alone", capStyle: cap("", false) },
+      { ...this.card("4:5", false, 0.22, false), cap: "4:5 feed \u00b7 no hours at any setting", capStyle: cap("", false) },
+      { ...this.card("1:1", false, 0.22, false), cap: "1:1 square \u00b7 no hours at any setting", capStyle: cap("", false) },
+    ];
+
+    const rich = { hours: BOOK_H, spread: BOOK_S, sittings: 14 };
+    const thin = { hours: THIN_H, spread: THIN_S, sittings: 4 };
+    const one = { hours: ONE_H, spread: ONE_S, sittings: 1 };
+    const richCells = this.dayCells([34, 28, 0, 41, 22, 0, 0, 30, 26, 0, 44, 19, 0, 0, 36], 44);
+    const thinCells = this.dayCells([26, 0, 0, 18, 21, 0, 15], 26);
+    const oneCells = this.dayCells([22], 22);
+    const tag = (c) => "font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.4px; color:#241a10; background:" + c + "; border-radius:4px; padding:4px 9px;";
+    const fallbackLine = "One sitting, 1\u20132 am on 2 August \u00b7 22 pages.";
+
+    const bookStates = [
+      { tag: "Hidden", tagStyle: tag("#8a745a"), note: "the default \u2014 a toggle and nothing else", meta: "26 days in 3 stretches", open: false, ...rich, stretchRange: "18\u201331 July 2026", stretchMeta: "11 days \u00b7 324 pages \u00b7 9h 12m", cells: richCells, fallback: fallbackLine },
+      { tag: "Rich", tagStyle: tag("#cfa452"), note: "324 pages, 14 sittings, 10 hours occupied", meta: "26 days in 3 stretches", open: true, ...rich, stretchRange: "18\u201331 July 2026", stretchMeta: "11 days \u00b7 324 pages \u00b7 9h 12m", cells: richCells, fallback: fallbackLine },
+      { tag: "Thin", tagStyle: tag("#cfa452"), note: "four sittings, five bars \u2014 one crossed midnight", meta: "4 days in 2 stretches", open: true, ...thin, stretchRange: "2\u20138 August 2026", stretchMeta: "4 days \u00b7 80 pages \u00b7 2h 04m", cells: thinCells, fallback: fallbackLine },
+      { tag: "Single", tagStyle: tag("#c07a5a"), note: "under the threshold \u2014 no chart, no toggle", meta: "1 day", open: true, ...one, stretchRange: "2 August 2026", stretchMeta: "1 day \u00b7 22 pages \u00b7 41m", cells: oneCells, fallback: fallbackLine },
+    ];
+
+    const phoneStates = [
+      { tag: "rich", meta: "26 days", open: true, ...rich, stretchRange: "18\u201331 July 2026", cells: richCells, fallback: fallbackLine },
+      { tag: "thin", meta: "4 days", open: true, ...thin, stretchRange: "2\u20138 August 2026", cells: thinCells, fallback: fallbackLine },
+      { tag: "single", meta: "1 day", open: true, ...one, stretchRange: "2 August 2026", cells: oneCells, fallback: fallbackLine },
+    ];
+
+    return {
+      facts: [
+        { k: "Axis", v: "midnight \u2192 midnight" },
+        { k: "Bar", v: "page turns in that hour" },
+        { k: "Zone", v: "America/New_York" },
+        { k: "Threshold", v: "3 occupied hours" },
+      ],
+
+      weekdays: ["M", "T", "W", "T", "F", "S", "S"],
+      figures: [
+        { label: "Books", value: "9" }, { label: "Pages", value: "1,684" },
+        { label: "Streak", value: "15 days" }, { label: "Finished", value: "3" },
+      ].map((f, i) => ({ ...f, style: "flex:1; padding:0 4px 0 " + (i === 0 ? "0" : "26px") + "; border-left:" + (i === 0 ? "none" : "1px solid #45341f") + ";" })),
+      aspectChips: [["Feed", 0], ["Square", 0], ["Story", 1]].map(([l, on]) => ({
+        label: l, style: "padding:6px 13px; border-radius:6px; font-size:12.5px; color:" + (on ? "#ecc87c" : "#a68f6e") + "; background:" + (on ? "#33261a" : "transparent") + ";",
+      })),
+      cards,
+      monthHours: MONTH_H, monthSpread: MONTH_S,
+      bookStates, phoneStates,
+
+      notes: [
+        { kicker: "Axis", head: "Midnight to midnight", body: "A plain 0\u219223 day. The 11pm\u20133am habit reads as a wall at each end of the chart rather than one hill, which is a true picture of how the days actually break." },
+        { kicker: "Placement", head: "Inside the card, Story only", body: "Story is the one ratio with vertical slack: a 200px band there leaves the calendar at its full 132px cells. Feed and Square would lose 20% and 27% of cell size, so they never show it. Hours and Summary are two independent switches, and both change the export \u2014 unlike the other controls." },
+        { kicker: "Sparse", head: "Three occupied hours", body: "Below three the component draws a sentence instead of a chart, and drops the toggle with it. Empty hours are 2px sockets in the empty-cell brown, so twenty of them read as a resting state rather than as damage." },
+      ],
+
+      shared: [
+        "24 slots, midnight to midnight, no scroll at any width.",
+        "Bars are page turns, attributed to the hour their timestamp falls in \u2014 nothing is split across the boundary.",
+        "Bar height plus the five-step day-cell ramp, with a 3px floor on any non-zero hour.",
+        "Empty hours draw a 2px socket in #241a10.",
+        "Hover or drag along the chart for the exact hour; nothing is stated finer than an hour.",
+      ],
+      differs: [
+        "Scope in the hover line: \u201c34% of the month\u201d against \u201c30% of this book\u201d.",
+        "The count clause is days for a month, sittings for a book: \u201c22 of 31 days\u201d, \u201c9 of 14 sittings\u201d.",
+        "The month instance is drawn at card scale with no toggle of its own \u2014 Hours and Summary both live in the page's control bar.",
+        "The threshold only ever fires on a book.",
+        "Labels drop from four to three at phone width. The bars do not change.",
+      ],
+
+      ramp: RAMP.map((c, i) => ({
+        swatch: "width:46px; height:" + [6, 20, 38, 56, 74][i] + "px; border-radius:2px 2px 0 0; background:" + c + ";",
+        label: ["empty", "\u226425%", "\u226450%", "\u226475%", "peak"][i],
+      })),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

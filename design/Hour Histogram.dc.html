@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; color-scheme: dark; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+</style>
+</helmet>
+
+<div style="{{ rootStyle }}">
+
+  <sc-if value="{{ showHeader }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:14px;">
+      <div style="{{ titleStyle }}">{{ title }}</div>
+      <sc-if value="{{ hasToggle }}" hint-placeholder-val="{{ true }}">
+        <button onClick="{{ toggle }}" style="font-size:12px; color:#a68f6e; background:transparent; border:none; padding:0; cursor:pointer; font-family:'Archivo',sans-serif; text-decoration:underline; text-decoration-color:#4d3a22; text-underline-offset:4px; white-space:nowrap;" style-hover="color:#ecc87c;">{{ toggleLabel }}</button>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ showFallback }}" hint-placeholder-val="{{ false }}">
+    <div style="{{ fallbackStyle }}">{{ fallbackLine }}</div>
+  </sc-if>
+
+  <sc-if value="{{ showChart }}" hint-placeholder-val="{{ true }}">
+    <div>
+      <div style="{{ plotStyle }}" onMouseMove="{{ onMove }}" onMouseLeave="{{ onLeave }}" onPointerDown="{{ onMove }}">
+        <div style="{{ colsStyle }}">
+          <sc-for list="{{ cols }}" as="c" hint-placeholder-count="24">
+            <div style="{{ c.colStyle }}"><div style="{{ c.barStyle }}"></div></div>
+          </sc-for>
+        </div>
+        <div style="{{ baselineStyle }}"></div>
+        <sc-if value="{{ showTip }}" hint-placeholder-val="{{ false }}">
+          <div style="{{ tipStyle }}">{{ tipLine }}</div>
+        </sc-if>
+      </div>
+
+      <div style="{{ axisStyle }}">
+        <sc-for list="{{ labels }}" as="l" hint-placeholder-count="4">
+          <div style="{{ l.style }}">{{ l.text }}</div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:760,&quot;height&quot;:200},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scope&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;month&quot;,&quot;book&quot;],&quot;default&quot;:&quot;month&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;size&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;lg&quot;,&quot;sm&quot;,&quot;mini&quot;],&quot;default&quot;:&quot;lg&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;hours&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number[]&quot;},&quot;spread&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number[]&quot;},&quot;spreadTotal&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:31,&quot;tsType&quot;:&quot;number&quot;},&quot;spreadUnit&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;days&quot;,&quot;sittings&quot;],&quot;default&quot;:&quot;days&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;fallback&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;scale&quot;:{&quot;editor&quot;:&quot;float&quot;,&quot;default&quot;:1,&quot;min&quot;:0.5,&quot;max&quot;:3,&quot;step&quot;:0.1,&quot;tsType&quot;:&quot;number&quot;}}">
+const RAMP = ["#241a10", "rgba(207,164,82,.26)", "rgba(207,164,82,.48)", "rgba(207,164,82,.74)", "#cfa452"];
+const AXIS = Array.from({ length: 24 }, (_, i) => i);
+
+function axisLabel(h) {
+  if (h === 0) return "midnight";
+  if (h === 12) return "noon";
+  return (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? "am" : "pm");
+}
+function clockLabel(h) {
+  if (h === 0) return "midnight";
+  if (h === 12) return "noon";
+  return (h % 12 === 0 ? 12 : h % 12) + (h < 12 ? " am" : " pm");
+}
+
+class Component extends DCLogic {
+  state = { open: null, hover: null };
+
+  size() { return this.props.size || "lg"; }
+  scale() { return +this.props.scale || 1; }
+  geom() {
+    const s = this.size();
+    const k = this.scale();
+    const g = s === "mini" ? { H: 40, gap: 1.5, labels: [0, 6, 12, 18], type: 9, chrome: false }
+      : s === "sm" ? { H: 76, gap: 2, labels: [0, 12, 18], type: 10, chrome: true }
+      : { H: 104, gap: 3.5, labels: [0, 6, 12, 18], type: 10, chrome: true };
+    return { ...g, H: Math.round(g.H * k), gap: +(g.gap * k).toFixed(2), type: +(g.type * k).toFixed(1) };
+  }
+
+  onMove = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const i = Math.floor(((e.clientX - r.left) / r.width) * 24);
+    if (i >= 0 && i < 24 && i !== this.state.hover) this.setState({ hover: i });
+  };
+  onLeave = () => this.setState({ hover: null });
+
+  renderVals() {
+    const p = this.props;
+    const g = this.geom();
+    const size = this.size();
+    const k = this.scale();
+    const hours = p.hours || new Array(24).fill(0);
+    const spread = p.spread || null;
+    const spreadTotal = p.spreadTotal || 0;
+    const unit = p.spreadUnit || "days";
+    const scopeWord = p.scope === "book" ? "this book" : "the month";
+
+    const total = hours.reduce((a, b) => a + (b || 0), 0);
+    const occupied = hours.filter((v) => v > 0).length;
+    const max = Math.max(1, ...hours);
+
+    // Threshold: three occupied hours. Two bars is not a distribution.
+    const enough = occupied >= 3;
+    const open = this.state.open === null ? p.startOpen !== false : this.state.open;
+    const chart = enough && open;
+
+    const hv = this.state.hover;
+    const hoverH = hv === null ? null : AXIS[hv];
+    let tip = "";
+    if (hoverH !== null) {
+      const v = hours[hoverH];
+      if (!v) {
+        tip = clockLabel(hoverH) + " \u2014 nothing read";
+      } else {
+        const pct = Math.round((v / total) * 100);
+        const sp = spread && spread[hoverH] ? " \u00b7 " + spread[hoverH] + " of " + spreadTotal + " " + unit : "";
+        tip = clockLabel(hoverH) + " \u2014 " + v.toLocaleString("en-US") + (v === 1 ? " page" : " pages") + " \u00b7 " + (pct < 1 ? "<1" : pct) + "% of " + scopeWord + sp;
+      }
+    }
+
+    const cols = AXIS.map((h, i) => {
+      const v = hours[h] || 0;
+      const ratio = v / max;
+      const lvl = !v ? 0 : ratio <= 0.25 ? 1 : ratio <= 0.5 ? 2 : ratio <= 0.75 ? 3 : 4;
+      const px = v ? Math.max(3, Math.round(ratio * g.H)) : 2;
+      const on = hv === i;
+      return {
+        colStyle: "flex:1 1 0; min-width:0; height:100%; display:flex; align-items:flex-end; background:" + (on ? "rgba(207,164,82,.07)" : "transparent") + ";",
+        barStyle: "width:100%; height:" + px + "px; border-radius:" + (v ? "2px 2px 0 0" : "1px") + "; background:" + RAMP[lvl] + ";" + (on && v ? " box-shadow:0 0 0 1px #ecc87c;" : ""),
+      };
+    });
+
+    const pctAt = (i) => (i / 24) * 100;
+    const labels = g.labels.map((h) => {
+      const left = pctAt(AXIS.indexOf(h)) + 100 / 48;
+      const edge = left < 8 ? "-8%" : left > 92 ? "-92%" : "-50%";
+      return { text: axisLabel(h), style: "position:absolute; top:0; left:" + left.toFixed(2) + "%; transform:translateX(" + edge + "); font-size:" + g.type + "px; letter-spacing:.6px; color:" + (h === 0 ? "#8a745a" : "#8a745a") + "; white-space:nowrap;" };
+    });
+
+    const tipLeft = hv === null ? 0 : pctAt(hv) + 100 / 48;
+    const tipEdge = tipLeft < 22 ? "0%" : tipLeft > 78 ? "-100%" : "-50%";
+
+    return {
+      rootStyle: "display:flex; flex-direction:column; gap:" + Math.round(11 * (size === "mini" ? k : 1)) + "px;",
+      showHeader: size !== "mini" && (!!p.title || enough),
+      title: p.title || "",
+      titleStyle: "font-family:'Newsreader',serif; font-style:italic; font-size:" + (size === "sm" ? "17px" : "19px") + "; color:#ead9b6; line-height:1.2;",
+      hasToggle: enough,
+      toggleLabel: open ? "Hide hours" : "Show hours",
+      toggle: () => this.setState({ open: !open }),
+
+      showFallback: !enough,
+      fallbackStyle: "font-family:'Newsreader',serif; font-style:italic; font-size:" + (size === "sm" ? "15.5px" : "17px") + "; color:#8a745a; line-height:1.55;",
+      fallbackLine: p.fallback || "One sitting \u2014 not enough of a day to draw one.",
+
+      showChart: chart,
+      plotStyle: "position:relative; height:" + g.H + "px; touch-action:none; cursor:crosshair;",
+      colsStyle: "position:absolute; inset:0; display:flex; align-items:flex-end; gap:" + g.gap + "px;",
+      baselineStyle: "position:absolute; left:0; right:0; bottom:0; height:1px; background:#45341f;",
+      cols,
+
+      showTip: g.chrome && hoverH !== null,
+      tipLine: tip,
+      tipStyle: "position:absolute; bottom:calc(100% + 8px); left:" + tipLeft.toFixed(2) + "%; transform:translateX(" + tipEdge + "); white-space:nowrap; z-index:20; background:#241a10; border:1px solid #45341f; border-radius:7px; padding:7px 11px; font-size:11.5px; color:#f2e6cd; box-shadow:0 14px 32px -12px rgba(0,0,0,.85);",
+
+      axisStyle: "position:relative; height:" + Math.round(g.type * 1.5) + "px; margin-top:" + Math.round(7 * k) + "px;",
+      labels,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

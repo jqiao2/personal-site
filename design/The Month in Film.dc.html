@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e; display:flex; justify-content:center; padding:0 24px 90px;">
+  <div style="width:100%; max-width:900px;">
+
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #4a2529; margin-bottom:30px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a2857a;" style-hover="color:#f4e8d1;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a6f63;">Share</span>
+    </header>
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:44px; color:#f4e8d1; letter-spacing:-.5px; line-height:1;">Month in film</h1>
+      <span style="font-size:12.5px; color:#8a6f63; padding-bottom:6px;">{{ dimsLabel }}</span>
+    </div>
+
+    <!-- CONTROLS — screen only, never exported -->
+    <div style="background:#20100f; border:1px solid #4a2529; border-radius:12px; padding:16px 18px; display:flex; align-items:center; gap:26px; flex-wrap:wrap; margin-bottom:30px;">
+
+      <div ref="{{ setPicker }}" style="position:relative; display:flex; align-items:center; gap:6px;">
+        <button onClick="{{ prevMonth }}" style="width:32px; height:32px; border-radius:8px; border:1px solid #4a2529; background:#2a1214; color:#c2a99a; font-size:14px; cursor:pointer;" style-hover="border-color:#d9b45a; color:#f4e8d1;">&larr;</button>
+        <button onClick="{{ togglePicker }}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:168px; height:32px; padding:0 12px; border-radius:8px; border:1px solid #4a2529; background:#2a1214; color:#f4e8d1; font-size:13px; font-family:'Archivo',sans-serif; cursor:pointer;" style-hover="border-color:#d9b45a;">
+          <span>{{ monthLabel }}</span><span style="font-size:9px; color:#a2857a;">&#9662;</span>
+        </button>
+        <button onClick="{{ nextMonth }}" style="width:32px; height:32px; border-radius:8px; border:1px solid #4a2529; background:#2a1214; color:#c2a99a; font-size:14px; cursor:pointer;" style-hover="border-color:#d9b45a; color:#f4e8d1;">&rarr;</button>
+
+        <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute; left:0; top:calc(100% + 8px); z-index:40; background:#20100f; border:1px solid #4a2529; border-radius:10px; padding:12px; width:290px; box-shadow:0 20px 44px -14px rgba(0,0,0,.7);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <button onClick="{{ prevPickerYear }}" style="width:24px; height:24px; border:none; background:none; color:#a2857a; cursor:pointer; font-size:13px;" style-hover="color:#f4e8d1;">&larr;</button>
+              <span style="font-family:'Newsreader',serif; font-size:19px; color:#f4e8d1;">{{ pickerYear }}</span>
+              <button onClick="{{ nextPickerYear }}" style="width:24px; height:24px; border:none; background:none; color:#a2857a; cursor:pointer; font-size:13px;" style-hover="color:#f4e8d1;">&rarr;</button>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px;">
+              <sc-for list="{{ pickerMonths }}" as="p" hint-placeholder-count="12">
+                <div onClick="{{ p.onClick }}" style="{{ p.style }}">
+                  <div style="font-size:12px;">{{ p.abbr }}</div>
+                  <div style="font-size:10px; color:#8a6f63; margin-top:2px;">{{ p.count }}</div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:4px; border:1px solid #4a2529; border-radius:8px; padding:3px; background:#2a1214;">
+        <sc-for list="{{ aspects }}" as="a" hint-placeholder-count="3">
+          <div onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</div>
+        </sc-for>
+      </div>
+
+      <div onClick="{{ toggleLikes }}" style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+        <div style="{{ switchTrack }}"><div style="{{ switchKnob }}"></div></div>
+        <span style="font-size:12.5px; color:#c2a99a;">Show likes</span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-left:auto;">
+        <button onClick="{{ copyLink }}" style="height:34px; padding:0 15px; border-radius:8px; border:1px solid #4a2529; background:transparent; color:#c2a99a; font-size:12.5px; font-family:'Archivo',sans-serif; cursor:pointer;" style-hover="border-color:#d9b45a; color:#f4e8d1;">Copy link</button>
+        <button onClick="{{ download }}" style="height:34px; padding:0 17px; border-radius:8px; border:none; background:#d9b45a; color:#2a1214; font-size:12.5px; font-weight:700; font-family:'Archivo',sans-serif; cursor:pointer;" style-hover="background:#f0d488;">Download image</button>
+      </div>
+    </div>
+
+    <!-- THE CARD -->
+    <div style="display:flex; justify-content:center;">
+      <div ref="{{ setFit }}" style="{{ viewportStyle }}">
+        <div style="{{ scaleStyle }}">
+          <div ref="{{ setCard }}" style="{{ cardStyle }}">
+
+            <div style="text-align:center;">
+              <div style="font-size:25px; letter-spacing:5px; color:#d9b45a; text-transform:uppercase;">Month in review</div>
+              <div style="font-family:'Newsreader',serif; font-weight:500; font-size:84px; line-height:1.02; color:#f4e8d1; letter-spacing:-1.5px; margin-top:10px;">{{ monthLabel }}</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:center; flex:1; justify-content:center; gap:16px;">
+              <div style="{{ weekdayRowStyle }}">
+                <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                  <div style="text-align:center; font-size:22px; letter-spacing:3px; color:#a3877a;">{{ w }}</div>
+                </sc-for>
+              </div>
+
+              <div style="{{ gridStyle }}">
+                <sc-for list="{{ cells }}" as="c" hint-placeholder-count="35">
+                  <div style="{{ c.cellStyle }}" onMouseEnter="{{ c.onEnter }}" onMouseLeave="{{ c.onLeave }}">
+                    <sc-if value="{{ c.showNumeral }}" hint-placeholder-val="{{ true }}">
+                      <div style="{{ c.numeralStyle }}">{{ c.dateNum }}</div>
+                    </sc-if>
+                    <sc-for list="{{ c.behind }}" as="b" hint-placeholder-count="0">
+                      <div style="{{ b.style }}"></div>
+                    </sc-for>
+                    <sc-if value="{{ c.hasFilms }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ c.topStyle }}">
+                        <div style="{{ c.tileStyle }}">
+                          <div style="{{ c.titleStyle }}">{{ c.topTitle }}</div>
+                          <div style="{{ c.yearStyle }}">{{ c.topYear }}</div>
+                        </div>
+                        <sc-if value="{{ c.showHeart }}" hint-placeholder-val="{{ false }}">
+                          <div style="{{ c.heartStyle }}">&#9829;</div>
+                        </sc-if>
+                        <sc-if value="{{ c.showBadge }}" hint-placeholder-val="{{ false }}">
+                          <div style="{{ c.badgeStyle }}">{{ c.count }}</div>
+                        </sc-if>
+                      </div>
+                      <sc-if value="{{ c.showTip }}" hint-placeholder-val="{{ false }}">
+                        <div style="{{ c.tipStyle }}">
+                          <sc-for list="{{ c.tipItems }}" as="t" hint-placeholder-count="2">
+                            <div style="font-size:17px; color:#f2e5cd; line-height:1.45; white-space:nowrap;">{{ t.line }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ isEmptyMonth }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center; margin-top:26px; font-family:'Newsreader',serif; font-style:italic; font-size:28px; color:#8a6f63;">{{ emptyNote }}</div>
+            </sc-if>
+
+            <sc-if value="{{ showFigures }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:flex-start; border-top:1px solid #4a2529; margin-top:30px; padding-top:26px;">
+                <sc-for list="{{ figures }}" as="f" hint-placeholder-count="4">
+                  <div style="{{ f.style }}">
+                    <div style="font-size:23px; letter-spacing:2.2px; text-transform:uppercase; color:#bd9c8c;">{{ f.label }}</div>
+                    <div style="font-family:'Newsreader',serif; font-weight:500; font-size:50px; line-height:1.05; color:#d9b45a; margin-top:8px; white-space:nowrap;">{{ f.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; border-top:1px solid #4a2529; margin-top:26px; padding-top:20px; font-size:27px; color:#a3877a;">
+              <span>jqiao.vercel.app</span>
+              <span>Film data from TMDB</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:#2a1214; border:1px solid #4a2529; border-radius:9px; padding:11px 18px; font-size:13px; color:#f4e8d1; box-shadow:0 16px 40px -12px rgba(0,0,0,.7); z-index:60;">{{ toast }}</div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1000,&quot;height&quot;:1180},&quot;month&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-07&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Card&quot;},&quot;aspect&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;4:5&quot;,&quot;1:1&quot;,&quot;9:16&quot;],&quot;default&quot;:&quot;4:5&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Card&quot;},&quot;showLikes&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Card&quot;}}">
+class Component extends DCLogic {
+  state = { month: null, aspect: null, showLikes: null, scale: 0.5, hover: null, pickerOpen: false, pickerYear: 2026, toast: "" };
+
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+    this._onResize = () => {
+      if (!this._fit) return;
+      const w = this._fit.parentElement ? this._fit.parentElement.clientWidth : 700;
+      this.setState({ scale: Math.max(0.2, Math.min(0.62, w / 1080)) });
+    };
+    window.addEventListener("resize", this._onResize);
+    this._onResize();
+    this._onDoc = (e) => {
+      if (!this.state.pickerOpen) return;
+      if (this._picker && !this._picker.contains(e.target)) this.setState({ pickerOpen: false });
+    };
+    document.addEventListener("mousedown", this._onDoc);
+  }
+  componentWillUnmount() {
+    window.removeEventListener("resize", this._onResize);
+    document.removeEventListener("mousedown", this._onDoc);
+  }
+  backNav(h, l) {
+    const nav = this._nav ? this._nav.resolveBack(h, l) : { href: h, label: l };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = h; } };
+  }
+
+  // ---- mock diary logs (real field shape) ----
+  logs() {
+    if (this._logs) return this._logs;
+    const raw = [
+      // July 2026
+      ["2026-07-02", 101, "Perfect Days", 2023, 124, 4.5, 1, 0],
+      ["2026-07-03", 102, "The Zone of Interest", 2023, 105, 4, 0, 0],
+      ["2026-07-04", 103, "Chungking Express", 1994, 102, 5, 1, 1],
+      ["2026-07-04", 120, "Days of Being Wild", 1990, 94, 4, 0, 0],
+      ["2026-07-05", 105, "In the Mood for Love", 2000, 98, 5, 1, 0],
+      ["2026-07-06", 106, "Past Lives", 2023, 105, 4.5, 1, 0],
+      ["2026-07-07", 107, "Aftersun", 2022, 102, 5, 1, 0],
+      ["2026-07-08", 108, "Paprika", 2006, 90, 4, 0, 1],
+      ["2026-07-10", 121, "Stalker", 1979, 162, 4.5, 0, 0],
+      ["2026-07-10", 122, "Cure", 1997, 111, 4, 0, 0],
+      ["2026-07-10", 110, "Fallen Leaves", 2023, 81, 3.5, 1, 0],
+      ["2026-07-11", 119, "Yi Yi", 2000, 173, 5, 1, 0],
+      ["2026-07-11", 118, "Close-Up", 1990, 98, 4.5, 0, 0],
+      ["2026-07-11", 124, "Vagabond", 1985, 105, 4, 0, 0],
+      ["2026-07-11", 125, "Tampopo", 1985, 114, 3.5, 0, 0],
+      ["2026-07-11", 117, "Millennium Actress", 2001, 87, null, 0, 0],
+      ["2026-07-13", 111, "Drive My Car", 2021, 179, 4.5, 1, 0],
+      ["2026-07-15", 109, "La Haine", 1995, 98, 4.5, 0, 1],
+      ["2026-07-16", 123, "Happy Together", 1997, 96, 4, 1, 0],
+      ["2026-07-16", 112, "Portrait of a Lady on Fire", 2019, 122, 4, 1, 0],
+      ["2026-07-19", 113, "Anatomy of a Fall", 2023, 152, 4, 0, 0],
+      ["2026-07-20", 101, "Perfect Days", 2023, 124, 5, 1, 1],
+      ["2026-07-22", 104, "The Substance", 2024, 141, 3, 0, 0],
+      ["2026-07-23", 115, "Poor Things", 2023, 141, 3.5, 0, 0],
+      ["2026-07-26", 114, "There Will Be Blood", 2007, 158, 5, 1, 1],
+      ["2026-07-27", 116, "The Worst Person in the World", 2021, 128, 4, 1, 0],
+      ["2026-07-29", 126, "Tokyo Story", 1953, 136, 5, 1, 0],
+      ["2026-07-31", 127, "Petite Maman", 2021, 72, 4, 1, 0],
+      // June 2026
+      ["2026-06-04", 110, "Fallen Leaves", 2023, 81, 4, 1, 0],
+      ["2026-06-09", 114, "There Will Be Blood", 2007, 158, 5, 1, 1],
+      ["2026-06-13", 128, "Sansho the Bailiff", 1954, 124, 4.5, 0, 0],
+      ["2026-06-14", 113, "Anatomy of a Fall", 2023, 152, 4, 0, 0],
+      ["2026-06-14", 129, "Shoplifters", 2018, 121, 4.5, 1, 0],
+      ["2026-06-18", 109, "La Haine", 1995, 98, 5, 1, 1],
+      ["2026-06-21", 106, "Past Lives", 2023, 105, 4.5, 1, 0],
+      ["2026-06-24", 108, "Paprika", 2006, 90, 5, 1, 1],
+      ["2026-06-27", 107, "Aftersun", 2022, 102, 5, 1, 0],
+      ["2026-06-30", 130, "Dune: Part Two", 2024, 166, 3.5, 0, 0],
+      // August 2026
+      ["2026-08-01", 131, "Burning", 2018, 148, 4.5, 1, 0],
+      ["2026-08-02", 132, "Certain Women", 2016, 107, 4, 0, 0],
+      ["2026-08-05", 133, "Wings of Desire", 1987, 128, 4.5, 1, 0],
+      ["2026-08-05", 134, "Alice in the Cities", 1974, 110, 4, 0, 0],
+    ];
+    this._logs = raw.map((r, i) => ({
+      id: 9000 + i, watched_date: r[0], tmdb_id: r[1], title: r[2], release_year: r[3],
+      runtime: r[4], rating: r[5], liked: !!r[6], rewatched: !!r[7],
+      review_text: null, poster_path: "/p" + r[1] + ".jpg", created_at: 1000 + i,
+    }));
+    return this._logs;
+  }
+
+  MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+  daysIn(y, m) {
+    if (m === 2) return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28;
+    return [31,28,31,30,31,30,31,31,30,31,30,31][m - 1];
+  }
+  // Monday-first index (0=Mon) of the 1st, computed from the calendar, never from Date
+  firstIndex(y, m) {
+    const t = [0,3,2,5,0,3,5,1,4,6,2,4];
+    const yy = m < 3 ? y - 1 : y;
+    const dow = (yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) + t[m - 1] + 1) % 7;
+    return (dow + 6) % 7;
+  }
+  tone(id) {
+    const sets = [["#3a1d1e","#2e1618"],["#33201a","#281812"],["#2c1a22","#21131a"],["#3a2418","#2c1a12"],["#2e1d1a","#231413"]];
+    return sets[id % sets.length];
+  }
+  stripe(id) {
+    const t = this.tone(id);
+    return "repeating-linear-gradient(135deg," + t[0] + " 0 9px," + t[1] + " 9px 18px)";
+  }
+
+  monthEntries(key) {
+    return this.logs().filter((l) => l.watched_date && l.watched_date.slice(0, 7) === key);
+  }
+  sortDay(list) {
+    return list.slice().sort((a, b) => {
+      const ar = a.rating == null ? -1 : a.rating, br = b.rating == null ? -1 : b.rating;
+      if (ar !== br) return br - ar;
+      return a.created_at - b.created_at;
+    });
+  }
+
+  setMonth(y, m) { this.setState({ month: y + "-" + String(m).padStart(2, "0"), pickerOpen: false }); }
+  shiftMonth(key, delta) {
+    let y = +key.slice(0, 4), m = +key.slice(5, 7) + delta;
+    while (m > 12) { m -= 12; y += 1; }
+    while (m < 1) { m += 12; y -= 1; }
+    return y + "-" + String(m).padStart(2, "0");
+  }
+  flash(msg) {
+    this.setState({ toast: msg });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: "" }), 2600);
+  }
+  async download(label, h) {
+    this.flash("Rendering 1080\u00d7" + h + "\u2026");
+    try {
+      const mod = await import("https://esm.sh/html-to-image@1.11.11");
+      const url = await mod.toPng(this._card, { width: 1080, height: h, backgroundColor: "#1c0d0e", pixelRatio: 1 });
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "film-log-" + label.toLowerCase().replace(/\s+/g, "-") + ".png";
+      a.click();
+      this.flash("Saved " + a.download);
+    } catch (e) {
+      this.flash("Export needs a network connection \u2014 try again online");
+    }
+  }
+
+  renderVals() {
+    const aspect = this.state.aspect ?? this.props.aspect ?? "4:5";
+    const showLikes = this.state.showLikes ?? this.props.showLikes ?? true;
+    const key = this.state.month ?? this.props.month ?? "2026-07";
+    const year = +key.slice(0, 4), mo = +key.slice(5, 7);
+    const W = 1080;
+    const H = aspect === "1:1" ? 1080 : aspect === "9:16" ? 1920 : 1350;
+    // Story has the height for the summary; Feed and Square give the band to the grid.
+    const showFigures = aspect === "9:16";
+    const PAD = 46, GUT = 10, CHROME = showFigures ? 470 : 300;
+
+    const dim = this.daysIn(year, mo);
+    const first = this.firstIndex(year, mo);
+    const rows = Math.ceil((first + dim) / 7);
+    const cellW = Math.min((W - 2 * PAD - 6 * GUT) / 7, ((H - CHROME) - (rows - 1) * GUT) / rows / 1.5);
+    const cellH = cellW * 1.5;
+    const gridW = cellW * 7 + GUT * 6;
+
+    const entries = this.monthEntries(key);
+    const byDay = {};
+    entries.forEach((e) => {
+      const d = +e.watched_date.slice(8, 10);
+      (byDay[d] = byDay[d] || []).push(e);
+    });
+
+    const step = Math.max(3, cellW * 0.032);
+    const badge = Math.max(22, cellW * 0.26);
+
+    const cells = [];
+    for (let i = 0; i < rows * 7; i++) {
+      const dnum = i - first + 1;
+      const inMonth = dnum >= 1 && dnum <= dim;
+      const base = { cellStyle: { position: "relative", width: cellW + "px", height: cellH + "px" }, showNumeral: false, hasFilms: false, behind: [], showTip: false, tipItems: [] };
+      if (!inMonth) { cells.push(base); continue; }
+      const day = this.sortDay(byDay[dnum] || []);
+      if (!day.length) {
+        cells.push({ ...base, showNumeral: true, dateNum: dnum,
+          numeralStyle: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Newsreader',serif", fontSize: cellW * 0.28 + "px", color: "#573331", lineHeight: 1 } });
+        continue;
+      }
+      const top = day[0];
+      const hovered = this.state.hover === dnum;
+      const layers = Math.min(3, day.length - 1);
+      const fan = hovered ? 2.4 : 1;
+      const behind = [];
+      for (let k = layers; k >= 1; k--) {
+        const f = day[k];
+        const rot = (k % 2 ? 1.5 : -1.7) * (hovered ? 2 : 1);
+        behind.push({ style: {
+          position: "absolute", inset: 0, borderRadius: "3px", border: "2px solid #d8c9ae",
+          background: this.stripe(f.tmdb_id), boxShadow: "0 3px 10px -4px rgba(0,0,0,.7)",
+          transform: "translate(" + (k * step * fan).toFixed(1) + "px," + (k * step * fan).toFixed(1) + "px) rotate(" + rot.toFixed(1) + "deg)",
+          transition: "transform .18s ease", zIndex: 10 - k,
+        } });
+      }
+      cells.push({
+        ...base,
+        cellStyle: { ...base.cellStyle, zIndex: hovered ? 30 : 1 },
+        behind,
+        hasFilms: true,
+        count: day.length,
+        showBadge: day.length > 1,
+        showHeart: showLikes && top.liked,
+        topTitle: top.title,
+        topYear: top.release_year,
+        topStyle: { position: "absolute", inset: 0, borderRadius: "3px", border: "2px solid #f4e8d1", background: "#1c0d0e", zIndex: 12,
+          boxShadow: "0 " + (5 + day.length) + "px " + (14 + day.length * 3) + "px -6px rgba(0,0,0,.8)" },
+        tileStyle: { position: "absolute", inset: 0, borderRadius: "1px", overflow: "hidden", background: this.stripe(top.tmdb_id),
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: cellW * 0.09 + "px" },
+        titleStyle: { fontFamily: "'Newsreader',serif", fontSize: cellW * 0.125 + "px", lineHeight: 1.16, color: "#f2e5cd", textAlign: "center", textWrap: "pretty" },
+        yearStyle: { fontFamily: "'Newsreader',serif", fontStyle: "italic", fontSize: cellW * 0.095 + "px", color: "#b0917f", marginTop: cellW * 0.05 + "px" },
+        heartStyle: { position: "absolute", left: cellW * 0.05 + "px", top: cellW * 0.05 + "px", zIndex: 14,
+          background: "rgba(18,8,9,.6)", borderRadius: "4px", padding: cellW * 0.02 + "px " + cellW * 0.035 + "px",
+          fontSize: cellW * 0.14 + "px", lineHeight: 1, color: "#f0d488" },
+        badgeStyle: { position: "absolute", right: -badge * 0.32 + "px", bottom: -badge * 0.32 + "px", zIndex: 14,
+          width: badge + "px", height: badge + "px", borderRadius: "50%", background: "#d9b45a", color: "#2a1214",
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: badge * 0.54 + "px", fontWeight: 700,
+          boxShadow: "0 2px 7px -1px rgba(0,0,0,.6)" },
+        showTip: hovered && day.length > 1,
+        tipItems: day.map((f) => ({ line: f.title + " (" + f.release_year + ")" })),
+        tipStyle: { position: "absolute", left: "50%", bottom: cellH + 14 + "px", transform: "translateX(-50%)", zIndex: 40,
+          background: "#20100f", border: "1px solid #4a2529", borderRadius: "8px", padding: "12px 16px",
+          boxShadow: "0 20px 44px -14px rgba(0,0,0,.8)" },
+        onEnter: () => this.setState({ hover: dnum }),
+        onLeave: () => this.setState({ hover: null }),
+      });
+    }
+
+    const monthLabel = this.MONTHS[mo - 1] + " " + year;
+    const py = this.state.pickerYear;
+    const counts = {};
+    this.logs().forEach((l) => { const k = l.watched_date.slice(0, 7); counts[k] = (counts[k] || 0) + 1; });
+    const pickerMonths = this.ABBR.map((abbr, idx) => {
+      const k = py + "-" + String(idx + 1).padStart(2, "0");
+      const on = k === key;
+      return { abbr, count: counts[k] ? counts[k] + " films" : "\u2014",
+        onClick: () => this.setMonth(py, idx + 1),
+        style: { textAlign: "center", padding: "8px 0", borderRadius: "7px", cursor: "pointer", color: on ? "#f0d488" : "#e9d9c4", background: on ? "#33211a" : "transparent", border: "1px solid " + (on ? "#5c3a22" : "transparent") } };
+    });
+
+    // Films counts distinct tmdb_id; Hours sums runtime over EVERY watch, so a
+    // rewatch lifts the hours without lifting the film count.
+    const uniqueFilms = new Set(entries.map((e) => e.tmdb_id)).size;
+    const minutes = entries.reduce((n, e) => n + (e.runtime || 0), 0);
+    const watchedDays = Object.keys(byDay).map(Number).sort((a, b) => a - b);
+    let best = 0, run = 0, prev = null;
+    watchedDays.forEach((d) => { run = prev !== null && d === prev + 1 ? run + 1 : 1; prev = d; if (run > best) best = run; });
+    const figures = [
+      ["Films", String(uniqueFilms)],
+      ["Hours", Math.round(minutes / 60) + "h"],
+      ["Days", watchedDays.length + " of " + dim],
+      ["Streak", best + (best === 1 ? " day" : " days")],
+    ].map(([label, value], i) => ({
+      label, value,
+      style: { flex: 1, paddingLeft: i === 0 ? 0 : "22px", paddingRight: i === 3 ? 0 : "16px",
+        borderLeft: i === 0 ? "none" : "1px solid #4a2529" },
+    }));
+
+    const aspects = [["4:5", "Feed"], ["1:1", "Square"], ["9:16", "Story"]].map(([v, l]) => ({
+      label: l, onClick: () => this.setState({ aspect: v }),
+      style: { padding: "6px 13px", borderRadius: "6px", fontSize: "12.5px", cursor: "pointer",
+        color: aspect === v ? "#f0d488" : "#a2857a", background: aspect === v ? "#33211a" : "transparent" },
+    }));
+
+    const s = this.state.scale;
+    return {
+      ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"),
+      monthLabel, weekdays: ["M","T","W","T","F","S","S"], cells,
+      showFigures, figures,
+      isEmptyMonth: entries.length === 0,
+      emptyNote: "No films logged in " + monthLabel,
+      dimsLabel: "1080 \u00d7 " + H + " \u00b7 " + aspect,
+      viewportStyle: { width: W * s + "px", height: H * s + "px", position: "relative" },
+      scaleStyle: { transform: "scale(" + s + ")", transformOrigin: "0 0", width: W + "px", height: H + "px" },
+      cardStyle: { width: W + "px", height: H + "px", background: "#1c0d0e", padding: "44px " + PAD + "px 40px",
+        display: "flex", flexDirection: "column", overflow: "hidden" },
+      weekdayRowStyle: { width: gridW + "px", display: "grid", gridTemplateColumns: "repeat(7," + cellW + "px)", columnGap: GUT + "px" },
+      gridStyle: { width: gridW + "px", display: "grid", gridTemplateColumns: "repeat(7," + cellW + "px)", gap: GUT + "px" },
+      aspects, pickerMonths, pickerYear: py, pickerOpen: this.state.pickerOpen,
+      togglePicker: () => this.setState((p) => ({ pickerOpen: !p.pickerOpen, pickerYear: +key.slice(0, 4) })),
+      prevPickerYear: (e) => { e.stopPropagation(); this.setState({ pickerYear: py - 1 }); },
+      nextPickerYear: (e) => { e.stopPropagation(); this.setState({ pickerYear: py + 1 }); },
+      prevMonth: () => this.setState({ month: this.shiftMonth(key, -1) }),
+      nextMonth: () => this.setState({ month: this.shiftMonth(key, 1) }),
+      toggleLikes: () => this.setState({ showLikes: !showLikes }),
+      switchTrack: { width: "40px", height: "22px", borderRadius: "11px", background: showLikes ? "#d9b45a" : "#3a1f21", border: "1px solid " + (showLikes ? "#d9b45a" : "#4a2529"), position: "relative", transition: "background .16s ease" },
+      switchKnob: { position: "absolute", top: "2px", left: showLikes ? "20px" : "2px", width: "16px", height: "16px", borderRadius: "50%", background: showLikes ? "#2a1214" : "#8a6f63", transition: "left .16s ease" },
+      copyLink: () => {
+        const url = "https://jqiao.vercel.app/month/" + key;
+        if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => this.flash("Link copied \u00b7 " + url), () => this.flash(url));
+        else this.flash(url);
+      },
+      download: () => this.download(monthLabel, H),
+      setCard: (el) => { this._card = el; },
+      setPicker: (el) => { this._picker = el; },
+      setFit: (el) => { if (el && el !== this._fit) { this._fit = el; setTimeout(this._onResize, 0); } },
+      toast: this.state.toast,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

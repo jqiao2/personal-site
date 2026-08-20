@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1a120a;">
+  <nav style="display:flex; align-items:stretch; gap:2px; background:#150e07; border-bottom:1px solid #45341f; padding:0 clamp(14px,4vw,24px); overflow-x:auto; max-width:1008px; margin:0 auto; box-shadow:-2000px 0 0 #150e07, 2000px 0 0 #150e07;">
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Home</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">About</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Projects</a>
+    <a href="Jason's Film Log.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Films</a>
+    <a href="Books.dc.html" style="font-size:13px; letter-spacing:.4px; color:#f2e6cd; font-weight:600; padding:26px 16px 24px; border-bottom:2px solid #cfa452; white-space:nowrap;" style-hover="color:#fff2da;">Books</a>
+    <a href="Subway Map.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Subway</a>
+  </nav>
+  <div style="display:flex; justify-content:center; padding:34px clamp(14px,4vw,24px) 90px;">
+  <div style="width:100%; max-width:960px;">
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:30px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:clamp(38px,9vw,52px); color:#f2e6cd; letter-spacing:-.5px; line-height:1;">Books</h1>
+      <div style="font-size:12.5px; color:#8a745a; line-height:1.5; max-width:280px;">Logged automatically via Kindle</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:44px;">
+      <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="5">
+        <div style="background:#241a10; border:1px solid #45341f; border-radius:10px; padding:20px 18px;">
+          <div style="font-family:'Newsreader',serif; font-size:36px; color:#cfa452; line-height:1;">{{ m.value }}</div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#a68f6e; margin-top:8px;">{{ m.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- CURRENTLY READING -->
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:20px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Currently reading</div>
+      </div>
+
+      <sc-if value="{{ hasCurrent }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <sc-for list="{{ current }}" as="b" hint-placeholder-count="1">
+            <div style="background:#241a10; border:1px solid #45341f; border-radius:10px; padding:22px 20px; display:flex; gap:22px; align-items:stretch; flex-wrap:wrap;">
+              <div style="display:flex; align-items:flex-start; flex:none;">
+                <a href="{{ b.href }}" title="{{ b.hoverTitle }}" style="{{ b.coverStyle }}" style-hover="transform:translateY(-5px); border-color:#cfa452; box-shadow:0 16px 26px -10px rgba(0,0,0,.85), 0 0 0 1px rgba(207,164,82,.4);" style-focus="transform:translateY(-5px); border-color:#cfa452; box-shadow:0 16px 26px -10px rgba(0,0,0,.85), 0 0 0 2px rgba(207,164,82,.65);">
+                  <sc-if value="{{ b.noArt }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:absolute; inset:0; display:flex; align-items:flex-end; padding:10px; font-family:'Newsreader',serif; font-size:14px; line-height:1.2; color:#f2e6cd;">{{ b.main }}</div>
+                  </sc-if>
+                </a>
+              </div>
+              <div style="flex:1 1 260px; min-width:0; display:flex; flex-direction:column;">
+                <div style="font-family:'Newsreader',serif; font-size:26px; font-weight:500; color:#f2e6cd; line-height:1.15; letter-spacing:-.2px;"><a href="{{ b.href }}" style="color:inherit;" style-hover="color:#ecc87c;">{{ b.main }}</a></div>
+                <sc-if value="{{ b.hasSub }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-family:'Newsreader',serif; font-style:italic; font-size:15px; color:#a68f6e; margin-top:4px; line-height:1.3;">{{ b.sub }}</div>
+                </sc-if>
+                <sc-if value="{{ b.hasAuthor }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:13px; color:#a68f6e; margin-top:9px;">{{ b.author }}</div>
+                </sc-if>
+
+                <div style="margin-top:18px;">
+                  <div style="height:8px; background:#33261a; border-radius:4px; overflow:hidden;">
+                    <div style="{{ b.barStyle }}"></div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-top:9px; flex-wrap:wrap;">
+                    <span style="font-size:12.5px; color:#dcc9a6;">{{ b.pagesLabel }} <span style="color:#8a745a;">pages</span></span>
+                    <span style="font-family:'Newsreader',serif; font-size:19px; color:#cfa452; line-height:1;">{{ b.pct }}</span>
+                  </div>
+                </div>
+              </div>
+              <sc-if value="{{ showFacts }}" hint-placeholder-val="{{ true }}">
+                <div style="flex:0 1 190px; min-width:170px; display:flex; flex-direction:column; gap:9px; border-left:1px solid #392a19; padding-left:20px;">
+                  <sc-for list="{{ b.facts }}" as="f" hint-placeholder-count="4">
+                    <div style="display:flex; justify-content:space-between; gap:10px; font-size:12.5px;">
+                      <span style="color:#8a745a;">{{ f.k }}</span>
+                      <span style="color:#efe0c2; text-align:right;">{{ f.v }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ noCurrent }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px dashed #392a19; border-radius:10px; padding:30px 22px; text-align:center;">
+          <div style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#a68f6e;">{{ emptyCurrentLine }}</div>
+          <div style="font-size:12.5px; color:#8a745a; margin-top:7px;">The next page turn on the Kindle starts a new entry here.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ACTIVITY -->
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:20px; flex-wrap:wrap;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Reading activity</div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:12px; color:#a68f6e;">{{ activityMeta }}</span>
+          <div style="display:flex; gap:7px;">
+            <sc-for list="{{ viewPills }}" as="p" hint-placeholder-count="2">
+              <button onClick="{{ p.onClick }}" title="{{ p.title }}" style="{{ p.style }}">{{ p.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- compressed spells -->
+      <sc-if value="{{ isSpells }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column;">
+          <sc-for list="{{ spellRows }}" as="r" hint-placeholder-count="3">
+            <div style="{{ r.wrapStyle }}">
+              <sc-if value="{{ r.isBreak }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:14px; padding:16px 0;">
+                  <div style="flex:1; height:1px; background:repeating-linear-gradient(90deg,#392a19 0 5px,transparent 5px 11px);"></div>
+                  <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#8a745a; white-space:nowrap;">{{ r.label }}</span>
+                  <div style="flex:1; height:1px; background:repeating-linear-gradient(90deg,#392a19 0 5px,transparent 5px 11px);"></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.isSpell }}" hint-placeholder-val="{{ true }}">
+                <div style="background:#201709; border:1px solid #392a19; border-radius:10px; padding:16px 18px;">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                    <div style="font-size:13.5px; color:#efe0c2; font-weight:500; letter-spacing:.2px;">{{ r.label }}</div>
+                    <div style="font-size:12px; color:#a68f6e;">{{ r.meta }}</div>
+                  </div>
+                  <div style="display:flex; gap:3px; margin-top:13px; flex-wrap:wrap;">
+                    <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="12">
+                      <div title="{{ c.title }}" style="{{ c.style }}"></div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:12px; color:#8a745a; margin-top:12px; line-height:1.45;">{{ r.books }}</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- year heatmap -->
+      <sc-if value="{{ isHeatmap }}" hint-placeholder-val="{{ false }}">
+        <div ref="{{ heatRef }}" style="padding-bottom:6px;">
+          <div>
+            <div style="display:flex; gap:3px; margin-left:26px; margin-bottom:6px;">
+              <sc-for list="{{ heatCols }}" as="col" hint-placeholder-count="53">
+                <div style="{{ col.labelStyle }}">{{ col.month }}</div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <div style="display:flex; flex-direction:column; gap:3px; width:20px; flex:none;">
+                <sc-for list="{{ dowLabels }}" as="d" hint-placeholder-count="7">
+                  <div style="{{ dowStyle }}">{{ d }}</div>
+                </sc-for>
+              </div>
+              <div style="display:flex; gap:3px; flex:1; min-width:0;">
+                <sc-for list="{{ heatCols }}" as="col" hint-placeholder-count="53">
+                  <div style="display:flex; flex-direction:column; gap:3px; flex:1; min-width:0;">
+                    <sc-for list="{{ col.cells }}" as="c" hint-placeholder-count="7">
+                      <div title="{{ c.title }}" style="{{ c.style }}"></div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:9px; margin-top:14px; flex-wrap:wrap;">
+          <span style="font-size:11.5px; color:#8a745a;">Fewer pages</span>
+          <div style="display:flex; gap:3px;">
+            <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+              <div style="{{ l.style }}"></div>
+            </sc-for>
+          </div>
+          <span style="font-size:11.5px; color:#8a745a;">More</span>
+          <span style="font-size:11.5px; color:#8a745a; margin-left:auto;">{{ heatSpan }}</span>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- SET ASIDE -->
+    <sc-if value="{{ hasAside }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:14px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Set aside</div>
+      </div>
+      <sc-for list="{{ aside }}" as="b" hint-placeholder-count="1">
+        <div style="display:flex; align-items:center; gap:16px; padding:14px 2px; border-bottom:1px solid #33261a; flex-wrap:wrap;">
+          <a href="{{ b.href }}" title="{{ b.hoverTitle }}" style="{{ b.coverSmallStyle }}" style-hover="transform:translateY(-4px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(207,164,82,.4);" style-focus="transform:translateY(-4px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 2px rgba(207,164,82,.65);">
+            <sc-if value="{{ b.noArt }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; inset:0; display:flex; align-items:flex-end; padding:5px; font-family:'Newsreader',serif; font-size:9px; line-height:1.15; color:#e4d3b0; overflow:hidden;">{{ b.main }}</div>
+            </sc-if>
+          </a>
+          <div style="flex:1 1 200px; min-width:0;">
+            <div style="font-family:'Newsreader',serif; font-size:19px; color:#e4d3b0; line-height:1.2;"><a href="{{ b.href }}" style="color:inherit;" style-hover="color:#ecc87c;">{{ b.main }}</a></div>
+            <div style="font-size:12px; color:#8a745a; margin-top:3px;">{{ b.asideMeta }}</div>
+          </div>
+          <div style="width:110px; flex:none;">
+            <div style="height:6px; background:#33261a; border-radius:3px; overflow:hidden;">
+              <div style="{{ b.barStyle }}"></div>
+            </div>
+          </div>
+          <span style="font-size:12.5px; color:#a68f6e; width:46px; text-align:right; flex:none;">{{ b.pct }}</span>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- ================= TO READ: THE PILE, AS A SHELF =================
+         Newest addition at the left. One row, never wrapping: the shelf is the object,
+         and running out of board is the honest way to show how far behind I am. -->
+    <sc-if value="{{ toReadShow }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:6px; flex-wrap:wrap;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">To read</div>
+        <a href="To Read.dc.html" style="font-size:12.5px;">{{ toReadCount }}</a>
+      </div>
+      <div style="position:relative;">
+        <div onScroll="{{ onShelfScroll }}" onClick="{{ clearPull }}" style="overflow-x:auto; overflow-y:hidden; padding-top:54px; scrollbar-width:thin; scrollbar-color:#4a3520 #1c1409;">
+          <div style="width:max-content; min-width:100%;">
+            <div style="display:flex; align-items:flex-end; gap:2px; height:236px; padding:0 46px 0 22px; background:linear-gradient(180deg,#0c0704 0%,#130d07 55%,#1d1409 100%); box-shadow:inset 0 -22px 28px -20px rgba(0,0,0,.95), inset 0 14px 20px -16px rgba(0,0,0,.9);">
+              <sc-for list="{{ toReadBooks }}" as="s" hint-placeholder-count="14">
+                <a href="{{ s.href }}" title="{{ s.tooltip }}" aria-label="{{ s.aria }}" onClick="{{ s.onClick }}" style="{{ s.hitStyle }}" style-hover="transform:translateY(-7px);" style-focus="outline:2px solid #cfa452; outline-offset:3px;">
+                  <div style="{{ s.bodyStyle }}">
+                    <div style="position:absolute; inset:0; background:linear-gradient(90deg,rgba(255,246,225,.17) 0%,rgba(255,246,225,.06) 16%,rgba(0,0,0,0) 44%,rgba(0,0,0,.26) 80%,rgba(0,0,0,.46) 100%);"></div>
+                    <sc-if value="{{ s.foiled }}" hint-placeholder-val="{{ true }}">
+                      <div style="position:absolute; left:0; right:0; top:0; height:5px; background:currentColor; opacity:.3;"></div>
+                      <div style="position:absolute; left:0; right:0; bottom:0; height:5px; background:currentColor; opacity:.3;"></div>
+                      <div style="position:absolute; left:2px; right:2px; top:10px; height:3px; border-top:1px solid currentColor; border-bottom:1px solid currentColor; opacity:.55;"></div>
+                      <div style="position:absolute; left:2px; right:2px; bottom:10px; height:3px; border-top:1px solid currentColor; border-bottom:1px solid currentColor; opacity:.55;"></div>
+                    </sc-if>
+                    <div style="{{ s.typeStyle }}">
+                      <div style="{{ s.titleStyle }}">{{ s.title }}</div>
+                      <sc-if value="{{ s.showAuthor }}" hint-placeholder-val="{{ true }}">
+                        <div style="{{ s.sepStyle }}"></div>
+                        <div style="{{ s.authorStyle }}">{{ s.surname }}</div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </a>
+              </sc-for>
+              <sc-if value="{{ toReadEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:'Newsreader',serif; font-style:italic; font-size:17px; color:#a68f6e; padding-bottom:16px;">Nothing on the pile.</div>
+              </sc-if>
+            </div>
+            <div style="height:20px; background:linear-gradient(180deg,#4c3721 0%,#3e2c1a 44%,#2b1d10 100%),repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 3px,rgba(255,255,255,.02) 3px 8px,rgba(0,0,0,.07) 8px 14px); background-blend-mode:overlay; box-shadow:inset 0 1px 0 rgba(232,199,138,.3);"></div>
+            <div style="height:7px; background:linear-gradient(180deg,#22170a 0%,#150e06 100%);"></div>
+          </div>
+        </div>
+        <div style="position:absolute; top:0; right:0; bottom:0; width:66px; pointer-events:none; background:linear-gradient(90deg,rgba(26,18,10,0) 0%,rgba(26,18,10,.7) 55%,#1a120a 100%);"></div>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- ================= FINISHED, AS A SHELF =================
+         Newest finish at the left. No year filter: scrolling back through the shelf
+         IS the time axis, and a pill row would only let you cut it into pieces. -->
+    <div style="margin-bottom:44px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:6px; flex-wrap:wrap;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Finished</div>
+        <span style="font-size:12px; color:#8a745a;">{{ finishedMetaLine }}</span>
+      </div>
+      <div style="position:relative;">
+        <div onScroll="{{ onShelfScroll }}" onClick="{{ clearPull }}" style="overflow-x:auto; overflow-y:hidden; padding-top:54px; scrollbar-width:thin; scrollbar-color:#4a3520 #1c1409;">
+          <div style="width:max-content; min-width:100%;">
+            <div style="display:flex; align-items:flex-end; gap:2px; height:236px; padding:0 46px 0 22px; background:linear-gradient(180deg,#0c0704 0%,#130d07 55%,#1d1409 100%); box-shadow:inset 0 -22px 28px -20px rgba(0,0,0,.95), inset 0 14px 20px -16px rgba(0,0,0,.9);">
+              <sc-for list="{{ finishedBooks }}" as="s" hint-placeholder-count="18">
+                <a href="{{ s.href }}" title="{{ s.tooltip }}" aria-label="{{ s.aria }}" onClick="{{ s.onClick }}" style="{{ s.hitStyle }}" style-hover="transform:translateY(-7px);" style-focus="outline:2px solid #cfa452; outline-offset:3px;">
+                  <div style="{{ s.bodyStyle }}">
+                    <div style="position:absolute; inset:0; background:linear-gradient(90deg,rgba(255,246,225,.17) 0%,rgba(255,246,225,.06) 16%,rgba(0,0,0,0) 44%,rgba(0,0,0,.26) 80%,rgba(0,0,0,.46) 100%);"></div>
+                    <sc-if value="{{ s.foiled }}" hint-placeholder-val="{{ true }}">
+                      <div style="position:absolute; left:0; right:0; top:0; height:5px; background:currentColor; opacity:.3;"></div>
+                      <div style="position:absolute; left:0; right:0; bottom:0; height:5px; background:currentColor; opacity:.3;"></div>
+                      <div style="position:absolute; left:2px; right:2px; top:10px; height:3px; border-top:1px solid currentColor; border-bottom:1px solid currentColor; opacity:.55;"></div>
+                      <div style="position:absolute; left:2px; right:2px; bottom:10px; height:3px; border-top:1px solid currentColor; border-bottom:1px solid currentColor; opacity:.55;"></div>
+                    </sc-if>
+                    <div style="{{ s.typeStyle }}">
+                      <div style="{{ s.titleStyle }}">{{ s.title }}</div>
+                      <sc-if value="{{ s.showAuthor }}" hint-placeholder-val="{{ true }}">
+                        <div style="{{ s.sepStyle }}"></div>
+                        <div style="{{ s.authorStyle }}">{{ s.surname }}</div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </a>
+              </sc-for>
+              <sc-if value="{{ finishedEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:'Newsreader',serif; font-style:italic; font-size:17px; color:#a68f6e; padding-bottom:16px;">Nothing finished yet.</div>
+              </sc-if>
+            </div>
+            <div style="height:20px; background:linear-gradient(180deg,#4c3721 0%,#3e2c1a 44%,#2b1d10 100%),repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 3px,rgba(255,255,255,.02) 3px 8px,rgba(0,0,0,.07) 8px 14px); background-blend-mode:overlay; box-shadow:inset 0 1px 0 rgba(232,199,138,.3);"></div>
+            <div style="height:7px; background:linear-gradient(180deg,#22170a 0%,#150e06 100%);"></div>
+          </div>
+        </div>
+        <div style="position:absolute; top:0; right:0; bottom:0; width:66px; pointer-events:none; background:linear-gradient(90deg,rgba(26,18,10,0) 0%,rgba(26,18,10,.7) 55%,#1a120a 100%);"></div>
+      </div>
+    </div>
+
+    <div style="font-size:11.5px; color:#8a745a; padding-top:4px; line-height:1.6;">Some books are read privately. They are counted in the totals and streaks above but never listed.</div>
+
+  </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;pileState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;books&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;books&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;To-read shelf&quot;},&quot;viewer&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;visitor&quot;],&quot;default&quot;:&quot;owner&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;To-read shelf&quot;},&quot;activityView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;spells&quot;,&quot;heatmap&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Activity&quot;},&quot;dataState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;current&quot;,&quot;dense&quot;,&quot;firstLoad&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;current&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Data state&quot;}}">
+const DAY = 86400000;
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+// ---------------------------------------------------------------------------
+// SPINE GEOMETRY — the single site-wide source of truth. Ported as-is to
+// src/lib/books-view.ts; nothing below this block should be re-derived in markup.
+// ---------------------------------------------------------------------------
+const REFERENCE_HEIGHT = 180;   // the shelf's mid-height; all widths are quoted at this height
+const DEFAULT_PAGES    = 250;   // an average book — what an unknown length draws as
+const MIN_SPINE_W      = 16;    // two boards and endpapers: nothing is hairline-thin
+const MAX_SPINE_W      = 64;    // reached at ~960 pages
+const PX_PER_PAGE      = 0.05;
+const MIN_DRAWN_W      = 8;
+const SPINE_H_MIN      = 155;
+const SPINE_H_MAX      = 205;
+
+// Linear in page count, plus a fixed floor for the covers.
+function spineWidth(pages) {
+  const p = pages === null || pages === undefined ? DEFAULT_PAGES : pages;
+  return Math.min(MAX_SPINE_W, Math.max(MIN_SPINE_W, MIN_SPINE_W + p * PX_PER_PAGE));
+}
+// Scaled by the CONTEXT's reference height — never by the book's own randomized
+// height, or two 300-page books on one shelf would come out different widths.
+function drawnWidth(pages, contextHeight) {
+  return Math.max(MIN_DRAWN_W, spineWidth(pages) * contextHeight / REFERENCE_HEIGHT);
+}
+function half(px) { return Math.round(px * 2) / 2; }
+
+function hash32(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function seed01(id, salt) { return (hash32(id + "~" + salt) % 100000) / 100000; }
+// Deterministic, so a book is the same height on every reload and on both shelves.
+function spineHeight(id) { return Math.round(SPINE_H_MIN + seed01(id, "h") * (SPINE_H_MAX - SPINE_H_MIN)); }
+
+const SPINE_FAMILIES = [
+  { h: 27,  s: 32, l: 21, foil: "#efe1c2" }, // antique tobacco
+  { h: 152, s: 26, l: 15, foil: "#eee0c1" }, // deep forest
+  { h: 92,  s: 19, l: 24, foil: "#efe3c6" }, // withered fern
+  { h: 355, s: 40, l: 20, foil: "#f2e4c6" }, // oxblood
+  { h: 43,  s: 48, l: 36, foil: "#33240a" }, // dark mustard — needs a much deeper gold to read
+  { h: 189, s: 28, l: 19, foil: "#eadfc4" }, // silent-library teal
+];
+function spineCloth(id) {
+  const f = SPINE_FAMILIES[hash32(id + "~fam") % SPINE_FAMILIES.length];
+  const hue = f.h + (seed01(id, "hue") - 0.5) * 12;
+  const sat = f.s + (seed01(id, "sat") - 0.5) * 7;
+  const lit = f.l + (seed01(id, "lit") - 0.5) * 7;
+  const c = (d) => "hsl(" + hue.toFixed(1) + " " + Math.max(10, sat).toFixed(1) + "% " + Math.max(8, lit + d).toFixed(1) + "%)";
+  return {
+    // lighter at the left edge, falling into shadow at the right: a curve, not a bar
+    background: "linear-gradient(90deg," + c(7) + " 0%," + c(3.5) + " 15%," + c(0) + " 43%," + c(-4.5) + " 79%," + c(-8.5) + " 100%)",
+    foil: f.foil,
+  };
+}
+
+function mainTitle(t) { const i = t.indexOf(": "); return i > 0 ? t.slice(0, i) : t; }
+const PARTICLE = /^(le|la|de|del|della|da|van|von|du|den|der|ten|ter|di|st\.?|bin|ibn|mac|mc|o')$/i;
+function surname(name) {
+  const p = name.trim().split(/\s+/);
+  if (p.length === 1) return p[0];
+  const last = p[p.length - 1], prev = p[p.length - 2];
+  return PARTICLE.test(prev) ? prev + " " + last : last;
+}
+function spineAuthor(authors) {
+  const a = (authors || "").split(/\s*&\s*|\s*,\s*/).filter(Boolean);
+  if (!a.length) return "";
+  if (a.length === 1) return surname(a[0]);
+  if (a.length === 2) return surname(a[0]) + " & " + surname(a[1]);
+  return surname(a[0]) + " et al.";
+}
+// Type that fits: step the size down once, then let it truncate.
+function spineType(w, h, title, author) {
+  const showAuthor = w >= 21 && !!author;
+  const runLength = h - 36;
+  let ts = w >= 42 ? 15 : w >= 34 ? 13.5 : w >= 26 ? 12.5 : w >= 21 ? 11 : 10;
+  let as = Math.max(7.5, half(ts - 3.5));
+  const authorRun = showAuthor ? author.length * as * 0.64 + 14 : 0;
+  if (title.length * ts * 0.46 > runLength - authorRun - 6) { ts = Math.max(9, ts - 1.5); as = Math.max(7.5, half(ts - 3.5)); }
+  return { ts, as, showAuthor, runLength };
+}
+// ------------------------- end spine geometry -------------------------------
+
+// The pile. Added by hand, nothing read yet. Piranesi has no page count on record:
+// it draws as an ordinary 250-page book rather than advertising the gap.
+const TO_READ = [
+  { id: "tr-piranesi", title: "Piranesi", authors: "Susanna Clarke", pages: null, added_at: "2026-07-28" },
+  { id: "tr-idiot", title: "The Idiot", authors: "Elif Batuman", pages: 423, added_at: "2026-07-12" },
+  { id: "tr-seeing", title: "Seeing Like a State: How Certain Schemes to Improve the Human Condition Have Failed", authors: "James C. Scott", pages: 445, added_at: "2026-06-30" },
+  { id: "tr-small-things", title: "Small Things Like These", authors: "Claire Keegan", pages: 128, added_at: "2026-06-04" },
+  { id: "tr-field-guide", title: "A Field Guide to Getting Lost", authors: "Rebecca Solnit", pages: 209, added_at: "2026-05-19", private: true },
+  { id: "tr-malte", title: "The Notebooks of Malte Laurids Brigge", authors: "Rainer Maria Rilke", pages: 272, added_at: "2026-04-27" },
+  { id: "tr-jest", title: "Infinite Jest", authors: "David Foster Wallace", pages: 1079, added_at: "2026-03-15" },
+  { id: "tr-underland", title: "Underland: A Deep Time Journey", authors: "Robert Macfarlane", pages: 496, added_at: "2026-02-02" },
+  { id: "tr-wolf-hall", title: "Wolf Hall", authors: "Hilary Mantel", pages: 653, added_at: "2026-01-20" },
+  { id: "tr-maladies", title: "The Emperor of All Maladies: A Biography of Cancer", authors: "Siddhartha Mukherjee", pages: 592, added_at: "2025-12-14" },
+  { id: "tr-atomic", title: "The Making of the Atomic Bomb", authors: "Richard Rhodes", pages: 886, added_at: "2025-11-08" },
+  { id: "tr-autumn", title: "Autumn", authors: "Ali Smith", pages: 264, added_at: "2025-10-02" },
+  { id: "tr-saturn", title: "The Rings of Saturn", authors: "W. G. Sebald", pages: 296, added_at: "2025-09-11" },
+  { id: "tr-geb", title: "Gödel, Escher, Bach: An Eternal Golden Braid", authors: "Douglas Hofstadter", pages: 777, added_at: "2025-08-23" },
+  { id: "tr-stoner", title: "Stoner", authors: "John Williams", pages: 278, added_at: "2025-07-30" },
+];
+
+// Everything read. kindle:false means it was read on paper — matte spine, no foil.
+const FINISHED = [
+  { id: "fn-pale-fire", title: "Pale Fire", authors: "Vladimir Nabokov", pages: 315, finished_at: "2026-07-19", kindle: true },
+  { id: "fn-sea", title: "The Sea, the Sea", authors: "Iris Murdoch", pages: 517, finished_at: "2026-06-08", kindle: true },
+  { id: "fn-trust", title: "Trust", authors: "Hernan Diaz", pages: 402, finished_at: "2026-05-21", kindle: true },
+  { id: "fn-bewilderment", title: "Bewilderment", authors: "Richard Powers", pages: 288, finished_at: "2026-05-02", kindle: true },
+  { id: "fn-employees", title: "The Employees: A Workplace Novel of the 22nd Century", authors: "Olga Ravn", pages: 136, finished_at: "2026-04-14", kindle: true },
+  { id: "fn-chip-war", title: "Chip War: The Fight for the World's Most Critical Technology", authors: "Chris Miller", pages: 464, finished_at: "2026-03-27", kindle: true },
+  { id: "fn-room", title: "A Room of One's Own", authors: "Virginia Woolf", pages: 172, finished_at: "2026-03-08", kindle: true },
+  { id: "fn-overstory", title: "The Overstory", authors: "Richard Powers", pages: 502, finished_at: "2026-02-16", kindle: true },
+  { id: "fn-klara", title: "Klara and the Sun", authors: "Kazuo Ishiguro", pages: 303, finished_at: "2026-01-24", kindle: true },
+  { id: "fn-dawn", title: "The Dawn of Everything: A New History of Humanity", authors: "David Graeber & David Wengrow", pages: 692, finished_at: "2025-12-30", kindle: true },
+  { id: "fn-morisaki", title: "Days at the Morisaki Bookshop", authors: "Satoshi Yagisawa", pages: 147, finished_at: "2025-12-05", kindle: true },
+  { id: "fn-cloud-atlas", title: "Cloud Atlas", authors: "David Mitchell", pages: 509, finished_at: "2025-11-18", kindle: true },
+  { id: "fn-left-hand", title: "The Left Hand of Darkness", authors: "Ursula K. Le Guin", pages: 304, finished_at: "2025-10-29", kindle: true },
+  { id: "fn-physics", title: "Seven Brief Lessons on Physics", authors: "Carlo Rovelli", pages: 96, finished_at: "2025-10-07", kindle: true },
+  { id: "fn-educated", title: "Educated: A Memoir", authors: "Tara Westover", pages: 334, finished_at: "2025-09-19", kindle: true },
+  { id: "fn-blood-meridian", title: "Blood Meridian: Or the Evening Redness in the West", authors: "Cormac McCarthy", pages: 351, finished_at: "2025-08-30", kindle: true },
+  { id: "fn-goldfinch", title: "The Goldfinch", authors: "Donna Tartt", pages: 771, finished_at: "2025-08-02", kindle: true },
+  { id: "fn-circe", title: "Circe", authors: "Madeline Miller", pages: 393, finished_at: "2025-07-11", kindle: true },
+  { id: "fn-thinking", title: "Thinking, Fast and Slow", authors: "Daniel Kahneman", pages: 499, finished_at: "2025-06-20", kindle: true },
+  { id: "fn-sicp", title: "Structure and Interpretation of Computer Programs", authors: "Harold Abelson, Gerald Jay Sussman & Julie Sussman", pages: 657, finished_at: "2025-06-02", kindle: true },
+  { id: "fn-convenience", title: "Convenience Store Woman", authors: "Sayaka Murata", pages: 163, finished_at: "2025-05-28", kindle: true },
+  { id: "fn-martian", title: "The Martian: A Novel", authors: "Andy Weir", pages: 628, finished_at: "2025-04-22", kindle: true },
+  { id: "fn-bluest-eye", title: "The Bluest Eye", authors: "Toni Morrison", pages: 216, finished_at: "2025-03-30", kindle: true },
+  { id: "fn-sapiens", title: "Sapiens: A Brief History of Humankind", authors: "Yuval Noah Harari", pages: 498, finished_at: "2025-03-02", kindle: true },
+  { id: "fn-remains", title: "The Remains of the Day", authors: "Kazuo Ishiguro", pages: 258, finished_at: "2025-01-27", kindle: true },
+  { id: "fn-never-let-me-go", title: "Never Let Me Go", authors: "Kazuo Ishiguro", pages: 288, finished_at: "2024-12-15", kindle: true },
+  { id: "fn-secret-history", title: "The Secret History", authors: "Donna Tartt", pages: 559, finished_at: "2024-11-20", kindle: true },
+  { id: "fn-gentleman", title: "A Gentleman in Moscow", authors: "Amor Towles", pages: 462, finished_at: "2024-10-26", kindle: true },
+  { id: "fn-hamnet", title: "Hamnet", authors: "Maggie O'Farrell", pages: 372, finished_at: "2024-09-30", kindle: true },
+  { id: "fn-waves", title: "The Waves", authors: "Virginia Woolf", pages: null, finished_at: "2024-09-04", kindle: true },
+];
+
+class Component extends DCLogic {
+  state = { view: null, pulled: null, heatW: 0, isMobile: typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches };
+
+  // The year grid always fills its container: at desktop widths that means larger
+  // squares across all 53 weeks; on narrow screens the squares stay ~11px and the
+  // grid is cropped back to the most recent weeks that fit.
+  heatGeom() {
+    const w = this.state.heatW;
+    if (!w) return { cell: 11, weeks: 53 };
+    const avail = w - 26; // day-label column + gap
+    const weeks = Math.max(8, Math.min(53, Math.floor((avail + 3) / 14)));
+    const cell = Math.min(22, (avail - 3 * (weeks - 1)) / weeks);
+    return { cell, weeks };
+  }
+
+  componentDidMount() {
+
+    this.mq = window.matchMedia("(max-width: 640px)");
+    this.onMq = (e) => this.setState({ isMobile: e.matches });
+    this.mq.addEventListener("change", this.onMq);
+    this.onKey = (e) => { if (e.key === "Escape" && this.state.pulled) this.setState({ pulled: null }); };
+    document.addEventListener("keydown", this.onKey);
+  }
+  componentWillUnmount() { document.removeEventListener("keydown", this.onKey); if (this.mq) this.mq.removeEventListener("change", this.onMq); if (this.ro) this.ro.disconnect(); }
+
+  reducedMotion() {
+    return typeof window !== "undefined" && window.matchMedia
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches : false;
+  }
+
+  key(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  parse(s) { const p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  fmtDay(d) { return d.getDate() + " " + MO[d.getMonth()] + " " + d.getFullYear(); }
+  fmtTime(sec) {
+    const m = Math.round(sec / 60);
+    if (m < 60) return m + "m";
+    return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+  }
+  fmtNum(n) { return n.toLocaleString("en-US"); }
+  splitTitle(title) {
+    const colon = title.indexOf(": ");
+    return colon > 0 ? { main: title.slice(0, colon), sub: title.slice(colon + 2) } : { main: title, sub: "" };
+  }
+  waited(from, today) {
+    const d = Math.round((today - this.parse(from)) / DAY);
+    if (d < 31) return d + (d === 1 ? " day" : " days");
+    if (d < 365) { const m = Math.round(d / 30.4); return m + (m === 1 ? " month" : " months"); }
+    const y = (d / 365).toFixed(1);
+    return y + " years";
+  }
+
+  // One shelf spine: geometry, cloth, foil and printed type, all from pure functions.
+  shelfSpine(b, tooltipTail, today) {
+    const uid = b.id;
+    const h = spineHeight(b.id);
+    const w = half(drawnWidth(b.pages, REFERENCE_HEIGHT));
+    const cloth = spineCloth(b.id);
+    const title = mainTitle(b.title);
+    const author = spineAuthor(b.authors);
+    const t = spineType(w, h, title, author);
+    const foiled = b.kindle !== false;             // paper reads get a matte, unlettered spine
+    const foil = foiled ? cloth.foil : "#efe6d2";
+    const pulled = this.state.pulled === uid;
+    const rm = this.reducedMotion();
+    const pagesText = b.pages === null || b.pages === undefined ? "length unknown" : this.fmtNum(b.pages) + " pages";
+
+    return {
+      uid, foiled, title, surname: author, showAuthor: t.showAuthor,
+      href: "Book.dc.html",
+      tooltip: b.title + " — " + b.authors + " · " + pagesText + " · " + tooltipTail,
+      aria: title + " — " + b.authors + ", " + pagesText,
+      hitStyle: {
+        display: "block", flex: "none", position: "relative", width: w + "px", height: h + "px",
+        outline: "none", textDecoration: "none", zIndex: pulled ? 60 : 1,
+        transition: rm ? "none" : "transform .16s ease",
+      },
+      bodyStyle: {
+        position: "absolute", left: 0, right: 0, top: 0, bottom: 0, overflow: "hidden",
+        borderRadius: "1px 3px 3px 1px", background: cloth.background, color: foil,
+        transformOrigin: "50% 100%",
+        transform: pulled ? "translateY(-30px) scale(1.05) rotate(-1.4deg)" : "none",
+        boxShadow: pulled
+          ? "0 26px 34px -12px rgba(0,0,0,.95), 8px 0 18px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(207,164,82,.35)"
+          : "6px 0 10px -7px rgba(0,0,0,.9), 0 9px 13px -8px rgba(0,0,0,.95), inset -1px 0 0 rgba(0,0,0,.5)",
+        transition: rm ? "opacity .22s ease, box-shadow .22s ease" : "transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s ease",
+      },
+      // rotated 90° clockwise: reads top-to-bottom, the English hardcover convention
+      typeStyle: {
+        position: "absolute", top: "50%", left: "50%",
+        width: t.runLength + "px", height: w + "px",
+        marginTop: -w / 2 + "px", marginLeft: -t.runLength / 2 + "px",
+        transform: "rotate(90deg)", display: "flex", alignItems: "center", padding: "0 2px",
+      },
+      titleStyle: {
+        flex: "0 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        fontFamily: "'Newsreader',serif", fontWeight: 500, fontSize: t.ts + "px", lineHeight: 1.05, letterSpacing: ".1px",
+      },
+      sepStyle: { flex: "none", width: "1px", height: "58%", background: "currentColor", opacity: foiled ? 0.5 : 0.24, marginLeft: "auto" },
+      authorStyle: {
+        flex: "none", marginLeft: "7px", maxWidth: "40%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        fontFamily: "'Archivo',sans-serif", fontSize: t.as + "px", letterSpacing: ".7px", textTransform: "uppercase", opacity: 0.88,
+      },
+      onClick: (e) => {
+        e.stopPropagation();
+        if (this.state.pulled !== uid) { e.preventDefault(); this.setState({ pulled: uid }); }
+      },
+    };
+  }
+
+  dataset() {
+    const state = this.props.dataState || "current";
+    if (state === "empty") return { books: [], days: [], finished: [] };
+
+    const B = (o) => o;
+    if (state === "firstLoad") {
+      return {
+        books: [B({ title: "The Martian: A Novel", author: "Andy Weir", isbn: "9780553418026", total: 628, furthest: 74, distinct: 70, sec: 41 * 60, first: "2025-04-13", last: "2025-04-13", daysRead: 1, kind: "book" })],
+        days: [{ d: "2025-04-13", pages: 70, sec: 41 * 60, books: 1 }],
+        finished: [],
+      };
+    }
+
+    const books = [
+      B({ title: "The Power Broker: Robert Moses and the Fall of New York", author: "Robert A. Caro", isbn: "9780394720241", total: 3943, furthest: 106, distinct: 101, sec: 4 * 60, first: "2026-08-02", last: "2026-08-02", daysRead: 1, kind: "book" }),
+      B({ title: "This Is How You Lose the Time War", author: "Amal El-Mohtar & Max Gladstone", isbn: "9781534431003", total: 238, furthest: 16, distinct: 16, sec: 17 * 60, first: "2025-04-23", last: "2025-04-25", daysRead: 3, kind: "book" }),
+    ];
+
+    const spring = [
+      ["2025-04-13", 70, 44], ["2025-04-14", 60, 38], ["2025-04-15", 55, 34],
+      ["2025-04-17", 48, 33], ["2025-04-18", 40, 30], ["2025-04-19", 38, 28],
+      ["2025-04-20", 36, 27], ["2025-04-21", 30, 25], ["2025-04-22", 23, 22],
+      ["2025-04-23", 7, 8], ["2025-04-24", 5, 5], ["2025-04-25", 4, 4],
+    ];
+    let days = spring.map((r) => ({ d: r[0], pages: r[1], sec: r[2] * 60, books: 1 }));
+    days.push({ d: "2026-08-02", pages: 109, sec: 4 * 60, books: 2 });
+
+    if (state === "dense") {
+      let seed = 4712;
+      const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+      const out = [];
+      const end = this.parse("2026-08-02");
+      for (let i = 330; i >= 0; i--) {
+        const d = new Date(end.getTime() - i * DAY);
+        const r = rnd();
+        if (r < 0.34) continue;
+        const pages = 6 + Math.round(rnd() * 58);
+        out.push({ d: this.key(d), pages, sec: pages * 62, books: rnd() > 0.8 ? 2 : 1 });
+      }
+      days = out;
+    }
+    return { books, days, finished: FINISHED };
+  }
+
+  // Covers beside Currently reading and Set aside. Open Library art when the ISBN
+  // resolves; the tinted board with the title underneath is what shows when it doesn't.
+  coverStyles(b) {
+    const art = b.isbn ? "url(https://covers.openlibrary.org/b/isbn/" + b.isbn + "-L.jpg)" : "";
+    const cloth = "repeating-linear-gradient(135deg,#33261a 0 6px,#2a1c0c 6px 12px)";
+    const board = { position: "relative", display: "block", flex: "none", overflow: "hidden", borderRadius: "2px 5px 5px 2px", border: "1px solid #45341f", backgroundImage: art ? art + "," + cloth : cloth, backgroundSize: "cover, auto", backgroundPosition: "center", backgroundRepeat: "no-repeat, repeat", boxShadow: "0 10px 18px -10px rgba(0,0,0,.85)", cursor: "pointer", outline: "none", transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease" };
+    return {
+      coverStyle: { ...board, width: "104px", height: "156px" },
+      coverSmallStyle: { ...board, width: "48px", height: "72px" },
+      noArt: !art,
+    };
+  }
+
+  spineStyles(b) {
+    const h = 104;
+    const w = half(drawnWidth(b.total, h));
+    return {
+      spineStyle: { display: "block", width: w + "px", height: h + "px", flex: "none", position: "relative", borderRadius: "2px", border: "1px solid #45341f", overflow: "hidden", backgroundImage: "repeating-linear-gradient(135deg,#33261a 0 6px,#2a1c0c 6px 12px)", cursor: "pointer", outline: "none", transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease" },
+      spineFillStyle: { position: "absolute", left: 0, right: 0, bottom: 0, height: Math.max(2, Math.round(b.progress * h)) + "px", background: "#cfa452", opacity: 0.9 },
+    };
+  }
+
+  level(pages, max) {
+    if (!pages) return 0;
+    const r = pages / max;
+    if (r <= 0.25) return 1;
+    if (r <= 0.5) return 2;
+    if (r <= 0.75) return 3;
+    return 4;
+  }
+  cellBg(lvl) { return ["#241a10", "rgba(207,164,82,.26)", "rgba(207,164,82,.48)", "rgba(207,164,82,.72)", "#cfa452"][lvl]; }
+
+  renderVals() {
+    const ds = this.dataset();
+    const dayList = ds.days.slice().sort((a, b) => (a.d < b.d ? -1 : 1));
+    const daySet = {};
+    dayList.forEach((x) => { daySet[x.d] = x; });
+    const maxPages = Math.max(1, ...dayList.map((x) => x.pages));
+
+    const totalPages = dayList.reduce((a, x) => a + x.pages, 0);
+    const totalSec = dayList.reduce((a, x) => a + x.sec, 0);
+
+    let longest = 0, run = 0, prev = null, current = 0;
+    dayList.forEach((x) => {
+      const d = this.parse(x.d);
+      run = prev && d.getTime() - prev.getTime() === DAY ? run + 1 : 1;
+      longest = Math.max(longest, run);
+      prev = d;
+    });
+    if (dayList.length) {
+      const t0 = this.parse("2026-08-03");
+      const lastD = this.parse(dayList[dayList.length - 1].d);
+      current = Math.round((t0 - lastD) / DAY) <= 1 ? run : 0;
+    }
+
+    const metrics = dayList.length
+      ? [
+          { value: current, label: "Current streak" },
+          { value: longest, label: "Longest streak" },
+          { value: dayList.length, label: "Days read" },
+          { value: this.fmtNum(totalPages), label: "Pages" },
+          { value: this.fmtTime(totalSec), label: "Time read" },
+        ]
+      : [
+          { value: "0", label: "Current streak" },
+          { value: "0", label: "Longest streak" },
+          { value: "0", label: "Days read" },
+          { value: "0", label: "Pages" },
+          { value: "0m", label: "Time read" },
+        ];
+
+    const today = this.parse("2026-08-03");
+    const books = ds.books.map((b) => {
+      const t = this.splitTitle(b.title);
+      const progress = Math.max(0, Math.min(1, b.furthest / b.total));
+      const rec = { ...b, ...t, progress };
+      const sp = this.coverStyles(rec);
+      const pph = b.sec > 240 ? b.distinct / (b.sec / 3600) : null;
+      const hoursLeft = pph ? (b.total - b.furthest) / pph : null;
+      const lastD = this.parse(b.last);
+      const daysAgo = Math.round((today - lastD) / DAY);
+      const pctNum = progress * 100;
+      const pct = pctNum >= 99.995 ? "100%" : pctNum < 10 || pctNum > 99 ? pctNum.toFixed(1) + "%" : Math.round(pctNum) + "%";
+      const facts = [
+        { k: "Last picked up", v: daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : daysAgo + " days ago" },
+        { k: "Time on it", v: this.fmtTime(b.sec) },
+        { k: "Sessions", v: b.daysRead + (b.daysRead === 1 ? " day" : " days") },
+        { k: "Pace", v: pph ? Math.round(pph) + " pages/hr" : "too early to say" },
+        { k: "Left at that pace", v: hoursLeft ? "~" + this.fmtTime(hoursLeft * 3600) : "—" },
+      ];
+      return {
+        ...rec, ...sp, facts, pct,
+        hasSub: !!t.sub, hasAuthor: !!b.author,
+        pagesLabel: this.fmtNum(b.furthest) + " / " + this.fmtNum(b.total),
+        barStyle: { width: Math.max(1.5, pctNum) + "%", height: "100%", background: "#cfa452", borderRadius: "4px" },
+        asideMeta: b.author + " · reached page " + this.fmtNum(b.furthest) + " of " + this.fmtNum(b.total) + " · last opened " + this.fmtDay(lastD),
+        href: "Book.dc.html",
+        hoverTitle: t.main + " — open the book",
+        daysAgo,
+        isDone: progress >= 0.97,
+      };
+    });
+
+    const real = books.filter((b) => b.kind === "book");
+    const current_ = real.filter((b) => !b.isDone && b.daysAgo <= 30).sort((a, b) => a.daysAgo - b.daysAgo);
+    const aside = real.filter((b) => !b.isDone && b.daysAgo > 30).sort((a, b) => a.daysAgo - b.daysAgo);
+
+    const pillBase = { fontSize: "12.5px", padding: "7px 13px", borderRadius: "20px", border: "1px solid #45341f", background: "transparent", color: "#dcc9a6", cursor: "pointer", fontFamily: "'Archivo',sans-serif", lineHeight: 1.2 };
+    const pillOn = { ...pillBase, background: "#cfa452", color: "#241a10", fontWeight: 600, borderColor: "#cfa452" };
+
+    // ---- activity ----
+    const spanDays = dayList.length ? Math.max(1, Math.round((this.parse(dayList[dayList.length - 1].d) - this.parse(dayList[0].d)) / DAY) + 1) : 0;
+    const last365 = dayList.filter((x) => (today - this.parse(x.d)) / DAY <= 365);
+    const weeksTouched = new Set(last365.map((x) => Math.floor((this.parse(x.d) - new Date(2020, 0, 6)) / (7 * DAY)))).size;
+    const dense = last365.length >= 60 && weeksTouched >= 14;
+    const auto = !this.props.activityView || this.props.activityView === "auto";
+    const chosen = auto ? (dense ? "heatmap" : "spells") : this.props.activityView;
+    const view = this.state.view || chosen;
+    const isHeatmap = view === "heatmap" && dayList.length > 0;
+    const isSpells = !isHeatmap;
+
+    const viewPills = [
+      { k: "spells", label: "Spells", title: "Only the stretches with reading in them" },
+      { k: "heatmap", label: "Year", title: "Calendar heatmap of the last 12 months" },
+    ].map((o) => ({
+      label: o.label, title: o.title,
+      style: view === o.k ? { ...pillOn, fontSize: "12px", padding: "6px 12px" } : { ...pillBase, fontSize: "12px", padding: "6px 12px" },
+      onClick: () => this.setState({ view: o.k }),
+    }));
+
+    const activityMeta = dayList.length
+      ? dayList.length + (dayList.length === 1 ? " day" : " days") + " read across " + (spanDays >= 60 ? Math.round(spanDays / 30.4) + " months" : spanDays + " days")
+      : "nothing logged yet";
+
+    const spellRows = [];
+    if (dayList.length) {
+      const clusters = [];
+      let cur = [dayList[0]];
+      for (let i = 1; i < dayList.length; i++) {
+        const gap = (this.parse(dayList[i].d) - this.parse(dayList[i - 1].d)) / DAY;
+        if (gap <= 3) cur.push(dayList[i]);
+        else { clusters.push(cur); cur = [dayList[i]]; }
+      }
+      clusters.push(cur);
+      clusters.slice(-8).forEach((cl, ci, arr) => {
+        if (ci > 0) {
+          const prevEnd = this.parse(arr[ci - 1][arr[ci - 1].length - 1].d);
+          const start = this.parse(cl[0].d);
+          const gapDays = Math.round((start - prevEnd) / DAY);
+          spellRows.push({ isBreak: true, isSpell: false, label: gapDays >= 60 ? Math.round(gapDays / 30.4) + " quiet months" : gapDays + " quiet days", wrapStyle: {} });
+        }
+        const s = this.parse(cl[0].d), e = this.parse(cl[cl.length - 1].d);
+        const span = Math.round((e - s) / DAY) + 1;
+        const cells = [];
+        for (let i = 0; i < span; i++) {
+          const d = new Date(s.getTime() + i * DAY);
+          const rec = daySet[this.key(d)];
+          const lvl = rec ? this.level(rec.pages, maxPages) : 0;
+          cells.push({
+            title: this.fmtDay(d) + (rec ? " · " + rec.pages + " pages · " + this.fmtTime(rec.sec) : " · nothing read"),
+            style: { width: "17px", height: "17px", borderRadius: "3px", background: this.cellBg(lvl), border: rec ? "1px solid transparent" : "1px solid #33261a", flex: "none" },
+          });
+        }
+        const pages = cl.reduce((a, x) => a + x.pages, 0);
+        const sec = cl.reduce((a, x) => a + x.sec, 0);
+        const range = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()
+          ? (s.getDate() === e.getDate() ? this.fmtDay(s) : s.getDate() + "–" + e.getDate() + " " + MO[e.getMonth()] + " " + e.getFullYear())
+          : this.fmtDay(s) + " → " + this.fmtDay(e);
+        const titles = real.filter((b) => b.first <= cl[cl.length - 1].d && b.last >= cl[0].d).map((b) => b.main);
+        spellRows.push({
+          isBreak: false, isSpell: true, label: range,
+          meta: cl.length + (cl.length === 1 ? " day" : " days") + " · " + this.fmtNum(pages) + " pages · " + this.fmtTime(sec),
+          cells, books: titles.length ? titles.join(" · ") : "—", wrapStyle: {},
+        });
+      });
+    }
+
+    const geom = this.heatGeom();
+    const cellPx = geom.cell + "px";
+    const heatCols = [];
+    if (dayList.length) {
+      const end = new Date(today.getTime());
+      const start = new Date(end.getTime() - 364 * DAY);
+      const startMon = new Date(start.getTime() - ((start.getDay() + 6) % 7) * DAY);
+      let lastLabel = -1;
+      for (let w = 0; w * 7 <= Math.round((end - startMon) / DAY) + 6; w++) {
+        const colStart = new Date(startMon.getTime() + w * 7 * DAY);
+        const cells = [];
+        for (let dow = 0; dow < 7; dow++) {
+          const d = new Date(colStart.getTime() + dow * DAY);
+          const inRange = d >= start && d <= end;
+          const rec = inRange ? daySet[this.key(d)] : null;
+          const lvl = rec ? this.level(rec.pages, maxPages) : 0;
+          cells.push({
+            title: inRange ? this.fmtDay(d) + (rec ? " · " + rec.pages + " pages · " + this.fmtTime(rec.sec) : " · nothing read") : "",
+            style: { width: "100%", height: cellPx, borderRadius: "2px", background: inRange ? this.cellBg(lvl) : "transparent", border: inRange && !rec ? "1px solid #2f2415" : "1px solid transparent", flex: "none", boxSizing: "border-box" },
+          });
+        }
+        const m = colStart.getMonth();
+        const showLabel = m !== lastLabel && colStart.getDate() <= 7;
+        if (showLabel) lastLabel = m;
+        heatCols.push({
+          month: showLabel ? MO[m] : "",
+          cells,
+          labelStyle: { flex: "1 1 0", minWidth: 0, fontSize: "9.5px", color: "#8a745a", whiteSpace: "nowrap", overflow: "visible" },
+        });
+      }
+      // crop to the most recent weeks that fit at a legible square size
+      if (heatCols.length > geom.weeks) heatCols.splice(0, heatCols.length - geom.weeks);
+      // a label in the last columns would run past the right edge
+      heatCols.slice(-2).forEach((c) => { c.month = ""; });
+    }
+    const legend = [0, 1, 2, 3, 4].map((l) => ({ style: { width: "11px", height: "11px", borderRadius: "2px", background: this.cellBg(l), border: l === 0 ? "1px solid #2f2415" : "1px solid transparent" } }));
+
+    // ---- the two shelves ----
+    const owner = (this.props.viewer || "owner") !== "visitor";
+    const pile = (this.props.pileState === "empty" || this.props.dataState === "empty" ? [] : TO_READ)
+      .filter((b) => owner || !b.private)
+      .slice().sort((a, b) => (a.added_at < b.added_at ? 1 : -1));
+    const toReadBooks = pile.map((b) => this.shelfSpine(b, "waiting " + this.waited(b.added_at, today), today));
+
+    const done = (ds.finished || []).slice().sort((a, b) => (a.finished_at < b.finished_at ? 1 : -1));
+    const finishedBooks = done.map((b) => this.shelfSpine(b, "finished " + this.fmtDay(this.parse(b.finished_at)), today));
+    const finishedMetaLine = done.length
+      ? done.length + " books · " + this.parse(done[done.length - 1].finished_at).getFullYear() + " → " + this.parse(done[0].finished_at).getFullYear()
+      : "";
+
+    const clearPull = () => { if (this.state.pulled) this.setState({ pulled: null }); };
+
+    return {
+      metrics,
+      showFacts: !this.state.isMobile,
+      current: current_, hasCurrent: current_.length > 0, noCurrent: current_.length === 0,
+      emptyCurrentLine: dayList.length ? "Between books right now." : "No reading logged yet.",
+      aside, hasAside: aside.length > 0,
+      viewPills, isHeatmap, isSpells, spellRows: spellRows.slice().reverse(), heatCols, legend, activityMeta,
+      dowLabels: ["M", "", "W", "", "F", "", "S"],
+      heatRef: (el) => {
+        if (el === this.heatEl) return;
+        this.heatEl = el;
+        if (this.ro) this.ro.disconnect();
+        if (!el) return;
+        this.ro = new ResizeObserver((es) => {
+          const w = Math.round(es[0].contentRect.width);
+          if (w && w !== this.state.heatW) this.setState({ heatW: w });
+        });
+        this.ro.observe(el);
+      },
+      dowStyle: { height: cellPx, fontSize: "9px", color: "#8a745a", lineHeight: cellPx },
+      heatSpan: "Aug 2025 → Aug 2026",
+      // a visitor sees no To read section at all rather than a zero
+      toReadShow: toReadBooks.length > 0 || owner,
+      toReadBooks, toReadEmpty: toReadBooks.length === 0,
+      toReadCount: pile.length + (pile.length === 1 ? " book" : " books") + " →",
+      finishedBooks, finishedEmpty: finishedBooks.length === 0, finishedMetaLine,
+      clearPull, onShelfScroll: clearPull,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

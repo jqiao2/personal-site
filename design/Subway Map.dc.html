@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: inherit; }
+  a:hover { color: #fff3df; }
+</style>
+</helmet>
+
+<section data-screen-label="Subway Map" style="min-height:100vh; background:#2a1214; display:flex; flex-direction:column;">
+  <nav style="display:flex; align-items:stretch; gap:2px; padding:0 28px; background:#20100f; border-bottom:1px solid #4a2529;">
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Home</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">About</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Projects</a>
+    <a href="Jason's Film Log.dc.html" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Films</a>
+    <a href="Subway Map.dc.html" style="font-size:13px; letter-spacing:.4px; color:#f4e8d1; font-weight:600; padding:26px 16px 24px; border-bottom:2px solid #d9b45a;">Subway Map</a>
+  </nav>
+
+  <div style="display:flex; flex:1; height:calc(100vh - 66px); min-height:520px;">
+
+    <div style="flex:1; min-width:0; position:relative; background:#e2e8e4;">
+      <svg id="sm-svg" viewBox="0 0 900 1440" style="width:100%; height:100%; display:block; cursor:grab; touch-action:none;" onPointerDown="{{ pDown }}" onPointerMove="{{ pMove }}" onPointerUp="{{ pUp }}" onPointerLeave="{{ pUp }}">
+        <rect x="0" y="0" width="900" height="1440" fill="#eef1ee"></rect>
+        <g id="sm-vp">
+          <sc-for list="{{ segs }}" as="s" hint-placeholder-count="0">
+            <g>
+              <path d="{{ s.d }}" stroke="{{ s.c }}" stroke-width="{{ s.w }}" fill="none" stroke-linecap="round" style="pointer-events:none;"></path>
+              <path d="{{ s.d }}" stroke="rgba(0,0,0,0)" stroke-width="20" fill="none" onClick="{{ s.onClick }}" style="cursor:pointer;"><title>{{ s.tip }}</title></path>
+            </g>
+          </sc-for>
+
+          <sc-for list="{{ dots }}" as="d0" hint-placeholder-count="0">
+            <circle cx="{{ d0.x }}" cy="{{ d0.y }}" r="{{ d0.r }}" fill="{{ d0.f }}" stroke="{{ d0.s }}" stroke-width="{{ d0.sw }}" onClick="{{ d0.onClick }}" style="cursor:pointer;"><title>{{ d0.tip }}</title></circle>
+          </sc-for>
+
+          <sc-for list="{{ labels }}" as="lb" hint-placeholder-count="0">
+            <text x="{{ lb.x }}" y="{{ lb.y }}" text-anchor="{{ lb.anchor }}" style="font:600 13px Archivo,Arial,sans-serif; fill:#403b33; paint-order:stroke; stroke:#eef1ee; stroke-width:3px; pointer-events:none;">{{ lb.t }}</text>
+          </sc-for>
+        </g>
+      </svg>
+
+      <div style="position:absolute; top:14px; left:14px; display:flex; flex-direction:column; gap:8px; align-items:flex-start;">
+        <div style="display:flex; gap:6px;">
+          <button onClick="{{ zoomIn }}" title="Zoom in" style="width:34px; height:34px; border:none; border-radius:8px; background:#20100f; color:#f4e8d1; font-size:18px; cursor:pointer;" style-hover="background:#3a1d1f;">+</button>
+          <button onClick="{{ zoomOut }}" title="Zoom out" style="width:34px; height:34px; border:none; border-radius:8px; background:#20100f; color:#f4e8d1; font-size:18px; cursor:pointer;" style-hover="background:#3a1d1f;">&minus;</button>
+          <button onClick="{{ resetView }}" title="Reset view" style="width:34px; height:34px; border:none; border-radius:8px; background:#20100f; color:#f4e8d1; font-size:14px; cursor:pointer;" style-hover="background:#3a1d1f;">&#8634;</button>
+        </div>
+        <button onClick="{{ toggleRange }}" style="border:none; border-radius:8px; background:{{ rangeBg }}; color:{{ rangeFg }}; font:600 12px Archivo,Arial,sans-serif; padding:9px 14px; cursor:pointer;">{{ rangeLabel }}</button>
+        <sc-if value="{{ hasMsg }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#20100f; color:#f4e8d1; font:500 12px Archivo,Arial,sans-serif; padding:8px 12px; border-radius:8px; max-width:240px;">{{ msg }}</div>
+        </sc-if>
+      </div>
+
+      <div style="position:absolute; bottom:12px; left:14px; font:500 11px Archivo,Arial,sans-serif; color:#8a9490; pointer-events:none;">Scroll to zoom &middot; drag to pan &middot; zoom in for station names &middot; click track to mark it ridden, stations to mark visited</div>
+
+      <sc-if value="{{ hasChoices }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; top:70px; left:50%; transform:translateX(-50%); background:#20100f; border:1px solid #4a2529; border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:8px; min-width:260px; box-shadow:0 12px 32px rgba(0,0,0,.35);">
+          <div style="font:600 13px Archivo,Arial,sans-serif; color:#f4e8d1;">Which line did you ride?</div>
+          <sc-for list="{{ choices }}" as="ch" hint-placeholder-count="0">
+            <button onClick="{{ ch.onClick }}" style="display:flex; align-items:center; gap:10px; border:1px solid #4a2529; border-radius:8px; background:#2a1214; padding:8px 12px; cursor:pointer; text-align:left;" style-hover="border-color:#d9b45a;">
+              <span style="display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; border-radius:50%; background:{{ ch.color }}; color:#ffffff; font:700 11px Archivo,Arial,sans-serif; padding:0 4px;">{{ ch.svc }}</span>
+              <span style="font:500 12px Archivo,Arial,sans-serif; color:#ddc9b4;">{{ ch.label }}</span>
+            </button>
+          </sc-for>
+          <button onClick="{{ cancelChoices }}" style="border:none; background:none; color:#a2857a; font:500 12px Archivo,Arial,sans-serif; cursor:pointer; padding:4px;" style-hover="color:#f4e8d1;">Cancel</button>
+        </div>
+      </sc-if>
+    </div>
+
+    <aside style="width:300px; flex:none; background:#20100f; border-left:1px solid #4a2529; padding:24px 20px; overflow-y:auto; display:flex; flex-direction:column; gap:18px;">
+      <div>
+        <div style="font-family:'Newsreader',serif; font-size:24px; font-weight:500; color:#f4e8d1; line-height:1.1;">Subway log</div>
+        <div style="margin-top:10px; font-size:13px; color:#d9b45a; font-weight:600;">{{ totStations }}</div>
+        <div style="margin-top:3px; font-size:13px; color:#ddc9b4;">{{ totSegs }}</div>
+        <div style="margin-top:3px; font-size:12px; color:#a2857a;">{{ totPct }}</div>
+      </div>
+      <div style="height:1px; background:#4a2529;"></div>
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <sc-for list="{{ statRows }}" as="r" hint-placeholder-count="3">
+          <div style="display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:10px;">
+            <span style="display:inline-flex; align-items:center; justify-content:center; min-width:26px; height:26px; border-radius:50%; background:{{ r.color }}; color:#ffffff; font:700 11px Archivo,Arial,sans-serif; padding:0 3px;">{{ r.svc }}</span>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <div style="font:600 12px Archivo,Arial,sans-serif; color:#f4e8d1;">{{ r.name }}</div>
+              <div style="height:4px; background:#3a1d1f; border-radius:2px; overflow:hidden;"><div style="{{ r.barStyle }}"></div></div>
+              <div style="font:500 11px Archivo,Arial,sans-serif; color:#a2857a;">stations {{ r.st }} &middot; track {{ r.sg }}</div>
+            </div>
+            <span style="font:600 12px Archivo,Arial,sans-serif; color:#ddc9b4;">{{ r.pct }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="height:1px; background:#4a2529;"></div>
+      <div style="display:flex; gap:8px;">
+        <button onClick="{{ doExport }}" style="flex:1; border:1px solid #6b3a3f; border-radius:8px; background:transparent; color:#f4e8d1; font:600 12px Archivo,Arial,sans-serif; padding:9px 0; cursor:pointer;" style-hover="border-color:#d9b45a;">Export JSON</button>
+        <label style="flex:1; display:flex; align-items:center; justify-content:center; border:1px solid #6b3a3f; border-radius:8px; background:transparent; color:#f4e8d1; font:600 12px Archivo,Arial,sans-serif; padding:9px 0; cursor:pointer;" style-hover="border-color:#d9b45a;">Import JSON<input type="file" accept=".json,application/json" onChange="{{ doImport }}" style="display:none;"></label>
+      </div>
+      <div style="font:400 11px Archivo,Arial,sans-serif; color:#a2857a; line-height:1.5;">A graph of stations linked by per-line track segments, saved in this browser. Express segments skip local stops; the transfer node is a larger circle. Export to back up or move devices.</div>
+    </aside>
+  </div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showAllLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Map&quot;},&quot;unriddenTint&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:0.25,&quot;min&quot;:0.08,&quot;max&quot;:0.6,&quot;step&quot;:0.02,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Map&quot;}}">
+class Component extends DCLogic {
+  state = { ready: false, marks: { st: {}, seg: {} }, showLabels: false, rangeOn: false, rangeA: null, choices: null, msg: "" };
+  W = 900; H = 1440; KEY = "fake-subway-log-v1";
+  v = { x: 0, y: 0, k: 1 };
+
+  componentDidMount() {
+    import("./subway-data.js").then((m) => {
+      this.RO = m.ROUTES; this.order = m.SERVICE_ORDER;
+      this.build();
+      let s = null;
+      try { s = JSON.parse(localStorage.getItem(this.KEY)); } catch (e) {}
+      this.setState({ ready: true, marks: s && s.st && s.seg ? s : { st: {}, seg: {} } });
+    });
+    const svg = document.getElementById("sm-svg");
+    if (svg) svg.addEventListener("wheel", (e) => this.wheel(e), { passive: false });
+  }
+
+  build() {
+    const stations = {}; this.svcColor = {}; this.svcName = {}; this.routes = [];
+    const segs = []; const seen = {};
+    for (const r of this.RO) {
+      this.svcColor[r.svc] = r.color; this.svcName[r.svc] = r.name;
+      const ids = r.stations.map((e) => e[0]);
+      r.stations.forEach((e) => {
+        const id = e[0];
+        if (!stations[id]) stations[id] = { id, name: id.replace(/ X$/, ""), x: e[1], y: e[2], svcs: [] };
+        if (stations[id].svcs.indexOf(r.svc) < 0) stations[id].svcs.push(r.svc);
+      });
+      this.routes.push({ svc: r.svc, name: r.name, color: r.color, ids });
+      for (let i = 0; i < ids.length - 1; i++) {
+        const a = ids[i], b = ids[i + 1], A = stations[a], B = stations[b];
+        const key = r.svc + "|" + (a < b ? a + "|" + b : b + "|" + a);
+        if (seen[key]) continue;
+        seen[key] = 1;
+        let d;
+        if (r.bow) {
+          const dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1;
+          const nx = dy / L, ny = -dx / L;
+          const cx = (A.x + B.x) / 2 + nx * r.bow, cy = (A.y + B.y) / 2 + ny * r.bow;
+          d = "M " + A.x + " " + A.y + " Q " + cx.toFixed(1) + " " + cy.toFixed(1) + " " + B.x + " " + B.y;
+        } else {
+          d = "M " + A.x + " " + A.y + " L " + B.x + " " + B.y;
+        }
+        segs.push({ key, svc: r.svc, color: r.color, an: A.name, bn: B.name, d });
+      }
+    }
+    this.stations = stations; this.segments = segs;
+  }
+
+  mix(hex, t) {
+    const b = [0xee, 0xf1, 0xee];
+    let c = "#";
+    for (let j = 0; j < 3; j++) {
+      const v = Math.round(parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) * t + b[j] * (1 - t));
+      c += v.toString(16).padStart(2, "0");
+    }
+    return c;
+  }
+
+  metrics() {
+    const svg = document.getElementById("sm-svg");
+    const r = svg.getBoundingClientRect();
+    const s = Math.min(r.width / this.W, r.height / this.H);
+    return { r, s, ox: (r.width - this.W * s) / 2, oy: (r.height - this.H * s) / 2 };
+  }
+  tf() { return "translate(" + this.v.x + " " + this.v.y + ") scale(" + this.v.k + ")"; }
+  apply() { const el = document.getElementById("sm-vp"); if (el) el.setAttribute("transform", this.tf()); }
+  clampPan() {
+    const v = this.v;
+    v.x = Math.min(this.W * 0.4, Math.max(this.W * (1 - v.k) - this.W * 0.4, v.x));
+    v.y = Math.min(this.H * 0.4, Math.max(this.H * (1 - v.k) - this.H * 0.4, v.y));
+  }
+  labelCheck() {
+    const show = (this.props.showAllLabels ?? false) || this.v.k >= 1.8;
+    if (show !== this.state.showLabels) this.setState({ showLabels: show });
+  }
+  wheel(e) {
+    e.preventDefault();
+    const m = this.metrics();
+    const q = [(e.clientX - m.r.left - m.ox) / m.s, (e.clientY - m.r.top - m.oy) / m.s];
+    this.zoomAt(q, Math.exp(-e.deltaY * 0.0015));
+  }
+  zoomAt(q, f) {
+    const v = this.v;
+    const k2 = Math.max(1, Math.min(16, v.k * f));
+    f = k2 / v.k;
+    v.x = q[0] - (q[0] - v.x) * f;
+    v.y = q[1] - (q[1] - v.y) * f;
+    v.k = k2;
+    this.clampPan(); this.apply(); this.labelCheck();
+  }
+  pDown(e) {
+    if (e.button !== 0) return;
+    this.drag = { x: e.clientX, y: e.clientY };
+    this.dragMoved = false;
+  }
+  pMove(e) {
+    if (!this.drag) return;
+    const dx = e.clientX - this.drag.x, dy = e.clientY - this.drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) this.dragMoved = true;
+    const m = this.metrics();
+    this.v.x += dx / m.s; this.v.y += dy / m.s;
+    this.drag = { x: e.clientX, y: e.clientY };
+    this.clampPan(); this.apply();
+  }
+  pUp() { this.drag = null; }
+
+  commit(mk) {
+    try { localStorage.setItem(this.KEY, JSON.stringify(mk)); } catch (e) {}
+    this.setState({ marks: mk });
+  }
+  cloneMarks() { return { st: { ...this.state.marks.st }, seg: { ...this.state.marks.seg } }; }
+  toggleSeg(key) {
+    if (this.dragMoved) return;
+    if (this.state.rangeOn) { this.setState({ msg: "Range mode: click two stations (not track)." }); return; }
+    const mk = this.cloneMarks();
+    if (mk.seg[key]) delete mk.seg[key]; else mk.seg[key] = 1;
+    this.commit(mk);
+  }
+  stationClick(id) {
+    if (this.dragMoved) return;
+    if (this.state.rangeOn) { this.rangePick(id); return; }
+    const mk = this.cloneMarks();
+    if (mk.st[id]) delete mk.st[id]; else mk.st[id] = 1;
+    this.commit(mk);
+  }
+  toggleRange() {
+    const on = !this.state.rangeOn;
+    this.setState({ rangeOn: on, rangeA: null, choices: null, msg: on ? "Range: click the first station." : "" });
+  }
+  rangePick(id) {
+    if (!this.state.rangeA) { this.setState({ rangeA: id, msg: "Now click the last station of the ride." }); return; }
+    const a = this.state.rangeA, b = id;
+    if (a === b) { this.setState({ rangeA: null, msg: "" }); return; }
+    const opts = [];
+    this.routes.forEach((r, ri) => {
+      const ia = r.ids.indexOf(a), ib = r.ids.indexOf(b);
+      if (ia >= 0 && ib >= 0) opts.push({ ri, svc: r.svc, color: r.color, label: r.name, count: Math.abs(ib - ia) });
+    });
+    if (!opts.length) { this.setState({ rangeA: null, msg: "No single line serves both of those stations." }); return; }
+    if (opts.length === 1) { this.applyRange(opts[0], a, b); return; }
+    this.setState({ choices: { opts, a, b }, msg: "" });
+  }
+  applyRange(opt, a, b) {
+    const r = this.routes[opt.ri];
+    const ia = r.ids.indexOf(a), ib = r.ids.indexOf(b);
+    const lo = Math.min(ia, ib), hi = Math.max(ia, ib);
+    const mk = this.cloneMarks();
+    for (let i = lo; i <= hi; i++) {
+      mk.st[r.ids[i]] = 1;
+      if (i < hi) {
+        const x = r.ids[i], y = r.ids[i + 1];
+        mk.seg[r.svc + "|" + (x < y ? x + "|" + y : y + "|" + x)] = 1;
+      }
+    }
+    this.commit(mk);
+    this.setState({ rangeOn: false, rangeA: null, choices: null, msg: "Marked " + (hi - lo + 1) + " stations on the " + r.name + "." });
+  }
+  doExport() {
+    const mk = this.state.marks;
+    const data = { format: "fake-subway-log", version: 1, stationsVisited: Object.keys(mk.st), segmentsRidden: Object.keys(mk.seg) };
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
+    a.download = "subway-log.json";
+    a.click();
+  }
+  doImport(e) {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    f.text().then((t) => {
+      try {
+        const d = JSON.parse(t);
+        const mk = { st: {}, seg: {} };
+        (d.stationsVisited || Object.keys(d.st || {})).forEach((id) => (mk.st[id] = 1));
+        (d.segmentsRidden || Object.keys(d.seg || {})).forEach((k) => (mk.seg[k] = 1));
+        this.commit(mk);
+        this.setState({ msg: "Imported." });
+      } catch (err) { this.setState({ msg: "Could not read that file." }); }
+    });
+    e.target.value = "";
+  }
+
+  renderVals() {
+    const S = this.state, mk = S.marks;
+    const tint = this.props.unriddenTint ?? 0.25;
+    const vals = {
+      ready: S.ready, msg: S.msg, hasMsg: !!S.msg,
+      rangeOn: S.rangeOn,
+      rangeLabel: S.rangeOn ? "Cancel range" : "Mark a range",
+      rangeBg: S.rangeOn ? "#d9b45a" : "#20100f",
+      rangeFg: S.rangeOn ? "#2a1214" : "#f4e8d1",
+      zoomIn: () => this.zoomAt([this.W / 2, this.H / 2], 1.5),
+      zoomOut: () => this.zoomAt([this.W / 2, this.H / 2], 1 / 1.5),
+      resetView: () => { this.v = { x: 0, y: 0, k: 1 }; this.apply(); this.labelCheck(); this.forceUpdate(); },
+      toggleRange: () => this.toggleRange(),
+      cancelChoices: () => this.setState({ choices: null, rangeOn: false, rangeA: null, msg: "" }),
+      doExport: () => this.doExport(),
+      doImport: (e) => this.doImport(e),
+      pDown: (e) => this.pDown(e), pMove: (e) => this.pMove(e), pUp: () => this.pUp(),
+      segs: [], dots: [], labels: [], statRows: [], choices: [], hasChoices: false,
+      totStations: "Loading network\u2026", totSegs: "", totPct: ""
+    };
+    if (!S.ready || !this.segments) return vals;
+    vals.segs = this.segments.map((sg) => {
+      const on = !!mk.seg[sg.key];
+      return { d: sg.d, c: on ? sg.color : this.mix(sg.color, tint), w: on ? 7 : 5,
+        tip: sg.svc + " \u00b7 " + sg.an + " \u2194 " + sg.bn + (on ? " \u2014 ridden" : ""),
+        onClick: () => this.toggleSeg(sg.key) };
+    });
+    const stArr = Object.values(this.stations);
+    vals.dots = stArr.map((st) => {
+      const on = !!mk.st[st.id];
+      const isA = S.rangeA === st.id;
+      const xfer = st.svcs.length >= 2;
+      return { x: st.x, y: st.y, r: xfer ? 11 : 6.5,
+        f: on ? "#26231f" : "#ffffff",
+        s: isA ? "#d9b45a" : on ? "#26231f" : "#7a7264",
+        sw: isA ? 4 : xfer ? 3 : 2,
+        tip: st.name + " (" + st.svcs.join(" ") + ")" + (on ? " \u2014 visited" : ""),
+        onClick: () => this.stationClick(st.id) };
+    });
+    if (S.showLabels) vals.labels = stArr.map((st) => {
+      const right = st.x >= 400;
+      return { x: st.x + (right ? 16 : -16), y: st.y + 4, anchor: right ? "start" : "end", t: st.name };
+    });
+    const per = {};
+    this.order.forEach((s) => (per[s] = { stT: 0, stV: 0, sgT: 0, sgR: 0 }));
+    stArr.forEach((st) => st.svcs.forEach((s) => { per[s].stT++; if (mk.st[st.id]) per[s].stV++; }));
+    this.segments.forEach((sg) => { per[sg.svc].sgT++; if (mk.seg[sg.key]) per[sg.svc].sgR++; });
+    vals.statRows = this.order.map((s) => {
+      const p = per[s];
+      const pct = p.sgT ? Math.round((100 * p.sgR) / p.sgT) : 0;
+      return { svc: s, name: this.svcName[s], color: this.svcColor[s],
+        st: p.stV + "/" + p.stT, sg: p.sgR + "/" + p.sgT, pct: pct + "%",
+        barStyle: "height:100%;width:" + pct + "%;background:" + this.svcColor[s] + ";" };
+    });
+    const visited = stArr.filter((st) => mk.st[st.id]).length;
+    const ridden = this.segments.filter((sg) => mk.seg[sg.key]).length;
+    vals.totStations = visited + " / " + stArr.length + " stations visited";
+    vals.totSegs = ridden + " / " + this.segments.length + " track segments ridden";
+    vals.totPct = Math.round((100 * ridden) / this.segments.length) + "% of the system ridden";
+    if (S.choices) {
+      vals.hasChoices = true;
+      vals.choices = S.choices.opts.map((o) => ({ svc: o.svc, color: o.color,
+        label: o.label + " \u2014 " + o.count + " stops", onClick: () => this.applyRange(o, S.choices.a, S.choices.b) }));
+    }
+    return vals;
+  }
+}
+</script>
+</body>
+</html>

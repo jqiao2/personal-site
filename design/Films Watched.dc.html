@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+  input::placeholder { color: #8a6f63; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e; display:flex; justify-content:center; padding:0 24px 80px;">
+  <div style="width:100%; max-width:1000px;">
+
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #4a2529; margin-bottom:34px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a2857a;" style-hover="color:#f4e8d1;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a6f63;">Films watched</span>
+    </header>
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:26px; flex-wrap:wrap; gap:16px;">
+      <div>
+        <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:52px; color:#f4e8d1; letter-spacing:-.5px; line-height:1;">All films</h1>
+        <div style="font-size:13px; color:#a2857a; margin-top:10px;"><span style="color:#d9b45a; font-weight:600;">{{ total }}</span> films watched</div>
+      </div>
+    </div>
+
+    <!-- Search / filters / sort bar -->
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+      <input value="{{ query }}" onInput="{{ setQuery }}" placeholder="Search films&hellip;" style="flex:1; min-width:220px; background:#241012; border:1px solid #4a2529; border-radius:8px; padding:11px 14px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+      <button onClick="{{ toggleFilters }}" style="{{ filterBtnStyle }}">{{ filterBtnLabel }}</button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">Sort</span>
+        <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="2">
+          <button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- Filter panel -->
+    <sc-if value="{{ filtersOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#241012; border:1px solid #4a2529; border-radius:12px; padding:18px 20px; margin-bottom:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+          <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.6px; color:#8a6f63;">Filter films</span>
+          <sc-if value="{{ anyActive }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ clearAll }}" style="font-size:12px; font-weight:600; color:#d9b45a; background:transparent; border:none; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="color:#f0d488;">Clear all</button>
+          </sc-if>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px 32px;">
+
+          <!-- Rating -->
+          <div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Rating</div>
+            <div style="display:flex; align-items:center; gap:18px;">
+              <div style="flex:1; max-width:260px; opacity:{{ ratingOpacity }};">
+                <div onPointerDown="{{ rateDown }}" onPointerMove="{{ rateMove }}" onPointerUp="{{ rateUp }}" style="position:relative; height:32px; cursor:pointer; touch-action:none;">
+                  <div style="position:absolute; left:0; right:0; top:14px; height:4px; background:#402226; border-radius:2px;"></div>
+                  <div style="position:absolute; top:14px; height:4px; background:#d9b45a; border-radius:2px; left:{{ rLeft }}%; width:{{ rWidth }}%;"></div>
+                  <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ rMinPct }}%;"></div>
+                  <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ rMaxPct }}%;"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; font-size:13px; color:#d9b45a; margin-top:2px;">
+                  <span>{{ rMinStars }}</span><span>{{ rMaxStars }}</span>
+                </div>
+              </div>
+              <button onClick="{{ toggleUnrated }}" style="{{ unratedStyle }}">Unrated only</button>
+            </div>
+          </div>
+
+          <!-- Flags -->
+          <div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Activity</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button onClick="{{ toggleLiked }}" style="{{ likedStyle }}">&hearts; Liked</button>
+              <button onClick="{{ toggleRewatched }}" style="{{ rewatchedStyle }}">&#8635; Rewatched</button>
+            </div>
+          </div>
+
+          <!-- Diary date -->
+          <div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Diary date</div>
+            <div style="max-width:260px;">
+              <div onPointerDown="{{ dyDown }}" onPointerMove="{{ dyMove }}" onPointerUp="{{ dyUp }}" style="position:relative; height:32px; cursor:pointer; touch-action:none;">
+                <div style="position:absolute; left:0; right:0; top:14px; height:4px; background:#402226; border-radius:2px;"></div>
+                <div style="position:absolute; top:14px; height:4px; background:#d9b45a; border-radius:2px; left:{{ dyLeft }}%; width:{{ dyWidth }}%;"></div>
+                <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ dyMinPct }}%;"></div>
+                <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ dyMaxPct }}%;"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:13px; color:#d9b45a; margin-top:2px;">
+                <span>{{ dyMinLabel }}</span><span>{{ dyMaxLabel }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tags -->
+          <div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Tags</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <sc-for list="{{ tagChips }}" as="c" hint-placeholder-count="5">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Friends -->
+          <div>
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+              <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">Watched with</span>
+              <div style="display:flex; border:1px solid #4a2529; border-radius:14px; overflow:hidden;">
+                <button onClick="{{ friendAny }}" style="{{ friendAnyStyle }}">Any</button>
+                <button onClick="{{ friendAll }}" style="{{ friendAllStyle }}">All</button>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <sc-for list="{{ friendChips }}" as="c" hint-placeholder-count="4">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Where / how -->
+          <div style="grid-column:1 / -1;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+              <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">Medium &middot; theater &middot; format</span>
+              <div style="display:flex; border:1px solid #4a2529; border-radius:14px; overflow:hidden;">
+                <button onClick="{{ whereAny }}" style="{{ whereAnyStyle }}">Any</button>
+                <button onClick="{{ whereAll }}" style="{{ whereAllStyle }}">All</button>
+              </div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Medium</span>
+                <sc-for list="{{ mediumChips }}" as="c" hint-placeholder-count="3">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Theater</span>
+                <sc-for list="{{ venueChips }}" as="c" hint-placeholder-count="3">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Format</span>
+                <sc-for list="{{ formatChips }}" as="c" hint-placeholder-count="4">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Movie details (expandable) -->
+        <div style="margin-top:20px; padding-top:18px; border-top:1px solid #4a2529;">
+          <button onClick="{{ toggleMovieExpanded }}" style="display:flex; align-items:center; gap:8px; background:transparent; border:none; cursor:pointer; padding:0; font-family:'Archivo',sans-serif;">
+            <span style="font-size:11px; transform:{{ movieChevronRotate }}; transition:transform .15s ease; color:#8a6f63;">&#9656;</span>
+            <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.6px; color:#8a6f63;">Movie details</span>
+            <sc-if value="{{ movieCount }}" hint-placeholder-val="{{ false }}">
+              <span style="font-size:11px; font-weight:600; color:#d9b45a;">&middot; {{ movieCount }}</span>
+            </sc-if>
+          </button>
+
+          <sc-if value="{{ movieExpanded }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:18px 32px; margin-top:18px;">
+
+              <!-- Release date -->
+              <div>
+                <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Release date</div>
+                <sc-if value="{{ decSlider }}" hint-placeholder-val="{{ true }}">
+                  <div style="max-width:260px;">
+                    <div onPointerDown="{{ decDown }}" onPointerMove="{{ decMove }}" onPointerUp="{{ decUp }}" style="position:relative; height:32px; cursor:pointer; touch-action:none;">
+                      <div style="position:absolute; left:0; right:0; top:14px; height:4px; background:#402226; border-radius:2px;"></div>
+                      <div style="position:absolute; top:14px; height:4px; background:#d9b45a; border-radius:2px; left:{{ dLeft }}%; width:{{ dWidth }}%;"></div>
+                      <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ dMinPct }}%;"></div>
+                      <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ dMaxPct }}%;"></div>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:13px; color:#d9b45a; margin-top:2px;">
+                      <span>{{ dMinLabel }}</span><span>{{ dMaxLabel }}</span>
+                    </div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ decChipsMode }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <sc-for list="{{ decadeChips }}" as="c" hint-placeholder-count="5">
+                      <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ decEras }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <sc-for list="{{ eraChips }}" as="c" hint-placeholder-count="5">
+                      <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+
+              <!-- Genre -->
+              <div>
+                <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Genre</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <sc-for list="{{ genreChips }}" as="c" hint-placeholder-count="6">
+                    <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- Language -->
+              <div>
+                <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Language</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <sc-for list="{{ languageChips }}" as="c" hint-placeholder-count="6">
+                    <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- Country -->
+              <div>
+                <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Country</div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <sc-for list="{{ countryChips }}" as="c" hint-placeholder-count="6">
+                    <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+
+              <!-- People -->
+              <div style="grid-column:1 / -1;">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                  <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">People</span>
+                  <input value="{{ peopleQuery }}" onInput="{{ setPeopleQuery }}" placeholder="Search directors &amp; cast&hellip;" style="width:220px; background:#1c0d0e; border:1px solid #4a2529; border-radius:14px; padding:5px 12px; color:#f4e8d1; font-size:12px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Director</span>
+                    <sc-for list="{{ directorChips }}" as="c" hint-placeholder-count="5">
+                      <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                    </sc-for>
+                    <sc-if value="{{ noDirectorMatch }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size:12px; color:#8a6f63; font-style:italic;">No matches</span>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                    <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Cast</span>
+                    <sc-for list="{{ actorChips }}" as="c" hint-placeholder-count="6">
+                      <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                    </sc-for>
+                    <sc-if value="{{ noActorMatch }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size:12px; color:#8a6f63; font-style:italic;">No matches</span>
+                    </sc-if>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- Filter description panel -->
+    <sc-if value="{{ anyActive }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#241012; border:1px solid #4a2529; border-radius:12px; padding:15px 20px; margin-bottom:16px; display:flex; align-items:baseline; gap:16px;">
+        <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.8px; color:#8a6f63; flex:none;">Filter</span>
+        <p style="font-family:'Newsreader',serif; font-size:16px; line-height:1.55; margin:0; letter-spacing:.1px;">
+          <sc-for list="{{ filterParts }}" as="p" hint-placeholder-count="4"><span style="{{ p.style }}">{{ p.t }}</span></sc-for>
+        </p>
+      </div>
+    </sc-if>
+
+    <!-- Poster grid -->
+    <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:18px; margin-top:16px;">
+        <sc-for list="{{ films }}" as="f" hint-placeholder-count="24">
+          <a href="Film v2.dc.html" style="cursor:pointer; display:block;">
+            <div style="position:relative; aspect-ratio:2/3; border-radius:5px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 9px,#2c1518 9px 18px); border:1px solid #4a2529;" style-hover="border-color:#d9b45a;">
+              <div style="position:absolute; inset:0; background:rgba(18,8,9,.82); display:flex; flex-direction:column; justify-content:flex-end; padding:12px; opacity:0; transition:opacity .18s ease;" style-hover="opacity:1;">
+                <div style="font-family:'Newsreader',serif; font-size:16px; font-weight:500; color:#f4e8d1; line-height:1.15;">{{ f.title }}</div>
+                <div style="font-family:'Archivo',sans-serif; font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:#d9b45a; margin-top:5px;">{{ f.year }}</div>
+                <div style="font-size:12px; color:#d9b45a; margin-top:4px;">{{ f.stars }}</div>
+              </div>
+            </div>
+          </a>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:48px 0; text-align:center; color:#8a6f63; font-size:15px; font-style:italic; font-family:'Newsreader',serif;">No films match these filters</div>
+    </sc-if>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;decadeStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Range slider&quot;,&quot;Chips&quot;,&quot;Era groups&quot;],&quot;default&quot;:&quot;Range slider&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = {
+    query: "", sort: "recent", filtersOpen: false,
+    rMin: 0.5, rMax: 5, unratedOnly: false,
+    fLiked: false, fRewatched: false,
+    fTags: [], fFriends: [], friendMode: "any",
+    fMediums: [], fVenues: [], fFormats: [], whereMode: "any",
+    fDecades: [], fEras: [], dMin: null, dMax: null,
+    fDirectors: [], fActors: [], peopleQuery: "",
+    fGenres: [], fLanguages: [], fCountries: [], dyMin: null, dyMax: null,
+    movieExpanded: false,
+    tagsExpanded: false, friendsExpanded: false, venuesExpanded: false, formatsExpanded: false, decadesExpanded: false, directorsExpanded: false, actorsExpanded: false,
+    genresExpanded: false, languagesExpanded: false, countriesExpanded: false,
+  };
+  drag = null;
+
+  static FILTER_KEYS = ["query","sort","rMin","rMax","unratedOnly","fLiked","fRewatched","fTags","fFriends","friendMode","fMediums","fVenues","fFormats","whereMode","fDecades","fEras","dMin","dMax","fDirectors","fActors","fGenres","fLanguages","fCountries","dyMin","dyMax"];
+
+  backNav(fallbackHref, fallbackLabel) {
+    const nav = this._nav ? this._nav.resolveBack(fallbackHref, fallbackLabel) : { href: fallbackHref, label: fallbackLabel };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = fallbackHref; } };
+  }
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+    const p = new URLSearchParams(location.search);
+    if (![...p.keys()].length) return;
+    const patch = {};
+    Component.FILTER_KEYS.forEach((k) => {
+      if (!p.has(k)) return;
+      const raw = p.get(k);
+      if (["fTags","fFriends","fMediums","fVenues","fFormats","fDecades","fEras","fDirectors","fActors","fGenres","fLanguages","fCountries"].includes(k)) {
+        patch[k] = raw ? raw.split(",").map((v) => (k === "fDecades" ? Number(v) : v)) : [];
+      } else if (["rMin","rMax","dMin","dMax","dyMin","dyMax"].includes(k)) {
+        patch[k] = raw === "" ? null : Number(raw);
+      } else if (["unratedOnly","fLiked","fRewatched"].includes(k)) {
+        patch[k] = raw === "1";
+      } else patch[k] = raw;
+    });
+    this.setState(patch);
+  }
+  componentDidUpdate() {
+    const s = this.state;
+    const p = new URLSearchParams();
+    const defaults = { query: "", sort: "recent", rMin: 0.5, rMax: 5, unratedOnly: false, fLiked: false, fRewatched: false, friendMode: "any", whereMode: "any", dMin: null, dMax: null, dyMin: null, dyMax: null };
+    Component.FILTER_KEYS.forEach((k) => {
+      const v = s[k];
+      const isArr = Array.isArray(v);
+      const isDefault = isArr ? v.length === 0 : (k in defaults ? v === defaults[k] : !v);
+      if (isDefault) return;
+      p.set(k, isArr ? v.join(",") : String(v));
+    });
+    const qs = p.toString();
+    const url = location.pathname + (qs ? "?" + qs : "");
+    if (url !== location.pathname + location.search) history.replaceState(null, "", url);
+  }
+
+  data = [
+    { title: "Perfect Days", year: 2023, rating: 4.5, liked: true, order: 40, rw: false, med: "Theater", ven: "Metrograph", fmt: "Digital", tags: ["film club", "matinee"], fr: ["Maya", "Dana"], genre: "Drama", language: "Japanese", country: "Japan", diaryYears: [2026] },
+    { title: "The Zone of Interest", year: 2023, rating: 4, liked: true, order: 39, rw: false, med: "Theater", ven: "Music Box", fmt: "70mm", tags: ["festival"], fr: ["Chris", "Leo"], genre: "Drama", language: "German", country: "Germany", diaryYears: [2026] },
+    { title: "Chungking Express", year: 1994, rating: 5, liked: true, order: 38, rw: true, med: "Home", ven: "", fmt: "4K disc", tags: ["comfort watch", "criterion"], fr: [], genre: "Romance", language: "Cantonese", country: "Hong Kong", diaryYears: [2026, 2022] },
+    { title: "The Substance", year: 2024, rating: 3.5, liked: false, order: 37, rw: false, med: "Theater", ven: "AMC River East", fmt: "IMAX", tags: ["date night", "midnight"], fr: ["Priya", "Sam", "Dana"], genre: "Horror", language: "English", country: "USA", diaryYears: [2026] },
+    { title: "Dune: Part Two", year: 2024, rating: 3.5, liked: false, order: 36, rw: false, med: "Theater", ven: "AMC River East", fmt: "IMAX", tags: ["big screen"], fr: ["Chris", "Sam"], genre: "Sci-Fi", language: "English", country: "USA", diaryYears: [2026] },
+    { title: "Aftersun", year: 2022, rating: 5, liked: true, order: 35, rw: true, med: "Home", ven: "", fmt: "Streaming", tags: ["rainy day"], fr: [], genre: "Drama", language: "English", country: "UK", diaryYears: [2026, 2021] },
+    { title: "Paprika", year: 2006, rating: 5, liked: true, order: 34, rw: true, med: "Theater", ven: "Music Box", fmt: "35mm", tags: ["film club", "big screen"], fr: ["Maya", "Priya"], genre: "Sci-Fi", language: "Japanese", country: "Japan", diaryYears: [2026, 2022] },
+    { title: "Past Lives", year: 2023, rating: 4.5, liked: true, order: 33, rw: false, med: "Theater", ven: "Metrograph", fmt: "Digital", tags: ["date night"], fr: ["Maya"], genre: "Romance", language: "English", country: "USA", diaryYears: [2026] },
+    { title: "La Haine", year: 1995, rating: 5, liked: true, order: 32, rw: true, med: "Home", ven: "", fmt: "Criterion disc", tags: ["criterion"], fr: [], genre: "Drama", language: "French", country: "France", diaryYears: [2026, 2024] },
+    { title: "Anatomy of a Fall", year: 2023, rating: 4, liked: false, order: 31, rw: false, med: "Theater", ven: "Logan Theatre", fmt: "Digital", tags: ["film club"], fr: ["Chris", "Priya"], genre: "Thriller", language: "French", country: "France", diaryYears: [2026] },
+    { title: "There Will Be Blood", year: 2007, rating: 5, liked: true, order: 30, rw: true, med: "Theater", ven: "Music Box", fmt: "70mm", tags: ["big screen"], fr: ["Sam"], genre: "Drama", language: "English", country: "USA", diaryYears: [2026, 2022] },
+    { title: "Fallen Leaves", year: 2023, rating: 4, liked: true, order: 29, rw: false, med: "Theater", ven: "Davis Theater", fmt: "35mm", tags: [], fr: [], genre: "Comedy", language: "Finnish", country: "Finland", diaryYears: [2026] },
+    { title: "In the Mood for Love", year: 2000, rating: 5, liked: true, order: 28, rw: true, med: "Theater", ven: "Metrograph", fmt: "35mm", tags: ["criterion", "date night"], fr: ["Maya"], genre: "Romance", language: "Cantonese", country: "Hong Kong", diaryYears: [2024, 2022] },
+    { title: "Portrait of a Lady on Fire", year: 2019, rating: 4.5, liked: true, order: 27, rw: false, med: "Home", ven: "", fmt: "Streaming", tags: ["rainy day"], fr: ["Priya"], genre: "Romance", language: "French", country: "France", diaryYears: [2024] },
+    { title: "Drive My Car", year: 2021, rating: 4.5, liked: true, order: 26, rw: false, med: "Home", ven: "", fmt: "Criterion disc", tags: ["criterion"], fr: [], genre: "Drama", language: "Japanese", country: "Japan", diaryYears: [2024] },
+    { title: "Yi Yi", year: 2000, rating: 5, liked: true, order: 25, rw: false, med: "Home", ven: "", fmt: "Criterion disc", tags: ["criterion", "film club"], fr: ["Chris"], genre: "Drama", language: "Mandarin", country: "Taiwan", diaryYears: [2024] },
+    { title: "Stalker", year: 1979, rating: 4.5, liked: true, order: 24, rw: true, med: "Theater", ven: "Music Box", fmt: "35mm", tags: ["big screen", "slow cinema"], fr: ["Chris"], genre: "Sci-Fi", language: "Russian", country: "Russia", diaryYears: [2023, 2021] },
+    { title: "Mulholland Drive", year: 2001, rating: 4.5, liked: true, order: 23, rw: true, med: "Home", ven: "", fmt: "4K disc", tags: ["rainy day"], fr: [], genre: "Thriller", language: "English", country: "USA", diaryYears: [2023, 2018] },
+    { title: "Close-Up", year: 1990, rating: 4.5, liked: true, order: 22, rw: false, med: "Home", ven: "", fmt: "Criterion disc", tags: ["criterion"], fr: [], genre: "Documentary", language: "Persian", country: "Iran", diaryYears: [2023] },
+    { title: "Spirited Away", year: 2001, rating: 5, liked: true, order: 21, rw: true, med: "Theater", ven: "Music Box", fmt: "35mm", tags: ["comfort watch"], fr: ["Maya", "Sam"], genre: "Sci-Fi", language: "Japanese", country: "Japan", diaryYears: [2023, 2020] },
+    { title: "Petite Maman", year: 2021, rating: 4.5, liked: true, order: 20, rw: false, med: "Home", ven: "", fmt: "Streaming", tags: ["rainy day"], fr: [], genre: "Drama", language: "French", country: "France", diaryYears: [2023] },
+    { title: "Memoria", year: 2021, rating: 0, liked: false, order: 19, rw: false, med: "Theater", ven: "Metrograph", fmt: "Digital", tags: ["film club", "slow cinema"], fr: ["Priya", "Rosa"], genre: "Drama", language: "Spanish", country: "Thailand", diaryYears: [2022] },
+    { title: "Cure", year: 1997, rating: 4, liked: false, order: 18, rw: false, med: "Home", ven: "", fmt: "4K disc", tags: ["noir"], fr: ["Leo"], genre: "Horror", language: "Japanese", country: "Japan", diaryYears: [2022] },
+    { title: "Burning", year: 2018, rating: 4.5, liked: true, order: 17, rw: false, med: "Home", ven: "", fmt: "Streaming", tags: ["rainy day"], fr: ["Chris"], genre: "Thriller", language: "Korean", country: "South Korea", diaryYears: [2022] },
+    { title: "Parasite", year: 2019, rating: 5, liked: true, order: 16, rw: true, med: "Theater", ven: "AMC River East", fmt: "Digital", tags: ["big screen"], fr: ["Maya", "Chris", "Sam"], genre: "Thriller", language: "Korean", country: "South Korea", diaryYears: [2022, 2020] },
+    { title: "The Handmaiden", year: 2016, rating: 4.5, liked: true, order: 15, rw: false, med: "Home", ven: "", fmt: "4K disc", tags: ["date night"], fr: ["Maya"], genre: "Thriller", language: "Korean", country: "South Korea", diaryYears: [2022] },
+    { title: "Moonlight", year: 2016, rating: 4.5, liked: true, order: 14, rw: false, med: "Home", ven: "", fmt: "Streaming", tags: [], fr: [], genre: "Drama", language: "English", country: "USA", diaryYears: [2021] },
+    { title: "Whiplash", year: 2014, rating: 4, liked: false, order: 13, rw: true, med: "Home", ven: "", fmt: "Streaming", tags: ["comfort watch"], fr: ["Sam", "Nate"], genre: "Drama", language: "English", country: "USA", diaryYears: [2021, 2018] },
+    { title: "Her", year: 2013, rating: 4, liked: true, order: 12, rw: false, med: "Home", ven: "", fmt: "Streaming", tags: ["rainy day"], fr: [], genre: "Sci-Fi", language: "English", country: "USA", diaryYears: [2021] },
+    { title: "The Master", year: 2012, rating: 4.5, liked: true, order: 11, rw: false, med: "Theater", ven: "Alamo Drafthouse", fmt: "70mm", tags: ["big screen"], fr: ["Chris"], genre: "Drama", language: "English", country: "USA", diaryYears: [2021] },
+    { title: "Uncle Boonmee", year: 2010, rating: 0, liked: false, order: 10, rw: false, med: "Home", ven: "", fmt: "Streaming", tags: [], fr: [], genre: "Drama", language: "Thai", country: "Thailand", diaryYears: [2021] },
+    { title: "No Country for Old Men", year: 2007, rating: 5, liked: true, order: 9, rw: true, med: "Home", ven: "", fmt: "4K disc", tags: ["comfort watch"], fr: ["Sam"], genre: "Thriller", language: "English", country: "USA", diaryYears: [2020, 2017] },
+    { title: "Oldboy", year: 2003, rating: 4.5, liked: true, order: 8, rw: true, med: "Home", ven: "", fmt: "4K disc", tags: [], fr: ["Chris"], genre: "Thriller", language: "Korean", country: "South Korea", diaryYears: [2020, 2018] },
+    { title: "Lost in Translation", year: 2003, rating: 4, liked: true, order: 7, rw: true, med: "Home", ven: "", fmt: "Streaming", tags: ["comfort watch", "rainy day"], fr: ["Maya"], genre: "Comedy", language: "English", country: "USA", diaryYears: [2020, 2016] },
+    { title: "Fallen Angels", year: 1995, rating: 4.5, liked: true, order: 6, rw: false, med: "Theater", ven: "Metrograph", fmt: "35mm", tags: ["criterion"], fr: [], genre: "Drama", language: "Cantonese", country: "Hong Kong", diaryYears: [2020] },
+    { title: "Pulp Fiction", year: 1994, rating: 4.5, liked: false, order: 5, rw: true, med: "Home", ven: "", fmt: "4K disc", tags: ["comfort watch"], fr: ["Sam"], genre: "Thriller", language: "English", country: "USA", diaryYears: [2020, 2017] },
+    { title: "Playtime", year: 1967, rating: 4.5, liked: true, order: 4, rw: false, med: "Theater", ven: "Aero", fmt: "70mm", tags: ["big screen"], fr: ["Chris"], genre: "Comedy", language: "French", country: "France", diaryYears: [2019] },
+    { title: "Psycho", year: 1960, rating: 4.5, liked: false, order: 3, rw: true, med: "Theater", ven: "New Beverly", fmt: "35mm", tags: ["midnight"], fr: ["Sam"], genre: "Horror", language: "English", country: "USA", diaryYears: [2019, 2016] },
+    { title: "Seven Samurai", year: 1954, rating: 5, liked: true, order: 2, rw: false, med: "Home", ven: "", fmt: "Criterion disc", tags: ["criterion"], fr: [], genre: "Drama", language: "Japanese", country: "Japan", diaryYears: [2019] },
+    { title: "Casablanca", year: 1942, rating: 4.5, liked: true, order: 1, rw: true, med: "Theater", ven: "Castro", fmt: "Nitrate print", tags: ["classic"], fr: ["Maya"], genre: "Romance", language: "English", country: "USA", diaryYears: [2019, 2016] },
+    { title: "Sunrise", year: 1927, rating: 5, liked: true, order: 0, rw: false, med: "Theater", ven: "Gene Siskel", fmt: "35mm", tags: ["silent"], fr: [], genre: "Drama", language: "English", country: "USA", diaryYears: [2019] },
+  ];
+
+  credits = {
+    "Perfect Days": ["Wim Wenders", ["Koji Yakusho"]],
+    "The Zone of Interest": ["Jonathan Glazer", ["Christian Friedel", "Sandra H\u00fcller"]],
+    "Chungking Express": ["Wong Kar-wai", ["Tony Leung", "Faye Wong", "Brigitte Lin"]],
+    "The Substance": ["Coralie Fargeat", ["Demi Moore", "Margaret Qualley"]],
+    "Dune: Part Two": ["Denis Villeneuve", ["Timoth\u00e9e Chalamet", "Zendaya"]],
+    "Aftersun": ["Charlotte Wells", ["Paul Mescal", "Frankie Corio"]],
+    "Paprika": ["Satoshi Kon", ["Megumi Hayashibara"]],
+    "Past Lives": ["Celine Song", ["Greta Lee", "Teo Yoo"]],
+    "La Haine": ["Mathieu Kassovitz", ["Vincent Cassel"]],
+    "Anatomy of a Fall": ["Justine Triet", ["Sandra H\u00fcller"]],
+    "There Will Be Blood": ["Paul Thomas Anderson", ["Daniel Day-Lewis", "Paul Dano"]],
+    "Fallen Leaves": ["Aki Kaurism\u00e4ki", ["Alma P\u00f6ysti"]],
+    "In the Mood for Love": ["Wong Kar-wai", ["Tony Leung", "Maggie Cheung"]],
+    "Portrait of a Lady on Fire": ["C\u00e9line Sciamma", ["No\u00e9mie Merlant", "Ad\u00e8le Haenel"]],
+    "Drive My Car": ["Ryusuke Hamaguchi", ["Hidetoshi Nishijima"]],
+    "Yi Yi": ["Edward Yang", ["Wu Nien-jen"]],
+    "Stalker": ["Andrei Tarkovsky", ["Alexander Kaidanovsky"]],
+    "Mulholland Drive": ["David Lynch", ["Naomi Watts", "Laura Harring"]],
+    "Close-Up": ["Abbas Kiarostami", ["Hossain Sabzian"]],
+    "Spirited Away": ["Hayao Miyazaki", ["Rumi Hiiragi"]],
+    "Petite Maman": ["C\u00e9line Sciamma", ["Jos\u00e9phine Sanz"]],
+    "Memoria": ["Apichatpong Weerasethakul", ["Tilda Swinton"]],
+    "Cure": ["Kiyoshi Kurosawa", ["Koji Yakusho"]],
+    "Burning": ["Lee Chang-dong", ["Yoo Ah-in", "Steven Yeun"]],
+    "Parasite": ["Bong Joon-ho", ["Song Kang-ho"]],
+    "The Handmaiden": ["Park Chan-wook", ["Kim Min-hee"]],
+    "Moonlight": ["Barry Jenkins", ["Mahershala Ali"]],
+    "Whiplash": ["Damien Chazelle", ["Miles Teller", "J.K. Simmons"]],
+    "Her": ["Spike Jonze", ["Joaquin Phoenix", "Scarlett Johansson"]],
+    "The Master": ["Paul Thomas Anderson", ["Joaquin Phoenix", "Philip Seymour Hoffman"]],
+    "Uncle Boonmee": ["Apichatpong Weerasethakul", ["Thanapat Saisaymar"]],
+    "No Country for Old Men": ["Joel & Ethan Coen", ["Javier Bardem", "Josh Brolin"]],
+    "Oldboy": ["Park Chan-wook", ["Choi Min-sik"]],
+    "Lost in Translation": ["Sofia Coppola", ["Bill Murray", "Scarlett Johansson"]],
+    "Fallen Angels": ["Wong Kar-wai", ["Leon Lai", "Takeshi Kaneshiro"]],
+    "Pulp Fiction": ["Quentin Tarantino", ["John Travolta", "Uma Thurman", "Samuel L. Jackson"]],
+    "Playtime": ["Jacques Tati", ["Jacques Tati"]],
+    "Psycho": ["Alfred Hitchcock", ["Anthony Perkins", "Janet Leigh"]],
+    "Seven Samurai": ["Akira Kurosawa", ["Toshiro Mifune", "Takashi Shimura"]],
+    "Casablanca": ["Michael Curtiz", ["Humphrey Bogart", "Ingrid Bergman"]],
+    "Sunrise": ["F.W. Murnau", ["George O'Brien", "Janet Gaynor"]],
+  };
+  dirOf(f) { const c = this.credits[f.title]; return c ? [c[0]] : []; }
+  castOf(f) { const c = this.credits[f.title]; return c ? c[1] : []; }
+
+  starText(r) {
+    if (!r) return "Unrated";
+    const full = Math.floor(r);
+    return "\u2605".repeat(full) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+  uniq(get) {
+    const out = [];
+    this.data.forEach((f) => get(f).forEach((v) => { if (v && !out.includes(v)) out.push(v); }));
+    return out.sort();
+  }
+  byFrequency(get) {
+    const counts = new Map();
+    this.data.forEach((f) => get(f).forEach((v) => { if (v) counts.set(v, (counts.get(v) || 0) + 1); }));
+    return [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+  }
+  toggleIn(key, val) {
+    const arr = this.state[key];
+    this.setState({ [key]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val] });
+  }
+  valFromEvent(e) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    return 0.5 + Math.round(pct * 9) * 0.5;
+  }
+  applyRate(v) {
+    if (this.drag === "min") this.setState({ rMin: Math.min(v, this.state.rMax), unratedOnly: false });
+    else if (this.drag === "max") this.setState({ rMax: Math.max(v, this.state.rMin), unratedOnly: false });
+  }
+  collapseChips(values, key, limit, expKey, mkChips, chipBase) {
+    const s = this.state;
+    const ghost = chipBase + "background:transparent; color:#a2857a; border-style:dashed;";
+    let shown = values, extra = [];
+    if (!s[expKey] && values.length > limit) {
+      shown = values.slice(0, limit).concat(values.slice(limit).filter((v) => s[key].includes(v)));
+      const hidden = values.length - shown.length;
+      if (hidden > 0) extra = [{ label: "+" + hidden + " other\u2026", onClick: () => this.setState({ [expKey]: true }), style: ghost }];
+    } else if (s[expKey] && values.length > limit) {
+      extra = [{ label: "Show fewer", onClick: () => this.setState({ [expKey]: false }), style: ghost }];
+    }
+    return mkChips(shown, key).concat(extra);
+  }
+  ratingActive() { return this.state.unratedOnly || this.state.rMin > 0.5 || this.state.rMax < 5; }
+  yearOf(f) { return f.diaryYears || [f.year]; }
+  andList(arr) {
+    if (arr.length <= 1) return arr.join("");
+    if (arr.length === 2) return arr[0] + " and " + arr[1];
+    return arr.slice(0, -1).join(", ") + ", and " + arr[arr.length - 1];
+  }
+  activeCount(decCount, dyCount) {
+    const s = this.state;
+    return (this.ratingActive() ? 1 : 0) + (s.fLiked ? 1 : 0) + (s.fRewatched ? 1 : 0) +
+      s.fTags.length + s.fFriends.length + s.fMediums.length + s.fVenues.length + s.fFormats.length + dyCount;
+  }
+  movieActiveCount(decCount) {
+    const s = this.state;
+    return decCount + s.fDirectors.length + s.fActors.length + s.fGenres.length + s.fLanguages.length + s.fCountries.length;
+  }
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim().toLowerCase();
+    const chipBase = "font-size:12px; padding:6px 12px; border-radius:20px; cursor:pointer; font-family:'Archivo',sans-serif; border:1px solid #4a2529; ";
+    const on = "background:#d9b45a; color:#2a1214; font-weight:600; border-color:#d9b45a;";
+    const off = "background:transparent; color:#ddc9b4;";
+    const chipStyle = (active) => chipBase + (active ? on : off);
+    const modeBtn = (active) => "font-size:11px; font-weight:600; padding:5px 11px; border:none; cursor:pointer; font-family:'Archivo',sans-serif; " + (active ? "background:#d9b45a; color:#2a1214;" : "background:transparent; color:#a2857a;");
+
+    const allYears = this.uniq((f) => this.yearOf(f)).map(Number).sort((a, b) => a - b);
+    const yLo = allYears[0], yHi = allYears[allYears.length - 1];
+    const eDyMin = s.dyMin ?? yLo, eDyMax = s.dyMax ?? yHi;
+    const decadesAsc = this.uniq((f) => [Math.floor(f.year / 10) * 10]).sort((a, b) => a - b);
+    const decades = this.byFrequency((f) => [Math.floor(f.year / 10) * 10]);
+    const dLo = decadesAsc[0], dHi = decadesAsc[decadesAsc.length - 1];
+    const decMode = this.props.decadeStyle ?? "Range slider";
+    const eMin = s.dMin ?? dLo, eMax = s.dMax ?? dHi;
+    const eraDefs = [["Pre-1960", (d) => d < 1960], ["'60s\u2013'70s", (d) => d >= 1960 && d < 1980], ["'80s\u2013'90s", (d) => d >= 1980 && d < 2000], ["2000s\u2013'10s", (d) => d >= 2000 && d < 2020], ["2020s", (d) => d >= 2020]].filter((e) => decades.some(e[1]));
+    const eraDecades = s.fEras.length ? decades.filter((d) => eraDefs.some((e) => s.fEras.includes(e[0]) && e[1](d))) : [];
+
+    let list = this.data.filter((f) => {
+      if (q && !f.title.toLowerCase().includes(q)) return false;
+      if (s.unratedOnly) { if (f.rating) return false; }
+      else if (s.rMin > 0.5 || s.rMax < 5) { if (!f.rating || f.rating < s.rMin || f.rating > s.rMax) return false; }
+      if (s.fLiked && !f.liked) return false;
+      if (s.fRewatched && !f.rw) return false;
+      if (s.fTags.length && !s.fTags.some((t) => f.tags.includes(t))) return false;
+      if (s.fDirectors.length && !this.dirOf(f).some((d) => s.fDirectors.includes(d))) return false;
+      if (s.fActors.length && !this.castOf(f).some((a) => s.fActors.includes(a))) return false;
+      if (s.fGenres.length && !s.fGenres.includes(f.genre)) return false;
+      if (s.fLanguages.length && !s.fLanguages.includes(f.language)) return false;
+      if (s.fCountries.length && !s.fCountries.includes(f.country)) return false;
+      if ((s.dyMin != null || s.dyMax != null) && !this.yearOf(f).some((y) => y >= (s.dyMin ?? yLo) && y <= (s.dyMax ?? yHi))) return false;
+      if (s.fFriends.length) {
+        const has = (n) => f.fr.includes(n);
+        if (s.friendMode === "all" ? !s.fFriends.every(has) : !s.fFriends.some(has)) return false;
+      }
+      const wh = [...s.fMediums, ...s.fVenues, ...s.fFormats];
+      if (wh.length) {
+        const vals = [f.med, f.ven, f.fmt].filter(Boolean);
+        const has = (v) => vals.includes(v);
+        if (s.whereMode === "all" ? !wh.every(has) : !wh.some(has)) return false;
+      }
+      const dec = Math.floor(f.year / 10) * 10;
+      if (decMode === "Range slider") { if ((s.dMin != null || s.dMax != null) && (dec < eMin || dec > eMax)) return false; }
+      else if (decMode === "Era groups") { if (s.fEras.length && !eraDecades.includes(dec)) return false; }
+      else if (s.fDecades.length && !s.fDecades.includes(dec)) return false;
+      return true;
+    });
+    list = [...list].sort((a, b) => (s.sort === "year" ? b.year - a.year : b.order - a.order));
+    const films = list.map((f) => ({ title: f.title, year: f.year, stars: this.starText(f.rating) }));
+
+    const mkSort = (key, label) => ({
+      label,
+      onClick: () => this.setState({ sort: key }),
+      style: chipStyle(s.sort === key),
+    });
+    const mkChips = (values, key, labelFn) => values.map((v) => ({
+      label: labelFn ? labelFn(v) : v,
+      onClick: () => this.toggleIn(key, v),
+      style: chipStyle(s[key].includes(v)),
+    }));
+
+    const decCount = decMode === "Range slider" ? (eMin > dLo || eMax < dHi ? 1 : 0) : decMode === "Era groups" ? s.fEras.length : s.fDecades.length;
+    const dyCount = (eDyMin > yLo || eDyMax < yHi) ? 1 : 0;
+    const movieCount = this.movieActiveCount(decCount);
+    const n = this.activeCount(decCount, dyCount) + movieCount;
+    const pct = (v) => ((v - 0.5) / 4.5) * 100;
+    const pctD = (v) => ((v - dLo) / Math.max(10, dHi - dLo)) * 100;
+    const pctY = (v) => ((v - yLo) / Math.max(1, yHi - yLo)) * 100;
+    const decVal = (e) => { const r = e.currentTarget.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); return dLo + Math.round((p * (dHi - dLo)) / 10) * 10; };
+    const dyVal = (e) => { const r = e.currentTarget.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); return yLo + Math.round(p * (yHi - yLo)); };
+    const pq = s.peopleQuery.trim().toLowerCase();
+    const pMatch = (name) => name.toLowerCase().includes(pq);
+    const applyDec = (v) => { if (this.yDrag === "min") this.setState({ dMin: Math.min(v, eMax) }); else if (this.yDrag === "max") this.setState({ dMax: Math.max(v, eMin) }); };
+    const applyDy = (v) => { if (this.dyDrag === "min") this.setState({ dyMin: Math.min(v, eDyMax) }); else if (this.dyDrag === "max") this.setState({ dyMax: Math.max(v, eDyMin) }); };
+
+    // Filter-description sentence
+    const seg = [];
+    seg.push({ t: "You have watched " });
+    seg.push({ t: String(films.length), em: true });
+    if (s.fTags.length) seg.push({ t: " " }, { t: this.andList(s.fTags), em: true });
+    seg.push({ t: " film" + (films.length === 1 ? "" : "s") });
+    if (s.fDirectors.length) seg.push({ t: " directed by " }, { t: this.andList(s.fDirectors), em: true });
+    if (s.fActors.length) seg.push({ t: " starring " }, { t: this.andList(s.fActors), em: true });
+    if (s.unratedOnly) seg.push({ t: " that are " }, { t: "unrated", em: true });
+    else if (this.ratingActive()) seg.push({ t: " rated between " }, { t: this.starText(s.rMin) + " and " + this.starText(s.rMax), em: true });
+    let releaseText = null;
+    if (decMode === "Range slider" && (s.dMin != null || s.dMax != null)) releaseText = eMin + "s and " + eMax + "s";
+    else if (decMode === "Chips" && s.fDecades.length) releaseText = this.andList([...s.fDecades].sort((a, b) => a - b).map((d) => d + "s"));
+    else if (decMode === "Era groups" && s.fEras.length) releaseText = this.andList(s.fEras);
+    if (releaseText) seg.push({ t: " released between " }, { t: releaseText, em: true });
+    if (s.fGenres.length) seg.push({ t: " in the " }, { t: this.andList(s.fGenres), em: true }, { t: " genre" + (s.fGenres.length === 1 ? "" : "s") });
+    if (s.fLanguages.length) seg.push({ t: " in " }, { t: this.andList(s.fLanguages), em: true });
+    if (s.fCountries.length) seg.push({ t: " from " }, { t: this.andList(s.fCountries), em: true });
+    if (dyCount) seg.push({ t: " logged between " }, { t: eDyMin + " and " + eDyMax, em: true });
+    seg.push({ t: "." });
+    const filterParts = seg.map((p) => ({ t: p.t, style: p.em ? "color:#f0d488; font-weight:600;" : "color:#c2a99a;" }));
+
+    return {
+      filterParts,
+      ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"),
+      films, total: "1,204", shown: films.length,
+      hasResults: films.length > 0, isEmpty: films.length === 0,
+      query: s.query, setQuery: (e) => this.setState({ query: e.target.value }),
+      sorts: [mkSort("recent", "Recent"), mkSort("year", "Release date")],
+
+      filtersOpen: s.filtersOpen,
+      toggleFilters: () => this.setState({ filtersOpen: !s.filtersOpen }),
+      filterBtnLabel: n ? "Filters \u00b7 " + n : "Filters",
+      movieExpanded: s.movieExpanded,
+      toggleMovieExpanded: () => this.setState({ movieExpanded: !s.movieExpanded }),
+      movieChevronRotate: s.movieExpanded ? "rotate(90deg)" : "rotate(0deg)",
+      movieCount: movieCount || null,
+      genreChips: this.collapseChips(this.byFrequency((f) => [f.genre]), "fGenres", 8, "genresExpanded", mkChips, chipBase),
+      languageChips: this.collapseChips(this.byFrequency((f) => [f.language]), "fLanguages", 8, "languagesExpanded", mkChips, chipBase),
+      countryChips: this.collapseChips(this.byFrequency((f) => [f.country]), "fCountries", 8, "countriesExpanded", mkChips, chipBase),
+      dyMinPct: pctY(eDyMin), dyMaxPct: pctY(eDyMax), dyLeft: pctY(eDyMin), dyWidth: pctY(eDyMax) - pctY(eDyMin),
+      dyMinLabel: String(eDyMin), dyMaxLabel: String(eDyMax),
+      dyDown: (e) => { const v = dyVal(e); this.dyDrag = Math.abs(v - eDyMin) <= Math.abs(v - eDyMax) ? "min" : "max"; e.currentTarget.setPointerCapture(e.pointerId); applyDy(v); },
+      dyMove: (e) => { if (this.dyDrag) applyDy(dyVal(e)); },
+      dyUp: () => { this.dyDrag = null; },
+      filterBtnStyle: chipBase + "padding:10px 16px; border-radius:8px; " + (s.filtersOpen || n ? on : off),
+      anyActive: n > 0,
+      clearAll: () => this.setState({
+        rMin: 0.5, rMax: 5, unratedOnly: false, fLiked: false, fRewatched: false,
+        fTags: [], fFriends: [], friendMode: "any", fMediums: [], fVenues: [], fFormats: [], whereMode: "any",
+        fDecades: [], fEras: [], dMin: null, dMax: null, fDirectors: [], fActors: [],
+        fGenres: [], fLanguages: [], fCountries: [], dyMin: null, dyMax: null,
+      }),
+
+      // rating slider
+      rMinPct: pct(s.rMin), rMaxPct: pct(s.rMax),
+      rLeft: pct(s.rMin), rWidth: pct(s.rMax) - pct(s.rMin),
+      rMinStars: this.starText(s.rMin), rMaxStars: this.starText(s.rMax),
+      ratingOpacity: s.unratedOnly ? 0.35 : 1,
+      rateDown: (e) => {
+        const v = this.valFromEvent(e);
+        this.drag = Math.abs(v - s.rMin) <= Math.abs(v - s.rMax) ? "min" : "max";
+        e.currentTarget.setPointerCapture(e.pointerId);
+        this.applyRate(v);
+      },
+      rateMove: (e) => { if (this.drag) this.applyRate(this.valFromEvent(e)); },
+      rateUp: () => { this.drag = null; },
+      toggleUnrated: () => this.setState({ unratedOnly: !s.unratedOnly, rMin: 0.5, rMax: 5 }),
+      unratedStyle: chipStyle(s.unratedOnly),
+
+      // flags
+      toggleLiked: () => this.setState({ fLiked: !s.fLiked }),
+      likedStyle: chipStyle(s.fLiked),
+      toggleRewatched: () => this.setState({ fRewatched: !s.fRewatched }),
+      rewatchedStyle: chipStyle(s.fRewatched),
+
+      decSlider: decMode === "Range slider", decChipsMode: decMode === "Chips", decEras: decMode === "Era groups",
+      decadeChips: this.collapseChips(decades, "fDecades", 6, "decadesExpanded", (v, k) => mkChips(v, k, (d) => d + "s"), chipBase),
+      eraChips: mkChips(eraDefs.map((e) => e[0]), "fEras"),
+      dMinPct: pctD(eMin), dMaxPct: pctD(eMax), dLeft: pctD(eMin), dWidth: pctD(eMax) - pctD(eMin),
+      dMinLabel: eMin + "s", dMaxLabel: eMax + "s",
+      decDown: (e) => { const v = decVal(e); this.yDrag = Math.abs(v - eMin) <= Math.abs(v - eMax) ? "min" : "max"; e.currentTarget.setPointerCapture(e.pointerId); applyDec(v); },
+      decMove: (e) => { if (this.yDrag) applyDec(decVal(e)); },
+      decUp: () => { this.yDrag = null; },
+      tagChips: this.collapseChips(this.byFrequency((f) => f.tags), "fTags", 7, "tagsExpanded", mkChips, chipBase),
+      friendChips: this.collapseChips(this.byFrequency((f) => f.fr), "fFriends", 4, "friendsExpanded", mkChips, chipBase),
+      friendAny: () => this.setState({ friendMode: "any" }),
+      friendAll: () => this.setState({ friendMode: "all" }),
+      friendAnyStyle: modeBtn(s.friendMode === "any"),
+      friendAllStyle: modeBtn(s.friendMode === "all"),
+
+      peopleQuery: s.peopleQuery,
+      setPeopleQuery: (e) => this.setState({ peopleQuery: e.target.value }),
+      directorChips: pq
+        ? mkChips(this.byFrequency((f) => this.dirOf(f)).filter(pMatch).concat(this.byFrequency((f) => this.dirOf(f)).filter((v) => !pMatch(v) && s.fDirectors.includes(v))), "fDirectors")
+        : this.collapseChips(this.byFrequency((f) => this.dirOf(f)), "fDirectors", 6, "directorsExpanded", mkChips, chipBase),
+      actorChips: pq
+        ? mkChips(this.byFrequency((f) => this.castOf(f)).filter(pMatch).concat(this.byFrequency((f) => this.castOf(f)).filter((v) => !pMatch(v) && s.fActors.includes(v))), "fActors")
+        : this.collapseChips(this.byFrequency((f) => this.castOf(f)), "fActors", 7, "actorsExpanded", mkChips, chipBase),
+      noDirectorMatch: !!pq && !this.byFrequency((f) => this.dirOf(f)).some(pMatch) && !s.fDirectors.length,
+      noActorMatch: !!pq && !this.byFrequency((f) => this.castOf(f)).some(pMatch) && !s.fActors.length,
+      mediumChips: mkChips(this.byFrequency((f) => [f.med]), "fMediums"),
+      venueChips: this.collapseChips(this.byFrequency((f) => [f.ven]), "fVenues", 6, "venuesExpanded", mkChips, chipBase),
+      formatChips: this.collapseChips(this.byFrequency((f) => [f.fmt]), "fFormats", 6, "formatsExpanded", mkChips, chipBase),
+      whereAny: () => this.setState({ whereMode: "any" }),
+      whereAll: () => this.setState({ whereMode: "all" }),
+      whereAnyStyle: modeBtn(s.whereMode === "any"),
+      whereAllStyle: modeBtn(s.whereMode === "all"),
+    };
+  }
+}
+</script>
+</body>
+</html>

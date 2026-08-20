@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: inherit; }
+</style>
+</helmet>
+
+<section style="min-height:100vh; background:#2a1214; display:flex; justify-content:center; overflow-x:hidden;">
+
+  <div style="display:flex; flex-direction:column; width:100%; max-width:1120px;">
+
+    <div style="width:100%; min-height:100vh; background:#2a1214; display:flex; flex-direction:column; font-family:'Archivo',Arial,sans-serif;">
+      <!-- Header tabs -->
+      <nav style="display:flex; align-items:stretch; gap:2px; width:100vw; margin-left:calc(50% - 50vw); padding:0 calc(50vw - 50% + 28px); background:#20100f; border-bottom:1px solid #4a2529;">
+        <a href="#" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Home</a>
+        <a href="#" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">About</a>
+        <a href="#" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Projects</a>
+        <a href="Jason's Film Log.dc.html" style="font-size:13px; letter-spacing:.4px; color:#f4e8d1; font-weight:600; padding:26px 16px 24px; border-bottom:2px solid #d9b45a;" style-hover="color:#fff3df;">Films</a>
+        <a href="Reading.dc.html" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Reading</a>
+        <a href="Subway Map.dc.html" style="font-size:13px; letter-spacing:.4px; color:#c2a99a; padding:26px 16px 24px; border-bottom:2px solid transparent;" style-hover="color:#f4e8d1;">Subway Map</a>
+        <sc-if value="{{ loggedIn }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ openComposer }}" style="margin-left:auto; align-self:center; font-size:13px; font-weight:700; color:#2a1214; background:#d9b45a; border:none; border-radius:8px; padding:8px 16px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#f0d488;">+ Log film</button>
+        </sc-if>
+        <sc-if value="{{ loggedOut }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openLogin }}" style="margin-left:auto; align-self:center; white-space:nowrap; font-size:13px; font-weight:700; color:#f4e8d1; background:transparent; border:1px solid #6b3a3f; border-radius:8px; padding:8px 16px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#d9b45a; color:#fff3df;">Log in</button>
+        </sc-if>
+      </nav>
+
+      <!-- Body -->
+      <div style="display:flex;">
+      <!-- Sidebar -->
+      <aside style="width:288px; flex:none; background:#2a1214; border-right:1px solid #4a2529; padding:36px 28px; display:flex; flex-direction:column; box-shadow:-2000px 0 0 #2a1214;">
+        <div style="font-family:'Newsreader',serif; font-size:29px; font-weight:500; color:#f4e8d1; letter-spacing:-.3px; line-height:1.05;">Jason's<br>film log</div>
+        <div style="margin-top:8px; font-size:13px; color:#d9b45a; font-weight:600;">{{ thisYear }} films this year</div>
+
+        <div style="height:1px; background:#4a2529; margin:26px 0 8px;"></div>
+        <nav style="display:flex; flex-direction:column;">
+          <a href="Films Watched.dc.html" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4; border-bottom:1px solid #402226;" style-hover="color:#fff3df;"><span>Films watched</span><span style="color:#a2857a; font-size:13px;">1,204</span></a>
+          <a href="Film Diary.dc.html" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4; border-bottom:1px solid #402226;" style-hover="color:#fff3df;"><span>Diary</span><span style="color:#a2857a; font-size:13px;">1,204</span></a>
+          <a href="Watchlist.dc.html" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4; border-bottom:1px solid #402226;" style-hover="color:#fff3df;"><span>Watchlist</span><span style="color:#a2857a; font-size:13px;">212</span></a>
+          <a href="Films Watched.dc.html?fLiked=1" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4; border-bottom:1px solid #402226;" style-hover="color:#fff3df;"><span>Liked films</span><span style="color:#a2857a; font-size:13px;">389</span></a>
+          <a href="Lists.dc.html" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4; border-bottom:1px solid #402226;" style-hover="color:#fff3df;"><span>Lists</span><span style="color:#a2857a; font-size:13px;">8</span></a>
+          <a href="Stats.dc.html" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4; border-bottom:1px solid #402226;" style-hover="color:#fff3df;"><span>Stats</span><span style="color:#d9b45a; font-size:14px;">&rarr;</span></a>
+          <a href="The Month in Film.dc.html" style="display:flex; justify-content:space-between; align-items:center; padding:11px 0; font-size:14px; color:#ddc9b4;" style-hover="color:#fff3df;"><span>The month in film</span><span style="color:#d9b45a; font-size:14px;">&rarr;</span></a>
+        </nav>
+      </aside>
+
+      <!-- Main -->
+      <main style="flex:1; padding:38px 40px 44px; display:flex; flex-direction:column; gap:38px; box-shadow:2000px 0 0 #2a1214;">
+        <!-- Favorites -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #4a2529; padding-bottom:9px; margin-bottom:16px;">
+            <span style="font-family:'Newsreader',serif; font-style:italic; font-size:19px; color:#ecdcbd;">Favorite films</span>
+            <a href="Edit Favorites.dc.html" style="font-size:12px; color:#d9b45a; font-weight:600; letter-spacing:.3px;" style-hover="color:#f0d488;">Edit favorites</a>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+            <sc-for list="{{ favorites }}" as="f" hint-placeholder-count="4">
+              <div style="aspect-ratio:2/3; border-radius:5px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 9px,#2c1518 9px 18px); border:1px solid #4a2529; display:flex; align-items:flex-end; padding:11px; cursor:pointer;" style-hover="border-color:#d9b45a;">
+                <div style="font-family:'Newsreader',serif; font-size:14px; font-weight:500; color:#f2e5cd; line-height:1.2;">{{ f.title }} <span style="color:#b0917f; font-style:italic;">{{ f.year }}</span></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- Recent from diary -->
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #4a2529; padding-bottom:9px; margin-bottom:16px;">
+            <span style="font-family:'Newsreader',serif; font-style:italic; font-size:19px; color:#ecdcbd;">Recent from diary</span>
+            <a href="Film Diary.dc.html" style="font-size:12px; color:#d9b45a; font-weight:600; letter-spacing:.3px;" style-hover="color:#f0d488;">See more &rarr;</a>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+            <sc-for list="{{ diary }}" as="f" hint-placeholder-count="4">
+              <a href="Film.dc.html" style="cursor:pointer; display:block;">
+                <div style="aspect-ratio:2/3; border-radius:5px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 9px,#2c1518 9px 18px); border:1px solid #4a2529; display:flex; align-items:flex-end; padding:11px;" style-hover="border-color:#d9b45a;">
+                  <div style="font-family:'Newsreader',serif; font-size:14px; font-weight:500; color:#f2e5cd; line-height:1.2;">{{ f.title }} <span style="color:#b0917f; font-style:italic;">{{ f.year }}</span></div>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:2px 7px; margin-top:9px;">
+                  <span style="display:flex; align-items:center; gap:5px; white-space:nowrap;">
+                    <span style="color:#d9b45a; font-size:clamp(11px,1.15vw,13px); letter-spacing:.3px;">{{ f.stars }}</span>
+                    <span style="color:#d9b45a; font-size:clamp(11px,1.15vw,13px); line-height:1;">{{ f.likeIcon }}</span>
+                    <span style="color:#8d6a60; font-size:clamp(11px,1.15vw,13px); line-height:1;">{{ f.rewatchIcon }}</span>
+                  </span>
+                  <span style="color:#a2857a; font-size:clamp(10.5px,1.05vw,12px); white-space:nowrap;">{{ f.date }}</span>
+                </div>
+              </a>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr; gap:38px;">
+          <!-- Ratings -->
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #4a2529; padding-bottom:9px; margin-bottom:16px;">
+              <span style="font-family:'Newsreader',serif; font-style:italic; font-size:19px; color:#ecdcbd;">Ratings</span>
+              <span style="font-size:12px; color:#a2857a;">{{ total }} rated &middot; <span style="color:#d9b45a; font-weight:600;">{{ avg }}</span> avg</span>
+            </div>
+            <div style="display:flex; align-items:flex-end; gap:6px; height:104px;">
+              <sc-for list="{{ histogram }}" as="bar" hint-placeholder-count="10">
+                <div style="flex:1; height:100%; display:flex; align-items:flex-end;" title="{{ bar.count }}">
+                  <div style="{{ bar.style }}"></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:13px;">
+              <span style="color:#d9b45a;">&frac12;&#9733;</span>
+              <span style="color:#d9b45a;">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+            </div>
+          </div>
+
+          <!-- Watchlist -->
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:1px solid #4a2529; padding-bottom:9px; margin-bottom:16px;">
+              <span style="font-family:'Newsreader',serif; font-style:italic; font-size:19px; color:#ecdcbd;">Recently added to watchlist</span>
+              <a href="Watchlist.dc.html" style="font-size:12px; color:#d9b45a; font-weight:600; letter-spacing:.3px;" style-hover="color:#f0d488;">See more &rarr;</a>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px;">
+              <sc-for list="{{ watchlist }}" as="f" hint-placeholder-count="4">
+                <div style="aspect-ratio:2/3; border-radius:5px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 9px,#2c1518 9px 18px); border:1px solid #4a2529; display:flex; align-items:flex-end; padding:11px; cursor:pointer; opacity:.9;" style-hover="border-color:#d9b45a; opacity:1;">
+                  <div style="font-family:'Newsreader',serif; font-size:14px; font-weight:500; color:#d8c6ad; line-height:1.2;">{{ f.title }} <span style="color:#b0917f; font-style:italic;">{{ f.year }}</span></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </main>
+      </div>
+    </div>
+  </div>
+
+  <dc-import name="Entry Editor" mode="select" open="{{ composerOpen }}" on-save="{{ onLogSave }}" on-close="{{ closeComposer }}" hint-size="0px,0px"></dc-import>
+
+  <sc-if value="{{ loginOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeLogin }}" style="position:fixed; inset:0; z-index:200; background:rgba(15,7,8,.72); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div onClick="{{ stopProp }}" style="width:100%; max-width:380px; background:#2a1214; border:1px solid #6b3a3f; border-radius:14px; padding:32px 30px; box-shadow:0 30px 80px rgba(0,0,0,.6); font-family:'Archivo',Arial,sans-serif;">
+        <div style="font-family:'Newsreader',serif; font-size:24px; color:#f4e8d1; letter-spacing:-.3px;">Admin sign in</div>
+        <div style="margin-top:6px; font-size:13px; color:#c2a99a; line-height:1.4;">Enter the admin password to log films and edit this profile.</div>
+        <form onSubmit="{{ submitLogin }}" style="margin-top:22px; display:flex; flex-direction:column; gap:12px;">
+          <input type="password" value="{{ pw }}" onChange="{{ onPwChange }}" placeholder="Password" autoFocus="{{ true }}" style="width:100%; box-sizing:border-box; background:#20100f; border:1px solid #4a2529; border-radius:8px; padding:12px 14px; font-size:14px; color:#f4e8d1; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;" />
+          <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12.5px; color:#e08a8a;">Incorrect password. Try again.</div>
+          </sc-if>
+          <div style="display:flex; gap:10px; margin-top:6px;">
+            <button type="button" onClick="{{ closeLogin }}" style="flex:1; font-size:13px; font-weight:600; color:#ddc9b4; background:transparent; border:1px solid #4a2529; border-radius:8px; padding:11px 0; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#6b3a3f;">Cancel</button>
+            <button type="submit" style="flex:1; font-size:13px; font-weight:700; color:#2a1214; background:#d9b45a; border:none; border-radius:8px; padding:11px 0; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#f0d488;">Sign in</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </sc-if>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { composerOpen: false, loggedIn: false, loginOpen: false, pw: "", loginError: false };
+  starText(r) {
+    const full = Math.floor(r);
+    const half = r % 1 >= 0.5;
+    return "\u2605".repeat(full) + (half ? "\u00bd" : "");
+  }
+  renderVals() {
+    const favorites = [
+      { title: "In the Mood for Love", year: 2000 },
+      { title: "There Will Be Blood", year: 2007 },
+      { title: "Paprika", year: 2006 },
+      { title: "La Haine", year: 1995 },
+    ];
+    const diary = [
+      { title: "Perfect Days", year: 2023, rating: 4.5, date: "Jul 8", liked: true, rewatch: false },
+      { title: "The Zone of Interest", year: 2023, rating: 4, date: "Jul 5", liked: true, rewatch: false },
+      { title: "Dune: Part Two", year: 2024, rating: 3.5, date: "Jun 30", liked: false, rewatch: false },
+      { title: "Aftersun", year: 2022, rating: 5, date: "Jun 27", liked: true, rewatch: true },
+    ].map(f => ({ ...f, stars: this.starText(f.rating), likeIcon: f.liked ? "\u2665" : "", rewatchIcon: f.rewatch ? "\u21ba" : "" }));
+    const watchlist = [
+      { title: "Anora", year: 2024 },
+      { title: "The Substance", year: 2024 },
+      { title: "Flow", year: 2024 },
+      { title: "A Real Pain", year: 2024 },
+    ];
+    const counts = [3, 5, 9, 12, 21, 34, 42, 57, 39, 23]; // half .. 5 stars
+    const total = counts.reduce((a, b) => a + b, 0);
+    const max = Math.max(...counts);
+    const histogram = counts.map((c) => ({
+      count: c,
+      style: {
+        width: "100%",
+        height: Math.round((c / max) * 100) + "%",
+        minHeight: "3px",
+        background: "#d9b45a",
+        borderRadius: "2px 2px 0 0",
+      },
+    }));
+    const weighted = counts.reduce((a, c, i) => a + c * ((i + 1) / 2), 0);
+    const avg = (weighted / total).toFixed(1);
+    return {
+      favorites, diary, watchlist, histogram, total, avg, thisYear: 96,
+      composerOpen: this.state.composerOpen,
+      openComposer: () => this.setState({ composerOpen: true }),
+      closeComposer: () => this.setState({ composerOpen: false }),
+      onLogSave: () => this.setState({ composerOpen: false }),
+      loggedIn: this.state.loggedIn,
+      loggedOut: !this.state.loggedIn,
+      loginOpen: this.state.loginOpen,
+      loginError: this.state.loginError,
+      pw: this.state.pw,
+      openLogin: () => this.setState({ loginOpen: true, pw: "", loginError: false }),
+      closeLogin: () => this.setState({ loginOpen: false }),
+      stopProp: (e) => e.stopPropagation(),
+      onPwChange: (e) => this.setState({ pw: e.target.value, loginError: false }),
+      submitLogin: (e) => {
+        e.preventDefault();
+        if (this.state.pw === "marquee") {
+          this.setState({ loggedIn: true, loginOpen: false, pw: "", loginError: false });
+        } else {
+          this.setState({ loginError: true });
+        }
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

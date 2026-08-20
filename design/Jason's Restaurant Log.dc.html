@@ -1,0 +1,2364 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Ultra&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #f7eed9; font-family: "Archivo", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #6d5740; }
+  a:hover { color: #b34328; }
+  button { font-family: "Archivo", Helvetica, Arial, sans-serif; }
+</style>
+</helmet>
+
+<div style="background:#f7eed9; min-height:100vh; padding-bottom:80px;">
+
+  <div style="background:#efe1c3; border-bottom:1px solid #c4ad86;">
+    <div style="max-width:1264px; margin:0 auto; padding:9px clamp(14px,4vw,32px); min-height:54px; display:flex; align-items:center; gap:10px 18px; flex-wrap:wrap;">
+      <a href="#" style="font-size:13px; color:#6d5740;">Home</a>
+      <a href="#" style="font-size:13px; color:#6d5740;">About</a>
+      <a href="#" style="font-size:13px; color:#6d5740;">Projects</a>
+      <a href="#" style="font-size:13px; color:#6d5740;">Films</a>
+      <a href="#" style="font-size:13px; color:#6d5740;">Books</a>
+      <a href="#" style="font-size:13px; color:#6d5740;">Subway</a>
+      <a href="#" onClick="{{ nav.landing }}" style="font-size:13px; font-weight:600; color:#2f1e12; border-bottom:2px solid #b34328; padding-bottom:3px;">Restaurants</a>
+      <span style="margin-left:auto; display:flex; gap:8px;">
+        <button onClick="{{ openTry }}" style="background:none; border:1px solid #c4ad86; color:#6d5740; font-size:12.5px; padding:7px 13px; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">+ To try</button>
+        <button onClick="{{ openLog }}" style="background:#f6e7d4; border:1px solid #b34328; color:#8e3220; font-size:12.5px; font-weight:600; padding:7px 13px; cursor:pointer;" style-hover="background:#b34328; color:#fdf7e8;">+ Log meal</button>
+      </span>
+    </div>
+  </div>
+
+  <sc-if value="{{ isLanding }}" hint-placeholder-val="{{ true }}">
+  <div data-screen-label="Landing" style="max-width:1264px; margin:0 auto; padding:30px clamp(14px,4vw,32px) 0; display:flex; gap:28px 44px; align-items:flex-start; flex-wrap:wrap;">
+
+    <div style="flex:1 1 258px; min-width:0; max-width:340px;">
+      <div style="font-family:'Ultra',Georgia,serif; font-size:29px; line-height:1.06; color:#2f1e12; letter-spacing:-.4px;">Jason&rsquo;s<br>restaurant log</div>
+      <div style="margin-top:9px; font-size:12.5px; font-weight:600; color:#b34328;">{{ yearLine }}</div>
+      <div style="margin-top:16px; border-top:1px solid #c4ad86;"></div>
+      <sc-for list="{{ sideNav }}" as="row" hint-placeholder-count="5">
+        <div onClick="{{ row.go }}" style="display:flex; align-items:baseline; gap:10px; padding:11px 2px; border-bottom:1px solid #ddcaa6; cursor:pointer;" style-hover="background:#f1e5cb">
+          <span style="font-size:13.5px; color:#2f1e12;">{{ row.label }}</span>
+          <span style="flex:1; border-bottom:1px dotted #cbb389; transform:translateY(-4px);"></span>
+          <span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#8d7357; font-variant-numeric:tabular-nums;">{{ row.count }}</span>
+        </div>
+      </sc-for>
+      <div style="margin-top:22px; background:#fdf7e8; border:1px solid #c4ad86; padding:14px 15px;">
+        <div style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; color:#8d7357; text-transform:uppercase;">Today&rsquo;s special</div>
+        <div style="margin-top:7px; font-family:'Ultra',Georgia,serif; font-size:17px; line-height:1.2; color:#2f1e12;">Ba Xuy&ecirc;n</div>
+        <div style="margin-top:4px; font-size:12px; color:#8d7357;">11 visits &middot; b&aacute;nh m&igrave; th&#7883;t ngu&#7897;i</div>
+      </div>
+    </div>
+
+    <div style="flex:999 1 460px; min-width:0; display:flex; flex-direction:column; gap:36px;">
+
+      <div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px 16px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:8px;">
+          <span style="font-family:'Ultra',Georgia,serif; font-size:20px; color:#2f1e12;">Favourites</span>
+        </div>
+        <div style="margin-top:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(198px,1fr)); gap:16px;">
+          <sc-for list="{{ favourites }}" as="t" hint-placeholder-count="4">
+            <div onClick="{{ t.go }}" style="background:#fdf7e8; border:1px solid #c4ad86; cursor:pointer; display:flex; flex-direction:column;" style-hover="border-color:#b34328">
+              <sc-if value="{{ t.hasPhoto }}">
+                <div style="height:126px; background:{{ t.photo }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.16); position:relative;">
+                  <span style="position:absolute; left:8px; top:7px; font-family:ui-monospace,Menlo,monospace; font-size:9.5px; letter-spacing:.5px; color:rgba(253,247,232,.82);">{{ t.file }}</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ t.noPhoto }}">
+                <div style="height:126px; background:repeating-linear-gradient(#efe1c3, #efe1c3 21px, #e3d2ae 21px, #e3d2ae 22px); border-bottom:1px solid #c4ad86; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;">
+                  <span style="font-family:'Ultra',Georgia,serif; font-size:34px; line-height:1; color:#2f1e12;">{{ t.price }}</span>
+                  <span style="font-size:10px; font-weight:600; letter-spacing:2.2px; text-transform:uppercase; color:#8d7357;">{{ t.cuisineShort }}</span>
+                </div>
+              </sc-if>
+              <div style="padding:11px 13px 13px;">
+                <div style="display:flex; align-items:flex-start; gap:6px;">
+                  <span style="font-size:14.5px; font-weight:600; line-height:1.25; color:#2f1e12; text-wrap:pretty;">{{ t.name }}</span>
+                  <span style="margin-left:auto; font-size:13px; color:{{ t.heartInk }}; line-height:1;">&#9829;</span>
+                </div>
+                <div style="margin-top:5px; display:flex; align-items:baseline; gap:6px;">
+                  <span style="font-size:11.5px; color:#6d5740; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:118px;">{{ t.cuisines }}</span>
+                  <span style="flex:1; border-bottom:1px dotted #cbb389; transform:translateY(-4px); min-width:8px;"></span>
+                  <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#2f1e12;">{{ t.price }}</span>
+                </div>
+                <div style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+                  <svg viewBox="0 0 24 24" style="width:19px; height:19px; flex:none;">
+                    <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.2"></circle>
+                    <g transform="{{ t.rot }}">
+                      <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ t.ink }}"></path>
+                      <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ t.ink }}"></rect>
+                    </g>
+                  </svg>
+                  <span style="font-size:11px; color:#8d7357; letter-spacing:.2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.hood }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+          <sc-for list="{{ favHoles }}" as="h" hint-placeholder-count="0">
+            <div style="border:1px dashed #c4ad86; background:rgba(253,247,232,.4); min-height:222px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; padding:16px;">
+              <span style="font-family:'Ultra',Georgia,serif; font-size:26px; color:#d8c39c;">{{ h.rank }}</span>
+              <button style="background:none; border:1px solid #c4ad86; color:#8d7357; font-size:11.5px; padding:5px 10px; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">Pick one</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px 16px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:8px;">
+          <span style="font-family:'Ultra',Georgia,serif; font-size:20px; color:#2f1e12;">Recently visited</span>
+          <a href="#" onClick="{{ nav.diary }}" style="font-size:12.5px; font-weight:600; color:#b34328;">See more &rarr;</a>
+        </div>
+        <div style="margin-top:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(198px,1fr)); gap:16px;">
+          <sc-for list="{{ recent }}" as="t" hint-placeholder-count="4">
+            <div onClick="{{ t.go }}" style="background:#fdf7e8; border:1px solid #c4ad86; cursor:pointer; display:flex; flex-direction:column;" style-hover="border-color:#b34328">
+              <sc-if value="{{ t.hasPhoto }}">
+                <div style="height:106px; background:{{ t.photo }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.16);"></div>
+              </sc-if>
+              <sc-if value="{{ t.noPhoto }}">
+                <div style="height:106px; background:repeating-linear-gradient(#efe1c3, #efe1c3 21px, #e3d2ae 21px, #e3d2ae 22px); border-bottom:1px solid #c4ad86; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                  <span style="font-family:'Ultra',Georgia,serif; font-size:30px; line-height:1; color:#2f1e12;">{{ t.price }}</span>
+                  <span style="margin-top:2px; font-size:9.5px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:#8d7357;">{{ t.cuisineShort }}</span>
+                </div>
+              </sc-if>
+              <div style="padding:10px 13px 12px;">
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <span style="font-family:ui-monospace,Menlo,monospace; font-size:10.5px; letter-spacing:.4px; color:#8d7357;">{{ t.date }}</span>
+                  <span style="margin-left:auto; font-size:11px; color:#b34328;">{{ t.marks }}</span>
+                </div>
+                <div style="margin-top:4px; font-size:14px; font-weight:600; line-height:1.25; color:#2f1e12;">{{ t.name }}</div>
+                <div style="margin-top:6px; display:flex; align-items:center; gap:7px;">
+                  <span style="font-size:12.5px; letter-spacing:1px; color:#d38b1a; line-height:1;">{{ t.stars }}</span>
+                  <svg viewBox="0 0 24 24" style="width:17px; height:17px; flex:none; margin-left:auto;">
+                    <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.3"></circle>
+                    <g transform="{{ t.rot }}">
+                      <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ t.ink }}"></path>
+                      <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ t.ink }}"></rect>
+                    </g>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div>
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px 16px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:8px;">
+          <span style="font-family:'Ultra',Georgia,serif; font-size:20px; color:#2f1e12;">To try</span>
+          <a href="#" onClick="{{ nav.totry }}" style="font-size:12.5px; font-weight:600; color:#b34328;">See more &rarr;</a>
+        </div>
+        <div style="margin-top:6px; background:#fdf7e8; border:1px solid #c4ad86;">
+          <sc-for list="{{ toTryShort }}" as="r" hint-placeholder-count="4">
+            <div onClick="{{ nav.totry }}" style="display:flex; align-items:baseline; gap:6px 10px; flex-wrap:wrap; padding:12px 16px; border-bottom:1px solid #eadfc4; cursor:pointer;" style-hover="background:#f6ecd6">
+              <span style="font-size:14px; font-weight:600; color:#2f1e12;">{{ r.name }}</span>
+              <span title="worth the trip" style="font-family:'Newsreader',Georgia,serif; font-size:14px; color:#b34328;">{{ r.trip }}</span>
+              <span style="font-size:11.5px; color:#8d7357;">{{ r.hood }}</span>
+              <span style="flex:1; border-bottom:1px dotted #cbb389; transform:translateY(-4px); min-width:20px;"></span>
+              <span style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:14px; color:#6d5740; text-align:right; max-width:340px;">{{ r.why }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#2f1e12; width:34px; text-align:right;">{{ r.price }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ onFilterScreen }}">
+  <div style="max-width:1264px; margin:0 auto; padding:30px clamp(14px,4vw,32px) 0;">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px 20px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:10px;">
+      <div>
+        <a href="#" onClick="{{ nav.landing }}" style="font-size:12px; color:#8d7357;">&larr; Jason&rsquo;s restaurant log</a>
+        <div style="margin-top:6px; font-family:'Ultra',Georgia,serif; font-size:30px; line-height:1; color:#2f1e12;">{{ hdrTitle }}</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px 14px; flex-wrap:wrap;">
+        <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8d7357;">{{ hdrCount }}</span>
+        <sc-if value="{{ isTryHeader }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ openTry }}" style="background:#f6e7d4; border:1px solid #b34328; color:#8e3220; font-size:12px; font-weight:600; padding:7px 13px; cursor:pointer;" style-hover="background:#b34328; color:#fdf7e8;">+ Add place</button>
+        </sc-if>
+        <div style="display:flex; border:1px solid #c4ad86;">
+          <button onClick="{{ goTabList }}" style="background:{{ tabList.bg }}; color:{{ tabList.fg }}; font-weight:{{ tabList.w }}; border:none; font-size:12px; padding:7px 14px; cursor:pointer;">List</button>
+          <button onClick="{{ goTabMap }}" style="background:{{ tabMap.bg }}; color:{{ tabMap.fg }}; font-weight:{{ tabMap.w }}; border:none; border-left:1px solid #c4ad86; font-size:12px; padding:7px 14px; cursor:pointer;">Map</button>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ barCollapsed }}" hint-placeholder-val="{{ false }}">
+      <button onClick="{{ openBar }}" style="width:100%; margin-top:14px; background:#efe1c3; border:1px solid #c4ad86; color:#2f1e12; font-size:12.5px; font-weight:600; padding:10px 14px; cursor:pointer; text-align:left;" style-hover="border-color:#b34328; color:#8e3220;">{{ barToggleLabel }}</button>
+    </sc-if>
+
+    <sc-if value="{{ barOpen }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top:14px; background:#efe1c3; border:1px solid #c4ad86; padding:12px 14px; display:flex; flex-direction:column; gap:10px;">
+      <sc-for list="{{ filterRows }}" as="row" hint-placeholder-count="4">
+        <div style="display:flex; flex-direction:column; gap:8px; border-top:1px solid {{ row.rule }}; padding-top:{{ row.pad }};">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; width:74px; flex:none;">{{ row.label }}</span>
+            <sc-for list="{{ row.chips }}" as="c" hint-placeholder-count="6">
+              <button onClick="{{ c.pick }}" style="background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.bd }}; font-family:{{ c.font }}; font-size:12px; padding:5px 11px; cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;" style-hover="border-color:#b34328">
+                <span>{{ c.name }}</span>
+                <span style="font-family:ui-monospace,Menlo,monospace; font-size:10px; opacity:.7;">{{ c.n }}</span>
+              </button>
+            </sc-for>
+            <sc-if value="{{ row.hasMore }}">
+              <button style="background:none; border:1px dashed #b09873; color:#8d7357; font-size:12px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">{{ row.more }}</button>
+            </sc-if>
+          </div>
+          <sc-if value="{{ row.hasSecond }}">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="width:74px; flex:none; font-size:13px; color:#bda98a; text-align:right; padding-right:6px;">&#8627;</span>
+              <sc-for list="{{ row.second }}" as="c" hint-placeholder-count="6">
+                <button onClick="{{ c.pick }}" style="background:{{ c.bg }}; color:{{ c.fg }}; border:1px solid {{ c.bd }}; font-size:12px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#b34328">{{ c.name }}</button>
+              </sc-for>
+              <sc-if value="{{ row.hasSecondMore }}">
+                <button style="background:none; border:1px dashed #b09873; color:#8d7357; font-size:12px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">{{ row.secondMore }}</button>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ row.hasNone }}">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="width:74px; flex:none;"></span>
+              <span style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:13.5px; color:#a8927a;">{{ row.noneLabel }}</span>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ showVerdictRow }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #ddcaa6; padding-top:10px;">
+          <span style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; width:74px; flex:none;">Verdict</span>
+          <button onClick="{{ cycleVerdict }}" style="background:#fdf7e8; border:1px solid #b09873; font-size:12px; padding:5px 11px; cursor:pointer; display:flex; align-items:center; gap:7px; color:#2f1e12;" style-hover="border-color:#b34328">
+            <svg viewBox="0 0 24 24" style="width:15px; height:15px;"><circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.4"></circle><g transform="rotate(0 12 12)"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ verdictInk }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ verdictInk }}"></rect></g></svg>
+            {{ verdictText }}
+          </button>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid #ddcaa6; padding-top:10px;">
+        <span style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; width:74px; flex:none;">Sort</span>
+        <sc-for list="{{ sortPills }}" as="s" hint-placeholder-count="4">
+          <button onClick="{{ s.pick }}" style="background:{{ s.bg }}; color:{{ s.fg }}; border:1px solid {{ s.bd }}; font-size:12px; padding:5px 11px; cursor:pointer;" style-hover="border-color:#b34328">{{ s.name }}</button>
+        </sc-for>
+        <sc-if value="{{ showBarClose }}">
+          <button onClick="{{ closeBar }}" style="margin-left:auto; background:#2f1e12; border:none; color:#f7eed9; font-size:12px; font-weight:600; padding:6px 14px; cursor:pointer;">Done</button>
+        </sc-if>
+      </div>
+    </div>
+    </sc-if>
+
+    <sc-if value="{{ hasPills }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <sc-for list="{{ pills }}" as="p" hint-placeholder-count="3">
+          <button onClick="{{ p.clear }}" style="background:#2f1e12; color:#f7eed9; border:none; font-family:{{ p.font }}; font-size:12px; padding:5px 10px; cursor:pointer; display:flex; align-items:center; gap:7px;" style-hover="background:#4a3626">
+            <span>{{ p.label }}</span>
+            <span style="opacity:.6;">&times;</span>
+          </button>
+        </sc-for>
+        <button onClick="{{ clearAll }}" style="background:none; border:none; color:#8e3220; font-size:12px; cursor:pointer; text-decoration:underline;">Clear all</button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ noMatches }}" hint-placeholder-val="{{ false }}">
+      <div style="margin-top:22px; background:#fdf7e8; border:1px solid #c4ad86; padding:clamp(20px,4vw,36px); max-width:640px;">
+        <div style="font-family:'Ultra',Georgia,serif; font-size:26px; line-height:1.15; color:#2f1e12;">Nothing matches.</div>
+        <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.55; color:#6d5740; text-wrap:pretty;">Filters in play: {{ filterSummary }}.</div>
+        <button onClick="{{ clearAll }}" style="margin-top:18px; background:#b34328; border:none; color:#fdf7e8; font-size:12.5px; font-weight:700; padding:9px 16px; cursor:pointer;" style-hover="background:#8e3220;">Clear all</button>
+      </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ showListBody }}">
+  <div data-screen-label="Restaurants — list" style="max-width:1264px; margin:0 auto; padding:0 clamp(14px,4vw,32px);">
+    <sc-for list="{{ groups }}" as="g" hint-placeholder-count="4">
+      <div style="margin-top:30px;">
+        <div style="display:flex; align-items:baseline; gap:12px; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+          <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">{{ g.title }}</span>
+          <span style="font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:#8d7357;">{{ g.sub }}</span>
+          <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8d7357;">{{ g.count }}</span>
+        </div>
+        <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="4">
+          <div onClick="{{ r.go }}" style="display:flex; align-items:flex-start; gap:13px; padding:13px 6px 13px 0; border-bottom:1px solid #e3d5b6; cursor:pointer;" style-hover="background:#fbf3e1">
+            <svg viewBox="0 0 24 24" title="{{ r.tip }}" style="width:22px; height:22px; flex:none; margin-top:2px;">
+              <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.2"></circle>
+              <g transform="{{ r.rot }}">
+                <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ r.ink }}"></path>
+                <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ r.ink }}"></rect>
+              </g>
+            </svg>
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:baseline; gap:9px;">
+                <span style="font-size:15.5px; font-weight:600; color:#2f1e12; letter-spacing:.1px;">{{ r.name }}</span>
+                <span title="{{ r.tripTip }}" style="font-family:'Newsreader',Georgia,serif; font-size:15px; color:#b34328;">{{ r.trip }}</span>
+                <span style="font-size:12.5px; color:#8e3220;">{{ r.heart }}</span>
+                <span style="flex:1; border-bottom:1px dotted {{ r.leader }}; transform:translateY(-4px); min-width:24px;"></span>
+                <span style="font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#2f1e12; width:44px; text-align:right; flex:none;">{{ r.price }}</span>
+              </div>
+              <div style="margin-top:4px; display:flex; align-items:baseline; gap:10px;">
+                <span style="font-size:12px; color:#6d5740;">{{ r.cuisines }}</span>
+                <span style="font-size:12.5px; letter-spacing:.8px; color:#d38b1a; line-height:1;">{{ r.stars }}</span>
+                <span style="font-family:'Newsreader',Georgia,serif; font-size:13.5px; color:#8d7357;">{{ r.verdictLabel }}</span>
+                <span style="margin-left:auto; font-size:11.5px; color:#8d7357;">{{ r.meta }}</span>
+              </div>
+            </div>
+            <sc-if value="{{ r.hasPhoto }}">
+              <span style="width:52px; height:40px; flex:none; background:{{ r.photo }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></span>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ showMapView }}">
+  <div data-screen-label="Restaurants — map" style="max-width:1264px; margin:0 auto; padding:0 clamp(14px,4vw,32px);">
+    <div style="margin-top:16px; display:flex; gap:0; flex-wrap:wrap; border:1px solid #c4ad86;">
+      <div style="flex:999 1 380px; position:relative; background:#f2e7d2; height:min(70vh,560px); min-height:360px; overflow:hidden;">
+        <svg viewBox="{{ mapViewBox }}" style="width:100%; height:100%; display:block;">
+          <rect x="0" y="0" width="900" height="560" fill="#f2e7d2"></rect>
+          <path d="M0 392 L214 336 L318 372 L402 470 L360 560 L0 560 Z" fill="#c9d4c2"></path>
+          <path d="M690 0 L900 0 L900 190 L742 150 Z" fill="#c9d4c2"></path>
+          <rect x="112" y="112" width="150" height="106" fill="#dee5c3"></rect>
+          <rect x="556" y="330" width="128" height="92" fill="#dee5c3"></rect>
+          <g stroke="#efe4cd" stroke-width="3">
+            <path d="M0 60 H900 M0 120 H900 M0 180 H900 M0 240 H900 M0 300 H900 M0 360 H900 M0 420 H900 M0 480 H900"></path>
+            <path d="M60 0 V560 M120 0 V560 M180 0 V560 M240 0 V560 M300 0 V560 M360 0 V560 M420 0 V560 M480 0 V560 M540 0 V560 M600 0 V560 M660 0 V560 M720 0 V560 M780 0 V560 M840 0 V560"></path>
+          </g>
+          <g stroke="#cbb389" stroke-width="8" fill="none" opacity=".9"><path d="M-20 268 L920 214"></path><path d="M348 -20 L470 580"></path></g>
+          <g stroke="#e9d6ae" stroke-width="6" fill="none"><path d="M-20 268 L920 214"></path><path d="M348 -20 L470 580"></path></g>
+          <path d="M214 336 L318 372" stroke="#e9d6ae" stroke-width="5" fill="none"></path>
+          <g fill="#4a3626" font-family="Archivo, sans-serif" font-size="{{ hoodTextSize }}" letter-spacing="1.6">
+            <text x="128" y="140" fill="#6b7a4a">SUNSET PARK</text>
+            <text x="600" y="120">EAST VILLAGE</text>
+            <text x="150" y="470" fill="#7d8a6c">UPPER BAY</text>
+            <text x="700" y="380">FLUSHING</text>
+          </g>
+          <g font-family="Archivo, sans-serif" font-size="{{ streetTextSize }}" fill="#6d5740"><text x="372" y="120" transform="rotate(78 372 120)">4th Ave</text><text x="60" y="256">Gowanus Expwy</text></g>
+        </svg>
+
+        <sc-for list="{{ pins }}" as="p" hint-placeholder-count="9">
+          <div title="{{ p.tip }}" style="position:absolute; left:{{ p.x }}; top:{{ p.y }}; transform:translate(-50%,-100%); cursor:pointer;">
+            <svg viewBox="0 0 26 34" style="width:26px; height:34px; display:block; filter:drop-shadow(0 1px 1px rgba(47,30,18,.35));">
+              <path d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z" fill="none" stroke="{{ p.ring }}" stroke-width="1.8" transform="translate(13,18) scale(1.08) translate(-13,-18)"></path>
+              <path d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z" fill="#fdf7e8" stroke="#2f1e12" stroke-width="1.6"></path>
+              <g transform="translate(4.2,4.2) scale(0.74)"><g transform="{{ p.rot }}"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ p.ink }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ p.ink }}"></rect></g></g>
+            </svg>
+            <sc-if value="{{ p.showLabel }}" hint-placeholder-val="{{ false }}">
+              <span style="position:absolute; left:{{ p.labelLeft }}; right:{{ p.labelRight }}; top:2px; white-space:nowrap; background:rgba(253,247,232,.92); border:1px solid #c4ad86; padding:1px 6px; font-size:11px; color:{{ p.labelInk }};">{{ p.name }}</span>
+            </sc-if>
+          </div>
+        </sc-for>
+
+        <sc-for list="{{ tryMapPins }}" as="p" hint-placeholder-count="0">
+          <div title="{{ p.tip }}" style="position:absolute; left:{{ p.x }}; top:{{ p.y }}; transform:translate(-50%,-100%); cursor:pointer;">
+            <svg viewBox="0 0 26 34" style="width:26px; height:34px; display:block; filter:drop-shadow(0 1px 1px rgba(47,30,18,.35));">
+              <path d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z" fill="{{ p.fill }}" stroke="#2f1e12" stroke-width="1.6"></path>
+              <circle cx="13" cy="13" r="4.4" fill="none" stroke="{{ p.ringInk }}" stroke-width="1.6"></circle>
+              <text x="13" y="18.5" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="15" fill="{{ p.glyphInk }}">&#8224;</text>
+            </svg>
+            <sc-if value="{{ p.showLabel }}" hint-placeholder-val="{{ false }}">
+              <span style="position:absolute; left:{{ p.labelLeft }}; right:{{ p.labelRight }}; top:2px; white-space:nowrap; background:rgba(253,247,232,.92); border:1px solid #c4ad86; padding:1px 6px; font-size:11px; color:{{ p.labelInk }};">{{ p.name }}</span>
+            </sc-if>
+          </div>
+        </sc-for>
+
+        <sc-if value="{{ showCluster }}">
+        <div style="position:absolute; left:196px; top:250px; transform:translate(-50%,-50%); width:56px; height:56px; border-radius:50%; background:#f0e2c2; border:1.6px solid #2f1e12; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 1px 3px rgba(47,30,18,.3); cursor:pointer;">
+          <span style="font-family:ui-monospace,Menlo,monospace; font-size:17px; font-weight:700; color:#2f1e12; line-height:1;">12</span>
+          <span style="font-size:8px; letter-spacing:.9px; text-transform:uppercase; color:#8d7357; margin-top:2px;">8 blocks</span>
+          <span style="position:absolute; bottom:-3px; width:26px; height:3px; background:linear-gradient(90deg,#556b2a 0 58%,#c07d14 58% 84%,#a83a22 84% 100%);"></span>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ showMapCard }}">
+        <div style="position:absolute; left:clamp(14px,462px,calc(100% - 280px)); top:196px; width:min(266px,calc(100% - 28px)); background:#fdf7e8; border:1px solid #2f1e12; box-shadow:0 4px 12px rgba(47,30,18,.22);">
+          <div style="height:88px; background:linear-gradient(148deg,#7c4a26,#c28244 52%,#5d3419); box-shadow:inset 0 0 0 1px rgba(47,30,18,.16);"></div>
+          <div style="padding:11px 13px 13px;">
+            <div style="display:flex; align-items:baseline; gap:8px;">
+              <span style="font-size:14.5px; font-weight:600; color:#2f1e12;">Ba Xuy&ecirc;n</span>
+              <span style="font-size:12px; color:#8e3220;">&#9829;</span>
+              <span style="flex:1; border-bottom:1px dotted #cbb389; transform:translateY(-4px);"></span>
+              <span style="font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#2f1e12;">$</span>
+            </div>
+            <div style="margin-top:4px; display:flex; align-items:center; gap:8px;">
+              <span style="font-size:11.5px; color:#6d5740;">Vietnamese</span>
+              <span style="font-size:12px; letter-spacing:.8px; color:#d38b1a;">&#9733;&#9733;&#9733;&#9733;&frac12;</span>
+            </div>
+            <div style="margin-top:9px; padding-top:9px; border-top:1px solid #eadfc4; display:flex; align-items:center; gap:9px;">
+              <svg viewBox="0 0 24 24" style="width:20px; height:20px; flex:none;"><circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.2"></circle><g transform="rotate(0 12 12)"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="#556b2a"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="#556b2a"></rect></g></svg>
+              <span style="font-size:12.5px; color:#2f1e12;">Definitely return</span>
+              <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357;">11 visits</span>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <div style="position:absolute; left:14px; bottom:14px; max-width:calc(100% - 28px); background:rgba(253,247,232,.94); border:1px solid #c4ad86; padding:9px 11px; display:flex; align-items:center; gap:8px 14px; flex-wrap:wrap;">
+          <span style="font-size:10px; font-weight:700; letter-spacing:1.3px; text-transform:uppercase; color:#8d7357;">{{ legendLabel }}</span>
+          <sc-for list="{{ legend }}" as="l" hint-placeholder-count="3">
+            <span style="display:flex; align-items:center; gap:6px;">
+              <span style="width:11px; height:11px; background:{{ l.ink }}; box-shadow:inset 0 0 0 1.4px {{ l.bd }};"></span>
+              <span style="font-size:11.5px; color:#6d5740;">{{ l.label }}</span>
+            </span>
+          </sc-for>
+          <span style="flex:1 1 100%; min-width:0; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:12px; color:#8d7357;">{{ legendNote }}</span>
+        </div>
+
+        <div style="position:absolute; right:14px; top:14px; display:flex; flex-direction:column; border:1px solid #2f1e12; background:#fdf7e8;">
+          <button onClick="{{ zoomIn }}" style="background:none; border:none; border-bottom:1px solid #c4ad86; width:30px; height:30px; font-size:16px; color:{{ zoomInInk }}; cursor:pointer;">+</button>
+          <button onClick="{{ zoomOut }}" style="background:none; border:none; width:30px; height:30px; font-size:16px; color:{{ zoomOutInk }}; cursor:pointer;">&minus;</button>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isPlace }}">
+  <div data-screen-label="Restaurant detail" style="max-width:1264px; margin:0 auto; padding:0 clamp(14px,4vw,32px);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid #ddcaa6;">
+      <a href="#" onClick="{{ nav.list }}" style="font-size:12.5px; color:#8d7357;">&larr; Jason&rsquo;s restaurant log</a>
+      <span style="font-size:10.5px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:#8d7357;">Restaurants</span>
+    </div>
+
+    <div style="margin-top:26px; display:flex; gap:28px 44px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="flex:999 1 440px; min-width:min(100%,440px);">
+        <div style="border-bottom:2px solid #2f1e12; padding-bottom:14px;">
+          <div style="font-family:'Ultra',Georgia,serif; font-size:44px; line-height:1.02; color:#2f1e12; letter-spacing:-.6px;">{{ place.name }}</div>
+          <div style="margin-top:11px; display:flex; align-items:baseline; gap:8px 12px; flex-wrap:wrap;">
+            <sc-if value="{{ place.hasFacts }}" hint-placeholder-val="{{ true }}">
+              <span style="display:contents;">
+                <span style="font-size:13px; color:#6d5740;">{{ place.cuisines }}</span>
+                <span style="color:#c4ad86;">&middot;</span>
+                <span style="font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#2f1e12;">{{ place.price }}</span>
+                <span style="color:#c4ad86;">&middot;</span>
+              </span>
+            </sc-if>
+            <sc-if value="{{ place.whereConfirmed }}" hint-placeholder-val="{{ true }}">
+              <span style="font-size:13px; color:#6d5740;">{{ place.whereText }}</span>
+            </sc-if>
+            <sc-if value="{{ place.whereUnconfirmed }}" hint-placeholder-val="{{ false }}">
+              <span style="display:contents;">
+                <span title="{{ place.whereTip }}" style="font-size:13px; color:#bda98a; border-bottom:1px dotted #cbb389; cursor:help;">{{ place.whereText }}</span>
+                <span title="{{ place.whereTip }}" style="font-size:10px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:#bda98a; cursor:help;">nobody confirmed this</span>
+              </span>
+            </sc-if>
+            <span style="margin-left:auto; display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;">
+              <sc-for list="{{ place.links }}" as="l" hint-placeholder-count="4">
+                <span title="{{ l.tip }}" style="font-size:12px; color:{{ l.ink }}; border-bottom:1px solid {{ l.bd }}; cursor:{{ l.cursor }};">{{ l.label }}</span>
+              </sc-for>
+              <sc-if value="{{ place.wrongLoc }}" hint-placeholder-val="{{ true }}">
+                <button onClick="{{ openPlaceFix }}" style="font-size:11.5px; color:#8d7357; background:none; border:none; padding:0; cursor:pointer; text-decoration:underline; text-decoration-color:#c4ad86; text-underline-offset:3px;" style-hover="color:#8e3220;">wrong location?</button>
+              </sc-if>
+            </span>
+          </div>
+        </div>
+
+        <sc-if value="{{ place.inviteLoud }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:22px; border:1px dashed #b09873; padding:20px 22px; max-width:620px;">
+            <div style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:19px; line-height:1.34; color:#2f1e12; text-wrap:pretty;">{{ place.inviteTitle }}</div>
+            <div style="margin-top:13px; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; line-height:1.55; color:#6d5740; background:#f0e2c2; border:1px solid #ddcaa6; padding:9px 11px; overflow-wrap:anywhere;">{{ place.evidence }}</div>
+            <div style="margin-top:13px; font-size:13px; line-height:1.62; color:#6d5740; max-width:520px; text-wrap:pretty;">{{ place.inviteBody }}</div>
+            <div style="margin-top:17px; display:flex; align-items:center; gap:8px 16px; flex-wrap:wrap;">
+              <button onClick="{{ openPlaceSearch }}" style="background:#b34328; border:none; color:#fdf7e8; font-size:13px; font-weight:700; padding:10px 18px; cursor:pointer;" style-hover="background:#8e3220;">Find this place on OpenStreetMap</button>
+              <button onClick="{{ openPlaceByHand }}" style="background:none; border:none; color:#8e3220; font-size:12.5px; cursor:pointer; text-decoration:underline; text-decoration-color:#ddcaa6; text-underline-offset:3px; padding:0;" style-hover="color:#b34328;">or write the location in by hand</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ place.inviteQuiet }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px; border:1px dashed #b09873; padding:9px 13px; display:flex; align-items:baseline; gap:6px 12px; flex-wrap:wrap; max-width:620px;">
+            <span style="font-size:12.5px; color:#6d5740; text-wrap:pretty;">{{ place.quietLine }}</span>
+            <button onClick="{{ openPlaceSearch }}" style="background:none; border:none; color:#8e3220; font-size:12.5px; font-weight:600; cursor:pointer; padding:0;" style-hover="color:#b34328;">{{ place.quietCta }}</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ place.showHistory }}">
+        <div style="margin-top:30px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+            <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">Verdict history</span>
+            <span style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">{{ place.span }}</span>
+          </div>
+          <div style="margin-top:14px; background:#fdf7e8; border:1px solid #c4ad86; padding:18px 20px 14px;">
+            <div style="display:flex; align-items:flex-end; gap:0; height:130px;">
+              <div style="width:112px; flex:none; height:100%; display:flex; flex-direction:column; justify-content:space-between; padding-bottom:2px;">
+                <span style="font-size:10.5px; color:#8d7357;">Definitely</span>
+                <span style="font-size:10.5px; color:#8d7357;">Happy to go</span>
+                <span style="font-size:10.5px; color:#8d7357;">Avoid</span>
+              </div>
+              <sc-for list="{{ place.ladder }}" as="v" hint-placeholder-count="11">
+                <div title="{{ v.tip }}" style="flex:1; height:100%; position:relative; border-left:1px solid #eadfc4; cursor:pointer;">
+                  <span style="position:absolute; left:0; right:0; top:{{ v.top }}; display:flex; justify-content:center;">
+                    <svg viewBox="0 0 24 24" style="width:20px; height:20px;">
+                      <circle cx="12" cy="12" r="11" fill="#fdf7e8" stroke="#c4ad86" stroke-width="1"></circle>
+                      <g transform="{{ v.rot }}"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ v.ink }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ v.ink }}"></rect></g>
+                    </svg>
+                  </span>
+                  <span style="position:absolute; bottom:-2px; left:0; right:0; text-align:center; font-family:ui-monospace,Menlo,monospace; font-size:9.5px; color:#a8927a;">{{ v.label }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ place.showPhotos }}">
+        <div style="margin-top:30px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+            <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">Photographs</span>
+            <span style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">{{ place.photoNote }}</span>
+          </div>
+          <sc-for list="{{ place.photoGroups }}" as="g" hint-placeholder-count="3">
+            <div style="margin-top:16px;">
+              <div style="display:flex; align-items:baseline; gap:9px;">
+                <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357;">{{ g.date }}</span>
+                <span style="flex:1; border-bottom:1px solid #e3d5b6; transform:translateY(-4px);"></span>
+                <span style="font-size:11px; color:#8d7357;">{{ g.n }}</span>
+              </div>
+              <div style="margin-top:9px; display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+                <sc-for list="{{ g.photos }}" as="p" hint-placeholder-count="3">
+                  <div style="width:{{ p.w }}; height:{{ p.h }}; background:{{ p.bg }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.18); cursor:pointer;" style-hover="box-shadow:inset 0 0 0 2px #b34328"></div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ place.noVisits }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:32px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+            <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">On the to-try list</span>
+            <span style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">{{ place.addedWhen }}</span>
+          </div>
+          <div style="margin-top:14px; background:#fdf7e8; border:1px solid #c4ad86; padding:16px 18px; display:flex; align-items:center; gap:12px 18px; flex-wrap:wrap;">
+            <span style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:16px; line-height:1.5; color:#4a3626; flex:1 1 240px; min-width:0; text-wrap:pretty;">{{ place.why }}</span>
+            <button onClick="{{ openPlaceLog }}" style="background:#f6e7d4; border:1px solid #b34328; color:#8e3220; font-size:12.5px; font-weight:600; padding:8px 14px; cursor:pointer; flex:none;" style-hover="background:#b34328; color:#fdf7e8;">+ Log the first visit</button>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ place.hasVisits }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:32px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+            <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">Every visit</span>
+            <span style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">{{ place.visitCount }}</span>
+          </div>
+          <sc-for list="{{ place.entries }}" as="e" hint-placeholder-count="4">
+            <div onClick="{{ nav.entry }}" style="padding:15px 0; border-bottom:1px solid #e3d5b6; display:flex; gap:16px; cursor:pointer;" style-hover="background:#fbf3e1">
+              <div style="width:74px; flex:none;">
+                <div style="font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#2f1e12;">{{ e.day }}</div>
+                <div style="font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:#8d7357;">{{ e.year }}</div>
+              </div>
+              <svg viewBox="0 0 24 24" title="{{ e.tip }}" style="width:22px; height:22px; flex:none;">
+                <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.2"></circle>
+                <g transform="{{ e.rot }}"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ e.ink }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ e.ink }}"></rect></g>
+              </svg>
+              <div style="flex:1; min-width:0;">
+                <div style="display:flex; align-items:center; gap:9px;">
+                  <span style="font-size:12.5px; letter-spacing:.8px; color:#d38b1a;">{{ e.stars }}</span>
+                  <span style="font-size:12px; color:#8e3220;">{{ e.marks }}</span>
+                  <span style="font-size:11.5px; color:#8d7357;">{{ e.friends }}</span>
+                </div>
+                <div style="margin-top:5px; font-family:'Newsreader',Georgia,serif; font-size:15px; line-height:1.5; color:#4a3626; text-wrap:pretty;">{{ e.review }}</div>
+              </div>
+              <sc-if value="{{ e.hasPhoto }}">
+                <span style="width:58px; height:44px; flex:none; background:{{ e.photo }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+        </sc-if>
+      </div>
+
+      <div style="flex:1 1 258px; min-width:0; max-width:340px;">
+        <div style="background:#fdf7e8; border:1px solid #c4ad86;">
+          <div style="padding:16px 18px; border-bottom:1px solid #ddcaa6;">
+            <div style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Verdict</div>
+            <div style="margin-top:11px; display:flex; align-items:center; gap:13px;">
+              <svg viewBox="0 0 24 24" style="width:40px; height:40px; flex:none;">
+                <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1"></circle>
+                <g transform="{{ place.rot }}"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ place.ink }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ place.ink }}"></rect></g>
+              </svg>
+              <div>
+                <div style="font-size:15px; font-weight:600; color:#2f1e12;">{{ place.verdict }}</div>
+                <div style="margin-top:2px; font-size:11px; color:#8d7357;">{{ place.verdictWhen }}</div>
+              </div>
+            </div>
+          </div>
+          <div style="padding:14px 18px; border-bottom:1px solid #ddcaa6; display:flex; align-items:baseline; gap:10px;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Rating</span>
+            <span style="flex:1; border-bottom:1px dotted {{ place.leader }}; transform:translateY(-4px);"></span>
+            <span style="font-size:14px; letter-spacing:1px; color:#d38b1a;">{{ place.stars }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#2f1e12;">{{ place.avg }}</span>
+          </div>
+          <div style="padding:14px 18px; border-bottom:1px solid #ddcaa6; display:flex; align-items:baseline; gap:10px;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Visits</span>
+            <span style="flex:1; border-bottom:1px dotted {{ place.leader }}; transform:translateY(-4px);"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#2f1e12;">{{ place.visits }}</span>
+          </div>
+          <div onClick="{{ place.toggleTrip }}" title="{{ place.tripHint }}" style="padding:14px 18px; border-bottom:1px solid #ddcaa6; display:flex; align-items:baseline; gap:10px; cursor:pointer;" style-hover="background:#fbf3e1">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Trip</span>
+            <span style="flex:1; border-bottom:1px dotted {{ place.leader }}; transform:translateY(-4px);"></span>
+            <span style="font-size:12.5px; color:{{ place.tripInk }};">{{ place.tripLabel }}</span>
+          </div>
+          <sc-if value="{{ place.showMapRow }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:14px 18px; border-bottom:1px solid #ddcaa6; display:flex; align-items:baseline; gap:10px;">
+            <span style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">On the map</span>
+            <span style="flex:1; border-bottom:1px dotted {{ place.leader }}; transform:translateY(-4px);"></span>
+            <span title="{{ place.mapRowTip }}" style="font-size:12.5px; color:#bda98a; cursor:help;">{{ place.mapRow }}</span>
+          </div>
+          </sc-if>
+          <div style="padding:14px 18px;">
+            <button style="width:100%; background:{{ place.heartBg }}; border:1px solid #b34328; color:{{ place.heartFg }}; font-size:12.5px; font-weight:600; padding:9px 0; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;" style-hover="background:#b34328; color:#fdf7e8;"><span style="font-size:14px; line-height:1;">&#9829;</span>{{ place.heartLabel }}</button>
+          </div>
+        </div>
+        <div style="margin-top:14px; background:#efe1c3; border:1px solid #c4ad86; padding:14px 16px;">
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Owner</div>
+          <div style="margin-top:9px; display:flex; flex-direction:column; gap:7px;">
+            <a href="#" onClick="{{ openLogHere }}" style="font-size:12.5px; color:#8e3220;">+ Log another visit</a>
+            <a href="#" onClick="{{ openPlaceSearch }}" style="font-size:12.5px; color:#8e3220;">{{ place.ownerLink }}</a>
+            <a href="#" style="font-size:12.5px; color:#8e3220;">Edit this place</a>
+            <a href="#" style="font-size:12.5px; color:#8e3220;">Set favourite rank</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ showSketch }}" hint-placeholder-val="{{ false }}">
+    <div style="margin-top:44px; margin-bottom:40px; border:1px dashed #b09873; padding:20px 22px 24px; max-width:700px;">
+      <div style="display:flex; align-items:baseline; gap:10px 14px; flex-wrap:wrap; border-bottom:1px solid #ddcaa6; padding-bottom:8px;">
+        <span style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Not shipped &middot; alternative</span>
+        <span style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:15px; color:#6d5740;">the same lookup done inline, in the body of the page</span>
+      </div>
+      <div style="margin-top:16px; font-size:13px; line-height:1.62; color:#6d5740; max-width:560px; text-wrap:pretty;">Static sketch. The invitation expands in place instead of opening a dialog, borrowing the Log meal suggestion list. It reads calmer at first and worse once a result is picked: the confirming form has three fields and a coordinate line, and it pushes the verdict history down the page every time you open it.</div>
+      <div style="margin-top:18px; border:1px dashed #b09873; padding:18px 20px; background:#fbf3e1;">
+        <div style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:18px; color:#2f1e12;">This place has no point on the map.</div>
+        <div style="margin-top:14px; display:grid; grid-template-columns:2fr 1fr; gap:10px; max-width:460px;">
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Name</label>
+            <div style="background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;">Laser Wolf</div>
+          </div>
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Where</label>
+            <div style="background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;">Brooklyn</div>
+          </div>
+        </div>
+        <div style="margin-top:8px; max-width:460px; background:#fdf7e8; border:1px solid #2f1e12;">
+          <div style="display:flex; align-items:baseline; gap:9px; padding:9px 11px; border-bottom:1px solid #eadfc4;">
+            <span style="font-size:13.5px; font-weight:600; color:#2f1e12;">Laser Wolf</span>
+            <span style="flex:1; font-size:11.5px; color:#8d7357;">97 Wythe Ave, Williamsburg</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357;">restaurant</span>
+          </div>
+          <div style="display:flex; align-items:baseline; gap:9px; padding:9px 11px; border-bottom:1px solid #eadfc4; background:#f0e2c2;">
+            <span style="font-size:13.5px; font-weight:600; color:#2f1e12;">Laser Wolf</span>
+            <span style="flex:1; font-size:11.5px; color:#8d7357;">Fishtown, Philadelphia</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357;">restaurant</span>
+          </div>
+          <div style="display:flex; align-items:baseline; gap:9px; padding:9px 11px;">
+            <span style="font-size:13.5px; font-weight:600; color:#2f1e12;">Williamsburg</span>
+            <span style="flex:1; font-size:11.5px; color:#8d7357;">Brooklyn, New York</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#a83a22;">no exact point</span>
+          </div>
+        </div>
+        <div style="margin-top:12px; font-size:12px; color:#8d7357;">&hellip; and then three more fields, here, above the verdict history.</div>
+      </div>
+    </div>
+    </sc-if>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isDiary }}">
+  <div data-screen-label="Diary" style="max-width:1264px; margin:0 auto; padding:30px clamp(14px,4vw,32px) 0;">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px 20px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:10px;">
+      <div>
+        <a href="#" onClick="{{ nav.landing }}" style="font-size:12px; color:#8d7357;">&larr; Jason&rsquo;s restaurant log</a>
+        <div style="margin-top:6px; font-family:'Ultra',Georgia,serif; font-size:30px; line-height:1; color:#2f1e12;">Diary</div>
+      </div>
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8d7357;">214 visits &middot; 96 places</span>
+    </div>
+    <sc-for list="{{ diaryMonths }}" as="m" hint-placeholder-count="2">
+      <div style="margin-top:26px;">
+        <div style="display:flex; align-items:baseline; gap:12px; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+          <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">{{ m.name }}</span>
+          <span style="flex:1;"></span>
+          <span style="font-size:11px; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">{{ m.summary }}</span>
+        </div>
+        <sc-for list="{{ m.rows }}" as="e" hint-placeholder-count="4">
+          <div onClick="{{ nav.entry }}" style="display:flex; align-items:center; gap:8px 14px; flex-wrap:wrap; padding:12px 4px; border-bottom:1px solid #e3d5b6; cursor:pointer;" style-hover="background:#fbf3e1">
+            <span style="width:34px; flex:none; font-family:ui-monospace,Menlo,monospace; font-size:14px; color:#2f1e12; text-align:right;">{{ e.day }}</span>
+            <svg viewBox="0 0 24 24" title="{{ e.tip }}" style="width:21px; height:21px; flex:none;">
+              <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.2"></circle>
+              <g transform="{{ e.rot }}"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ e.ink }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ e.ink }}"></rect></g>
+            </svg>
+            <span style="font-size:14.5px; font-weight:600; color:#2f1e12; white-space:nowrap;">{{ e.name }}</span>
+            <span style="font-size:11.5px; color:#8d7357; white-space:nowrap;">{{ e.hood }}</span>
+            <span style="flex:1; border-bottom:1px dotted {{ e.leader }}; transform:translateY(-4px); min-width:20px;"></span>
+            <span style="display:flex; gap:5px; align-items:center;">
+              <sc-for list="{{ e.thumbs }}" as="t" hint-placeholder-count="0">
+                <span style="width:38px; height:30px; background:{{ t.bg }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></span>
+              </sc-for>
+            </span>
+            <span style="font-size:12.5px; letter-spacing:.8px; color:#d38b1a; width:66px; text-align:right;">{{ e.stars }}</span>
+            <span style="font-size:12px; color:#8e3220; width:34px; text-align:right;">{{ e.marks }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#2f1e12; width:34px; text-align:right;">{{ e.price }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-for>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isEntry }}">
+  <div data-screen-label="Diary entry" style="max-width:1264px; margin:0 auto; padding:0 clamp(14px,4vw,32px);">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:14px 0; border-bottom:1px solid #ddcaa6;">
+      <a href="#" onClick="{{ nav.diary }}" style="font-size:12.5px; color:#8d7357;">&larr; Jason&rsquo;s restaurant log</a>
+      <span style="font-size:10.5px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:#8d7357;">Diary</span>
+    </div>
+    <div style="margin-top:26px; display:flex; gap:28px 44px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="flex:999 1 440px; min-width:min(100%,440px);">
+        <div style="border-bottom:2px solid #2f1e12; padding-bottom:13px;">
+          <div style="font-family:ui-monospace,Menlo,monospace; font-size:12px; letter-spacing:1.2px; color:#8d7357;">SATURDAY 8 AUGUST 2026</div>
+          <a href="#" onClick="{{ nav.place }}" style="display:block; margin-top:8px; font-family:'Ultra',Georgia,serif; font-size:40px; line-height:1.04; color:#2f1e12;">Ba Xuy&ecirc;n</a>
+          <div style="margin-top:9px; display:flex; align-items:baseline; gap:11px;">
+            <span style="font-size:13px; color:#6d5740;">Vietnamese</span>
+            <span style="color:#c4ad86;">&middot;</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#2f1e12;">$</span>
+            <span style="color:#c4ad86;">&middot;</span>
+            <span style="font-size:13px; color:#6d5740;">Sunset Park, Brooklyn</span>
+            <span style="margin-left:auto; font-size:12px; color:#8d7357;">with Priya</span>
+          </div>
+        </div>
+
+        <div style="margin-top:20px; display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+          <div style="flex:2 1 320px; min-width:0;">
+            <div style="height:290px; background:linear-gradient(148deg,#7c4a26,#c28244 52%,#5d3419); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+            <div style="margin-top:6px; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:13.5px; color:#6d5740;">Th&#7883;t ngu&#7897;i, extra p&acirc;t&eacute;</div>
+          </div>
+          <div style="flex:1 1 170px; height:290px; background:linear-gradient(160deg,#3f4a2c,#8a9a5b 58%,#2f3720); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+          <div style="flex:1 1 190px; min-width:0;">
+            <div style="height:160px; background:linear-gradient(140deg,#8e3220,#d38b1a 60%,#6b2617); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:26px; max-width:660px; display:flex; flex-direction:column; gap:14px;">
+          <div style="font-family:'Newsreader',Georgia,serif; font-size:17px; line-height:1.62; color:#2f1e12; text-wrap:pretty;">The bread was ten minutes out of the oven and the whole thing collapsed correctly &mdash; that shatter down the front of your shirt that means the crust is right. Two sandwiches, one iced coffee, eleven dollars.</div>
+          <div style="font-family:'Newsreader',Georgia,serif; font-size:17px; line-height:1.62; color:#4a3626; text-wrap:pretty;">Priya got the b&igrave; and conceded halfway through that the th&#7883;t ngu&#7897;i is the correct order. Eleventh visit. I have never once considered ordering anything else and I am not going to start.</div>
+        </div>
+
+        <div style="margin-top:22px; display:flex; gap:8px; flex-wrap:wrap;">
+          <sc-for list="{{ entryTags }}" as="t" hint-placeholder-count="4">
+            <span style="border:1px solid #c4ad86; background:#fdf7e8; font-size:12px; color:#6d5740; padding:4px 10px;">{{ t.name }}</span>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="flex:1 1 258px; min-width:0; max-width:340px;">
+        <div style="background:#fdf7e8; border:1px solid #c4ad86; padding:16px 18px;">
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">How was it</div>
+          <div style="margin-top:10px; display:flex; align-items:center; gap:10px; padding-bottom:14px; border-bottom:1px solid #ddcaa6;">
+            <span style="font-size:24px; letter-spacing:2px; color:#d38b1a; line-height:1;">&#9733;&#9733;&#9733;&#9733;&frac12;</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#6d5740;">4.5</span>
+          </div>
+          <div style="margin-top:14px; font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Would I go back</div>
+          <div style="margin-top:9px; display:flex; align-items:center; gap:12px;">
+            <svg viewBox="0 0 24 24" style="width:34px; height:34px; flex:none;">
+              <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1"></circle>
+              <g transform="rotate(0 12 12)"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="#556b2a"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="#556b2a"></rect></g>
+            </svg>
+            <div>
+              <div style="font-size:14px; font-weight:600; color:#2f1e12;">Definitely return</div>
+            </div>
+          </div>
+          <div style="margin-top:16px; padding-top:14px; border-top:1px solid #ddcaa6; display:flex; gap:8px;">
+            <span style="flex:1; background:#b34328; color:#fdf7e8; font-size:12px; font-weight:600; padding:7px 0; text-align:center;">&#9829; Loved</span>
+            <span style="flex:1; background:#efe1c3; border:1px solid #c4ad86; color:#4a3626; font-size:12px; padding:7px 0; text-align:center;">&#8635; Been before</span>
+          </div>
+        </div>
+        <div style="margin-top:14px; background:#efe1c3; border:1px solid #c4ad86; padding:14px 16px; display:flex; flex-direction:column; gap:7px;">
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Owner</div>
+          <a href="#" style="font-size:12.5px; color:#8e3220;">Edit this entry</a>
+          <a href="#" style="font-size:12.5px; color:#8e3220;">Add photos</a>
+          <a href="#" style="font-size:12.5px; color:#8e3220;">Delete</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ showTryBody }}">
+  <div data-screen-label="To try" style="max-width:1264px; margin:0 auto; padding:0 clamp(14px,4vw,32px);">
+    <sc-for list="{{ tryGroups }}" as="g" hint-placeholder-count="3">
+      <div style="margin-top:26px;">
+        <div style="display:flex; align-items:baseline; gap:12px; border-bottom:1px solid #2f1e12; padding-bottom:6px;">
+          <span style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">{{ g.title }}</span>
+          <span style="font-size:11px; letter-spacing:1.6px; text-transform:uppercase; color:#8d7357;">{{ g.sub }}</span>
+          <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8d7357;">{{ g.count }}</span>
+        </div>
+        <div style="margin-top:6px; background:#fdf7e8; border:1px solid #c4ad86;">
+          <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+            <div onClick="{{ r.logIt }}" title="Log a visit here" style="display:flex; align-items:baseline; gap:6px 11px; flex-wrap:wrap; padding:14px 16px; border-bottom:1px solid #eadfc4; cursor:pointer;" style-hover="background:#f6ecd6">
+              <span style="width:9px; height:9px; flex:none; border:1.4px solid #8d7357; border-radius:50%; transform:translateY(-1px);"></span>
+              <span style="font-size:15px; font-weight:600; color:#2f1e12;">{{ r.name }}</span>
+              <span title="{{ r.tripTip }}" style="font-family:'Newsreader',Georgia,serif; font-size:15px; color:#b34328;">{{ r.trip }}</span>
+              <span style="flex:1; border-bottom:1px dotted {{ r.leader }}; transform:translateY(-4px); min-width:24px;"></span>
+              <span style="font-size:10px; font-weight:600; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; white-space:nowrap;">{{ r.tag }}</span>
+              <span style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:14.5px; color:#6d5740; text-align:right; max-width:320px;">{{ r.why }}</span>
+              <span style="font-family:ui-monospace,Menlo,monospace; font-size:12.5px; color:#2f1e12; width:38px; text-align:right;">{{ r.price }}</span>
+              <button onClick="{{ r.toggleTrip }}" title="{{ r.toggleLabel }}" style="flex:none; width:22px; background:none; border:none; font-family:'Newsreader',Georgia,serif; font-size:15px; color:{{ r.toggleInk }}; cursor:pointer; padding:0;" style-hover="color:#b34328;">&#8224;</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-for>
+    <div style="margin-top:14px; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:13.5px; color:#8d7357;">{{ tryLegendNote }}</div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isStats }}">
+  <div data-screen-label="Stats" style="max-width:1264px; margin:0 auto; padding:30px clamp(14px,4vw,32px) 0;">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px 20px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:10px;">
+      <div>
+        <a href="#" onClick="{{ nav.landing }}" style="font-size:12px; color:#8d7357;">&larr; Jason&rsquo;s restaurant log</a>
+        <div style="margin-top:6px; font-family:'Ultra',Georgia,serif; font-size:30px; line-height:1; color:#2f1e12;">Stats</div>
+      </div>
+      <span style="font-size:10.5px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; color:#8d7357;">Not built yet</span>
+    </div>
+
+    <div style="margin-top:20px; background:#fdf7e8; border:1px solid #c4ad86; padding:clamp(20px,4vw,40px); display:flex; gap:28px 44px; align-items:flex-start; flex-wrap:wrap;">
+      <div style="flex:1 1 300px; max-width:520px;">
+        <div style="font-family:'Ultra',Georgia,serif; font-size:26px; line-height:1.15; color:#2f1e12;">Not drawn yet.</div>
+        <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-size:16px; line-height:1.5; color:#6d5740;">214 visits logged. The fields are there.</div>
+        <div style="margin-top:18px; display:flex; gap:10px;">
+          <a href="#" onClick="{{ nav.diary }}" style="background:#b34328; color:#fdf7e8; font-size:12.5px; font-weight:600; padding:9px 15px;">Go to the diary</a>
+          <a href="#" onClick="{{ nav.map }}" style="border:1px solid #c4ad86; color:#6d5740; font-size:12.5px; padding:9px 15px;">Go to the map</a>
+        </div>
+      </div>
+      <div style="flex:1 1 320px; min-width:0;">
+        <div style="font-size:10.5px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8d7357;">Planned</div>
+        <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:22px 26px;">
+          <div>
+            <div style="font-size:12.5px; font-weight:600; color:#2f1e12;">Cuisine breakdown</div>
+            <div style="margin-top:8px; display:flex; flex-direction:column; gap:5px;">
+              <sc-for list="{{ sketchBars }}" as="b" hint-placeholder-count="6">
+                <div style="display:flex; align-items:center; gap:7px;">
+                  <span style="width:62px; font-size:10px; color:#8d7357; text-align:right;">{{ b.label }}</span>
+                  <span style="height:9px; width:{{ b.w }}; background:{{ b.ink }};"></span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px; font-weight:600; color:#2f1e12;">Price mix</div>
+            <div style="margin-top:8px; display:flex; height:66px; align-items:flex-end; gap:9px;">
+              <span style="width:26px; height:66px; background:#d38b1a;"></span>
+              <span style="width:26px; height:44px; background:#c07d14;"></span>
+              <span style="width:26px; height:20px; background:#b34328;"></span>
+              <span style="width:26px; height:7px; background:#8e3220;"></span>
+            </div>
+            <div style="margin-top:5px; font-family:ui-monospace,Menlo,monospace; font-size:10px; color:#8d7357; display:flex; gap:19px;"><span>$</span><span>$$</span><span>$$$</span><span>$$$$</span></div>
+          </div>
+          <div>
+            <div style="font-size:12.5px; font-weight:600; color:#2f1e12;">Where I eat</div>
+            <div style="margin-top:8px; height:74px; background:repeating-linear-gradient(90deg,#f2e7d2 0 14px,#eadfc4 14px 15px); border:1px solid #ddcaa6; position:relative;">
+              <span style="position:absolute; left:22px; top:26px; width:22px; height:22px; border-radius:50%; background:rgba(179,67,40,.55);"></span>
+              <span style="position:absolute; left:52px; top:14px; width:13px; height:13px; border-radius:50%; background:rgba(179,67,40,.45);"></span>
+              <span style="position:absolute; left:86px; top:40px; width:9px; height:9px; border-radius:50%; background:rgba(179,67,40,.4);"></span>
+            </div>
+          </div>
+          <div>
+            <div style="font-size:12.5px; font-weight:600; color:#2f1e12;">Visits over time</div>
+            <div style="margin-top:8px; display:flex; align-items:flex-end; gap:3px; height:66px;">
+              <sc-for list="{{ sketchSpark }}" as="s" hint-placeholder-count="12">
+                <span style="flex:1; height:{{ s.h }}; background:#556b2a;"></span>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isMonth }}">
+  <div data-screen-label="Month in review" style="max-width:1264px; margin:0 auto; padding:30px clamp(14px,4vw,32px) 0;">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:12px 20px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:10px;">
+      <div>
+        <a href="#" onClick="{{ nav.landing }}" style="font-size:12px; color:#8d7357;">&larr; Jason&rsquo;s restaurant log</a>
+        <div style="margin-top:6px; font-family:'Ultra',Georgia,serif; font-size:30px; line-height:1; color:#2f1e12;">Month in review</div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357;">Export</span>
+        <span style="background:#2f1e12; color:#f7eed9; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:5px 10px;">9:16</span>
+        <span style="background:#fdf7e8; border:1px solid #b09873; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:5px 10px; color:#6d5740;">4:5</span>
+        <span style="background:#fdf7e8; border:1px solid #b09873; font-family:ui-monospace,Menlo,monospace; font-size:11.5px; padding:5px 10px; color:#6d5740;">1:1</span>
+      </div>
+    </div>
+
+    <div style="margin-top:20px; max-width:100%; overflow-x:auto;">
+      <div style="width:1080px; transform:scale(.79); transform-origin:top left; margin-bottom:-140px;">
+        <div style="width:1080px; background:#fdf7e8; border:1px solid #c4ad86; padding:56px 56px 48px;">
+          <div style="display:flex; align-items:flex-end; justify-content:space-between; border-bottom:3px solid #2f1e12; padding-bottom:18px;">
+            <div>
+              <div style="font-size:13px; font-weight:700; letter-spacing:2.6px; text-transform:uppercase; color:#b34328;">The month in eating</div>
+              <div style="margin-top:10px; font-family:'Ultra',Georgia,serif; font-size:66px; line-height:.98; color:#2f1e12; letter-spacing:-1px;">July 2026</div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-family:'Ultra',Georgia,serif; font-size:52px; line-height:1; color:#2f1e12;">9</div>
+              <div style="font-size:13px; letter-spacing:1.8px; text-transform:uppercase; color:#8d7357;">meals out</div>
+            </div>
+          </div>
+
+          <div style="margin-top:26px; display:grid; grid-template-columns:repeat(7,1fr); gap:8px;">
+            <sc-for list="{{ calendar }}" as="c" hint-placeholder-count="35">
+              <div style="aspect-ratio:1; background:{{ c.bg }}; border:1px solid {{ c.bd }}; position:relative; overflow:hidden;">
+                <span style="position:absolute; left:6px; top:4px; font-family:ui-monospace,Menlo,monospace; font-size:12px; color:{{ c.numInk }};">{{ c.day }}</span>
+                <sc-if value="{{ c.marked }}">
+                  <span style="position:absolute; right:5px; bottom:4px;">
+                    <svg viewBox="0 0 24 24" style="width:18px; height:18px; display:block;">
+                      <g transform="{{ c.rot }}"><path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ c.ink }}"></path><rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ c.ink }}"></rect></g>
+                    </svg>
+                  </span>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:30px; display:grid; grid-template-columns:repeat(4,1fr); gap:0; border-top:1px solid #c4ad86; border-bottom:1px solid #c4ad86;">
+            <sc-for list="{{ monthFigures }}" as="f" hint-placeholder-count="4">
+              <div style="padding:20px 22px; border-left:1px solid #eadfc4;">
+                <div style="font-family:'Ultra',Georgia,serif; font-size:38px; line-height:1; color:#2f1e12;">{{ f.value }}</div>
+                <div style="margin-top:8px; font-size:12px; letter-spacing:1.6px; text-transform:uppercase; color:#8d7357;">{{ f.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:28px; display:flex; gap:10px;">
+            <div style="flex:2; height:250px; background:linear-gradient(148deg,#7c4a26,#c28244 52%,#5d3419); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18); position:relative;">
+              <div style="position:absolute; left:0; right:0; bottom:0; padding:16px 18px; background:linear-gradient(transparent,rgba(36,24,18,.86));">
+                <div style="font-size:19px; font-weight:600; color:#fdf7e8;">Ba Xuy&ecirc;n</div>
+                <div style="margin-top:3px; font-size:13px; color:#e0c9a4;">Sunset Park</div>
+              </div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
+              <div style="flex:1; background:linear-gradient(160deg,#3f4a2c,#8a9a5b 58%,#2f3720); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+              <div style="flex:1; background:linear-gradient(140deg,#8e3220,#d38b1a 60%,#6b2617); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:10px;">
+              <div style="flex:1; background:linear-gradient(155deg,#4a3626,#a8825a 55%,#33241a); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+              <div style="flex:1; background:linear-gradient(145deg,#6d5740,#e0c48c 62%,#4a3626); box-shadow:inset 0 0 0 1px rgba(47,30,18,.18);"></div>
+            </div>
+          </div>
+
+          <div style="margin-top:24px; display:flex; align-items:baseline; justify-content:space-between;">
+            <span style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:19px; color:#6d5740;">Nine meals, four boroughs, one sandwich eleven times over.</span>
+            <span style="font-size:12px; letter-spacing:1.8px; text-transform:uppercase; color:#a8927a;">jasonqiao.com/restaurants</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </sc-if>
+
+</div>
+
+
+<sc-if value="{{ logOpen }}">
+  <div onClick="{{ backdropClose }}" style="position:fixed; inset:0; background:rgba(47,30,18,.58); display:flex; align-items:flex-start; justify-content:center; padding:clamp(12px,4vh,44px) 14px; z-index:60; overflow:auto;">
+    <div onClick="{{ stop }}" style="position:relative; width:100%; max-width:620px; min-width:0; background:#fdf7e8; border:1px solid #2f1e12; box-shadow:0 20px 48px rgba(47,30,18,.36);">
+
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 20px; border-bottom:1px solid #c4ad86; background:#efe1c3;">
+        <span style="font-family:'Ultra',Georgia,serif; font-size:19px; color:#2f1e12;">{{ logTitle }}</span>
+        <button onClick="{{ askClose }}" style="width:28px; height:28px; border:1px solid #c4ad86; background:#fdf7e8; color:#6d5740; font-size:14px; line-height:1; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">&times;</button>
+      </div>
+
+      <sc-if value="{{ confirmOpen }}">
+        <div style="position:absolute; inset:0; background:rgba(247,238,217,.94); display:flex; align-items:center; justify-content:center; padding:24px; z-index:20;">
+          <div style="width:100%; max-width:320px; background:#fdf7e8; border:1px solid #2f1e12; padding:20px; text-align:center;">
+            <div style="font-family:'Ultra',Georgia,serif; font-size:17px; color:#2f1e12;">Discard?</div>
+            <div style="margin-top:16px; display:flex; gap:9px; justify-content:center;">
+              <button onClick="{{ keepEditing }}" style="border:1px solid #c4ad86; background:none; color:#4a3626; font-size:12.5px; font-weight:600; padding:8px 15px; cursor:pointer;">Keep</button>
+              <button onClick="{{ discard }}" style="border:none; background:#b34328; color:#fdf7e8; font-size:12.5px; font-weight:700; padding:8px 15px; cursor:pointer;">Discard</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="padding:18px 20px; display:flex; flex-direction:column; gap:16px; max-height:calc(100vh - 190px); overflow:auto;">
+
+        <div style="position:relative;">
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Place</label>
+          <sc-if value="{{ log.locked }}">
+            <div style="display:flex; align-items:center; gap:6px 10px; flex-wrap:wrap; background:#f0e2c2; border:1px solid #c4ad86; padding:9px 11px;">
+              <span style="font-size:14.5px; font-weight:600; color:#2f1e12;">{{ log.lockedName }}</span>
+              <span style="flex:1 1 auto; min-width:0; font-size:11.5px; color:#8d7357;">{{ log.lockedMeta }}</span>
+              <button onClick="{{ log.unlock }}" style="margin-left:auto; border:1px solid #c4ad86; background:#fdf7e8; color:#6d5740; font-size:11.5px; padding:5px 10px; cursor:pointer;" style-hover="color:#8e3220; border-color:#b34328;">Change</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ log.showSearch }}">
+            <input value="{{ log.name }}" onInput="{{ log.setName }}" onFocus="{{ log.focusName }}" onBlur="{{ log.blurName }}" placeholder="Search or type a new place" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+          </sc-if>
+          <sc-if value="{{ log.showSuggest }}">
+            <div style="position:absolute; left:0; right:0; top:100%; margin-top:4px; background:#fdf7e8; border:1px solid #2f1e12; box-shadow:0 12px 26px rgba(47,30,18,.24); z-index:10;">
+              <sc-for list="{{ log.suggest }}" as="s" hint-placeholder-count="3">
+                <div onMouseDown="{{ s.pick }}" style="display:flex; align-items:baseline; gap:4px 9px; flex-wrap:wrap; padding:9px 11px; border-bottom:1px solid #eadfc4; cursor:pointer;" style-hover="background:#f0e2c2">
+                  <span style="font-size:13.5px; font-weight:600; color:#2f1e12;">{{ s.name }}</span>
+                  <span style="flex:1 1 auto; min-width:0; font-size:11.5px; color:#8d7357;">{{ s.meta }}</span>
+                  <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357;">{{ s.tail }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Visited</label>
+            <input type="date" value="{{ log.date }}" onInput="{{ log.setDate }}" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:8px 11px; font-size:13.5px; color:#2f1e12; font-family:ui-monospace,Menlo,monospace;"></input>
+          </div>
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Rating</label>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="display:flex; gap:2px;">
+                <sc-for list="{{ log.starCells }}" as="s" hint-placeholder-count="5">
+                  <span onClick="{{ s.set }}" title="{{ s.tip }}" style="font-size:22px; line-height:1; color:{{ s.ink }}; cursor:pointer;">{{ s.glyph }}</span>
+                </sc-for>
+              </span>
+              <button onClick="{{ log.toggleHalf }}" style="border:1px solid {{ log.halfBd }}; background:{{ log.halfBg }}; color:{{ log.halfFg }}; font-size:12px; padding:3px 8px; cursor:pointer;">&frac12;</button>
+              <button onClick="{{ log.clearStars }}" style="margin-left:auto; border:none; background:none; color:#8d7357; font-size:11.5px; cursor:pointer; text-decoration:underline;">clear</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Would I go back</label>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <svg viewBox="0 0 24 24" style="width:26px; height:26px; flex:none;">
+              <circle cx="12" cy="12" r="11" fill="none" stroke="#c4ad86" stroke-width="1.2"></circle>
+              <g transform="{{ log.verdictRot }}">
+                <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ log.verdictInk }}"></path>
+                <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ log.verdictInk }}"></rect>
+              </g>
+            </svg>
+            <input type="range" min="0" max="5" step="1" value="{{ log.verdict }}" onInput="{{ log.setVerdict }}" title="{{ log.verdictGloss }}" style="flex:1; min-width:0; accent-color:#b34328; height:20px; cursor:pointer;"></input>
+            <span style="flex:0 1 132px; min-width:70px; font-size:13px; color:#2f1e12; text-align:right; text-wrap:pretty;">{{ log.verdictName }}</span>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Would I go out of my way</label>
+          <div style="display:flex; gap:6px; max-width:340px;">
+            <sc-for list="{{ log.tripCells }}" as="p" hint-placeholder-count="2">
+              <button onClick="{{ p.pick }}" style="flex:1; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.fg }}; font-size:12.5px; padding:8px 6px; cursor:pointer;">{{ p.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button onClick="{{ log.toggleLoved }}" style="border:1px solid {{ log.lovedBd }}; background:{{ log.lovedBg }}; color:{{ log.lovedFg }}; font-size:12.5px; font-weight:600; padding:8px 13px; cursor:pointer;">&#9829; Loved it</button>
+          <button onClick="{{ log.toggleAgain }}" style="border:1px solid {{ log.againBd }}; background:{{ log.againBg }}; color:{{ log.againFg }}; font-size:12.5px; font-weight:600; padding:8px 13px; cursor:pointer;">&#8635; Been before</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">With</label>
+            <input value="{{ log.who }}" onInput="{{ log.setWho }}" placeholder="Priya, Dan" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+          </div>
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Price</label>
+            <div style="display:flex; gap:6px; max-width:260px;">
+              <sc-for list="{{ log.prices }}" as="p" hint-placeholder-count="4">
+                <button onClick="{{ p.pick }}" style="flex:1; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.fg }}; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; padding:8px 0; cursor:pointer;">{{ p.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Notes</label>
+          <textarea value="{{ log.notes }}" onInput="{{ log.setNotes }}" rows="3" placeholder="What you ate, what to order next time" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:10px 11px; font-size:14px; line-height:1.5; color:#2f1e12; font-family:'Newsreader',Georgia,serif; resize:vertical;"></textarea>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Photos</label>
+          <div style="display:flex; gap:8px; align-items:stretch; flex-wrap:wrap;">
+            <sc-for list="{{ log.photos }}" as="p" hint-placeholder-count="0">
+              <span style="width:74px; height:56px; background:{{ p.bg }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.18); position:relative;">
+                <button onClick="{{ p.remove }}" style="position:absolute; top:2px; right:2px; width:17px; height:17px; border:none; background:rgba(36,24,18,.72); color:#fdf7e8; font-size:11px; line-height:1; cursor:pointer;">&times;</button>
+              </span>
+            </sc-for>
+            <button onClick="{{ log.addPhoto }}" style="width:74px; height:56px; border:1px dashed #b09873; background:none; color:#8d7357; font-size:18px; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">+</button>
+          </div>
+        </div>
+
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Tags</label>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:7px;">
+            <sc-for list="{{ log.tags }}" as="t" hint-placeholder-count="0">
+              <span style="display:flex; align-items:center; gap:6px; border:1px solid #c4ad86; background:#f0e2c2; font-size:12px; color:#4a3626; padding:4px 9px;">
+                {{ t.name }}
+                <button onClick="{{ t.remove }}" style="border:none; background:none; color:#8d7357; font-size:12px; line-height:1; cursor:pointer; padding:0;">&times;</button>
+              </span>
+            </sc-for>
+          </div>
+          <input value="{{ log.tagInput }}" onInput="{{ log.setTagInput }}" onKeyDown="{{ log.tagKey }}" placeholder="Enter to add" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:8px 11px; font-size:13px; color:#2f1e12;"></input>
+        </div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap; padding:14px 20px; border-top:1px solid #c4ad86; background:#efe1c3;">
+        <span style="flex:1 1 auto; min-width:0; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ log.summary }}</span>
+        <button onClick="{{ askClose }}" style="margin-left:auto; border:1px solid #c4ad86; background:#fdf7e8; color:#4a3626; font-size:13px; font-weight:600; padding:9px 17px; cursor:pointer;">Cancel</button>
+        <button onClick="{{ log.save }}" style="border:none; background:{{ log.saveBg }}; color:{{ log.saveFg }}; font-size:13px; font-weight:700; padding:9px 19px; cursor:{{ log.saveCursor }};">Log visit</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ tryOpen }}">
+  <div onClick="{{ backdropClose }}" style="position:fixed; inset:0; background:rgba(47,30,18,.58); display:flex; align-items:flex-start; justify-content:center; padding:clamp(12px,6vh,64px) 14px; z-index:60; overflow:auto;">
+    <div onClick="{{ stop }}" style="width:100%; max-width:520px; background:#fdf7e8; border:1px solid #2f1e12; box-shadow:0 20px 48px rgba(47,30,18,.36);">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 20px; border-bottom:1px solid #c4ad86; background:#efe1c3;">
+        <span style="font-family:'Ultra',Georgia,serif; font-size:19px; color:#2f1e12;">Add to to-try</span>
+        <button onClick="{{ askClose }}" style="width:28px; height:28px; border:1px solid #c4ad86; background:#fdf7e8; color:#6d5740; font-size:14px; line-height:1; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">&times;</button>
+      </div>
+      <div style="padding:18px 20px; display:flex; flex-direction:column; gap:15px;">
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Place</label>
+          <input value="{{ tryF.name }}" onInput="{{ tryF.setName }}" placeholder="Wu&rsquo;s Wonton King" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:14px; color:#2f1e12;"></input>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px;">
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Where</label>
+            <input value="{{ tryF.hood }}" onInput="{{ tryF.setHood }}" placeholder="Two Bridges, Manhattan" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+          </div>
+          <div>
+            <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Cuisine</label>
+            <input value="{{ tryF.cuisine }}" onInput="{{ tryF.setCuisine }}" placeholder="Cantonese" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Price</label>
+          <div style="display:flex; gap:6px; max-width:260px;">
+            <sc-for list="{{ tryF.prices }}" as="p" hint-placeholder-count="4">
+              <button onClick="{{ p.pick }}" style="flex:1; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.fg }}; font-family:ui-monospace,Menlo,monospace; font-size:12.5px; padding:8px 0; cursor:pointer;">{{ p.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Would I go out of my way</label>
+          <div style="display:flex; gap:6px; max-width:340px;">
+            <sc-for list="{{ tryF.tripCells }}" as="p" hint-placeholder-count="2">
+              <button onClick="{{ p.pick }}" style="flex:1; border:1px solid {{ p.bd }}; background:{{ p.bg }}; color:{{ p.fg }}; font-size:12.5px; padding:8px 6px; cursor:pointer;">{{ p.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">What kind of why</label>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <sc-for list="{{ tryF.whyTags }}" as="t" hint-placeholder-count="8">
+              <button onClick="{{ t.pick }}" style="background:{{ t.bg }}; color:{{ t.fg }}; border:1px solid {{ t.bd }}; font-size:12px; padding:4px 10px; cursor:pointer; white-space:nowrap;" style-hover="border-color:#b34328">{{ t.name }}</button>
+            </sc-for>
+          </div>
+        </div>
+        <div>
+          <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Why</label>
+          <input value="{{ tryF.why }}" onInput="{{ tryF.setWhy }}" placeholder="Peking duck, BYOB, a big table" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:14px; color:#2f1e12; font-family:'Newsreader',Georgia,serif;"></input>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap; padding:14px 20px; border-top:1px solid #c4ad86; background:#efe1c3;">
+        <span style="flex:1 1 auto; min-width:0; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ tryF.summary }}</span>
+        <button onClick="{{ askClose }}" style="margin-left:auto; border:1px solid #c4ad86; background:#fdf7e8; color:#4a3626; font-size:13px; font-weight:600; padding:9px 17px; cursor:pointer;">Cancel</button>
+        <button onClick="{{ tryF.save }}" style="border:none; background:{{ tryF.saveBg }}; color:{{ tryF.saveFg }}; font-size:13px; font-weight:700; padding:9px 19px; cursor:{{ tryF.saveCursor }};">Add</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ placeOpen }}">
+  <div onClick="{{ backdropClose }}" style="position:fixed; inset:0; background:rgba(47,30,18,.58); display:flex; align-items:flex-start; justify-content:center; padding:clamp(12px,4vh,44px) 14px; z-index:60; overflow:auto;">
+    <div onClick="{{ stop }}" style="position:relative; width:100%; max-width:620px; min-width:0; background:#fdf7e8; border:1px solid #2f1e12; box-shadow:0 20px 48px rgba(47,30,18,.36);">
+
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:15px 20px; border-bottom:1px solid #c4ad86; background:#efe1c3;">
+        <div style="min-width:0;">
+          <div style="font-family:'Ultra',Georgia,serif; font-size:19px; line-height:1.15; color:#2f1e12;">{{ pp.head }}</div>
+          <div style="margin-top:6px; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:#8d7357; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ pp.evidence }}</div>
+        </div>
+        <button onClick="{{ askClose }}" style="flex:none; width:28px; height:28px; border:1px solid #c4ad86; background:#fdf7e8; color:#6d5740; font-size:14px; line-height:1; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">&times;</button>
+      </div>
+
+      <div style="padding:18px 20px; display:flex; flex-direction:column; gap:16px; max-height:calc(100vh - 210px); overflow:auto;">
+
+        <sc-if value="{{ pp.showQuery }}" hint-placeholder-val="{{ true }}">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px;">
+            <div>
+              <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Name</label>
+              <input value="{{ pp.q }}" onInput="{{ pp.setQ }}" placeholder="Laser Wolf" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Where</label>
+              <input value="{{ pp.where }}" onInput="{{ pp.setWhere }}" placeholder="Brooklyn" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ pp.showResults }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <div style="font-size:11.5px; color:#8d7357; line-height:1.5;">{{ pp.resultMeta }}</div>
+            <div style="margin-top:9px; background:#fdf7e8; border:1px solid #2f1e12;">
+              <sc-for list="{{ pp.hits }}" as="h" hint-placeholder-count="5">
+                <div onClick="{{ h.pick }}" style="display:flex; align-items:baseline; gap:4px 10px; flex-wrap:wrap; padding:10px 12px; border-bottom:1px solid #eadfc4; cursor:pointer;" style-hover="background:#f0e2c2">
+                  <span style="font-size:13.5px; font-weight:600; color:#2f1e12;">{{ h.name }}</span>
+                  <span style="flex:1 1 auto; min-width:0; font-size:11.5px; color:#8d7357;">{{ h.meta }}</span>
+                  <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:{{ h.tailInk }}; background:{{ h.tailBg }}; border:1px solid {{ h.tailBd }}; padding:2px 6px; white-space:nowrap;">{{ h.tail }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ pp.noResults }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:13px; color:#6d5740; line-height:1.62; padding:4px 0 2px; max-width:520px; text-wrap:pretty;">Nothing in OpenStreetMap matches that. Try the name on its own, or leave it unplaced &mdash; the log works without a point.</div>
+        </sc-if>
+
+        <sc-if value="{{ pp.down }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#f0e2c2; border:1px solid #c4ad86; padding:16px 18px;">
+            <div style="font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:17px; color:#2f1e12; line-height:1.4;">OpenStreetMap didn&rsquo;t answer.</div>
+            <div style="margin-top:10px; font-size:13px; color:#6d5740; line-height:1.62; max-width:480px; text-wrap:pretty;">Nothing has been lost and nothing has been written. Try again in a minute, or write the location in by hand and leave the point for later.</div>
+            <div style="margin-top:14px; display:flex; align-items:center; gap:8px 14px; flex-wrap:wrap;">
+              <button onClick="{{ pp.retry }}" style="background:#fdf7e8; border:1px solid #b34328; color:#8e3220; font-size:12.5px; font-weight:600; padding:8px 14px; cursor:pointer;" style-hover="background:#b34328; color:#fdf7e8;">Try again</button>
+              <button onClick="{{ pp.goHand }}" style="background:none; border:none; color:#8e3220; font-size:12.5px; cursor:pointer; text-decoration:underline; text-decoration-color:#ddcaa6; text-underline-offset:3px; padding:0;" style-hover="color:#b34328;">write the location in by hand</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ pp.handForm }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid #ddcaa6; padding-top:16px; display:flex; flex-direction:column; gap:14px;">
+            <div>
+              <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Location, in words</label>
+              <input value="{{ pp.hand }}" onInput="{{ pp.setHand }}" placeholder="Williamsburg, Brooklyn" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+              <div style="margin-top:7px; font-size:11.5px; color:#8d7357; line-height:1.55;">Saved as the record. The place stays off the map until it has a point.</div>
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Or paste a link or a pair of coordinates</label>
+              <input value="{{ pp.paste }}" onInput="{{ pp.setPaste }}" placeholder="maps.app.goo.gl/&hellip;  or  40.72174, -73.95809" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:12.5px; color:#2f1e12; font-family:ui-monospace,Menlo,monospace;"></input>
+              <div style="margin-top:7px; font-size:11.5px; color:#8d7357; line-height:1.55;">{{ pp.pasteNote }}</div>
+            </div>
+            <sc-if value="{{ pp.handSearchLink }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ pp.goSearch }}" style="align-self:flex-start; background:none; border:none; color:#8e3220; font-size:12.5px; cursor:pointer; text-decoration:underline; text-decoration-color:#ddcaa6; text-underline-offset:3px; padding:0;" style-hover="color:#b34328;">search OpenStreetMap instead</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ pp.confirming }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div style="background:#f0e2c2; border:1px solid #c4ad86; padding:13px 15px;">
+              <div style="display:flex; align-items:baseline; gap:8px 10px; flex-wrap:wrap;">
+                <span style="font-size:15px; font-weight:600; color:#2f1e12;">{{ pp.pickedName }}</span>
+                <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:{{ pp.pickedTailInk }};">{{ pp.pickedTail }}</span>
+              </div>
+              <div style="margin-top:5px; font-size:11.5px; color:#6d5740; line-height:1.5;">{{ pp.pickedLine }}</div>
+              <button onClick="{{ pp.back }}" style="margin-top:9px; background:none; border:none; color:#8d7357; font-size:11.5px; cursor:pointer; text-decoration:underline; text-decoration-color:#c4ad86; text-underline-offset:3px; padding:0;" style-hover="color:#8e3220;">Pick a different result</button>
+            </div>
+
+            <sc-if value="{{ pp.areaWarn }}" hint-placeholder-val="{{ false }}">
+              <div style="border-left:2px solid #a83a22; background:#fbf3e1; padding:11px 14px; font-size:12.5px; color:#4a3626; line-height:1.6; text-wrap:pretty;">This result is the centre of an area, not a door. Confirming it fills in the words and leaves the place off the map.</div>
+            </sc-if>
+
+            <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;">
+              <div>
+                <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Shown as</label>
+                <input value="{{ pp.fName }}" onInput="{{ pp.setName }}" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:14px; color:#2f1e12;"></input>
+              </div>
+              <div>
+                <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Cuisine</label>
+                <input value="{{ pp.fCuisine }}" onInput="{{ pp.setCuisine }}" placeholder="&mdash;" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+              </div>
+            </div>
+            <div>
+              <label style="display:block; font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357; margin-bottom:6px;">Where</label>
+              <input value="{{ pp.fWhere }}" onInput="{{ pp.setWhereField }}" autoComplete="off" style="width:100%; background:#f7eed9; border:1px solid #c4ad86; padding:9px 11px; font-size:13.5px; color:#2f1e12;"></input>
+            </div>
+
+            <sc-if value="{{ pp.cuisineOffer }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ pp.acceptCuisine }}" style="align-self:flex-start; display:flex; align-items:center; gap:8px; background:#fdf7e8; border:1px dashed #b09873; color:#4a3626; font-size:12px; padding:6px 11px; cursor:pointer;" style-hover="border-color:#b34328; color:#8e3220;">
+                <span style="font-weight:600;">{{ pp.cuisineGuess }}</span>
+                <span style="color:#8d7357;">&mdash; OpenStreetMap&rsquo;s guess, tap to use it</span>
+              </button>
+            </sc-if>
+
+            <sc-if value="{{ pp.hasPoint }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:baseline; gap:8px 12px; flex-wrap:wrap; background:#f0e2c2; border:1px solid #ddcaa6; padding:9px 11px;">
+                <span style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; color:#8d7357;">Point</span>
+                <span style="font-family:ui-monospace,Menlo,monospace; font-size:12px; color:#2f1e12;">{{ pp.coords }}</span>
+                <span style="margin-left:auto; font-size:11px; color:#8d7357;">the door, per OpenStreetMap</span>
+              </div>
+            </sc-if>
+
+            <div style="font-size:11.5px; color:#8d7357; line-height:1.62; border-top:1px solid #eadfc4; padding-top:12px;">{{ pp.underneath }}<br><span style="font-family:ui-monospace,Menlo,monospace; color:#6d5740;">{{ pp.evidence }}</span></div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap; padding:14px 20px; border-top:1px solid #c4ad86; background:#efe1c3;">
+        <span style="flex:1 1 auto; min-width:0; font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7357; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ pp.summary }}</span>
+        <button onClick="{{ askClose }}" style="margin-left:auto; border:1px solid #c4ad86; background:#fdf7e8; color:#4a3626; font-size:13px; font-weight:600; padding:9px 17px; cursor:pointer;">Cancel</button>
+        <sc-if value="{{ pp.showSave }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ pp.save }}" style="border:none; background:{{ pp.saveBg }}; color:{{ pp.saveFg }}; font-size:13px; font-weight:700; padding:9px 19px; cursor:{{ pp.saveCursor }};">{{ pp.saveLabel }}</button>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<sc-if value="{{ toast }}">
+  <div style="position:fixed; left:50%; bottom:26px; transform:translateX(-50%); background:#2f1e12; color:#f7eed9; font-size:13px; padding:10px 16px; box-shadow:0 10px 26px rgba(47,30,18,.4); z-index:70; display:flex; align-items:center; gap:10px;">
+    <span>{{ toastText }}</span>
+    <button onClick="{{ clearToast }}" style="border:none; background:none; color:#c4ad86; font-size:12px; cursor:pointer;">&times;</button>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;screen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Landing&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Landing&quot;,&quot;List&quot;,&quot;Map&quot;,&quot;Restaurant&quot;,&quot;Diary&quot;,&quot;Entry&quot;,&quot;To try&quot;,&quot;Stats&quot;,&quot;Month&quot;],&quot;section&quot;:&quot;Screen&quot;},&quot;dialog&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Closed&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Closed&quot;,&quot;Log meal&quot;,&quot;Add to to-try&quot;,&quot;Place it&quot;],&quot;section&quot;:&quot;Screen&quot;},&quot;mapZoom&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Whole city&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Whole city&quot;,&quot;Zoomed in&quot;,&quot;Close&quot;],&quot;section&quot;:&quot;Screen&quot;},&quot;filterState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;None&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;None&quot;,&quot;One filter&quot;,&quot;Several filters&quot;,&quot;No matches&quot;],&quot;section&quot;:&quot;Filters&quot;},&quot;tripEmphasis&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Filters&quot;},&quot;collection&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Full&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Full&quot;,&quot;Day one&quot;],&quot;section&quot;:&quot;States&quot;},&quot;photoSupply&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;As logged&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;As logged&quot;,&quot;None yet&quot;],&quot;section&quot;:&quot;States&quot;},&quot;placeHistory&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Eleven visits&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Eleven visits&quot;,&quot;One visit&quot;,&quot;Bare entry&quot;,&quot;No visits yet&quot;],&quot;section&quot;:&quot;States&quot;},&quot;location&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Placed&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Placed&quot;,&quot;Unplaced&quot;,&quot;Located, no point&quot;],&quot;section&quot;:&quot;States&quot;},&quot;placePanel&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Searching&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;options&quot;:[&quot;Searching&quot;,&quot;Confirming&quot;,&quot;Nothing found&quot;,&quot;Geocoder unreachable&quot;],&quot;section&quot;:&quot;States&quot;},&quot;showInlineSketch&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;States&quot;},&quot;dotLeaders&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Menu devices&quot;},&quot;verdictLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Menu devices&quot;}}">
+const VERDICTS = [
+  ["Definitely return", "I'd come back and order the same thing again", "#556b2a"],
+  ["Worth returning", "I'd come back of my own accord, but it's too expensive or too far to be likely", "#556b2a"],
+  ["Try something else", "I'd come back, but I wouldn't order what I ordered", "#c07d14"],
+  ["Happy to go", "I wouldn't pick it myself, but I'd go if someone else suggested it", "#c07d14"],
+  ["No return", "Would not go again", "#a83a22"],
+  ["Avoid", "Would actively recommend that others not go", "#a83a22"],
+];
+
+const TONES = [
+  "linear-gradient(148deg,#7c4a26,#c28244 52%,#5d3419)",
+  "linear-gradient(160deg,#3f4a2c,#8a9a5b 58%,#2f3720)",
+  "linear-gradient(140deg,#8e3220,#d38b1a 60%,#6b2617)",
+  "linear-gradient(155deg,#4a3626,#a8825a 55%,#33241a)",
+  "linear-gradient(145deg,#6d5740,#e0c48c 62%,#4a3626)",
+  "linear-gradient(150deg,#2f1e12,#b34328 70%,#241812)",
+];
+
+const REST = [
+  { n: "Taquer\u00eda Ram\u00edrez", c: ["Mexican"], p: "$", hood: "Greenpoint", city: "Brooklyn", stars: 4.5, v: 0, heart: true, visits: 4, fav: 1, tone: 2, trip: false, x: 462, y: 232, last: "2026-07-21" },
+  { n: "Ba Xuy\u00ean", c: ["Vietnamese"], p: "$", hood: "Sunset Park", city: "Brooklyn", stars: 4.5, v: 0, heart: true, visits: 11, fav: 2, tone: 0, trip: true, x: 150, y: 196, last: "2026-08-08" },
+  { n: "Sonoratown", c: ["Mexican", "Sonoran"], p: "$", hood: null, city: "Los Angeles, CA", stars: 4.5, v: 1, heart: true, visits: 2, fav: 3, tone: 4, trip: true, last: "2026-02-14" },
+  { n: "Expendio de Ma\u00edz", c: ["Mexican"], p: "$$", hood: "Roma Norte", city: "Mexico City", stars: 5.0, v: 1, heart: true, visits: 1, fav: 4, tone: 1, trip: true, last: "2026-01-09" },
+  { n: "Xi'an Famous Foods", c: ["Chinese", "Shaanxi"], p: "$", hood: "Flushing", city: "Queens", stars: 4.0, v: 0, heart: false, visits: 6, tone: 3, trip: false, x: 742, y: 348, last: "2026-08-02" },
+  { n: "Casa Enrique", c: ["Mexican"], p: "$$$", hood: "Long Island City", city: "Queens", stars: 4.0, v: 1, heart: false, visits: 2, tone: 5, trip: false, x: 520, y: 420, last: "2026-05-30" },
+  { n: "Lhasa Fast Food", c: ["Tibetan"], p: "$", hood: "Jackson Heights", city: "Queens", stars: 4.0, v: 0, heart: false, visits: 3, tone: 0, trip: false, x: 690, y: 452, last: "2026-07-05" },
+  { n: "Tacos El Bronco", c: ["Mexican"], p: "$", hood: "Sunset Park", city: "Brooklyn", stars: 3.5, v: 2, heart: false, visits: 5, tone: 2, trip: false, x: 268, y: 300, last: "2026-07-28" },
+  { n: "Cafe Mogador", c: ["Moroccan", "Middle Eastern"], p: "$$", hood: "East Village", city: "Manhattan", stars: 3.5, v: 2, heart: false, visits: 3, tone: 4, trip: false, x: 596, y: 168, last: "2026-06-11" },
+  { n: "Veselka", c: ["Ukrainian"], p: "$$", hood: "East Village", city: "Manhattan", stars: 3.0, v: 3, heart: false, visits: 2, tone: 1, trip: false, x: 654, y: 240, last: "2026-07-14" },
+  { n: "Nixta Taquer\u00eda", c: ["Mexican"], p: "$$", hood: null, city: "Austin, TX", stars: 4.5, v: 1, heart: false, visits: 1, tone: 2, trip: false, last: "2025-11-22" },
+  { n: "Kagari", c: ["Japanese", "Ramen"], p: "$$", hood: "Ginza", city: "Tokyo", stars: 4.5, v: 1, heart: false, visits: 1, tone: 3, trip: true, last: "2025-10-04" },
+  { n: "Yi Lan Halal", c: ["Uyghur", "Xinjiang"], p: "$", hood: "Flushing", city: "Queens", stars: 4.0, v: 0, heart: false, visits: 2, tone: 5, trip: true, x: 806, y: 300, last: "2026-06-19" },
+  { n: "El Vilsito", c: ["Mexican", "Tacos al pastor"], p: "$", hood: "Narvarte", city: "Mexico City", stars: 4.5, v: 0, heart: false, visits: 1, tone: 0, trip: true, last: "2026-01-11" },
+  { n: "Bocca Nuova", c: ["Italian"], p: "$$$", hood: "Carroll Gardens", city: "Brooklyn", stars: 2.0, v: 4, heart: false, visits: 1, tone: 4, trip: false, x: 352, y: 128, last: "2026-06-27" },
+  { n: "Harbor & Vine", c: ["New American"], p: "$$$$", hood: null, city: "Austin, TX", stars: 1.5, v: 5, heart: false, visits: 1, tone: 5, trip: false, last: "2025-09-18" },
+];
+
+const DIARY = [
+  { r: 1, d: "2026-08-08", stars: 4.5, v: 0, heart: true, revisit: true, photos: 3 },
+  { r: 4, c: 1, d: "2026-08-02", stars: 4.0, v: 0, heart: false, revisit: true, photos: 1 },
+  { r: 7, d: "2026-07-28", stars: 3.5, v: 2, heart: false, revisit: true, photos: 0 },
+  { r: 0, d: "2026-07-21", stars: 4.5, v: 0, heart: true, revisit: true, photos: 2 },
+  { r: 9, d: "2026-07-14", stars: 3.0, v: 3, heart: false, revisit: false, photos: 1 },
+  { r: 6, d: "2026-07-05", stars: 4.0, v: 0, heart: false, revisit: true, photos: 2 },
+  { r: 14, d: "2026-06-27", stars: 2.0, v: 4, heart: false, revisit: false, photos: 0 },
+  { r: 12, d: "2026-06-19", stars: 4.0, v: 0, heart: false, revisit: true, photos: 1 },
+];
+
+const WHY_TAGS = ["a dish", "a recommendation", "the room", "a group", "walked past", "press", "cheap eats", "late night"];
+
+const TOTRY = [
+  { n: "Superiority Burger", hood: "East Village", city: "New York", cuisine: "Vegetarian", p: "$$", why: "The tofu sandwich, per three people I trust", tags: ["a recommendation", "a dish"], trip: false, x: 596, y: 150, added: "2026-08-04" },
+  { n: "Wu's Wonton King", hood: "Two Bridges", city: "New York", cuisine: "Cantonese", p: "$$", why: "Peking duck, BYOB, a big table", tags: ["a group", "the room"], trip: true, x: 560, y: 268, added: "2026-07-30" },
+  { n: "Sami's Kabab House", hood: "Astoria", city: "New York", cuisine: "Afghan", p: "$", why: "Afghan; the mantu", tags: ["a dish"], trip: false, x: 700, y: 120, added: "2026-07-22" },
+  { n: "Mercado de Coyoac\u00e1n", hood: "Coyoac\u00e1n", city: "Mexico City", cuisine: "Mexican", p: "$", why: "Tostadas, the whole aisle of them", tags: ["a dish", "cheap eats"], trip: true, added: "2026-07-19" },
+  { n: "B\u00e1nh M\u00ec S\u00e0i G\u00f2n", hood: "Nolita", city: "New York", cuisine: "Vietnamese", p: "$", why: "Counter inside a jewellery shop", tags: ["the room"], trip: false, x: 520, y: 206, added: "2026-07-11" },
+  { n: "Kuun", hood: "Sunset Park", city: "New York", cuisine: "Korean", p: "$$", why: "Walked past it twice, both times full", tags: ["walked past"], trip: false, x: 172, y: 222, added: "2026-06-28" },
+  { n: "Tlayuda Oaxaque\u00f1a SR San Pablo", hood: "Sunset Park", city: "New York", cuisine: "Oaxacan", p: "$", why: "The tlayuda, at eleven at night, from a van", tags: ["late night", "a dish"], trip: true, x: 208, y: 268, added: "2026-06-14" },
+  { n: "Benfaremo \u2014 The Lemon Ice King of Corona", hood: "Corona", city: "New York", cuisine: "Italian ices", p: "$", why: "Lemon, and nothing but lemon, since 1944", tags: ["press"], trip: false, x: 800, y: 262, added: "2026-05-26" },
+  { n: "Chef Paul Restaurant", hood: "Flatbush", city: "New York", cuisine: "Haitian", p: "$", why: "Griot, and the plate comes out enormous", tags: ["cheap eats", "a dish"], trip: false, x: 300, y: 360, added: "2026-05-09" },
+  { n: "K\u014dy\u014d", hood: "Ginza", city: "Tokyo", cuisine: "Japanese", p: "$$$$", why: "Ten seats, one omakase, booked two months out", tags: ["press", "the room"], trip: true, added: "2026-04-30" },
+];
+
+const CITY_N = [["New York", 78], ["Mexico City", 9], ["Austin", 4], ["Los Angeles", 3], ["Tokyo", 2]];
+
+const HOODS = {
+  "New York": ["Sunset Park", "Flushing", "East Village", "Greenpoint", "Jackson Heights", "Carroll Gardens", "Long Island City", "Astoria", "Two Bridges", "Nolita", "Corona", "Flatbush", "Williamsburg"],
+  "Mexico City": ["Roma Norte", "Narvarte", "Coyoac\u00e1n"],
+  "Tokyo": ["Ginza"],
+  "Austin": [],
+  "Los Angeles": [],
+};
+
+const OSM_WOLF = [
+  { name: "Laser Wolf", hood: "Williamsburg", city: "Brooklyn", kind: "restaurant", cuisine: "Israeli",
+    addr: "97 Wythe Ave, Williamsburg, Brooklyn, New York", lat: 40.72174, lng: -73.95809, precise: true },
+  { name: "Laser Wolf", hood: "Fishtown", city: "Philadelphia", kind: "restaurant", cuisine: "Israeli",
+    addr: "1301 N Howard St, Fishtown, Philadelphia, Pennsylvania", lat: 39.97182, lng: -75.13604, precise: true },
+  { name: "Laser Wolf Rooftop", hood: "Williamsburg", city: "Brooklyn", kind: "bar", cuisine: "",
+    addr: "The Hoxton, 97 Wythe Ave, Brooklyn, New York", lat: 40.72181, lng: -73.95793, precise: true },
+  { name: "Williamsburg", hood: null, city: "Brooklyn", kind: "neighbourhood", cuisine: "",
+    addr: "Williamsburg, Kings County, New York", lat: 40.71427, lng: -73.95368, precise: false },
+  { name: "Laser Wolf", hood: "Jaffa Port", city: "Tel Aviv", kind: "restaurant", cuisine: "Israeli",
+    addr: "Ha-Ta\u2019arukha St 4, Jaffa Port, Tel Aviv, Israel", lat: 32.05003, lng: 34.75157, precise: true },
+];
+
+const OSM_BAX = [
+  { name: "Ba Xuy\u00ean", hood: "Dyker Heights", city: "Brooklyn", kind: "restaurant", cuisine: "Vietnamese",
+    addr: "4222 8th Ave, Dyker Heights, Brooklyn, New York", lat: 40.63498, lng: -74.01452, precise: true },
+  { name: "Ba Xuy\u00ean Bakery", hood: "Sunset Park", city: "Brooklyn", kind: "fast food", cuisine: "Vietnamese",
+    addr: "5810 5th Ave, Sunset Park, Brooklyn, New York", lat: 40.63871, lng: -74.01614, precise: true },
+  { name: "Sunset Park", hood: null, city: "Brooklyn", kind: "neighbourhood", cuisine: "",
+    addr: "Sunset Park, Kings County, New York", lat: 40.64524, lng: -74.01207, precise: false },
+];
+
+const UNPLACED = {
+  name: "Laser Wolf Brooklyn",
+  q: "Laser Wolf",
+  where: "Brooklyn",
+  evidence: "added 12 Mar 2026 \u00b7 bulk import, saved Google Maps list \u00b7 \u201cLaser Wolf Brooklyn\u201d",
+  why: "Roof, skewers, someone\u2019s birthday in June",
+};
+
+class Component extends DCLogic {
+  state = { screen: null, dialog: null, log: null, tryForm: null, placeF: null, confirm: false, toast: null,
+    filters: null, tripOn: null, tryView: null, barOpen: false, narrow: false, zoom: null };
+  componentDidMount() {
+    this._fit = () => {
+      const n = window.innerWidth < 780;
+      if (n !== this.state.narrow) this.setState({ narrow: n });
+    };
+    this._fit();
+    window.addEventListener("resize", this._fit);
+  }
+  componentDidUpdate(prev) {
+    if (prev.filterState !== this.props.filterState && this.state.filters) this.setState({ filters: null });
+    if (prev.screen !== this.props.screen && this.state.screen) this.setState({ screen: null });
+    if (prev.mapZoom !== this.props.mapZoom && this.state.zoom) this.setState({ zoom: null });
+    if (prev.dialog !== this.props.dialog && this.state.dialog) this.setState({ dialog: null });
+    if (prev.placePanel !== this.props.placePanel && this.state.placeF) this.setState({ placeF: null });
+    if (prev.location !== this.props.location && this.state.placeF) this.setState({ placeF: null });
+  }
+  componentWillUnmount() { clearTimeout(this._t); if (this._fit) window.removeEventListener("resize", this._fit); }
+  screen() { return this.state.screen || this.props.screen || "Landing"; }
+  onMap() { const s = this.screen(); return s === "Map" || (s === "To try" && (this.state.tryView || "List") === "Map"); }
+  mapZoom() {
+    if (this.state.zoom) return this.state.zoom;
+    const p = this.props.mapZoom || "Whole city";
+    return p === "Close" ? 4 : (p === "Zoomed in" ? 2 : 1);
+  }
+  blankLog(lock) {
+    return { locked: lock || null, name: "", focus: false, date: "2026-08-13", stars: 0, half: false,
+      verdict: null, loved: false, again: !!lock, who: "", price: null, notes: "", photos: [], tags: [], tagInput: "",
+      trip: !!(lock && lock.trip) };
+  }
+  blankTry() { return { name: "", hood: "", cuisine: "", price: null, why: "", tags2: [], trip: false }; }
+  tripRow(current, pick) {
+    const d = this.dagger();
+    return [["If I\u2019m nearby", false], [("Worth the trip " + d).trim(), true]].map(o => ({
+      label: o[0], pick: () => pick(o[1]),
+      bg: current === o[1] ? "#2f1e12" : "#f7eed9",
+      fg: current === o[1] ? "#f7eed9" : "#4a3626",
+      bd: current === o[1] ? "#2f1e12" : "#c4ad86",
+    }));
+  }
+  blankPlace(seed) {
+    const s = seed || {};
+    const sub = this.subject();
+    return { q: s.q !== undefined ? s.q : sub.q, where: s.where !== undefined ? s.where : sub.where,
+      mode: s.mode || null, picked: null, name: "", loc: "", cuisine: "", hand: "", paste: "" };
+  }
+  dialog() {
+    if (this.state.dialog) return this.state.dialog === "none" ? null : this.state.dialog;
+    const p = this.props.dialog;
+    if (p === "Log meal") return "log";
+    if (p === "Add to to-try") return "try";
+    if (p === "Place it") return "place";
+    return null;
+  }
+  openDialog(kind, lock) {
+    const patch = { dialog: kind, confirm: false, toast: null };
+    if (kind === "log") patch.log = this.blankLog(lock);
+    if (kind === "try") patch.tryForm = this.blankTry();
+    if (kind === "place") patch.placeF = this.blankPlace(lock);
+    this.setState(patch);
+  }
+  subject() {
+    const loc = this.props.location || "Placed";
+    if (loc !== "Placed") return { name: UNPLACED.name, q: UNPLACED.q, where: UNPLACED.where };
+    if (this.props.placeHistory === "Bare entry") return { name: "Bocca Nuova", q: "Bocca Nuova", where: "Carroll Gardens" };
+    if (this.props.placeHistory === "No visits yet") return { name: "Kuun", q: "Kuun", where: "Sunset Park" };
+    return { name: "Ba Xuy\u00ean", q: "Ba Xuy\u00ean", where: "Sunset Park" };
+  }
+  patchPlace(k, v) { this.setState(s => { const p = Object.assign({}, s.placeF || this.blankPlace()); p[k] = v; return { placeF: p }; }); }
+  hitWhere(h) { return h.hood ? h.hood + ", " + h.city : h.city; }
+  hitsFor(q) {
+    const n = q.trim().toLowerCase();
+    if (!n) return [];
+    if (n.indexOf("laser") >= 0 || n.indexOf("wolf") >= 0) return OSM_WOLF;
+    if (n.indexOf("ba xuy") >= 0 || n.indexOf("xuyen") >= 0 || n.indexOf("xuy\u00ean") >= 0) return OSM_BAX;
+    return [];
+  }
+  metro(r) {
+    const c = r.city || "";
+    if (c === "Brooklyn" || c === "Queens" || c === "Manhattan" || c === "New York") return "New York";
+    if (c.indexOf("Austin") === 0) return "Austin";
+    if (c.indexOf("Los Angeles") === 0) return "Los Angeles";
+    return c;
+  }
+  baseFilters() {
+    const none = { city: null, hood: null, cuisines: [], prices: [], why: [], trip: "All", verdict: 9, sortR: "Latest visit", sortT: "Recently added" };
+    const s = this.props.filterState || "None";
+    if (s === "One filter") return Object.assign(none, { cuisines: ["Mexican"] });
+    if (s === "Several filters") return Object.assign(none, { city: "New York", cuisines: ["Mexican", "Vietnamese"], prices: ["$"], trip: "Worth the trip" });
+    if (s === "No matches") return Object.assign(none, { city: "Mexico City", cuisines: ["Italian"], prices: ["$"], trip: "Worth the trip" });
+    return none;
+  }
+  f() { return this.state.filters || this.baseFilters(); }
+  setF(patch) { this.setState(s => ({ filters: Object.assign({}, s.filters || this.baseFilters(), patch) })); }
+  clearF() { this.setState({ filters: { city: null, hood: null, cuisines: [], prices: [], why: [], trip: "All", verdict: 9, sortR: this.f().sortR, sortT: this.f().sortT } }); }
+  toggleIn(arr, v) { return arr.indexOf(v) >= 0 ? arr.filter(x => x !== v) : arr.concat([v]); }
+  tripOf(key, base) { const o = this.state.tripOn || {}; return o[key] === undefined ? base : o[key]; }
+  toggleTrip(key, base) {
+    this.setState(s => {
+      const o = Object.assign({}, s.tripOn || {});
+      o[key] = !(o[key] === undefined ? base : o[key]);
+      return { tripOn: o };
+    });
+  }
+  dagger() { return this.props.tripEmphasis === false ? "" : "\u2020"; }
+  matchRest(r, anywhere) {
+    const f = this.f();
+    if (!anywhere && f.city && this.metro(r) !== f.city) return false;
+    if (!anywhere && f.hood && r.hood !== f.hood) return false;
+    if (f.cuisines.length && !r.c.some(c => f.cuisines.indexOf(c) >= 0)) return false;
+    if (f.prices.length && f.prices.indexOf(r.p) < 0) return false;
+    if (f.trip === "Worth the trip" && !this.tripOf("r" + r.n, r.trip)) return false;
+    if (f.trip === "If I'm nearby" && this.tripOf("r" + r.n, r.trip)) return false;
+    if (r.v > f.verdict) return false;
+    return true;
+  }
+  matchTry(t, anywhere) {
+    const f = this.f();
+    if (!anywhere && f.city && t.city !== f.city) return false;
+    if (!anywhere && f.hood && t.hood !== f.hood) return false;
+    if (f.cuisines.length && f.cuisines.indexOf(t.cuisine) < 0) return false;
+    if (f.prices.length && f.prices.indexOf(t.p) < 0) return false;
+    if (f.why.length && !t.tags.some(x => f.why.indexOf(x) >= 0)) return false;
+    if (f.trip === "Worth the trip" && !this.tripOf("t" + t.n, t.trip)) return false;
+    if (f.trip === "If I'm nearby" && this.tripOf("t" + t.n, t.trip)) return false;
+    return true;
+  }
+  sortRest(rows) {
+    const k = this.f().sortR;
+    const a = rows.slice();
+    if (k === "Rating") return a.sort((x, y) => y.stars - x.stars);
+    if (k === "Verdict") return a.sort((x, y) => x.v - y.v);
+    if (k === "A\u2013Z") return a.sort((x, y) => x.n.localeCompare(y.n));
+    return a.sort((x, y) => (y.last || "").localeCompare(x.last || ""));
+  }
+  sortTry(rows) {
+    const k = this.f().sortT;
+    const a = rows.slice();
+    if (k === "Worth the trip first") return a.sort((x, y) => (this.tripOf("t" + y.n, y.trip) ? 1 : 0) - (this.tripOf("t" + x.n, x.trip) ? 1 : 0) || y.added.localeCompare(x.added));
+    if (k === "Price") return a.sort((x, y) => x.p.length - y.p.length || x.n.localeCompare(y.n));
+    if (k === "A\u2013Z") return a.sort((x, y) => x.n.localeCompare(y.n));
+    return a.sort((x, y) => y.added.localeCompare(x.added));
+  }
+  scale(n, from, to) { return n >= from ? to : Math.max(n && 1, Math.round(n * to / from)); }
+  verdictLabel(v) { return v === 9 ? "Any verdict" : (v === 1 ? "Worth returning or better" : "Definitely return"); }
+  filterVals(scope) {
+    const f = this.f();
+    const on = (b) => ({ bg: b ? "#2f1e12" : "#fdf7e8", fg: b ? "#f7eed9" : "#2f1e12", bd: b ? "#2f1e12" : "#b09873" });
+    const chip = (name, n, active, pick, mono) => Object.assign({ name, n: n || "", pick, font: mono ? "ui-monospace,Menlo,monospace" : "Archivo, Helvetica, sans-serif" }, on(active));
+    const isTry = scope === "try";
+    const cityChips = CITY_N.map(c => chip(c[0], c[1], f.city === c[0], () => this.setF({ city: f.city === c[0] ? null : c[0], hood: null })));
+    const hoodAll = f.city ? (HOODS[f.city] || []) : [];
+    const hoodShown = hoodAll.slice(0, 8);
+    const cuisineDefs = isTry
+      ? [["Vietnamese", 4], ["Mexican", 3], ["Cantonese", 2], ["Korean", 2], ["Afghan", 1], ["Haitian", 1], ["Oaxacan", 1], ["Japanese", 1]]
+      : [["Mexican", 22], ["Chinese", 14], ["Vietnamese", 7], ["Japanese", 6], ["Italian", 5], ["Middle Eastern", 4], ["Tibetan", 3], ["Ukrainian", 2]];
+    const rows = [
+      {
+        label: "Location", chips: cityChips, hasMore: false, more: "",
+        hasSecond: !!f.city && hoodAll.length > 0,
+        second: hoodShown.map(h => chip(h, "", f.hood === h, () => this.setF({ hood: f.hood === h ? null : h }))),
+        hasSecondMore: hoodAll.length > hoodShown.length,
+        secondMore: (hoodAll.length - hoodShown.length) + " more \u25be",
+        hasNone: !!f.city && hoodAll.length === 0,
+        noneLabel: "no neighbourhoods on record",
+      },
+      {
+        label: "Cuisine", chips: cuisineDefs.map(c => chip(c[0], c[1], f.cuisines.indexOf(c[0]) >= 0, () => this.setF({ cuisines: this.toggleIn(f.cuisines, c[0]) }))),
+        hasMore: true, more: (isTry ? "9" : "52") + " more \u25be", hasSecond: false, second: [], hasSecondMore: false, hasNone: false,
+      },
+      {
+        label: "Price", chips: ["$", "$$", "$$$", "$$$$"].map(p => chip(p, "", f.prices.indexOf(p) >= 0, () => this.setF({ prices: this.toggleIn(f.prices, p) }), true)),
+        hasMore: false, more: "", hasSecond: false, second: [], hasSecondMore: false, hasNone: false,
+      },
+      {
+        label: "Why", chips: WHY_TAGS.map(w => chip(w, "", f.why.indexOf(w) >= 0, () => this.setF({ why: this.toggleIn(f.why, w) }))),
+        hasMore: false, more: "", hasSecond: false, second: [], hasSecondMore: false, hasNone: false,
+      },
+      {
+        label: "Trip", chips: ["All", "Worth the trip " + this.dagger(), "If I\u2019m nearby"].map((lab, i) => {
+          const key = i === 0 ? "All" : (i === 1 ? "Worth the trip" : "If I'm nearby");
+          return chip(lab.trim(), "", f.trip === key, () => this.setF({ trip: key }));
+        }),
+        hasMore: false, more: "", hasSecond: false, second: [], hasSecondMore: false, hasNone: false,
+      },
+    ];
+    if (!isTry) rows.splice(3, 1);
+    if (this.onMap()) rows.splice(0, 1);
+    rows.forEach((r, i) => { r.rule = i ? "#ddcaa6" : "transparent"; r.pad = i ? "10px" : "0px"; });
+
+    const pills = [];
+    if (f.city && !this.onMap()) pills.push({ label: f.city, clear: () => this.setF({ city: null, hood: null }) });
+    if (f.hood && !this.onMap()) pills.push({ label: f.hood, clear: () => this.setF({ hood: null }) });
+    f.cuisines.forEach(c => pills.push({ label: c, clear: () => this.setF({ cuisines: f.cuisines.filter(x => x !== c) }) }));
+    f.prices.forEach(p => pills.push({ label: p, mono: true, clear: () => this.setF({ prices: f.prices.filter(x => x !== p) }) }));
+    if (isTry) f.why.forEach(w => pills.push({ label: w, clear: () => this.setF({ why: f.why.filter(x => x !== w) }) }));
+    if (f.trip !== "All") pills.push({ label: f.trip === "Worth the trip" ? "Worth the trip " + this.dagger() : "If I\u2019m nearby", clear: () => this.setF({ trip: "All" }) });
+    if (!isTry && f.verdict !== 9) pills.push({ label: this.verdictLabel(f.verdict), clear: () => this.setF({ verdict: 9 }) });
+    pills.forEach(p => { p.font = p.mono ? "ui-monospace,Menlo,monospace" : "Archivo, Helvetica, sans-serif"; });
+
+    const sortNames = isTry
+      ? ["Recently added", "Worth the trip first", "Price", "A\u2013Z"]
+      : ["Latest visit", "Rating", "Verdict", "A\u2013Z"];
+    const cur = isTry ? f.sortT : f.sortR;
+    const sorts = sortNames.map(s => chip(s, "", cur === s, () => this.setF(isTry ? { sortT: s } : { sortR: s })));
+
+    const barOpen = !this.state.narrow || !!this.state.barOpen;
+    return {
+      filterRows: rows,
+      sortPills: sorts,
+      showVerdictRow: !isTry,
+      verdictText: this.verdictLabel(f.verdict) + " \u25be",
+      verdictInk: f.verdict === 9 ? "#8d7357" : "#556b2a",
+      cycleVerdict: () => this.setF({ verdict: f.verdict === 9 ? 1 : (f.verdict === 1 ? 0 : 9) }),
+      pills,
+      hasPills: pills.length > 0,
+      pillCount: pills.length,
+      filterSummary: pills.length ? pills.map(p => p.label).join(" \u00b7 ") : "no filters",
+      clearAll: () => this.clearF(),
+      barOpen,
+      barCollapsed: !barOpen,
+      barToggleLabel: "Filters (" + pills.length + ") \u25be",
+      openBar: () => this.setState({ barOpen: true }),
+      closeBar: () => this.setState({ barOpen: false }),
+      showBarClose: !!this.state.narrow && barOpen,
+    };
+  }
+  placeVals() {
+    const pf = this.state.placeF || this.blankPlace();
+    const loc = this.props.location || "Placed";
+    const placed = loc === "Placed";
+    const raw = pf.mode || this.props.placePanel || "Searching";
+    let mode = raw === "Confirming" ? "confirm" : raw === "Nothing found" ? "none"
+      : raw === "Geocoder unreachable" ? "down" : raw === "hand" ? "hand" : "search";
+    const all = this.hitsFor(pf.q);
+    const picked = pf.picked || (mode === "confirm" ? (all[0] || OSM_WOLF[0]) : null);
+    if (picked) mode = "confirm";
+    else if (mode === "confirm") mode = "search";
+    else if (mode === "search" && !all.length) mode = "none";
+
+    const fName = pf.picked ? pf.name : (picked ? picked.name : "");
+    const fWhere = pf.picked ? pf.loc : (picked ? this.hitWhere(picked) : "");
+    const precise = picked ? picked.precise : false;
+    const guess = picked && picked.cuisine ? picked.cuisine : "";
+    const hand = (pf.hand || "").trim();
+    const paste = (pf.paste || "").trim();
+    const canSave = mode === "confirm" ? !!fName.trim() : !!(hand || paste);
+    const evidence = placed
+      ? "on record since 4 Nov 2023 \u00b7 set by hand \u00b7 \u201c" + this.subject().where + ", Brooklyn\u201d"
+      : UNPLACED.evidence;
+    const summary = mode === "confirm"
+      ? (precise ? "will save a point" : "will save the words, no point")
+      : (paste ? "will read the link for a point" : (hand ? "will save the words, no point" : ""));
+
+    return {
+      placeOpen: this.dialog() === "place",
+      openPlaceSearch: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("place"); },
+      openPlaceFix: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("place"); },
+      openPlaceByHand: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("place", { mode: "hand" }); },
+      openPlaceLog: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("log", { n: this.subject().name, c: ["\u2014"], p: null, hood: null, city: placed ? "Sunset Park, Brooklyn" : "New York", visits: 0 }); },
+      pp: {
+        head: placed ? "Check this location" : "Place this restaurant",
+        evidence,
+        showQuery: mode === "search" || mode === "none",
+        showResults: mode === "search",
+        noResults: mode === "none",
+        down: mode === "down",
+        handForm: mode === "none" || mode === "hand",
+        handSearchLink: mode === "hand",
+        confirming: mode === "confirm",
+        q: pf.q,
+        setQ: (e) => this.patchPlace("q", e.target.value),
+        where: pf.where,
+        setWhere: (e) => this.patchPlace("where", e.target.value),
+        resultMeta: all.length + " results from OpenStreetMap. It searches names, so the where field is what separates the first two.",
+        hits: all.map(h => ({
+          name: h.name,
+          meta: (h.cuisine ? h.kind + " \u00b7 " + h.cuisine : h.kind) + " \u00b7 " + h.addr,
+          tail: h.precise ? h.kind : "no exact point",
+          tailInk: h.precise ? "#8d7357" : "#a83a22",
+          tailBg: h.precise ? "transparent" : "#f0e2c2",
+          tailBd: h.precise ? "transparent" : "#ddcaa6",
+          pick: () => this.setState(s => ({ placeF: Object.assign({}, s.placeF || this.blankPlace(), { picked: h, name: h.name, loc: this.hitWhere(h), cuisine: "" }) })),
+        })),
+        pickedName: picked ? picked.name : "",
+        pickedLine: picked ? picked.addr : "",
+        pickedTail: picked ? (precise ? picked.kind : "no exact point") : "",
+        pickedTailInk: precise ? "#8d7357" : "#a83a22",
+        areaWarn: !!picked && !precise,
+        hasPoint: !!picked && precise,
+        coords: picked ? picked.lat.toFixed(5) + ", " + picked.lng.toFixed(5) : "",
+        fName,
+        setName: (e) => this.setState(s => ({ placeF: Object.assign({}, s.placeF || this.blankPlace(), { picked: picked, name: e.target.value, loc: fWhere, cuisine: pf.cuisine }) })),
+        fWhere,
+        setWhereField: (e) => this.setState(s => ({ placeF: Object.assign({}, s.placeF || this.blankPlace(), { picked: picked, name: fName, loc: e.target.value, cuisine: pf.cuisine }) })),
+        fCuisine: pf.cuisine,
+        setCuisine: (e) => this.setState(s => ({ placeF: Object.assign({}, s.placeF || this.blankPlace(), { picked: picked, name: fName, loc: fWhere, cuisine: e.target.value }) })),
+        cuisineOffer: !!guess && !pf.cuisine,
+        cuisineGuess: guess,
+        acceptCuisine: () => this.setState(s => ({ placeF: Object.assign({}, s.placeF || this.blankPlace(), { picked: picked, name: fName, loc: fWhere, cuisine: guess }) })),
+        underneath: "Everything above is a suggestion until you save it, and editable after. What you typed stays in the record underneath:",
+        back: () => this.setState(s => ({ placeF: Object.assign({}, s.placeF || this.blankPlace(), { picked: null, mode: "Searching", name: "", loc: "" }) })),
+        retry: () => this.patchPlace("mode", "Searching"),
+        goHand: () => this.patchPlace("mode", "hand"),
+        goSearch: () => this.patchPlace("mode", "Searching"),
+        hand: pf.hand,
+        setHand: (e) => this.patchPlace("hand", e.target.value),
+        paste: pf.paste,
+        setPaste: (e) => this.patchPlace("paste", e.target.value),
+        pasteNote: "A link is read for its coordinates and nothing else. Anything it fills in stays editable.",
+        summary,
+        showSave: mode === "confirm" || mode === "hand" || mode === "none",
+        saveLabel: mode === "confirm" ? (precise ? "Place it here" : "Save the location") : "Save the location",
+        saveBg: canSave ? "#b34328" : "#e0d1b2",
+        saveFg: canSave ? "#fdf7e8" : "#a8927a",
+        saveCursor: canSave ? "pointer" : "not-allowed",
+        save: () => {
+          if (!canSave) return;
+          this.setState({ dialog: "none", confirm: false, placeF: null });
+          if (mode === "confirm") {
+            this.flash(precise
+              ? "Placed " + fName.trim() + " \u2014 " + fWhere
+              : "Located " + fName.trim() + " \u2014 " + fWhere + " \u00b7 still no point on the map");
+          } else {
+            this.flash("Saved " + (hand || paste) + " \u00b7 still no point on the map");
+          }
+        },
+      },
+    };
+  }
+  closeDialog() { this.setState({ dialog: "none", confirm: false }); }
+  dirty() {
+    const d = this.dialog();
+    if (d === "log") {
+      const l = this.state.log || this.blankLog();
+      return !!(l.name || l.stars || l.verdict !== null || l.who || l.notes || l.tags.length || l.photos.length);
+    }
+    if (d === "try") {
+      const t = this.state.tryForm || this.blankTry();
+      return !!(t.name || t.hood || t.cuisine || t.why || t.price);
+    }
+    return false;
+  }
+  flash(text) {
+    this.setState({ toast: text });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: null }), 3200);
+  }
+  patchLog(k, v) { this.setState(s => { const l = Object.assign({}, s.log || this.blankLog()); l[k] = v; return { log: l }; }); }
+  patchTry(k, v) { this.setState(s => { const t = Object.assign({}, s.tryForm || this.blankTry()); t[k] = v; return { tryForm: t }; }); }
+  priceRow(current, pick) {
+    return ["$", "$$", "$$$", "$$$$"].map(p => ({
+      label: p, pick: () => pick(current === p ? null : p),
+      bg: current === p ? "#2f1e12" : "#f7eed9",
+      fg: current === p ? "#f7eed9" : "#4a3626",
+      bd: current === p ? "#2f1e12" : "#c4ad86",
+    }));
+  }
+  dialogVals() {
+    const d = this.dialog();
+    const l = this.state.log || this.blankLog();
+    const t = this.state.tryForm || this.blankTry();
+    const q = l.name.trim().toLowerCase();
+    const hits = q ? REST.filter(r => r.n.toLowerCase().indexOf(q) >= 0).slice(0, 4) : [];
+    const suggest = hits.map(r => ({
+      name: r.n, meta: r.c[0] + " \u00b7 " + this.place(r),
+      tail: r.visits + (r.visits === 1 ? " visit" : " visits"),
+      pick: () => this.setState(s => ({ log: Object.assign({}, s.log, { locked: r, name: "", focus: false, again: r.visits > 0 }) })),
+    }));
+    if (q && !hits.some(r => r.n.toLowerCase() === q)) {
+      suggest.push({ name: "\u201c" + l.name.trim() + "\u201d", meta: "new place", tail: "add",
+        pick: () => this.setState(s => ({ log: Object.assign({}, s.log, { locked: { n: s.log.name.trim(), c: ["\u2014"], p: null, hood: null, city: "", visits: 0, isNew: true }, name: "", focus: false }) })) });
+    }
+    const filled = Math.ceil(l.stars);
+    const starCells = [0, 1, 2, 3, 4].map(i => ({
+      glyph: l.half && i + 1 === filled ? "\u00bd" : "\u2605",
+      ink: i + 1 <= filled ? "#d38b1a" : "#dbc7a2",
+      tip: (i + 1) + (l.half && i + 1 === filled ? ".5" : "") + " stars",
+      set: () => this.patchLog("stars", l.half ? i + 0.5 : i + 1),
+    }));
+    const canLog = !!(l.locked || l.name.trim());
+    const lockedName = l.locked ? l.locked.n : "";
+    const lockedMeta = l.locked ? (l.locked.isNew ? "new place" : l.locked.c[0] + " \u00b7 " + this.place(l.locked)) : "";
+    const bits = [];
+    if (l.stars) bits.push(l.stars.toFixed(1).replace(".0", "") + "\u2605");
+    if (l.verdict !== null) bits.push(VERDICTS[l.verdict][0].toLowerCase());
+    if (l.photos.length) bits.push(l.photos.length + (l.photos.length === 1 ? " photo" : " photos"));
+    const canTry = !!t.name.trim();
+
+    return Object.assign(this.placeVals(), {
+      logOpen: d === "log",
+      tryOpen: d === "try",
+      confirmOpen: !!this.state.confirm,
+      toast: !!this.state.toast,
+      toastText: this.state.toast || "",
+      clearToast: () => this.setState({ toast: null }),
+      openLog: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("log"); },
+      openLogHere: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("log", REST[1]); },
+      openTry: (e) => { if (e && e.preventDefault) e.preventDefault(); this.openDialog("try"); },
+      stop: (e) => e.stopPropagation(),
+      backdropClose: () => { if (this.dirty()) this.setState({ confirm: true }); else this.closeDialog(); },
+      askClose: () => { if (this.dirty()) this.setState({ confirm: true }); else this.closeDialog(); },
+      keepEditing: () => this.setState({ confirm: false }),
+      discard: () => this.closeDialog(),
+      logTitle: l.locked && !l.locked.isNew ? "Log a visit" : "Log a meal",
+      log: {
+        locked: !!l.locked, showSearch: !l.locked, showSuggest: !l.locked && suggest.length > 0,
+        lockedName, lockedMeta, suggest,
+        unlock: () => this.patchLog("locked", null),
+        name: l.name,
+        setName: (e) => this.patchLog("name", e.target.value),
+        focusName: () => this.patchLog("focus", true),
+        blurName: () => setTimeout(() => this.patchLog("focus", false), 120),
+        date: l.date,
+        setDate: (e) => this.patchLog("date", e.target.value),
+        starCells,
+        toggleHalf: () => this.setState(s => {
+          const cur = Object.assign({}, s.log); const half = !cur.half;
+          if (cur.stars) cur.stars = half ? Math.ceil(cur.stars) - 0.5 : Math.ceil(cur.stars);
+          cur.half = half; return { log: cur };
+        }),
+        clearStars: () => this.setState(s => ({ log: Object.assign({}, s.log, { stars: 0, half: false }) })),
+        halfBg: l.half ? "#2f1e12" : "#f7eed9", halfFg: l.half ? "#f7eed9" : "#6d5740", halfBd: l.half ? "#2f1e12" : "#c4ad86",
+        verdict: l.verdict === null ? 0 : l.verdict,
+        setVerdict: (e) => this.patchLog("verdict", +e.target.value),
+        verdictName: VERDICTS[l.verdict === null ? 0 : l.verdict][0],
+        verdictGloss: VERDICTS[l.verdict === null ? 0 : l.verdict][1],
+        verdictInk: VERDICTS[l.verdict === null ? 0 : l.verdict][2],
+        verdictRot: "rotate(" + (l.verdict === null ? 0 : l.verdict) * 36 + " 12 12)",
+        tripCells: this.tripRow(l.trip, (v) => this.patchLog("trip", v)),
+        toggleLoved: () => this.patchLog("loved", !l.loved),
+        lovedBg: l.loved ? "#b34328" : "none", lovedFg: l.loved ? "#fdf7e8" : "#8e3220", lovedBd: "#b34328",
+        toggleAgain: () => this.patchLog("again", !l.again),
+        againBg: l.again ? "#2f1e12" : "none", againFg: l.again ? "#f7eed9" : "#4a3626", againBd: l.again ? "#2f1e12" : "#c4ad86",
+        who: l.who, setWho: (e) => this.patchLog("who", e.target.value),
+        prices: this.priceRow(l.price, (v) => this.patchLog("price", v)),
+        notes: l.notes, setNotes: (e) => this.patchLog("notes", e.target.value),
+        photos: l.photos.map((p, i) => ({ bg: TONES[p % 6], remove: () => this.patchLog("photos", l.photos.filter((_, j) => j !== i)) })),
+        addPhoto: () => this.patchLog("photos", l.photos.concat([l.photos.length + 2])),
+        tags: l.tags.map((name, i) => ({ name, remove: () => this.patchLog("tags", l.tags.filter((_, j) => j !== i)) })),
+        tagInput: l.tagInput,
+        setTagInput: (e) => this.patchLog("tagInput", e.target.value),
+        tagKey: (e) => {
+          if (e.key === "Enter" && e.target.value.trim()) {
+            e.preventDefault();
+            this.setState(s => ({ log: Object.assign({}, s.log, { tags: s.log.tags.concat([s.log.tagInput.trim()]), tagInput: "" }) }));
+          }
+        },
+        summary: bits.join(" \u00b7 "),
+        saveBg: canLog ? "#b34328" : "#e0d1b2", saveFg: canLog ? "#fdf7e8" : "#a8927a", saveCursor: canLog ? "pointer" : "not-allowed",
+        save: () => {
+          if (!canLog) return;
+          const name = l.locked ? l.locked.n : l.name.trim();
+          this.setState({ dialog: "none", confirm: false });
+          this.flash("Logged " + name + " \u00b7 " + this.fmt(l.date));
+        },
+      },
+      tryF: {
+        name: t.name, setName: (e) => this.patchTry("name", e.target.value),
+        hood: t.hood, setHood: (e) => this.patchTry("hood", e.target.value),
+        cuisine: t.cuisine, setCuisine: (e) => this.patchTry("cuisine", e.target.value),
+        why: t.why, setWhy: (e) => this.patchTry("why", e.target.value),
+        prices: this.priceRow(t.price, (v) => this.patchTry("price", v)),
+        tripCells: this.tripRow(t.trip, (v) => this.patchTry("trip", v)),
+        whyTags: WHY_TAGS.map(w => {
+          const on = (t.tags2 || []).indexOf(w) >= 0;
+          return {
+            name: w,
+            bg: on ? "#2f1e12" : "#fdf7e8",
+            fg: on ? "#f7eed9" : "#4a3626",
+            bd: on ? "#2f1e12" : "#c4ad86",
+            pick: () => this.patchTry("tags2", this.toggleIn(t.tags2 || [], w)),
+          };
+        }),
+        summary: canTry ? "32nd on the list" : "",
+        saveBg: canTry ? "#b34328" : "#e0d1b2", saveFg: canTry ? "#fdf7e8" : "#a8927a", saveCursor: canTry ? "pointer" : "not-allowed",
+        save: () => {
+          if (!canTry) return;
+          const name = t.name.trim();
+          this.setState({ dialog: "none", confirm: false });
+          this.flash("Added " + name + " to to-try");
+        },
+      },
+    });
+  }
+  go(s) { return (e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ screen: s }); }; }
+  stars(r) {
+    const f = Math.floor(r);
+    return "\u2605".repeat(f) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+  fmt(iso) {
+    const m = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const p = iso.split("-");
+    return p[2].replace(/^0/, "") + " " + m[+p[1] - 1];
+  }
+  place(r) { return r.hood ? r.hood + ", " + r.city : r.city; }
+  tile(r, i) {
+    const dayOne = this.props.collection === "Day one";
+    const photos = this.props.photoSupply !== "None yet";
+    return {
+      name: r.n,
+      cuisines: r.c.join(", "),
+      cuisineShort: r.c[0],
+      price: r.p,
+      hood: this.place(r),
+      stars: this.stars(r.stars),
+      hasPhoto: photos && r.visits > 0 && !dayOne,
+      noPhoto: !(photos && r.visits > 0 && !dayOne),
+      photo: TONES[r.tone],
+      file: "IMG_" + (2400 + i * 37),
+      ink: VERDICTS[r.v][2],
+      rot: "rotate(" + r.v * 36 + " 12 12)",
+      heartInk: r.heart ? "#b34328" : "transparent",
+      go: this.go("Restaurant"),
+    };
+  }
+  renderVals() {
+    const dayOne = this.props.collection === "Day one";
+    const favs = REST.filter(r => r.fav).sort((a, b) => a.fav - b.fav);
+    const shown = dayOne ? [] : favs;
+    const holes = [];
+    for (let i = shown.length; i < 4; i++) holes.push({ rank: "0" + (i + 1) });
+
+    const recent = (dayOne ? [] : DIARY.slice(0, 4)).map((e, i) => {
+      const r = REST[e.r];
+      const t = this.tile(r, i + 9);
+      t.date = this.fmt(e.d);
+      t.stars = this.stars(e.stars);
+      t.ink = VERDICTS[e.v][2];
+      t.rot = "rotate(" + e.v * 36 + " 12 12)";
+      t.hasPhoto = t.hasPhoto && e.photos > 0;
+      t.noPhoto = !t.hasPhoto;
+      t.marks = (e.heart ? "\u2665 " : "") + (e.revisit ? "\u21bb" : "");
+      t.go = this.go("Entry");
+      return t;
+    });
+
+    const counts = dayOne
+      ? { rest: 0, diary: 0, totry: 3 }
+      : { rest: 96, diary: 214, totry: 31 };
+
+    const leader = this.props.dotLeaders === false ? "transparent" : "#cbb389";
+    const chip = (name, n, on) => ({
+      name, n, on,
+      bg: on ? "#2f1e12" : "#fdf7e8",
+      fg: on ? "#f7eed9" : "#2f1e12",
+      bd: on ? "#2f1e12" : "#b09873",
+    });
+    const dag = this.dagger();
+    const row = (r) => {
+      const t = this.tripOf("r" + r.n, r.trip);
+      return {
+        name: r.n,
+        trip: t ? dag : "",
+        tripTip: t ? "Worth the trip" : "",
+        heart: r.heart ? "\u2665" : "",
+        leader,
+        price: r.p,
+        cuisines: r.c.join(", "),
+        stars: this.stars(r.stars),
+        verdictLabel: this.props.verdictLabels ? VERDICTS[r.v][0] : "",
+        meta: r.visits === 1 ? "1 visit" : r.visits + " visits",
+        hasPhoto: this.props.photoSupply !== "None yet",
+        photo: TONES[r.tone],
+        rot: "rotate(" + r.v * 36 + " 12 12)",
+        ink: VERDICTS[r.v][2],
+        tip: VERDICTS[r.v][0] + " \u2014 " + VERDICTS[r.v][1],
+        go: this.go("Restaurant"),
+      };
+    };
+    const boroughOf = {};
+    REST.forEach(r => { if (r.hood) boroughOf[r.hood] = r.city; });
+    const onMap = this.onMap();
+    const visMatched = this.sortRest(REST.filter(r => this.matchRest(r, onMap)));
+    const homeRows = visMatched.filter(r => r.hood && this.metro(r) === "New York");
+    const awayRows = visMatched.filter(r => !(r.hood && this.metro(r) === "New York"));
+    const hoodSeen = [];
+    homeRows.forEach(r => { if (hoodSeen.indexOf(r.hood) < 0) hoodSeen.push(r.hood); });
+    const groups = hoodSeen.map(h => {
+      const rows = homeRows.filter(r => r.hood === h);
+      return { title: h, sub: boroughOf[h], count: rows.length + (rows.length === 1 ? " place" : " places"), rows: rows.map(row) };
+    });
+    if (awayRows.length) groups.push({ title: "Away from home", sub: "city only", count: awayRows.length + (awayRows.length === 1 ? " place" : " places"), rows: awayRows.map(row) });
+
+    const tryMatched = this.sortTry(TOTRY.filter(t => this.matchTry(t, onMap)));
+    const tryRow = (t) => {
+      const on = this.tripOf("t" + t.n, t.trip);
+      return {
+        name: t.n,
+        hood: t.hood ? t.hood + (t.city === "New York" ? ", " + (boroughOf[t.hood] || "New York") : ", " + t.city) : t.city,
+        why: t.why,
+        tag: t.tags.join(" \u00b7 ").toUpperCase(),
+        price: t.p,
+        leader,
+        trip: on ? dag : "",
+        tripTip: on ? "Worth the trip" : "",
+        toggleLabel: on ? "worth the trip " + dag : "mark " + dag,
+        toggleInk: on ? "#8e3220" : "#a8927a",
+        toggleTrip: (e) => { if (e) { e.preventDefault(); e.stopPropagation(); } this.toggleTrip("t" + t.n, t.trip); },
+        logIt: () => this.openDialog("log", { n: t.n, c: [t.cuisine], p: t.p, hood: t.hood, city: t.city, visits: 0, trip: on }),
+      };
+    };
+    const tryHome = tryMatched.filter(t => t.hood && t.city === "New York");
+    const tryAway = tryMatched.filter(t => !(t.hood && t.city === "New York"));
+    const trySeen = [];
+    tryHome.forEach(t => { if (trySeen.indexOf(t.hood) < 0) trySeen.push(t.hood); });
+    const tryGroups = trySeen.map(h => {
+      const rows = tryHome.filter(t => t.hood === h);
+      return { title: h, sub: boroughOf[h] || "New York", count: rows.length + (rows.length === 1 ? " place" : " places"), rows: rows.map(tryRow) };
+    });
+    if (tryAway.length) tryGroups.push({ title: "Away from home", sub: "city only", count: tryAway.length + (tryAway.length === 1 ? " place" : " places"), rows: tryAway.map(tryRow) });
+
+    // ponytail: zoom is centred on the map, there is no pan yet
+    const Z = this.mapZoom();
+    const vw = 900 / Z, vh = 560 / Z, vx = 450 - vw / 2, vy = 280 - vh / 2;
+    const inView = (o) => o.x !== undefined && o.x >= vx && o.x <= vx + vw && o.y >= vy && o.y <= vy + vh;
+    const px = (o) => (o.x - vx) * Z, py = (o) => (o.y - vy) * Z;
+    // Labels surface as the zoom pulls the pins apart: place greedily, skip any
+    // that would collide with a pin or a label already down. The sort is the
+    // tie-break, and worth-the-trip goes first.
+    const labelSides = (rows, isTrip) => {
+      const out = {};
+      if (Z <= 1) return out;
+      const boxes = rows.map(o => [px(o) - 13, py(o) - 34, 26, 34]);
+      const hits = (b) => boxes.some(a => a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3]);
+      rows.slice()
+        .sort((a, b) => (isTrip(b) ? 1 : 0) - (isTrip(a) ? 1 : 0) || (b.visits || 0) - (a.visits || 0) || a.n.localeCompare(b.n))
+        .forEach(o => {
+          const w = o.n.length * 6 + 14;
+          let b = [px(o) + 17, py(o) - 32, w, 15], side = "right";
+          if (b[0] + w > 900 || hits(b)) { b = [px(o) - 17 - w, py(o) - 32, w, 15]; side = "left"; }
+          if (b[0] < 0 || hits(b)) return;
+          boxes.push(b);
+          out[o.n] = side;
+        });
+      return out;
+    };
+    const restVis = visMatched.filter(inView);
+    const tryVis = tryMatched.filter(inView);
+    const restSides = labelSides(restVis, r => this.tripOf("r" + r.n, r.trip));
+    const trySides = labelSides(tryVis, t => this.tripOf("t" + t.n, t.trip));
+    const pinAt = (o, sides, trip) => ({
+      x: (px(o) / 9) + "%", y: (py(o) / 5.6) + "%",
+      showLabel: !!sides[o.n],
+      name: o.n + (trip && dag ? " " + dag : ""),
+      labelLeft: sides[o.n] === "right" ? "30px" : "auto",
+      labelRight: sides[o.n] === "left" ? "30px" : "auto",
+      labelInk: trip && dag ? "#8e3220" : "#2f1e12",
+    });
+    const pin = (r) => {
+      const t = this.tripOf("r" + r.n, r.trip);
+      return Object.assign(pinAt(r, restSides, t), {
+        rot: "rotate(" + r.v * 36 + " 12 12)",
+        ink: VERDICTS[r.v][2],
+        ring: t && dag ? "#b34328" : "transparent",
+        tip: r.n + " \u2014 " + VERDICTS[r.v][0] + (t ? " \u00b7 worth the trip" : ""),
+      });
+    };
+    const tryPin = (t) => {
+      const on = this.tripOf("t" + t.n, t.trip) && !!dag;
+      return Object.assign(pinAt(t, trySides, on), {
+        fill: on ? "#b34328" : "#fdf7e8",
+        ringInk: on ? "transparent" : "#8d7357",
+        glyphInk: on ? "#fdf7e8" : "transparent",
+        tip: t.n + " \u2014 " + (on ? "worth the trip" : "if I\u2019m nearby"),
+      });
+    };
+    const onTry = this.screen() === "To try";
+    const tryView = this.state.tryView || "List";
+    const f = this.f();
+    const noMatches = onTry ? tryMatched.length === 0 : visMatched.length === 0;
+    const tab = (o) => ({ bg: o ? "#2f1e12" : "#fdf7e8", fg: o ? "#f7eed9" : "#6d5740", w: o ? 600 : 400 });
+
+    const mode = this.props.placeHistory || "Eleven visits";
+    const bare = mode === "Bare entry";
+    const once = mode === "One visit";
+    const never = mode === "No visits yet";
+    const locState = this.props.location || "Placed";
+    const placed = locState === "Placed";
+    const unplaced = locState === "Unplaced";
+    const wordsOnly = locState === "Located, no point";
+    const visitN = never ? 0 : (bare || once ? 1 : 11);
+    const link = (label, live) => ({
+      label,
+      ink: live ? "#8e3220" : "#bda98a",
+      bd: live ? "#ddcaa6" : "transparent",
+      cursor: live ? "pointer" : "default",
+      tip: live ? label : "No " + label + " link on record",
+    });
+    const hist = [2, 2, 1, 0, 2, 1, 0, 0, 2, 0, 0];
+    const histDates = ["Nov 23", "Feb 24", "Jul 24", "Oct 24", "Jan 25", "Apr 25", "Aug 25", "Dec 25", "Mar 26", "Jun 26", "Aug 26"];
+    const rev = [
+      { d: "2026-08-08", stars: 4.5, v: 0, marks: "\u2665 \u21bb", friends: "with Priya", review: "Th\u1ecbt ngu\u1ed9i, extra p\u00e2t\u00e9. The bread was ten minutes out of the oven and the whole thing collapsed correctly.", ph: 0 },
+      { d: "2026-06-19", stars: 4.0, v: 0, marks: "\u21bb", friends: "alone", review: "Ordered the b\u00ec instead. Fine, but I was thinking about the other one the entire time.", ph: 4 },
+      { d: "2026-03-14", stars: 3.5, v: 2, marks: "\u21bb", friends: "with Dan, Ellie", review: "Got there at 3pm and they were out of the good bread. Not their fault, still a lesson.", ph: -1 },
+      { d: "2025-12-02", stars: 4.5, v: 0, marks: "\u2665 \u21bb", friends: "with Priya", review: "", ph: 2 },
+    ];
+    const entries = (never ? [] : (bare || once ? rev.slice(0, 1) : rev)).map(e => ({
+      day: this.fmt(e.d),
+      year: e.d.slice(0, 4),
+      stars: bare ? "" : this.stars(e.stars),
+      marks: bare ? "" : e.marks,
+      friends: bare ? "" : e.friends,
+      review: bare ? "No review." : (e.review || "\u2014"),
+      rot: "rotate(" + e.v * 36 + " 12 12)",
+      ink: VERDICTS[e.v][2],
+      tip: VERDICTS[e.v][0],
+      hasPhoto: !bare && e.ph >= 0 && this.props.photoSupply !== "None yet",
+      photo: TONES[e.ph < 0 ? 0 : e.ph],
+    }));
+    const pw = [["124px", "94px"], ["70px", "94px"], ["124px", "94px"], ["70px", "94px"], ["124px", "94px"], ["94px", "94px"]];
+    const photoGroups = [
+      { date: "8 Aug 2026", n: "3 photos", photos: [0, 1, 2] },
+      { date: "19 Jun 2026", n: "1 photo", photos: [3] },
+      { date: "2 Dec 2025", n: "5 photos", photos: [4, 5, 0, 1, 2] },
+    ].map(g => ({
+      date: g.date, n: g.n,
+      photos: g.photos.map((t, i) => ({ bg: TONES[t], w: pw[i % 6][0], h: pw[i % 6][1] })),
+    }));
+
+    const photosOn = this.props.photoSupply !== "None yet";
+    const diaryRow = (e) => {
+      const r = REST[e.r];
+      const nth = Math.min(e.photos, 3);
+      const thumbs = [];
+      for (let i = 0; i < (photosOn ? nth : 0); i++) thumbs.push({ bg: TONES[(r.tone + i) % 6] });
+      return {
+        day: e.d.slice(8).replace(/^0/, ""),
+        name: r.n, hood: this.place(r), price: r.p, leader,
+        stars: this.stars(e.stars),
+        marks: (e.heart ? "\u2665" : "") + (e.revisit ? " \u21bb" : ""),
+        rot: "rotate(" + e.v * 36 + " 12 12)",
+        ink: VERDICTS[e.v][2],
+        tip: VERDICTS[e.v][0] + " \u2014 " + VERDICTS[e.v][1],
+        thumbs,
+      };
+    };
+    const cal = [];
+    const marked = { 3: 0, 6: 2, 11: 1, 14: 3, 18: 0, 21: 0, 24: 1, 28: 2, 30: 0 };
+    for (let i = 0; i < 35; i++) {
+      const day = i - 2;
+      const inMonth = day >= 1 && day <= 31;
+      const hit = inMonth && marked[day] !== undefined;
+      cal.push({
+        day: inMonth ? String(day) : "",
+        bg: hit ? "#f0e2c2" : "#faf3e2",
+        bd: hit ? "#c4ad86" : "#eadfc4",
+        numInk: inMonth ? (hit ? "#2f1e12" : "#bda98a") : "transparent",
+        marked: hit,
+        rot: hit ? "rotate(" + marked[day] * 36 + " 12 12)" : "rotate(0 12 12)",
+        ink: hit ? VERDICTS[marked[day]][2] : "transparent",
+      });
+    }
+
+    return Object.assign(this.dialogVals(), this.filterVals(onTry ? "try" : "rest"), {
+      isDiary: this.screen() === "Diary",
+      isEntry: this.screen() === "Entry",
+      isTry: this.screen() === "To try",
+      isStats: this.screen() === "Stats",
+      isMonth: this.screen() === "Month",
+      diaryMonths: [
+        { name: "August 2026", summary: "2 visits \u00b7 2 places", rows: DIARY.slice(0, 2).map(diaryRow) },
+        { name: "July 2026", summary: "4 visits \u00b7 4 places", rows: DIARY.slice(2, 6).map(diaryRow) },
+        { name: "June 2026", summary: "2 visits \u00b7 2 places", rows: DIARY.slice(6).map(diaryRow) },
+      ],
+      entryTags: [{ name: "b\u00e1nh m\u00ec" }, { name: "counter service" }, { name: "cash only" }, { name: "under $15" }, { name: "walk from home" }],
+      tryLegendNote: dag ? dag + " worth a trip on its own" : "",
+      sketchBars: [
+        { label: "Mexican", w: "108px", ink: "#b34328" }, { label: "Chinese", w: "78px", ink: "#c07d14" },
+        { label: "Vietnamese", w: "48px", ink: "#d38b1a" }, { label: "Japanese", w: "40px", ink: "#556b2a" },
+        { label: "Italian", w: "32px", ink: "#8d7357" }, { label: "60 others", w: "120px", ink: "#ddcaa6" },
+      ],
+      sketchSpark: [14, 22, 30, 18, 40, 52, 36, 44, 58, 30, 24, 46].map(h => ({ h: h + "px" })),
+      calendar: cal,
+      monthFigures: [
+        { value: "9", label: "meals out" }, { value: "7", label: "new places" },
+        { value: "4.1", label: "avg rating" }, { value: "$$", label: "median price" },
+      ],
+      isPlace: this.screen() === "Restaurant",
+      showSketch: !!this.props.showInlineSketch,
+      place: {
+        name: placed ? (never ? "Kuun" : (bare ? "Bocca Nuova" : "Ba Xuy\u00ean")) : UNPLACED.name,
+        hasFacts: placed,
+        cuisines: never ? "Korean" : (bare ? "Italian" : "Vietnamese"),
+        price: never ? "$$" : (bare ? "$$$" : "$"),
+        whereText: placed
+          ? (never ? "Sunset Park, Brooklyn" : (bare ? "Carroll Gardens, Brooklyn" : "Sunset Park, Brooklyn"))
+          : (wordsOnly ? "Williamsburg, Brooklyn" : "New York"),
+        whereConfirmed: placed || wordsOnly,
+        whereUnconfirmed: unplaced,
+        whereTip: "Nobody confirmed this. \u201cNew York\u201d was assumed when the place was added by name alone.",
+        links: placed
+          ? [link("Google Maps", true), link("Website", true), link("Beli", true), link("Yelp", false)]
+          : [link("Google Maps", false), link("Website", false), link("Beli", false), link("Yelp", false)],
+        wrongLoc: placed,
+        inviteLoud: !placed && visitN <= 1,
+        inviteQuiet: !placed && visitN > 1,
+        inviteTitle: unplaced ? "This place has no point on the map." : "Located, but still not on the map.",
+        inviteBody: unplaced
+          ? "It doesn\u2019t appear on the map screen, and its city counts toward nothing in the rollup. Nothing else came with it either \u2014 no cuisine, no price band, no links."
+          : "Williamsburg, Brooklyn came from OpenStreetMap\u2019s outline of the neighbourhood, which has no door to point at. The words are on record; the map still has nothing to draw.",
+        evidence: unplaced
+          ? UNPLACED.evidence
+          : "located 4 Aug 2026 \u00b7 OpenStreetMap area match \u00b7 \u201cWilliamsburg, Brooklyn\u201d \u00b7 no coordinates",
+        quietLine: unplaced
+          ? "Eleven visits and no point on the map \u2014 it doesn\u2019t appear on the map screen."
+          : "Located in words only. Still nothing for the map to draw.",
+        quietCta: unplaced ? "Find its point" : "Try again for a point",
+        ownerLink: placed ? "Fix this location" : "Find this place on the map",
+        showMapRow: !placed,
+        mapRow: unplaced ? "not on it" : "words only",
+        mapRowTip: unplaced
+          ? "The map screen only draws places with both coordinates."
+          : "Located to a neighbourhood, which has no point to draw.",
+        tripOn: (() => { const s = this.subject().name; return this.tripOf("r" + s, (REST.filter(r => r.n === s)[0] || {}).trip || false); })(),
+        tripLabel: (() => {
+          const s = this.subject().name;
+          const on = this.tripOf("r" + s, (REST.filter(r => r.n === s)[0] || {}).trip || false);
+          return on ? "Worth the trip " + dag : "If I\u2019m nearby";
+        })(),
+        tripInk: (() => { const s = this.subject().name; return this.tripOf("r" + s, (REST.filter(r => r.n === s)[0] || {}).trip || false) ? "#8e3220" : "#6d5740"; })(),
+        tripHint: "click to change",
+        toggleTrip: (e) => {
+          if (e && e.preventDefault) e.preventDefault();
+          const s = this.subject().name;
+          this.toggleTrip("r" + s, (REST.filter(r => r.n === s)[0] || {}).trip || false);
+        },
+        noVisits: never,
+        hasVisits: !never,
+        addedWhen: placed ? "added 2 Feb 2026" : "added 12 Mar 2026",
+        why: placed ? "Walked past it twice, both times full" : UNPLACED.why,
+        rot: "rotate(" + (never ? 0 : (bare ? 144 : 0)) + " 12 12)",
+        ink: never ? "transparent" : (bare ? "#a83a22" : "#556b2a"),
+        verdict: never ? "None recorded" : (bare ? "No return" : "Definitely return"),
+        verdictWhen: never ? "no visits yet" : (bare ? "27 Jun 2026 \u00b7 only visit" : "8 Aug 2026 \u00b7 latest of 11"),
+        verdictGloss: bare ? VERDICTS[4][1] : VERDICTS[0][1],
+        stars: bare || never ? "" : this.stars(4.5),
+        avg: bare || never ? "no rating" : "4.4 avg",
+        visits: never ? "0" : (bare || once ? "1" : "11"),
+        visitCount: never ? "0 visits" : (bare || once ? "1 visit" : "11 visits"),
+        span: "Nov 2023 \u2014 Aug 2026",
+        photoNote: "9 of 24",
+        showHistory: !bare && !once && !never,
+        showPhotos: !bare && !never && this.props.photoSupply !== "None yet",
+        heartBg: bare || never ? "#fdf7e8" : "#b34328",
+        heartFg: bare || never ? "#8e3220" : "#fdf7e8",
+        heartLabel: bare || never ? "Love it" : "Loved",
+        leader,
+        ladder: hist.map((v, i) => ({
+          rot: "rotate(" + v * 36 + " 12 12)",
+          ink: VERDICTS[v][2],
+          top: (4 + v * 19.2) + "px",
+          label: histDates[i],
+          tip: histDates[i] + " \u2014 " + VERDICTS[v][0],
+        })),
+        entries,
+        photoGroups,
+      },
+      isList: this.screen() === "List",
+      isMap: this.screen() === "Map",
+      onFilterScreen: onTry || this.screen() === "List" || this.screen() === "Map",
+      isRestHeader: this.screen() === "List" || this.screen() === "Map",
+      isTryHeader: onTry,
+      hdrTitle: onTry ? "To try" : "Restaurants",
+      hdrCount: onTry
+        ? this.scale(tryMatched.length, TOTRY.length, 31) + " of 31 places"
+        : this.scale(visMatched.length, REST.length, 96) + " of 96",
+      tabList: tab(onTry ? tryView === "List" : this.screen() === "List"),
+      tabMap: tab(onTry ? tryView === "Map" : this.screen() === "Map"),
+      goTabList: onTry ? ((e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ tryView: "List" }); }) : this.go("List"),
+      goTabMap: onTry ? ((e) => { if (e && e.preventDefault) e.preventDefault(); this.setState({ tryView: "Map" }); }) : this.go("Map"),
+      showMapView: !noMatches && (this.screen() === "Map" || (onTry && tryView === "Map")),
+      showListBody: this.screen() === "List" && !noMatches,
+      showTryBody: onTry && tryView === "List" && !noMatches,
+      noMatches,
+      groups,
+      tryGroups,
+      pins: onTry ? [] : restVis.map(pin),
+      tryMapPins: onTry ? tryVis.map(tryPin) : [],
+      mapViewBox: [vx, vy, vw, vh].join(" "),
+      hoodTextSize: 12 / Z,
+      streetTextSize: 10.5 / Z,
+      zoomIn: () => this.setState({ zoom: Math.min(4, this.mapZoom() * 1.6) }),
+      zoomOut: () => this.setState({ zoom: Math.max(1, this.mapZoom() / 1.6) }),
+      zoomInInk: Z >= 4 ? "#c4ad86" : "#2f1e12",
+      zoomOutInk: Z <= 1 ? "#c4ad86" : "#2f1e12",
+      showMapCard: this.screen() === "Map" && Z <= 1 && visMatched.indexOf(REST[1]) >= 0,
+      showCluster: this.screen() === "Map" && Z <= 1,
+      legendLabel: onTry ? "Pin" : "Pin ink",
+      legend: onTry
+        ? [{ ink: "#fdf7e8", bd: "#8d7357", label: "if I\u2019m nearby" }, { ink: "#b34328", bd: "#b34328", label: "worth the trip " + dag }]
+        : [{ ink: "#556b2a", bd: "#556b2a", label: "want to go back" }, { ink: "#c07d14", bd: "#c07d14", label: "reservations" }, { ink: "#a83a22", bd: "#a83a22", label: "no" }],
+      legendNote: dag ? (onTry ? dag + " worth a trip on its own" : dag + " worth a trip on its own \u2014 thin brick ring") : "",
+      isLanding: this.screen() === "Landing",
+      yearLine: dayOne ? "no restaurants yet" : "38 restaurants this year",
+      favCaption: dayOne ? "0 of 4 picked" : "picked by hand, ranked",
+      favourites: shown.map((r, i) => this.tile(r, i)),
+      favHoles: holes,
+      recent,
+      toTryShort: (() => {
+        const pool = TOTRY.slice().sort((a, b) => (this.tripOf("t" + b.n, b.trip) ? 1 : 0) - (this.tripOf("t" + a.n, a.trip) ? 1 : 0) || b.added.localeCompare(a.added));
+        return (dayOne ? pool.slice(0, 3) : pool.slice(0, 4)).map(t => ({
+          name: t.n,
+          hood: t.hood ? t.hood + ", " + (t.city === "New York" ? (boroughOf[t.hood] || "New York") : t.city) : t.city,
+          why: t.why,
+          price: t.p,
+          trip: this.tripOf("t" + t.n, t.trip) ? dag : "",
+        }));
+      })(),
+      sideNav: [
+        { label: "Restaurants", count: counts.rest, go: this.go("List") },
+        { label: "Diary", count: counts.diary, go: this.go("Diary") },
+        { label: "To try", count: counts.totry, go: this.go("To try") },
+        { label: "Stats", count: "\u2014", go: this.go("Stats") },
+        { label: "Month in review", count: "Jul", go: this.go("Month") },
+      ],
+      nav: {
+        landing: this.go("Landing"), list: this.go("List"), map: this.go("Map"),
+        place: this.go("Restaurant"), diary: this.go("Diary"), entry: this.go("Entry"),
+        totry: this.go("To try"), stats: this.go("Stats"), month: this.go("Month"),
+      },
+    });
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1a120a; display:flex; justify-content:center; padding:0 24px 90px;">
+  <div style="width:100%; max-width:900px;">
+
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #45341f; margin-bottom:30px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a68f6e;" style-hover="color:#f2e6cd;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a745a;">Share</span>
+    </header>
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:44px; color:#f2e6cd; letter-spacing:-.5px; line-height:1;">Month in reading</h1>
+      <span style="font-size:12.5px; color:#8a745a; padding-bottom:6px;">{{ dimsLabel }}</span>
+    </div>
+
+    <!-- CONTROLS — screen only, never exported -->
+    <div style="background:#241a10; border:1px solid #45341f; border-radius:12px; padding:16px 18px; display:flex; align-items:center; gap:26px; flex-wrap:wrap; margin-bottom:30px;">
+
+      <div ref="{{ setPicker }}" style="position:relative; display:flex; align-items:center; gap:6px;">
+        <button onClick="{{ prevMonth }}" style="width:32px; height:32px; border-radius:8px; border:1px solid #45341f; background:#2a1c0c; color:#bfa886; font-size:14px; cursor:pointer;" style-hover="border-color:#cfa452; color:#f2e6cd;">&larr;</button>
+        <button onClick="{{ togglePicker }}" style="display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:168px; height:32px; padding:0 12px; border-radius:8px; border:1px solid #45341f; background:#2a1c0c; color:#f2e6cd; font-size:13px; font-family:'Archivo',sans-serif; cursor:pointer;" style-hover="border-color:#cfa452;">
+          <span>{{ monthLabel }}</span><span style="font-size:9px; color:#a68f6e;">&#9662;</span>
+        </button>
+        <button onClick="{{ nextMonth }}" style="width:32px; height:32px; border-radius:8px; border:1px solid #45341f; background:#2a1c0c; color:#bfa886; font-size:14px; cursor:pointer;" style-hover="border-color:#cfa452; color:#f2e6cd;">&rarr;</button>
+
+        <sc-if value="{{ pickerOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute; left:0; top:calc(100% + 8px); z-index:40; background:#241a10; border:1px solid #45341f; border-radius:10px; padding:12px; width:300px; box-shadow:0 20px 44px -14px rgba(0,0,0,.75);">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+              <button onClick="{{ prevPickerYear }}" style="width:24px; height:24px; border:none; background:none; color:#a68f6e; cursor:pointer; font-size:13px;" style-hover="color:#f2e6cd;">&larr;</button>
+              <span style="font-family:'Newsreader',serif; font-size:19px; color:#f2e6cd;">{{ pickerYear }}</span>
+              <button onClick="{{ nextPickerYear }}" style="width:24px; height:24px; border:none; background:none; color:#a68f6e; cursor:pointer; font-size:13px;" style-hover="color:#f2e6cd;">&rarr;</button>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:5px;">
+              <sc-for list="{{ pickerMonths }}" as="p" hint-placeholder-count="12">
+                <a href="{{ p.href }}" onClick="{{ p.onClick }}" style="{{ p.style }}">
+                  <div style="font-size:12px;">{{ p.abbr }}</div>
+                  <div style="font-size:10px; color:#8a745a; margin-top:2px;">{{ p.count }}</div>
+                </a>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:4px; border:1px solid #45341f; border-radius:8px; padding:3px; background:#2a1c0c;">
+        <sc-for list="{{ aspects }}" as="a" hint-placeholder-count="3">
+          <div onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</div>
+        </sc-for>
+      </div>
+
+      <sc-if value="{{ showSwitches }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <sc-for list="{{ switches }}" as="t" hint-placeholder-count="2">
+            <button onClick="{{ t.onClick }}" style="{{ t.btnStyle }}">
+              <span style="{{ t.trackStyle }}"><span style="{{ t.knobStyle }}"></span></span>
+              <span style="{{ t.labelStyle }}">{{ t.label }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <div style="display:flex; align-items:center; gap:10px; margin-left:auto;">
+        <button onClick="{{ copyLink }}" style="height:34px; padding:0 15px; border-radius:8px; border:1px solid #45341f; background:transparent; color:#bfa886; font-size:12.5px; font-family:'Archivo',sans-serif; cursor:pointer;" style-hover="border-color:#cfa452; color:#f2e6cd;">Copy link</button>
+        <button onClick="{{ download }}" style="height:34px; width:152px; border-radius:8px; border:none; background:#cfa452; color:#241a10; font-size:12.5px; font-weight:700; font-family:'Archivo',sans-serif; cursor:pointer;" style-hover="background:#ecc87c;">{{ saveLabel }}</button>
+      </div>
+    </div>
+
+    <!-- THE CARD -->
+    <div style="display:flex; justify-content:center;">
+      <div ref="{{ setFit }}" style="{{ viewportStyle }}">
+        <div style="{{ scaleStyle }}">
+          <div ref="{{ setCard }}" style="{{ cardStyle }}">
+
+            <div style="text-align:center;">
+              <div style="font-size:25px; letter-spacing:5px; color:#cfa452; text-transform:uppercase;">Jason's book log</div>
+              <div style="font-family:'Newsreader',serif; font-weight:500; font-size:80px; line-height:1.02; color:#f2e6cd; letter-spacing:-1.4px; margin-top:10px;">{{ monthLabel }}</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; align-items:center; flex:1; justify-content:center; gap:18px;">
+              <div style="{{ weekdayRowStyle }}">
+                <sc-for list="{{ weekdays }}" as="w" hint-placeholder-count="7">
+                  <div style="text-align:center; font-size:22px; letter-spacing:3px; color:#a68f6e;">{{ w }}</div>
+                </sc-for>
+              </div>
+
+              <div style="{{ gridStyle }}">
+                <sc-for list="{{ cells }}" as="c" hint-placeholder-count="35">
+                  <div style="{{ c.cellStyle }}" onMouseEnter="{{ c.onEnter }}" onMouseLeave="{{ c.onLeave }}">
+                    <sc-if value="{{ c.showNumeral }}" hint-placeholder-val="{{ true }}">
+                      <div style="{{ c.numeralStyle }}">{{ c.dateNum }}</div>
+                    </sc-if>
+                    <sc-for list="{{ c.behind }}" as="b" hint-placeholder-count="0">
+                      <div style="{{ b.style }}">
+                        <sc-if value="{{ b.hasImg }}" hint-placeholder-val="{{ false }}">
+                          <img src="{{ b.src }}" alt="" style="{{ b.imgStyle }}" />
+                        </sc-if>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ c.hasBooks }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ c.topStyle }}">
+                        <sc-if value="{{ c.topHasImg }}" hint-placeholder-val="{{ true }}">
+                          <img src="{{ c.topSrc }}" alt="" style="{{ c.topImgStyle }}" />
+                        </sc-if>
+                        <sc-if value="{{ c.showSeal }}" hint-placeholder-val="{{ false }}">
+                          <div style="{{ c.sealStyle }}">&#10003;</div>
+                        </sc-if>
+                        <sc-if value="{{ c.showBadge }}" hint-placeholder-val="{{ false }}">
+                          <div style="{{ c.badgeStyle }}">{{ c.count }}</div>
+                        </sc-if>
+                      </div>
+                      <sc-if value="{{ c.showTip }}" hint-placeholder-val="{{ false }}">
+                        <div style="{{ c.tipStyle }}">
+                          <sc-for list="{{ c.tipItems }}" as="t" hint-placeholder-count="2">
+                            <div style="{{ t.style }}">{{ t.line }}</div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ isEmptyMonth }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align:center; margin-top:26px; font-family:'Newsreader',serif; font-style:italic; font-size:28px; color:#8a745a;">{{ emptyNote }}</div>
+            </sc-if>
+
+            <sc-if value="{{ showHoursBand }}" hint-placeholder-val="{{ false }}">
+              <div style="border-top:1px solid #392a19; margin-top:30px; padding-top:26px;">
+                <div style="font-size:25px; letter-spacing:2.6px; text-transform:uppercase; color:#bfa886; margin-bottom:22px;">When I read</div>
+                <dc-import name="Hour Histogram" scope="month" size="mini" scale="{{ 2.5 }}" hours="{{ monthHours }}" hint-size="100%,130px"></dc-import>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ showFigures }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; align-items:flex-start; border-top:1px solid #45341f; margin-top:30px; padding-top:26px;">
+                <sc-for list="{{ figures }}" as="f" hint-placeholder-count="4">
+                  <div style="{{ f.style }}">
+                    <div style="font-size:25px; letter-spacing:2.6px; text-transform:uppercase; color:#bfa886;">{{ f.label }}</div>
+                    <div style="font-family:'Newsreader',serif; font-weight:500; font-size:62px; line-height:1.05; color:#cfa452; margin-top:8px; white-space:nowrap;">{{ f.value }}</div>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; border-top:1px solid #392a19; margin-top:26px; padding-top:20px; font-size:27px; color:#a68f6e;">
+              <span>jqiao.vercel.app</span>
+              <span>Covers from Open Library</span>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+      <div style="position:fixed; left:50%; bottom:34px; transform:translateX(-50%); background:#2a1c0c; border:1px solid #45341f; border-radius:9px; padding:11px 18px; font-size:13px; color:#f2e6cd; box-shadow:0 16px 40px -12px rgba(0,0,0,.75); z-index:60;">{{ toast }}</div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1000,&quot;height&quot;:1180},&quot;month&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2026-07&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Card&quot;},&quot;aspect&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;4:5&quot;,&quot;1:1&quot;,&quot;9:16&quot;],&quot;default&quot;:&quot;4:5&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Card&quot;},&quot;crop&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;cover&quot;,&quot;letterbox&quot;],&quot;default&quot;:&quot;cover&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Covers&quot;},&quot;maxBehind&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:3,&quot;min&quot;:1,&quot;max&quot;:3,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Covers&quot;}}">
+// ---------------------------------------------------------------------------
+// THE MONTH IN READING — sibling of "The Month in Film".
+// Everything on the card derives from book_days + the month. No hand placement.
+// ---------------------------------------------------------------------------
+
+const OL = "https://covers.openlibrary.org/b/isbn/";
+
+// Books. cover_url is stored inconsistently (-S / -M / -L); the suffix is always
+// swapped for the size actually drawn rather than trusted.
+const BOOKS = {
+  ov:    { id: "ov",    title: "The Overstory", authors: "Richard Powers", cover_url: OL + "9780393356687-L.jpg", total_pages: 502, furthest_page: 502, finished_at: "2026-07-15", finished_by_hand: true, is_public: true },
+  emp:   { id: "emp",   title: "The Employees", authors: "Olga Ravn", cover_url: OL + "9780811232104-M.jpg", total_pages: 136, furthest_page: 136, finished_at: null, finished_by_hand: false, is_public: true },
+  chip:  { id: "chip",  title: "Chip War", authors: "Chris Miller", cover_url: OL + "9781982172008-L.jpg", total_pages: 464, furthest_page: 348, finished_at: null, finished_by_hand: false, is_public: true },
+  small: { id: "small", title: "Small Things Like These", authors: "Claire Keegan", cover_url: OL + "9780802158741-M.jpg", total_pages: 128, furthest_page: 128, finished_at: "2026-07-22", finished_by_hand: true, is_public: true },
+  rings: { id: "rings", title: "The Rings of Saturn", authors: "W. G. Sebald", cover_url: OL + "9780811226158-M.jpg", total_pages: 296, furthest_page: 296, finished_at: "2026-07-27", finished_by_hand: true, is_public: true },
+  phys:  { id: "phys",  title: "Seven Brief Lessons on Physics", authors: "Carlo Rovelli", cover_url: OL + "9780399184413-L.jpg", total_pages: 96, furthest_page: 94, finished_at: null, finished_by_hand: false, is_public: true },
+  pir:   { id: "pir",   title: "Piranesi", authors: "Susanna Clarke", cover_url: OL + "9781635575637-L.jpg", total_pages: 245, furthest_page: 245, finished_at: "2026-08-01", finished_by_hand: true, is_public: true },
+  dawn:  { id: "dawn",  title: "The Dawn of Everything", authors: "David Graeber & David Wengrow", cover_url: OL + "9780374157357-L.jpg", total_pages: 692, furthest_page: 408, finished_at: null, finished_by_hand: false, is_public: true },
+  trust: { id: "trust", title: "Trust", authors: "Hernan Diaz", cover_url: OL + "9780593420317-L.jpg", total_pages: 402, furthest_page: 204, finished_at: null, finished_by_hand: false, is_public: true },
+  pv:    { id: "pv",    title: "", authors: "", cover_url: null, total_pages: 288, furthest_page: 82, finished_at: null, finished_by_hand: false, is_public: false },
+};
+
+// book_days — already local calendar days, treated as strings, never parsed to Date.
+const DAY_ROWS = [
+  // June 2026 — a month with nothing finished
+  ["dawn", "2026-06-04", 34], ["dawn", "2026-06-05", 40], ["dawn", "2026-06-06", 28],
+  ["dawn", "2026-06-09", 46], ["dawn", "2026-06-10", 30], ["pv", "2026-06-10", 22],
+  ["dawn", "2026-06-11", 36], ["dawn", "2026-06-12", 24],
+  ["dawn", "2026-06-16", 52], ["dawn", "2026-06-17", 44], ["dawn", "2026-06-18", 30],
+  ["dawn", "2026-06-19", 26], ["dawn", "2026-06-20", 18],
+  ["chip", "2026-06-24", 30], ["chip", "2026-06-26", 42], ["chip", "2026-06-28", 36], ["chip", "2026-06-30", 28],
+  // July 2026 — the fifteen-day run, and the finishes
+  ["ov", "2026-07-01", 36], ["ov", "2026-07-02", 42], ["ov", "2026-07-03", 28],
+  ["ov", "2026-07-04", 50], ["ov", "2026-07-05", 44], ["ov", "2026-07-06", 26],
+  ["ov", "2026-07-07", 32], ["ov", "2026-07-08", 40], ["pv", "2026-07-08", 30],
+  ["ov", "2026-07-09", 34], ["ov", "2026-07-10", 28], ["ov", "2026-07-11", 46],
+  ["ov", "2026-07-12", 24], ["chip", "2026-07-12", 20],
+  ["ov", "2026-07-13", 30], ["ov", "2026-07-14", 26], ["ov", "2026-07-15", 16],
+  ["chip", "2026-07-17", 44],
+  ["emp", "2026-07-18", 70], ["chip", "2026-07-18", 12],
+  ["emp", "2026-07-19", 66],
+  ["small", "2026-07-21", 122], ["chip", "2026-07-21", 18],
+  ["small", "2026-07-22", 6], ["chip", "2026-07-22", 52], ["pv", "2026-07-22", 30],
+  ["chip", "2026-07-23", 40],
+  ["pir", "2026-07-24", 60], ["chip", "2026-07-24", 26],
+  ["rings", "2026-07-25", 96], ["pir", "2026-07-25", 40],
+  ["rings", "2026-07-26", 110], ["phys", "2026-07-26", 50],
+  ["rings", "2026-07-27", 90], ["phys", "2026-07-27", 44],
+  ["pir", "2026-07-29", 52], ["pir", "2026-07-31", 82],
+  // August 2026
+  ["pir", "2026-08-01", 11], ["trust", "2026-08-02", 54], ["trust", "2026-08-03", 48],
+  ["trust", "2026-08-05", 62], ["trust", "2026-08-06", 40],
+];
+
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const ABBR = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const ASPECTS = ["4:5", "1:1", "9:16"];
+
+function isFinished(b) {
+  if (b.finished_at) return true;
+  return b.total_pages > 0 && b.furthest_page / b.total_pages >= 0.97;
+}
+
+class Component extends DCLogic {
+  state = { month: null, aspect: null, scale: 0.5, hover: null, pickerOpen: false, pickerYear: 2026, toast: "", cb: 0, failed: {}, mobile: false, hoursOn: null, summaryOn: null };
+
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+    import("./reading-hours.js").then((m) => { this._rh = m; this.forceUpdate(); }).catch(() => {});
+
+    const q = new URLSearchParams(location.search);
+    const st = {};
+    const m = q.get("month");
+    if (m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m)) st.month = m;
+    const a = q.get("aspect");
+    if (ASPECTS.indexOf(a) >= 0) st.aspect = a;
+    if (q.get("hours") === "0") st.hoursOn = false;
+    if (q.get("summary") === "0") st.summaryOn = false;
+    st.mobile = typeof navigator !== "undefined" && !!navigator.canShare &&
+      typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    this.setState(st);
+
+    this._onResize = () => {
+      if (!this._fit) return;
+      const w = this._fit.parentElement ? this._fit.parentElement.clientWidth : 700;
+      this.setState({ scale: Math.max(0.2, Math.min(0.62, w / 1080)) });
+    };
+    window.addEventListener("resize", this._onResize);
+    this._onResize();
+    this._onDoc = (e) => {
+      if (!this.state.pickerOpen) return;
+      if (this._picker && !this._picker.contains(e.target)) this.setState({ pickerOpen: false });
+    };
+    document.addEventListener("mousedown", this._onDoc);
+    this.syncUrl();
+    setTimeout(() => this.auditCovers(), 0);
+  }
+  componentDidUpdate() { this.syncUrl(); this.auditCovers(); }
+  componentWillUnmount() {
+    window.removeEventListener("resize", this._onResize);
+    document.removeEventListener("mousedown", this._onDoc);
+  }
+
+  // The aspect is a real setting; stepping months must not reset it. Hours and
+  // Summary go in the URL too, because unlike the other controls they change
+  // what the card exports — a shared link has to render what was shared.
+  syncUrl() {
+    const want = "?month=" + this.monthKey() + "&aspect=" + encodeURIComponent(this.aspect()) + this.bandParams();
+    if (location.search !== want) {
+      try { history.replaceState(null, "", location.pathname + want); } catch (e) {}
+    }
+  }
+  monthKey() { return this.state.month ?? this.props.month ?? "2026-07"; }
+  hoursOn() { return this.state.hoursOn ?? true; }
+  summaryOn() { return this.state.summaryOn ?? true; }
+  bandParams() {
+    return (this.hoursOn() ? "" : "&hours=0") + (this.summaryOn() ? "" : "&summary=0");
+  }
+
+  // Sittings dealt out of the month's day rows, then bucketed by local hour.
+  monthHours(monthRows) {
+    if (!this._rh) return null;
+    const k = this.monthKey() + ":" + monthRows.length;
+    if (!this._mh || this._mh.k !== k) {
+      this._mh = { k, v: this._rh.bucketHours(monthRows.map((r) => ({ key: r.book_id + "|" + r.day, pages: r.pages }))) };
+    }
+    return this._mh.v;
+  }
+  aspect() {
+    const a = this.state.aspect ?? this.props.aspect ?? "4:5";
+    return ASPECTS.indexOf(a) >= 0 ? a : "4:5";
+  }
+
+  backNav(h, l) {
+    const nav = this._nav ? this._nav.resolveBack(h, l) : { href: h, label: l };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = h; } };
+  }
+
+  // ---- calendar arithmetic, from strings only ----
+  daysIn(y, m) {
+    if (m === 2) return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28;
+    return [31,28,31,30,31,30,31,31,30,31,30,31][m - 1];
+  }
+  firstIndex(y, m) {
+    const t = [0,3,2,5,0,3,5,1,4,6,2,4];
+    const yy = m < 3 ? y - 1 : y;
+    const dow = (yy + Math.floor(yy / 4) - Math.floor(yy / 100) + Math.floor(yy / 400) + t[m - 1] + 1) % 7;
+    return (dow + 6) % 7;
+  }
+  shiftMonth(key, delta) {
+    let y = +key.slice(0, 4), m = +key.slice(5, 7) + delta;
+    while (m > 12) { m -= 12; y += 1; }
+    while (m < 1) { m += 12; y -= 1; }
+    return y + "-" + String(m).padStart(2, "0");
+  }
+
+  rows() {
+    if (this._rows) return this._rows;
+    this._rows = DAY_ROWS.map((r) => ({ book_id: r[0], day: r[1], pages: r[2], seconds: r[2] * 62 }));
+    return this._rows;
+  }
+  // A book's finish day: the hand-set date, else the last day it was touched.
+  finishDays() {
+    if (this._fd) return this._fd;
+    const last = {};
+    this.rows().forEach((r) => { if (!last[r.book_id] || r.day > last[r.book_id]) last[r.book_id] = r.day; });
+    const out = {};
+    Object.keys(BOOKS).forEach((id) => { if (isFinished(BOOKS[id])) out[id] = BOOKS[id].finished_at || last[id]; });
+    this._fd = out;
+    return out;
+  }
+
+  // Open Library bakes the size into the URL. Never trust the stored suffix.
+  cover(book, size) {
+    if (!book.cover_url || this.state.failed[book.id]) return null;
+    const url = book.cover_url.replace(/-(S|M|L)\.jpg$/i, "-" + size + ".jpg");
+    return this.state.cb ? url + "?cb=" + this.state.cb : url;
+  }
+
+  // Open Library answers some ISBNs with a 1x1 blank JPEG instead of a 404, so a
+  // successful load still has to be checked before it counts as cover art.
+  markFailed(id) {
+    if (this.state.failed[id]) return;
+    this.setState((p) => ({ failed: { ...p.failed, [id]: true } }));
+  }
+  // Walk the rendered covers and retire any that came back blank. Handlers are
+  // attached here rather than in the template so no event holes hit the runtime.
+  auditCovers() {
+    if (!this._card) return;
+    const byIsbn = {};
+    Object.keys(BOOKS).forEach((id) => {
+      const u = BOOKS[id].cover_url;
+      const m = u && u.match(/\/(\d{9,13}[\dXx])-/);
+      if (m) byIsbn[m[1]] = id;
+    });
+    Array.from(this._card.querySelectorAll("img")).forEach((img) => {
+      const m = img.src.match(/\/(\d{9,13}[\dXx])-/);
+      const id = m && byIsbn[m[1]];
+      if (!id || this.state.failed[id]) return;
+      if (img.complete) {
+        if (img.naturalWidth <= 2) this.markFailed(id);
+      } else if (!img._audited) {
+        img._audited = true;
+        img.addEventListener("load", () => { if (img.naturalWidth <= 2) this.markFailed(id); });
+        img.addEventListener("error", () => this.markFailed(id));
+      }
+    });
+  }
+
+  flash(msg) {
+    this.setState({ toast: msg });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => this.setState({ toast: "" }), 2600);
+  }
+
+  async render1080(H) {
+    // Fresh, cache-busted URLs so the exporter's own fetch carries an Origin and
+    // cannot reuse a copy cached without the CORS header.
+    this.setState({ cb: Date.now() });
+    await new Promise((r) => setTimeout(r, 120));
+    const imgs = Array.from(this._card.querySelectorAll("img"));
+    await Promise.all(imgs.map((i) => (i.complete ? Promise.resolve() : new Promise((r) => { i.onload = r; i.onerror = r; }))));
+    const mod = await import("https://esm.sh/html-to-image@1.11.11");
+    return mod.toBlob(this._card, { width: 1080, height: H, backgroundColor: "#1a120a", pixelRatio: 1 });
+  }
+
+  async save(label, H) {
+    const name = "book-log-" + label.toLowerCase().replace(/\s+/g, "-") + ".png";
+    this.flash("Rendering 1080\u00d7" + H + "\u2026");
+    try {
+      const blob = await this.render1080(H);
+      if (this.state.mobile) {
+        const file = new File([blob], name, { type: "image/png" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: label });
+          this.flash("Shared " + label);
+          return;
+        }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      this.flash("Saved " + name);
+    } catch (e) {
+      this.flash("Export needs a network connection \u2014 try again online");
+    }
+  }
+
+  renderVals() {
+    const aspect = this.aspect();
+    const key = this.monthKey();
+    const year = +key.slice(0, 4), mo = +key.slice(5, 7);
+    const crop = this.props.crop ?? "cover";
+    const maxBehind = Math.max(1, Math.min(3, this.props.maxBehind ?? 3));
+
+    const W = 1080;
+    const H = aspect === "1:1" ? 1080 : aspect === "9:16" ? 1920 : 1350;
+    const monthRows = this.rows().filter((r) => r.day.slice(0, 7) === key);
+
+    // Feed and Square drop the summary, so the grid reclaims that band. Story is
+    // the only ratio with the vertical slack for the hour band: on Feed it would
+    // cost 20% of the cover size and on Square 27%, so it is never drawn there.
+    const isStory = aspect === "9:16";
+    const hoursData = this.monthHours(monthRows);
+    const showFigures = isStory && this.summaryOn();
+    const showHoursBand = isStory && this.hoursOn() && !!hoursData && hoursData.occupied >= 3;
+    const PAD = 46, GUT = 10;
+    const CHROME = (showFigures ? 470 : 330) + (showHoursBand ? 200 : 0);
+
+    const dim = this.daysIn(year, mo);
+    const first = this.firstIndex(year, mo);
+    const rows = Math.ceil((first + dim) / 7);
+    const cellW = Math.min((W - 2 * PAD - 6 * GUT) / 7, ((H - CHROME) - (rows - 1) * GUT) / rows / 1.5);
+    const cellH = cellW * 1.5;
+    const gridW = cellW * 7 + GUT * 6;
+
+    const fd = this.finishDays();
+    const byDay = {};
+    monthRows.forEach((r) => { (byDay[+r.day.slice(8, 10)] = byDay[+r.day.slice(8, 10)] || []).push(r); });
+
+    // STACK ORDER: finished-that-day first, then pages, then time, then id.
+    const order = (list) => list.slice().sort((a, b) => {
+      const af = fd[a.book_id] === a.day ? 1 : 0, bf = fd[b.book_id] === b.day ? 1 : 0;
+      if (af !== bf) return bf - af;
+      if (a.pages !== b.pages) return b.pages - a.pages;
+      if (a.seconds !== b.seconds) return b.seconds - a.seconds;
+      return a.book_id < b.book_id ? -1 : 1;
+    });
+
+    const step = Math.max(3, cellW * 0.033);
+    const seal = Math.max(24, cellW * 0.24);
+    const badge = Math.max(22, cellW * 0.235);
+    const hatch = "repeating-linear-gradient(135deg,#33261a 0 7px,#291d10 7px 14px)";
+    // Blank print (private book, or a public book with no cover art): hatched warm
+    // ground with a small empty disc, drawn in one element so no scoped child holes.
+    const discR = cellW * 0.11;
+    const disc = "radial-gradient(circle at 50% 50%, transparent " + (discR - 1.5) + "px, rgba(207,164,82,.3) " + (discR - 1.5) + "px " + discR + "px, transparent " + discR + "px)";
+    const blankBg = disc + "," + hatch;
+    const imgBase = { position: "absolute", inset: 0, width: "100%", height: "100%",
+      objectFit: crop === "letterbox" ? "contain" : "cover", objectPosition: "center", background: "#241a10", display: "block" };
+
+    const cells = [];
+    for (let i = 0; i < rows * 7; i++) {
+      const dnum = i - first + 1;
+      const inMonth = dnum >= 1 && dnum <= dim;
+      const base = { cellStyle: { position: "relative", width: cellW + "px", height: cellH + "px" }, showNumeral: false, hasBooks: false, behind: [], showTip: false, tipItems: [] };
+      if (!inMonth) { cells.push(base); continue; }
+
+      const day = order(byDay[dnum] || []);
+      if (!day.length) {
+        cells.push({ ...base, showNumeral: true, dateNum: dnum,
+          numeralStyle: { position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Newsreader',serif", fontSize: cellW * 0.28 + "px", color: "#4b3a23", lineHeight: 1 } });
+        continue;
+      }
+
+      const hovered = this.state.hover === dnum;
+      const fan = hovered ? 2.4 : 1;
+      const layers = Math.min(maxBehind, day.length - 1);
+      const behind = [];
+      for (let k = layers; k >= 1; k--) {
+        const r = day[k];
+        const b = BOOKS[r.book_id];
+        const gilt = fd[r.book_id] === r.day;
+        const src = b.is_public ? this.cover(b, "S") : null;
+        const rot = (k % 2 ? 1.6 : -1.8) * (hovered ? 2 : 1);
+        behind.push({
+          hasImg: !!src, src,
+          imgStyle: imgBase,
+          onError: () => this.markFailed(b.id),
+          onLoad: (e) => this.checkBlank(b.id, e),
+          style: {
+            position: "absolute", inset: 0, borderRadius: "3px", overflow: "hidden",
+            border: "2px solid " + (gilt ? "#ecc87c" : "#e8dbc0"), background: src ? "#241a10" : blankBg,
+            boxShadow: "0 3px 10px -4px rgba(0,0,0,.75)",
+            transform: "translate(" + (k * step * fan).toFixed(1) + "px," + (k * step * fan).toFixed(1) + "px) rotate(" + rot.toFixed(1) + "deg)",
+            transition: "transform .18s ease", zIndex: 10 - k,
+          },
+        });
+      }
+
+      const topRow = day[0];
+      const top = BOOKS[topRow.book_id];
+      const topFinished = fd[topRow.book_id] === topRow.day;
+      const topSrc = top.is_public ? this.cover(top, "M") : null;
+      const depth = Math.min(3, day.length - 1);
+
+      cells.push({
+        ...base,
+        cellStyle: { ...base.cellStyle, zIndex: hovered ? 30 : 1 },
+        behind, hasBooks: true, count: day.length,
+        showBadge: day.length > 1,
+        showSeal: topFinished,
+        topHasImg: !!topSrc, topSrc,
+        topImgStyle: imgBase,
+        onTopError: () => this.markFailed(top.id),
+        onTopLoad: (e) => this.checkBlank(top.id, e),
+        topStyle: {
+          position: "absolute", inset: 0, borderRadius: "3px", overflow: "visible",
+          border: "2px solid " + (topFinished ? "#ecc87c" : "#f2e6cd"), background: topSrc ? "#241a10" : blankBg, zIndex: 12,
+          boxShadow: "0 " + (5 + depth * 2) + "px " + (14 + depth * 5) + "px -6px rgba(0,0,0,.85)",
+        },
+        sealStyle: {
+          position: "absolute", right: -seal * 0.3 + "px", top: -seal * 0.3 + "px", zIndex: 16,
+          width: seal + "px", height: seal + "px", borderRadius: "50%", background: "#ecc87c", color: "#241a10",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: seal * 0.56 + "px", lineHeight: 1, fontWeight: 700,
+          boxShadow: "0 2px 7px -1px rgba(0,0,0,.7), inset 0 0 0 1.5px rgba(36,26,16,.28)",
+        },
+        badgeStyle: {
+          position: "absolute", right: -badge * 0.3 + "px", bottom: -badge * 0.3 + "px", zIndex: 16,
+          minWidth: badge + "px", height: badge + "px", padding: "0 " + badge * 0.16 + "px",
+          borderRadius: badge * 0.28 + "px", background: "#cfa452", color: "#241a10",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: badge * 0.56 + "px", fontWeight: 700, boxShadow: "0 2px 7px -1px rgba(0,0,0,.65)",
+        },
+        showTip: hovered,
+        tipItems: day.map((r) => {
+          const b = BOOKS[r.book_id];
+          const done = fd[r.book_id] === r.day;
+          const who = b.is_public ? b.title + " \u2014 " + b.authors : "Private book";
+          return {
+            line: (done ? "\u2713 " : "") + who + " \u00b7 " + r.pages + " pages",
+            style: { fontSize: "17px", lineHeight: 1.5, whiteSpace: "nowrap", color: done ? "#ecc87c" : "#f2e6cd" },
+          };
+        }),
+        tipStyle: { position: "absolute", left: "50%", bottom: cellH + 14 + "px", transform: "translateX(-50%)", zIndex: 40,
+          background: "#241a10", border: "1px solid #45341f", borderRadius: "8px", padding: "12px 16px",
+          boxShadow: "0 20px 44px -14px rgba(0,0,0,.85)" },
+        onEnter: () => this.setState({ hover: dnum }),
+        onLeave: () => this.setState({ hover: null }),
+      });
+    }
+
+    const monthLabel = MONTHS[mo - 1] + " " + year;
+
+    // ---- summary: four figures, all derived from the day rows ----
+    const bookIds = {};
+    let totalPages = 0;
+    monthRows.forEach((r) => { bookIds[r.book_id] = true; totalPages += r.pages; });
+    let streak = 0, run = 0;
+    for (let d = 1; d <= dim; d++) {
+      run = byDay[d] ? run + 1 : 0;
+      if (run > streak) streak = run;
+    }
+    const finishedCount = Object.keys(fd).filter((id) => fd[id].slice(0, 7) === key).length;
+    const figures = [
+      { label: "Books", value: String(Object.keys(bookIds).length) },
+      { label: "Pages", value: totalPages.toLocaleString("en-US") },
+      { label: "Streak", value: streak === 1 ? "1 day" : streak + " days" },
+      { label: "Finished", value: String(finishedCount) },
+    ].map((f, i) => ({
+      ...f,
+      style: { flex: 1, padding: "0 4px 0 " + (i === 0 ? "0" : "26px"),
+        borderLeft: i === 0 ? "none" : "1px solid #45341f" },
+    }));
+
+    // ---- picker ----
+    const py = this.state.pickerYear;
+    const perMonth = {};
+    this.rows().forEach((r) => {
+      const k = r.day.slice(0, 7);
+      (perMonth[k] = perMonth[k] || {})[r.book_id] = true;
+    });
+    const pickerMonths = ABBR.map((abbr, idx) => {
+      const k = py + "-" + String(idx + 1).padStart(2, "0");
+      const n = perMonth[k] ? Object.keys(perMonth[k]).length : 0;
+      const on = k === key;
+      return {
+        abbr, count: n ? n + (n === 1 ? " book" : " books") : "\u2014",
+        href: "?month=" + k + "&aspect=" + encodeURIComponent(aspect),
+        onClick: (e) => { e.preventDefault(); this.setState({ month: k, pickerOpen: false }); },
+        style: { display: "block", textAlign: "center", padding: "8px 0", borderRadius: "7px", cursor: "pointer",
+          color: on ? "#ecc87c" : "#e9dcc4", background: on ? "#33261a" : "transparent",
+          border: "1px solid " + (on ? "#5c4526" : "transparent") },
+      };
+    });
+
+    const aspects = [["4:5", "Feed"], ["1:1", "Square"], ["9:16", "Story"]].map(([v, l]) => ({
+      label: l, onClick: () => this.setState({ aspect: v }),
+      style: { padding: "6px 13px", borderRadius: "6px", fontSize: "12.5px", cursor: "pointer",
+        color: aspect === v ? "#ecc87c" : "#a68f6e", background: aspect === v ? "#33261a" : "transparent" },
+    }));
+
+    // Both of these change the exported card, which is why they sit apart from
+    // the month stepper and carry through to the link.
+    const switches = [
+      { label: "Hours", on: this.hoursOn(), set: () => this.setState((p) => ({ hoursOn: !(p.hoursOn ?? true) })) },
+      { label: "Summary", on: this.summaryOn(), set: () => this.setState((p) => ({ summaryOn: !(p.summaryOn ?? true) })) },
+    ].map((t) => ({
+      label: t.label, onClick: t.set,
+      btnStyle: { display: "flex", alignItems: "center", gap: "9px", background: "transparent", border: "none", padding: 0, cursor: "pointer", fontFamily: "'Archivo',sans-serif" },
+      trackStyle: { position: "relative", flex: "none", width: "30px", height: "17px", borderRadius: "9px", background: t.on ? "#cfa452" : "#3d2d1a", transition: "background .15s ease" },
+      knobStyle: { position: "absolute", top: "2px", left: t.on ? "15px" : "2px", width: "13px", height: "13px", borderRadius: "50%", background: t.on ? "#241a10" : "#8a745a", transition: "left .15s ease" },
+      labelStyle: { fontSize: "12px", fontWeight: 600, color: t.on ? "#ecc87c" : "#8a745a" },
+    }));
+
+    const s = this.state.scale;
+    return {
+      ...this.backNav("Books.dc.html", "Books"),
+      monthLabel, weekdays: ["M","T","W","T","F","S","S"], cells, figures,
+      showFigures, showHoursBand,
+      showSwitches: isStory,
+      switches,
+      monthHours: hoursData ? hoursData.hours : null,
+      isEmptyMonth: monthRows.length === 0,
+      emptyNote: "Nothing read in " + monthLabel,
+      dimsLabel: "1080 \u00d7 " + H + " \u00b7 " + aspect,
+      saveLabel: this.state.mobile ? "Save image" : "Download image",
+      viewportStyle: { width: W * s + "px", height: H * s + "px", position: "relative" },
+      scaleStyle: { transform: "scale(" + s + ")", transformOrigin: "0 0", width: W + "px", height: H + "px" },
+      cardStyle: { width: W + "px", height: H + "px", background: "#1a120a", padding: "42px " + PAD + "px 38px",
+        display: "flex", flexDirection: "column", overflow: "hidden" },
+      weekdayRowStyle: { width: gridW + "px", display: "grid", gridTemplateColumns: "repeat(7," + cellW + "px)", columnGap: GUT + "px" },
+      gridStyle: { width: gridW + "px", display: "grid", gridTemplateColumns: "repeat(7," + cellW + "px)", gap: GUT + "px" },
+      aspects, pickerMonths, pickerYear: py, pickerOpen: this.state.pickerOpen,
+      togglePicker: () => this.setState((p) => ({ pickerOpen: !p.pickerOpen, pickerYear: +key.slice(0, 4) })),
+      prevPickerYear: (e) => { e.stopPropagation(); this.setState({ pickerYear: py - 1 }); },
+      nextPickerYear: (e) => { e.stopPropagation(); this.setState({ pickerYear: py + 1 }); },
+      prevMonth: () => this.setState({ month: this.shiftMonth(key, -1) }),
+      nextMonth: () => this.setState({ month: this.shiftMonth(key, 1) }),
+      copyLink: () => {
+        const url = "https://jqiao.vercel.app/reading/" + key + "?aspect=" + encodeURIComponent(aspect) + this.bandParams();
+        if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => this.flash("Link copied \u00b7 " + url), () => this.flash(url));
+        else this.flash(url);
+      },
+      download: () => this.save(monthLabel, H),
+      setCard: (el) => { this._card = el; },
+      setPicker: (el) => { this._picker = el; },
+      setFit: (el) => { if (el && el !== this._fit) { this._fit = el; setTimeout(this._onResize, 0); } },
+      toast: this.state.toast,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

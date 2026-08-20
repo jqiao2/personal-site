@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+</style>
+</helmet>
+
+<sc-if value="{{ open }}" hint-placeholder-val="{{ true }}">
+  <div style="position:fixed; inset:0; background:rgba(10,4,5,.72); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding:56px 24px; z-index:50;">
+    <div style="position:relative; width:100%; max-width:560px; max-height:calc(100vh - 112px); display:flex; flex-direction:column; background:#241012; border:1px solid #4a2529; border-radius:14px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7); overflow:hidden;">
+      <!-- head -->
+      <div style="display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid #402226;">
+        <span style="font-family:'Newsreader',serif; font-style:italic; font-size:22px; color:#f4e8d1;">{{ headTitle }}</span>
+        <button onClick="{{ attemptClose }}" style="width:30px; height:30px; border:1px solid #4a2529; background:transparent; color:#c2a99a; border-radius:7px; cursor:pointer; font-size:14px; line-height:1;" style-hover="background:#402226; color:#f4e8d1;">&#10005;</button>
+      </div>
+
+      <!-- discard confirmation -->
+      <sc-if value="{{ confirmDiscard }}" hint-placeholder-val="{{ false }}">
+        <div style="position:absolute; inset:0; background:rgba(15,6,7,.88); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; padding:28px; z-index:20; border-radius:14px;">
+          <div style="width:100%; max-width:360px; background:#241012; border:1px solid #4a2529; border-radius:12px; padding:24px; text-align:center;">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:21px; color:#f4e8d1; margin-bottom:8px;">{{ discardTitle }}</div>
+            <div style="font-size:13px; color:#a2857a; line-height:1.5; margin-bottom:22px;">{{ discardBody }}</div>
+            <div style="display:flex; gap:10px; justify-content:center;">
+              <button onClick="{{ keepEditing }}" style="font-size:13px; font-weight:600; color:#ddc9b4; background:transparent; border:1px solid #4a2529; border-radius:8px; padding:9px 18px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#a2857a; color:#f4e8d1;">Keep editing</button>
+            <button onClick="{{ discardChanges }}" style="font-size:13px; font-weight:700; color:#2a1214; background:#d9865a; border:none; border-radius:8px; padding:9px 18px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#e89b70;">Discard</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="padding:22px 24px 26px; display:flex; flex-direction:column; gap:20px; flex:1 1 auto; min-height:{{ bodyMinH }}; overflow-y:auto;">
+        <!-- film + date -->
+        <div style="{{ filmRowStyle }}">
+          <div style="position:relative;">
+            <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Film</label>
+            <sc-if value="{{ lockedFilm }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:12px; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:8px 10px;">
+                <a href="{{ filmHref }}" style="display:flex; align-items:center; gap:12px; flex:1; min-width:0; color:inherit;" style-hover="color:#f0d488;">
+                  <div style="width:38px; height:57px; flex:none; border-radius:4px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 7px,#2c1518 7px 14px); border:1px solid #4a2529;"></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-family:'Newsreader',serif; font-size:16px; color:inherit; line-height:1.2;">{{ filmTitle }} <span style="color:#b0917f; font-style:italic; font-size:14px;">{{ filmYear }}</span></div>
+                  </div>
+                </a>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showSelectedFilm }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:12px; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:8px 10px;">
+                <a href="{{ filmHref }}" style="display:flex; align-items:center; gap:12px; flex:1; min-width:0; color:inherit;" style-hover="color:#f0d488;">
+                  <div style="width:38px; height:57px; flex:none; border-radius:4px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 7px,#2c1518 7px 14px); border:1px solid #4a2529;"></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-family:'Newsreader',serif; font-size:16px; color:inherit; line-height:1.2;">{{ selectedTitle }} <span style="color:#b0917f; font-style:italic; font-size:14px;">{{ selectedYear }}</span></div>
+                  </div>
+                </a>
+                <button onClick="{{ changeFilm }}" style="flex:none; font-size:12px; font-weight:600; color:#ddc9b4; background:transparent; border:1px solid #4a2529; border-radius:7px; padding:7px 13px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#d9b45a; color:#f4e8d1;">Change</button>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showFilmInput }}" hint-placeholder-val="{{ false }}">
+              <input value="{{ dTitle }}" onInput="{{ setTitle }}" onFocus="{{ titleFocus }}" onBlur="{{ titleBlur }}" placeholder="Search a film&hellip;" autoComplete="off" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:11px 13px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+            </sc-if>
+            <sc-if value="{{ showSuggestions }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; top:100%; left:0; right:0; margin-top:6px; background:#241012; border:1px solid #4a2529; border-radius:8px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7); overflow:hidden; z-index:10; max-height:236px; overflow-y:auto;">
+                <sc-for list="{{ suggestions }}" as="sg" hint-placeholder-count="3">
+                  <div onMouseDown="{{ sg.pick }}" style="display:flex; align-items:center; gap:12px; padding:9px 13px; cursor:pointer; border-bottom:1px solid #351a1d;" style-hover="background:#331619;">
+                    <div style="width:30px; height:45px; flex:none; border-radius:3px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 6px,#2c1518 6px 12px); border:1px solid #4a2529;"></div>
+                    <span style="flex:1; min-width:0; font-size:14px; color:#f2e5cd;">{{ sg.title }} <span style="color:#b0917f; font-size:12px;">{{ sg.year }}</span></span>
+                    <span style="font-size:10px; text-transform:uppercase; letter-spacing:1px; color:#d9b45a; white-space:nowrap;">{{ sg.watched }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+          <sc-if value="{{ showFullForm }}" hint-placeholder-val="{{ true }}">
+          <div style="position:relative;">
+            <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Watched</label>
+            <button onClick="{{ toggleCal }}" style="width:100%; text-align:left; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:10px 13px; color:#f4e8d1; font-size:13px; font-family:'Archivo',sans-serif; cursor:pointer; outline:none;" style-hover="border-color:#d9b45a;">{{ dateLabel }}</button>
+            <sc-if value="{{ calOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; top:100%; right:0; margin-top:6px; width:252px; background:#241012; border:1px solid #4a2529; border-radius:10px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7); z-index:20; padding:12px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+                  <button onMouseDown="{{ calPrev }}" style="width:26px; height:26px; border:1px solid #4a2529; background:transparent; color:#c2a99a; border-radius:6px; cursor:pointer; font-size:14px; line-height:1;" style-hover="background:#402226; color:#f4e8d1;">&lsaquo;</button>
+                  <span style="font-family:'Newsreader',serif; font-size:15px; color:#f4e8d1;">{{ calMonthLabel }}</span>
+                  <button onMouseDown="{{ calNext }}" style="width:26px; height:26px; border:1px solid #4a2529; background:transparent; color:#c2a99a; border-radius:6px; cursor:pointer; font-size:14px; line-height:1;" style-hover="background:#402226; color:#f4e8d1;">&rsaquo;</button>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px; margin-bottom:4px;">
+                  <sc-for list="{{ weekdayHeaders }}" as="w" hint-placeholder-count="7">
+                    <div style="text-align:center; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:#8a6f63; padding:4px 0;">{{ w }}</div>
+                  </sc-for>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(7,1fr); gap:2px;">
+                  <sc-for list="{{ calCells }}" as="c" hint-placeholder-count="35">
+                    <div onMouseDown="{{ c.pick }}" style="{{ c.style }}">{{ c.label }}</div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ showFullForm }}" hint-placeholder-val="{{ true }}">
+        <!-- rating + toggles -->
+        <div>
+          <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:9px;">Rating</label>
+          <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+            <div style="display:flex; gap:3px;" onMouseLeave="{{ hoverClear }}">
+              <sc-for list="{{ starButtons }}" as="s" hint-placeholder-count="5">
+                <span onClick="{{ s.onClick }}" onMouseEnter="{{ s.onHover }}" style="{{ s.style }}">&#9733;</span>
+              </sc-for>
+            </div>
+            <span style="font-size:13px; color:#a2857a;">{{ ratingLabel }}</span>
+            <div style="display:flex; gap:10px; margin-left:auto;">
+              <button onClick="{{ toggleLike }}" style="{{ likeStyle }}">&#9829; Like</button>
+              <button onClick="{{ toggleRewatch }}" style="{{ rewatchStyle }}">&#8635; Rewatch</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- medium -->
+        <div>
+          <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:9px;">Medium</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <sc-for list="{{ mediumButtons }}" as="mb" hint-placeholder-count="5">
+              <button onClick="{{ mb.onClick }}" style="{{ mb.style }}">{{ mb.label }}</button>
+            </sc-for>
+          </div>
+          <sc-if value="{{ showTheaterFields }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">
+              <div style="position:relative;">
+                <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Theater</label>
+                <input value="{{ dVenue }}" onInput="{{ setVenue }}" onFocus="{{ venueFocus }}" onBlur="{{ venueBlur }}" autoComplete="off" placeholder="e.g. Metrograph, NYC" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:11px 13px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+                <sc-if value="{{ showVenueSuggestions }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; top:100%; left:0; right:0; margin-top:6px; background:#241012; border:1px solid #4a2529; border-radius:8px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7); overflow:hidden; z-index:10; max-height:200px; overflow-y:auto;">
+                    <sc-for list="{{ venueSuggestions }}" as="v" hint-placeholder-count="3">
+                      <div onMouseDown="{{ v.pick }}" style="padding:9px 13px; cursor:pointer; font-size:14px; color:#f2e5cd; border-bottom:1px solid #351a1d;" style-hover="background:#331619;">{{ v.label }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+              <div style="position:relative;">
+                <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Format</label>
+                <input value="{{ dFormat }}" onInput="{{ setFormat }}" onFocus="{{ formatFocus }}" onBlur="{{ formatBlur }}" autoComplete="off" placeholder="e.g. 35mm, IMAX, 70mm" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:11px 13px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+                <sc-if value="{{ showFormatSuggestions }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute; top:100%; left:0; right:0; margin-top:6px; background:#241012; border:1px solid #4a2529; border-radius:8px; box-shadow:0 18px 40px -14px rgba(0,0,0,.7); overflow:hidden; z-index:10; max-height:200px; overflow-y:auto;">
+                    <sc-for list="{{ formatSuggestions }}" as="f2" hint-placeholder-count="3">
+                      <div onMouseDown="{{ f2.pick }}" style="padding:9px 13px; cursor:pointer; font-size:14px; color:#f2e5cd; border-bottom:1px solid #351a1d;" style-hover="background:#331619;">{{ f2.label }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ showOtherField }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:12px;">
+              <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Other medium</label>
+              <input value="{{ dOtherMedium }}" onInput="{{ setOtherMedium }}" placeholder="e.g. Projector, phone, drive-in&hellip;" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:11px 13px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- friends -->
+        <div style="position:relative;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Watched with</label>
+          <input value="{{ dFriendInput }}" onInput="{{ setFriendInput }}" onKeyDown="{{ friendKeyDown }}" onFocus="{{ friendsFocus }}" onBlur="{{ friendsBlur }}" autoComplete="off" placeholder="Tag a friend, press Enter&hellip;" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:11px 13px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+          <sc-if value="{{ showFriendSuggestions }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; bottom:100%; left:0; right:0; margin-bottom:6px; background:#241012; border:1px solid #4a2529; border-radius:8px; box-shadow:0 -18px 40px -14px rgba(0,0,0,.7); overflow:hidden; z-index:10; max-height:200px; overflow-y:auto;">
+              <sc-for list="{{ friendSuggestions }}" as="fr" hint-placeholder-count="3">
+                <div onMouseDown="{{ fr.pick }}" style="padding:9px 13px; cursor:pointer; font-size:14px; color:#f2e5cd; border-bottom:1px solid #351a1d;" style-hover="background:#331619;">{{ fr.label }}</div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ hasFriendChips }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:10px;">
+              <sc-for list="{{ friendChips }}" as="f" hint-placeholder-count="2">
+                <span style="display:inline-flex; align-items:center; gap:7px; font-size:12px; color:#ddc9b4; border:1px solid #4a2529; border-radius:20px; padding:4px 8px 4px 12px; background:#241012;">{{ f.label }}<span onMouseDown="{{ f.remove }}" style="cursor:pointer; color:#a2857a; font-size:13px; line-height:1;" style-hover="color:#f4e8d1;">&#10005;</span></span>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+
+        <!-- review -->
+        <div>
+          <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Review</label>
+          <textarea value="{{ dReview }}" onInput="{{ setReview }}" placeholder="Add your thoughts&hellip;" rows="4" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:12px 13px; color:#f2e5cd; font-size:14px; font-family:'Newsreader',serif; line-height:1.5; outline:none; resize:vertical;"></textarea>
+        </div>
+
+        <!-- tags -->
+        <div style="position:relative;">
+          <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:7px;">Tags</label>
+          <input value="{{ dTagInput }}" onInput="{{ setTagInput }}" onKeyDown="{{ tagKeyDown }}" onFocus="{{ tagsFocus }}" onBlur="{{ tagsBlur }}" autoComplete="off" placeholder="Type a tag, press Enter&hellip;" style="width:100%; background:#1c0d0e; border:1px solid #4a2529; border-radius:8px; padding:11px 13px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+          <sc-if value="{{ showTagSuggestions }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute; bottom:100%; left:0; right:0; margin-bottom:6px; background:#241012; border:1px solid #4a2529; border-radius:8px; box-shadow:0 -18px 40px -14px rgba(0,0,0,.7); overflow:hidden; z-index:10; max-height:200px; overflow-y:auto;">
+              <sc-for list="{{ tagSuggestions }}" as="tg" hint-placeholder-count="3">
+                <div onMouseDown="{{ tg.pick }}" style="padding:9px 13px; cursor:pointer; font-size:14px; color:#f2e5cd; border-bottom:1px solid #351a1d;" style-hover="background:#331619;">{{ tg.label }}</div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ hasTagChips }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:7px; flex-wrap:wrap; margin-top:10px;">
+              <sc-for list="{{ tagChips }}" as="t" hint-placeholder-count="2">
+                <span style="display:inline-flex; align-items:center; gap:7px; font-size:12px; color:#ddc9b4; border:1px solid #4a2529; border-radius:20px; padding:4px 8px 4px 12px; background:#241012;">{{ t.label }}<span onMouseDown="{{ t.remove }}" style="cursor:pointer; color:#a2857a; font-size:13px; line-height:1;" style-hover="color:#f4e8d1;">&#10005;</span></span>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+        </sc-if>
+      </div>
+
+      <!-- actions -->
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px 24px; border-top:1px solid #402226; background:#1f0e10; flex:none;">
+        <button onClick="{{ leftAction }}" style="{{ leftStyle }}">{{ leftLabel }}</button>
+        <sc-if value="{{ showPrimary }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ save }}" style="{{ saveStyle }}">{{ primaryLabel }}</button>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:608,&quot;height&quot;:900},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;log&quot;,&quot;edit&quot;,&quot;select&quot;],&quot;default&quot;:&quot;log&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;open&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;filmTitle&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Perfect Days&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;filmYear&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:2023,&quot;tsType&quot;:&quot;number&quot;},&quot;seedDate&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;seedRating&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number&quot;},&quot;seedLiked&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;boolean&quot;},&quot;seedRewatch&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;boolean&quot;},&quot;seedMedium&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;seedVenue&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;seedFormat&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;seedOtherMedium&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;seedReview&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string&quot;},&quot;seedTags&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string[]&quot;},&quot;seedFriends&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;string[]&quot;},&quot;catalog&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;object[]&quot;},&quot;onSave&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(entry:any)=&gt;void&quot;},&quot;onDelete&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;()=&gt;void&quot;}}">
+class Component extends DCLogic {
+  state = {
+    seeded: false,
+    activeMode: "log",
+    dTitle: "", dFilmSelected: false, titleFocused: false,
+    dDate: "2026-07-11", calOpen: false, calY: 2026, calM: 6,
+    dRating: 0, hoverRating: 0, dLiked: false, dRewatch: false,
+    dMedium: "theater", dVenue: "", dFormat: "", dOtherMedium: "",
+    venueFocused: false, formatFocused: false,
+    dReview: "", dTags: "", dTagInput: "",
+    dFriends: "", dFriendInput: "",
+    tagsFocused: false, friendsFocused: false,
+    confirmDiscard: false,
+  };
+
+  isOpen() { return this.props.open ?? true; }
+
+  lockScroll(on) {
+    if (typeof document === "undefined") return;
+    document.body.style.overflow = on ? "hidden" : "";
+  }
+
+  componentDidMount() {
+    if (this.isOpen()) { this.seedFromProps(); this.lockScroll(true); }
+  }
+  componentDidUpdate(prev) {
+    const prevOpen = prev.open ?? true;
+    if (this.isOpen() && (!prevOpen || prev.mode !== this.props.mode)) this.seedFromProps();
+    if (this.isOpen() !== (prevOpen)) this.lockScroll(this.isOpen());
+  }
+  componentWillUnmount() { this.lockScroll(false); }
+
+  isEdit() { return this.state.activeMode === "edit"; }
+  isSelect() { return this.state.activeMode === "select"; }
+  isLog() { return this.state.activeMode === "log"; }
+  isLocked() { return this.isEdit() || this.isLog(); }
+
+  seedFromProps() {
+    const p = this.props;
+    const mode = p.mode || "log";
+    const edit = mode === "edit";
+    const locked = edit || mode === "log";
+    const iso = p.seedDate || this.todayIso();
+    const q = iso.split("-").map(Number);
+    this.setState({
+      seeded: true,
+      activeMode: mode,
+      dTitle: locked ? (p.filmTitle || "") : "",
+      dFilmSelected: locked,
+      titleFocused: false,
+      dDate: iso, calOpen: false, calY: q[0], calM: q[1] - 1,
+      dRating: p.seedRating || 0, hoverRating: 0,
+      dLiked: !!p.seedLiked, dRewatch: !!p.seedRewatch,
+      dMedium: p.seedMedium || "theater",
+      dVenue: p.seedVenue || "", dFormat: p.seedFormat || "", dOtherMedium: p.seedOtherMedium || "",
+      venueFocused: false, formatFocused: false,
+      dReview: p.seedReview || "",
+      dTags: (p.seedTags || []).join(", "), dTagInput: "",
+      dFriends: (p.seedFriends || []).join(", "), dFriendInput: "",
+      tagsFocused: false, friendsFocused: false, confirmDiscard: false,
+    });
+  }
+
+  todayIso() { return "2026-07-11"; }
+
+  starText(r) {
+    const full = Math.floor(r);
+    return "\u2605".repeat(full) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+
+  calendarVals(iso, onPick) {
+    const s = this.state;
+    const MON = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const WD = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const p = (iso || "").split("-").map(Number);
+    const dateLabel = iso ? WD[new Date(p[0], p[1]-1, p[2]).getDay()] + ", " + MON[p[1]-1].slice(0,3) + " " + p[2] + ", " + p[0] : "Select a date";
+    const first = new Date(s.calY, s.calM, 1).getDay();
+    const dayCount = new Date(s.calY, s.calM + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < first; i++) cells.push({ label: "", style: "padding:7px 0;", pick: undefined });
+    for (let d = 1; d <= dayCount; d++) {
+      const cIso = s.calY + "-" + String(s.calM + 1).padStart(2, "0") + "-" + String(d).padStart(2, "0");
+      const isSel = cIso === iso;
+      cells.push({
+        label: String(d),
+        style: "text-align:center; font-size:13px; padding:7px 0; border-radius:6px; cursor:pointer; " + (isSel ? "background:#d9b45a; color:#2a1214; font-weight:700;" : "color:#e9d9c4;"),
+        pick: (e) => { e.preventDefault(); onPick(cIso); },
+      });
+    }
+    return {
+      dateLabel,
+      calOpen: s.calOpen,
+      weekdayHeaders: ["Su","Mo","Tu","We","Th","Fr","Sa"],
+      calMonthLabel: MON[s.calM] + " " + s.calY,
+      calCells: cells,
+      toggleCal: () => {
+        if (this.state.calOpen) { this.setState({ calOpen: false }); return; }
+        const z = (iso || this.todayIso()).split("-").map(Number);
+        this.setState({ calOpen: true, calY: z[0], calM: z[1] - 1 });
+      },
+      calPrev: (e) => { e.preventDefault(); this.setState((st) => { let m = st.calM - 1, y = st.calY; if (m < 0) { m = 11; y--; } return { calM: m, calY: y }; }); },
+      calNext: (e) => { e.preventDefault(); this.setState((st) => { let m = st.calM + 1, y = st.calY; if (m > 11) { m = 0; y++; } return { calM: m, calY: y }; }); },
+    };
+  }
+
+  // ---- film catalog (log mode autocomplete) ----
+  catalog() {
+    if (Array.isArray(this.props.catalog) && this.props.catalog.length) return this.props.catalog;
+    return [
+      { title: "Perfect Days", year: 2023, watched: true, rating: 4.5, liked: true },
+      { title: "The Zone of Interest", year: 2023, watched: true, rating: 4, liked: true },
+      { title: "Chungking Express", year: 1994, watched: true, rating: 5, liked: true },
+      { title: "The Substance", year: 2024, watched: true, rating: 3.5, liked: false },
+      { title: "Aftersun", year: 2022, watched: true, rating: 5, liked: true },
+      { title: "Past Lives", year: 2023, watched: true, rating: 4.5, liked: true },
+      { title: "In the Mood for Love", year: 2000, watched: false },
+      { title: "Portrait of a Lady on Fire", year: 2019, watched: false },
+      { title: "Drive My Car", year: 2021, watched: false },
+      { title: "Poor Things", year: 2023, watched: false },
+      { title: "Perfect Blue", year: 1997, watched: false },
+      { title: "The Worst Person in the World", year: 2021, watched: false },
+    ];
+  }
+  filteredSuggestions() {
+    const t = this.state.dTitle.trim().toLowerCase();
+    if (!t) return [];
+    return this.catalog().filter((f) => f.title.toLowerCase().includes(t)).slice(0, 6);
+  }
+  selectedFilm() {
+    const t = this.state.dTitle.trim().toLowerCase();
+    if (!t) return null;
+    return this.catalog().find((f) => f.title.toLowerCase() === t) || null;
+  }
+  onTitleChange(val) {
+    this.setState({ dTitle: val, dRewatch: false, dRating: 0, dLiked: false, titleFocused: true, dFilmSelected: false });
+  }
+  pickSuggestion(f) {
+    const toLog = this.isSelect() ? { activeMode: "log" } : {};
+    if (f.watched) {
+      this.setState({ dTitle: f.title, dRewatch: true, dRating: f.rating || 0, dLiked: !!f.liked, titleFocused: false, dFilmSelected: true, ...toLog });
+    } else {
+      this.setState({ dTitle: f.title, dRewatch: false, dRating: 0, dLiked: false, titleFocused: false, dFilmSelected: true, ...toLog });
+    }
+  }
+
+  // ---- venue / format ----
+  venueList() { return ["Metrograph, NYC", "Film Forum, NYC", "IFC Center, NYC", "Alamo Drafthouse, Brooklyn", "Angelika Film Center, NYC", "Nitehawk Cinema, Williamsburg", "Paris Theater, NYC"]; }
+  formatList() { return ["Digital", "35mm", "70mm", "IMAX", "IMAX 70mm", "Dolby Cinema", "DCP"]; }
+  venueSuggestions() {
+    const t = this.state.dVenue.trim().toLowerCase();
+    return this.venueList().filter((v) => !t || v.toLowerCase().includes(t)).filter((v) => v.toLowerCase() !== t).slice(0, 6);
+  }
+  formatSuggestions() {
+    const t = this.state.dFormat.trim().toLowerCase();
+    return this.formatList().filter((v) => !t || v.toLowerCase().includes(t)).filter((v) => v.toLowerCase() !== t).slice(0, 6);
+  }
+
+  // ---- tags ----
+  knownTags() {
+    return ["slow cinema", "rewatchable", "komorebi", "Tokyo", "arthouse", "neo-noir", "coming of age", "one-shot", "melancholy", "visually stunning", "great soundtrack", "cried", "comfort watch", "criterion", "debut feature"];
+  }
+  tagSuggestions() {
+    const token = this.state.dTagInput.trim().toLowerCase();
+    const used = this.state.dTags.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    return this.knownTags().filter((t) => !used.includes(t.toLowerCase())).filter((t) => !token || t.toLowerCase().includes(token)).slice(0, 6);
+  }
+  commitTag(token) {
+    const t = (token || "").trim();
+    if (!t) return;
+    const used = this.state.dTags.split(",").map((x) => x.trim()).filter(Boolean);
+    if (!used.some((u) => u.toLowerCase() === t.toLowerCase())) used.push(t);
+    this.setState({ dTags: used.join(", "), dTagInput: "", tagsFocused: true });
+  }
+  removeTag(i) {
+    const parts = this.state.dTags.split(",").map((t) => t.trim()).filter(Boolean);
+    parts.splice(i, 1);
+    this.setState({ dTags: parts.join(", ") });
+  }
+
+  // ---- friends ----
+  knownFriends() {
+    return ["Mia Tanaka", "Leo Vasquez", "Priya Shah", "Sam Okafor", "Noah Bergstrom", "Ines Moreau", "Devon Clark", "Yuki Sato", "Hannah Reyes", "Marcus Webb"];
+  }
+  friendSuggestions() {
+    const token = this.state.dFriendInput.trim().toLowerCase();
+    const used = this.state.dFriends.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    return this.knownFriends().filter((t) => !used.includes(t.toLowerCase())).filter((t) => !token || t.toLowerCase().includes(token)).slice(0, 6);
+  }
+  commitFriend(token) {
+    const t = (token || "").trim();
+    if (!t) return;
+    const used = this.state.dFriends.split(",").map((x) => x.trim()).filter(Boolean);
+    if (!used.some((u) => u.toLowerCase() === t.toLowerCase())) used.push(t);
+    this.setState({ dFriends: used.join(", "), dFriendInput: "", friendsFocused: true });
+  }
+  removeFriend(i) {
+    const parts = this.state.dFriends.split(",").map((t) => t.trim()).filter(Boolean);
+    parts.splice(i, 1);
+    this.setState({ dFriends: parts.join(", ") });
+  }
+
+  isDirty() {
+    const s = this.state, p = this.props;
+    if (this.isSelect()) return false;
+    if (this.isEdit()) {
+      return (
+        s.dDate !== (p.seedDate || "") ||
+        s.dRating !== (p.seedRating || 0) ||
+        s.dLiked !== !!p.seedLiked ||
+        s.dRewatch !== !!p.seedRewatch ||
+        s.dMedium !== (p.seedMedium || "theater") ||
+        s.dVenue !== (p.seedVenue || "") ||
+        s.dFormat !== (p.seedFormat || "") ||
+        s.dOtherMedium !== (p.seedOtherMedium || "") ||
+        s.dReview !== (p.seedReview || "") ||
+        s.dTags !== (p.seedTags || []).join(", ") ||
+        s.dFriends !== (p.seedFriends || []).join(", ")
+      );
+    }
+    return s.dRating > 0 || s.dLiked || s.dRewatch || s.dReview.trim().length > 0 ||
+      s.dTags.trim().length > 0 || s.dFriends.trim().length > 0 || s.dTitle.trim().length > 0;
+  }
+
+  close() { this.props.onClose && this.props.onClose(); }
+
+  save() {
+    const s = this.state;
+    const title = this.isLocked() ? (this.props.filmTitle || "") : s.dTitle.trim();
+    if (!title) return;
+    const entry = {
+      title,
+      year: this.isLocked() ? this.props.filmYear : (this.selectedFilm() ? this.selectedFilm().year : new Date().getFullYear()),
+      date: s.dDate,
+      rating: s.dRating,
+      liked: s.dLiked,
+      rewatch: s.dRewatch,
+      medium: s.dMedium,
+      venue: s.dVenue,
+      format: s.dFormat,
+      otherMedium: s.dOtherMedium,
+      review: s.dReview.trim(),
+      tags: s.dTags.split(",").map((t) => t.trim()).filter(Boolean),
+      friends: s.dFriends.split(",").map((t) => t.trim()).filter(Boolean),
+    };
+    this.props.onSave && this.props.onSave(entry);
+  }
+
+  renderVals() {
+    const s = this.state, edit = this.isEdit(), select = this.isSelect();
+    const active = s.hoverRating || s.dRating;
+    const starButtons = [1, 2, 3, 4, 5].map((n) => ({
+      onClick: () => this.setState({ dRating: n }),
+      onHover: () => this.setState({ hoverRating: n }),
+      style: "cursor:pointer; font-size:26px; line-height:1; transition:color .1s; color:" + (n <= active ? "#d9b45a" : "#4a2529") + ";",
+    }));
+    const ratingLabels = ["Not rated", "1 star", "2 stars", "3 stars", "4 stars", "5 stars"];
+    const toggleBase = "font-size:13px; font-weight:600; border-radius:20px; padding:9px 16px; cursor:pointer; font-family:'Archivo',sans-serif; ";
+    const toggleOn = "background:#d9b45a; color:#2a1214; border:1px solid #d9b45a;";
+    const toggleOff = "background:transparent; color:#ddc9b4; border:1px solid #4a2529;";
+    const locked = this.isLocked();
+    const canSave = locked || s.dTitle.trim().length > 0;
+    const saveStyle = "font-size:14px; font-weight:700; border:none; border-radius:8px; padding:10px 22px; font-family:'Archivo',sans-serif; " +
+      (canSave ? "background:#d9b45a; color:#2a1214; cursor:pointer;" : "background:#4a2529; color:#8a6f63; cursor:not-allowed;");
+    const neutralLeft = "font-size:14px; font-weight:600; color:#ddc9b4; background:transparent; border:1px solid #4a2529; border-radius:8px; padding:10px 20px; cursor:pointer; font-family:'Archivo',sans-serif;";
+    const dangerLeft = "font-size:14px; font-weight:600; color:#e89b70; background:transparent; border:1px solid #6b3a30; border-radius:8px; padding:10px 20px; cursor:pointer; font-family:'Archivo',sans-serif;";
+
+    const tagChips = s.dTags.split(",").map((t) => t.trim()).filter(Boolean).map((label, i) => ({
+      label, remove: (ev) => { ev.preventDefault(); this.removeTag(i); },
+    }));
+    const friendChips = s.dFriends.split(",").map((t) => t.trim()).filter(Boolean).map((label, i) => ({
+      label, remove: (ev) => { ev.preventDefault(); this.removeFriend(i); },
+    }));
+
+    return {
+      open: this.isOpen(),
+      headTitle: select ? "What did you watch?" : (edit ? "Edit entry" : "Log a film"),
+      primaryLabel: edit ? "Save changes" : "Log film",
+      discardTitle: edit ? "Discard changes?" : "Discard this entry?",
+      discardBody: edit ? "You have unsaved edits to this entry." : "Your entry has unsaved changes.",
+      bodyMinH: select ? "380px" : "0",
+      showFullForm: !select,
+      showPrimary: !select,
+      filmRowStyle: select ? "display:block;" : "display:grid; grid-template-columns:1fr 150px; gap:12px;",
+
+      // film field
+      lockedFilm: locked,
+      filmHref: this.props.filmHref || undefined,
+      filmTitle: this.props.filmTitle,
+      filmYear: this.props.filmYear,
+      showSelectedFilm: !locked && s.dFilmSelected,
+      showFilmInput: !locked && !s.dFilmSelected,
+      showSuggestions: !locked && s.titleFocused && this.filteredSuggestions().length > 0,
+      dTitle: s.dTitle,
+      selectedTitle: s.dTitle,
+      selectedYear: this.selectedFilm() ? this.selectedFilm().year : "",
+      setTitle: (e) => this.onTitleChange(e.target.value),
+      titleFocus: () => this.setState({ titleFocused: true }),
+      titleBlur: () => this.setState({ titleFocused: false }),
+      changeFilm: () => this.setState({ dFilmSelected: false, dTitle: "", dRewatch: false, dRating: 0, dLiked: false, titleFocused: true }),
+      suggestions: this.filteredSuggestions().map((f) => ({
+        title: f.title, year: f.year, watched: f.watched ? "Watched" : "",
+        pick: (e) => { e.preventDefault(); this.pickSuggestion(f); },
+      })),
+
+      // date / calendar
+      ...this.calendarVals(s.dDate, (iso) => this.setState({ dDate: iso, calOpen: false })),
+
+      // rating
+      starButtons,
+      hoverClear: () => this.setState({ hoverRating: 0 }),
+      ratingLabel: active ? ratingLabels[Math.round(active)].replace(/^(\d+)/, () => active).replace(/(\.5)/, "\u00bd") : "Not rated",
+
+      // toggles
+      toggleLike: () => this.setState((p) => ({ dLiked: !p.dLiked })),
+      toggleRewatch: () => this.setState((p) => ({ dRewatch: !p.dRewatch })),
+      likeStyle: toggleBase + (s.dLiked ? toggleOn : toggleOff),
+      rewatchStyle: toggleBase + (s.dRewatch ? toggleOn : toggleOff),
+
+      // medium
+      mediumButtons: ["theater", "tv", "computer", "plane", "other"].map((m) => {
+        const labels = { theater: "Theater", tv: "TV", computer: "Computer", plane: "Airplane", other: "Other\u2026" };
+        const on = s.dMedium === m;
+        return {
+          label: labels[m],
+          onClick: () => this.setState({ dMedium: m }),
+          style: "font-size:13px; font-weight:600; border-radius:20px; padding:9px 16px; cursor:pointer; font-family:'Archivo',sans-serif; " +
+            (on ? "background:#d9b45a; color:#2a1214; border:1px solid #d9b45a;" : "background:transparent; color:#ddc9b4; border:1px solid #4a2529;"),
+        };
+      }),
+      showTheaterFields: s.dMedium === "theater",
+      showOtherField: s.dMedium === "other",
+      dOtherMedium: s.dOtherMedium,
+      setOtherMedium: (e) => this.setState({ dOtherMedium: e.target.value }),
+      dVenue: s.dVenue,
+      setVenue: (e) => this.setState({ dVenue: e.target.value, venueFocused: true }),
+      venueFocus: () => this.setState({ venueFocused: true }),
+      venueBlur: () => this.setState({ venueFocused: false }),
+      showVenueSuggestions: s.venueFocused && this.venueSuggestions().length > 0,
+      venueSuggestions: this.venueSuggestions().map((v) => ({ label: v, pick: (e) => { e.preventDefault(); this.setState({ dVenue: v, venueFocused: false }); } })),
+      dFormat: s.dFormat,
+      setFormat: (e) => this.setState({ dFormat: e.target.value, formatFocused: true }),
+      formatFocus: () => this.setState({ formatFocused: true }),
+      formatBlur: () => this.setState({ formatFocused: false }),
+      showFormatSuggestions: s.formatFocused && this.formatSuggestions().length > 0,
+      formatSuggestions: this.formatSuggestions().map((v) => ({ label: v, pick: (e) => { e.preventDefault(); this.setState({ dFormat: v, formatFocused: false }); } })),
+
+      // review
+      dReview: s.dReview,
+      setReview: (e) => this.setState({ dReview: e.target.value }),
+
+      // tags
+      dTagInput: s.dTagInput,
+      setTagInput: (e) => this.setState({ dTagInput: e.target.value }),
+      tagKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); this.commitTag(this.state.dTagInput); } },
+      tagsFocus: () => this.setState({ tagsFocused: true }),
+      tagsBlur: () => this.setState({ tagsFocused: false }),
+      showTagSuggestions: s.tagsFocused && this.tagSuggestions().length > 0,
+      tagSuggestions: this.tagSuggestions().map((t) => ({ label: t, pick: (e) => { e.preventDefault(); this.commitTag(t); } })),
+      tagChips, hasTagChips: tagChips.length > 0,
+
+      // friends
+      dFriendInput: s.dFriendInput,
+      setFriendInput: (e) => this.setState({ dFriendInput: e.target.value }),
+      friendKeyDown: (e) => { if (e.key === "Enter") { e.preventDefault(); this.commitFriend(this.state.dFriendInput); } },
+      friendsFocus: () => this.setState({ friendsFocused: true }),
+      friendsBlur: () => this.setState({ friendsFocused: false }),
+      showFriendSuggestions: s.friendsFocused && this.friendSuggestions().length > 0,
+      friendSuggestions: this.friendSuggestions().map((t) => ({ label: t, pick: (e) => { e.preventDefault(); this.commitFriend(t); } })),
+      friendChips, hasFriendChips: friendChips.length > 0,
+
+      // discard / close / footer
+      confirmDiscard: s.confirmDiscard,
+      attemptClose: () => { if (this.isDirty()) this.setState({ confirmDiscard: true }); else this.close(); },
+      keepEditing: () => this.setState({ confirmDiscard: false }),
+      discardChanges: () => { this.setState({ confirmDiscard: false }); this.close(); },
+      leftLabel: edit ? "Delete entry" : "Cancel",
+      leftStyle: edit ? dangerLeft : neutralLeft,
+      leftAction: edit ? () => (this.props.onDelete && this.props.onDelete()) : () => { if (this.isDirty()) this.setState({ confirmDiscard: true }); else this.close(); },
+
+      save: () => this.save(),
+      saveStyle,
+    };
+  }
+}
+</script>
+</body>
+</html>
