@@ -12,7 +12,7 @@ import {
 	listTheaterNames,
 	type RelatedFilm,
 } from '../../../lib/films';
-import { imageUrl, releaseYear } from '../../../lib/tmdb';
+import { extractCrew, getMovieDetails, imageUrl, releaseYear } from '../../../lib/tmdb';
 import { formatWatchedDate, starText, ytsUrl } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 import { jellyfinConfig } from '../../../lib/jellyfin';
@@ -43,6 +43,14 @@ if (!film) {
 
 const { movie, watched } = film;
 
+// The Crew tab's data. Unlike cast/genres/directors this isn't cached on the movie
+// row: nothing aggregates over crew, so it hasn't earned a column — it's a live
+// TMDB read, started here so it overlaps the queries below. TMDB being down just
+// means no Crew tab, never a broken page.
+const crewPromise = getMovieDetails(movie.tmdb_id)
+	.then(extractCrew)
+	.catch(() => []);
+
 // Every diary entry for this film (newest first) → the "Your reviews" list, and
 // the values the editor reopens each of them with. A film can be watched with no
 // logs at all (Letterboxd import), in which case this is empty and the reviews
@@ -62,6 +70,7 @@ const [onWatchlist, related] = seen
 // (migrations 0008 + 0009), so the page renders without a live TMDB call.
 const directors = movie.directors;
 const cast = movie.actors.slice(0, 5);
+const crew = await crewPromise;
 const genres = movie.genres;
 const runtime = movie.runtime;
 // The film's primary production country for the meta row.
@@ -316,14 +325,52 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 
 						{movie.overview && <p class="synopsis">{movie.overview}</p>}
 
-						{cast.length > 0 && (
-							<section class="block">
-								<div class="block__head">Cast</div>
-								<div class="cast">
-									{cast.map((c) => (
-										<a class="cast__chip" href={filterHref('actor', c, 'year')}>{c}</a>
-									))}
+						{(cast.length > 0 || crew.length > 0) && (
+							<section class="block" id="credits">
+								<div class="block__head block__head--row">
+									<div class="tabs">
+										{cast.length > 0 && (
+											<button type="button" class="tab" data-tab="cast" aria-selected="true">Cast</button>
+										)}
+										{crew.length > 0 && (
+											<button
+												type="button"
+												class="tab"
+												data-tab="crew"
+												aria-selected={cast.length === 0 ? 'true' : 'false'}
+											>
+												Crew
+											</button>
+										)}
+									</div>
 								</div>
+
+								{cast.length > 0 && (
+									<div class="cast" data-panel="cast">
+										{cast.map((c) => (
+											<a class="cast__chip" href={filterHref('actor', c, 'year')}>{c}</a>
+										))}
+									</div>
+								)}
+
+								{crew.length > 0 && (
+									<div class="crew" data-panel="crew" hidden={cast.length > 0}>
+										{crew.map((g) => (
+											<div class="crew__row">
+												<div class="crew__role">{g.role}</div>
+												<div class="crew__names">
+													{g.names.map((n) =>
+														g.role === 'Director' ? (
+															<a class="crew__name" href={filterHref('director', n, 'year')}>{n}</a>
+														) : (
+															<span class="crew__name">{n}</span>
+														),
+													)}
+												</div>
+											</div>
+										))}
+									</div>
+								)}
 							</section>
 						)}
 
@@ -774,6 +821,35 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				font-size: 12px;
 				color: #8a6f63;
 			}
+			/* `.cast`/`.crew` set display, and an author rule outranks the UA's
+			   [hidden] { display: none } — so the hidden panel needs saying again. */
+			[data-panel][hidden] {
+				display: none;
+			}
+			.tabs {
+				display: flex;
+				gap: 18px;
+				/* Sit the active tab's underline on the block head's own rule. */
+				margin-bottom: -10px;
+			}
+			.tab {
+				font-family: 'Newsreader', serif;
+				font-style: italic;
+				font-size: 17px;
+				background: none;
+				border: none;
+				border-bottom: 2px solid transparent;
+				padding: 0 0 8px;
+				cursor: pointer;
+				color: #8a6f63;
+			}
+			.tab:hover {
+				color: #ecdcbd;
+			}
+			.tab[aria-selected='true'] {
+				color: #ecdcbd;
+				border-bottom-color: #d9b45a;
+			}
 			.cast {
 				display: flex;
 				gap: 8px;
@@ -790,6 +866,47 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 			.cast__chip:hover {
 				color: #f0d488;
 				border-color: #d9b45a;
+			}
+			.crew {
+				display: flex;
+				flex-direction: column;
+				/* 1px gaps over the container's colour become the hairline row rules. */
+				gap: 1px;
+				background: #2c1518;
+				border: 1px solid #3a1c20;
+				border-radius: 7px;
+				overflow: hidden;
+			}
+			.crew__row {
+				display: grid;
+				grid-template-columns: 148px minmax(0, 1fr);
+				gap: 16px;
+				align-items: baseline;
+				background: #1c0d0e;
+				padding: 11px 14px;
+			}
+			.crew__role {
+				font-size: 11px;
+				font-weight: 600;
+				letter-spacing: 0.6px;
+				text-transform: uppercase;
+				color: #8a6f63;
+			}
+			.crew__names {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 4px 10px;
+				font-size: 13.5px;
+				line-height: 1.5;
+				color: #e9d9c4;
+			}
+			a.crew__name {
+				color: #e9d9c4;
+				border-bottom: 1px solid #4a2529;
+			}
+			a.crew__name:hover {
+				color: #f0d488;
+				border-bottom-color: #d9b45a;
 			}
 			.reviews {
 				display: flex;
@@ -931,10 +1048,27 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				.h1-year {
 					font-size: 24px;
 				}
+				.crew__row {
+					grid-template-columns: 1fr;
+					gap: 4px;
+				}
 			}
 		</style>
 
 		<script>
+			// Cast/Crew switch. Both panels ship in the HTML; this just flips which one
+			// is hidden, so the section still shows Cast with scripting off.
+			for (const tab of document.querySelectorAll<HTMLButtonElement>('.tab[data-tab]')) {
+				tab.addEventListener('click', () => {
+					for (const other of document.querySelectorAll<HTMLButtonElement>('.tab[data-tab]')) {
+						other.setAttribute('aria-selected', String(other === tab));
+					}
+					for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
+						panel.hidden = panel.dataset.panel !== tab.dataset.tab;
+					}
+				});
+			}
+
 			// "Back" links go to the actual previous page when you arrived from within
 			// the site; the href stays a fallback for direct loads / new tabs / external
 			// referrers (where history.back() would leave the site).
