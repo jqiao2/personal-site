@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Ultra&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #241812; font-family: "Archivo", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: inherit; }
+  a:hover { color: #b34328; }
+</style>
+</helmet>
+
+<div style="background:#241812; padding:56px 64px 120px; display:flex; flex-direction:column; align-items:flex-start; gap:72px; width:max-content;">
+
+  <!-- ============ A. COVER + THE DECISION ============ -->
+  <div style="width:1280px; display:flex; flex-direction:column; gap:34px;">
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; border-bottom:1px solid #4a3626; padding-bottom:22px;">
+      <div>
+        <div style="font-family:'Ultra',Georgia,serif; font-size:44px; line-height:1; color:#f4ead3; letter-spacing:-.5px;">The restaurant log</div>
+        <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-style:italic; font-size:20px; color:#c6ab8c;">Nine screens, one palette, and the arguments for both.</div>
+      </div>
+      <div style="font-family:ui-monospace,Menlo,monospace; font-size:11px; line-height:2; color:#9a8straw; text-align:right; color:#a08a६;"></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:48px;">
+      <div style="display:flex; flex-direction:column; gap:22px;">
+        <div>
+          <div style="font-size:11px; font-weight:700; letter-spacing:1.8px; color:#d38b1a; text-transform:uppercase;">The decision — light, and here is why</div>
+          <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.62; color:#ddc9ae; text-wrap:pretty;">The restaurant log ships <strong style="color:#f4ead3;">light</strong>: manila ground, ink brown, terracotta and marigold and avocado. The brief's reference set is a printed object — a laminated menu, a placemat, butcher paper over yesterday's prices — and every one of those is dark ink on cheap warm paper. Rendering that as a dark screen is a photograph of a menu at night, not a menu. The dark version is drawn at the bottom of this sheet so you can see what it costs.</div>
+          <div style="margin-top:14px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.62; color:#ddc9ae; text-wrap:pretty;">The family resemblance survives because the resemblance was never the hue. It is the anatomy: the same tab nav with the accent underline and the owner's button pinned right, the same 288px sidebar with a two-line wordmark and counts in the right margin, the same section heads with a rule and a <em>See more →</em>, the same Archivo controls and tabular figures, the same ♥ and ↻ marks. Three sections, one hand, three papers.</div>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:22px;">
+        <div>
+          <div style="font-size:11px; font-weight:700; letter-spacing:1.8px; color:#d38b1a; text-transform:uppercase;">Three answers, in one paragraph each</div>
+          <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.62; color:#ddc9ae; text-wrap:pretty;"><strong style="color:#f4ead3;">The tile</strong> is a menu card, and its top band is a slot: a photograph when one exists, and a <em>set plate</em> — price band at 34px over ruled paper, cuisine in small caps — when one doesn't. Same card, same height, same density either way, and the photoless case is the designed case rather than the degraded one. Everything below the band is the menu line you already know: name, cuisine, dot leaders running to a price in the right margin.</div>
+          <div style="margin-top:14px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.62; color:#ddc9ae; text-wrap:pretty;"><strong style="color:#f4ead3;">The three signals</strong> are ranked by what I ask standing on the sidewalk. Verdict is the headline — it is the only one on a tile at a glance and the only one a map pin carries. Stars are metadata, set once in the line under the name. The heart is a marginal mark that appears only when true and never reserves space.</div>
+          <div style="margin-top:14px; font-family:'Newsreader',Georgia,serif; font-size:16.5px; line-height:1.62; color:#ddc9ae; text-wrap:pretty;"><strong style="color:#f4ead3;">The map</strong> opens on New York at neighbourhood scale, because that is where 80% of the pins and 100% of the sidewalk decisions are. The other cities are not hidden: they sit in a rail down the right edge with counts, and they push chevrons against the edge of the viewport pointing at where they actually are.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ B. TOKENS ============ -->
+  <div style="width:1280px; display:flex; flex-direction:column; gap:14px;">
+    <div style="display:flex; align-items:baseline; gap:12px;">
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:1.4px; color:#d38b1a;">S1</span>
+      <span style="font-size:13.5px; font-weight:600; letter-spacing:.3px; color:#e8dcc4;">Palette + basemap tokens</span>
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7a63;">paste into :root</span>
+    </div>
+    <div style="background:#f7eed9; border:1px solid #c4ad86; padding:34px 38px; display:grid; grid-template-columns:1fr 1fr; gap:38px;">
+      <div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.6px; color:#8d7357; text-transform:uppercase; border-bottom:1px solid #ddcaa6; padding-bottom:8px;">The section palette</div>
+        <sc-for list="{{ tokens }}" as="t" hint-placeholder-count="18">
+          <div style="display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #eadfc4;">
+            <span style="width:22px; height:22px; flex:none; border:1px solid rgba(47,30,18,.25); background:{{ t.hex }};"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#2f1e12; width:158px; flex:none;">{{ t.name }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8d7357; width:76px; flex:none;">{{ t.hex }}</span>
+            <span style="font-size:12px; color:#6d5740;">{{ t.use }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.6px; color:#8d7357; text-transform:uppercase; border-bottom:1px solid #ddcaa6; padding-bottom:8px;">The basemap (MapLibre style JSON)</div>
+        <sc-for list="{{ mapTokens }}" as="t" hint-placeholder-count="12">
+          <div style="display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid #eadfc4;">
+            <span style="width:22px; height:22px; flex:none; border:1px solid rgba(47,30,18,.25); background:{{ t.hex }};"></span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#2f1e12; width:158px; flex:none;">{{ t.name }}</span>
+            <span style="font-family:ui-monospace,Menlo,monospace; font-size:11.5px; color:#8d7357; width:76px; flex:none;">{{ t.hex }}</span>
+            <span style="font-size:12px; color:#6d5740;">{{ t.use }}</span>
+          </div>
+        </sc-for>
+        <div style="margin-top:18px; font-family:'Newsreader',Georgia,serif; font-size:14.5px; line-height:1.55; color:#6d5740; text-wrap:pretty;">Type: <strong style="color:#2f1e12;">Archivo</strong> for the whole interface, unchanged from Films and Books. <strong style="color:#2f1e12;">Newsreader</strong> for prose. One display face — <strong style="color:#2f1e12;">Ultra</strong> — a 1970s fat slab with no distressing in it, used for the wordmark, page titles and the boxed special and nothing else. It reads as paint on a counter board rather than costume, and its single weight makes overuse impossible.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ C. THE VERDICT MARK ============ -->
+  <div style="width:1280px; display:flex; flex-direction:column; gap:14px;">
+    <div style="display:flex; align-items:baseline; gap:12px;">
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; letter-spacing:1.4px; color:#d38b1a;">S2</span>
+      <span style="font-size:13.5px; font-weight:600; letter-spacing:.3px; color:#e8dcc4;">The verdict — one mark, three sizes</span>
+      <span style="font-family:ui-monospace,Menlo,monospace; font-size:11px; color:#8d7a63;">rank = angle · appetite = ink</span>
+    </div>
+    <div style="background:#f7eed9; border:1px solid #c4ad86; padding:34px 38px; display:grid; grid-template-columns:400px 1fr 360px; gap:40px;">
+
+      <!-- full size: the ladder -->
+      <div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.6px; color:#8d7357; text-transform:uppercase; border-bottom:1px solid #ddcaa6; padding-bottom:8px; margin-bottom:14px;">Full size — the entry page</div>
+        <sc-for list="{{ verdicts }}" as="v" hint-placeholder-count="6">
+          <div style="display:flex; align-items:flex-start; gap:14px; padding:11px 12px 11px 10px; border-bottom:1px solid #eadfc4; background:{{ v.rowBg }}; border-left:3px solid {{ v.rowEdge }};">
+            <svg viewBox="0 0 24 24" style="width:30px; height:30px; flex:none; margin-top:1px;">
+              <circle cx="12" cy="12" r="11" fill="none" stroke="{{ v.ring }}" stroke-width="1"></circle>
+              <g transform="{{ v.rot }}">
+                <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ v.ink }}"></path>
+                <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ v.ink }}"></rect>
+              </g>
+            </svg>
+            <div>
+              <div style="font-size:14px; font-weight:600; color:#2f1e12; letter-spacing:.1px;">{{ v.name }}</div>
+              <div style="margin-top:3px; font-family:'Newsreader',Georgia,serif; font-size:13.5px; line-height:1.4; color:#6d5740;">{{ v.gloss }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-size:13.5px; line-height:1.5; color:#8d7357;">Shown here with <em>Definitely return</em> struck. The other five stay legible at 45% — the ladder is the point, so it is never collapsed to a single badge on the entry page.</div>
+      </div>
+
+      <!-- composer -->
+      <div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.6px; color:#8d7357; text-transform:uppercase; border-bottom:1px solid #ddcaa6; padding-bottom:8px; margin-bottom:14px;">Input — the composer</div>
+        <div style="background:#fdf7e8; border:1px solid #ddcaa6; padding:20px 22px;">
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; color:#8d7357; text-transform:uppercase;">How was it</div>
+          <div style="display:flex; align-items:center; gap:14px; margin-top:10px; padding-bottom:16px; border-bottom:1px solid #eadfc4;">
+            <span style="font-size:26px; letter-spacing:2px; color:#d38b1a; line-height:1;">&#9733;&#9733;&#9733;&#9733;<span style="color:#e3d3b2;">&#9733;</span></span>
+            <span style="font-size:13px; color:#6d5740;">4.0</span>
+            <button style="margin-left:auto; display:flex; align-items:center; gap:7px; background:#f6e7d4; border:1px solid #b34328; padding:8px 13px; cursor:pointer; font-family:'Archivo',sans-serif; font-size:12.5px; font-weight:600; color:#8e3220;" style-hover="background:#f0d9c0;"><span style="font-size:14px; line-height:1;">&#9829;</span>Loved it</button>
+          </div>
+          <div style="font-size:10.5px; font-weight:700; letter-spacing:1.4px; color:#8d7357; text-transform:uppercase; margin-top:16px;">Would I go back</div>
+          <div style="display:flex; flex-direction:column; margin-top:9px; border:1px solid #ddcaa6;">
+            <sc-for list="{{ verdicts }}" as="v" hint-placeholder-count="6">
+              <button aria-pressed="{{ v.pressed }}" style="display:flex; align-items:center; gap:12px; text-align:left; padding:10px 12px; background:{{ v.inputBg }}; border:none; border-bottom:1px solid #eadfc4; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#f4e6c8;">
+                <svg viewBox="0 0 24 24" style="width:22px; height:22px; flex:none;">
+                  <circle cx="12" cy="12" r="11" fill="none" stroke="{{ v.ring }}" stroke-width="1"></circle>
+                  <g transform="{{ v.rot }}">
+                    <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ v.ink }}"></path>
+                    <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ v.ink }}"></rect>
+                  </g>
+                </svg>
+                <span style="font-size:13px; font-weight:{{ v.inputWeight }}; color:#2f1e12;">{{ v.name }}</span>
+                <span style="margin-left:auto; font-family:ui-monospace,Menlo,monospace; font-size:10.5px; color:#a8927a;">{{ v.rank }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="margin-top:12px; font-family:'Newsreader',Georgia,serif; font-size:13px; line-height:1.45; color:#8d7357;">Three signals, three shapes: a row of stars, a column of six, one button. No modal ever stacks three identical widgets.</div>
+        </div>
+      </div>
+
+      <!-- badge -->
+      <div>
+        <div style="font-size:11px; font-weight:700; letter-spacing:1.6px; color:#8d7357; text-transform:uppercase; border-bottom:1px solid #ddcaa6; padding-bottom:8px; margin-bottom:14px;">Badge — 20px, in a row</div>
+        <sc-for list="{{ verdicts }}" as="v" hint-placeholder-count="6">
+          <div title="{{ v.tip }}" style="display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #eadfc4;">
+            <svg viewBox="0 0 24 24" style="width:20px; height:20px; flex:none;">
+              <circle cx="12" cy="12" r="11" fill="none" stroke="{{ v.ring }}" stroke-width="1.2"></circle>
+              <g transform="{{ v.rot }}">
+                <path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="{{ v.ink }}"></path>
+                <rect x="11.2" y="9.2" width="1.6" height="10" fill="{{ v.ink }}"></rect>
+              </g>
+            </svg>
+            <span style="font-family:'Newsreader',Georgia,serif; font-size:16px; color:#2f1e12;">{{ v.example }}</span>
+          </div>
+        </sc-for>
+        <div style="margin-top:14px; font-family:'Newsreader',Georgia,serif; font-size:13.5px; line-height:1.5; color:#6d5740; text-wrap:pretty;">A vane. Straight up is <em>definitely</em>, straight down is <em>avoid</em>, and the four in between are the brief's order at 36&deg; a step — so the rank is readable at 20px without the label, which is the only test that matters in a list. Ink carries appetite in three bands: avocado I want to go, marigold I have reservations, terracotta I don't. Hover gives the exact words.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;dotLeaders&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Menu devices&quot;},&quot;artboardLabels&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sheet&quot;},&quot;showRationale&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Sheet&quot;}}">
+class Component extends DCLogic {
+  stars(r) {
+    if (r == null) return "";
+    const f = Math.floor(r);
+    return "\u2605".repeat(f) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+  verdictList(active) {
+    const base = [
+      ["Definitely return", "I'd come back and order the same thing again", "#556b2a", "Taquer\u00eda Ram\u00edrez"],
+      ["Worth returning", "I'd come back of my own accord, but it's too expensive or too far to be likely", "#556b2a", "Casa Enrique"],
+      ["Try something else", "I'd come back, but I wouldn't order what I ordered", "#c07d14", "Cafe Mogador"],
+      ["Happy to go", "I wouldn't pick it myself, but I'd go if someone else suggested it", "#c07d14", "Veselka"],
+      ["No return", "Would not go again", "#a83a22", "Bocca Nuova"],
+      ["Avoid", "Would actively recommend that others not go", "#a83a22", "Harbor &amp; Vine"],
+    ];
+    return base.map((b, i) => ({
+      i,
+      name: b[0],
+      gloss: b[1],
+      ink: i === active ? b[2] : "#b7a184",
+      ring: i === active ? "#c4ad86" : "#e0d0b0",
+      rot: "rotate(" + i * 36 + " 12 12)",
+      rank: i + 1 + " / 6",
+      example: b[3],
+      tip: b[0] + " \u2014 " + b[1].replace(/&amp;/g, "&"),
+      pressed: i === active,
+      rowBg: i === active ? "#f0e2c2" : "transparent",
+      rowEdge: i === active ? "#b34328" : "transparent",
+      inputBg: i === active ? "#f0e2c2" : "#fdf7e8",
+      inputWeight: i === active ? 700 : 400,
+    }));
+  }
+  renderVals() {
+    const tokens = [
+      ["--paper", "#f7eed9", "the page — manila, the menu ground"],
+      ["--paper-card", "#fdf7e8", "cards, tiles, the printed slip"],
+      ["--paper-plate", "#efe1c3", "nav strip, set plates, filter bar"],
+      ["--paper-sunk", "#e8d9b8", "sunken wells, disabled, map land"],
+      ["--ink", "#2f1e12", "names, headings, body"],
+      ["--ink-2", "#6d5740", "secondary — cuisine, dates, prose"],
+      ["--ink-3", "#8d7357", "tertiary — counts, captions, labels"],
+      ["--rule", "#ddcaa6", "hairlines between rows"],
+      ["--rule-strong", "#c4ad86", "section rules, card borders"],
+      ["--terracotta", "#b34328", "primary accent — active tab, owner button, heart"],
+      ["--terracotta-deep", "#8e3220", "hover, pressed, link hover"],
+      ["--marigold", "#d38b1a", "stars, counts, chart fill"],
+      ["--marigold-ink", "#a06510", "marigold as text on paper"],
+      ["--avocado", "#556b2a", "the top two verdicts, positive figures"],
+      ["--verdict-mid", "#c07d14", "verdicts 3\u20134"],
+      ["--verdict-low", "#a83a22", "verdicts 5\u20136"],
+      ["--desk", "#241812", "the surface the paper sits on \u2014 chrome only"],
+    ].map(t => ({ name: t[0], hex: t[1], use: t[2] }));
+    const mapTokens = [
+      ["--map-land", "#f2e7d2", "the paper the map is printed on"],
+      ["--map-water", "#c9d4c2", "a faded green wash \u2014 not blue"],
+      ["--map-park", "#dee5c3", "parks, cemeteries, green space"],
+      ["--map-road-major", "#e9d6ae", "arterials, bridges"],
+      ["--map-road-casing", "#cbb389", "0.5px casing on majors only"],
+      ["--map-road-minor", "#efe4cd", "residential streets"],
+      ["--map-building", "#e6d8bc", "building fill, no stroke"],
+      ["--map-boundary", "#b8a180", "borough / state, dashed"],
+      ["--map-label", "#4a3626", "place and street labels, Archivo"],
+      ["--map-label-halo", "#f7f0e0", "1.5px halo"],
+      ["--map-pin-ring", "#2f1e12", "pin outline \u2014 always ink, never accent"],
+      ["--map-cluster", "#f0e2c2", "cluster disc fill"],
+    ].map(t => ({ name: t[0], hex: t[1], use: t[2] }));
+    return { tokens, mapTokens, verdicts: this.verdictList(0) };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1a120a;">
+  <nav style="display:flex; align-items:stretch; gap:2px; background:#150e07; border-bottom:1px solid #45341f; padding:0 clamp(14px,4vw,24px); overflow-x:auto; max-width:1008px; margin:0 auto; box-shadow:-2000px 0 0 #150e07, 2000px 0 0 #150e07;">
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Home</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">About</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Projects</a>
+    <a href="Jason's Film Log.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Films</a>
+    <a href="Reading.dc.html" style="font-size:13px; letter-spacing:.4px; color:#f2e6cd; font-weight:600; padding:26px 16px 24px; border-bottom:2px solid #cfa452; white-space:nowrap;" style-hover="color:#fff2da;">Reading</a>
+    <a href="Subway Map.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Subway Map</a>
+  </nav>
+  <div style="display:flex; justify-content:center; padding:34px clamp(14px,4vw,24px) 90px;">
+  <div style="width:100%; max-width:960px;">
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:30px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:clamp(38px,9vw,52px); color:#f2e6cd; letter-spacing:-.5px; line-height:1;">Reading</h1>
+      <div style="font-size:12.5px; color:#8a745a; line-height:1.5; max-width:280px;">Logged automatically via Kindle</div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:44px;">
+      <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="5">
+        <div style="background:#241a10; border:1px solid #45341f; border-radius:10px; padding:20px 18px;">
+          <div style="font-family:'Newsreader',serif; font-size:36px; color:#cfa452; line-height:1;">{{ m.value }}</div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#a68f6e; margin-top:8px;">{{ m.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- CURRENTLY READING -->
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:20px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Currently reading</div>
+      </div>
+
+      <sc-if value="{{ hasCurrent }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:14px;">
+          <sc-for list="{{ current }}" as="b" hint-placeholder-count="1">
+            <div style="background:#241a10; border:1px solid #45341f; border-radius:10px; padding:22px 20px; display:flex; gap:22px; align-items:stretch; flex-wrap:wrap;">
+              <div style="display:flex; align-items:flex-end; gap:7px; flex:none;">
+                <a href="{{ b.href }}" title="{{ b.hoverTitle }}" style="{{ b.spineStyle }}" style-hover="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(207,164,82,.4);" style-focus="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 2px rgba(207,164,82,.65);">
+                  <div style="{{ b.spineFillStyle }}"></div>
+                </a>
+              </div>
+              <div style="flex:1 1 260px; min-width:0; display:flex; flex-direction:column;">
+                <div style="font-family:'Newsreader',serif; font-size:26px; font-weight:500; color:#f2e6cd; line-height:1.15; letter-spacing:-.2px;"><a href="{{ b.href }}" style="color:inherit;" style-hover="color:#ecc87c;">{{ b.main }}</a></div>
+                <sc-if value="{{ b.hasSub }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-family:'Newsreader',serif; font-style:italic; font-size:15px; color:#a68f6e; margin-top:4px; line-height:1.3;">{{ b.sub }}</div>
+                </sc-if>
+                <sc-if value="{{ b.hasAuthor }}" hint-placeholder-val="{{ true }}">
+                  <div style="font-size:13px; color:#a68f6e; margin-top:9px;">{{ b.author }}</div>
+                </sc-if>
+
+                <div style="margin-top:18px;">
+                  <div style="height:8px; background:#33261a; border-radius:4px; overflow:hidden;">
+                    <div style="{{ b.barStyle }}"></div>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px; margin-top:9px; flex-wrap:wrap;">
+                    <span style="font-size:12.5px; color:#dcc9a6;">{{ b.pagesLabel }} <span style="color:#8a745a;">pages</span></span>
+                    <span style="font-family:'Newsreader',serif; font-size:19px; color:#cfa452; line-height:1;">{{ b.pct }}</span>
+                  </div>
+                </div>
+              </div>
+              <div style="flex:0 1 190px; min-width:170px; display:flex; flex-direction:column; gap:9px; border-left:1px solid #392a19; padding-left:20px;">
+                <sc-for list="{{ b.facts }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex; justify-content:space-between; gap:10px; font-size:12.5px;">
+                    <span style="color:#8a745a;">{{ f.k }}</span>
+                    <span style="color:#efe0c2; text-align:right;">{{ f.v }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ noCurrent }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px dashed #392a19; border-radius:10px; padding:30px 22px; text-align:center;">
+          <div style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#a68f6e;">{{ emptyCurrentLine }}</div>
+          <div style="font-size:12.5px; color:#8a745a; margin-top:7px;">The next page turn on the Kindle starts a new entry here.</div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- SET ASIDE -->
+    <sc-if value="{{ hasAside }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:14px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Set aside</div>
+      </div>
+      <sc-for list="{{ aside }}" as="b" hint-placeholder-count="1">
+        <div style="display:flex; align-items:center; gap:16px; padding:14px 2px; border-bottom:1px solid #33261a; flex-wrap:wrap;">
+          <a href="{{ b.href }}" title="{{ b.hoverTitle }}" style="{{ b.spineStyle }}" style-hover="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(207,164,82,.4);" style-focus="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 2px rgba(207,164,82,.65);">
+            <div style="{{ b.spineFillStyle }}"></div>
+          </a>
+          <div style="flex:1 1 200px; min-width:0;">
+            <div style="font-family:'Newsreader',serif; font-size:19px; color:#e4d3b0; line-height:1.2;"><a href="{{ b.href }}" style="color:inherit;" style-hover="color:#ecc87c;">{{ b.main }}</a></div>
+            <div style="font-size:12px; color:#8a745a; margin-top:3px;">{{ b.asideMeta }}</div>
+          </div>
+          <div style="width:110px; flex:none;">
+            <div style="height:6px; background:#33261a; border-radius:3px; overflow:hidden;">
+              <div style="{{ b.barStyle }}"></div>
+            </div>
+          </div>
+          <span style="font-size:12.5px; color:#a68f6e; width:46px; text-align:right; flex:none;">{{ b.pct }}</span>
+        </div>
+      </sc-for>
+    </div>
+    </sc-if>
+
+    <!-- ACTIVITY -->
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:20px; flex-wrap:wrap;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Reading activity</div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <a href="The Month in Reading.dc.html" style="font-size:12px; color:#cfa452; text-decoration:none; border-bottom:1px solid #45341f; padding-bottom:1px;" style-hover="color:#ecc87c; border-bottom-color:#ecc87c;">Month in reading &rarr;</a>
+          <div style="display:flex; gap:7px;">
+            <sc-for list="{{ viewPills }}" as="p" hint-placeholder-count="2">
+              <button onClick="{{ p.onClick }}" title="{{ p.title }}" style="{{ p.style }}">{{ p.label }}</button>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+      <!-- compressed spells -->
+      <sc-if value="{{ isSpells }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column;">
+          <sc-for list="{{ spellRows }}" as="r" hint-placeholder-count="3">
+            <div style="{{ r.wrapStyle }}">
+              <sc-if value="{{ r.isBreak }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; align-items:center; gap:14px; padding:16px 0;">
+                  <div style="flex:1; height:1px; background:repeating-linear-gradient(90deg,#392a19 0 5px,transparent 5px 11px);"></div>
+                  <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#8a745a; white-space:nowrap;">{{ r.label }}</span>
+                  <div style="flex:1; height:1px; background:repeating-linear-gradient(90deg,#392a19 0 5px,transparent 5px 11px);"></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ r.isSpell }}" hint-placeholder-val="{{ true }}">
+                <div style="background:#201709; border:1px solid #392a19; border-radius:10px; padding:16px 18px;">
+                  <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                    <div style="font-size:13.5px; color:#efe0c2; font-weight:500; letter-spacing:.2px;">{{ r.label }}</div>
+                    <div style="font-size:12px; color:#a68f6e;">{{ r.meta }}</div>
+                  </div>
+                  <div style="display:flex; gap:3px; margin-top:13px; flex-wrap:wrap;">
+                    <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="12">
+                      <div title="{{ c.title }}" style="{{ c.style }}"></div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:12px; color:#8a745a; margin-top:12px; line-height:1.45;">{{ r.books }}</div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- year heatmap -->
+      <sc-if value="{{ isHeatmap }}" hint-placeholder-val="{{ false }}">
+        <div style="overflow-x:auto; padding-bottom:6px;">
+          <div style="min-width:680px;">
+            <div style="display:flex; gap:3px; margin-left:26px; margin-bottom:6px;">
+              <sc-for list="{{ heatCols }}" as="col" hint-placeholder-count="53">
+                <div style="width:11px; flex:none; font-size:9.5px; color:#8a745a; white-space:nowrap;">{{ col.month }}</div>
+              </sc-for>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <div style="display:flex; flex-direction:column; gap:3px; width:20px; flex:none;">
+                <sc-for list="{{ dowLabels }}" as="d" hint-placeholder-count="7">
+                  <div style="height:11px; font-size:9px; color:#8a745a; line-height:11px;">{{ d }}</div>
+                </sc-for>
+              </div>
+              <div style="display:flex; gap:3px;">
+                <sc-for list="{{ heatCols }}" as="col" hint-placeholder-count="53">
+                  <div style="display:flex; flex-direction:column; gap:3px;">
+                    <sc-for list="{{ col.cells }}" as="c" hint-placeholder-count="7">
+                      <div title="{{ c.title }}" style="{{ c.style }}"></div>
+                    </sc-for>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:9px; margin-top:14px; flex-wrap:wrap;">
+          <span style="font-size:11.5px; color:#8a745a;">Fewer pages</span>
+          <div style="display:flex; gap:3px;">
+            <sc-for list="{{ legend }}" as="l" hint-placeholder-count="5">
+              <div style="{{ l.style }}"></div>
+            </sc-for>
+          </div>
+          <span style="font-size:11.5px; color:#8a745a;">More</span>
+          <span style="font-size:11.5px; color:#8a745a; margin-left:auto;">{{ heatSpan }}</span>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- FINISHED -->
+    <div style="margin-bottom:44px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:16px; flex-wrap:wrap;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Finished</div>
+        <div style="display:flex; gap:7px; flex-wrap:wrap;">
+          <sc-for list="{{ yearPills }}" as="p" hint-placeholder-count="3">
+            <button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+      <sc-if value="{{ hasFinished }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ finished }}" as="b" hint-placeholder-count="1">
+          <div style="display:flex; align-items:center; gap:18px; padding:16px 2px; border-bottom:1px solid #33261a; flex-wrap:wrap;">
+            <a href="{{ b.href }}" title="{{ b.hoverTitle }}" style="{{ b.spineStyle }}" style-hover="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(207,164,82,.4);" style-focus="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 2px rgba(207,164,82,.65);">
+              <div style="{{ b.spineFillStyle }}"></div>
+            </a>
+            <div style="flex:1 1 240px; min-width:0;">
+              <div style="font-family:'Newsreader',serif; font-size:21px; color:#f2e6cd; line-height:1.2;"><a href="{{ b.href }}" style="color:inherit;" style-hover="color:#ecc87c;">{{ b.main }}</a></div>
+              <div style="font-size:12px; color:#8a745a; margin-top:4px; line-height:1.4;">{{ b.finishedMeta }}</div>
+            </div>
+            <div style="text-align:right; flex:none;">
+              <div style="font-family:'Newsreader',serif; font-size:20px; color:#cfa452; line-height:1;">{{ b.readTime }}</div>
+              <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.2px; color:#a68f6e; margin-top:5px;">{{ b.finishedDate }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{ noFinished }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size:13px; color:#8a745a; padding:18px 2px;">Nothing finished in this period.</div>
+      </sc-if>
+    </div>
+
+    <div style="font-size:11.5px; color:#8a745a; padding-top:4px; line-height:1.6;">Some books are read privately. They are counted in the totals and streaks above but never listed.</div>
+
+  </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;activityView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;auto&quot;,&quot;spells&quot;,&quot;heatmap&quot;],&quot;default&quot;:&quot;auto&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Activity&quot;},&quot;dataState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;current&quot;,&quot;dense&quot;,&quot;firstLoad&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;current&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Data state&quot;}}">
+const DAY = 86400000;
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+class Component extends DCLogic {
+  state = { view: null, year: "all", isMobile: typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches };
+
+  componentDidMount() {
+    this.mq = window.matchMedia("(max-width: 640px)");
+    this.onMq = (e) => this.setState({ isMobile: e.matches });
+    this.mq.addEventListener("change", this.onMq);
+  }
+  componentWillUnmount() { if (this.mq) this.mq.removeEventListener("change", this.onMq); }
+
+  key(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  parse(s) { const p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  fmtDay(d) { return d.getDate() + " " + MO[d.getMonth()] + " " + d.getFullYear(); }
+  fmtTime(sec) {
+    const m = Math.round(sec / 60);
+    if (m < 60) return m + "m";
+    return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+  }
+  fmtNum(n) { return n.toLocaleString("en-US"); }
+
+  // "The Martian: A Novel" -> {main:"The Martian", sub:"A Novel"}
+  splitTitle(title) {
+    const colon = title.indexOf(": ");
+    return colon > 0
+      ? { main: title.slice(0, colon), sub: title.slice(colon + 2) }
+      : { main: title, sub: "" };
+  }
+
+  dataset() {
+    const state = this.props.dataState || "current";
+    if (state === "empty") return { books: [], days: [] };
+
+    const B = (o) => o;
+    if (state === "firstLoad") {
+      return {
+        books: [B({ title: "The Martian: A Novel", author: "Andy Weir", total: 628, furthest: 74, distinct: 70, sec: 41 * 60, first: "2025-04-13", last: "2025-04-13", daysRead: 1, kind: "book" })],
+        days: [{ d: "2025-04-13", pages: 70, sec: 41 * 60, books: 1 }],
+      };
+    }
+
+    const books = [
+      B({ title: "The Martian: A Novel", author: "Andy Weir", total: 628, furthest: 627, distinct: 400, sec: 281 * 60, first: "2025-04-13", last: "2025-04-22", daysRead: 9, kind: "book" }),
+      B({ title: "This Is How You Lose the Time War", author: "Amal El-Mohtar & Max Gladstone", total: 238, furthest: 16, distinct: 16, sec: 17 * 60, first: "2025-04-23", last: "2025-04-25", daysRead: 3, kind: "book" }),
+      B({ title: "The Power Broker: Robert Moses and the Fall of New York", author: "Robert A. Caro", total: 3943, furthest: 106, distinct: 101, sec: 4 * 60, first: "2026-08-02", last: "2026-08-02", daysRead: 1, kind: "book" }),
+    ];
+
+    const spring = [
+      ["2025-04-13", 70, 44], ["2025-04-14", 60, 38], ["2025-04-15", 55, 34],
+      ["2025-04-17", 48, 33], ["2025-04-18", 40, 30], ["2025-04-19", 38, 28],
+      ["2025-04-20", 36, 27], ["2025-04-21", 30, 25], ["2025-04-22", 23, 22],
+      ["2025-04-23", 7, 8], ["2025-04-24", 5, 5], ["2025-04-25", 4, 4],
+    ];
+    let days = spring.map((r) => ({ d: r[0], pages: r[1], sec: r[2] * 60, books: 1 }));
+    days.push({ d: "2026-08-02", pages: 109, sec: 4 * 60, books: 2 });
+
+    if (state === "dense") {
+      // a year of regular reading — the case the heatmap is for
+      let seed = 4712;
+      const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+      const out = [];
+      const end = this.parse("2026-08-02");
+      for (let i = 330; i >= 0; i--) {
+        const d = new Date(end.getTime() - i * DAY);
+        const r = rnd();
+        if (r < 0.34) continue;
+        const pages = 6 + Math.round(rnd() * 58);
+        out.push({ d: this.key(d), pages, sec: pages * 62, books: rnd() > 0.8 ? 2 : 1 });
+      }
+      days = out;
+      books.push(B({ title: "Pale Fire", author: "Vladimir Nabokov", total: 315, furthest: 315, distinct: 302, sec: 402 * 60, first: "2026-02-04", last: "2026-03-01", daysRead: 18, kind: "book" }));
+      books.push(B({ title: "The Sea, the Sea", author: "Iris Murdoch", total: 517, furthest: 517, distinct: 498, sec: 611 * 60, first: "2026-05-02", last: "2026-06-08", daysRead: 26, kind: "book" }));
+    }
+    return { books, days };
+  }
+
+  spineStyles(b) {
+    // Shared site-wide spine formula (see /books shelves): linear in pages, floor for the
+    // covers, scaled by this context's reference height. Ported to src/lib/books-view.ts.
+    const REFERENCE_HEIGHT = 180, DEFAULT_PAGES = 250, MIN_W = 16, MAX_W = 64, PX_PER_PAGE = 0.05, MIN_DRAWN = 8;
+    const h = 104;
+    const pages = b.total === null || b.total === undefined ? DEFAULT_PAGES : b.total;
+    const base = Math.min(MAX_W, Math.max(MIN_W, MIN_W + pages * PX_PER_PAGE));
+    const w = Math.round(Math.max(MIN_DRAWN, base * h / REFERENCE_HEIGHT) * 2) / 2;
+    return {
+      spineStyle: { display: "block", width: w + "px", height: h + "px", flex: "none", position: "relative", borderRadius: "2px", border: "1px solid #45341f", overflow: "hidden", backgroundImage: "repeating-linear-gradient(135deg,#33261a 0 6px,#2a1c0c 6px 12px)", cursor: "pointer", outline: "none", transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease" },
+      spineFillStyle: { position: "absolute", left: 0, right: 0, bottom: 0, height: Math.max(2, Math.round(b.progress * h)) + "px", background: b.kind === "doc" ? "#45341f" : "#cfa452", opacity: b.kind === "doc" ? 1 : 0.9 },
+    };
+  }
+
+  level(pages, max) {
+    if (!pages) return 0;
+    const r = pages / max;
+    if (r <= 0.25) return 1;
+    if (r <= 0.5) return 2;
+    if (r <= 0.75) return 3;
+    return 4;
+  }
+  cellBg(lvl) {
+    return ["#241a10", "rgba(207,164,82,.26)", "rgba(207,164,82,.48)", "rgba(207,164,82,.72)", "#cfa452"][lvl];
+  }
+
+  renderVals() {
+    const ds = this.dataset();
+    const dayList = ds.days.slice().sort((a, b) => (a.d < b.d ? -1 : 1));
+    const daySet = {};
+    dayList.forEach((x) => { daySet[x.d] = x; });
+    const maxPages = Math.max(1, ...dayList.map((x) => x.pages));
+
+    const totalPages = dayList.reduce((a, x) => a + x.pages, 0);
+    const totalSec = dayList.reduce((a, x) => a + x.sec, 0);
+
+    // streaks
+    let longest = 0, run = 0, prev = null, current = 0;
+    dayList.forEach((x) => {
+      const d = this.parse(x.d);
+      run = prev && d.getTime() - prev.getTime() === DAY ? run + 1 : 1;
+      longest = Math.max(longest, run);
+      prev = d;
+    });
+    if (dayList.length) {
+      const today = this.parse("2026-08-03");
+      const lastD = this.parse(dayList[dayList.length - 1].d);
+      const gapToToday = Math.round((today - lastD) / DAY);
+      current = gapToToday <= 1 ? run : 0;
+    }
+
+    const metrics = dayList.length
+      ? [
+          { value: current, label: "Current streak" },
+          { value: longest, label: "Longest streak" },
+          { value: dayList.length, label: "Days read" },
+          { value: this.fmtNum(totalPages), label: "Pages" },
+          { value: this.fmtTime(totalSec), label: "Time read" },
+        ]
+      : [
+          { value: "0", label: "Current streak" },
+          { value: "0", label: "Longest streak" },
+          { value: "0", label: "Days read" },
+          { value: "0", label: "Pages" },
+          { value: "0m", label: "Time read" },
+        ];
+
+    // ---- books ----
+    const today = this.parse("2026-08-03");
+    const books = ds.books.map((b) => {
+      const t = this.splitTitle(b.title);
+      const progress = Math.max(0, Math.min(1, b.furthest / b.total));
+      const rec = { ...b, ...t, progress };
+      const sp = this.spineStyles(rec);
+      const pph = b.sec > 240 ? b.distinct / (b.sec / 3600) : null;
+      const left = b.total - b.furthest;
+      const hoursLeft = pph ? left / pph : null;
+      const lastD = this.parse(b.last);
+      const daysAgo = Math.round((today - lastD) / DAY);
+      const pctNum = progress * 100;
+      const pct = pctNum >= 99.995 ? "100%" : pctNum < 10 || pctNum > 99 ? pctNum.toFixed(1) + "%" : Math.round(pctNum) + "%";
+      const facts = [
+        { k: "Last picked up", v: daysAgo === 0 ? "today" : daysAgo === 1 ? "yesterday" : daysAgo + " days ago" },
+        { k: "Time on it", v: this.fmtTime(b.sec) },
+        { k: "Sessions", v: b.daysRead + (b.daysRead === 1 ? " day" : " days") },
+        { k: "Pace", v: pph ? Math.round(pph) + " pages/hr" : "too early to say" },
+        { k: "Left at that pace", v: hoursLeft ? "~" + this.fmtTime(hoursLeft * 3600) : "—" },
+      ];
+      return {
+        ...rec, ...sp, facts, pct,
+        hasSub: !!t.sub, hasAuthor: !!b.author,
+        pagesLabel: this.fmtNum(b.furthest) + " / " + this.fmtNum(b.total),
+        barStyle: { width: Math.max(1.5, pctNum) + "%", height: "100%", background: "#cfa452", borderRadius: "4px" },
+        readTime: this.fmtTime(b.sec),
+        finishedDate: MO[lastD.getMonth()] + " " + lastD.getFullYear(),
+        finishedMeta: b.author + " · " + this.fmtNum(b.distinct) + " pages read over " + b.daysRead + (b.daysRead === 1 ? " day" : " days") + " · " + this.fmtDay(this.parse(b.first)) + " → " + this.fmtDay(lastD),
+        asideMeta: b.author + " · reached page " + this.fmtNum(b.furthest) + " of " + this.fmtNum(b.total) + " · last opened " + this.fmtDay(lastD),
+        meta: b.total + " pages · " + this.fmtTime(b.sec),
+        href: "Book.dc.html",
+        hoverTitle: t.main + " — open the book",
+        daysAgo,
+        lastYear: lastD.getFullYear(),
+        isDone: progress >= 0.97,
+      };
+    });
+
+    const docs = books.filter((b) => b.kind === "doc");
+    const real = books.filter((b) => b.kind === "book");
+    const current_ = real.filter((b) => !b.isDone && b.daysAgo <= 30).sort((a, b) => a.daysAgo - b.daysAgo);
+    const aside = real.filter((b) => !b.isDone && b.daysAgo > 30).sort((a, b) => a.daysAgo - b.daysAgo);
+    const doneAll = real.filter((b) => b.isDone).sort((a, b) => (a.last < b.last ? 1 : -1));
+
+    const years = [...new Set(doneAll.map((b) => b.lastYear))].sort((a, b) => b - a);
+    const pillBase = { fontSize: "12.5px", padding: "7px 13px", borderRadius: "20px", border: "1px solid #45341f", background: "transparent", color: "#dcc9a6", cursor: "pointer", fontFamily: "'Archivo',sans-serif", lineHeight: 1.2 };
+    const pillOn = { ...pillBase, background: "#cfa452", color: "#241a10", fontWeight: 600, borderColor: "#cfa452" };
+    const yearPills = [{ k: "all", label: "All" }].concat(years.map((y) => ({ k: y, label: String(y) }))).map((o) => ({
+      label: o.label,
+      style: this.state.year === o.k ? pillOn : pillBase,
+      onClick: () => this.setState({ year: o.k }),
+    }));
+    const finished = this.state.year === "all" ? doneAll : doneAll.filter((b) => b.lastYear === this.state.year);
+
+    // ---- activity: density decides the instrument ----
+    const spanDays = dayList.length ? Math.max(1, Math.round((this.parse(dayList[dayList.length - 1].d) - this.parse(dayList[0].d)) / DAY) + 1) : 0;
+    const last365 = dayList.filter((x) => (today - this.parse(x.d)) / DAY <= 365);
+    const weeksTouched = new Set(last365.map((x) => {
+      const d = this.parse(x.d);
+      return Math.floor((d - new Date(2020, 0, 6)) / (7 * DAY));
+    })).size;
+    const dense = last365.length >= 60 && weeksTouched >= 14;
+    const auto = this.props.activityView === undefined || this.props.activityView === "auto" || !this.props.activityView;
+    const chosen = auto ? (dense ? "heatmap" : "spells") : this.props.activityView;
+    const view = this.state.view || chosen;
+    const isHeatmap = view === "heatmap" && dayList.length > 0;
+    const isSpells = !isHeatmap;
+
+    const viewPills = [
+      { k: "spells", label: "Spells", title: "Only the stretches with reading in them" },
+      { k: "heatmap", label: "Year", title: "Calendar heatmap of the last 12 months" },
+    ].map((o) => ({
+      label: o.label, title: o.title,
+      style: view === o.k ? { ...pillOn, fontSize: "12px", padding: "6px 12px" } : { ...pillBase, fontSize: "12px", padding: "6px 12px" },
+      onClick: () => this.setState({ view: o.k }),
+    }));
+
+    const activityMeta = dayList.length
+      ? dayList.length + (dayList.length === 1 ? " day" : " days") + " read across " + (spanDays >= 60 ? Math.round(spanDays / 30.4) + " months" : spanDays + " days") + (auto && !this.state.view ? " · " + (isHeatmap ? "dense enough for a calendar" : "shown as spells") : "")
+      : "nothing logged yet";
+
+    // spells: cluster days with gaps <= 3 nights
+    const spellRows = [];
+    if (dayList.length) {
+      const clusters = [];
+      let cur = [dayList[0]];
+      for (let i = 1; i < dayList.length; i++) {
+        const gap = (this.parse(dayList[i].d) - this.parse(dayList[i - 1].d)) / DAY;
+        if (gap <= 3) cur.push(dayList[i]);
+        else { clusters.push(cur); cur = [dayList[i]]; }
+      }
+      clusters.push(cur);
+      clusters.slice(-8).forEach((cl, ci, arr) => {
+        if (ci > 0) {
+          const prevEnd = this.parse(arr[ci - 1][arr[ci - 1].length - 1].d);
+          const start = this.parse(cl[0].d);
+          const gapDays = Math.round((start - prevEnd) / DAY);
+          const label = gapDays >= 60 ? Math.round(gapDays / 30.4) + " quiet months" : gapDays + " quiet days";
+          spellRows.push({ isBreak: true, isSpell: false, label, wrapStyle: {} });
+        }
+        const s = this.parse(cl[0].d), e = this.parse(cl[cl.length - 1].d);
+        const span = Math.round((e - s) / DAY) + 1;
+        const cells = [];
+        for (let i = 0; i < span; i++) {
+          const d = new Date(s.getTime() + i * DAY);
+          const rec = daySet[this.key(d)];
+          const lvl = rec ? this.level(rec.pages, maxPages) : 0;
+          cells.push({
+            title: this.fmtDay(d) + (rec ? " · " + rec.pages + " pages · " + this.fmtTime(rec.sec) : " · nothing read"),
+            style: { width: "17px", height: "17px", borderRadius: "3px", background: this.cellBg(lvl), border: rec ? "1px solid transparent" : "1px solid #33261a", flex: "none" },
+          });
+        }
+        const pages = cl.reduce((a, x) => a + x.pages, 0);
+        const sec = cl.reduce((a, x) => a + x.sec, 0);
+        const range = s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()
+          ? (s.getDate() === e.getDate() ? this.fmtDay(s) : s.getDate() + "–" + e.getDate() + " " + MO[e.getMonth()] + " " + e.getFullYear())
+          : this.fmtDay(s) + " → " + this.fmtDay(e);
+        const titles = real.filter((b) => b.first <= cl[cl.length - 1].d && b.last >= cl[0].d).map((b) => b.main);
+        spellRows.push({
+          isBreak: false, isSpell: true, label: range,
+          meta: cl.length + (cl.length === 1 ? " day" : " days") + " · " + this.fmtNum(pages) + " pages · " + this.fmtTime(sec),
+          cells, books: titles.length ? titles.join(" · ") : "—",
+          wrapStyle: {},
+        });
+      });
+    }
+
+    // heatmap: last 12 months, week columns
+    const heatCols = [];
+    if (dayList.length) {
+      const end = new Date(today.getTime());
+      const start = new Date(end.getTime() - 364 * DAY);
+      const startMon = new Date(start.getTime() - ((start.getDay() + 6) % 7) * DAY);
+      let lastLabel = -1;
+      for (let w = 0; w * 7 <= Math.round((end - startMon) / DAY) + 6; w++) {
+        const colStart = new Date(startMon.getTime() + w * 7 * DAY);
+        const cells = [];
+        for (let dow = 0; dow < 7; dow++) {
+          const d = new Date(colStart.getTime() + dow * DAY);
+          const inRange = d >= start && d <= end;
+          const rec = inRange ? daySet[this.key(d)] : null;
+          const lvl = rec ? this.level(rec.pages, maxPages) : 0;
+          cells.push({
+            title: inRange ? this.fmtDay(d) + (rec ? " · " + rec.pages + " pages · " + this.fmtTime(rec.sec) : " · nothing read") : "",
+            style: { width: "11px", height: "11px", borderRadius: "2px", background: inRange ? this.cellBg(lvl) : "transparent", border: inRange && !rec ? "1px solid #2f2415" : "1px solid transparent", flex: "none" },
+          });
+        }
+        const m = colStart.getMonth();
+        const showLabel = m !== lastLabel && colStart.getDate() <= 7;
+        if (showLabel) lastLabel = m;
+        heatCols.push({ month: showLabel ? MO[m] : "", cells });
+      }
+    }
+    const legend = [0, 1, 2, 3, 4].map((l) => ({ style: { width: "11px", height: "11px", borderRadius: "2px", background: this.cellBg(l), border: l === 0 ? "1px solid #2f2415" : "1px solid transparent" } }));
+
+    return {
+      metrics,
+      showFacts: !this.state.isMobile,
+      current: current_, hasCurrent: current_.length > 0, noCurrent: current_.length === 0,
+      currentMeta: current_.length ? "touched in the last 30 days" : "",
+      emptyCurrentLine: dayList.length ? "Between books right now." : "No reading logged yet.",
+      aside, hasAside: aside.length > 0,
+      finished, hasFinished: finished.length > 0, noFinished: finished.length === 0, yearPills,
+      viewPills, isHeatmap, isSpells, spellRows: spellRows.slice().reverse(), heatCols, legend, activityMeta,
+      dowLabels: ["M", "", "W", "", "F", "", "S"],
+      heatSpan: "Aug 2025 → Aug 2026",
+    };
+  }
+}
+
+</script>
+</body>
+</html>

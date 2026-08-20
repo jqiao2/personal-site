@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+  input::placeholder { color: #8a6f63; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e; display:flex; justify-content:center; padding:0 24px 80px;">
+  <div style="width:100%; max-width:720px;">
+
+    <!-- Top bar -->
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #4a2529; margin-bottom:32px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a2857a;" style-hover="color:#f4e8d1;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a6f63;">Edit favorites</span>
+    </header>
+
+    <!-- Title -->
+    <div style="margin-bottom:28px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:44px; color:#f4e8d1; letter-spacing:-.5px; line-height:1;">Favorite films</h1>
+      <div style="font-size:13.5px; color:#a2857a; margin-top:10px;">Feature up to four films on your profile. Drag to reorder &mdash; the first is shown top-left.</div>
+    </div>
+
+    <!-- Current favorites -->
+    <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #402226; padding-bottom:9px; margin-bottom:8px;">
+      <span style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#ecdcbd;">Your favorites</span>
+      <span style="font-size:12px; color:#d9b45a; font-weight:600;">{{ count }} / 4</span>
+    </div>
+
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:26px 0; color:#8a6f63; font-size:14px; font-style:italic;">No favorites yet &mdash; add some below.</div>
+    </sc-if>
+
+    <div style="display:flex; flex-direction:column; margin-bottom:36px;">
+      <sc-for list="{{ favorites }}" as="f" hint-placeholder-count="4">
+        <div draggable="true" onDragStart="{{ f.onDragStart }}" onDragEnter="{{ f.onDragEnter }}" onDragOver="{{ f.onDragOver }}" onDragEnd="{{ f.onDragEnd }}" onDrop="{{ f.onDragEnd }}" style="{{ f.rowStyle }}">
+          <div style="display:flex; align-items:center; justify-content:center; color:#8a6f63; font-size:16px; cursor:grab; line-height:1; letter-spacing:1px;" title="Drag to reorder">&#8942;&#8942;</div>
+          <div style="font-family:'Newsreader',serif; font-size:24px; color:#d9b45a; text-align:center;">{{ f.num }}</div>
+          <div style="width:44px; height:66px; border-radius:4px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 8px,#2c1518 8px 16px); border:1px solid #4a2529;"></div>
+          <div style="font-family:'Newsreader',serif; font-size:17px; color:#f2e5cd; line-height:1.2;">{{ f.title }} <span style="color:#b0917f; font-style:italic; font-size:14px;">{{ f.year }}</span></div>
+          <button onClick="{{ f.onRemove }}" style="width:30px; height:30px; border:1px solid #5c2a2a; background:transparent; color:#c96a5f; border-radius:6px; cursor:pointer; font-size:14px; line-height:1;" style-hover="background:#5c2a2a; color:#ffd9cf;">&#10005;</button>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Add films -->
+    <div style="display:flex; align-items:baseline; justify-content:space-between; border-bottom:1px solid #402226; padding-bottom:9px; margin-bottom:16px;">
+      <span style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#ecdcbd;">Add a film</span>
+      <sc-if value="{{ atMax }}" hint-placeholder-val="{{ false }}">
+        <span style="font-size:12px; color:#c96a5f;">Remove one to add another</span>
+      </sc-if>
+    </div>
+
+    <input value="{{ query }}" onInput="{{ setQuery }}" placeholder="Search your films&hellip;" style="width:100%; background:#241012; border:1px solid #4a2529; border-radius:8px; padding:12px 14px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; margin-bottom:18px; outline:none;" style-focus="border-color:#d9b45a;">
+
+    <div style="display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:40px;">
+      <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="6">
+        <button onClick="{{ s.onAdd }}" style="{{ s.rowStyle }}" style-hover="border-color:#d9b45a;">
+          <div style="width:34px; height:51px; border-radius:3px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 7px,#2c1518 7px 14px); border:1px solid #4a2529; flex:none;"></div>
+          <div style="flex:1; min-width:0; text-align:left;">
+            <div style="font-family:'Newsreader',serif; font-size:15px; color:#f2e5cd; line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ s.title }}</div>
+            <div style="font-size:12px; color:#b0917f; font-style:italic; margin-top:2px;">{{ s.year }}</div>
+          </div>
+          <span style="color:#d9b45a; font-size:13px; font-weight:600; flex:none;">{{ s.addLabel }}</span>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- Actions -->
+    <div style="display:flex; justify-content:flex-end; gap:12px; border-top:1px solid #4a2529; padding-top:22px;">
+      <a href="Jason's Film Log.dc.html" style="font-size:14px; font-weight:600; color:#ddc9b4; border:1px solid #4a2529; border-radius:8px; padding:11px 22px;" style-hover="border-color:#a2857a; color:#f4e8d1;">Cancel</a>
+      <a href="Jason's Film Log.dc.html" style="font-size:14px; font-weight:700; color:#2a1214; background:#d9b45a; border-radius:8px; padding:11px 26px;" style-hover="background:#f0d488; color:#2a1214;">Save favorites</a>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    favorites: [
+      { title: "In the Mood for Love", year: 2000 },
+      { title: "There Will Be Blood", year: 2007 },
+      { title: "Paprika", year: 2006 },
+      { title: "La Haine", year: 1995 },
+    ],
+    query: "",
+    dragIndex: null,
+    overIndex: null,
+  };
+
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+  }
+  backNav(fallbackHref, fallbackLabel) {
+    const nav = this._nav ? this._nav.resolveBack(fallbackHref, fallbackLabel) : { href: fallbackHref, label: fallbackLabel };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = fallbackHref; } };
+  }
+
+  pool = [
+    { title: "Chungking Express", year: 1994 },
+    { title: "Aftersun", year: 2022 },
+    { title: "Perfect Days", year: 2023 },
+    { title: "Yi Yi", year: 2000 },
+    { title: "Stalker", year: 1979 },
+    { title: "Past Lives", year: 2023 },
+    { title: "The Zone of Interest", year: 2023 },
+    { title: "Close-Up", year: 1990 },
+    { title: "Drive My Car", year: 2021 },
+    { title: "Mulholland Drive", year: 2001 },
+    { title: "Portrait of a Lady on Fire", year: 2019 },
+    { title: "Cure", year: 1997 },
+  ];
+
+  dragEnter(i) {
+    this.setState((s) => {
+      if (s.dragIndex === null || s.dragIndex === i) return { overIndex: i };
+      const a = [...s.favorites];
+      const [moved] = a.splice(s.dragIndex, 1);
+      a.splice(i, 0, moved);
+      return { favorites: a, dragIndex: i, overIndex: i };
+    });
+  }
+  dragEnd() {
+    this.setState({ dragIndex: null, overIndex: null });
+  }
+  remove(i) {
+    this.setState((s) => ({ favorites: s.favorites.filter((_, k) => k !== i) }));
+  }
+  add(p) {
+    this.setState((s) =>
+      s.favorites.length >= 4 || s.favorites.some((f) => f.title === p.title)
+        ? {}
+        : { favorites: [...s.favorites, p] }
+    );
+  }
+
+  renderVals() {
+    const fav = this.state.favorites;
+    const dragI = this.state.dragIndex;
+    const rowBase =
+      "display:grid; grid-template-columns:24px 34px 44px 1fr auto; gap:16px; align-items:center; padding:12px 8px; border-bottom:1px solid #351a1d; border-radius:6px; transition:background .12s, opacity .12s; ";
+    const favorites = fav.map((f, i) => ({
+      title: f.title,
+      year: f.year,
+      num: i + 1,
+      rowStyle:
+        rowBase +
+        (dragI === i
+          ? "background:#3a1c20; opacity:.55;"
+          : dragI !== null
+          ? "background:#241012;"
+          : "background:transparent;"),
+      onDragStart: (e) => {
+        if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", String(i)); }
+        this.setState({ dragIndex: i, overIndex: i });
+      },
+      onDragEnter: (e) => { e.preventDefault(); this.dragEnter(i); },
+      onDragOver: (e) => e.preventDefault(),
+      onDragEnd: () => this.dragEnd(),
+      onRemove: () => this.remove(i),
+    }));
+
+    const atMax = fav.length >= 4;
+    const q = this.state.query.trim().toLowerCase();
+    const suggestions = this.pool
+      .filter((p) => !fav.some((f) => f.title === p.title))
+      .filter((p) => !q || p.title.toLowerCase().includes(q))
+      .map((p) => ({
+        title: p.title,
+        year: p.year,
+        addLabel: atMax ? "" : "+ Add",
+        rowStyle:
+          "display:flex; align-items:center; gap:11px; padding:9px 12px; background:#241012; border:1px solid #4a2529; border-radius:9px; cursor:" +
+          (atMax ? "not-allowed" : "pointer") +
+          "; opacity:" + (atMax ? ".45" : "1") + ";",
+        onAdd: atMax ? () => {} : () => this.add(p),
+      }));
+
+    return {
+      ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"),
+      favorites,
+      suggestions,
+      query: this.state.query,
+      count: fav.length,
+      isEmpty: fav.length === 0,
+      atMax,
+      setQuery: (e) => this.setState({ query: e.target.value }),
+    };
+  }
+}
+</script>
+</body>
+</html>

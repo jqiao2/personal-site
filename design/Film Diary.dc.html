@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e; display:flex; justify-content:center; padding:0 24px 80px;">
+  <div style="width:100%; max-width:900px;">
+
+    <!-- Top bar -->
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #4a2529; margin-bottom:34px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a2857a;" style-hover="color:#f4e8d1;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a6f63;">Diary</span>
+    </header>
+
+    <!-- Title block -->
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:38px; flex-wrap:wrap; gap:14px;">
+      <div style="display:flex; align-items:center; gap:20px;">
+        <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:52px; color:#f4e8d1; letter-spacing:-.5px; line-height:1;">Film diary</h1>
+        <button onClick="{{ openComposer }}" style="font-size:13px; font-weight:700; color:#2a1214; background:#d9b45a; border:none; border-radius:8px; padding:10px 18px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#f0d488;">+ Log film</button>
+      </div>
+      <div style="display:flex; gap:26px;">
+        <div>
+          <div style="font-family:'Newsreader',serif; font-size:26px; color:#d9b45a;">{{ total }}</div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-top:2px;">films logged</div>
+        </div>
+        <div>
+          <div style="font-family:'Newsreader',serif; font-size:26px; color:#d9b45a;">{{ thisYear }}</div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-top:2px;">this year</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Months -->
+    <sc-for list="{{ months }}" as="m" hint-placeholder-count="2">
+      <section style="margin-bottom:40px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:6px;">{{ m.label }}</div>
+
+        <sc-for list="{{ m.items }}" as="f" hint-placeholder-count="4">
+          <a href="Diary Entry.dc.html" style="display:grid; grid-template-columns:56px 46px 1fr auto; gap:18px; align-items:center; padding:14px 10px; border-bottom:1px solid #351a1d; border-radius:6px; cursor:pointer;" style-hover="background:#331619;">
+            <!-- date -->
+            <div style="text-align:center;">
+              <div style="font-family:'Newsreader',serif; font-size:28px; color:#f4e8d1; line-height:1;">{{ f.day }}</div>
+              <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:1px; color:#8a6f63; margin-top:3px;">{{ f.weekday }}</div>
+            </div>
+            <!-- poster -->
+            <div style="width:46px; height:69px; border-radius:4px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 8px,#2c1518 8px 16px); border:1px solid #4a2529;"></div>
+            <!-- title -->
+            <div style="min-width:0;">
+              <div style="font-family:'Newsreader',serif; font-size:18px; color:#f2e5cd; line-height:1.2;">{{ f.title }} <span style="color:#b0917f; font-style:italic; font-size:15px;">{{ f.year }}</span></div>
+              <sc-if value="{{ f.review }}" hint-placeholder-val="{{ true }}">
+                <div style="font-size:13px; color:#a2857a; margin-top:5px; line-height:1.4; display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis;">{{ f.review }}</div>
+              </sc-if>
+            </div>
+            <!-- meta -->
+            <div style="display:flex; align-items:center; gap:14px; justify-content:flex-end;">
+              <span style="color:#d9b45a; font-size:15px; letter-spacing:1px; white-space:nowrap;">{{ f.stars }}</span>
+              <span style="font-size:15px; color:#d9b45a;">{{ f.likeIcon }}</span>
+              <span style="font-size:14px; color:#7a5a52;">{{ f.rewatchIcon }}</span>
+            </div>
+          </a>
+        </sc-for>
+      </section>
+    </sc-for>
+
+  </div>
+
+  <dc-import name="Entry Editor" mode="select" open="{{ composerOpen }}" catalog="{{ editorCatalog }}" on-save="{{ onLogSave }}" on-close="{{ closeComposer }}" hint-size="0px,0px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { composerOpen: false, logged: [] };
+
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+  }
+  backNav(fallbackHref, fallbackLabel) {
+    const nav = this._nav ? this._nav.resolveBack(fallbackHref, fallbackLabel) : { href: fallbackHref, label: fallbackLabel };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = fallbackHref; } };
+  }
+
+  starText(r) {
+    const full = Math.floor(r);
+    return "\u2605".repeat(full) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+
+  diaryData() {
+    return [
+      { m: "July 2026", day: 8, wd: "Wed", title: "Perfect Days", year: 2023, rating: 4.5, liked: true, rewatch: false, review: "Wenders finds the whole world in a Tokyo cleaning route. Quietly devastating." },
+      { m: "July 2026", day: 5, wd: "Sun", title: "The Zone of Interest", year: 2023, rating: 4, liked: true, rewatch: false, review: "The sound design does the haunting the camera refuses to." },
+      { m: "July 2026", day: 3, wd: "Fri", title: "Chungking Express", year: 1994, rating: 5, liked: true, rewatch: true, review: "" },
+      { m: "July 2026", day: 1, wd: "Wed", title: "The Substance", year: 2024, rating: 3.5, liked: false, rewatch: false, review: "" },
+      { m: "June 2026", day: 30, wd: "Mon", title: "Dune: Part Two", year: 2024, rating: 3.5, liked: false, rewatch: false, review: "Spectacle for days; the interiority thins out in the back half." },
+      { m: "June 2026", day: 27, wd: "Fri", title: "Aftersun", year: 2022, rating: 5, liked: true, rewatch: false, review: "That final dancefloor cut. I'm not okay." },
+      { m: "June 2026", day: 24, wd: "Tue", title: "Paprika", year: 2006, rating: 5, liked: true, rewatch: true, review: "" },
+      { m: "June 2026", day: 21, wd: "Sat", title: "Past Lives", year: 2023, rating: 4.5, liked: true, rewatch: false, review: "In-yun, and a lifetime folded into one New York night." },
+      { m: "June 2026", day: 18, wd: "Wed", title: "La Haine", year: 1995, rating: 5, liked: true, rewatch: true, review: "" },
+      { m: "June 2026", day: 14, wd: "Sat", title: "Anatomy of a Fall", year: 2023, rating: 4, liked: false, rewatch: false, review: "" },
+      { m: "June 2026", day: 9, wd: "Mon", title: "There Will Be Blood", year: 2007, rating: 5, liked: true, rewatch: true, review: "I drink your milkshake, still, every time." },
+      { m: "June 2026", day: 4, wd: "Wed", title: "Fallen Leaves", year: 2023, rating: 4, liked: true, rewatch: false, review: "" },
+    ];
+  }
+
+  editorCatalog() {
+    const seen = {};
+    const watched = [];
+    [...this.state.logged, ...this.diaryData()].forEach((f) => {
+      const k = f.title.toLowerCase();
+      if (!seen[k]) { seen[k] = true; watched.push({ title: f.title, year: f.year, watched: true, rating: f.rating, liked: f.liked }); }
+    });
+    const unwatched = [
+      { title: "In the Mood for Love", year: 2000, watched: false },
+      { title: "Portrait of a Lady on Fire", year: 2019, watched: false },
+      { title: "Drive My Car", year: 2021, watched: false },
+      { title: "Poor Things", year: 2023, watched: false },
+      { title: "Perfect Blue", year: 1997, watched: false },
+      { title: "The Worst Person in the World", year: 2021, watched: false },
+    ];
+    return [...watched, ...unwatched];
+  }
+
+  formatDate(iso) {
+    if (!iso) return { m: "July 2026", day: 11, wd: "Sat" };
+    const d = new Date(iso + "T00:00:00");
+    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const wds = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    return { m: months[d.getMonth()] + " " + d.getFullYear(), day: d.getDate(), wd: wds[d.getDay()] };
+  }
+
+  onLogSave(entry) {
+    const f = this.formatDate(entry.date);
+    const row = { m: f.m, day: f.day, wd: f.wd, title: entry.title, year: entry.year, rating: entry.rating, liked: entry.liked, rewatch: entry.rewatch, review: entry.review };
+    this.setState((prev) => ({ logged: [row, ...prev.logged], composerOpen: false }));
+  }
+
+  renderVals() {
+    const combined = [...this.state.logged, ...this.diaryData()];
+    const decorated = combined.map((f) => ({
+      day: f.day, weekday: f.wd, title: f.title, year: f.year,
+      stars: this.starText(f.rating), review: f.review,
+      likeIcon: f.liked ? "\u2665" : "", rewatchIcon: f.rewatch ? "\u21ba" : "",
+    }));
+    const order = [];
+    const byMonth = {};
+    combined.forEach((f, i) => {
+      if (!byMonth[f.m]) { byMonth[f.m] = []; order.push(f.m); }
+      byMonth[f.m].push(decorated[i]);
+    });
+    const months = order.map((label) => ({ label, items: byMonth[label] }));
+    return {
+      ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"),
+      months, total: "1,204", thisYear: 96,
+      composerOpen: this.state.composerOpen,
+      openComposer: () => this.setState({ composerOpen: true }),
+      closeComposer: () => this.setState({ composerOpen: false }),
+      editorCatalog: this.editorCatalog(),
+      onLogSave: (entry) => this.onLogSave(entry),
+    };
+  }
+}
+</script>
+</body>
+</html>

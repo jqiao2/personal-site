@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+  input::placeholder { color: #8a6f63; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e; display:flex; justify-content:center; padding:0 24px 80px;">
+  <div style="width:100%; max-width:1000px;">
+
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #4a2529; margin-bottom:34px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a2857a;" style-hover="color:#f4e8d1;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a6f63;">Watchlist</span>
+    </header>
+
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:26px; flex-wrap:wrap; gap:16px;">
+      <div>
+        <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:52px; color:#f4e8d1; letter-spacing:-.5px; line-height:1;">Watchlist</h1>
+        <div style="font-size:13px; color:#a2857a; margin-top:10px;"><span style="color:#d9b45a; font-weight:600;">{{ total }}</span> films to watch &middot; showing <span style="color:#d9b45a; font-weight:600;">{{ shown }}</span></div>
+      </div>
+    </div>
+
+    <!-- Search / filters / sort bar -->
+    <div style="display:flex; gap:12px; align-items:center; margin-bottom:14px; flex-wrap:wrap;">
+      <input value="{{ query }}" onInput="{{ setQuery }}" placeholder="Search watchlist&hellip;" style="flex:1; min-width:220px; background:#241012; border:1px solid #4a2529; border-radius:8px; padding:11px 14px; color:#f4e8d1; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+      <button onClick="{{ toggleFilters }}" style="{{ filterBtnStyle }}">{{ filterBtnLabel }}</button>
+      <button onClick="{{ openWheel }}" style="font-size:12.5px; padding:10px 16px; border-radius:8px; cursor:pointer; font-family:'Archivo',sans-serif; border:1px solid #6b4a42; background:transparent; color:#f0d488;" style-hover="border-color:#d9b45a; background:#241012;">&#9678; Spin the wheel</button>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">Sort</span>
+        <sc-for list="{{ sorts }}" as="s" hint-placeholder-count="3">
+          <button onClick="{{ s.onClick }}" style="{{ s.style }}">{{ s.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- Filter panel -->
+    <sc-if value="{{ filtersOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#241012; border:1px solid #4a2529; border-radius:12px; padding:24px 26px; margin-bottom:26px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+          <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.6px; color:#8a6f63;">Filter watchlist</span>
+          <sc-if value="{{ anyActive }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ clearAll }}" style="font-size:12px; font-weight:600; color:#d9b45a; background:transparent; border:none; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="color:#f0d488;">Clear all</button>
+          </sc-if>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:26px 40px;">
+
+          <!-- Release date -->
+          <div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Release date</div>
+            <div style="max-width:260px;">
+              <div onPointerDown="{{ decDown }}" onPointerMove="{{ decMove }}" onPointerUp="{{ decUp }}" style="position:relative; height:32px; cursor:pointer; touch-action:none;">
+                <div style="position:absolute; left:0; right:0; top:14px; height:4px; background:#402226; border-radius:2px;"></div>
+                <div style="position:absolute; top:14px; height:4px; background:#d9b45a; border-radius:2px; left:{{ dLeft }}%; width:{{ dWidth }}%;"></div>
+                <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ dMinPct }}%;"></div>
+                <div style="position:absolute; top:8px; width:16px; height:16px; border-radius:50%; background:#f0d488; border:2px solid #241012; box-shadow:0 1px 4px rgba(0,0,0,.5); margin-left:-8px; left:{{ dMaxPct }}%;"></div>
+              </div>
+              <div style="display:flex; justify-content:space-between; font-size:13px; color:#d9b45a; margin-top:2px;">
+                <span>{{ dMinLabel }}</span><span>{{ dMaxLabel }}</span>
+              </div>
+              <button onClick="{{ toggleUpcoming }}" style="display:flex; align-items:center; gap:8px; background:transparent; border:none; cursor:pointer; font-family:'Archivo',sans-serif; margin-top:14px; padding:0;">
+                <span style="{{ upcomingTrackStyle }}"><span style="{{ upcomingThumbStyle }}"></span></span>
+                <span style="font-size:12.5px; color:#a2857a;">Include upcoming</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Genre -->
+          <div>
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+              <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">Genre</span>
+              <div style="display:flex; border:1px solid #4a2529; border-radius:14px; overflow:hidden;">
+                <button onClick="{{ genreAny }}" style="{{ genreAnyStyle }}">Any</button>
+                <button onClick="{{ genreAll }}" style="{{ genreAllStyle }}">All</button>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <sc-for list="{{ genreChips }}" as="c" hint-placeholder-count="6">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- Language -->
+          <div>
+            <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Language</div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <sc-for list="{{ languageChips }}" as="c" hint-placeholder-count="6">
+                <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- People -->
+          <div style="grid-column:1 / -1;">
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+              <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63;">People</span>
+              <input value="{{ peopleQuery }}" onInput="{{ setPeopleQuery }}" placeholder="Search directors &amp; cast&hellip;" style="width:220px; background:#1c0d0e; border:1px solid #4a2529; border-radius:14px; padding:5px 12px; color:#f4e8d1; font-size:12px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#d9b45a;">
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Director</span>
+                <sc-for list="{{ directorChips }}" as="c" hint-placeholder-count="5">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+                <sc-if value="{{ noDirectorMatch }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:12px; color:#8a6f63; font-style:italic;">No matches</span>
+                </sc-if>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span style="font-size:12px; color:#8a6f63; width:60px; flex:none;">Cast</span>
+                <sc-for list="{{ actorChips }}" as="c" hint-placeholder-count="6">
+                  <button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button>
+                </sc-for>
+                <sc-if value="{{ noActorMatch }}" hint-placeholder-val="{{ false }}">
+                  <span style="font-size:12px; color:#8a6f63; font-style:italic;">No matches</span>
+                </sc-if>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- Poster grid -->
+    <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+      <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:18px; margin-top:16px;">
+        <sc-for list="{{ films }}" as="f" hint-placeholder-count="18">
+          <a href="Film Unwatched.dc.html" style="cursor:pointer; display:block;">
+            <div style="position:relative; aspect-ratio:2/3; border-radius:5px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 9px,#2c1518 9px 18px); border:1px solid #4a2529;" style-hover="border-color:#d9b45a;">
+              <sc-if value="{{ f.upcoming }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute; top:8px; left:8px; font-size:9.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#2a1214; background:#d9b45a; border-radius:3px; padding:3px 6px; z-index:1;">Upcoming</div>
+              </sc-if>
+              <div style="position:absolute; inset:0; background:rgba(18,8,9,.82); display:flex; flex-direction:column; justify-content:flex-end; padding:12px; opacity:0; transition:opacity .18s ease;" style-hover="opacity:1;">
+                <div style="font-family:'Newsreader',serif; font-size:16px; font-weight:500; color:#f4e8d1; line-height:1.15;">{{ f.title }}</div>
+                <div style="font-family:'Archivo',sans-serif; font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:#d9b45a; margin-top:5px;">{{ f.year }}</div>
+                <div style="font-size:12px; color:#a2857a; margin-top:4px;">{{ f.genre }}</div>
+                <div style="font-size:11px; color:#8a6f63; margin-top:3px;">Added {{ f.added }}</div>
+              </div>
+            </div>
+          </a>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:48px 0; text-align:center; color:#8a6f63; font-size:15px; font-style:italic; font-family:'Newsreader',serif;">No films match these filters</div>
+    </sc-if>
+
+  </div>
+
+  <!-- Wheel spinner modal -->
+  <sc-if value="{{ wheelOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeWheel }}" style="position:fixed; inset:0; z-index:50; background:rgba(12,6,7,.86); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; padding:24px;">
+      <div onClick="{{ stop }}" style="width:80%; max-width:800px; background:#1c0d0e; border:1px solid #4a2529; border-radius:16px; padding:30px 34px 34px; box-shadow:0 40px 90px -30px rgba(0,0,0,.8);">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+          <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.6px; color:#8a6f63;">Pick for me</span>
+          <button onClick="{{ closeWheel }}" style="font-size:20px; line-height:1; color:#a2857a; background:transparent; border:none; cursor:pointer;" style-hover="color:#f4e8d1;">&times;</button>
+        </div>
+        <div style="font-family:'Newsreader',serif; font-size:15px; font-style:italic; color:#c2a99a; margin-bottom:20px;">Spinning <span style="color:#d9b45a;">{{ poolCount }}</span> films from your current filters</div>
+
+        <sc-if value="{{ hasPool }}" hint-placeholder-val="{{ true }}">
+          <div style="position:relative; width:440px; height:440px; margin:0 auto;">
+            <div style="position:absolute; top:-6px; left:50%; transform:translateX(-50%); z-index:3; width:0; height:0; border-left:14px solid transparent; border-right:14px solid transparent; border-top:24px solid #f0d488; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));"></div>
+            <div style="{{ wheelStyle }}">
+              <sc-for list="{{ wheelSegments }}" as="seg" hint-placeholder-count="8">
+                <div style="{{ seg.wrapStyle }}"><span style="{{ seg.textStyle }}">{{ seg.text }}</span></div>
+              </sc-for>
+            </div>
+            <button onClick="{{ spin }}" style="{{ hubBtnStyle }}">{{ hubLabel }}</button>
+            <canvas ref="{{ setCanvas }}" style="position:absolute; top:-70px; left:50%; transform:translateX(-50%); width:600px; height:600px; pointer-events:none; z-index:4;"></canvas>
+          </div>
+
+          <sc-if value="{{ winner }}" hint-placeholder-val="{{ false }}">
+            <a href="Film Unwatched.dc.html" style="display:block; text-align:center; margin-top:22px; padding:14px; background:#241012; border:1px solid #4a2529; border-radius:12px;" style-hover="border-color:#d9b45a;">
+              <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#8a6f63; margin-bottom:6px;">Tonight you're watching</div>
+              <div style="font-family:'Newsreader',serif; font-size:26px; color:#f4e8d1; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ winnerLabel }}</div>
+            </a>
+          </sc-if>
+        </sc-if>
+        <sc-if value="{{ emptyPool }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:40px 0; text-align:center; color:#8a6f63; font-size:15px; font-style:italic; font-family:'Newsreader',serif;">No films match these filters</div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    query: "", sort: "added", filtersOpen: false,
+    fGenres: [], genreMode: "any", fLanguages: [], fDirectors: [], fActors: [], peopleQuery: "", dMin: null, dMax: null, shuffleSeed: null,
+    wheelOpen: false, spinning: false, wheelRotation: 0, winner: null,
+    includeUpcoming: true,
+  };
+  yDrag = null;
+
+  static FILTER_KEYS = ["query", "sort", "fGenres", "genreMode", "fLanguages", "fDirectors", "fActors", "dMin", "dMax", "includeUpcoming"];
+
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+    const p = new URLSearchParams(location.search);
+    if (![...p.keys()].length) return;
+    const patch = {};
+    Component.FILTER_KEYS.forEach((k) => {
+      if (!p.has(k)) return;
+      const raw = p.get(k);
+      if (k === "fGenres" || k === "fLanguages" || k === "fDirectors" || k === "fActors") patch[k] = raw ? raw.split(",") : [];
+      else if (k === "dMin" || k === "dMax") patch[k] = raw === "" ? null : Number(raw);
+      else if (k === "includeUpcoming") patch[k] = raw !== "0";
+      else patch[k] = raw;
+    });
+    if (patch.sort === "shuffle") patch.shuffleSeed = 1 + Math.floor(Math.random() * 99998);
+    this.setState(patch);
+  }
+  componentDidUpdate() {
+    const s = this.state;
+    const p = new URLSearchParams();
+    const defaults = { query: "", sort: "added", dMin: null, dMax: null, includeUpcoming: true, genreMode: "any" };
+    Component.FILTER_KEYS.forEach((k) => {
+      const v = s[k];
+      const isArr = Array.isArray(v);
+      const isDefault = isArr ? v.length === 0 : v === defaults[k];
+      if (isDefault) return;
+      p.set(k, isArr ? v.join(",") : (v === true ? "1" : v === false ? "0" : String(v)));
+    });
+    const qs = p.toString();
+    const url = location.pathname + (qs ? "?" + qs : "");
+    if (url !== location.pathname + location.search) history.replaceState(null, "", url);
+  }
+  backNav(fallbackHref, fallbackLabel) {
+    const nav = this._nav ? this._nav.resolveBack(fallbackHref, fallbackLabel) : { href: fallbackHref, label: fallbackLabel };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = fallbackHref; } };
+  }
+
+  data = [
+    { title: "Anora", year: 2024, genre: "Comedy", language: "English", added: "Jul 9", order: 18 },
+    { title: "The Substance", year: 2024, genre: "Horror", language: "English", added: "Jul 7", order: 17 },
+    { title: "Flow", year: 2024, genre: "Animation", language: "Latvian", added: "Jul 6", order: 16 },
+    { title: "A Real Pain", year: 2024, genre: "Drama", language: "English", added: "Jul 2", order: 15 },
+    { title: "The Brutalist", year: 2024, genre: "Drama", language: "English", added: "Jun 29", order: 14 },
+    { title: "Nickel Boys", year: 2024, genre: "Drama", language: "English", added: "Jun 25", order: 13 },
+    { title: "Sentimental Value", year: 2026, genre: "Drama", language: "Norwegian", added: "Jun 21", order: 12 },
+    { title: "The Battle of Baktan Cross", year: 2026, genre: "Thriller", language: "Hindi", added: "Jun 18", order: 11 },
+    { title: "Dune: Part Three", year: 2027, genre: "Sci-fi", language: "English", added: "Jun 12", order: 10 },
+    { title: "Barry Lyndon", year: 1975, genre: "Drama", language: "English", added: "Jun 5", order: 9 },
+    { title: "The Conversation", year: 1974, genre: "Thriller", language: "English", added: "May 30", order: 8 },
+    { title: "Ran", year: 1985, genre: "Drama", language: "Japanese", added: "May 26", order: 7 },
+    { title: "Wings of Desire", year: 1987, genre: "Romance", language: "German", added: "May 21", order: 6 },
+    { title: "Le Samoura\u00ef", year: 1967, genre: "Thriller", language: "French", added: "May 17", order: 5 },
+    { title: "Rear Window", year: 1954, genre: "Thriller", language: "English", added: "May 12", order: 4 },
+    { title: "The Red Shoes", year: 1948, genre: "Romance", language: "English", added: "May 9", order: 3 },
+    { title: "Sherlock Jr.", year: 1924, genre: "Comedy", language: "English", added: "May 6", order: 2 },
+    { title: "A Brighter Summer Day", year: 1991, genre: "Drama", language: "Mandarin", added: "May 4", order: 1 },
+  ];
+
+  credits = {
+    "Anora": ["Sean Baker", ["Mikey Madison", "Mark Eydelshteyn"]],
+    "The Substance": ["Coralie Fargeat", ["Demi Moore", "Margaret Qualley"]],
+    "Flow": ["Gints Zilbalodis", []],
+    "A Real Pain": ["Jesse Eisenberg", ["Jesse Eisenberg", "Kieran Culkin"]],
+    "The Brutalist": ["Brady Corbet", ["Adrien Brody", "Felicity Jones"]],
+    "Nickel Boys": ["RaMell Ross", ["Ethan Herisse", "Brandon Wilson"]],
+    "Sentimental Value": ["Joachim Trier", ["Renate Reinsve", "Stellan Skarsg\u00e5rd"]],
+    "The Battle of Baktan Cross": ["Paul Thomas Anderson", ["Leonardo DiCaprio", "Sean Penn"]],
+    "Dune: Part Three": ["Denis Villeneuve", ["Timoth\u00e9e Chalamet", "Zendaya"]],
+    "Barry Lyndon": ["Stanley Kubrick", ["Ryan O'Neal", "Marisa Berenson"]],
+    "The Conversation": ["Francis Ford Coppola", ["Gene Hackman"]],
+    "Ran": ["Akira Kurosawa", ["Tatsuya Nakadai"]],
+    "Wings of Desire": ["Wim Wenders", ["Bruno Ganz", "Solveig Dommartin"]],
+    "Le Samoura\u00ef": ["Jean-Pierre Melville", ["Alain Delon"]],
+    "Rear Window": ["Alfred Hitchcock", ["James Stewart", "Grace Kelly"]],
+    "The Red Shoes": ["Powell & Pressburger", ["Moira Shearer", "Anton Walbrook"]],
+    "Sherlock Jr.": ["Buster Keaton", ["Buster Keaton"]],
+    "A Brighter Summer Day": ["Edward Yang", ["Chang Chen", "Lisa Yang"]],
+  };
+  dirOf(f) { const c = this.credits[f.title]; return c ? [c[0]] : []; }
+  castOf(f) { const c = this.credits[f.title]; return c ? c[1] : []; }
+
+  byFrequency(get) {
+    const counts = new Map();
+    this.data.forEach((f) => get(f).forEach((v) => { if (v) counts.set(v, (counts.get(v) || 0) + 1); }));
+    return [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+  }
+  toggleIn(key, val) {
+    const arr = this.state[key];
+    this.setState({ [key]: arr.includes(val) ? arr.filter((x) => x !== val) : [...arr, val] });
+  }
+
+  componentWillUnmount() { clearTimeout(this._spinT); (this._tickTimers || []).forEach(clearTimeout); }
+
+  audio() {
+    if (this._ac === undefined) { try { this._ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { this._ac = null; } }
+    if (this._ac && this._ac.state === "suspended") this._ac.resume();
+    return this._ac;
+  }
+  tick(freq) {
+    const ac = this.audio(); if (!ac) return;
+    const t = ac.currentTime, o = ac.createOscillator(), g = ac.createGain(), lp = ac.createBiquadFilter();
+    lp.type = "lowpass"; lp.frequency.value = 900; lp.Q.value = 6;
+    o.type = "triangle"; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    o.connect(lp).connect(g).connect(ac.destination); o.start(t); o.stop(t + 0.1);
+  }
+  ding() {
+    const ac = this.audio(); if (!ac) return;
+    const t = ac.currentTime;
+    [880, 1318.5].forEach((f, i) => {
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type = "triangle"; o.frequency.value = f;
+      const s = t + i * 0.11;
+      g.gain.setValueAtTime(0.0001, s);
+      g.gain.exponentialRampToValueAtTime(0.22, s + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, s + 0.5);
+      o.connect(g).connect(ac.destination); o.start(s); o.stop(s + 0.55);
+    });
+  }
+  fireConfetti() {
+    const cv = this._canvas; if (!cv) return;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = 600 * dpr; cv.height = 600 * dpr;
+    const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
+    const colors = ["#d9b45a", "#f0d488", "#f4e8d1", "#a23b2e", "#e9d9c4"];
+    const parts = Array.from({ length: 150 }, () => ({
+      x: 300, y: 290, vx: (Math.random() - 0.5) * 13, vy: -Math.random() * 15 - 5,
+      r: 3 + Math.random() * 5, c: colors[(Math.random() * colors.length) | 0],
+      rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.5, life: 0,
+    }));
+    cancelAnimationFrame(this._raf);
+    const start = performance.now();
+    const step = (now) => {
+      const el = now - start;
+      ctx.clearRect(0, 0, 600, 600);
+      parts.forEach((p) => {
+        p.vy += 0.34; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life = el;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.globalAlpha = Math.max(0, 1 - el / 1600);
+        ctx.fillStyle = p.c; ctx.fillRect(-p.r, -p.r * 0.5, p.r * 2, p.r);
+        ctx.restore();
+      });
+      if (el < 1700) this._raf = requestAnimationFrame(step);
+      else ctx.clearRect(0, 0, 600, 600);
+    };
+    this._raf = requestAnimationFrame(step);
+  }
+
+  spin() {
+    const pool = this._pool || [];
+    if (!pool.length || this.state.spinning) return;
+    this.audio();
+    const n = pool.length, seg = 360 / n;
+    const i = Math.floor(Math.random() * n);
+    const center = i * seg + seg / 2;
+    const cur = this.state.wheelRotation;
+    const target = cur - (cur % 360) + 360 * 4 + ((360 - center) % 360);
+    const dur = 6000, delta = target - cur, ticks = Math.floor(delta / seg);
+    (this._tickTimers || []).forEach(clearTimeout);
+    this._tickTimers = [];
+    for (let k = 1; k <= ticks; k++) {
+      const frac = (k * seg) / delta;
+      const t = 1 - Math.pow(1 - frac, 1 / 3);
+      this._tickTimers.push(setTimeout(() => this.tick(300 + (1 - t) * 240), t * dur));
+    }
+    this.setState({ spinning: true, winner: null, wheelRotation: target });
+    clearTimeout(this._spinT);
+    this._spinT = setTimeout(() => {
+      this.setState({ spinning: false, winner: pool[i] });
+      this.ding(); this.fireConfetti();
+    }, dur);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const q = s.query.trim().toLowerCase();
+    const nowYear = 2026;
+    const chipBase = "font-size:12.5px; padding:7px 13px; border-radius:20px; cursor:pointer; font-family:'Archivo',sans-serif; border:1px solid #4a2529; ";
+    const on = "background:#d9b45a; color:#2a1214; font-weight:600; border-color:#d9b45a;";
+    const off = "background:transparent; color:#ddc9b4;";
+    const chipStyle = (active) => chipBase + (active ? on : off);
+    const modeBtn = (active) => "font-size:11px; font-weight:600; padding:5px 11px; border:none; cursor:pointer; font-family:'Archivo',sans-serif; " + (active ? "background:#d9b45a; color:#2a1214;" : "background:transparent; color:#a2857a;");
+
+    const decadesAsc = [...new Set(this.data.map((f) => Math.floor(f.year / 10) * 10))].sort((a, b) => a - b);
+    const dLo = decadesAsc[0], dHi = decadesAsc[decadesAsc.length - 1];
+    const eMin = s.dMin ?? dLo, eMax = s.dMax ?? dHi;
+
+    const isUpcoming = (f) => f.year > nowYear || (f.year === nowYear && f.order >= 11);
+    let list = this.data.filter((f) => {
+      if (q && !f.title.toLowerCase().includes(q)) return false;
+      if (s.fGenres.length) {
+        const has = (g) => f.genre === g;
+        if (s.genreMode === "all" ? !s.fGenres.every(has) : !s.fGenres.some(has)) return false;
+      }
+      if (s.fLanguages.length && !s.fLanguages.includes(f.language)) return false;
+      if (s.fDirectors.length && !this.dirOf(f).some((d) => s.fDirectors.includes(d))) return false;
+      if (s.fActors.length && !this.castOf(f).some((a) => s.fActors.includes(a))) return false;
+      if (!s.includeUpcoming && isUpcoming(f)) return false;
+      const dec = Math.floor(f.year / 10) * 10;
+      if ((s.dMin != null || s.dMax != null) && (dec < eMin || dec > eMax)) return false;
+      return true;
+    });
+    if (s.sort === "shuffle" && s.shuffleSeed) {
+      const seed = s.shuffleSeed;
+      const rank = (f) => { let h = seed; for (const ch of f.title) h = (h * 31 + ch.charCodeAt(0)) % 100000; return h; };
+      list = [...list].sort((a, b) => rank(a) - rank(b));
+    } else {
+      list = [...list].sort((a, b) => (s.sort === "year" ? b.year - a.year : b.order - a.order));
+    }
+    const films = list.map((f) => ({ ...f, upcoming: isUpcoming(f) }));
+
+    const sortBtn = (key, label, onClick) => ({ label, onClick, style: chipStyle(s.sort === key) });
+    const decActive = eMin > dLo || eMax < dHi;
+    const n = (decActive ? 1 : 0) + s.fGenres.length + s.fLanguages.length + s.fDirectors.length + s.fActors.length + (s.includeUpcoming ? 0 : 1);
+    const pctD = (v) => ((v - dLo) / Math.max(10, dHi - dLo)) * 100;
+    const decVal = (e) => { const r = e.currentTarget.getBoundingClientRect(); const p = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); return dLo + Math.round((p * (dHi - dLo)) / 10) * 10; };
+    const applyDec = (v) => { if (this.yDrag === "min") this.setState({ dMin: Math.min(v, eMax) }); else if (this.yDrag === "max") this.setState({ dMax: Math.max(v, eMin) }); };
+
+    // Wheel pool = current filtered set
+    const pool = list.map((f) => ({ title: f.title, year: f.year }));
+    this._pool = pool;
+    const nSeg = pool.length, segA = nSeg ? 360 / nSeg : 360;
+    const c1 = "#d9b45a", c2 = "#3a1a1d";
+    const stops = pool.map((f, i) => `${i % 2 ? c2 : c1} ${(i * segA).toFixed(3)}deg ${((i + 1) * segA).toFixed(3)}deg`).join(", ");
+    const wheelStyle = "width:440px; height:440px; border-radius:50%; position:relative; transition:transform 6s cubic-bezier(.12,.52,.22,1); transform:rotate(" + s.wheelRotation + "deg); background:" + (nSeg ? "conic-gradient(" + stops + ")" : "#241012") + "; box-shadow:0 0 0 6px #241012, 0 0 0 8px #4a2529, 0 24px 60px -20px rgba(0,0,0,.7);";
+    const R = 210;
+    const wheelSegments = pool.map((f, i) => {
+      const center = i * segA + segA / 2;
+      const lower = center > 180;
+      const onGold = i % 2 === 0;
+      return {
+        text: f.title,
+        wrapStyle: "position:absolute; left:50%; top:50%; width:" + R + "px; height:20px; margin-top:-10px; transform-origin:0 50%; transform:rotate(" + (center - 90) + "deg); display:flex; align-items:center; justify-content:flex-end; padding-right:18px;",
+        textStyle: "font-family:'Archivo',sans-serif; font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:" + (R - 30) + "px; color:" + (onGold ? "#2a1214" : "#f0d488") + ";",
+      };
+    });
+    const spinBtnBase = "width:100%; margin-top:18px; padding:14px; border-radius:10px; font-family:'Archivo',sans-serif; font-size:14px; font-weight:600; cursor:pointer; border:none;";
+
+    return {
+      wheelOpen: s.wheelOpen,
+      openWheel: () => this.setState({ wheelOpen: true, winner: null }),
+      closeWheel: () => this.setState({ wheelOpen: false }),
+      stop: (e) => e.stopPropagation(),
+      spin: () => this.spin(),
+      setCanvas: (el) => { this._canvas = el; },
+      wheelStyle, wheelSegments,
+      poolCount: pool.length, hasPool: pool.length > 0, emptyPool: pool.length === 0,
+      hubLabel: s.spinning ? "\u2026" : (s.winner ? "Spin again" : "Spin"),
+      hubBtnStyle: "position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:2; width:104px; height:104px; border-radius:50%; border:3px solid #4a2529; font-family:'Newsreader',serif; font-style:italic; font-size:16px; line-height:1.1; text-align:center; padding:6px; cursor:" + (s.spinning ? "default" : "pointer") + "; " + (s.spinning ? "background:#241012; color:#8a6f63;" : "background:#d9b45a; color:#2a1214;"),
+      winner: !!s.winner, winnerLabel: s.winner ? s.winner.title + " \u00b7 " + s.winner.year : "",
+      spinBtnLabel: s.spinning ? "Spinning\u2026" : (s.winner ? "Spin again" : "Spin the wheel"),
+      spinBtnStyle: spinBtnBase + (s.spinning ? "background:#4a2529; color:#8a6f63; cursor:default;" : "background:#d9b45a; color:#2a1214;"),
+      ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"),
+      films, total: this.data.length, shown: films.length,
+      hasResults: films.length > 0, isEmpty: films.length === 0,
+      query: s.query, setQuery: (e) => this.setState({ query: e.target.value }),
+      sorts: [
+        sortBtn("added", "Recently added", () => this.setState({ sort: "added" })),
+        sortBtn("year", "Release date", () => this.setState({ sort: "year" })),
+        sortBtn("shuffle", "\u21c4 Shuffle", () => this.setState({ sort: "shuffle", shuffleSeed: 1 + Math.floor(Math.random() * 99998) })),
+      ],
+
+      filtersOpen: s.filtersOpen,
+      toggleFilters: () => this.setState({ filtersOpen: !s.filtersOpen }),
+      filterBtnLabel: n ? "Filters \u00b7 " + n : "Filters",
+      filterBtnStyle: chipBase + "padding:10px 16px; border-radius:8px; " + (s.filtersOpen || n ? on : off),
+      anyActive: n > 0,
+      clearAll: () => this.setState({ fGenres: [], genreMode: "any", fLanguages: [], fDirectors: [], fActors: [], peopleQuery: "", dMin: null, dMax: null, includeUpcoming: true }),
+
+      genreChips: this.byFrequency((f) => [f.genre]).map((g) => ({
+        label: g, onClick: () => this.toggleIn("fGenres", g), style: chipStyle(s.fGenres.includes(g)),
+      })),
+      genreAny: () => this.setState({ genreMode: "any" }),
+      genreAll: () => this.setState({ genreMode: "all" }),
+      genreAnyStyle: modeBtn(s.genreMode === "any"),
+      genreAllStyle: modeBtn(s.genreMode === "all"),
+      languageChips: this.byFrequency((f) => [f.language]).map((g) => ({
+        label: g, onClick: () => this.toggleIn("fLanguages", g), style: chipStyle(s.fLanguages.includes(g)),
+      })),
+
+      peopleQuery: s.peopleQuery,
+      setPeopleQuery: (e) => this.setState({ peopleQuery: e.target.value }),
+      directorChips: (() => {
+        const pq = s.peopleQuery.trim().toLowerCase();
+        const all = this.byFrequency((f) => this.dirOf(f));
+        const shown = pq ? all.filter((v) => v.toLowerCase().includes(pq) || s.fDirectors.includes(v)) : all;
+        return shown.map((d) => ({ label: d, onClick: () => this.toggleIn("fDirectors", d), style: chipStyle(s.fDirectors.includes(d)) }));
+      })(),
+      actorChips: (() => {
+        const pq = s.peopleQuery.trim().toLowerCase();
+        const all = this.byFrequency((f) => this.castOf(f));
+        const shown = pq ? all.filter((v) => v.toLowerCase().includes(pq) || s.fActors.includes(v)) : all;
+        return shown.map((a) => ({ label: a, onClick: () => this.toggleIn("fActors", a), style: chipStyle(s.fActors.includes(a)) }));
+      })(),
+      noDirectorMatch: (() => { const pq = s.peopleQuery.trim().toLowerCase(); return !!pq && !this.byFrequency((f) => this.dirOf(f)).some((v) => v.toLowerCase().includes(pq)) && !s.fDirectors.length; })(),
+      noActorMatch: (() => { const pq = s.peopleQuery.trim().toLowerCase(); return !!pq && !this.byFrequency((f) => this.castOf(f)).some((v) => v.toLowerCase().includes(pq)) && !s.fActors.length; })(),
+
+      dMinPct: pctD(eMin), dMaxPct: pctD(eMax), dLeft: pctD(eMin), dWidth: pctD(eMax) - pctD(eMin),
+      dMinLabel: eMin + "s", dMaxLabel: eMax + "s",
+      toggleUpcoming: () => this.setState({ includeUpcoming: !s.includeUpcoming }),
+      upcomingTrackStyle: "position:relative; width:34px; height:19px; border-radius:10px; transition:background .15s ease; background:" + (s.includeUpcoming ? "#d9b45a" : "#402226") + ";",
+      upcomingThumbStyle: "position:absolute; top:2px; left:" + (s.includeUpcoming ? "17px" : "2px") + "; width:15px; height:15px; border-radius:50%; background:#f4e8d1; transition:left .15s ease;",
+      decDown: (e) => { const v = decVal(e); this.yDrag = Math.abs(v - eMin) <= Math.abs(v - eMax) ? "min" : "max"; e.currentTarget.setPointerCapture(e.pointerId); applyDec(v); },
+      decMove: (e) => { if (this.yDrag) applyDec(decVal(e)); },
+      decUp: () => { this.yDrag = null; },
+    };
+  }
+}
+</script>
+</body>
+</html>

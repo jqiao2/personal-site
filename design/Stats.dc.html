@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e; display:flex; justify-content:center; padding:0 24px 80px;">
+  <div style="width:100%; max-width:960px;">
+
+    <!-- Top bar -->
+    <header style="display:flex; align-items:center; justify-content:space-between; padding:26px 0 22px; border-bottom:1px solid #4a2529; margin-bottom:34px;">
+      <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:flex; align-items:center; gap:9px; font-size:13px; color:#a2857a;" style-hover="color:#f4e8d1;">
+        <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+      </a>
+      <span style="font-size:11.5px; text-transform:uppercase; letter-spacing:2px; color:#8a6f63;">Stats</span>
+    </header>
+
+    <!-- Title -->
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:34px; flex-wrap:wrap; gap:14px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:52px; color:#f4e8d1; letter-spacing:-.5px; line-height:1;">Stats</h1>
+      <div ref="{{ setWrap }}" style="position:relative;">
+        <button onClick="{{ toggleOpen }}" style="display:flex; align-items:center; gap:10px; font-size:13px; color:#f4e8d1; background:#2a1214; border:1px solid #4a2529; border-radius:9px; padding:9px 14px; cursor:pointer; font-family:'Archivo',sans-serif; min-width:150px; justify-content:space-between;" style-hover="border-color:#d9b45a;">
+          <span>{{ selLabel }}</span>
+          <span style="font-size:10px; color:#a2857a;">&#9662;</span>
+        </button>
+        <sc-if value="{{ open }}" hint-placeholder-val="{{ false }}">
+          <div style="position:absolute; right:0; top:calc(100% + 8px); background:#20100f; border:1px solid #4a2529; border-radius:10px; padding:6px; min-width:210px; z-index:30; box-shadow:0 18px 40px -12px rgba(0,0,0,.6);">
+            <sc-for list="{{ yearOpts }}" as="y" hint-placeholder-count="8">
+              <div onClick="{{ y.onClick }}" style="{{ y.rowStyle }}">
+                <span style="width:16px; color:#d9b45a; font-size:12px;">{{ y.check }}</span>
+                <span style="flex:1; font-size:13px;">{{ y.label }}</span>
+                <span style="font-size:11.5px; color:#8a6f63;">{{ y.count }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- Metric cards -->
+    <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:44px;">
+      <sc-for list="{{ metrics }}" as="m" hint-placeholder-count="4">
+        <div style="background:#2a1214; border:1px solid #4a2529; border-radius:10px; padding:20px 18px;">
+          <div style="font-family:'Newsreader',serif; font-size:36px; color:#d9b45a; line-height:1;">{{ m.value }}</div>
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#a2857a; margin-top:8px;">{{ m.label }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Films per week histogram -->
+    <sc-if value="{{ showWeeks }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:18px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd;">Films watched per week</div>
+        <div style="font-size:12px; color:#a2857a;">{{ weekSpan }} &middot; avg <span style="color:#d9b45a; font-weight:600;">{{ weekAvg }}</span>/wk</div>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:1px; height:140px;">
+        <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="52">
+          <div style="flex:1; height:100%; display:flex; align-items:flex-end;" title="{{ w.title }}">
+            <div style="{{ w.style }}" style-hover="background:#f4e8d1;"></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:9.5px; color:#8a6f63;">
+        <sc-for list="{{ weekLabels }}" as="l" hint-placeholder-count="5">
+          <span>{{ l }}</span>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- Films by release year (own row) -->
+    <sc-if value="{{ showByYear }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-bottom:46px;">
+      <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:16px;">Films by release year</div>
+      <div style="display:flex; align-items:flex-end; gap:1px; height:132px;">
+        <sc-for list="{{ byYear }}" as="d" hint-placeholder-count="11">
+          <div style="flex:1; height:100%; display:flex; align-items:flex-end;" title="{{ d.title }}">
+            <div style="{{ d.style }}"></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:9.5px; color:#8a6f63;">
+        <sc-for list="{{ byYearLabels }}" as="l" hint-placeholder-count="6">
+          <span>{{ l }}</span>
+        </sc-for>
+      </div>
+    </div>
+    </sc-if>
+
+    <!-- Three column: genres + languages + countries -->
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:32px; margin-bottom:46px;">
+
+      <!-- Genres -->
+      <div>
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:16px;">Most-watched genres</div>
+        <div style="display:flex; flex-direction:column; gap:13px;">
+          <sc-for list="{{ genres }}" as="g" hint-placeholder-count="7">
+            <div style="display:grid; grid-template-columns:78px 1fr 34px; gap:10px; align-items:center;">
+              <span style="font-size:13px; color:#f2e5cd;">{{ g.name }}</span>
+              <div style="height:9px; background:#351a1d; border-radius:5px; overflow:hidden;">
+                <div style="{{ g.style }}"></div>
+              </div>
+              <span style="font-size:12px; color:#a2857a; text-align:right;">{{ g.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- Languages -->
+      <div>
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:16px;">Languages</div>
+        <div style="display:flex; flex-direction:column; gap:13px;">
+          <sc-for list="{{ languages }}" as="g" hint-placeholder-count="7">
+            <div style="display:grid; grid-template-columns:78px 1fr 34px; gap:10px; align-items:center;">
+              <span style="font-size:13px; color:#f2e5cd;">{{ g.name }}</span>
+              <div style="height:9px; background:#351a1d; border-radius:5px; overflow:hidden;">
+                <div style="{{ g.style }}"></div>
+              </div>
+              <span style="font-size:12px; color:#a2857a; text-align:right;">{{ g.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- Countries -->
+      <div>
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:16px;">Countries</div>
+        <div style="display:flex; flex-direction:column; gap:13px;">
+          <sc-for list="{{ countries }}" as="g" hint-placeholder-count="7">
+            <div style="display:grid; grid-template-columns:78px 1fr 34px; gap:10px; align-items:center;">
+              <span style="font-size:13px; color:#f2e5cd;">{{ g.name }}</span>
+              <div style="height:9px; background:#351a1d; border-radius:5px; overflow:hidden;">
+                <div style="{{ g.style }}"></div>
+              </div>
+              <span style="font-size:12px; color:#a2857a; text-align:right;">{{ g.count }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ratings distribution -->
+    <div style="margin-bottom:46px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:18px;">
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd;">Ratings distribution</div>
+        <div style="font-size:12px; color:#a2857a;">avg <span style="color:#d9b45a; font-weight:600;">{{ ratingAvg }}</span></div>
+      </div>
+      <div style="display:flex; align-items:flex-end; gap:8px; height:130px; width:66%; margin:0 auto;">
+        <sc-for list="{{ ratings }}" as="r" hint-placeholder-count="10">
+          <div style="flex:1; height:100%; display:flex; align-items:flex-end;" title="{{ r.title }}">
+            <div style="{{ r.style }}" style-hover="background:#f4e8d1;"></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex; gap:8px; margin:8px auto 0; width:66%;">
+        <sc-for list="{{ ratings }}" as="r" hint-placeholder-count="10">
+          <span style="flex:1; text-align:center; font-size:10px; color:#8a6f63;">{{ r.label }}</span>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- Top directors -->
+    <div>
+      <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:6px;">Top directors</div>
+      <sc-for list="{{ directors }}" as="p" hint-placeholder-count="6">
+        <div style="display:grid; grid-template-columns:32px 1fr auto auto; gap:18px; align-items:center; padding:13px 8px; border-bottom:1px solid #351a1d;">
+          <span style="font-family:'Newsreader',serif; font-size:20px; color:#8a6f63; text-align:center;">{{ p.rank }}</span>
+          <span style="font-family:'Newsreader',serif; font-size:18px; color:#f2e5cd;">{{ p.name }}</span>
+          <span style="color:#d9b45a; font-size:13px; letter-spacing:1px;">{{ p.stars }}</span>
+          <span style="font-size:13px; color:#a2857a; min-width:70px; text-align:right;">{{ p.count }} films</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- Top actors -->
+    <div style="margin-top:38px;">
+      <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ecdcbd; padding-bottom:10px; border-bottom:1px solid #402226; margin-bottom:6px;">Top actors</div>
+      <sc-for list="{{ actors }}" as="p" hint-placeholder-count="6">
+        <div style="display:grid; grid-template-columns:32px 1fr auto auto; gap:18px; align-items:center; padding:13px 8px; border-bottom:1px solid #351a1d;">
+          <span style="font-family:'Newsreader',serif; font-size:20px; color:#8a6f63; text-align:center;">{{ p.rank }}</span>
+          <span style="font-family:'Newsreader',serif; font-size:18px; color:#f2e5cd;">{{ p.name }}</span>
+          <span style="color:#d9b45a; font-size:13px; letter-spacing:1px;">{{ p.stars }}</span>
+          <span style="font-size:13px; color:#a2857a; min-width:70px; text-align:right;">{{ p.count }} films</span>
+        </div>
+      </sc-for>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { year: "all", open: false };
+  componentDidMount() {
+    this._onDoc = (e) => {
+      if (!this.state.open) return;
+      if (this._wrap && !this._wrap.contains(e.target)) this.setState({ open: false });
+    };
+    document.addEventListener("mousedown", this._onDoc);
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); });
+  }
+  backNav(fallbackHref, fallbackLabel) {
+    const nav = this._nav ? this._nav.resolveBack(fallbackHref, fallbackLabel) : { href: fallbackHref, label: fallbackLabel };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = fallbackHref; } };
+  }
+  componentWillUnmount() {
+    document.removeEventListener("mousedown", this._onDoc);
+  }
+  starText(r) {
+    const full = Math.floor(r);
+    return "\u2605".repeat(full) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+  renderVals() {
+    // ---- selected timespan ----
+    const yearTotals = [
+      { y: 2016, c: 34 }, { y: 2017, c: 52 }, { y: 2018, c: 8 },
+      { y: 2019, c: 61 }, { y: 2020, c: 143 }, { y: 2021, c: 118 },
+      { y: 2022, c: 97 }, { y: 2023, c: 88 }, { y: 2024, c: 132 },
+      { y: 2025, c: 121 }, { y: 2026, c: 96 },
+    ];
+    const ALL_TOTAL = 1204;
+    const isAll = this.state.year === "all";
+    const selInfo = yearTotals.find((r) => r.y === this.state.year);
+    const total = isAll ? ALL_TOTAL : selInfo ? selInfo.c : ALL_TOTAL;
+    const ratio = total / ALL_TOTAL;
+    const rand = (salt) => {
+      const base = isAll ? 7 : this.state.year;
+      let s = (base * 131 + salt * 977) % 233280;
+      s = (s * 9301 + 49297) % 233280;
+      return s / 233280;
+    };
+    const jit = (salt) => (isAll ? 1 : 0.75 + rand(salt) * 0.6);
+    const fmt = (n) => n.toLocaleString("en-US");
+    const scale = (n, salt) => Math.round(n * ratio * jit(salt));
+
+    const avgRating = isAll ? 3.8 : +(3.4 + rand(50) * 0.9).toFixed(1);
+    const metrics = isAll
+      ? [
+          { value: "1,204", label: "Films watched" },
+          { value: "2,140", label: "Hours" },
+          { value: "96", label: "This year" },
+          { value: "3.8", label: "Avg rating" },
+        ]
+      : [
+          { value: fmt(total), label: "Films watched" },
+          { value: fmt(Math.round(total * 1.78)), label: "Hours" },
+          { value: (total / 52).toFixed(1), label: "Films / week" },
+          { value: avgRating.toFixed(1), label: "Avg rating" },
+        ];
+
+    const gRaw = [
+      { name: "Drama", count: 342 },
+      { name: "Thriller", count: 168 },
+      { name: "Comedy", count: 141 },
+      { name: "Romance", count: 98 },
+      { name: "Sci-Fi", count: 87 },
+      { name: "Horror", count: 64 },
+      { name: "Documentary", count: 41 },
+    ];
+    const gScaled = gRaw
+      .map((g, i) => ({ name: g.name, count: isAll ? g.count : scale(g.count, i + 1) }))
+      .filter((g) => g.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const gMax = Math.max(1, ...gScaled.map((g) => g.count));
+    const genres = gScaled.map((g) => ({
+      name: g.name,
+      count: g.count,
+      style: {
+        width: Math.round((g.count / gMax) * 100) + "%",
+        height: "100%",
+        background: "#d9b45a",
+        borderRadius: "5px",
+      },
+    }));
+
+    const lRaw = [
+      { name: "English", count: 486 },
+      { name: "Japanese", count: 168 },
+      { name: "French", count: 152 },
+      { name: "Korean", count: 96 },
+      { name: "Cantonese", count: 78 },
+      { name: "Italian", count: 54 },
+      { name: "Spanish", count: 47 },
+    ];
+    const lScaled = lRaw
+      .map((g, i) => ({ name: g.name, count: isAll ? g.count : scale(g.count, i + 10) }))
+      .filter((g) => g.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const lMax = Math.max(1, ...lScaled.map((g) => g.count));
+    const languages = lScaled.map((g) => ({
+      name: g.name,
+      count: g.count,
+      style: {
+        width: Math.round((g.count / lMax) * 100) + "%",
+        height: "100%",
+        background: "#d9b45a",
+        borderRadius: "5px",
+      },
+    }));
+
+    const cRaw = [
+      { name: "USA", count: 402 },
+      { name: "Japan", count: 176 },
+      { name: "France", count: 158 },
+      { name: "South Korea", count: 92 },
+      { name: "Hong Kong", count: 74 },
+      { name: "Italy", count: 61 },
+      { name: "UK", count: 58 },
+    ];
+    const cScaled = cRaw
+      .map((g, i) => ({ name: g.name, count: isAll ? g.count : scale(g.count, i + 15) }))
+      .filter((g) => g.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const cMax = Math.max(1, ...cScaled.map((g) => g.count));
+    const countries = cScaled.map((g) => ({
+      name: g.name,
+      count: g.count,
+      style: {
+        width: Math.round((g.count / cMax) * 100) + "%",
+        height: "100%",
+        background: "#d9b45a",
+        borderRadius: "5px",
+      },
+    }));
+
+    // Ratings distribution (0.5 .. 5.0)
+    const rShape = [4, 9, 16, 28, 52, 96, 168, 214, 148, 62];
+    const rScaled = rShape.map((c, i) => (isAll ? c : Math.max(0, scale(c, i + 200))));
+    const rMax = Math.max(1, ...rScaled);
+    const rSum = rScaled.reduce((a, b) => a + b, 0) || 1;
+    const ratingAvg = (
+      rScaled.reduce((a, c, i) => a + c * ((i + 1) * 0.5), 0) / rSum
+    ).toFixed(1);
+    const STAR = "\u2605";
+    const HALF = "\u00bd";
+    const ratings = rScaled.map((c, i) => {
+      const val = (i + 1) * 0.5;
+      const full = Math.floor(val);
+      const label = STAR.repeat(full) + (val % 1 >= 0.5 ? HALF : "");
+      return {
+        label,
+        title: val.toFixed(1) + " \u00b7 " + c + " films",
+        style: {
+          width: "100%",
+          height: Math.round((c / rMax) * 100) + "%",
+          minHeight: "3px",
+          background: "#d9b45a",
+          borderRadius: "3px 3px 0 0",
+        },
+      };
+    });
+
+    // Films by release year
+    const decadeTotals = [
+      { start: 1920, count: 6 }, { start: 1930, count: 14 }, { start: 1940, count: 22 },
+      { start: 1950, count: 41 }, { start: 1960, count: 58 }, { start: 1970, count: 96 },
+      { start: 1980, count: 112 }, { start: 1990, count: 178 }, { start: 2000, count: 231 },
+      { start: 2010, count: 268 }, { start: 2020, count: 178 },
+    ];
+    const relByYear = [];
+    decadeTotals.forEach((dec) => {
+      const span = dec.start === 2020 ? 7 : 10;
+      const base = dec.count / span;
+      for (let k = 0; k < span; k++) {
+        const yr = dec.start + k;
+        let c = Math.round(base * (0.55 + rand(yr)));
+        if (!isAll) c = Math.round(c * ratio);
+        relByYear.push({ yr, c: Math.max(0, c) });
+      }
+    });
+    const byYearMax = Math.max(1, ...relByYear.map((x) => x.c));
+    const byYear = relByYear.map((x) => ({
+      short: "",
+      title: x.yr + " \u00b7 " + x.c + " films",
+      style: {
+        width: "100%",
+        height: Math.round((x.c / byYearMax) * 100) + "%",
+        minHeight: "2px",
+        background: "#d9b45a",
+        borderRadius: "1px 1px 0 0",
+      },
+    }));
+    const byYearLabels = ["1920", "1940", "1960", "1980", "2000", "2020"];
+
+    const dirRaw = [
+      { name: "Wong Kar-wai", count: 14, rating: 4.6 },
+      { name: "Paul Thomas Anderson", count: 11, rating: 4.4 },
+      { name: "Hayao Miyazaki", count: 10, rating: 4.5 },
+      { name: "Céline Sciamma", count: 7, rating: 4.3 },
+      { name: "Kiyoshi Kurosawa", count: 6, rating: 4.1 },
+      { name: "Agnès Varda", count: 6, rating: 4.4 },
+    ];
+    const dirScaled = dirRaw
+      .map((p, i) => ({
+        name: p.name,
+        count: isAll ? p.count : scale(p.count, i + 40),
+        rating: isAll ? p.rating : Math.min(5, +(p.rating - 0.3 + rand(i + 60) * 0.7).toFixed(1)),
+      }))
+      .filter((p) => p.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const directors = dirScaled.map((p, i) => ({
+      rank: i + 1,
+      name: p.name,
+      count: p.count,
+      stars: this.starText(p.rating),
+    }));
+
+    const actRaw = [
+      { name: "Tony Leung", count: 16, rating: 4.5 },
+      { name: "Isabelle Huppert", count: 13, rating: 4.4 },
+      { name: "Toshiro Mifune", count: 11, rating: 4.6 },
+      { name: "Tilda Swinton", count: 9, rating: 4.2 },
+      { name: "Song Kang-ho", count: 8, rating: 4.3 },
+      { name: "Setsuko Hara", count: 7, rating: 4.5 },
+    ];
+    const actScaled = actRaw
+      .map((p, i) => ({
+        name: p.name,
+        count: isAll ? p.count : scale(p.count, i + 80),
+        rating: isAll ? p.rating : Math.min(5, +(p.rating - 0.3 + rand(i + 100) * 0.7).toFixed(1)),
+      }))
+      .filter((p) => p.count > 0)
+      .sort((a, b) => b.count - a.count);
+    const actors = actScaled.map((p, i) => ({
+      rank: i + 1,
+      name: p.name,
+      count: p.count,
+      stars: this.starText(p.rating),
+    }));
+
+    // ---- films watched per week ----
+    const eligible = yearTotals.filter((r) => r.c > 10).sort((a, b) => b.y - a.y);
+    const genWeeks = (year) => {
+      const out = [];
+      let seed = (year * 2654435761) % 233280;
+      for (let i = 0; i < 52; i++) {
+        seed = (seed * 9301 + 49297) % 233280;
+        out.push(Math.round((seed / 233280) * 5));
+      }
+      return out;
+    };
+    const MO = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const fmtRange = (start, end) => {
+      const a = MO[start.getMonth()] + " " + start.getDate();
+      const b = start.getMonth() === end.getMonth() ? end.getDate() : MO[end.getMonth()] + " " + end.getDate();
+      return a + "\u2013" + b + ", " + end.getFullYear();
+    };
+
+    let bars = [];
+    let weekLabels;
+    let weekSpan;
+    if (isAll) {
+      const startYear = 2014;
+      const endYear = 2026;
+      for (let y = startYear; y <= endYear; y++) {
+        genWeeks(y).forEach((c, i) => {
+          const start = new Date(y, 0, 1); start.setDate(start.getDate() + i * 7);
+          if (start > new Date(2026, 6, 12)) return;
+          const end = new Date(start); end.setDate(end.getDate() + 6);
+          bars.push({ c, start, end });
+        });
+      }
+      weekLabels = ["2014", "2017", "2020", "2022", "2024", "2026"];
+      weekSpan = "All time \u00b7 weekly";
+    } else {
+      const y = this.state.year;
+      const yStart = new Date(y, 0, 1);
+      const yEnd = new Date(y, 11, 31);
+      const gw = genWeeks(y);
+      let start = new Date(yStart);
+      let i = 0;
+      while (start <= yEnd) {
+        const end = new Date(start); end.setDate(end.getDate() + 6);
+        if (end > yEnd) end.setTime(yEnd.getTime());
+        bars.push({ c: gw[i % gw.length], start: new Date(start), end });
+        start.setDate(start.getDate() + 7);
+        i++;
+      }
+      weekLabels = ["Jan", "Mar", "May", "Jul", "Sep", "Nov"];
+      weekSpan = y + " \u00b7 week by week";
+    }
+
+    const wMax = Math.max(1, ...bars.map((b) => b.c));
+    const weeks = bars.map((b) => ({
+      title: fmtRange(b.start, b.end) + " \u00b7 " + b.c + " films",
+      style: {
+        width: "100%",
+        height: Math.round((b.c / wMax) * 100) + "%",
+        minHeight: "3px",
+        background: b.c === 0 ? "#402226" : "#d9b45a",
+        borderRadius: "2px 2px 0 0",
+      },
+    }));
+    const weekAvg = (bars.reduce((a, b) => a + b.c, 0) / bars.length).toFixed(1);
+
+    // ---- year picker (single select) ----
+    const selLabel = isAll ? "All time" : String(this.state.year);
+    const selectYear = (key) => this.setState({ year: key, open: false });
+    const rowBase =
+      "display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:7px; cursor:pointer; color:#e9d9c4; font-family:'Archivo',sans-serif;";
+    const yearOpts = [{ key: "all", label: "All time", count: "" }]
+      .concat(eligible.map((r) => ({ key: r.y, label: String(r.y), count: r.c + " films" })))
+      .map((o) => {
+        const on = o.key === this.state.year;
+        return {
+          label: o.label,
+          count: o.count,
+          check: on ? "\u2713" : "",
+          onClick: () => selectYear(o.key),
+          rowStyle: rowBase + (on ? " background:#33211a;" : ""),
+        };
+      });
+
+    return { ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"), metrics, genres, languages, countries, ratings, ratingAvg, byYear, byYearLabels, showByYear: isAll, directors, actors, showWeeks: !isAll, weeks, weekAvg, weekLabels, weekSpan, yearOpts, selLabel, open: this.state.open, toggleOpen: () => this.setState((s) => ({ open: !s.open })), setWrap: (el) => { this._wrap = el; } };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1c0d0e; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { text-decoration: none; color: #d9b45a; }
+  a:hover { color: #f0d488; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1c0d0e;">
+
+  <!-- Backdrop -->
+  <div style="position:relative; height:360px; background-image:repeating-linear-gradient(135deg,#3a1c20 0 14px,#2c1518 14px 28px); overflow:hidden;">
+    <div style="position:absolute; inset:0; background:linear-gradient(180deg, rgba(28,13,14,.35) 0%, rgba(28,13,14,.72) 55%, #1c0d0e 100%);"></div>
+    <div style="position:absolute; top:0; left:0; right:0; display:flex; justify-content:center;">
+      <div style="width:100%; max-width:960px; padding:24px;">
+        <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:inline-flex; align-items:center; gap:9px; font-size:13px; color:#e9d9c4;" style-hover="color:#fff;">
+          <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div style="display:flex; justify-content:center; padding:0 24px 80px;">
+    <div style="width:100%; max-width:960px; margin-top:-150px; position:relative; display:grid; grid-template-columns:230px 1fr; gap:36px; align-items:start;">
+
+      <!-- Left: poster + your activity -->
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div style="aspect-ratio:2/3; border-radius:7px; overflow:hidden; background-image:repeating-linear-gradient(135deg,#351a1d 0 9px,#2c1518 9px 18px); border:1px solid #4a2529; box-shadow:0 20px 40px -12px rgba(0,0,0,.6); display:flex; align-items:flex-end; padding:14px;">
+          <div style="font-family:'Newsreader',serif; font-size:18px; color:#f2e5cd; line-height:1.2;">{{ title }} <span style="color:#b0917f; font-style:italic; font-size:15px;">{{ year }}</span></div>
+        </div>
+
+        <button onClick="{{ openComposer }}" style="width:100%; font-size:14px; font-weight:700; color:#2a1214; background:#d9b45a; border:none; border-radius:9px; padding:12px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#f0d488;">{{ logButtonLabel }}</button>
+
+        <!-- Your activity -->
+        <div style="background:#2a1214; border:1px solid #4a2529; border-radius:10px; padding:16px 16px 18px;">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.4px; color:#8a6f63; margin-bottom:12px;">Your activity</div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span style="font-size:12px; color:#a2857a;">Your rating</span>
+            <span style="color:#d9b45a; font-size:15px; letter-spacing:1px;">{{ yourStars }}</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span style="font-size:12px; color:#a2857a;">Liked</span>
+            <span style="color:#d9b45a; font-size:15px;">&#9829;</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:12px; color:#a2857a;">Watched</span>
+            <span style="font-size:13px; color:#e9d9c4;">{{ watchedDate }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: details -->
+      <div style="padding-top:150px;">
+        <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:46px; color:#f4e8d1; letter-spacing:-.5px; line-height:1.02;">{{ title }} <span style="color:#a2857a; font-style:italic; font-weight:400; font-size:32px;">{{ year }}</span></h1>
+        <div style="font-size:14px; color:#c2a99a; margin-top:10px;">Directed by <a href="{{ directorHref }}" style="color:#f2e5cd; font-weight:600;" style-hover="color:#f0d488;">{{ director }}</a></div>
+
+        <!-- meta row -->
+        <div style="display:flex; gap:22px; align-items:center; margin-top:18px; flex-wrap:wrap;">
+          <span style="font-size:11px; font-weight:700; letter-spacing:.5px; color:#ddc9b4; border:1.5px solid #6b4a42; border-radius:3px; padding:2px 7px; line-height:1.2;">{{ certification }}</span>
+          <span style="font-size:12px; color:#8a6f63;">{{ releaseDate }}</span>
+          <span style="font-size:12px; color:#8a6f63;">&middot;</span>
+          <span style="font-size:12px; color:#8a6f63;">{{ runtime }}</span>
+          <span style="font-size:12px; color:#8a6f63;">&middot;</span>
+          <span style="font-size:12px; color:#8a6f63;">{{ country }}</span>
+        </div>
+
+        <!-- genres -->
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:20px;">
+          <sc-for list="{{ genres }}" as="g" hint-placeholder-count="3">
+            <span style="font-size:12px; color:#ddc9b4; border:1px solid #4a2529; border-radius:20px; padding:5px 13px; background:#241012;">{{ g }}</span>
+          </sc-for>
+        </div>
+
+        <!-- synopsis -->
+        <p style="font-size:15px; color:#d8c6ad; line-height:1.65; margin-top:22px; max-width:560px;">{{ synopsis }}</p>
+
+        <!-- cast -->
+        <div style="margin-top:28px;">
+          <div style="font-family:'Newsreader',serif; font-style:italic; font-size:17px; color:#ecdcbd; padding-bottom:9px; border-bottom:1px solid #402226; margin-bottom:12px;">Cast</div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <sc-for list="{{ castLinks }}" as="c" hint-placeholder-count="5">
+              <a href="{{ c.href }}" style="font-size:13px; color:#e9d9c4; background:#241012; border:1px solid #4a2529; border-radius:6px; padding:7px 12px;" style-hover="color:#f0d488; border-color:#d9b45a;">{{ c.name }}</a>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- your reviews -->
+        <div style="margin-top:28px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; padding-bottom:9px; border-bottom:1px solid #402226; margin-bottom:16px;">
+            <span style="font-family:'Newsreader',serif; font-style:italic; font-size:17px; color:#ecdcbd;">Your reviews</span>
+            <span style="font-size:12px; color:#8a6f63;">{{ reviewCount }} entries</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <sc-for list="{{ reviews }}" as="r" hint-placeholder-count="2">
+              <div style="border-left:2px solid #4a2529; padding-left:16px;">
+                <div style="display:flex; align-items:center; gap:12px; margin-bottom:9px;">
+                  <span style="color:#d9b45a; font-size:14px; letter-spacing:1px;">{{ r.stars }}</span>
+                  <sc-if value="{{ r.liked }}" hint-placeholder-val="{{ true }}"><span style="color:#d9b45a; font-size:13px;">&#9829;</span></sc-if>
+                  <span style="font-size:12px; color:#8a6f63;">{{ r.label }} &middot; {{ r.date }}</span>
+                  <a href="{{ r.viewHref }}" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:#a2857a; background:transparent; border:1px solid #4a2529; border-radius:6px; padding:5px 11px; font-family:'Archivo',sans-serif;" style-hover="border-color:#d9b45a; color:#f4e8d1;">View <span style="font-size:12px;">&rarr;</span></a>
+                </div>
+                <p style="font-family:'Newsreader',serif; font-size:16px; color:#e6d8c3; line-height:1.6; font-style:italic; max-width:560px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; text-overflow:ellipsis;">{{ r.text }}</p>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <dc-import name="Entry Editor" film-href="Film v2.dc.html" mode="{{ editorMode }}" open="{{ editorOpen }}" film-title="{{ title }}" film-year="{{ year }}" seed-date="{{ seedDate }}" seed-rating="{{ seedRating }}" seed-liked="{{ seedLiked }}" seed-rewatch="{{ seedRewatch }}" seed-medium="{{ seedMedium }}" seed-venue="{{ seedVenue }}" seed-format="{{ seedFormat }}" seed-other-medium="{{ seedOtherMedium }}" seed-review="{{ seedReview }}" seed-tags="{{ seedTags }}" seed-friends="{{ seedFriends }}" on-save="{{ onEditorSave }}" on-close="{{ onEditorClose }}" on-delete="{{ onEditorDelete }}" hint-size="0px,0px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    editorOpen: false,
+    editorMode: "log",
+    editIndex: null,
+    reviews: [
+      { rating: 4.5, liked: true, rewatch: true, dateIso: "2026-07-08",
+        medium: "theater", venue: "Metrograph, NYC", format: "35mm", otherMedium: "",
+        tags: ["komorebi", "slow cinema", "rewatchable"], friends: ["Mia Tanaka", "Leo Vasquez"],
+        text: "Even better the second time. The komorebi \u2014 sunlight through leaves \u2014 becomes a whole philosophy, and the closing shot on Yakusho's face is one of the best of the decade." },
+      { rating: 4, liked: false, rewatch: false, dateIso: "2024-02-02",
+        medium: "computer", venue: "", format: "", otherMedium: "",
+        tags: ["Tokyo"], friends: [],
+        text: "A gentle rhythm of cassette tapes and film photographs. I wasn't sure where it was going at first, but it settles into you long after the credits." },
+    ],
+  };
+
+  storeKey = "filmlog:v2:Perfect Days:2023";
+  componentDidMount() {
+    import("./nav-back.js").then((m) => {
+      this._nav = m;
+      const saved = m.loadStore(this.storeKey, null);
+      if (saved) this.setState({ reviews: saved });
+      else this.forceUpdate();
+    });
+  }
+  persist(reviews) { if (this._nav) this._nav.saveStore(this.storeKey, reviews); }
+  backNav(fallbackHref, fallbackLabel) {
+    const nav = this._nav ? this._nav.resolveBack(fallbackHref, fallbackLabel) : { href: fallbackHref, label: fallbackLabel };
+    return { backHref: nav.href, backLabel: nav.label, handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = fallbackHref; } };
+  }
+
+  starText(r) {
+    const full = Math.floor(r);
+    return "\u2605".repeat(full) + (r % 1 >= 0.5 ? "\u00bd" : "");
+  }
+
+  fmt(iso) {
+    if (!iso) return "Today";
+    const d = new Date(iso + "T00:00:00");
+    const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return m[d.getMonth()] + " " + d.getDate() + ", " + d.getFullYear();
+  }
+
+  reviewLabel(r) { return r.rewatch ? "Rewatch" : "Watched"; }
+
+  entryToReview(entry) {
+    return {
+      rating: entry.rating, liked: entry.liked, rewatch: entry.rewatch, dateIso: entry.date,
+      medium: entry.medium, venue: entry.venue, format: entry.format, otherMedium: entry.otherMedium,
+      tags: entry.tags, friends: entry.friends, text: entry.review,
+    };
+  }
+
+  openLog() { this.setState({ editorOpen: true, editorMode: "log", editIndex: null }); }
+  openEdit(i) { this.setState({ editorOpen: true, editorMode: "edit", editIndex: i }); }
+
+  filterHref(key, val) {
+    const p = new URLSearchParams();
+    p.set(key, val);
+    return "Films Watched.dc.html?" + p.toString();
+  }
+
+  renderVals() {
+    const s = this.state;
+    const editing = s.editIndex != null ? s.reviews[s.editIndex] : null;
+    const cast = ["K\u014dji Yakusho", "Tokio Emoto", "Arisa Nakano", "Aoi Yamada", "Yumi As\u014d"];
+    const blank = { rating: 0, liked: false, rewatch: false, dateIso: "2026-07-11", medium: "theater", venue: "", format: "", otherMedium: "", tags: [], friends: [], text: "" };
+    const seed = editing || blank;
+
+    const reviews = s.reviews.map((r, i) => ({
+      stars: this.starText(r.rating),
+      liked: r.liked,
+      label: this.reviewLabel(r),
+      date: this.fmt(r.dateIso),
+      text: r.text,
+      viewHref: "Diary Entry.dc.html?i=" + i,
+    }));
+    const latest = s.reviews[0] || { rating: 0, dateIso: null };
+
+    return {
+      ...this.backNav("Jason's Film Log.dc.html", "Jason's film log"),
+      directorHref: this.filterHref("fDirectors", "Wim Wenders"),
+      castLinks: cast.map((c) => ({ name: c, href: this.filterHref("fActors", c) })),
+      title: "Perfect Days",
+      year: 2023,
+      director: "Wim Wenders",
+      runtime: "2h 4m",
+      avg: "4.3",
+      avgStars: this.starText(4.5),
+      ratingCount: "48,210",
+      country: "Japan",
+      certification: "PG",
+      releaseDate: "Feb 2, 2024",
+      genres: ["Drama", "Slice of life"],
+      synopsis:
+        "Hirayama cleans public toilets across Tokyo with quiet devotion. His days follow a gentle rhythm \u2014 cassette tapes, film photographs of dappled light, a paperback before sleep. When fragments of his past drift back into view, the ordinary reveals its depths.",
+      cast: ["K\u014dji Yakusho", "Tokio Emoto", "Arisa Nakano", "Aoi Yamada", "Yumi As\u014d"],
+      yourStars: this.starText(latest.rating),
+      watchedDate: this.fmt(latest.dateIso),
+      reviewCount: reviews.length,
+      reviews,
+      logButtonLabel: s.reviews.length ? "Log or review again" : "Log or review",
+
+      // entry editor
+      openComposer: () => this.openLog(),
+      editorOpen: s.editorOpen,
+      editorMode: s.editorMode,
+      seedDate: seed.dateIso,
+      seedRating: seed.rating,
+      seedLiked: seed.liked,
+      seedRewatch: seed.rewatch,
+      seedMedium: seed.medium,
+      seedVenue: seed.venue,
+      seedFormat: seed.format,
+      seedOtherMedium: seed.otherMedium,
+      seedReview: seed.text,
+      seedTags: seed.tags,
+      seedFriends: seed.friends,
+      onEditorSave: (entry) => {
+        const rev = this.entryToReview(entry);
+        this.setState((p) => {
+          let next;
+          if (p.editIndex != null) { next = p.reviews.slice(); next[p.editIndex] = rev; }
+          else next = [rev, ...p.reviews];
+          this.persist(next);
+          return { reviews: next, editorOpen: false };
+        });
+      },
+      onEditorClose: () => this.setState({ editorOpen: false }),
+      onEditorDelete: () => this.setState((p) => {
+        const next = p.editIndex != null ? p.reviews.filter((_, i) => i !== p.editIndex) : p.reviews;
+        this.persist(next);
+        return { reviews: next, editorOpen: false };
+      }),
+    };
+  }
+}
+</script>
+</body>
+</html>

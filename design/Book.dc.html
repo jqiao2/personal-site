@@ -1,0 +1,1328 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; color-scheme: dark; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1a120a;">
+
+  <nav style="display:flex; align-items:stretch; gap:2px; background:#150e07; border-bottom:1px solid #45341f; padding:0 clamp(14px,4vw,24px); overflow-x:auto; max-width:1008px; margin:0 auto; box-shadow:-2000px 0 0 #150e07, 2000px 0 0 #150e07; position:relative; z-index:3;">
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Home</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">About</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Projects</a>
+    <a href="Jason's Film Log.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Films</a>
+    <a href="Reading.dc.html" style="font-size:13px; letter-spacing:.4px; color:#f2e6cd; font-weight:600; padding:26px 16px 24px; border-bottom:2px solid #cfa452; white-space:nowrap;" style-hover="color:#fff2da;">Reading</a>
+    <a href="Subway Map.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Subway Map</a>
+  </nav>
+
+  <!-- Hero: a wash pulled from the cover, on a shelf with one book missing -->
+  <div style="{{ heroStyle }}">
+    <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(135deg,rgba(255,246,224,.022) 0 2px,transparent 2px 5px); pointer-events:none;"></div>
+    <div style="position:absolute; left:0; right:0; bottom:0; height:1px; background:#45341f;"></div>
+    <div style="{{ shelfRowStyle }}">
+      <sc-for list="{{ shelfSpines }}" as="sp" hint-placeholder-count="16">
+        <div style="{{ sp.style }}"></div>
+      </sc-for>
+    </div>
+    <div style="position:relative; height:100%; display:flex; justify-content:center; padding:0 clamp(14px,4vw,24px);">
+      <div style="width:100%; max-width:960px; display:flex; align-items:flex-start; justify-content:space-between; gap:18px; padding-top:22px; flex-wrap:wrap;">
+        <a href="{{ backHref }}" onClick="{{ handleBackClick }}" style="display:inline-flex; align-items:center; gap:9px; font-size:13px; color:#e8dbc2;" style-hover="color:#fff2da;">
+          <span style="font-size:15px;">&larr;</span><span>{{ backLabel }}</span>
+        </a>
+        <div style="display:inline-flex; align-items:center; gap:9px;">
+          <span style="{{ heroDotStyle }}"></span>
+          <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.7px; color:#c9b491;">{{ heroStatus }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex; justify-content:center; padding:0 clamp(14px,4vw,24px) 96px;">
+    <div style="width:100%; max-width:960px; display:flex; gap:38px; align-items:flex-start; flex-wrap:wrap;">
+
+      <!-- ============ LEFT RAIL ============ -->
+      <div style="flex:0 0 236px; max-width:100%; margin-top:-104px; display:flex; flex-direction:column; gap:16px; position:relative; z-index:2;">
+
+        <sc-if value="{{ hasCover }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ coverStyle }}">
+            <div style="position:absolute; inset:0; background:linear-gradient(180deg,rgba(20,13,6,.05) 40%,rgba(20,13,6,.82) 100%);"></div>
+            <div style="position:absolute; left:0; top:0; bottom:0; width:9px; background:linear-gradient(90deg,rgba(255,255,255,.10),rgba(0,0,0,.28));"></div>
+            <div style="position:relative; padding:16px; display:flex; flex-direction:column; justify-content:flex-end; height:100%;">
+              <div style="font-family:'Newsreader',serif; font-size:19px; color:#fbf1dc; line-height:1.2; letter-spacing:-.1px;">{{ title }}</div>
+              <div style="font-size:11.5px; color:#d6c3a0; margin-top:6px;">{{ authorLine }}</div>
+            </div>
+            <div style="position:absolute; top:11px; left:12px; font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:9px; letter-spacing:.6px; color:rgba(255,244,222,.42);">cover · open library</div>
+            <sc-if value="{{ hasBadge }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ badgeStyle }}">{{ badgeLabel }}</div>
+            </sc-if>
+            <sc-if value="{{ isPrivate }}" hint-placeholder-val="{{ false }}">
+              <div style="position:absolute; inset:0; background-image:repeating-linear-gradient(45deg,rgba(20,13,6,.62) 0 8px,rgba(20,13,6,.18) 8px 16px); pointer-events:none;"></div>
+              <div style="position:absolute; top:0; left:0; right:0; display:flex; align-items:center; gap:8px; background:#1a120a; border-bottom:1px solid #6b5228; padding:8px 12px;">
+                <span style="width:5px; height:5px; border-radius:50%; background:#cfa452; flex:none;"></span>
+                <span style="font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.6px; color:#ecc87c;">Private</span>
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- no cover: the spine treatment from the shelf -->
+        <sc-if value="{{ noCover }}" hint-placeholder-val="{{ false }}">
+          <div style="height:354px; display:flex; align-items:flex-end; justify-content:center; gap:14px; border:1px dashed #45341f; border-radius:8px; padding:20px;">
+            <div style="{{ bigSpineStyle }}">
+              <div style="{{ bigSpineFillStyle }}"></div>
+              <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+                <span style="writing-mode:vertical-rl; font-family:'Newsreader',serif; font-size:15px; color:#f2e6cd; letter-spacing:.4px; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,.6);">{{ title }}</span>
+              </div>
+            </div>
+            <div style="align-self:flex-end; font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:9.5px; letter-spacing:.5px; color:#75603f; writing-mode:vertical-rl;">no cover on file</div>
+          </div>
+        </sc-if>
+
+        <!-- rail status: a reading, not a control -->
+        <sc-if value="{{ hasProgressStatus }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ statusBoxStyle }}">
+            <div style="display:flex; align-items:center; gap:7px; margin-bottom:12px;">
+              <span style="{{ statusDotStyle }}"></span>
+              <span style="{{ statusLabelStyle }}">{{ statusLabel }}</span>
+              <sc-if value="{{ lovedAny }}" hint-placeholder-val="{{ false }}">
+                <span title="You loved this" style="margin-left:auto; color:#cfa452; font-size:13px; line-height:1;">&#9829;</span>
+              </sc-if>
+            </div>
+            <sc-if value="{{ knowsTotal }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ trackStyle }}">
+                <div style="{{ barStyle }}"></div>
+              </div>
+              <div style="font-size:12.5px; color:#dcc9a6; margin-top:9px; line-height:1.45;">{{ railPageLine }}</div>
+            </sc-if>
+            <sc-if value="{{ unknownTotal }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:12.5px; color:#dcc9a6; line-height:1.45;">{{ railPageLine }}</div>
+            </sc-if>
+            <sc-if value="{{ hasStatusNote }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px; color:#8a745a; margin-top:8px; line-height:1.55;">{{ statusNote }}</div>
+            </sc-if>
+            <div style="display:flex; flex-direction:column; gap:7px; margin-top:13px; padding-top:12px; border-top:1px solid #33261a;">
+              <sc-for list="{{ railFacts }}" as="f" hint-placeholder-count="2">
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:12px;">
+                  <span style="color:#8a745a;">{{ f.k }}</span><span style="color:#efe0c2; text-align:right;">{{ f.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isFinished }}" hint-placeholder-val="{{ false }}">
+          <div style="border-left:2px solid #7f8f5a; background:#241a10; border-radius:0 9px 9px 0; padding:14px 15px 15px;">
+            <div style="display:flex; align-items:center; gap:7px; margin-bottom:10px;">
+              <span style="width:5px; height:5px; border-radius:50%; background:#9fb072;"></span>
+              <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.5px; color:#9fb072;">Finished</span>
+              <sc-if value="{{ lovedAny }}" hint-placeholder-val="{{ false }}">
+                <span title="You loved this" style="margin-left:auto; color:#cfa452; font-size:13px; line-height:1;">&#9829;</span>
+              </sc-if>
+            </div>
+            <div style="font-family:'Newsreader',serif; font-size:20px; color:#f2e6cd; line-height:1.25;">{{ finishedDateLong }}</div>
+            <sc-if value="{{ byHand }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:12px; color:#a68f6e; margin-top:7px; line-height:1.5;">{{ stoppedLine }}</div>
+              <div style="font-size:11.5px; color:#75603f; margin-top:6px; line-height:1.5;">Called done by hand — the rest is endnotes and sources.</div>
+            </sc-if>
+            <div style="display:flex; flex-direction:column; gap:7px; margin-top:13px; padding-top:12px; border-top:1px solid #33261a;">
+              <sc-for list="{{ railFacts }}" as="f" hint-placeholder-count="3">
+                <div style="display:flex; justify-content:space-between; gap:10px; font-size:12px;">
+                  <span style="color:#8a745a;">{{ f.k }}</span><span style="color:#efe0c2; text-align:right;">{{ f.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isToRead }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px; color:#8a745a; line-height:1.55;">{{ addedLine }}</div>
+        </sc-if>
+
+        <sc-if value="{{ showAutoNote }}" hint-placeholder-val="{{ true }}">
+          <div style="font-size:11.5px; color:#75603f; line-height:1.5;">{{ autoNote }}</div>
+        </sc-if>
+
+        <!-- one primary action, everything else quieter -->
+        <sc-if value="{{ hasPrimary }}" hint-placeholder-val="{{ false }}">
+          <button onClick="{{ primaryAction }}" style="{{ primaryStyle }}">{{ primaryLabel }}</button>
+        </sc-if>
+
+        <sc-if value="{{ hasQuiet }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; flex-flow:row wrap; align-items:baseline; gap:10px 18px; padding-top:14px; border-top:1px solid #2b2013;">
+            <sc-for list="{{ quietActions }}" as="q" hint-placeholder-count="2">
+              <button onClick="{{ q.onClick }}" title="{{ q.hint }}" style="font-size:12px; color:#a68f6e; background:transparent; border:none; padding:0; cursor:pointer; font-family:'Archivo',sans-serif; text-align:left; text-decoration:underline; text-decoration-color:#4d3a22; text-underline-offset:4px;" style-hover="color:#f2e6cd;">{{ q.label }}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <!-- visibility -->
+        <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}">
+          <div style="{{ privBoxStyle }}">
+            <button onClick="{{ togglePrivate }}" style="display:flex; align-items:center; gap:10px; width:100%; background:transparent; border:none; padding:0; cursor:pointer; font-family:'Archivo',sans-serif; text-align:left;">
+              <span style="{{ privTrackStyle }}"><span style="{{ privKnobStyle }}"></span></span>
+              <span style="{{ privLabelStyle }}">{{ privLabel }}</span>
+            </button>
+          </div>
+        </sc-if>
+      </div>
+
+      <!-- ============ RIGHT COLUMN ============ -->
+      <div style="flex:1 1 440px; min-width:0; padding-top:26px;">
+
+        <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:clamp(32px,5.4vw,46px); color:#f4e9d2; letter-spacing:-.6px; line-height:1.05;">{{ title }}</h1>
+        <sc-if value="{{ hasSub }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'Newsreader',serif; font-style:italic; font-size:clamp(17px,2.6vw,22px); color:#a68f6e; margin-top:7px; line-height:1.3;">{{ sub }}</div>
+        </sc-if>
+        <sc-if value="{{ hasSeries }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px; text-transform:uppercase; letter-spacing:1.6px; color:#8a745a; margin-top:12px;">{{ series }}</div>
+        </sc-if>
+
+        <div style="font-size:14.5px; color:#c2ab88; margin-top:14px;">By <sc-for list="{{ authors }}" as="a" hint-placeholder-count="1"><a href="{{ a.href }}" style="color:#f2e6cd; font-weight:600;" style-hover="color:#ecc87c;">{{ a.name }}</a>{{ a.sep }}</sc-for></div>
+
+        <sc-if value="{{ hasMeta }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; align-items:center; gap:11px; margin-top:15px; flex-wrap:wrap;">
+            <sc-for list="{{ metaBits }}" as="m" hint-placeholder-count="3">
+              <span style="font-size:12.5px; color:#8a745a;">{{ m.text }}</span>
+            </sc-for>
+            <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ openMatch }}" style="font-size:11.5px; color:#75603f; background:transparent; border:none; padding:0; cursor:pointer; font-family:'Archivo',sans-serif; text-decoration:underline; text-decoration-color:#3d2d1a; text-underline-offset:3px;" style-hover="color:#cfa452;">wrong edition?</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasTags }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:19px;">
+            <a href="{{ kindHref }}" style="font-size:11.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.2px; color:#241a10; background:#cfa452; border-radius:20px; padding:6px 14px;" style-hover="background:#ecc87c;">{{ kind }}</a>
+            <sc-for list="{{ genres }}" as="g" hint-placeholder-count="3">
+              <a href="{{ g.href }}" style="font-size:12px; color:#dcc9a6; border:1px solid #45341f; border-radius:20px; padding:6px 14px; background:#221809;" style-hover="border-color:#cfa452; color:#f2e6cd;">{{ g.name }}</a>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ hasDesc }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top:22px; max-width:600px;">
+            <sc-for list="{{ descShown }}" as="p" hint-placeholder-count="2">
+              <p style="font-size:15px; color:#d5c3a4; line-height:1.68; margin-bottom:13px; text-wrap:pretty;">{{ p.text }}</p>
+            </sc-for>
+            <sc-if value="{{ descTruncated }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ toggleDesc }}" style="font-size:12.5px; color:#cfa452; background:transparent; border:none; padding:0; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="color:#ecc87c;">{{ descToggleLabel }}</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- unmatched invitation -->
+        <sc-if value="{{ showMatchInvite }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:26px; border:1px dashed #45341f; border-radius:10px; padding:22px 20px; max-width:600px;">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:19px; color:#ead9b6; line-height:1.35;">Nothing is known about this book yet.</div>
+            <div style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11.5px; color:#a68f6e; background:#1f1609; border:1px solid #33261a; border-radius:7px; padding:10px 12px; margin-top:14px; overflow-x:auto; white-space:nowrap;">{{ raw }}</div>
+            <sc-if value="{{ isOwner }}" hint-placeholder-val="{{ true }}">
+              <button onClick="{{ openMatch }}" style="margin-top:16px; font-size:13.5px; font-weight:700; color:#241a10; background:#cfa452; border:none; border-radius:8px; padding:11px 20px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#ecc87c;">Find this book on Open Library</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <!-- ============ YOUR READING ============ -->
+        <sc-if value="{{ hasActivity }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:42px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:20px; flex-wrap:wrap;">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Your reading</div>
+            <div style="font-size:11.5px; color:#75603f;">{{ lifetimeScope }}</div>
+          </div>
+
+          <sc-if value="{{ progressIsHero }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap; margin-bottom:8px;">
+              <div style="font-family:'Newsreader',serif; font-size:clamp(48px,9vw,68px); color:#cfa452; line-height:.85; letter-spacing:-2px;">{{ pctBig }}</div>
+              <div style="flex:1 1 220px; min-width:0; padding-bottom:6px;">
+                <div style="height:10px; background:#33261a; border-radius:5px; overflow:hidden;">
+                  <div style="{{ barStyle }}"></div>
+                </div>
+                <div style="display:flex; justify-content:space-between; gap:12px; margin-top:8px; font-size:12.5px;">
+                  <span style="color:#dcc9a6;">{{ pageLine }}</span>
+                  <span style="color:#8a745a;">{{ pagesLeftLine }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(128px,1fr)); gap:1px; background:#33261a; border:1px solid #45341f; border-radius:10px; overflow:hidden; margin-top:18px;">
+            <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+              <div style="background:#221809; padding:15px 16px 16px;">
+                <div style="font-family:'Newsreader',serif; font-size:26px; color:#f2e6cd; line-height:1;">{{ s.value }}</div>
+                <div style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.3px; color:#8a745a; margin-top:8px;">{{ s.label }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <!-- pace + projection -->
+          <sc-if value="{{ hasPace }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:18px; border-left:2px solid #cfa452; background:#221809; border-radius:0 10px 10px 0; padding:18px 20px 19px;">
+              <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;">
+                <div style="font-family:'Newsreader',serif; font-size:34px; color:#cfa452; line-height:1;">{{ paceValue }}</div>
+                <div style="font-size:12px; text-transform:uppercase; letter-spacing:1.4px; color:#a68f6e;">{{ paceUnit }}</div>
+              </div>
+              <div style="font-family:'Newsreader',serif; font-size:19px; color:#f2e6cd; line-height:1.45; margin-top:12px; max-width:520px;">{{ projectionLine }}</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ noPace }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:18px; border-left:2px solid #3d2d1a; padding:4px 0 4px 18px;">
+              <div style="font-family:'Newsreader',serif; font-style:italic; font-size:17px; color:#a68f6e; line-height:1.5; max-width:520px;">{{ noPaceLine }}</div>
+            </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- ============ ACTIVITY ============ -->
+        <sc-if value="{{ hasActivity }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:42px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:18px; flex-wrap:wrap;">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">When you read it</div>
+            <div style="font-size:11.5px; color:#75603f;">{{ activityMeta }}</div>
+          </div>
+          <sc-if value="{{ showHourBlock }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-bottom:22px;">
+              <dc-import name="Hour Histogram" scope="book" size="lg" start-open="{{ false }}" hours="{{ bookHours }}" spread="{{ bookSpread }}" spread-total="{{ bookSittings }}" spread-unit="sittings" fallback="{{ hourFallback }}" hint-size="100%,44px"></dc-import>
+            </div>
+          </sc-if>
+          <div style="display:flex; flex-direction:column;">
+            <sc-for list="{{ stretchRows }}" as="r" hint-placeholder-count="2">
+              <div>
+                <sc-if value="{{ r.isGap }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex; align-items:center; gap:14px; padding:15px 0;">
+                    <div style="flex:1; height:1px; background:repeating-linear-gradient(90deg,#392a19 0 5px,transparent 5px 11px);"></div>
+                    <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.6px; color:#75603f; white-space:nowrap;">{{ r.label }}</span>
+                    <div style="flex:1; height:1px; background:repeating-linear-gradient(90deg,#392a19 0 5px,transparent 5px 11px);"></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ r.isStretch }}" hint-placeholder-val="{{ true }}">
+                  <div style="background:#201709; border:1px solid #392a19; border-radius:10px; padding:16px 18px 17px;">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                      <div style="display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;">
+                        <span style="font-size:13.5px; color:#efe0c2; font-weight:500; letter-spacing:.2px;">{{ r.range }}</span>
+                        <sc-if value="{{ r.hasRead }}" hint-placeholder-val="{{ false }}">
+                          <span style="font-size:10.5px; text-transform:uppercase; letter-spacing:1.4px; color:#cfa452;">{{ r.readLabel }}</span>
+                        </sc-if>
+                      </div>
+                      <span style="font-size:12px; color:#a68f6e;">{{ r.meta }}</span>
+                    </div>
+                    <div style="display:flex; gap:3px; margin-top:14px; flex-wrap:wrap;">
+                      <sc-for list="{{ r.cells }}" as="c" hint-placeholder-count="14">
+                        <div title="{{ c.title }}" style="{{ c.style }}"></div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ============ HIGHLIGHTS ============ -->
+        <sc-if value="{{ hasHighlights }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:46px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:6px; flex-wrap:wrap;">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">Highlights</div>
+            <div style="font-size:11.5px; color:#75603f;">{{ highlightMeta }}</div>
+          </div>
+          <div style="{{ highlightListStyle }}">
+            <sc-for list="{{ highlightsShown }}" as="h" hint-placeholder-count="4">
+              <div style="display:flex; gap:20px; padding:20px 0; border-bottom:1px solid #2b2013;">
+                <div style="flex:0 0 34px; font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; color:#75603f; text-align:right; padding-top:6px; letter-spacing:.4px;">{{ h.page }}</div>
+                <div style="flex:1; min-width:0; font-family:'Newsreader',serif; font-size:17.5px; color:#e9dbbf; line-height:1.62; text-wrap:pretty;">{{ h.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ highlightsCollapsible }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ toggleHighlights }}" style="margin-top:16px; font-size:12.5px; font-weight:600; color:#dcc9a6; background:transparent; border:1px solid #45341f; border-radius:20px; padding:9px 18px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#cfa452; color:#f2e6cd;">{{ highlightToggleLabel }}</button>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- ============ REVIEWS ============ -->
+        <sc-if value="{{ showReviews }}" hint-placeholder-val="{{ true }}">
+        <div style="margin-top:46px;">
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:20px; flex-wrap:wrap;">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">{{ reviewsHeading }}</div>
+            <sc-if value="{{ manyReads }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:11.5px; color:#75603f;">{{ readsMeta }}</div>
+            </sc-if>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <sc-for list="{{ reads }}" as="r" hint-placeholder-count="1">
+              <div style="{{ r.wrapStyle }}">
+                <div style="display:flex; align-items:baseline; gap:12px; flex-wrap:wrap;">
+                  <sc-if value="{{ r.showReadLabel }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:#cfa452;">{{ r.readLabel }}</span>
+                  </sc-if>
+                  <span style="font-size:12.5px; color:#8a745a;">{{ r.dates }}</span>
+                  <sc-if value="{{ r.isOwner }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ r.onEdit }}" style="margin-left:auto; font-size:11px; font-weight:600; color:#a68f6e; background:transparent; border:1px solid #45341f; border-radius:6px; padding:5px 11px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#cfa452; color:#f2e6cd;">{{ r.editLabel }}</button>
+                  </sc-if>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:12px; margin-top:11px; flex-wrap:wrap;">
+                  <sc-if value="{{ r.hasRating }}" hint-placeholder-val="{{ true }}">
+                    <span style="color:#cfa452; font-size:16px; letter-spacing:2px; line-height:1;">{{ r.stars }}</span>
+                  </sc-if>
+                  <sc-if value="{{ r.loved }}" hint-placeholder-val="{{ false }}">
+                    <span title="You loved this" style="display:inline-flex; align-items:center; gap:6px; font-size:11.5px; letter-spacing:.4px; color:#cfa452;"><span style="font-size:14px; line-height:1;">&#9829;</span>{{ r.lovedWord }}</span>
+                  </sc-if>
+                  <sc-if value="{{ r.hasEnding }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.3px; color:#c07a5a;">{{ r.ending }}</span>
+                  </sc-if>
+                  <span style="font-size:12px; color:#75603f;">{{ r.readStats }}</span>
+                </div>
+
+                <sc-if value="{{ r.hasText }}" hint-placeholder-val="{{ true }}">
+                  <p style="font-family:'Newsreader',serif; font-size:17px; color:#e6d8bd; line-height:1.65; margin-top:13px; max-width:580px; text-wrap:pretty;">{{ r.text }}</p>
+                </sc-if>
+                <sc-if value="{{ r.noText }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-family:'Newsreader',serif; font-style:italic; font-size:16px; color:#75603f; margin-top:12px;">{{ r.emptyLine }}</div>
+                </sc-if>
+
+                <sc-if value="{{ r.hasChips }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:15px; align-items:center;">
+                    <sc-for list="{{ r.chips }}" as="c" hint-placeholder-count="5">
+                      <span style="{{ c.style }}">{{ c.label }}</span>
+                    </sc-for>
+                    <sc-if value="{{ r.hasMoreChips }}" hint-placeholder-val="{{ false }}">
+                      <button onClick="{{ r.toggleChips }}" style="font-size:11.5px; color:#8a745a; background:transparent; border:none; padding:4px 2px; cursor:pointer; font-family:'Archivo',sans-serif; text-decoration:underline; text-decoration-color:#3d2d1a; text-underline-offset:3px;" style-hover="color:#dcc9a6;">{{ r.chipsToggleLabel }}</button>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <sc-if value="{{ noReads }}" hint-placeholder-val="{{ false }}">
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:17px; color:#75603f;">{{ noReadsLine }}</div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MATCH PANEL ============ -->
+  <sc-if value="{{ matchOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; background:rgba(9,6,3,.74); backdrop-filter:blur(3px); display:flex; align-items:flex-start; justify-content:center; padding:48px 20px; z-index:60;">
+      <div style="width:100%; max-width:620px; max-height:calc(100vh - 96px); display:flex; flex-direction:column; background:#241a10; border:1px solid #45341f; border-radius:14px; box-shadow:0 30px 70px -20px rgba(0,0,0,.75); overflow:hidden;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; padding:18px 22px; border-bottom:1px solid #392a19; flex:none;">
+          <div>
+            <div style="font-family:'Newsreader',serif; font-style:italic; font-size:21px; color:#f2e6cd; line-height:1.2;">{{ matchHead }}</div>
+            <div style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:10.5px; color:#75603f; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ raw }}</div>
+          </div>
+          <button onClick="{{ closeMatch }}" style="flex:none; width:30px; height:30px; border:1px solid #45341f; background:transparent; color:#a68f6e; border-radius:7px; cursor:pointer; font-size:14px; line-height:1;" style-hover="background:#33261a; color:#f2e6cd;">&#10005;</button>
+        </div>
+
+        <div style="flex:1 1 auto; overflow-y:auto; padding:20px 22px 24px;">
+          <sc-if value="{{ matchSearching }}" hint-placeholder-val="{{ true }}">
+            <input value="{{ matchQuery }}" onInput="{{ setMatchQuery }}" placeholder="Title and author&hellip;" autoComplete="off" style="width:100%; background:#1a120a; border:1px solid #45341f; border-radius:9px; padding:12px 14px; color:#f2e6cd; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#cfa452;">
+            <div style="font-size:11.5px; color:#75603f; margin-top:9px;">{{ matchResultMeta }}</div>
+            <div style="display:flex; flex-direction:column; margin-top:12px;">
+              <sc-for list="{{ matchResults }}" as="m" hint-placeholder-count="3">
+                <div onClick="{{ m.pick }}" style="display:flex; gap:14px; align-items:center; padding:12px 12px; border:1px solid transparent; border-radius:9px; cursor:pointer;" style-hover="background:#2c2013; border-color:#45341f;">
+                  <div style="{{ m.thumbStyle }}"></div>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-family:'Newsreader',serif; font-size:16.5px; color:#f2e6cd; line-height:1.25;">{{ m.title }}</div>
+                    <div style="font-size:12px; color:#a68f6e; margin-top:4px;">{{ m.author }}</div>
+                  </div>
+                  <div style="flex:none; text-align:right;">
+                    <div style="font-family:'Newsreader',serif; font-size:17px; color:#cfa452; line-height:1;">{{ m.year }}</div>
+                    <div style="font-size:11px; color:#75603f; margin-top:5px;">{{ m.pages }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ matchNoResults }}" hint-placeholder-val="{{ false }}">
+              <div style="font-size:13px; color:#8a745a; padding:22px 2px; line-height:1.6;">Nothing on Open Library matches that. Try the author alone, or leave it unmatched — the reading log works without it.</div>
+            </sc-if>
+          </sc-if>
+
+          <sc-if value="{{ matchConfirming }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; gap:16px; align-items:flex-start; background:#1f1609; border:1px solid #33261a; border-radius:10px; padding:15px;">
+              <div style="{{ pickedThumbStyle }}"></div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-family:'Newsreader',serif; font-size:17px; color:#f2e6cd; line-height:1.25;">{{ pickedTitle }}</div>
+                <div style="font-size:12px; color:#a68f6e; margin-top:5px;">{{ pickedMeta }}</div>
+                <button onClick="{{ backToSearch }}" style="font-size:11.5px; color:#8a745a; background:transparent; border:none; padding:6px 0 0; cursor:pointer; font-family:'Archivo',sans-serif; text-decoration:underline; text-underline-offset:3px;" style-hover="color:#dcc9a6;">Pick a different edition</button>
+              </div>
+            </div>
+            <div style="margin-top:20px; display:flex; flex-direction:column; gap:16px;">
+              <div>
+                <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:#8a745a; margin-bottom:8px;">Shown as</label>
+                <input value="{{ editTitle }}" onInput="{{ setEditTitle }}" style="width:100%; background:#1a120a; border:1px solid #45341f; border-radius:9px; padding:12px 14px; color:#f2e6cd; font-size:15px; font-family:'Newsreader',serif; outline:none;" style-focus="border-color:#cfa452;">
+              </div>
+              <div>
+                <label style="display:block; font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:#8a745a; margin-bottom:8px;">Author</label>
+                <input value="{{ editAuthor }}" onInput="{{ setEditAuthor }}" style="width:100%; background:#1a120a; border:1px solid #45341f; border-radius:9px; padding:12px 14px; color:#f2e6cd; font-size:14px; font-family:'Archivo',sans-serif; outline:none;" style-focus="border-color:#cfa452;">
+              </div>
+              <div style="font-size:11.5px; color:#75603f; line-height:1.6;">The file the Kindle reports stays underneath as the identifier:<br><span style="font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; color:#a68f6e;">{{ raw }}</span></div>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 22px; border-top:1px solid #392a19; background:#1f1609; flex:none;">
+          <button onClick="{{ closeMatch }}" style="font-size:13.5px; font-weight:600; color:#dcc9a6; background:transparent; border:1px solid #45341f; border-radius:8px; padding:10px 18px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#a68f6e; color:#f2e6cd;">Cancel</button>
+          <sc-if value="{{ matchConfirming }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ confirmMatch }}" style="font-size:14px; font-weight:700; color:#241a10; background:#cfa452; border:none; border-radius:8px; padding:10px 22px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#ecc87c;">Link this edition</button>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- a private book does not exist to a visitor -->
+  <sc-if value="{{ is404 }}" hint-placeholder-val="{{ false }}">
+    <div style="position:fixed; inset:0; z-index:80; background:#1a120a; display:flex; align-items:center; justify-content:center; padding:40px 24px;">
+      <div style="max-width:420px;">
+        <div style="font-family:'Newsreader',serif; font-size:64px; color:#33261a; line-height:1; letter-spacing:-2px;">404</div>
+        <div style="font-family:'Newsreader',serif; font-style:italic; font-size:22px; color:#ead9b6; margin-top:18px; line-height:1.4;">There is nothing at this address.</div>
+        <div style="font-size:13px; color:#8a745a; margin-top:12px; line-height:1.65;">No redacted page, no placeholder — as far as this site is concerned the book was never here.</div>
+        <a href="Reading.dc.html" style="display:inline-block; font-size:13px; margin-top:22px;">&larr; Back to Reading</a>
+      </div>
+    </div>
+  </sc-if>
+
+  <dc-import name="Book Review Editor" open="{{ editorOpen }}" mode="{{ editorMode }}" book-title="{{ title }}" read-label="{{ editorReadLabel }}" prior-reads="{{ priorReads }}" latest-read-title="{{ latestReadTitle }}" new-read-title="{{ newReadTitle }}" attach-on-body="{{ attachOnBody }}" attach-off-body="{{ attachOffBody }}" seed-rating="{{ seedRating }}" seed-review="{{ seedReview }}" seed-loved="{{ seedLoved }}" seed-pacing="{{ seedPacing }}" seed-focus="{{ seedFocus }}" seed-moods="{{ seedMoods }}" seed-tones="{{ seedTones }}" on-save="{{ onReviewSave }}" on-close="{{ onReviewClose }}" on-delete="{{ onReviewDelete }}" hint-size="0px,0px"></dc-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;book&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;reading&quot;,&quot;first-session&quot;,&quot;set-aside&quot;,&quot;gave-up&quot;,&quot;finished-two-reads&quot;,&quot;loved-no-rating&quot;,&quot;finished-by-hand&quot;,&quot;rated-only&quot;,&quot;to-read&quot;,&quot;not-on-shelf&quot;,&quot;unmatched&quot;,&quot;private&quot;],&quot;default&quot;:&quot;reading&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;State&quot;},&quot;viewer&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;visitor&quot;],&quot;default&quot;:&quot;owner&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;State&quot;}}">
+const DAY = 86400000;
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MOL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const TODAY = "2026-08-03";
+const VOCAB = ["Slow","Moderate","Fast","Page-Turner","Character-Driven","A bit of both","Plot-Driven",
+  "Cozy","Hopeful","Emotional","Funny","Dark","Suspenseful","Heartbreaking","Magical","Nostalgic","Bittersweet",
+  "Atmospheric","Immersive","Grounded","Dreamlike","Gritty","Gothic","Eerie","Expansive","Reflective","Cynical","Witty","Lighthearted","Serious"];
+const SCALES = ["Slow","Moderate","Fast","Page-Turner","Character-Driven","A bit of both","Plot-Driven"];
+
+const PB_HL = [
+  [9,"He was never elected to anything, and for forty-four years he decided what the city would look like."],
+  [11,"Power is not a thing you are given. It is a thing you assemble, quietly, out of clauses nobody reads."],
+  [24,"The reformer arrived certain that intelligence was enough. It was the last thing about him that stayed true."],
+  [31,"He wrote the enabling act himself, and buried in it the sentence that made him unremovable."],
+  [38,"Authority is a word that sounds like restraint and functions like a blank cheque."],
+  [46,"A bond covenant, properly drafted, outlives every mayor who might object to it."],
+  [52,"He learned early that a plan on paper beats an objection spoken aloud."],
+  [58,"The public hearing was held. It was held after the contracts were signed."],
+  [63,"Idealism, in him, did not die so much as change its address."],
+  [71,"The bridge was not the point. The approach roads through the neighbourhood were the point."],
+  [78,"He measured a park in acres and never once in the streets it replaced."],
+  [84,"Every commission he sat on gave him one more place to be, and one less place to be found."],
+  [91,"The maps in his office had no people on them, which is how he preferred to read a city."],
+  [97,"To govern by fait accompli you need only begin digging before anyone can say no."],
+  [103,"He kept the surveys secret until the day the bulldozers made them irrelevant."],
+  [112,"They called it slum clearance. The families called it Tuesday."],
+  [119,"He gave the press the drawings and the press gave him the decade."],
+  [126,"A man who controls the tolls controls the roads, and a man who controls the roads controls the map."],
+  [133,"The parkway bridges were built low, and the buses that could not pass beneath them carried the people he did not want."],
+  [141,"He believed the automobile was democracy, and the subway was something else."],
+  [148,"There was no train to the beach because he did not draw one."],
+  [155,"He built for the family with a car, and then insisted no other family existed."],
+  [162,"The governor signed it in the last hour of the session, unread."],
+  [169,"He was never rude to a man he still needed."],
+  [176,"He knew the exact moment a favour becomes an obligation, and he never let it pass."],
+  [184,"The commissioners were his, the engineers were his, and the minutes said whatever he said last."],
+  [191,"He rarely threatened. He described, calmly, what would happen next."],
+  [198,"To resign was his only weapon, and he never once had to fire it."],
+  [206,"A newspaper that has praised a man for twenty years cannot investigate him in an afternoon."],
+  [213,"He did not lie to reporters. He gave them a number so specific they stopped asking for another."],
+  [221,"The cost estimate was honest about concrete and silent about people."],
+  [228,"Eminent domain is a sentence in the law and a moving van in the street."],
+  [236,"Fifteen hundred families received the same letter on the same morning."],
+  [243,"Relocation was a department with a name, a budget, and almost no apartments."],
+  [251,"He was asked where they should go. He said that was not an engineering question."],
+  [258,"The expressway required a straight line, and the neighbourhood had the misfortune of being in it."],
+  [265,"They organised, and they were listened to, and the route did not move an inch."],
+  [272,"Two blocks to the north was possible. Two blocks to the north was a golf course."],
+  [279,"He could have curved it. Curving it would have been an admission."],
+  [287,"The hearing ran four hours; the decision had been mailed the previous week."],
+  [294,"A city can be improved into uninhabitability."],
+  [301,"He built more than any man in America and never learned to drive."],
+  [309,"His car was his office, and the city passed the window like a report."],
+  [316,"He worked from six until midnight and expected the same of men with children."],
+  [323,"Loyalty, to him, was a form of competence."],
+  [331,"The men who stayed learned to bring solutions, never problems."],
+  [338,"He had no small talk, which everyone mistook for depth."],
+  [345,"His memoranda were courteous and final."],
+  [352,"He could not be bought, which made him far harder to stop."],
+  [359,"Money bored him. Approval bored him. Only the work held."],
+  [366,"The public authority was his invention: public in name, accountable to a bondholder."],
+  [374,"Revenue is a wall, and he built his career behind it."],
+  [381,"Elected men come and go on four-year clocks; his clock was a forty-year lease."],
+  [388,"He outlasted five mayors by never standing for anything they could vote on."],
+  [395,"The legislature could not reach him, and after a while it stopped trying."],
+  [401,"He spoke of the public as a thing to be served and never as a thing to be asked."],
+  [407,"By the time anyone understood the machine, the machine was the city."],
+  [412,"He was right about the parks and wrong about everything they cost."],
+  [416,"To admire the work and mourn the method is the only honest position left."],
+  [421,"The beaches are still beautiful. That is the difficult part."],
+  [428,"What he built cannot be unbuilt, which was always the argument."],
+  [433,"A man is remembered by his monuments, and forgiven by nobody who lived on the route."],
+];
+
+const PF_HL = [
+  [12,"A commentary can love its poem to death, and this one intends to."],
+  [41,"He annotates a line about a bird and arrives, four pages later, at his own exiled kingship."],
+  [88,"Grief keeps its own index, and it does not match the one at the back."],
+  [143,"Every footnote is a small door the editor has built into someone else's house."],
+  [227,"The poem is about a daughter. The notes are about the man who cannot say so."],
+];
+
+const DEBT_HL = [
+  [23,"Before there were coins there were ledgers, and before ledgers there were favours nobody wrote down."],
+  [117,"A debt is a promise with a number stapled to it, and the number is the part that travels."],
+  [286,"The language of obligation is older than the language of money, which is why it survives every currency."],
+];
+
+const MR_HL = [
+  [18,"The problem with dying of something specific is that you can do arithmetic about it."],
+  [64,"He solves it the way an engineer solves anything: badly, then less badly, then well."],
+  [102,"Optimism as a survival technique, applied with a spreadsheet."],
+  [188,"The plan is stupid. Every other plan is stupider. He begins."],
+  [241,"Nothing on this planet wants him, which is at least consistent."],
+  [318,"Competence is its own kind of joke, and he tells it for four hundred pages."],
+  [372,"He apologises to the machinery before he breaks it."],
+];
+
+const OL = [
+  { title: "The Martian", author: "Andy Weir", year: 2011, pages: 369 },
+  { title: "The Martian: A Novel", author: "Andy Weir", year: 2014, pages: 385 },
+  { title: "The Martian (movie tie-in edition)", author: "Andy Weir", year: 2015, pages: 400 },
+  { title: "The Martian", author: "Andy Weir", year: 2013, pages: 435 },
+  { title: "The Martian Chronicles", author: "Ray Bradbury", year: 1950, pages: 222 },
+  { title: "The Power Broker: Robert Moses and the Fall of New York", author: "Robert A. Caro", year: 1974, pages: 1246 },
+  { title: "The Power Broker", author: "Robert A. Caro", year: 1998, pages: 1344 },
+];
+
+const GLASS = {
+  id: "glass-hours", raw: "Glass Hours, The - Peter Vance-Hale",
+  title: "The Glass Hours", sub: "", series: "",
+  authors: ["Peter Vance-Hale"], pages: 512, published: "March 2023", language: "English",
+  kind: "Fiction", genres: ["Literary fiction", "Family saga"],
+  hue: "#3f4a5e", matched: true, cover: true, furthest: 88,
+  desc: [
+    "Three generations of an upstate glassmaking family, told across the single week in which the furnace is finally allowed to go cold.",
+    "A novel about inheritance, craft, and the things a family agrees not to say at the table.",
+  ],
+  days: [["2026-04-02",18,26],["2026-04-04",14,22],["2026-04-06",16,24],["2026-04-08",12,19],["2026-04-11",14,21],["2026-04-13",14,20]],
+  highlights: [
+    [41,"Every character speaks in the same slow, careful voice, including the eight-year-old."],
+    [62,"A paragraph about light on water that reappears, nearly verbatim, nine pages later."],
+  ],
+};
+
+const GILEAD = {
+  id: "gilead", raw: "Gilead - Marilynne Robinson",
+  title: "Gilead", sub: "", series: "",
+  authors: ["Marilynne Robinson"], pages: 247, published: "November 2004", language: "English",
+  kind: "Fiction", genres: ["Literary fiction", "Epistolary", "Family"],
+  hue: "#4a5240", matched: true, cover: true, shelf: "finished", furthest: 247,
+  desc: [
+    "An old preacher in Iowa, knowing his heart is failing, writes a long letter to the young son who will not remember him \u2014 about his father, his grandfather, and the town they each tried to be good in.",
+    "Almost nothing happens, slowly, and it is one of the few novels that earns that.",
+  ],
+  days: [["2026-04-08",34,50],["2026-04-09",28,42],["2026-04-11",30,46],["2026-04-13",26,40],["2026-04-15",32,48],["2026-04-17",28,43],["2026-04-19",30,46],["2026-04-21",24,38],["2026-04-23",15,26]],
+  highlights: [
+    [22,"He is writing to a reader who does not exist yet, which is the only honest way to write about faith."],
+    [96,"Forgiveness here is not a feeling. It is a decision made repeatedly, without much help."],
+    [151,"A blessing given by a man who is not sure it will take."],
+    [208,"The light in this book is doing theological work and never once announces it."],
+  ],
+  reads: [{
+    rating: 0, loved: true, from: "2026-04-08", to: "2026-04-23",
+    text: "I have no idea what to give this out of five and I resent being asked. It is the only book this year I read slower on purpose. Stars would be a smaller thing than what I mean.",
+    pacing: "Slow", focus: "Character-Driven",
+    moods: ["Emotional", "Bittersweet", "Hopeful"],
+    tones: ["Reflective", "Grounded", "Immersive"],
+  }],
+};
+
+const BOOKS = {
+  "reading": {
+    id: "power-broker", raw: "Power Broker_ Robert Moses and the Fall of New York, The - Robert A. Caro",
+    title: "The Power Broker", sub: "Robert Moses and the Fall of New York", series: "",
+    authors: ["Robert A. Caro"], pages: 1246, published: "September 1974", language: "English",
+    kind: "Nonfiction", genres: ["Biography", "Urban planning", "New York"],
+    hue: "#6d4a2a", matched: true, cover: true, shelf: "reading", furthest: 438,
+    desc: [
+      "Robert Moses built more of New York than any other single person: the parkways, the bridges, the beaches, Lincoln Center, the housing projects, and the expressways that went through whatever stood in their way. He was never elected to anything.",
+      "Caro follows him from idealistic young reformer to the most powerful unelected man in American history, and asks how a man who could not drive came to decide how millions of people would move.",
+      "It is a biography of a man and a manual for how power actually works — through drafting, timing, patience, and the quiet capture of institutions that were meant to check him.",
+      "Winner of the Pulitzer Prize for Biography, and still the book every planner is told to read before they are allowed to draw anything.",
+    ],
+    days: [
+      ["2025-08-14",40,55],["2025-08-15",34,48],["2025-08-17",32,44],
+      ["2026-07-05",26,38],["2026-07-06",19,30],["2026-07-08",24,36],["2026-07-10",28,42],
+      ["2026-07-12",21,33],["2026-07-14",26,40],["2026-07-16",23,35],["2026-07-19",30,46],
+      ["2026-07-21",18,28],["2026-07-23",24,37],["2026-07-26",22,34],["2026-07-28",28,43],
+      ["2026-07-30",24,37],["2026-08-02",19,30],
+    ],
+    highlights: PB_HL, reads: [],
+  },
+
+  "first-session": {
+    id: "power-broker-day1", raw: "Power Broker_ Robert Moses and the Fall of New York, The - Robert A. Caro",
+    title: "The Power Broker", sub: "Robert Moses and the Fall of New York", series: "",
+    authors: ["Robert A. Caro"], pages: 1246, published: "September 1974", language: "English",
+    kind: "Nonfiction", genres: ["Biography", "Urban planning", "New York"],
+    hue: "#6d4a2a", matched: true, cover: true, shelf: "reading", furthest: 22,
+    desc: [
+      "Robert Moses built more of New York than any other single person: the parkways, the bridges, the beaches, Lincoln Center, the housing projects, and the expressways that went through whatever stood in their way. He was never elected to anything.",
+      "Caro follows him from idealistic young reformer to the most powerful unelected man in American history, and asks how a man who could not drive came to decide how millions of people would move.",
+    ],
+    days: [["2026-08-02",22,18]],
+    highlights: [[9,"He was never elected to anything, and for forty-four years he decided what the city would look like."]],
+    reads: [],
+  },
+
+  "finished-two-reads": {
+    id: "pale-fire", raw: "Pale Fire - Vladimir Nabokov",
+    title: "Pale Fire", sub: "", series: "",
+    authors: ["Vladimir Nabokov"], pages: 315, published: "April 1962", language: "English",
+    kind: "Fiction", genres: ["Literary fiction", "Metafiction", "Poetry"],
+    hue: "#5b4a6b", matched: true, cover: true, shelf: "finished", furthest: 315,
+    desc: [
+      "A 999-line poem by the late John Shade, presented with a foreword, a commentary and an index by his neighbour Charles Kinbote — who is either a devoted scholar or the exiled king of Zembla, and who is certainly not writing about the poem.",
+      "The novel is the argument between the two texts. Read the poem straight and it is an elegy for a dead daughter; read the notes and it is the autobiography of a man annotating his way out of his own life.",
+      "Nabokov built it so that no reading order is the correct one, and every path through it changes what the book is about.",
+    ],
+    days: [
+      ["2024-02-10",48,62],["2024-02-11",55,70],["2024-02-13",40,52],["2024-02-15",62,78],["2024-02-16",50,64],["2024-02-18",60,74],
+      ["2026-01-28",30,44],["2026-01-30",26,40],["2026-02-02",34,50],["2026-02-04",28,42],["2026-02-06",32,48],
+      ["2026-02-09",30,45],["2026-02-11",26,40],["2026-02-14",35,52],["2026-02-17",28,43],["2026-02-20",30,46],
+      ["2026-02-23",24,38],["2026-02-26",28,44],["2026-03-01",32,50],["2026-03-04",26,41],
+    ],
+    highlights: PF_HL,
+    reads: [
+      { rating: 5, from: "2026-01-28", to: "2026-03-04",
+        text: "Second time through I read only the commentary, start to finish, and it is a complete novel on its own \u2014 funnier and much sadder. Kinbote is not hiding anything from us, only from himself, and the index is where he finally loses the argument.",
+        pacing: "Slow", focus: "Character-Driven",
+        moods: ["Funny","Dark","Heartbreaking","Bittersweet","Nostalgic","Emotional"],
+        tones: ["Immersive","Reflective","Witty","Gothic","Dreamlike","Cynical"] },
+      { rating: 4, from: "2024-02-10", to: "2024-02-18",
+        text: "Read it the ordinary way \u2014 poem, then notes \u2014 and spent most of it suspecting I was being played with. I was. Finished it admiring the machine more than the book.",
+        pacing: "Moderate", focus: "A bit of both",
+        moods: ["Dark"], tones: ["Atmospheric","Witty"] },
+    ],
+  },
+
+  "finished-by-hand": {
+    id: "debt", raw: "Debt_ The First 5,000 Years - David Graeber",
+    title: "Debt", sub: "The First 5,000 Years", series: "",
+    authors: ["David Graeber"], pages: 604, published: "July 2011", language: "English",
+    kind: "Nonfiction", genres: ["Anthropology", "Economics", "History"],
+    hue: "#4a5a4a", matched: true, cover: true, shelf: "finished", furthest: 310, byHand: true, finishedIso: "2026-03-12",
+    desc: [
+      "The standard story says barter came first, then money, then credit. Graeber spends five thousand years of evidence showing it happened the other way around, and asks what we are really agreeing to when we agree that a debt must be paid.",
+      "An anthropologist's history of obligation \u2014 tribute, honour, slavery, interest \u2014 and of the long argument over which debts are sacred and which are merely someone's leverage.",
+    ],
+    days: [
+      ["2026-02-16",26,42],["2026-02-18",22,36],["2026-02-20",28,45],["2026-02-23",24,40],["2026-02-25",30,48],["2026-02-27",20,34],
+      ["2026-03-01",26,43],["2026-03-03",22,37],["2026-03-06",28,46],["2026-03-08",24,40],["2026-03-10",30,50],["2026-03-12",30,49],
+    ],
+    highlights: DEBT_HL,
+    reads: [
+      { rating: 4, from: "2026-02-16", to: "2026-03-12",
+        text: "The first two hundred pages rearranged how I think about obligation, and then the argument starts circling. I stopped at the end of the last chapter; what remains is ninety pages of endnotes I read out of order and do not intend to finish.",
+        pacing: "Slow", focus: "Plot-Driven",
+        moods: ["Dark","Hopeful"], tones: ["Grounded","Expansive","Reflective","Serious"] },
+    ],
+  },
+
+  "rated-only": {
+    id: "time-war", raw: "This Is How You Lose the Time War - Amal El-Mohtar",
+    title: "This Is How You Lose the Time War", sub: "", series: "",
+    authors: ["Amal El-Mohtar", "Max Gladstone"], pages: 208, published: "July 2019", language: "English",
+    kind: "Fiction", genres: ["Science fiction", "Romance", "Epistolary"],
+    hue: "#6b3a4a", matched: true, cover: true, shelf: "finished", furthest: 208,
+    desc: [
+      "Two agents on opposite sides of a war fought up and down the strands of time begin leaving each other letters \u2014 in seed rings, in lava flows, in the bones of a bird \u2014 and taunting turns into something neither side allows.",
+      "Short, dense, and written as correspondence, so it moves at the speed of two people showing off for each other.",
+    ],
+    days: [["2025-04-23",70,52],["2025-04-24",68,50],["2025-04-25",70,54]],
+    highlights: [],
+    reads: [{ rating: 4.5, from: "2025-04-23", to: "2025-04-25", text: "", pacing: "Page-Turner", focus: "Character-Driven", moods: [], tones: [] }],
+  },
+
+  "to-read": {
+    id: "sea", raw: "", title: "The Sea, the Sea", sub: "", series: "",
+    authors: ["Iris Murdoch"], pages: 517, published: "August 1978", language: "English",
+    kind: "Fiction", genres: ["Literary fiction", "Psychological"],
+    hue: "#3f5560", matched: true, cover: true, shelf: "toread", added: "2026-06-14", furthest: 0,
+    desc: [
+      "A retired theatre director buys a house on a cold stretch of coast to write his memoirs and renounce the world, and instead discovers that his first love lives in the village.",
+      "A novel about the stories we tell to keep being the hero of our own life, narrated by a man with an unshakeable talent for it.",
+    ],
+    days: [], highlights: [], reads: [],
+  },
+
+  "not-on-shelf": {
+    id: "sea", raw: "", title: "The Sea, the Sea", sub: "", series: "",
+    authors: ["Iris Murdoch"], pages: 517, published: "August 1978", language: "English",
+    kind: "Fiction", genres: ["Literary fiction", "Psychological"],
+    hue: "#3f5560", matched: true, cover: true, shelf: "none", furthest: 0,
+    desc: [
+      "A retired theatre director buys a house on a cold stretch of coast to write his memoirs and renounce the world, and instead discovers that his first love lives in the village.",
+      "A novel about the stories we tell to keep being the hero of our own life, narrated by a man with an unshakeable talent for it.",
+    ],
+    days: [], highlights: [], reads: [],
+  },
+
+  "unmatched": {
+    id: "martian-raw", raw: "Martian_ A Novel, The - Andy Weir",
+    title: "Martian_ A Novel, The", sub: "", series: "",
+    authors: ["Andy Weir"], pages: 0, published: "", language: "",
+    kind: "", genres: [], hue: "", matched: false, cover: false, shelf: "reading", furthest: 400,
+    desc: [],
+    days: [
+      ["2025-04-13",70,44],["2025-04-14",60,38],["2025-04-15",55,34],["2025-04-17",48,33],["2025-04-18",40,30],
+      ["2025-04-19",38,28],["2025-04-20",36,27],["2025-04-21",30,25],["2025-04-22",23,22],
+    ],
+    highlights: MR_HL, reads: [],
+  },
+};
+
+BOOKS["loved-no-rating"] = GILEAD;
+BOOKS["set-aside"] = { ...GLASS, shelf: "aside", reads: [] };
+BOOKS["gave-up"] = {
+  ...GLASS, shelf: "gaveup", gaveUpIso: "2026-04-14",
+  reads: [{
+    rating: 2, loved: false, gaveUp: true, from: "2026-04-02", to: "2026-04-13",
+    text: "Eighty-eight pages and three generations in, and every one of them talks like the dust jacket. The prose is careful in the way a man is careful when he has nothing to say and four hundred more pages to say it in. I stopped at the second description of light on water. Two stars for the furnace, which is the only thing in it that behaves like a real object.",
+    pacing: "Slow", focus: "Character-Driven",
+    moods: ["Dark"], tones: ["Serious", "Cynical"],
+  }],
+};
+BOOKS["private"] = { ...BOOKS["reading"], priv: true };
+
+class Component extends DCLogic {
+  state = {
+    shelfOverride: null, readsOverride: null, byHandOverride: null, matchOverride: null, privOverride: null,
+    descOpen: false, hlOpen: false, chipsOpen: {},
+    matchOpen: false, matchQuery: "", matchPicked: null, editTitle: "", editAuthor: "",
+    editorOpen: false, editorMode: "write", editorIdx: null,
+  };
+
+  componentDidMount() {
+    import("./nav-back.js").then((m) => { this._nav = m; this.forceUpdate(); }).catch(() => {});
+    import("./reading-hours.js").then((m) => { this._rh = m; this.forceUpdate(); }).catch(() => {});
+  }
+
+  // Sittings dealt out of this book's day rows, then bucketed by local hour.
+  // Same helper the month card uses, so the two charts agree about a shared day.
+  bookHours(id, dayList) {
+    if (!this._rh) return null;
+    const k = id + ":" + dayList.length;
+    if (!this._bh || this._bh.k !== k) {
+      this._bh = { k, v: this._rh.bucketHours(dayList.map((d) => ({ key: id + "|" + d[0], pages: d[1] }))) };
+    }
+    return this._bh.v;
+  }
+  componentDidUpdate(prev) {
+    if (prev.book !== this.props.book) {
+      this.setState({ shelfOverride: null, readsOverride: null, byHandOverride: null, matchOverride: null, privOverride: null, descOpen: false, hlOpen: false, chipsOpen: {} });
+    }
+  }
+
+  base() { return BOOKS[this.props.book || "reading"] || BOOKS.reading; }
+
+  book() {
+    const b = { ...this.base() };
+    const s = this.state;
+    if (s.shelfOverride) b.shelf = s.shelfOverride;
+    if (s.readsOverride) b.reads = s.readsOverride;
+    if (s.byHandOverride !== null) b.byHand = s.byHandOverride;
+    if (s.byHandOverride === true && !b.finishedIso) b.finishedIso = b.days.length ? b.days[b.days.length - 1][0] : TODAY;
+    if (s.matchOverride) Object.assign(b, s.matchOverride);
+    if (b.reads && b.reads.length) b.reads = b.reads.slice().sort((x, y) => (x.from < y.from ? 1 : -1));
+    return b;
+  }
+
+  parse(s) { const p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  key(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  fmtDay(d) { return d.getDate() + " " + MO[d.getMonth()] + " " + d.getFullYear(); }
+  fmtLong(d) { return d.getDate() + " " + MOL[d.getMonth()] + " " + d.getFullYear(); }
+  fmtNum(n) { return Math.round(n).toLocaleString("en-US"); }
+  fmtTime(sec) {
+    const m = Math.round(sec / 60);
+    if (m < 60) return m + "m";
+    return Math.floor(m / 60) + "h " + String(m % 60).padStart(2, "0") + "m";
+  }
+  ago(iso) {
+    const n = Math.round((this.parse(TODAY) - this.parse(iso)) / DAY);
+    if (n <= 0) return "today";
+    if (n === 1) return "yesterday";
+    if (n < 30) return n + " days ago";
+    if (n < 365) return Math.round(n / 30.4) + " months ago";
+    return (n / 365).toFixed(1).replace(/\.0$/, "") + " years ago";
+  }
+  stars(r) { return "\u2605".repeat(Math.floor(r)) + (r % 1 >= 0.5 ? "\u00bd" : ""); }
+  ord(n) { return ["First", "Second", "Third", "Fourth", "Fifth"][n - 1] || n + "th"; }
+
+  clusters(days) {
+    if (!days.length) return [];
+    const list = days.slice().sort((a, b) => (a[0] < b[0] ? -1 : 1));
+    const out = [[list[0]]];
+    for (let i = 1; i < list.length; i++) {
+      const gap = (this.parse(list[i][0]) - this.parse(list[i - 1][0])) / DAY;
+      if (gap <= 3) out[out.length - 1].push(list[i]); else out.push([list[i]]);
+    }
+    return out;
+  }
+
+  cellBg(lvl) { return ["#241a10", "rgba(207,164,82,.26)", "rgba(207,164,82,.48)", "rgba(207,164,82,.74)", "#cfa452"][lvl]; }
+  level(p, max) { if (!p) return 0; const r = p / max; return r <= 0.25 ? 1 : r <= 0.5 ? 2 : r <= 0.75 ? 3 : 4; }
+
+  shelfSpines() {
+    const seedHue = this.base().hue || "#4a3a28";
+    const out = [];
+    let seed = 90210;
+    const rnd = () => { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; };
+    for (let i = 0; i < 18; i++) {
+      const w = 8 + Math.round(rnd() * 20);
+      const h = 46 + Math.round(rnd() * 30);
+      out.push({ style: "width:" + w + "px; height:" + h + "px; flex:none; border-radius:1.5px 1.5px 0 0; border:1px solid rgba(255,240,214,.10); border-bottom:none; background-image:repeating-linear-gradient(135deg,rgba(255,244,222,.09) 0 5px,rgba(0,0,0,.14) 5px 10px); background-color:" + seedHue + ";" });
+    }
+    return out;
+  }
+
+  matchResults() {
+    const q = this.state.matchQuery.trim().toLowerCase();
+    if (!q) return OL.slice(0, 5);
+    const toks = q.split(/\s+/);
+    return OL.filter((o) => toks.every((t) => (o.title + " " + o.author).toLowerCase().includes(t))).slice(0, 6);
+  }
+
+  chipStyle(label, on) {
+    const scale = SCALES.indexOf(label) >= 0;
+    if (scale) return "font-size:11.5px; font-weight:600; letter-spacing:.2px; color:#ecc87c; border:1px solid #6b5228; border-radius:5px; padding:5px 11px; background:#2a1f0f;";
+    return "font-size:11.5px; color:#b09a78; border:1px solid #33261a; border-radius:5px; padding:5px 11px; background:#1f1609;";
+  }
+
+  renderVals() {
+    const b = this.book();
+    const s = this.state;
+    const owner = (this.props.viewer || "owner") === "owner";
+    const days = b.days || [];
+    const dayList = days.slice().sort((a, x) => (a[0] < x[0] ? -1 : 1));
+    const maxPages = Math.max(1, ...dayList.map((d) => d[1]));
+    const daySet = {};
+    dayList.forEach((d) => { daySet[d[0]] = d; });
+
+    const totalPages = dayList.reduce((a, d) => a + d[1], 0);
+    const totalSec = dayList.reduce((a, d) => a + d[2] * 60, 0);
+    const first = dayList.length ? dayList[0][0] : null;
+    const last = dayList.length ? dayList[dayList.length - 1][0] : null;
+
+    const knowsTotal = b.pages > 0;
+    const pctNum = knowsTotal ? Math.min(100, (b.furthest / b.pages) * 100) : 0;
+    const pct = pctNum >= 99.5 ? "100%" : pctNum < 10 ? pctNum.toFixed(1) + "%" : Math.round(pctNum) + "%";
+
+    const isReading = b.shelf === "reading";
+    const isFinished = b.shelf === "finished";
+    const isToRead = b.shelf === "toread";
+    const isNone = b.shelf === "none";
+    const isAside = b.shelf === "aside";
+    const isGaveUp = b.shelf === "gaveup";
+    const inProg = isReading || isAside || isGaveUp;
+    const priv = s.privOverride !== null ? s.privOverride : !!b.priv;
+    const stateColor = isReading ? "#cfa452" : isAside ? "#8a745a" : isGaveUp ? "#c07a5a" : "#9fb072";
+    const lovedAny = (b.reads || []).some((r) => r.loved);
+
+    // ---- rail ----
+    const railFacts = [];
+    if (inProg) {
+      railFacts.push({ k: "Last read", v: last ? this.ago(last) : "\u2014" });
+      railFacts.push({ k: "Time on it", v: this.fmtTime(totalSec) });
+    } else if (isFinished) {
+      railFacts.push({ k: "Time read", v: this.fmtTime(totalSec) });
+      railFacts.push({ k: "Days read", v: dayList.length + (dayList.length === 1 ? " day" : " days") });
+      if (b.reads && b.reads.length > 1) railFacts.push({ k: "Reads", v: b.reads.length });
+    }
+
+    // ---- pace ----
+    const recent = dayList.filter((d) => (this.parse(TODAY) - this.parse(d[0])) / DAY <= 35);
+    const recPages = recent.reduce((a, d) => a + d[1], 0);
+    const recMin = recent.reduce((a, d) => a + d[2], 0);
+    const pph = recMin > 0 ? recPages / (recMin / 60) : 0;
+    const left = knowsTotal ? Math.max(0, b.pages - b.furthest) : 0;
+    const hoursLeft = pph > 0 ? left / pph : 0;
+    let spanDays = 1, sessionsPerWeek = 0, avgMin = 0, weeksLeft = 0;
+    if (recent.length >= 2) {
+      spanDays = Math.max(1, Math.round((this.parse(recent[recent.length - 1][0]) - this.parse(recent[0][0])) / DAY) + 1);
+      sessionsPerWeek = recent.length / (spanDays / 7);
+      avgMin = recMin / recent.length;
+      weeksLeft = hoursLeft / Math.max(0.2, (sessionsPerWeek * avgMin) / 60);
+    }
+    const pphAll = totalSec > 0 ? totalPages / (totalSec / 3600) : 0;
+    const hasPace = isReading && knowsTotal && recent.length >= 4 && pph > 0;
+    let noPaceLine = "";
+    if (inProg && !hasPace) {
+      if (isGaveUp) noPaceLine = "No projection. You stopped on purpose at page " + this.fmtNum(b.furthest) + " \u2014 the arithmetic stopped being interesting before the book did.";
+      else if (isAside) noPaceLine = "Untouched since " + (last ? MOL[this.parse(last).getMonth()] : "") + ". The old pace \u2014 " + Math.round(pphAll) + " pages an hour \u2014 is a fact about " + (last ? MOL[this.parse(last).getMonth()] : "then") + ", not about now.";
+      else if (dayList.length <= 1) noPaceLine = "One sitting so far \u2014 " + this.fmtTime(totalSec) + " on the first " + b.furthest + " pages. Nothing to project from until there is a second.";
+      else if (!knowsTotal) noPaceLine = "You are " + this.fmtNum(b.furthest) + " pages in at roughly " + Math.round(pphAll) + " pages an hour, but without a page count there is nothing to count down to.";
+      else noPaceLine = dayList.length + " sittings, spread too thin to be a rhythm. A projection here would be a guess with a decimal point on it.";
+    }
+    const weeksLabel = weeksLeft >= 2 ? "about " + Math.round(weeksLeft) + " weeks at your recent rhythm" : "about " + Math.max(1, Math.round(weeksLeft * 7)) + " days at your recent rhythm";
+
+    // ---- stats ----
+    const stats = [];
+    if (isFinished) {
+      stats.push({ value: this.fmtTime(totalSec), label: "Time read" });
+      stats.push({ value: dayList.length, label: "Days read" });
+      stats.push({ value: this.fmtNum(totalPages), label: "Pages turned" });
+      stats.push({ value: last ? MO[this.parse(last).getMonth()] + " " + this.parse(last).getFullYear() : "\u2014", label: "Finished" });
+    } else if (inProg) {
+      stats.push({ value: this.fmtTime(totalSec), label: "Time read" });
+      stats.push({ value: dayList.length, label: "Days read" });
+      stats.push({ value: first ? this.fmtDay(this.parse(first)) : "\u2014", label: "First opened" });
+      stats.push({ value: last ? this.ago(last) : "\u2014", label: "Last read" });
+    }
+
+    const bookHours = this.bookHours(this.props.book || "reading", dayList);
+
+    // ---- stretches ----
+    const cl = this.clusters(dayList);
+    const reads = b.reads || [];
+    const stretchRows = [];
+    cl.slice().reverse().forEach((c, ri, arr) => {
+      const st = this.parse(c[0][0]), en = this.parse(c[c.length - 1][0]);
+      const span = Math.round((en - st) / DAY) + 1;
+      const cells = [];
+      for (let i = 0; i < span; i++) {
+        const d = new Date(st.getTime() + i * DAY);
+        const rec = daySet[this.key(d)];
+        const lvl = rec ? this.level(rec[1], maxPages) : 0;
+        cells.push({
+          title: this.fmtDay(d) + (rec ? " \u00b7 " + rec[1] + " pages \u00b7 " + this.fmtTime(rec[2] * 60) : " \u00b7 nothing read"),
+          style: "width:17px; height:17px; border-radius:3px; flex:none; background:" + this.cellBg(lvl) + "; border:1px solid " + (rec ? "transparent" : "#33261a") + ";",
+        });
+      }
+      const pages = c.reduce((a, d) => a + d[1], 0);
+      const mins = c.reduce((a, d) => a + d[2], 0);
+      const sameMonth = st.getMonth() === en.getMonth() && st.getFullYear() === en.getFullYear();
+      const range = st.getTime() === en.getTime() ? this.fmtDay(st)
+        : sameMonth ? st.getDate() + "\u2013" + en.getDate() + " " + MO[en.getMonth()] + " " + en.getFullYear()
+        : this.fmtDay(st) + " \u2192 " + this.fmtDay(en);
+      const total = cl.length;
+      const idxFromStart = total - 1 - ri;
+      const matchRead = reads.find((r) => r.from <= c[c.length - 1][0] && r.to >= c[0][0]);
+      const ord = ["First", "Second", "Third", "Fourth"][idxFromStart] || (idxFromStart + 1) + "th";
+      stretchRows.push({
+        isGap: false, isStretch: true, range,
+        meta: c.length + (c.length === 1 ? " day" : " days") + " \u00b7 " + this.fmtNum(pages) + " pages \u00b7 " + this.fmtTime(mins * 60),
+        cells,
+        hasRead: (isGaveUp && ri === 0) || (!!matchRead && total > 1),
+        readLabel: isGaveUp && ri === 0 ? "Gave up here" : ord + " read",
+      });
+      if (ri < arr.length - 1) {
+        const prevEnd = this.parse(arr[ri + 1][arr[ri + 1].length - 1][0]);
+        const gap = Math.round((st - prevEnd) / DAY);
+        stretchRows.push({ isGap: true, isStretch: false, label: gap >= 60 ? Math.round(gap / 30.4) + " months untouched" : gap + " days untouched" });
+      }
+    });
+
+    // ---- highlights ----
+    const hl = b.highlights || [];
+    const hlLimit = 4;
+    const hlShown = s.hlOpen ? hl : hl.slice(0, hlLimit);
+
+    // ---- reads / reviews ----
+    const readRows = reads.map((r, i) => {
+      const from = this.parse(r.from), to = this.parse(r.to);
+      const rDays = dayList.filter((d) => d[0] >= r.from && d[0] <= r.to);
+      const rPages = rDays.reduce((a, d) => a + d[1], 0);
+      const rMin = rDays.reduce((a, d) => a + d[2], 0);
+      const rPph = rMin ? Math.round(rPages / (rMin / 60)) : 0;
+      const sameY = from.getFullYear() === to.getFullYear();
+      const dates = from.getMonth() === to.getMonth() && sameY
+        ? MOL[to.getMonth()] + " " + to.getFullYear()
+        : sameY ? MO[from.getMonth()] + "\u2013" + MO[to.getMonth()] + " " + to.getFullYear()
+        : this.fmtDay(from) + " \u2192 " + this.fmtDay(to);
+      const ord = ["First", "Second", "Third", "Fourth"][reads.length - 1 - i] || (reads.length - i) + "th";
+      const all = VOCAB.filter((v) => v === r.pacing || v === r.focus || (r.moods || []).indexOf(v) >= 0 || (r.tones || []).indexOf(v) >= 0);
+      const open = !!s.chipsOpen[i];
+      const cap = 8;
+      const shown = open ? all : all.slice(0, cap);
+      return {
+        showReadLabel: reads.length > 1, readLabel: ord + " read",
+        dates, isOwner: owner, editLabel: r.text || r.rating ? "Edit" : "Add review",
+        onEdit: () => this.setState({ editorOpen: true, editorMode: "edit", editorIdx: i }),
+        hasRating: r.rating > 0, stars: this.stars(r.rating),
+        loved: !!r.loved, lovedWord: r.rating > 0 ? "" : "Loved",
+        hasEnding: !!r.gaveUp, ending: r.gaveUp ? "gave up at page " + this.fmtNum(b.furthest) : "",
+        readStats: rDays.length ? rDays.length + (rDays.length === 1 ? " day" : " days") + " \u00b7 " + this.fmtTime(rMin * 60) + (rPph ? " \u00b7 " + rPph + " pages/hr" : "") : "",
+        hasText: !!r.text, noText: !r.text,
+        text: r.text,
+        emptyLine: r.rating ? "Rated, never written up." : "Marked as read. No rating, no review.",
+        hasChips: all.length > 0,
+        chips: shown.map((v) => ({ label: v, style: this.chipStyle(v) })),
+        hasMoreChips: all.length > cap,
+        chipsToggleLabel: open ? "fewer" : "+" + (all.length - cap) + " more",
+        toggleChips: () => this.setState((p) => ({ chipsOpen: { ...p.chipsOpen, [i]: !p.chipsOpen[i] } })),
+        wrapStyle: "border-left:2px solid " + (i === 0 ? "#4d3a22" : "#33261a") + "; padding:2px 0 26px 20px;",
+      };
+    });
+
+    const editing = s.editorIdx != null ? reads[s.editorIdx] : null;
+    const seed = editing || { rating: 0, text: "", pacing: "", focus: "", moods: [], tones: [] };
+
+    // ---- match panel ----
+    const results = this.matchResults();
+    const picked = s.matchPicked != null ? OL[s.matchPicked] : null;
+    const thumb = (hue) => "width:38px; height:56px; flex:none; border-radius:3px; border:1px solid #45341f; background-color:" + hue + "; background-image:repeating-linear-gradient(135deg,rgba(255,244,222,.10) 0 6px,rgba(0,0,0,.16) 6px 12px);";
+
+    const heroHue = b.hue || "#3a2c1c";
+    const nav = this._nav ? this._nav.resolveBack("Reading.dc.html", "Reading") : { href: "Reading.dc.html", label: "Reading" };
+
+    const baseStatus = isReading ? (knowsTotal ? "Reading \u00b7 " + pct : "Reading")
+      : isAside ? "Set aside \u00b7 " + pct
+      : isGaveUp ? "Gave up \u00b7 " + pct
+      : isFinished ? "Finished " + (b.finishedIso ? this.fmtDay(this.parse(b.finishedIso)) : last ? this.fmtDay(this.parse(last)) : "")
+      : isToRead ? "On the to-read pile" : "Not on the shelf";
+    const heroStatus = priv ? "Private \u00b7 " + baseStatus : baseStatus;
+    const heroDot = isNone ? "#5c4a30" : isToRead ? "#a68f6e" : stateColor;
+
+    const lastC = cl.length ? cl[cl.length - 1] : null;
+    const newFrom = lastC ? lastC[0][0] : (first || TODAY);
+    const newTo = lastC ? lastC[lastC.length - 1][0] : (last || TODAY);
+    const newRange = newFrom === newTo ? this.fmtDay(this.parse(newTo)) : this.fmtDay(this.parse(newFrom)) + " \u2192 " + this.fmtDay(this.parse(newTo));
+
+    const quietActions = [];
+    if (owner) {
+      if (isReading || isAside) {
+        quietActions.push({ label: "Mark finished", hint: "For books that end before the last page", onClick: () => this.setState({ shelfOverride: "finished", byHandOverride: true }) });
+        quietActions.push({ label: "Give up on it", hint: "An ending, not a failure", onClick: () => this.setState({ shelfOverride: "gaveup" }) });
+      } else if (isGaveUp) {
+        quietActions.push({ label: "Picked it back up", hint: "A page turn would do this on its own", onClick: () => this.setState({ shelfOverride: "reading" }) });
+      } else if (isFinished && b.byHand) {
+        quietActions.push({ label: "Put it back in progress", hint: "Undo a premature finish", onClick: () => this.setState({ shelfOverride: "reading", byHandOverride: false }) });
+      }
+    }
+
+    const hasPrimary = owner && (isNone || isToRead || isFinished || isGaveUp);
+    const primaryLabel = isNone ? "+ Add to to-read pile" : isToRead ? "\u2713  On to-read pile" : (reads.length && reads[0].text ? "Edit review" : "Write a review");
+    const primaryStyle = isToRead
+      ? "width:100%; font-size:13.5px; font-weight:600; color:#f2e6cd; background:#2c2013; border:1px solid #cfa452; border-radius:9px; padding:12px; cursor:pointer; font-family:'Archivo',sans-serif;"
+      : "width:100%; font-size:14px; font-weight:700; color:#241a10; background:#cfa452; border:none; border-radius:9px; padding:12px; cursor:pointer; font-family:'Archivo',sans-serif;";
+
+    return {
+      backHref: nav.href, backLabel: nav.label,
+      handleBackClick: this._nav ? this._nav.handleBack : (e) => { e.preventDefault(); location.href = "Reading.dc.html"; },
+
+      heroStyle: "position:relative; height:186px; overflow:hidden; background-color:#1a120a; background-image:radial-gradient(120% 190% at 16% 130%," + heroHue + " 0%, rgba(26,18,10,0) 62%), radial-gradient(90% 150% at 82% -20%," + heroHue + " 0%, rgba(26,18,10,0) 58%);",
+      shelfRowStyle: "position:absolute; bottom:1px; left:272px; right:0; display:flex; align-items:flex-end; gap:5px; opacity:.3; mask-image:linear-gradient(90deg,rgba(0,0,0,1) 0%,rgba(0,0,0,1) 55%,rgba(0,0,0,0) 100%); -webkit-mask-image:linear-gradient(90deg,rgba(0,0,0,1) 0%,rgba(0,0,0,1) 55%,rgba(0,0,0,0) 100%); pointer-events:none;",
+      shelfSpines: this.shelfSpines(),
+      heroStatus, heroDotStyle: "width:6px; height:6px; border-radius:50%; background:" + heroDot + ";",
+
+      // identity
+      title: b.title, sub: b.sub, hasSub: !!b.sub, series: b.series, hasSeries: !!b.series,
+      raw: b.raw,
+      authorLine: (b.authors || []).join(" & "),
+      authors: (b.authors || []).map((n, i, arr) => ({
+        name: n, href: b.matched ? "Reading.dc.html?author=" + encodeURIComponent(n) : undefined,
+        sep: i < arr.length - 1 ? " & " : "",
+      })),
+      hasMeta: b.matched && (knowsTotal || !!b.published),
+      metaBits: [
+        knowsTotal ? this.fmtNum(b.pages) + " pages" : null,
+        b.published || null,
+        b.language || null,
+      ].filter(Boolean).map((t, i) => ({ text: i ? "\u00b7 " + t : t })),
+      hasTags: b.matched && !!b.kind,
+      kind: b.kind, kindHref: "Reading.dc.html?kind=" + encodeURIComponent(b.kind || ""),
+      genres: (b.genres || []).map((g) => ({ name: g, href: "Reading.dc.html?subject=" + encodeURIComponent(g) })),
+
+      hasDesc: (b.desc || []).length > 0,
+      descShown: (s.descOpen ? b.desc : (b.desc || []).slice(0, 2)).map((t) => ({ text: t })),
+      descTruncated: (b.desc || []).length > 2,
+      descToggleLabel: s.descOpen ? "Less" : "More",
+      toggleDesc: () => this.setState((p) => ({ descOpen: !p.descOpen })),
+      showMatchInvite: !b.matched,
+
+      // cover / spine
+      hasCover: !!b.cover, noCover: !b.cover,
+      coverStyle: "position:relative; height:354px; border-radius:4px 8px 8px 4px; overflow:hidden; border:1px solid #45341f; box-shadow:0 24px 46px -14px rgba(0,0,0,.7); background-color:" + heroHue + "; background-image:repeating-linear-gradient(135deg,rgba(255,244,222,.075) 0 9px,rgba(0,0,0,.13) 9px 18px);",
+      hasBadge: (inProg || isFinished || isToRead) && !priv,
+      badgeLabel: isReading ? "Reading" : isAside ? "Set aside" : isGaveUp ? "Gave up" : isFinished ? "Finished" : "To read",
+      badgeStyle: "position:absolute; top:0; right:0; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:1.3px; padding:6px 11px; border-radius:0 0 0 8px; color:#1a120a; background:" + (isToRead ? "#a68f6e" : stateColor) + ";",
+      bigSpineStyle: "position:relative; width:52px; height:280px; border-radius:2px; overflow:hidden; border:1px solid #45341f; background-image:repeating-linear-gradient(135deg,#3a2c1c 0 7px,#2a1c0c 7px 14px);",
+      bigSpineFillStyle: "position:absolute; left:0; right:0; bottom:0; height:" + (knowsTotal ? Math.round(pctNum * 2.8) : 0) + "px; background:#cfa452; opacity:.85;",
+
+      // rail state
+      isOwner: owner, is404: priv && !owner, isPrivate: priv, lovedAny,
+      isReading, isFinished, isToRead, isNotOnShelf: isNone, isAside, isGaveUp,
+      hasProgressStatus: inProg,
+      statusBoxStyle: isAside
+        ? "border-left:2px dashed #8a745a; background:#1f1609; border-radius:0 9px 9px 0; padding:14px 15px 15px;"
+        : "border-left:2px solid " + stateColor + "; background:#241a10; border-radius:0 9px 9px 0; padding:14px 15px 15px;",
+      statusDotStyle: "width:5px; height:5px; border-radius:50%; flex:none; background:" + (isAside ? "transparent" : stateColor) + "; box-shadow:" + (isAside ? "inset 0 0 0 1px " + stateColor : "none") + ";",
+      statusLabelStyle: "font-size:10.5px; text-transform:uppercase; letter-spacing:1.5px; color:" + stateColor + ";",
+      statusLabel: isReading ? "Reading now" : isAside ? "Set aside" : "Gave up",
+      hasStatusNote: (isAside || isGaveUp),
+      statusNote: isAside
+        ? "Untouched since " + (last ? this.fmtDay(this.parse(last)) : "") + "."
+        : isGaveUp ? "Stopped on purpose" + (b.gaveUpIso ? " on " + this.fmtDay(this.parse(b.gaveUpIso)) : "") + "." : "",
+      knowsTotal, unknownTotal: !knowsTotal,
+      trackStyle: isGaveUp
+        ? "height:7px; border-radius:4px; overflow:hidden; background-image:repeating-linear-gradient(45deg,#3a2c1c 0 4px,#241a10 4px 8px);"
+        : "height:7px; border-radius:4px; overflow:hidden; background:#33261a;",
+      barStyle: "width:" + Math.max(1.5, pctNum) + "%; height:100%; background:" + (isGaveUp ? "#c07a5a" : "#cfa452") + "; border-radius:5px;",
+      railPageLine: !knowsTotal ? "page " + this.fmtNum(b.furthest) + " \u00b7 total unknown"
+        : (isGaveUp ? "Gave up at page " : "page ") + this.fmtNum(b.furthest) + " of " + this.fmtNum(b.pages) + " \u00b7 " + pct,
+      railFacts,
+      showAutoNote: isReading,
+      autoNote: "Logged automatically",
+      hasPrimary, primaryLabel, primaryStyle,
+      primaryAction: isNone || isToRead ? () => this.setState({ shelfOverride: b.shelf === "toread" ? "none" : "toread" }) : () => this.setState({ editorOpen: true, editorMode: reads.length ? "edit" : "write", editorIdx: reads.length ? 0 : null }),
+      hasQuiet: quietActions.length > 0, quietActions,
+      privBoxStyle: priv
+        ? "border:1px solid #6b5228; background:#2a1f0f; border-radius:9px; padding:13px 14px;"
+        : "border-top:1px solid #2b2013; padding:15px 0 0;",
+      privTrackStyle: "position:relative; flex:none; width:30px; height:17px; border-radius:9px; transition:background .16s ease; background:" + (priv ? "#cfa452" : "#3d2d1a") + ";",
+      privKnobStyle: "position:absolute; top:2px; width:13px; height:13px; border-radius:50%; transition:left .16s ease; left:" + (priv ? "15px" : "2px") + "; background:" + (priv ? "#241a10" : "#8a745a") + ";",
+      privLabelStyle: "font-size:12px; letter-spacing:.2px; font-weight:" + (priv ? "600" : "400") + "; color:" + (priv ? "#ecc87c" : "#a68f6e") + ";",
+      privLabel: priv ? "Private \u2014 only you can see this" : "Private",
+
+      togglePrivate: () => this.setState({ privOverride: !priv }),
+      finishedDateLong: b.finishedIso ? this.fmtLong(this.parse(b.finishedIso)) : last ? this.fmtLong(this.parse(last)) : "",
+      byHand: !!b.byHand,
+      stoppedLine: "Stopped at page " + this.fmtNum(b.furthest) + " of " + this.fmtNum(b.pages) + ".",
+      addedLine: b.added ? "Added " + this.fmtDay(this.parse(b.added)) + " \u00b7 " + this.ago(b.added) : "",
+      reviewButtonLabel: reads.length && reads[0].text ? "Edit review" : "Write a review",
+      toggleShelf: () => this.setState({ shelfOverride: b.shelf === "toread" ? "none" : "toread" }),
+
+      // your reading
+      hasActivity: dayList.length > 0,
+      lifetimeScope: reads.length > 1 ? "across " + reads.length + " reads" : inProg ? "so far" : "",
+      progressIsHero: inProg && knowsTotal,
+      pctBig: pct,
+      pageLine: (isGaveUp ? "reached page " : "page ") + this.fmtNum(b.furthest) + " of " + this.fmtNum(b.pages),
+      pagesLeftLine: isGaveUp ? this.fmtNum(left) + " never read" : this.fmtNum(left) + " to go",
+      stats,
+      hasPace, noPace: inProg && !hasPace, noPaceLine,
+      paceValue: Math.round(pph), paceUnit: "pages an hour",
+      projectionLine: hasPace ? "Roughly " + this.fmtTime(hoursLeft * 3600) + " of reading left \u2014 " + weeksLabel + "." : "",
+      projectionBasis: "",
+
+      activityMeta: dayList.length + (dayList.length === 1 ? " day" : " days") + (cl.length > 1 ? " in " + cl.length + " stretches" : ""),
+      stretchRows,
+
+      // Hours first, then days — the same component the month card draws.
+      showHourBlock: !!bookHours,
+      bookHours: bookHours ? bookHours.hours : null,
+      bookSpread: bookHours ? bookHours.sittingSpread : null,
+      bookSittings: bookHours ? bookHours.sittings : 0,
+      hourFallback: bookHours ? this._rh.tooFewLine(bookHours.hours) : "",
+
+      hasHighlights: hl.length > 0,
+      highlightMeta: hl.length + (hl.length === 1 ? " passage" : " passages") + " saved on the Kindle",
+      highlightsShown: hlShown.map((h) => ({ page: h[0], text: h[1] })),
+      highlightListStyle: s.hlOpen && hl.length > 12 ? "max-height:620px; overflow-y:auto; padding-right:10px;" : "",
+      highlightsCollapsible: hl.length > hlLimit,
+      highlightToggleLabel: s.hlOpen ? "Show fewer" : "Show all " + hl.length + " highlights",
+      toggleHighlights: () => this.setState((p) => ({ hlOpen: !p.hlOpen })),
+
+      showReviews: isFinished || isGaveUp || reads.length > 0,
+      reviewsHeading: reads.length > 1 ? "Your reviews" : "Your review",
+      manyReads: reads.length > 1, readsMeta: reads.length + " reads \u00b7 newest first",
+      reads: readRows,
+      noReads: (isFinished || isGaveUp) && reads.length === 0,
+      noReadsLine: owner ? (isGaveUp ? "Gave up, and nothing written down yet." : "Finished, and nothing written down yet.") : "No review written.",
+
+      // review editor
+      editorOpen: s.editorOpen, editorMode: s.editorMode,
+      editorReadLabel: s.editorIdx != null && readRows[s.editorIdx] ? (readRows[s.editorIdx].showReadLabel ? readRows[s.editorIdx].readLabel + " \u00b7 " + readRows[s.editorIdx].dates : readRows[s.editorIdx].dates) : (last ? "Finished " + this.fmtDay(this.parse(last)) : "This read"),
+      seedRating: seed.rating, seedReview: seed.text, seedLoved: !!seed.loved, seedPacing: seed.pacing, seedFocus: seed.focus,
+      seedMoods: seed.moods, seedTones: seed.tones,
+      priorReads: reads.length,
+      latestReadTitle: reads.length ? this.ord(reads.length) + " read \u00b7 " + readRows[0].dates : "",
+      newReadTitle: this.ord(reads.length + 1) + " read \u00b7 " + newRange,
+      attachOnBody: reads.length ? "Dated from your most recent stretch on the Kindle, " + newRange + ". Your " + this.ord(reads.length) + " read keeps the review it already has." : "",
+      attachOffBody: reads.length ? "Anything you write replaces the review already on that read. If you have just finished the book again, turn on Re-read instead." : "",
+      openWrite: () => this.setState({ editorOpen: true, editorMode: reads.length ? "edit" : "write", editorIdx: reads.length ? 0 : null }),
+      onReviewClose: () => this.setState({ editorOpen: false }),
+      onReviewSave: (r) => {
+        const next = reads.slice();
+        if (r.reread) next.unshift({ ...r, from: newFrom, to: newTo });
+        else if (s.editorIdx != null && next[s.editorIdx]) next[s.editorIdx] = { ...next[s.editorIdx], ...r };
+        else next.unshift({ ...r, from: first || TODAY, to: last || TODAY });
+        this.setState({ readsOverride: next, editorOpen: false });
+      },
+      onReviewDelete: () => {
+        const next = reads.filter((_, i) => i !== s.editorIdx);
+        this.setState({ readsOverride: next, editorOpen: false });
+      },
+
+      // match panel
+      matchOpen: s.matchOpen,
+      matchHead: b.matched ? "Match a different edition" : "Match this book",
+      openMatch: () => this.setState({
+        matchOpen: true, matchPicked: null,
+        matchQuery: b.matched ? b.title + " " + (b.authors || [])[0] : "The Martian Andy Weir",
+      }),
+      closeMatch: () => this.setState({ matchOpen: false, matchPicked: null }),
+      matchSearching: s.matchPicked == null, matchConfirming: s.matchPicked != null,
+      matchQuery: s.matchQuery,
+      setMatchQuery: (e) => this.setState({ matchQuery: e.target.value }),
+      matchResultMeta: results.length ? results.length + " editions on Open Library \u2014 the year and page count are how you tell them apart" : "",
+      matchNoResults: results.length === 0,
+      matchResults: results.map((o) => ({
+        title: o.title, author: o.author, year: o.year, pages: o.pages + " pp",
+        thumbStyle: thumb(o.author.indexOf("Caro") >= 0 ? "#6d4a2a" : o.author.indexOf("Bradbury") >= 0 ? "#7a4a3a" : "#8a5a3a"),
+        pick: () => this.setState({ matchPicked: OL.indexOf(o), editTitle: o.title, editAuthor: o.author }),
+      })),
+      pickedTitle: picked ? picked.title : "",
+      pickedMeta: picked ? picked.author + " \u00b7 " + picked.year + " \u00b7 " + picked.pages + " pages" : "",
+      pickedThumbStyle: thumb("#8a5a3a"),
+      editTitle: s.editTitle, editAuthor: s.editAuthor,
+      setEditTitle: (e) => this.setState({ editTitle: e.target.value }),
+      setEditAuthor: (e) => this.setState({ editAuthor: e.target.value }),
+      backToSearch: () => this.setState({ matchPicked: null }),
+      confirmMatch: () => {
+        const p = picked;
+        if (!p) return;
+        const t = s.editTitle.trim();
+        const colon = t.indexOf(": ");
+        this.setState({
+          matchOpen: false, matchPicked: null,
+          matchOverride: {
+            matched: true, cover: true, hue: "#8a5a3a",
+            title: colon > 0 ? t.slice(0, colon) : t,
+            sub: colon > 0 ? t.slice(colon + 2) : "",
+            authors: s.editAuthor.split(/\s*&\s*/).filter(Boolean),
+            pages: p.pages, published: String(p.year), language: "English",
+            kind: "Fiction", genres: ["Science fiction", "Survival"],
+            desc: [
+              "An astronaut is left for dead on Mars with a habitat built for thirty days, and sets about staying alive on potatoes, duct tape and arithmetic.",
+              "Told mostly as log entries, so the tone is a competent man narrating his own near-death with jokes.",
+            ],
+          },
+        });
+      },
+    };
+  }
+}
+</script>
+</body>
+</html>

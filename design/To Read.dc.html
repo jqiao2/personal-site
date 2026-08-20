@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a120a; font-family: "Archivo", Arial, sans-serif; -webkit-font-smoothing: antialiased; color-scheme: dark; }
+  a { text-decoration: none; color: #cfa452; }
+  a:hover { color: #ecc87c; }
+  input { font-family: "Archivo", Arial, sans-serif; }
+  input::placeholder { color: #7d6a52; }
+</style>
+</helmet>
+
+<div style="min-height:100vh; background:#1a120a;">
+  <nav style="display:flex; align-items:stretch; gap:2px; background:#150e07; border-bottom:1px solid #45341f; padding:0 clamp(14px,4vw,24px); overflow-x:auto; max-width:1008px; margin:0 auto; box-shadow:-2000px 0 0 #150e07, 2000px 0 0 #150e07;">
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Home</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">About</a>
+    <a href="#" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Projects</a>
+    <a href="Jason's Film Log.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Films</a>
+    <!-- a page under /books/ lights up Books -->
+    <a href="Books.dc.html" style="font-size:13px; letter-spacing:.4px; color:#f2e6cd; font-weight:600; padding:26px 16px 24px; border-bottom:2px solid #cfa452; white-space:nowrap;" style-hover="color:#fff2da;">Books</a>
+    <a href="Subway Map.dc.html" style="font-size:13px; letter-spacing:.4px; color:#bfa886; padding:26px 16px 24px; border-bottom:2px solid transparent; white-space:nowrap;" style-hover="color:#f2e6cd;">Subway</a>
+  </nav>
+
+  <div style="display:flex; justify-content:center; padding:34px clamp(14px,4vw,24px) 90px;">
+  <div style="width:100%; max-width:960px;">
+
+    <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:#8a745a; margin-bottom:14px;"><a href="Books.dc.html" style="color:#8a745a;" style-hover="color:#cfa452;">Books</a> <span style="color:#5d4b36;">/</span> To read</div>
+
+    <!-- The single explanatory line on this page: the automatic transition. Everything else is
+         left to the controls' own labels. -->
+    <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:30px;">
+      <h1 style="font-family:'Newsreader',serif; font-weight:500; font-size:clamp(38px,9vw,52px); color:#f2e6cd; letter-spacing:-.5px; line-height:1;">To read</h1>
+      <div style="font-size:12.5px; color:#8a745a; line-height:1.5; max-width:300px;">{{ mechanicNote }}</div>
+    </div>
+
+    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; padding-bottom:10px; border-bottom:1px solid #392a19; margin-bottom:18px; flex-wrap:wrap;">
+      <div style="font-family:'Newsreader',serif; font-style:italic; font-size:20px; color:#ead9b6;">The pile</div>
+      <div style="display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;">
+        <span style="font-size:12px; color:#a68f6e;">{{ countLabel }}</span>
+        <sc-if value="{{ showAddButton }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ openComposer }}" style="font-size:12.5px; padding:7px 14px; border-radius:20px; border:1px solid #45341f; background:transparent; color:#dcc9a6; cursor:pointer; font-family:'Archivo',sans-serif; line-height:1.2;" style-hover="border-color:#cfa452; color:#f2e6cd;">Add a book</button>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- ADD COMPOSER — owner only -->
+    <sc-if value="{{ composerOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="background:#201709; border:1px solid #45341f; border-radius:10px; padding:20px; margin-bottom:26px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:14px;">
+          <div style="font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:#a68f6e;">{{ composerTitle }}</div>
+          <button onClick="{{ closeComposer }}" style="font-size:12px; background:none; border:none; color:#8a745a; cursor:pointer; font-family:'Archivo',sans-serif; padding:2px 0;" style-hover="color:#ecc87c;">Close</button>
+        </div>
+
+        <sc-if value="{{ inSearchMode }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <input type="search" value="{{ query }}" onInput="{{ onQuery }}" placeholder="Title or author" aria-label="Search Open Library" style="width:100%; background:#1a120a; border:1px solid #45341f; border-radius:8px; padding:12px 14px; font-size:14px; color:#f2e6cd; outline:none;" style-focus="border-color:#cfa452;">
+
+            <sc-if value="{{ isSearching }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:10px; margin-top:16px; font-size:12.5px; color:#8a745a;">
+                <span style="width:8px; height:8px; border-radius:50%; background:#cfa452; opacity:.7; flex:none;"></span>
+                <span>Searching</span>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-direction:column; gap:8px; margin-top:16px;">
+                <sc-for list="{{ results }}" as="r" hint-placeholder-count="3">
+                  <button onClick="{{ r.onAdd }}" style="display:flex; gap:14px; align-items:center; width:100%; text-align:left; background:#241a10; border:1px solid #392a19; border-radius:8px; padding:11px 13px; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="border-color:#cfa452; background:#2a1e11;">
+                    <!-- thumbnail slot; the live page loads covers.openlibrary.org here -->
+                    <div style="{{ r.thumbStyle }}">{{ r.thumbLabel }}</div>
+                    <div style="flex:1 1 auto; min-width:0;">
+                      <div style="font-family:'Newsreader',serif; font-size:17px; color:#f2e6cd; line-height:1.2;">{{ r.title }}</div>
+                      <div style="font-size:12px; color:#a68f6e; margin-top:3px;">{{ r.author }}</div>
+                      <div style="font-size:11.5px; color:#8a745a; margin-top:4px;">{{ r.meta }}</div>
+                    </div>
+                    <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.3px; color:#cfa452; flex:none; padding-left:6px;">Add</span>
+                  </button>
+                </sc-for>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; align-items:center; gap:16px; margin-top:16px; flex-wrap:wrap;">
+                <span style="font-size:12.5px; color:#a68f6e;">{{ noResultsLine }}</span>
+                <button onClick="{{ toManual }}" style="font-size:12.5px; padding:8px 15px; border-radius:20px; border:1px solid #cfa452; background:transparent; color:#cfa452; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#cfa452; color:#241a10;">Type it in</button>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isIdle }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ toManual }}" style="margin-top:14px; font-size:12.5px; background:none; border:none; color:#8a745a; cursor:pointer; font-family:'Archivo',sans-serif; padding:2px 0;" style-hover="color:#ecc87c;">Type it in instead</button>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isManual }}" hint-placeholder-val="{{ false }}">
+          <div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <input value="{{ manualTitle }}" onInput="{{ onManualTitle }}" placeholder="Title" aria-label="Title" style="flex:1 1 240px; min-width:0; background:#1a120a; border:1px solid #45341f; border-radius:8px; padding:12px 14px; font-size:14px; color:#f2e6cd; outline:none;" style-focus="border-color:#cfa452;">
+              <input value="{{ manualAuthor }}" onInput="{{ onManualAuthor }}" placeholder="Author" aria-label="Author" style="flex:1 1 180px; min-width:0; background:#1a120a; border:1px solid #45341f; border-radius:8px; padding:12px 14px; font-size:14px; color:#f2e6cd; outline:none;" style-focus="border-color:#cfa452;">
+            </div>
+            <div style="display:flex; align-items:center; gap:16px; margin-top:14px; flex-wrap:wrap;">
+              <button onClick="{{ submitManual }}" disabled="{{ manualDisabled }}" style="{{ manualBtnStyle }}">Add</button>
+              <button onClick="{{ backToSearch }}" style="font-size:12.5px; background:none; border:none; color:#8a745a; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="color:#ecc87c;">Search instead</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <!-- Filter + sort only; no facets. The pile is tens of books, so this is the ceiling.
+         No pinning and no manual order either: a ranked pile becomes a queue with a conscience. -->
+    <sc-if value="{{ showControls }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px; margin-bottom:4px; flex-wrap:wrap;">
+        <input type="search" value="{{ filter }}" onInput="{{ onFilter }}" placeholder="Filter" aria-label="Filter the pile" style="flex:0 1 220px; min-width:150px; background:#201709; border:1px solid #392a19; border-radius:20px; padding:8px 15px; font-size:12.5px; color:#f2e6cd; outline:none;" style-focus="border-color:#cfa452;">
+        <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+          <span style="font-size:11px; text-transform:uppercase; letter-spacing:1.3px; color:#8a745a; margin-right:2px;">Sort</span>
+          <sc-for list="{{ sortPills }}" as="p" hint-placeholder-count="4">
+            <button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- THE PILE -->
+    <div style="margin-top:14px;">
+      <sc-for list="{{ rows }}" as="b" hint-placeholder-count="6">
+        <div style="{{ b.wrapStyle }}">
+
+          <sc-if value="{{ b.isOpen }}" hint-placeholder-val="{{ true }}">
+            <div>
+              <div style="display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+                <a href="{{ b.href }}" title="{{ b.spineTitle }}" style="{{ b.spineStyle }}" style-hover="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 1px rgba(207,164,82,.4);" style-focus="transform:translateY(-7px); border-color:#cfa452; box-shadow:0 12px 22px -8px rgba(0,0,0,.8), 0 0 0 2px rgba(207,164,82,.65);"></a>
+                <div style="flex:1 1 240px; min-width:0;">
+                  <div style="display:flex; align-items:baseline; gap:9px; flex-wrap:wrap;">
+                    <div style="font-family:'Newsreader',serif; font-size:21px; color:#f2e6cd; line-height:1.2;"><a href="{{ b.href }}" style="color:inherit;" style-hover="color:#ecc87c;">{{ b.title }}</a></div>
+                    <sc-if value="{{ b.isPrivate }}" hint-placeholder-val="{{ false }}">
+                      <span style="font-size:9.5px; text-transform:uppercase; letter-spacing:1.4px; color:#a68f6e; border:1px solid #45341f; border-radius:3px; padding:2px 5px;">Private</span>
+                    </sc-if>
+                  </div>
+                  <div style="font-size:12.5px; color:#a68f6e; margin-top:4px;">{{ b.author }}</div>
+                  <div style="{{ b.metaStyle }}">{{ b.meta }}</div>
+                </div>
+                <div style="flex:none; text-align:right; min-width:92px;">
+                  <div style="font-size:12px; color:#dcc9a6;">{{ b.addedLabel }}</div>
+                  <div style="font-size:11px; color:#8a745a; margin-top:4px;">{{ b.ageLabel }}</div>
+                </div>
+                <sc-if value="{{ b.showActions }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; align-items:center; gap:13px; flex:none;">
+                    <button onClick="{{ b.onStart }}" style="font-size:12px; background:none; border:none; color:#a68f6e; cursor:pointer; font-family:'Archivo',sans-serif; padding:3px 0;" style-hover="color:#ecc87c;">Started it</button>
+                    <span style="color:#45341f; font-size:11px;">·</span>
+                    <button onClick="{{ b.onRemove }}" style="font-size:12px; background:none; border:none; color:#8a745a; cursor:pointer; font-family:'Archivo',sans-serif; padding:3px 0;" style-hover="color:#ecc87c;">Take off the pile</button>
+                  </div>
+                </sc-if>
+              </div>
+
+              <!-- Kindle reconciliation: one sentence, two buttons. It only appears on a hand-typed
+                   entry, because a matched book already has the file hash the sync arrives with. -->
+              <sc-if value="{{ b.suggestOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="margin-top:15px; background:#201709; border:1px solid #45341f; border-left:3px solid #cfa452; border-radius:8px; padding:14px 16px; display:flex; align-items:center; gap:18px; flex-wrap:wrap;">
+                  <div style="flex:1 1 300px; min-width:0; font-size:13px; color:#efe0c2; line-height:1.5;">{{ b.suggestLine }}</div>
+                  <div style="display:flex; align-items:center; gap:14px; flex:none;">
+                    <button onClick="{{ b.onMerge }}" style="font-size:12.5px; padding:8px 15px; border-radius:20px; border:1px solid #cfa452; background:#cfa452; color:#241a10; font-weight:600; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#ecc87c; border-color:#ecc87c;">Same book</button>
+                    <button onClick="{{ b.onDismissSuggest }}" style="font-size:12.5px; background:none; border:none; color:#8a745a; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="color:#ecc87c;">No</button>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- removed / started / merged, resolved in place. Undo instead of a confirm: the action is
+               cheap to reverse and a dialog would make it feel like deletion. -->
+          <sc-if value="{{ b.isResolved }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+              <div style="{{ b.ghostStyle }}"></div>
+              <div style="flex:1 1 240px; min-width:0; font-size:12.5px; color:#a68f6e;">{{ b.resolvedLine }}</div>
+              <button onClick="{{ b.onUndo }}" style="font-size:12px; background:none; border:1px solid #45341f; border-radius:20px; padding:6px 14px; color:#dcc9a6; cursor:pointer; font-family:'Archivo',sans-serif; flex:none;" style-hover="border-color:#cfa452; color:#f2e6cd;">Undo</button>
+            </div>
+          </sc-if>
+
+        </div>
+      </sc-for>
+
+      <sc-if value="{{ emptyFiltered }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size:13px; color:#8a745a; padding:22px 2px;">Nothing matches.</div>
+      </sc-if>
+
+      <sc-if value="{{ emptyPile }}" hint-placeholder-val="{{ false }}">
+        <div style="border:1px dashed #392a19; border-radius:10px; padding:34px 24px; text-align:center;">
+          <div style="font-family:'Newsreader',serif; font-style:italic; font-size:18px; color:#a68f6e;">Nothing on the pile.</div>
+          <sc-if value="{{ showAddButton }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ openComposer }}" style="margin-top:16px; font-size:12.5px; padding:8px 16px; border-radius:20px; border:1px solid #cfa452; background:transparent; color:#cfa452; cursor:pointer; font-family:'Archivo',sans-serif;" style-hover="background:#cfa452; color:#241a10;">Add a book</button>
+          </sc-if>
+        </div>
+      </sc-if>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;viewer&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;owner&quot;,&quot;visitor&quot;],&quot;default&quot;:&quot;owner&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Who is looking&quot;},&quot;pileState&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mixed&quot;,&quot;empty&quot;],&quot;default&quot;:&quot;mixed&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Data state&quot;},&quot;composerDemo&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;closed&quot;,&quot;idle&quot;,&quot;searching&quot;,&quot;results&quot;,&quot;none&quot;,&quot;manual&quot;],&quot;default&quot;:&quot;closed&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Add composer&quot;}}">
+const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DAY = 86400000;
+const TODAY = "2026-08-04";
+
+// /api/books/openlibrary, mocked. Substring match on title + author.
+const OL = [
+  { t: "Piranesi", a: "Susanna Clarke", y: 2020, p: 245, ed: "Bloomsbury, hardback", kind: "Fiction", cover: true },
+  { t: "Piranesi", a: "Susanna Clarke", y: 2021, p: 272, ed: "Bloomsbury, paperback", kind: "Fiction", cover: false },
+  { t: "The Piranesi Effect", a: "Kerrianne Cartmel-Robinson", y: 2011, p: 118, ed: "Peleus Press", kind: "Fiction", cover: false },
+  { t: "A Field Guide to Getting Lost", a: "Rebecca Solnit", y: 2005, p: 209, ed: "Viking", kind: "Nonfiction", cover: true },
+  { t: "Wanderlust: A History of Walking", a: "Rebecca Solnit", y: 2000, p: 326, ed: "Viking", kind: "Nonfiction", cover: true },
+  { t: "Orbital", a: "Samantha Harvey", y: 2023, p: 136, ed: "Jonathan Cape", kind: "Fiction", cover: true },
+  { t: "The Overstory", a: "Richard Powers", y: 2018, p: 502, ed: "W. W. Norton", kind: "Fiction", cover: true },
+  { t: "Cloud Atlas", a: "David Mitchell", y: 2004, p: 509, ed: "Sceptre", kind: "Fiction", cover: true },
+];
+
+const SEED = [
+  { id: "piranesi", title: "Piranesi", author: "Susanna Clarke", added: "2026-07-29", matched: false,
+    sugg: { file: "piranesi_clarke.epub", since: "2026-08-02", pages: 42 } },
+  { id: "idiot", title: "The Idiot", author: "Elif Batuman", added: "2026-07-21", matched: true, pages: 423, year: 2017, kind: "Fiction" },
+  { id: "seeing", title: "Seeing Like a State", author: "James C. Scott", added: "2026-07-12", matched: true, pages: 445, year: 1998, kind: "Nonfiction" },
+  { id: "keegan", title: "Small Things Like These", author: "Claire Keegan", added: "2026-07-04", matched: true, pages: 128, year: 2021, kind: "Fiction" },
+  { id: "solnit", title: "A Field Guide to Getting Lost", author: "Rebecca Solnit", added: "2026-06-19", matched: true, pages: 209, year: 2005, kind: "Nonfiction", private: true },
+  { id: "malte", title: "The Notebooks of Malte Laurids Brigge", author: "Rainer Maria Rilke", added: "2026-06-02", matched: false },
+  { id: "jest", title: "Infinite Jest", author: "David Foster Wallace", added: "2026-03-14", matched: true, pages: 1079, year: 1996, kind: "Fiction" },
+  { id: "underland", title: "Underland", author: "Robert Macfarlane", added: "2025-11-08", matched: true, pages: 496, year: 2019, kind: "Nonfiction" },
+  { id: "bomb", title: "The Making of the Atomic Bomb", author: "Richard Rhodes", added: "2023-02-03", matched: true, pages: 886, year: 1986, kind: "Nonfiction" },
+];
+
+class Component extends DCLogic {
+  state = {
+    comp: null, q: null, results: null,
+    mTitle: "", mAuthor: "", filter: "", sort: "added",
+    rowState: {}, sugg: "open", added: [],
+  };
+
+  isOwner() { return (this.props.viewer || "owner") !== "visitor"; }
+  parse(s) { const p = s.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  fmt(s) { const d = this.parse(s); return d.getDate() + " " + MO[d.getMonth()] + " " + d.getFullYear(); }
+  fmtNum(n) { return n.toLocaleString("en-US"); }
+
+  search(q) {
+    const s = q.trim().toLowerCase();
+    if (s.length < 2) return [];
+    return OL.filter((r) => (r.t + " " + r.a).toLowerCase().includes(s)).slice(0, 5);
+  }
+
+  // Composer phase: interaction wins; otherwise the composerDemo prop seeds a state to review.
+  phase() { return this.state.comp || this.props.composerDemo || "closed"; }
+  seedQuery(ph) {
+    if (ph === "results") return "solnit";
+    if (ph === "searching") return "piranesi";
+    if (ph === "none") return "the blue trout";
+    return "";
+  }
+
+  setRow(id, kind) { this.setState((s) => ({ rowState: { ...s.rowState, [id]: kind } })); }
+  clearRow(id) { this.setState((s) => { const r = { ...s.rowState }; delete r[id]; return { rowState: r }; }); }
+
+  addBook(rec) {
+    this.setState((s) => ({ added: [rec, ...s.added], comp: "closed", q: "", results: null, mTitle: "", mAuthor: "" }));
+  }
+
+  // SPINE GEOMETRY — the single site-wide formula, shared with the shelves on /books.
+  // Linear in page count plus a fixed floor for the covers, then scaled by the CONTEXT's
+  // reference height so a given book is the same object wherever it is drawn.
+  // Ported to src/lib/books-view.ts as spineWidth/drawnWidth.
+  spineW(pages, contextHeight) {
+    const REFERENCE_HEIGHT = 180, DEFAULT_PAGES = 250, MIN_W = 16, MAX_W = 64, PX_PER_PAGE = 0.05, MIN_DRAWN = 8;
+    const p = pages === null || pages === undefined ? DEFAULT_PAGES : pages;
+    const w = Math.min(MAX_W, Math.max(MIN_W, MIN_W + p * PX_PER_PAGE));
+    const drawn = Math.max(MIN_DRAWN, w * (contextHeight || REFERENCE_HEIGHT) / REFERENCE_HEIGHT);
+    return Math.round(drawn * 2) / 2;
+  }
+
+  // An unfilled spine is the whole point of this page: same object as on the shelf, no gold in it.
+  // A hand-typed book has no page count, so there is no width to draw — it gets a dashed outline at
+  // a neutral width, the vocabulary the book page already uses for something incomplete.
+  pileSpine(b, h) {
+    const base = { display: "block", flex: "none", position: "relative", borderRadius: "2px", overflow: "hidden", cursor: "pointer", outline: "none", transition: "transform .16s ease, box-shadow .16s ease, border-color .16s ease" };
+    if (!b.matched) return { ...base, width: this.spineW(null, h) + "px", height: h + "px", border: "1px dashed #45341f", background: "transparent" };
+    return {
+      ...base, width: this.spineW(b.pages, h) + "px", height: h + "px", border: "1px solid #45341f",
+      backgroundImage: "repeating-linear-gradient(135deg,#2c2013 0 6px,#241906 6px 12px)",
+    };
+  }
+
+  renderVals() {
+    const owner = this.isOwner();
+    const ph = this.phase();
+    const composerOpen = owner && ph !== "closed";
+    const query = this.state.q === null ? this.seedQuery(ph) : this.state.q;
+    const results = this.state.results === null ? this.search(query) : this.state.results;
+
+    const onQuery = (e) => {
+      const v = e.target.value;
+      clearTimeout(this._t);
+      if (v.trim().length < 2) { this.setState({ comp: "idle", q: v, results: [] }); return; }
+      this.setState({ comp: "searching", q: v });
+      // long enough that the searching state is legible, short enough not to feel slow
+      this._t = setTimeout(() => {
+        const r = this.search(v);
+        this.setState({ results: r, comp: r.length ? "results" : "none" });
+      }, 550);
+    };
+
+    // ---- the pile ----
+    const base = (this.props.pileState === "empty" ? [] : SEED);
+    let list = this.state.added.concat(base);
+    // private books are filtered out of the data, not hidden in the markup: a visitor gets no row,
+    // no gap and no count that fails to add up
+    if (!owner) list = list.filter((b) => !b.private);
+
+    const f = this.state.filter.trim().toLowerCase();
+    let shown = f ? list.filter((b) => (b.title + " " + b.author).toLowerCase().includes(f)) : list.slice();
+
+    const sort = this.state.sort;
+    if (sort === "added") shown.sort((a, b) => (a.added < b.added ? 1 : -1));
+    if (sort === "author") shown.sort((a, b) => {
+      const la = (a.author.split(" ").pop() || "").toLowerCase(), lb = (b.author.split(" ").pop() || "").toLowerCase();
+      return la < lb ? -1 : la > lb ? 1 : 0;
+    });
+    // unknown length sorts last rather than as zero
+    if (sort === "length") shown.sort((a, b) => (b.matched ? b.pages : -1) - (a.matched ? a.pages : -1));
+    if (sort === "kind") shown.sort((a, b) => {
+      const rank = (x) => (!x.matched ? 2 : x.kind === "Fiction" ? 0 : 1);
+      return rank(a) - rank(b) || (a.added < b.added ? 1 : -1);
+    });
+
+    const today = this.parse(TODAY);
+    const rows = shown.map((b) => {
+      const st = this.state.rowState[b.id];
+      const days = Math.round((today - this.parse(b.added)) / DAY);
+      // relative dates up to six months; past that the length of the wait is the interesting part
+      const age = days >= 365 ? Math.floor(days / 365) + (days >= 730 ? " years on the pile" : " year on the pile")
+        : days >= 180 ? Math.round(days / 30.4) + " months on the pile"
+        : days <= 0 ? "added today" : days === 1 ? "yesterday" : days + " days ago";
+
+      const meta = b.matched ? [b.year, b.kind, this.fmtNum(b.pages) + " pages"].join(" · ") : "Typed in";
+
+      // "Started it" sends the book to Currently reading with no session behind it. The card there
+      // shows an empty spine and no bar at all — not 0%, which would read as a stalled Kindle book.
+      const resolvedLine =
+        st === "removed" ? b.title + " — off the pile"
+        : st === "started" ? b.title + " — now reading"
+        : st === "merged" ? b.title + " — merged, now reading" : "";
+
+      return {
+        ...b,
+        href: "Book.dc.html",
+        isOpen: !st, isResolved: !!st, isPrivate: !!b.private,
+        showActions: owner && !st,
+        spineStyle: this.pileSpine(b, 84),
+        spineTitle: b.matched ? this.fmtNum(b.pages) + " pages, none read" : "Length unknown",
+        meta,
+        metaStyle: { fontSize: "12px", color: b.matched ? "#8a745a" : "#7d6a52", marginTop: "5px", fontStyle: b.matched ? "normal" : "italic" },
+        addedLabel: this.fmt(b.added),
+        ageLabel: age,
+        onStart: () => this.setRow(b.id, "started"),
+        onRemove: () => this.setRow(b.id, "removed"),
+        onUndo: () => this.clearRow(b.id),
+        onMerge: () => { this.setState({ sugg: "merged" }); this.setRow(b.id, "merged"); },
+        onDismissSuggest: () => this.setState({ sugg: "dismissed" }),
+        suggestOpen: owner && !!b.sugg && !st && this.state.sugg === "open",
+        suggestLine: b.sugg ? "The Kindle started sending pages for " + b.sugg.file + " on " + this.fmt(b.sugg.since) + ". Is that this?" : "",
+        ghostStyle: { width: "13px", height: "34px", flex: "none", border: "1px dashed #33261a", borderRadius: "2px" },
+        wrapStyle: {
+          padding: "18px 2px", borderBottom: "1px solid #33261a",
+          background: b.justAdded && !st ? "linear-gradient(90deg, rgba(207,164,82,.07), transparent 60%)" : "transparent",
+        },
+      };
+    });
+
+    const pillBase = { fontSize: "12px", padding: "6px 12px", borderRadius: "20px", border: "1px solid #45341f", background: "transparent", color: "#dcc9a6", cursor: "pointer", fontFamily: "'Archivo',sans-serif", lineHeight: 1.2 };
+    const pillOn = { ...pillBase, background: "#cfa452", color: "#241a10", fontWeight: 600, borderColor: "#cfa452" };
+    const sortPills = [
+      { k: "added", label: "Added" }, { k: "author", label: "Author" },
+      { k: "length", label: "Length" }, { k: "kind", label: "Kind" },
+    ].map((o) => ({ label: o.label, style: sort === o.k ? pillOn : pillBase, onClick: () => this.setState({ sort: o.k }) }));
+
+    const total = list.length;
+
+    return {
+      mechanicNote: owner
+        ? "A book leaves the pile by itself: the first page turn the Kindle sends moves it to Currently reading."
+        : "A book leaves the pile by itself, on the first page turn the Kindle sends.",
+      countLabel: total === 0 ? "empty" : total + (total === 1 ? " book" : " books") + (f ? " · " + shown.length + " shown" : ""),
+      showAddButton: owner && !composerOpen,
+      showControls: total > 1,
+      composerOpen,
+      composerTitle: ph === "manual" ? "Type it in" : "Open Library",
+      inSearchMode: composerOpen && ph !== "manual",
+      isManual: composerOpen && ph === "manual",
+      isIdle: ph === "idle",
+      isSearching: ph === "searching",
+      hasResults: ph === "results" && results.length > 0,
+      noResults: ph === "none",
+      results: results.map((r) => ({
+        title: r.t, author: r.a,
+        meta: [r.y, this.fmtNum(r.p) + " pages", r.ed].join(" · "),
+        thumbStyle: r.cover
+          ? { width: "34px", height: "50px", flex: "none", borderRadius: "2px", border: "1px solid #45341f", backgroundImage: "repeating-linear-gradient(135deg,#33261a 0 6px,#2a1c0c 6px 12px)" }
+          : { width: "34px", height: "50px", flex: "none", borderRadius: "2px", border: "1px dashed #45341f", fontSize: "8px", color: "#7d6a52", display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", lineHeight: 1.2, padding: "2px" },
+        thumbLabel: r.cover ? "" : "no cover",
+        onAdd: () => this.addBook({
+          id: "new-" + r.t.toLowerCase().replace(/[^a-z]+/g, "-"), title: r.t, author: r.a,
+          added: TODAY, matched: true, pages: r.p, year: r.y, kind: r.kind, justAdded: true,
+        }),
+      })),
+      query, onQuery,
+      noResultsLine: "Nothing for “" + query.trim() + "”.",
+      toManual: () => this.setState({ comp: "manual" }),
+      backToSearch: () => this.setState({ comp: "idle", q: "", results: [] }),
+      closeComposer: () => this.setState({ comp: "closed" }),
+      openComposer: () => this.setState({ comp: "idle", q: "", results: [] }),
+      manualTitle: this.state.mTitle, manualAuthor: this.state.mAuthor,
+      onManualTitle: (e) => this.setState({ mTitle: e.target.value }),
+      onManualAuthor: (e) => this.setState({ mAuthor: e.target.value }),
+      manualDisabled: !(this.state.mTitle.trim() && this.state.mAuthor.trim()),
+      manualBtnStyle: (() => {
+        const on = this.state.mTitle.trim() && this.state.mAuthor.trim();
+        return { fontSize: "12.5px", padding: "9px 18px", borderRadius: "20px", fontFamily: "'Archivo',sans-serif", cursor: on ? "pointer" : "default", border: "1px solid " + (on ? "#cfa452" : "#392a19"), background: on ? "#cfa452" : "transparent", color: on ? "#241a10" : "#6f5c46", fontWeight: on ? 600 : 400 };
+      })(),
+      submitManual: () => {
+        if (!(this.state.mTitle.trim() && this.state.mAuthor.trim())) return;
+        this.addBook({ id: "man-" + Date.now(), title: this.state.mTitle.trim(), author: this.state.mAuthor.trim(), added: TODAY, matched: false, justAdded: true });
+      },
+      filter: this.state.filter,
+      onFilter: (e) => this.setState({ filter: e.target.value }),
+      sortPills, rows,
+      emptyFiltered: total > 0 && shown.length === 0,
+      emptyPile: total === 0,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
