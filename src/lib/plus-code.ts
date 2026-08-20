@@ -189,8 +189,15 @@ function encodePrefix(lat: number, lng: number, count: number): string {
 	return encode(lat, lng, 10).replace(SEPARATOR, '').slice(0, count);
 }
 
-/** Encode a point to a full code of `length` digits (10 = building-sized). */
-function encode(lat: number, lng: number, length = 10): string {
+/**
+ * Encode a point to a full code of `length` digits (10 = building-sized).
+ *
+ * Exported because a plus code is DERIVED, never stored: it is a pure function
+ * of lat/lng and carries nothing they do not, so a column for it would only be
+ * a second copy of the coordinates that can disagree with the first. Anything
+ * that wants to show one calls this.
+ */
+export function encode(lat: number, lng: number, length = 10): string {
 	const digits = Math.min(MAX_DIGITS, Math.max(2, length));
 	let latitude = Math.min(90, Math.max(-90, lat));
 	// A point exactly at the north pole would encode into the row past the last.

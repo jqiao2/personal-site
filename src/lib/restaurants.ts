@@ -81,12 +81,22 @@ export interface Place {
 	name: string;
 	cuisines: string[];
 	price_band: PriceBand | null;
+	house_number: string | null;
+	road: string | null;
 	neighborhood: string | null;
+	/** OSM's `quarter`. Its own tier, not a fallback for the neighbourhood. */
+	quarter: string | null;
+	/** Brooklyn, not New York. Null nearly everywhere outside the five boroughs. */
+	borough: string | null;
 	city: string;
 	state_region: string | null;
 	country: string;
 	lat: number | null;
 	lng: number | null;
+	/** OSM's identity for the object, when the point came from OSM at all. */
+	osm_type: string | null;
+	osm_id: number | null;
+	place_rank: number | null;
 	google_place_id: string | null;
 	website_url: string | null;
 	yelp_url: string | null;
@@ -130,6 +140,7 @@ export interface DiaryVisit {
 	cuisines: string[];
 	price_band: PriceBand | null;
 	neighborhood: string | null;
+	borough: string | null;
 	city: string;
 	state_region: string | null;
 	country: string;
@@ -834,12 +845,19 @@ export interface PlaceInput {
 	name?: string;
 	cuisines?: string[];
 	priceBand?: PriceBand | null;
+	houseNumber?: string | null;
+	road?: string | null;
 	neighborhood?: string | null;
+	quarter?: string | null;
+	borough?: string | null;
 	city?: string | null;
 	stateRegion?: string | null;
 	country?: string | null;
 	lat?: number | null;
 	lng?: number | null;
+	osmType?: string | null;
+	osmId?: number | null;
+	placeRank?: number | null;
 	googlePlaceId?: string | null;
 	websiteUrl?: string | null;
 	yelpUrl?: string | null;
@@ -856,13 +874,28 @@ function placePayload(input: PlaceInput): Record<string, unknown> {
 	if (input.name !== undefined) payload.name = input.name.trim();
 	if (input.cuisines !== undefined) payload.cuisines = input.cuisines.map((c) => c.trim()).filter(Boolean);
 	if (input.priceBand !== undefined) payload.price_band = input.priceBand;
+	if (input.houseNumber !== undefined) payload.house_number = emptyToNull(input.houseNumber);
+	if (input.road !== undefined) payload.road = emptyToNull(input.road);
 	if (input.neighborhood !== undefined) payload.neighborhood = emptyToNull(input.neighborhood);
+	if (input.quarter !== undefined) payload.quarter = emptyToNull(input.quarter);
+	if (input.borough !== undefined) payload.borough = emptyToNull(input.borough);
 	// City and country have a NOT NULL floor; only overwrite them when given.
 	if (input.city) payload.city = input.city.trim();
 	if (input.stateRegion !== undefined) payload.state_region = emptyToNull(input.stateRegion);
 	if (input.country) payload.country = input.country.trim();
 	if (input.lat !== undefined) payload.lat = input.lat;
 	if (input.lng !== undefined) payload.lng = input.lng;
+	// The OSM identity travels WITH the point, never apart from it: a stale
+	// osm_id beside a hand-typed coordinate would claim a provenance the point
+	// does not have. Moving a pin clears the identity unless a new one came too.
+	if (input.osmType !== undefined) payload.osm_type = emptyToNull(input.osmType);
+	if (input.osmId !== undefined) payload.osm_id = input.osmId;
+	if (input.placeRank !== undefined) payload.place_rank = input.placeRank;
+	if (input.lat !== undefined && input.osmType === undefined) {
+		payload.osm_type = null;
+		payload.osm_id = null;
+		payload.place_rank = null;
+	}
 	if (input.googlePlaceId !== undefined) payload.google_place_id = emptyToNull(input.googlePlaceId);
 	if (input.websiteUrl !== undefined) payload.website_url = emptyToNull(input.websiteUrl);
 	if (input.yelpUrl !== undefined) payload.yelp_url = emptyToNull(input.yelpUrl);

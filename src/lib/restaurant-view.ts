@@ -12,14 +12,24 @@ import type { DiaryVisit, Photo, Place, VisitDetail } from './restaurants';
  * isn't. The fallback must not read as a missing field — an absent
  * neighbourhood is the level of detail that place warrants, and geocoders are
  * unreliable about neighbourhoods outside New York anyway.
+ *
+ * THE BOROUGH IS THE SECOND WORD WHERE THERE IS ONE, and that is the whole
+ * reason it got a column. "Sunset Park, Brooklyn" is what this line has always
+ * claimed to render, but `city` for anywhere in the five boroughs is
+ * "New York" — so until the borough was stored the line either said
+ * "Sunset Park, New York" or leaned on somebody having typed the borough into
+ * the city box by hand. Optional, because the diary and the tiles hand this
+ * whatever they have and a caller without a borough should keep today's answer.
  */
 export function placeLine(place: {
 	neighborhood: string | null;
+	borough?: string | null;
 	city: string;
 	state_region: string | null;
 	country: string;
 }): string {
-	if (place.neighborhood) return `${place.neighborhood}, ${place.city}`;
+	if (place.neighborhood) return `${place.neighborhood}, ${place.borough ?? place.city}`;
+	if (place.borough) return `${place.borough}, ${place.city}`;
 	if (place.state_region) return `${place.city}, ${place.state_region}`;
 	return place.city;
 }

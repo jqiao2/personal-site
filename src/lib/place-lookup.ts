@@ -25,7 +25,15 @@ export interface GeoHit {
 	display: string;
 	lat: number;
 	lng: number;
+	/** OSM's identity for the object. Null for a gazetteer row, which is not one. */
+	osmType?: string | null;
+	osmId?: number | null;
+	placeRank?: number | null;
+	houseNumber?: string | null;
+	road?: string | null;
 	neighborhood: string | null;
+	quarter?: string | null;
+	borough?: string | null;
 	city: string | null;
 	stateRegion: string | null;
 	country: string | null;
@@ -84,7 +92,20 @@ export async function lookupPlaces(name: string, hint = ''): Promise<PlaceLookup
 			display: [h.name, h.address, h.locality].filter(Boolean).join(', '),
 			lat: h.lat as number,
 			lng: h.lng as number,
-			neighborhood: (h.locality as string) ?? null,
+			// `locality` ON A DOHMH ROW IS THE BOROUGH, not the neighbourhood —
+			// it is the health department's BORO column, which holds exactly
+			// "Brooklyn", "Queens", "Bronx", "Staten Island" and null (the
+			// importer drops "Manhattan"). It was read as a neighbourhood only
+			// because there was nowhere else to put it; now there is. The
+			// neighbourhood is genuinely unknown for these rows, and null says
+			// so rather than claiming Brooklyn is one.
+			neighborhood: null,
+			borough: (h.locality as string) ?? null,
+			// The gazetteer keeps the street as one line, unsplit, so there is
+			// no honest way to fill these two from it.
+			houseNumber: null,
+			road: null,
+			quarter: null,
 			city: (h.city as string) ?? null,
 			stateRegion: (h.region as string) ?? null,
 			country: (h.country as string) ?? null,
@@ -113,7 +134,13 @@ export async function lookupPlaces(name: string, hint = ''): Promise<PlaceLookup
 	}
 }
 
-/** "Sunset Park, Brooklyn" — the words a hit contributes to a location line. */
+/**
+ * "Sunset Park, Brooklyn" — the words a hit contributes to a location line.
+ *
+ * The borough stands in for the city when there is one, for the same reason
+ * `placeLine` does it: "Sunset Park, New York" is not how anybody says it, and
+ * a gazetteer row knows its borough and not its neighbourhood.
+ */
 export function hitWhere(hit: GeoHit): string {
-	return [hit.neighborhood, hit.city].filter(Boolean).join(', ');
+	return [hit.neighborhood, hit.borough ?? hit.city].filter(Boolean).join(', ');
 }

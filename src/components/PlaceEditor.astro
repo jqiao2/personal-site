@@ -270,6 +270,16 @@ const config = {
 			hand: '',
 			paste: '',
 			coords: null as { lat: number; lng: number } | null,
+			/**
+			 * What OSM says is AT the point, once one has been settled on.
+			 *
+			 * A plus code and a coordinate pair are exact and mute: they place
+			 * the restaurant to the metre and cannot say what neighbourhood it
+			 * is in. This is the answer to that second question, asked once the
+			 * point is known, and it is what fills the street, the quarter and
+			 * the borough for a place that was never searched for by name.
+			 */
+			reverse: null as GeoHit | null,
 			pasteNote: '',
 			linkAddress: '',
 		};
@@ -289,6 +299,7 @@ const config = {
 			state.hand = '';
 			state.paste = '';
 			state.coords = null;
+			state.reverse = null;
 			state.pasteNote = '';
 			state.linkAddress = '';
 			($('[data-pe-q]') as HTMLInputElement).value = cfg.query;
@@ -392,11 +403,59 @@ const config = {
 			return null;
 		}
 
+		/**
+		 * Settle on a point, and then go and find out what is there.
+		 *
+		 * THE ONE PLACE A COORDINATE IS ACCEPTED. Four things produce a point —
+		 * a pasted pair, a full plus code, a recovered short one, and a followed
+		 * share link — and each used to set `state.coords` itself and render.
+		 * That was four copies of a two-line ritual, and adding the reverse
+		 * lookup to it would have made four copies of a five-line one, which is
+		 * how the three copies of the place search drifted apart before
+		 * place-lookup.ts existed. So the point goes in here instead.
+		 *
+		 * The lookup is fired and not awaited: the point is already saveable and
+		 * the words are an improvement on it, so nothing waits on the network.
+		 * `token` guards against a slow answer for an old point landing after a
+		 * newer one has been typed.
+		 */
+		let pointToken = 0;
+		function placeAt(point: { lat: number; lng: number }, note: string) {
+			state.coords = point;
+			state.reverse = null;
+			state.pasteNote = note;
+			render();
+
+			const token = ++pointToken;
+			fetch(`/api/restaurants/reverse?lat=${point.lat}&lng=${point.lng}`)
+				.then((r) => (r.ok ? r.json() : null))
+				.then((body) => {
+					if (token !== pointToken || !body?.hit) return;
+					state.reverse = body.hit as GeoHit;
+					const words = hitWhere(state.reverse);
+					const street = state.reverse.address || '';
+					if (words) state.pasteNote = `${note} ${street || words}.`;
+					// The "where" box is prefilled only when it is empty: what
+					// you typed outranks what OSM guessed, every time.
+					const field = $('[data-pe-hand-field]') as HTMLInputElement;
+					if (!field.value.trim() && words) field.value = words;
+					render();
+				})
+				.catch(() => {
+					// No words for this point is a normal outcome, and the note
+					// already says where the pin is. Nothing to report.
+				});
+		}
+
 		let pasteTimer = 0;
 		function readPaste() {
 			window.clearTimeout(pasteTimer);
 			const text = val('[data-pe-paste]');
 			state.coords = null;
+			// Retyping invalidates the words as much as the point, and bumping
+			// the token drops any lookup still in flight for the old one.
+			state.reverse = null;
+			pointToken += 1;
 			if (!text) {
 				state.pasteNote = '';
 				render();
@@ -406,9 +465,7 @@ const config = {
 			// A pair of numbers is already the answer.
 			const direct = coordsIn(text);
 			if (direct) {
-				state.coords = direct;
-				state.pasteNote = `Reads as ${direct.lat.toFixed(5)}, ${direct.lng.toFixed(5)}.`;
-				render();
+				placeAt(direct, `Reads as ${direct.lat.toFixed(5)}, ${direct.lng.toFixed(5)}.`);
 				return;
 			}
 
@@ -420,9 +477,7 @@ const config = {
 				if (isFullPlusCode(plus.code)) {
 					const point = decodePlusCode(plus.code);
 					if (point) {
-						state.coords = point;
-						state.pasteNote = `Plus code — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`;
-						render();
+						placeAt(point, `Plus code — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`);
 						return;
 					}
 				}
@@ -471,9 +526,7 @@ const config = {
 				render();
 				return;
 			}
-			state.coords = point;
-			state.pasteNote = `${full} near ${near} — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`;
-			render();
+			placeAt(point, `${full} near ${near} — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`);
 		}
 
 		async function resolveLink(url: string) {
@@ -481,8 +534,11 @@ const config = {
 				const res = await fetch(`/api/restaurants/resolve-link?url=${encodeURIComponent(url)}`);
 				const body = await res.json();
 				if (res.ok && body.lat != null && body.lng != null) {
-					state.coords = { lat: body.lat, lng: body.lng };
-					state.pasteNote = `Reads as ${body.lat.toFixed(5)}, ${body.lng.toFixed(5)}.`;
+					placeAt(
+						{ lat: body.lat, lng: body.lng },
+						`Reads as ${body.lat.toFixed(5)}, ${body.lng.toFixed(5)}.`,
+					);
+					return;
 				} else if (res.ok && body.address) {
 					// The common case, and the one worth explaining: Google's share
 					// links name the place and its street and keep the point in
@@ -609,10 +665,23 @@ const config = {
 				body.stateRegion = h.stateRegion;
 				if (h.country) body.country = h.country;
 				if (cuisine) body.cuisines = cuisine.split(',').map((c) => c.trim()).filter(Boolean);
+				// The tiers the "where" box does not ask about. They come off the
+				// hit as they are: the box collects the two words a human would
+				// say, and these are the rest of the address underneath them.
+				body.houseNumber = h.houseNumber ?? null;
+				body.road = h.road ?? null;
+				body.quarter = h.quarter ?? null;
+				body.borough = h.borough ?? null;
 				// Only a point-precise hit contributes coordinates. An area's
 				// centroid is a pin floating in the middle of a neighbourhood.
 				body.lat = h.precise ? h.lat : null;
 				body.lng = h.precise ? h.lng : null;
+				// The identity travels with the point and only with it: an
+				// area's osm_id would claim provenance for a coordinate we
+				// declined to store.
+				body.osmType = h.precise ? (h.osmType ?? null) : null;
+				body.osmId = h.precise ? (h.osmId ?? null) : null;
+				body.placeRank = h.precise ? (h.placeRank ?? null) : null;
 			} else {
 				const where = val('[data-pe-hand-field]');
 				if (where) {
@@ -623,6 +692,29 @@ const config = {
 				if (state.coords) {
 					body.lat = state.coords.lat;
 					body.lng = state.coords.lng;
+				}
+				// The tiers underneath the two words the box collects, from the
+				// reverse lookup on the point that was just settled. The typed
+				// line still wins for neighbourhood and city — it is above these
+				// in the body and set from `where` — so this only ever fills in
+				// what the box does not ask about.
+				const r = state.reverse;
+				if (r) {
+					body.houseNumber = r.houseNumber ?? null;
+					body.road = r.road ?? null;
+					body.quarter = r.quarter ?? null;
+					body.borough = r.borough ?? null;
+					if (!where) {
+						body.neighborhood = r.neighborhood ?? null;
+						if (r.city) body.city = r.city;
+					}
+					if (r.stateRegion) body.stateRegion = r.stateRegion;
+					if (r.country) body.country = r.country;
+					// NO osm_type/osm_id HERE. Reverse geocoding names whatever
+					// object happens to sit at the point — the building, the
+					// shop next door, the street — and that is not a claim that
+					// this restaurant IS that object. The identity is only
+					// recorded when a named hit was picked deliberately.
 				}
 			}
 

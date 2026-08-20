@@ -1,18 +1,30 @@
 # Where a place is
 
-The location half of a `restaurants` row, defined field by field, with what the
-code does about each one today.
+The location half of a `restaurants` row, defined field by field.
 
-The short version: of the ten things below, **five are stored, one is derivable
-but unreachable, and four do not exist.** The four that are missing are the
-street address, OSM's own identity for the place, the quarter, and the borough —
-and the last two are missing in the specific sense that OSM *returns* them and
-`toHit()` throws them away.
+**Status: shipped.** Migration `0033_place_location_detail.sql` is applied, the
+`??` chains in `geocode.ts` are rewritten, `reverseGeocode()` exists, and the
+333 placed restaurants have been backfilled. The audit below is kept as written
+— it is the record of what was wrong and why each column earns its place.
 
-There is also one hole that is not a field at all: **nothing in this codebase
-reverse-geocodes.** `src/lib/geocode.ts` calls Nominatim's `/search` and nothing
-calls `/reverse`. That matters for the brief's own phrasing — "querying OSM given
-a plus code" — because that is a two-step trip the code cannot currently make.
+The original finding: of the ten things below, five were stored, one was
+derivable but unreachable, and four did not exist — the street address, OSM's
+own identity, the quarter, and the borough. The last two were missing in the
+specific sense that OSM *returned* them and `toHit()` threw them away.
+
+There was also one hole that was not a field at all: **nothing reverse-geocoded.**
+`geocode.ts` called Nominatim's `/search` and nothing called `/reverse`, so
+"querying OSM given a plus code" was a two-step trip the code could not make.
+
+> **One thing the audit got wrong, corrected by asking Nominatim.** This document
+> first claimed NYC boroughs arrive as `city_district`. They do not. A real
+> reverse geocode of a Sunset Park address returns
+> `{ neighbourhood: "Sunset Park", suburb: "Brooklyn", city: "New York" }` — no
+> `city_district` at all. The borough is in `suburb`, which elsewhere in the
+> world is routinely the neighbourhood. The rule that fits both is in
+> [`splitAddress`](../../src/lib/geocode.ts): the keys are two tiers, finest
+> first, so when both appear the second is the borough, and when only `suburb`
+> appears it is the neighbourhood.
 
 ---
 
@@ -238,10 +250,10 @@ write is one OSM key to one field, no fallbacks between tiers:
 | Field | OSM key |
 |---|---|
 | `house_number` | `house_number` |
-| `road` | `road` |
-| `neighborhood` | `neighbourhood` |
+| `road` | `road ?? pedestrian ?? footway` |
+| `neighborhood` | `neighbourhood ?? suburb` |
 | `quarter` | `quarter` |
-| `borough` | `city_district` |
+| `borough` | `city_district ?? borough ?? suburb`, the last only when `neighbourhood` is also present |
 | `city` | `city ?? town ?? village ?? municipality` |
 | `state_region` | `state ?? province ?? region` |
 | `country` | `country_code`, upper-cased |
@@ -250,30 +262,60 @@ Fallbacks *within* a tier are fine — `town` really is the city of a town. What
 has to stop is fallbacks *across* tiers, which is what turns a quarter into a
 neighbourhood and loses a borough.
 
+`county` appears in no chain. The Sunset Park lookup reports "Kings County",
+which is a true fact about Brooklyn and not a field this log has; the old city
+chain ended in `?? county`, which would have quietly named a county as a city
+for any rural place. That tail is gone.
+
 ---
 
-## What this asks for, in order
+## What shipped
 
-1. **Export `encode()`** from `plus-code.ts`. One word; the plus code becomes
+1. **`encode()` exported** from `plus-code.ts`. One word; the plus code is
    readable everywhere without storing anything.
-2. **One migration**, `0033`, adding seven nullable columns to `restaurants`:
-   `osm_type`, `osm_id`, `place_rank`, `house_number`, `road`, `quarter`,
-   `borough`. All nullable — every one of them is legitimately absent somewhere,
-   and null stays a normal reading rather than a gap.
-3. **Rewrite `toHit()`** to the one-key-one-field table above, and widen
-   `GeocodeHit` to carry the new fields.
-4. **Add `reverseGeocode(lat, lng)`** to `geocode.ts`, sharing the existing
-   pacer, so a plus code or a pasted coordinate pair can fill in the hierarchy
-   instead of leaving it blank.
-5. **Widen the write path** — `createPlace`, the `POST` and `PATCH` bodies,
-   `PlaceEditor` — to carry the new fields through. This is the step that is
-   pure mechanical breadth and no decisions.
-6. **Backfill** by reverse-geocoding every placed restaurant once, at one
-   request a second, writing only into columns that are null.
+2. **Migration `0033`** — seven nullable columns on `restaurants`: `osm_type`,
+   `osm_id`, `place_rank`, `house_number`, `road`, `quarter`, `borough`. Both
+   views rebuilt, because `restaurant_places` selects `r.*` and `create or
+   replace view` cannot add columns in the middle — the same trap `0031`
+   documented.
+3. **`splitAddress()`** replaces the `??` chains, one key to one field, and is
+   exported so it can be tested without a network.
+4. **`reverseGeocode(lat, lng)`** in `geocode.ts`, sharing the existing pacer
+   and User-Agent, behind `/api/restaurants/reverse`.
+5. **The write path widened** — `PlaceInput`, `placePayload`, `POST`, `PATCH`,
+   and `PlaceEditor`, whose four separate coordinate-setting sites now funnel
+   through one `placeAt()` that settles the point and then goes and finds out
+   what is there.
+6. **Backfilled** — `scripts/backfill-place-location.mjs`, one reverse geocode
+   per placed restaurant at one request a second, writing only into columns
+   that are null.
 
-Steps 1–3 are worth doing whatever happens to the rest: they stop the loss.
-Step 4 is what makes the plus-code path actually answer the question the brief
-asks of it.
+### The one thing the backfill deliberately does not write
+
+`osm_type`/`osm_id`/`place_rank` are **not** backfilled, and this is the most
+important line in the script. Reverse geocoding returns whatever object sits
+nearest the point: asked about a Sunset Park restaurant's pin, Nominatim answers
+`node/2561552351`, which is *a nail salon two doors down*. That is a fine answer
+to "what is at these coordinates" and a wrong answer to "which OSM object is
+this restaurant", and writing it into `osm_id` would manufacture exactly the
+false provenance the column exists to prevent.
+
+The address tiers do not have that problem — the nail salon and the restaurant
+share a street, a neighbourhood and a borough — which is precisely why those are
+safe to read off a neighbour and an identity is not.
+
+So the OSM identity is only ever recorded going forward, when a **named** hit is
+picked in the composer and the match is a name match rather than a proximity
+one. `PlaceEditor`'s by-hand branch does not set it either, for the same reason.
+
+### A gazetteer conflation fixed on the way
+
+`place-lookup.ts` mapped `place_sources.locality` to `neighborhood`. For DOHMH
+rows — the bulk of the gazetteer — `locality` is the health department's `BORO`
+column, holding literally "Brooklyn", "Queens", "Bronx", "Staten Island". It was
+the same borough-into-neighbourhood conflation arriving from the other source,
+and it now maps to `borough`, with `neighborhood` left null because for those
+rows it is genuinely unknown.
 
 ## What this deliberately does not ask for
 
