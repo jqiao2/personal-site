@@ -81,7 +81,7 @@ export interface TmdbMovieDetails {
 	production_countries?: { iso_3166_1: string; name: string }[];
 	credits?: {
 		cast: { id: number; name: string; character: string; profile_path: string | null }[];
-		crew: { id: number; name: string; job: string }[];
+		crew: { id: number; name: string; job: string; department?: string }[];
 	};
 	release_dates?: {
 		results: {
@@ -165,6 +165,62 @@ export function extractCreditFacts(d: TmdbMovieDetails): MovieCreditFacts {
 		originalLanguage: originalLanguageName(d),
 		mpaRating: usCertification(d),
 	};
+}
+
+/** One row of the film page's Crew tab: a display role and everyone credited with it. */
+export interface CrewGroup {
+	role: string;
+	names: string[];
+}
+
+/**
+ * Display role → the TMDB `job` strings that roll up into it, in the order the
+ * Crew tab lists them.
+ *
+ * TMDB returns 100–225 crew credits for a modern film — every set dresser, driver
+ * and foley editor — which is a phone book, not a credits block. So this is a
+ * whitelist of the roles a viewer actually looks for, which lands around 25–50 per
+ * film. Several TMDB jobs share one row (Screenplay/Writer/Novel are all "Writer";
+ * the three sound-department heads are all "Sound") because the distinction TMDB
+ * draws is finer than anyone reading a film page cares about.
+ *
+ * Anything not listed here is deliberately dropped. Widening the list is a matter
+ * of adding jobs; the exact strings are TMDB's, so they have to match verbatim.
+ */
+const CREW_ROLES: [role: string, jobs: string[]][] = [
+	['Director', ['Director']],
+	['Writer', ['Screenplay', 'Writer', 'Story', 'Novel', 'Book', 'Characters', 'Author', 'Original Film Writer']],
+	['Producer', ['Producer']],
+	['Executive Producer', ['Executive Producer']],
+	['Cinematography', ['Director of Photography']],
+	['Editor', ['Editor']],
+	['Composer', ['Original Music Composer', 'Composer', 'Music']],
+	['Production Design', ['Production Design']],
+	['Art Direction', ['Art Direction', 'Supervising Art Director']],
+	['Set Decoration', ['Set Decoration']],
+	['Costume Design', ['Costume Design']],
+	['Hair & Makeup', ['Makeup Department Head', 'Hair Department Head', 'Makeup Designer', 'Hair Designer', 'Prosthetic Designer']],
+	['Sound', ['Sound Designer', 'Supervising Sound Editor', 'Production Sound Mixer', 'Sound Re-Recording Mixer']],
+	['Visual Effects', ['Visual Effects Supervisor', 'Special Effects Supervisor']],
+	['Stunts', ['Stunt Coordinator']],
+	['Casting', ['Casting']],
+];
+
+/**
+ * The film page's Crew tab: {@link CREW_ROLES} applied to a details+credits
+ * response, dropping roles nobody is credited with. Names are de-duplicated within
+ * a role (TMDB credits the same person twice when jobs merge into one row).
+ */
+export function extractCrew(d: TmdbMovieDetails): CrewGroup[] {
+	const crew = d.credits?.crew ?? [];
+	const groups: CrewGroup[] = [];
+	for (const [role, jobs] of CREW_ROLES) {
+		const names = [
+			...new Set(crew.filter((c) => jobs.includes(c.job)).map((c) => c.name.trim()).filter(Boolean)),
+		];
+		if (names.length > 0) groups.push({ role, names });
+	}
+	return groups;
 }
 
 export interface TmdbPage<T> {
