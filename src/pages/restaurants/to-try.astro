@@ -34,7 +34,6 @@ import {
 	isPlaceSort,
 	isPriceBand,
 	isTripFilter,
-	listCityFacets,
 	listCuisineFacets,
 	listFriends,
 	listPlaces,
@@ -59,7 +58,6 @@ export const prerender = false;
 // a filtered list survives a reload, a share and the list/map toggle.
 const params = Astro.url.searchParams;
 const isMap = params.get('view') === 'map';
-const city = params.get('city');
 const selectedCuisines = params.getAll('cuisine');
 const selectedPrices = params.getAll('price').filter(isPriceBand) as PriceBand[];
 // "Recently added" is the list's own order and the only sensible default: a
@@ -69,20 +67,18 @@ const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('
 const onMap: MapFilter | null = isMapFilter(params.get('map')) ? (params.get('map') as MapFilter) : null;
 const selectedTags = params.getAll('why').filter((t) => (WHY_TAGS as readonly string[]).includes(t));
 
-const [all, places, cuisineFacets, cityFacets, whyFacets, isOwner] = await Promise.all([
+const [all, places, cuisineFacets, whyFacets, isOwner] = await Promise.all([
 	listPlaces({ scope: 'to-try' }),
 	listPlaces({
 		scope: 'to-try',
 		cuisines: selectedCuisines,
 		prices: selectedPrices,
-		city,
 		trip,
 		tags: selectedTags,
 		onMap,
 		sort,
 	}),
 	listCuisineFacets('to-try'),
-	listCityFacets('to-try'),
 	listWhyTagFacets('to-try'),
 	requireOwner(Astro.cookies),
 ]);
@@ -123,7 +119,6 @@ const activeFilters = [
 	...selectedTags.map((t) => ({ label: t, href: href({ why: toggle(selectedTags, t) }) })),
 	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
 	...(onMap ? [{ label: onMap === 'off' ? 'Not on the map' : 'On the map', href: href({ map: null }) }] : []),
-	...(city ? [{ label: city, href: href({ city: null }) }] : []),
 ];
 
 const countLine =
@@ -302,13 +297,7 @@ function href(changes: Record<string, string | string[] | null>): string {
 					see all {all.length}.
 				</p>
 			) : isMap ? (
-				<RestaurantMap
-					points={points}
-					cities={cityFacets.map((c) => ({ name: c.name, count: c.count }))}
-					activeCity={city}
-					cityHref={(c) => href({ city: c, view: 'map' })}
-					caption={`${points.length} of ${places.length} placed`}
-				/>
+				<RestaurantMap points={points} caption={`${points.length} of ${places.length} placed`} />
 			) : (
 				<div class="rl-box list">
 					{places.map((p) => (
