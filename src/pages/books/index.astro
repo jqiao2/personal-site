@@ -20,8 +20,6 @@ import {
 	buildShelf,
 	buildSpells,
 	DOW_LABELS,
-	formatDuration,
-	formatNumber,
 	HEAT_LEVELS,
 	prefersHeatmap,
 	readDays,
@@ -97,14 +95,6 @@ const defaultView = days.length && prefersHeatmap(days, todayDay) ? 'heatmap' : 
 const done = finishedShelf(finished);
 const doneSpan = shelfSpan(finished);
 
-const metrics = [
-	{ value: formatNumber(stats.current_streak), label: 'Current streak' },
-	{ value: formatNumber(stats.longest_streak), label: 'Longest streak' },
-	{ value: formatNumber(stats.days_read), label: 'Days read' },
-	{ value: formatNumber(stats.total_pages), label: 'Pages' },
-	{ value: formatDuration(stats.total_seconds), label: 'Time read' },
-];
-
 // Every book here is a page of its own. The picture of it is the strongest tie
 // between the two views, so it links as well as the title does — see BookCover
 // for why that link is hidden from the keyboard and the screen reader.
@@ -138,17 +128,6 @@ const hasActivity = days.length > 0;
 					<h1 class="head__title">Books</h1>
 					<p class="head__note">Logged automatically via Kindle</p>
 				</header>
-
-				<div class="metrics">
-					{
-						metrics.map((m) => (
-							<div class="metric">
-								<div class="metric__value">{m.value}</div>
-								<div class="metric__label">{m.label}</div>
-							</div>
-						))
-					}
-				</div>
 
 				<section class="section">
 					<div class="sec-head">
@@ -547,7 +526,7 @@ const hasActivity = days.length > 0;
 			justify-content: space-between;
 			gap: 14px;
 			flex-wrap: wrap;
-			margin-bottom: 30px;
+			margin-bottom: 40px;
 		}
 		.head__title {
 			font-family: 'Newsreader', serif;
@@ -564,33 +543,6 @@ const hasActivity = days.length > 0;
 			color: #8a745a;
 			line-height: 1.5;
 			max-width: 280px;
-		}
-
-		/* Metrics */
-		.metrics {
-			display: grid;
-			grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-			gap: 12px;
-			margin-bottom: 44px;
-		}
-		.metric {
-			background: #241a10;
-			border: 1px solid #45341f;
-			border-radius: 10px;
-			padding: 20px 18px;
-		}
-		.metric__value {
-			font-family: 'Newsreader', serif;
-			font-size: 36px;
-			color: #cfa452;
-			line-height: 1;
-		}
-		.metric__label {
-			font-size: 11px;
-			text-transform: uppercase;
-			letter-spacing: 1.4px;
-			color: #a68f6e;
-			margin-top: 8px;
 		}
 
 		/* Sections */
