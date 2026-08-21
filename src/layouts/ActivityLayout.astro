@@ -1,0 +1,102 @@
+---
+// Shell for "Jason's activity log" — see src/lib/activity-tokens.ts for the
+// full argument on why this section is light where the film log is dark. In
+// short: the film log is a lamp-lit room, this is a clear day above the
+// treeline, and a dark rendering of that would throw away the one fact ("cold,
+// bright") the section exists to carry.
+//
+// STRUCTURE. Deliberately the same shape as FilmLayout.astro — an <html> shell
+// that loads its two webfonts, a global reset, the history-aware `a.back`
+// script, then `<slot />` — because a reader who has already learned "this
+// framework wraps a page" from the film log shouldn't have to relearn it here.
+// What differs is only what art direction demands: the palette, the two
+// typefaces, and the vertical wash instead of a flat ground.
+//
+// THE WASH. `sky` at the top fading to `snow` by mid-page is doing the same job
+// a photographer's graduated ND filter does on an alpine horizon — it reads as
+// "up is the thin cold air near the ridge, down is where you're standing,"
+// which is also, not coincidentally, "up is the nav, down is the content."
+// It's a fixed background-attachment gradient rather than per-section colour
+// blocks so it doesn't reset and repeat every time a page scrolls past a
+// section boundary.
+//
+// NO TMDB PRECONNECT. That was the film log's optimisation for a poster host
+// it queries on every tile; this section's cards are self-drawn SVG (see
+// ActivityCard.astro) and never touch a third-party image host, so there is
+// nothing here worth warming a connection for.
+import { FONT_LINK } from '../lib/activity-tokens';
+
+interface Props {
+	title: string;
+}
+const { title } = Astro.props;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href={FONT_LINK} rel="stylesheet" />
+	</head>
+	<body>
+		<slot />
+		<script>
+			// "Back" links go to the actual previous page when you arrived from within
+			// the site; the href stays a fallback for direct loads / new tabs / external
+			// referrers (where history.back() would leave the site). Copied verbatim
+			// from FilmLayout.astro so the two sections agree on what a back link does.
+			for (const a of document.querySelectorAll('a.back')) {
+				a.addEventListener('click', (e) => {
+					const ref = document.referrer;
+					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+					if (history.length > 1 && sameOrigin) {
+						e.preventDefault();
+						history.back();
+					}
+				});
+			}
+		</script>
+		<style is:global>
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				min-height: 100vh;
+				/* The wash: thin cold air at the ridge (sky) settling to the paper
+				   you're standing on (snow). Fixed so it doesn't repeat per-section. */
+				background: linear-gradient(180deg, #dceaf4 0%, #f8fbfd 640px, #f8fbfd 100%);
+				background-attachment: fixed;
+				color: #3d4a55;
+				font-family: 'Instrument Sans', Arial, sans-serif;
+				-webkit-font-smoothing: antialiased;
+			}
+			a {
+				text-decoration: none;
+				color: #1c6e8c;
+			}
+			a:hover {
+				color: #12495e;
+			}
+			h1,
+			h2,
+			h3 {
+				font-family: 'Instrument Serif', Georgia, serif;
+				font-weight: 400;
+			}
+			/* Any figure sitting in a column — stats, distances, times — lines up on
+			   its digits instead of drifting with proportional widths. */
+			.figure {
+				font-variant-numeric: tabular-nums;
+			}
+		</style>
+	</body>
+</html>

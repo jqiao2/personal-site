@@ -13,11 +13,14 @@
     "credits:fetch": "node --env-file=.env scripts/credit-graph/fetch.mjs",
     "credits:load": "node --env-file=.env scripts/credit-graph/load.mjs",
     "credits:build": "node --env-file=.env scripts/credit-graph/build.mjs",
-    "restaurants:import": "node --env-file=.env scripts/import-to-try.mjs"
+    "restaurants:import": "node --env-file=.env scripts/import-to-try.mjs",
+    "activities:import": "node --import ./scripts/ts-hook.mjs --env-file=.env scripts/import-strava-archive.mjs",
+    "activities:test": "node --import ./scripts/ts-hook.mjs scripts/ingest.test.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.4",
     "@aws-sdk/client-s3": "^3.1115.0",
+    "@garmin/fitsdk": "^21.213.0",
     "@sigma/node-piechart": "^3.0.1",
     "@supabase/supabase-js": "^2.110.2",
     "astro": "^7.0.7",
