@@ -1,0 +1,512 @@
+---
+// /activities/heatmap — every outdoor track ever recorded, on one map, in two
+// readings of the same data:
+//
+//   routes — the tracks themselves, drawn faintly and stacked, so a road
+//            ridden a hundred times burns in and a one-off ride stays a thread.
+//   tiles  — the ground unlocked, on one world-spanning grid of ~150 ft
+//            squares (src/lib/heatmap.ts). Fog of war: a square is either
+//            ridden through or it isn't, and "where have I been" stops being
+//            a question about how often the GPS happened to sample.
+//
+// The two are a toggle rather than two pages because they answer the same
+// question at different resolutions, and switching in place is what makes the
+// difference between them legible.
+//
+// THE HEATMAP IS ITS OWN TOGGLE, and only means anything over tiles. Off, the
+// squares are one colour and the map is the boolean the grid actually is.
+// On, the same squares shade by how many activities crossed them — which is
+// worth *asking* for rather than being the default, because the boolean is
+// the honest picture of ground covered and the shading is a second question
+// laid over it. (The route view is already a heatmap by construction: it is
+// stacked translucent lines, so the toggle sits out while it's showing.)
+//
+// VIRTUAL RIDES ARE EXCLUDED at the query (listRoutePolylines) — a Zwift
+// polyline is a road in Watopia, and putting it on a map of ground covered
+// would be a claim that isn't true.
+//
+// THE CAMERA STARTS WHERE THE READER IS. A map of years fits a continent, at
+// which zoom every square is sub-pixel and the page shows nothing. So it asks
+// for geolocation on load and opens there; the all-time bounds are the
+// fallback for a denial, a timeout, or a browser without the API — never a
+// blank world view.
+import ActivityLayout from '../../layouts/ActivityLayout.astro';
+import { siteNav } from '../../lib/nav';
+import { ALPINE } from '../../lib/activity-tokens';
+import { ACTIVITY_MAP_TOKENS } from '../../lib/activity-map';
+import { TILE_FEET } from '../../lib/heatmap';
+
+export const prerender = false;
+
+const nav = siteNav(Astro.url.pathname);
+const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
+const config = { key, tokens: ACTIVITY_MAP_TOKENS };
+---
+
+<ActivityLayout title="Heatmap · Jason's activity log">
+	<div
+		class="page"
+		style={{
+			'--snow': ALPINE.snow,
+			'--granite': ALPINE.granite,
+			'--granite-soft': ALPINE.graniteSoft,
+			'--lake': ALPINE.lake,
+			'--lake-deep': ALPINE.lakeDeep,
+			'--scree': ALPINE.scree,
+		}}
+	>
+		<div class="card">
+			<nav class="tabs">
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
+			</nav>
+
+			<header class="head">
+				<div>
+					<a class="back" href="/activities">← Activity log</a>
+					<h1 class="head__title">Heatmap</h1>
+				</div>
+				<div class="head__controls">
+					<div class="seg" role="group" aria-label="Map view">
+						<button class="seg__btn seg__btn--on" type="button" data-view="routes" aria-pressed="true">Routes</button>
+						<button class="seg__btn" type="button" data-view="tiles" aria-pressed="false">{TILE_FEET} ft tiles</button>
+					</div>
+					<button class="toggle" type="button" data-heat aria-pressed="false" disabled>Heatmap</button>
+					<button class="locate" type="button" data-locate>Locate me</button>
+				</div>
+			</header>
+
+			<div class="map">
+				<div class="map__gl" data-heatmap role="img" aria-label="Map of every outdoor activity"></div>
+				<p class="map__status" data-status>Loading routes…</p>
+				<div class="map__legend" data-legend hidden>
+					<span>less</span><span class="map__legend-scale"></span><span>more</span>
+				</div>
+			</div>
+		</div>
+	</div>
+</ActivityLayout>
+
+<script type="application/json" id="heatmap-config" set:html={JSON.stringify(config)} is:inline />
+
+<script>
+	import * as maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	// See RestaurantMap.astro — MapLibre's tile-decoding worker has to go
+	// through Vite's worker build or every tile silently fails to decode.
+	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+	import { alpineBasemap, bareAlpineGround } from '../../lib/activity-map';
+	import { decodePolyline, bounds as trackBounds } from '../../lib/route-shape';
+	import { addTrackTiles, tilesToGeoJSON } from '../../lib/heatmap';
+
+	const tag = document.getElementById('heatmap-config');
+	const host = document.querySelector<HTMLElement>('[data-heatmap]');
+	const status = document.querySelector<HTMLElement>('[data-status]');
+	const legend = document.querySelector<HTMLElement>('[data-legend]');
+
+	if (tag && host && status) {
+		const cfg = JSON.parse(tag.textContent || '{}') as { key: string; tokens: { route: string } };
+
+		const map = new maplibregl.Map({
+			container: host,
+			style: cfg.key
+				? (alpineBasemap(cfg.key) as maplibregl.StyleSpecification)
+				: (bareAlpineGround() as maplibregl.StyleSpecification),
+			center: [-73.98, 40.75],
+			zoom: 11,
+			attributionControl: { compact: true },
+			pitchWithRotate: false,
+			dragRotate: false,
+			touchPitch: false,
+		});
+		map.touchZoomRotate.disableRotation();
+		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+		map.on('error', (e) => console.warn('heatmap:', e.error?.message ?? 'tile or style request failed'));
+
+		// Whoever answers first wins the camera, and neither overrules a reader
+		// who has already started panning: geolocation is the requested default,
+		// the all-time bounds are the fallback, a drag ends both.
+		let cameraSettled = false;
+		map.once('dragstart', () => (cameraSettled = true));
+		map.once('zoomstart', () => (cameraSettled = true));
+
+		function goToUser(force = false) {
+			if (!navigator.geolocation) return;
+			navigator.geolocation.getCurrentPosition(
+				(pos) => {
+					if (cameraSettled && !force) return;
+					cameraSettled = true;
+					map.jumpTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 12 });
+				},
+				() => {
+					/* denied, timed out, or no fix — the bounds fallback stands */
+				},
+				{ enableHighAccuracy: false, timeout: 8000, maximumAge: 300_000 },
+			);
+		}
+		goToUser();
+		document.querySelector('[data-locate]')?.addEventListener('click', () => goToUser(true));
+
+		// --- data -------------------------------------------------------------
+		let tracks: [number, number][][] = [];
+		/** Built on the first switch to tile view, then kept — quantising every
+		 *  track costs real time on a large collection, and the toggle should be
+		 *  free after the first flip. */
+		let tileData: ReturnType<typeof tilesToGeoJSON> | null = null;
+		let view: 'routes' | 'tiles' = 'routes';
+		let heat = false;
+		const heatBtn = document.querySelector<HTMLButtonElement>('[data-heat]');
+
+		function routeGeoJSON() {
+			return {
+				type: 'FeatureCollection' as const,
+				features: tracks.map((points) => ({
+					type: 'Feature' as const,
+					geometry: { type: 'LineString' as const, coordinates: points.map(([lat, lng]) => [lng, lat]) },
+					properties: {},
+				})),
+			};
+		}
+
+		function buildTiles() {
+			if (tileData) return tileData;
+			const counts = new Map<string, number>();
+			for (const points of tracks) addTrackTiles(points, counts);
+			tileData = tilesToGeoJSON(counts);
+			return tileData;
+		}
+
+		function whenStyleReady(fn: () => void) {
+			if (map.isStyleLoaded()) fn();
+			else map.once('styledata', fn);
+		}
+
+		function addRouteLayer() {
+			if (map.getSource('routes')) return;
+			map.addSource('routes', { type: 'geojson', data: routeGeoJSON() as never });
+			// Faint and stacked: one pass is a thread, a commute ridden weekly is
+			// a solid line. Overlap doing the work is the whole reason to draw
+			// tracks rather than count them.
+			map.addLayer({
+				id: 'routes-line',
+				type: 'line',
+				source: 'routes',
+				layout: { 'line-cap': 'round', 'line-join': 'round' },
+				paint: {
+					'line-color': cfg.tokens.route,
+					'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1, 12, 1.8, 16, 3],
+					'line-opacity': 0.28,
+				},
+			});
+		}
+
+		// Heatmap off: every unlocked square is the same colour, and the map is a
+		// boolean — visited or not, which is the fog-of-war reading. Heatmap on:
+		// the same squares, shaded by how often they were crossed. One hue,
+		// four steps; a second colour would read as a second variable.
+		const TILE_SHADES = ['#a9dde3', '#63b8c9', '#1c6e8c', '#12495e'];
+		const tileFill = () =>
+			heat
+				? (['step', ['get', 'bucket'], ...TILE_SHADES.flatMap((c, i) => (i === 0 ? [c] : [i, c]))] as never)
+				: ('#1c6e8c' as never);
+
+		function addTileLayer() {
+			if (map.getSource('tiles')) return;
+			map.addSource('tiles', { type: 'geojson', data: buildTiles() as never });
+			map.addLayer({
+				id: 'tiles-fill',
+				type: 'fill',
+				source: 'tiles',
+				paint: { 'fill-color': tileFill(), 'fill-opacity': 0.72 },
+			});
+		}
+
+		function applyView() {
+			if (view === 'tiles') addTileLayer();
+			if (map.getLayer('routes-line')) {
+				map.setLayoutProperty('routes-line', 'visibility', view === 'routes' ? 'visible' : 'none');
+			}
+			if (map.getLayer('tiles-fill')) {
+				map.setLayoutProperty('tiles-fill', 'visibility', view === 'tiles' ? 'visible' : 'none');
+				map.setPaintProperty('tiles-fill', 'fill-color', tileFill());
+			}
+			// The route view is the heatmap by construction (stacked lines), so
+			// the toggle only has anything to say about tiles.
+			heatBtn?.toggleAttribute('disabled', view !== 'tiles');
+			if (legend) legend.hidden = view !== 'tiles' || !heat;
+		}
+
+		for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
+			btn.addEventListener('click', () => {
+				const next = btn.dataset.view as 'routes' | 'tiles';
+				if (next === view) return;
+				view = next;
+				for (const b of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
+					const on = b.dataset.view === view;
+					b.classList.toggle('seg__btn--on', on);
+					b.setAttribute('aria-pressed', String(on));
+				}
+				whenStyleReady(applyView);
+			});
+		}
+
+		heatBtn?.addEventListener('click', () => {
+			heat = !heat;
+			heatBtn.classList.toggle('toggle--on', heat);
+			heatBtn.setAttribute('aria-pressed', String(heat));
+			whenStyleReady(applyView);
+		});
+
+		fetch('/api/activities/routes')
+			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+			.then((data: { routes: string[] }) => {
+				tracks = data.routes.map((p) => decodePolyline(p)).filter((points) => points.length > 1);
+				if (!tracks.length) {
+					status.textContent = 'No outdoor routes recorded yet.';
+					return;
+				}
+				status.hidden = true;
+
+				whenStyleReady(() => {
+					addRouteLayer();
+					applyView();
+					if (cameraSettled) return;
+					const all = trackBounds(tracks.flat());
+					if (!all) return;
+					cameraSettled = true;
+					// RESIZE FIRST — fitBounds solves for the container's real size,
+					// which MapLibre may not have measured yet at styledata time (see
+					// ActivityMap.astro's frame() for the full version of this trap).
+					map.resize();
+					map.fitBounds(
+						[
+							[all.w, all.s],
+							[all.e, all.n],
+						],
+						{ padding: 40, maxZoom: 12, animate: false },
+					);
+				});
+			})
+			.catch((err) => {
+				console.error('heatmap: could not load routes', err);
+				status.textContent = 'The routes could not be loaded.';
+			});
+	}
+</script>
+
+<style is:global>
+	.map__gl .maplibregl-ctrl-group {
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+		box-shadow: none;
+	}
+	.map__gl .maplibregl-ctrl-group button + button {
+		border-top: 1px solid #c9d4dc;
+	}
+	.map__gl .maplibregl-ctrl-attrib {
+		background: rgba(248, 251, 253, 0.86);
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 10px;
+	}
+	.map__gl .maplibregl-ctrl-attrib a {
+		color: #6b7b88;
+	}
+</style>
+
+<style>
+	.page {
+		min-height: 100vh;
+		display: flex;
+		justify-content: center;
+		overflow-x: hidden;
+	}
+	.card {
+		width: 100%;
+		max-width: 1360px;
+		display: flex;
+		flex-direction: column;
+	}
+	.tabs {
+		display: flex;
+		align-items: stretch;
+		gap: 2px;
+		width: 100vw;
+		margin-left: calc(50% - 50vw);
+		padding: 0 calc(50vw - 50% + 28px);
+		border-bottom: 1px solid var(--scree);
+	}
+	.tabs__link {
+		font-size: 13px;
+		letter-spacing: 0.4px;
+		color: var(--granite-soft);
+		padding: 26px 16px 24px;
+		border-bottom: 2px solid transparent;
+		transition: color 0.12s;
+	}
+	.tabs__link:hover {
+		color: var(--granite);
+	}
+	.tabs__link--active {
+		color: var(--lake);
+		font-weight: 600;
+		border-bottom-color: var(--lake);
+	}
+
+	.head {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 18px;
+		flex-wrap: wrap;
+		padding: 30px 28px 18px;
+	}
+	.back {
+		font-size: 12.5px;
+		color: var(--granite-soft);
+	}
+	.back:hover {
+		color: var(--lake);
+	}
+	.head__title {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: 32px;
+		font-weight: 400;
+		color: var(--granite);
+		margin: 4px 0 0;
+		letter-spacing: -0.2px;
+	}
+	.head__controls {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.seg {
+		display: flex;
+		border: 1px solid var(--scree);
+		border-radius: 8px;
+		overflow: hidden;
+		background: var(--snow);
+	}
+	.seg__btn,
+	.locate,
+	.toggle {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 13px;
+		color: var(--granite-soft);
+		background: none;
+		border: none;
+		padding: 9px 14px;
+		cursor: pointer;
+	}
+	.seg__btn + .seg__btn {
+		border-left: 1px solid var(--scree);
+	}
+	.seg__btn--on {
+		background: var(--lake);
+		color: var(--snow);
+		font-weight: 600;
+	}
+	.locate,
+	.toggle {
+		border: 1px solid var(--scree);
+		border-radius: 8px;
+		background: var(--snow);
+	}
+	.toggle--on {
+		background: var(--lake);
+		border-color: var(--lake);
+		color: var(--snow);
+		font-weight: 600;
+	}
+	.toggle:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+	.locate:hover,
+	.toggle:not(:disabled):not(.toggle--on):hover,
+	.seg__btn:not(.seg__btn--on):hover {
+		color: var(--lake);
+	}
+
+	.map {
+		position: relative;
+		margin: 0 28px 40px;
+		border: 1px solid var(--scree);
+		border-radius: 12px;
+		overflow: hidden;
+		background: #eef3f6;
+		height: min(80vh, 720px);
+		min-height: 420px;
+	}
+	.map__gl {
+		position: absolute;
+		inset: 0;
+	}
+	.map__status {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		z-index: 2;
+		transform: translate(-50%, -50%);
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 13.5px;
+		color: var(--granite-soft);
+		background: rgba(248, 251, 253, 0.94);
+		border: 1px solid var(--scree);
+		border-radius: 8px;
+		padding: 10px 14px;
+	}
+	.map__legend {
+		position: absolute;
+		left: 14px;
+		bottom: 14px;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		background: rgba(248, 251, 253, 0.94);
+		border: 1px solid var(--scree);
+		border-radius: 8px;
+		padding: 7px 11px;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 11.5px;
+		color: var(--granite-soft);
+		pointer-events: none;
+	}
+	.map__legend[hidden] {
+		display: none;
+	}
+	.map__legend-scale {
+		width: 74px;
+		height: 8px;
+		border-radius: 4px;
+		background: linear-gradient(90deg, #a9dde3, #63b8c9, var(--lake), var(--lake-deep));
+	}
+
+	@media (max-width: 860px) {
+		.tabs {
+			flex-wrap: wrap;
+			padding-left: calc(50vw - 50% + 16px);
+			padding-right: calc(50vw - 50% + 16px);
+		}
+		.tabs__link {
+			padding: 16px 10px 14px;
+		}
+		.head {
+			padding: 22px 18px 14px;
+		}
+		.map {
+			margin: 0 18px 30px;
+			height: min(70vh, 560px);
+		}
+	}
+</style>

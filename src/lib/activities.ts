@@ -13,6 +13,7 @@
 import { supabaseAdmin, supabasePublic } from './supabase';
 import { siteYear } from './day';
 import { sportMeta, type SportFamily } from './sports';
+import { decodePolyline, encodePolyline, mercator, simplify } from './route-shape';
 
 // ---------------------------------------------------------------------------
 // Migration-tier degradation — mirrors films.ts's isMissingCreditColumn /
@@ -915,4 +916,81 @@ export async function setFavoriteRank(activityId: number, rank: number | null): 
 	}
 	const { error } = await supabaseAdmin.from('activities').update({ favorite_rank: rank }).eq('id', activityId);
 	if (error) throw new Error(`setFavoriteRank failed: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
+// listRoutePolylines — /activities/heatmap.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every outdoor activity's full-fidelity polyline, all-time — the heatmap's
+ * whole input. Selects three columns rather than `*` because this is the one
+ * read in the file that deliberately fetches the entire collection at once:
+ * a `select('*')` here would drag every stat column across the wire for
+ * nothing.
+ *
+ * NON-VIRTUAL ONLY. A Zwift ride can carry a polyline (of a road in
+ * Watopia), and drawing it beside real rides would be a claim about ground
+ * the athlete has covered that isn't true. `indoor` is decided by sports.ts's
+ * sportMeta — the one place a sport's nature is decided (ACTIVITIES.md §6) —
+ * plus the `sub_sport = 'indoor'` marker listActivities' indoor filter also
+ * reads.
+ *
+ * MULTISPORT LEGS, NOT THEIR PARENT. A triathlon's parent row and its legs
+ * can both carry a track over the same ground; counting both would make a
+ * tile crossed once look crossed twice. Any row that turns out to be some
+ * other row's parent is dropped in favour of its legs.
+ *
+ * SIMPLIFIED BEFORE IT LEAVES. The stored tracks are ~1 Hz: 5.1M points
+ * across the collection, 10.5 MB encoded, which is a page load nobody waits
+ * out. RDP at 8 m cuts that to ~1 MB and changes nothing either view can
+ * show — the tiles are 45.7 m across, and the route lines are 2 px wide at
+ * the zooms this page lives at. It is the same trade route-shape.ts already
+ * makes for card thumbnails, at a tolerance an order of magnitude tighter.
+ */
+const HEATMAP_SIMPLIFY_M = 8;
+
+function simplifyTrack(polyline: string): string {
+	const points = decodePolyline(polyline);
+	if (points.length < 3) return polyline;
+	// Projected, because RDP's tolerance has to be in metres and degrees of
+	// longitude aren't. Mercator's scale error doesn't matter at 8 m.
+	const projected = points.map(([lat, lng]) => mercator(lat, lng));
+	const kept = simplify(projected, HEATMAP_SIMPLIFY_M);
+	// simplify() returns the surviving elements themselves, in order, so the
+	// original lat/lng pairs come back by walking the two in lockstep — no
+	// inverse projection, no index bookkeeping.
+	const out: [number, number][] = [];
+	for (let i = 0, j = 0; i < projected.length && j < kept.length; i++) {
+		if (projected[i] === kept[j]) {
+			out.push(points[i]);
+			j++;
+		}
+	}
+	return encodePolyline(out);
+}
+
+export async function listRoutePolylines(): Promise<string[]> {
+	const PAGE = 1000;
+	const rows: { id: number; parent_id: number | null; sport: string; sub_sport: string | null; polyline: string }[] = [];
+
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('activity_list')
+			.select('id, parent_id, sport, sub_sport, polyline')
+			.not('polyline', 'is', null)
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isDegraded(error)) return [];
+			throw new Error(`listRoutePolylines failed: ${error.message}`);
+		}
+		const page = (data ?? []) as typeof rows;
+		rows.push(...page);
+		if (page.length < PAGE) break;
+	}
+
+	const parents = new Set(rows.map((r) => r.parent_id).filter((id): id is number => id != null));
+	return rows
+		.filter((r) => !parents.has(r.id) && r.sub_sport !== 'indoor' && !sportMeta(r.sport).indoor)
+		.map((r) => simplifyTrack(r.polyline));
 }
