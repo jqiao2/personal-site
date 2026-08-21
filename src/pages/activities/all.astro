@@ -271,7 +271,7 @@ const scopeDummy: ActivityCardRow = {
 													type="button"
 													class="chip"
 													data-sport={slug}
-													aria-pressed={String(query.sports?.includes(slug) ?? false)}
+													aria-pressed={(query.sports?.includes(slug) ?? false) ? 'true' : 'false'}
 													disabled={count === 0}
 												>
 													{sportMeta(slug).label}
@@ -298,23 +298,23 @@ const scopeDummy: ActivityCardRow = {
 				<section>
 					<h2 class="grp">Type</h2>
 					<div class="chips chips--gap">
-						<button type="button" class="chip" data-tri="gps" data-value="1" aria-pressed={String(query.hasGps === true)}>GPS route</button>
-						<button type="button" class="chip" data-tri="gps" data-value="0" aria-pressed={String(query.hasGps === false)}>No GPS</button>
-						<button type="button" class="chip" data-tri="indoor" data-value="1" aria-pressed={String(query.indoor === true)}>Indoor</button>
-						<button type="button" class="chip" data-tri="indoor" data-value="0" aria-pressed={String(query.indoor === false)}>Outdoor</button>
+						<button type="button" class="chip" data-tri="gps" data-value="1" aria-pressed={(query.hasGps === true) ? 'true' : 'false'}>GPS route</button>
+						<button type="button" class="chip" data-tri="gps" data-value="0" aria-pressed={(query.hasGps === false) ? 'true' : 'false'}>No GPS</button>
+						<button type="button" class="chip" data-tri="indoor" data-value="1" aria-pressed={(query.indoor === true) ? 'true' : 'false'}>Indoor</button>
+						<button type="button" class="chip" data-tri="indoor" data-value="0" aria-pressed={(query.indoor === false) ? 'true' : 'false'}>Outdoor</button>
 					</div>
 				</section>
 
 				<section>
 					<h2 class="grp">Data &amp; highlights</h2>
 					<div class="chips chips--gap">
-						<button type="button" class="chip" data-flag="power" aria-pressed={String(!!query.hasPower)}>Has power</button>
-						<button type="button" class="chip" data-flag="hr" aria-pressed={String(!!query.hasHr)}>Has HR</button>
-						<button type="button" class="chip" data-flag="measured" aria-pressed={String(!!query.measuredOnly)} title="Only activities whose exertion score came from a measured stream (power or heart rate), not an estimate.">
+						<button type="button" class="chip" data-flag="power" aria-pressed={(!!query.hasPower) ? 'true' : 'false'}>Has power</button>
+						<button type="button" class="chip" data-flag="hr" aria-pressed={(!!query.hasHr) ? 'true' : 'false'}>Has HR</button>
+						<button type="button" class="chip" data-flag="measured" aria-pressed={(!!query.measuredOnly) ? 'true' : 'false'} title="Only activities whose exertion score came from a measured stream (power or heart rate), not an estimate.">
 							Measured exertion only
 						</button>
-						<button type="button" class="chip" data-flag="fav" aria-pressed={String(!!query.favoritesOnly)}>★ Favourites</button>
-						<button type="button" class="chip" data-flag="pr" aria-pressed={String(!!query.personalBestOnly)}>Personal bests</button>
+						<button type="button" class="chip" data-flag="fav" aria-pressed={(!!query.favoritesOnly) ? 'true' : 'false'}>★ Favourites</button>
+						<button type="button" class="chip" data-flag="pr" aria-pressed={(!!query.personalBestOnly) ? 'true' : 'false'}>Personal bests</button>
 					</div>
 				</section>
 
@@ -390,7 +390,7 @@ const scopeDummy: ActivityCardRow = {
 						<h2 class="grp">Gear</h2>
 						<div class="chips">
 							{facets.gear.map((g) => (
-								<button type="button" class="chip" data-gear={g.id} aria-pressed={String(query.gearIds?.includes(g.id) ?? false)}>
+								<button type="button" class="chip" data-gear={g.id} aria-pressed={(query.gearIds?.includes(g.id) ?? false) ? 'true' : 'false'}>
 									{g.name}
 								</button>
 							))}
@@ -404,7 +404,7 @@ const scopeDummy: ActivityCardRow = {
 					{facets.places.length > 0 && (
 						<div class="chips" id="place-chips">
 							{facets.places.slice(0, 10).map((p) => (
-								<button type="button" class="chip" data-place={p.place} aria-pressed={String(query.place === p.place)}>
+								<button type="button" class="chip" data-place={p.place} aria-pressed={(query.place === p.place) ? 'true' : 'false'}>
 									{p.place}
 								</button>
 							))}
@@ -1720,12 +1720,16 @@ const scopeDummy: ActivityCardRow = {
 			applyFilters();
 		});
 
-		// The server already rendered the first page from this exact state, so
-		// there's nothing to restore on load — only the chrome (badge, sentence)
-		// needs to reflect it once.
-		const n0 = activeCount();
-		countBadge.textContent = n0 ? ` · ${n0}` : '';
-		clearAll.hidden = n0 === 0;
-		renderFilterInfo(Number((shown.textContent ?? '').replace(/[^0-9]/g, '')) || 0);
+		// Deliberately no chrome hydration here. The server already rendered the
+		// badge, "Clear all" visibility and the filter sentence from this exact
+		// URL — and did it from the real ActivityQuery, not from what DOM
+		// controls happen to exist. Recomputing from activeCount() here would
+		// actively regress a filter the URL set but the panel can't represent
+		// yet (e.g. an ?exmin= narrower than any slider drawn, because the
+		// collection has no range to size one from): the request already
+		// honoured it, but a DOM-only recount would silently drop it from the
+		// badge and sentence, and then from the query itself on the next
+		// interaction. Chrome only needs to move once state actually changes,
+		// which is exactly what applyFilters() does.
 	</script>
 </ActivityLayout>

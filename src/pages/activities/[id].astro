@@ -46,7 +46,7 @@ import {
 } from '../../lib/activities';
 import { requireOwner } from '../../lib/auth';
 import { siteNav } from '../../lib/nav';
-import { sportMeta, sportIcon, formatStat, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
+import { sportMeta, sportIcon, formatStat, isStatRelevant, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
 import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
 import { ALPINE, exertionInk, exertionLabel } from '../../lib/activity-tokens';
 
@@ -185,7 +185,26 @@ function statsFor(keys: StatKey[]): FormattedStat[] {
 
 const primaryKeys: StatKey[] = meta.primaryStats.filter((k) => k !== 'exertion');
 const primaryStats = statsFor(primaryKeys);
-const secondaryKeys = ALL_STAT_KEYS.filter((k) => !primaryKeys.includes(k));
+
+// avg_pace / pace_100m / avg_speed are three renderings of the same
+// avg_speed_ms column — formatStat computes all three for any activity that
+// has a speed, regardless of sport, so without this the secondary block
+// would show a run's pace as minutes-per-mile AND minutes-per-100m AND mph
+// all at once. Only the one src/lib/sports.ts's paceStyle actually calls for
+// this sport belongs in the "everything else" grid.
+const PACE_KEYS: StatKey[] = ['avg_pace', 'pace_100m', 'avg_speed'];
+const paceKeyForSport: StatKey | null =
+	meta.paceStyle === 'per_km' ? 'avg_pace' : meta.paceStyle === 'per_100m' ? 'pace_100m' : meta.paceStyle === 'speed' ? 'avg_speed' : null;
+// isStatRelevant is the second gate, and it is about truth rather than tidiness:
+// a stat like `water_temp` reads `avg_temp_c`, which on a bike is the air, so an
+// "everything whose column is non-null" grid captions a real number with a false
+// label. See FAMILY_ONLY_STATS in src/lib/sports.ts.
+const secondaryKeys = ALL_STAT_KEYS.filter(
+	(k) =>
+		!primaryKeys.includes(k) &&
+		(!PACE_KEYS.includes(k) || k === paceKeyForSport) &&
+		isStatRelevant(activity.sport, k),
+);
 const secondaryStats = statsFor(secondaryKeys);
 
 // ---------------------------------------------------------------------------
@@ -246,10 +265,13 @@ function exertionDetail(act: ActivityRow): string | null {
 			},
 			thresholds ?? EMPTY_THRESHOLDS,
 		);
-		// Only trust the recomputed sentence when it took the same rung the
-		// stored value did — a method mismatch means the data that produced the
-		// stored number isn't fully available to recompute against right now.
-		if (result.method === act.exertion_method) return result.detail;
+		// Only trust the recomputed sentence when it took the same rung AND
+		// landed close to the stored score. Method agreement alone isn't
+		// enough — a threshold edited since ingest, say, would still take the
+		// same rung but produce a sentence whose numbers (an NP, an FTP) don't
+		// match the score sitting next to it, which is worse than no sentence.
+		const scoreAgrees = Math.abs(result.score - act.exertion) <= Math.max(3, act.exertion * 0.15);
+		if (result.method === act.exertion_method && scoreAgrees) return result.detail;
 	} catch {
 		// Recomputation is best-effort; the generic fallback below always works.
 	}
@@ -758,43 +780,41 @@ const exWord = exertionLabel(activity.exertion);
 		margin-bottom: 1.5rem;
 	}
 
-	/* Stats */
+	/* Stats — flex-wrap rather than a CSS grid on purpose: a grid's unfilled
+	   trailing cells on a partial last row paint as empty background boxes,
+	   which reads exactly like the broken/missing state §7 rules out. Each
+	   stat is its own small card instead, so any count wraps cleanly. */
 	.stats {
-		display: grid;
-		gap: 1px;
-		background: #c9d4dc;
-		border: 1px solid #c9d4dc;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
 	}
 	.stats--row {
 		margin-top: 1.25rem;
-		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-		border-radius: 10px;
-		overflow: hidden;
 	}
 	.stats--hero {
-		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		justify-content: center;
 		max-width: 760px;
 		margin: 0 auto;
-		border: none;
-		background: transparent;
 		gap: 1.5rem 2.5rem;
-	}
-	.stats--secondary {
-		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-		border-radius: 10px;
-		overflow: hidden;
 	}
 	.stat {
 		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
 		padding: 0.85rem 1rem;
+		flex: 1 1 110px;
 	}
 	.stat--hero {
 		background: transparent;
+		border: none;
 		padding: 0;
 		text-align: center;
+		flex: 0 1 auto;
 	}
 	.stat--sm {
 		padding: 0.7rem 0.9rem;
+		flex-basis: 120px;
 	}
 	.stat__value {
 		font-family: 'Instrument Serif', Georgia, serif;
