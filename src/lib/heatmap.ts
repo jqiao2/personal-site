@@ -1,64 +1,97 @@
 // The heatmap's tile grid — /activities/heatmap's second view.
 //
-// WHY NOT SLIPPY TILES. The obvious grid is a web-mercator tile at some fixed
-// zoom, which is what Strava's "squares" use. No integer zoom lands anywhere
-// near 150 ft (z19 is ~57 ft at 40°N, z18 ~115 ft, z17 ~230 ft), and mercator
-// tiles are only square in projected space — a "150 ft" tile would be 150 ft
-// somewhere and something else everywhere else. So the grid is defined in
-// ground metres directly: rows of constant latitude height, and inside each
-// row a column width that divides that row's own circle of latitude. Tiles
-// stay ~square on the ground at every latitude, which is the property the
-// feature is actually about ("I have covered this much ground").
+// ONE GRID, THE WHOLE WORLD, FIXED FOREVER. The tiles are a board an activity
+// unlocks squares on, so the board cannot move: a square has to mean the same
+// square next year, from a different city, on a different device. That rules
+// out anything computed from the data (a grid anchored on the first activity,
+// or on the collection's bounding box) — import one old ride from another
+// continent and every previously-unlocked square would shift.
 //
-// The cost of that choice is that columns don't line up between rows the way
-// mercator tiles do. Nothing here needs them to: a tile is only ever drawn as
-// its own rectangle and counted in its own bucket.
+// So the grid is squares of a constant size in Web Mercator, indexed from the
+// projection's own origin. Two consequences worth being explicit about:
+//
+//   - Columns line up across rows and rows line up across the globe, which is
+//     what makes the fog-of-war reading legible — squares tessellate instead
+//     of jittering row to row.
+//   - A mercator square is only one true size at one latitude. TILE_FEET is
+//     the size at REF_LAT; the ground square shrinks as cos(lat) away from it
+//     (~197 ft at the equator, ~130 ft at 50°N). Any grid that both tiles the
+//     world neatly and stays exactly 150 ft everywhere doesn't exist, so this
+//     is the trade: neat everywhere, exact where the riding happens.
+//
+// The alternative — rows that each divide their own circle of latitude — keeps
+// the ground size exact and gives up the alignment. That is the wrong half to
+// keep for a fog-of-war map, where the whole point is that squares fit
+// together.
 export const TILE_FEET = 150;
 
+/** The latitude TILE_FEET is exact at — New York, where most of the log is.
+ * ponytail: a constant, not a setting; if the riding ever moves continents,
+ * change the number, don't build a preference for it. */
+export const REF_LAT = 40.7;
+
 const METERS_PER_FOOT = 0.3048;
-const TILE_M = TILE_FEET * METERS_PER_FOOT; // 45.72 m
-/** Metres per degree of latitude — a sphere is close enough at 45 m. */
-const M_PER_DEG_LAT = 111_320;
-const DEG_LAT = TILE_M / M_PER_DEG_LAT;
+const TILE_M = TILE_FEET * METERS_PER_FOOT; // 45.72 m on the ground at REF_LAT
+const EARTH_RADIUS_M = 6378137; // WGS84 equatorial radius — matches EPSG:3857
+const MAX_LAT = 85.05112878; // mercator's own cutoff
 
-/** Cosine of the row's latitude, floored so a track near the pole yields a
- * finite column width instead of dividing by zero. */
-function cosLat(row: number): number {
-	const lat = (row + 0.5) * DEG_LAT;
-	return Math.max(0.01, Math.cos((lat * Math.PI) / 180));
-}
+/** The cell's side in Web Mercator metres. Mercator stretches by 1/cos(lat),
+ * so a cell that measures TILE_M on the ground at REF_LAT measures this in the
+ * projection — everywhere. */
+const CELL = TILE_M / Math.cos((REF_LAT * Math.PI) / 180);
 
-/** Degrees of longitude one tile spans in `row`. */
-function degLng(row: number): number {
-	return DEG_LAT / cosLat(row);
-}
-
-/** The tile containing a point, as "row:col". Row is a global latitude band;
- * col indexes that band's own division of the 360°. */
-export function tileKey(lat: number, lng: number): string {
-	const row = Math.floor(lat / DEG_LAT);
-	const col = Math.floor(lng / degLng(row));
-	return `${row}:${col}`;
-}
-
-/** A tile's corners as [[w,s],[e,n]] — what a GeoJSON rectangle is built from. */
-export function tileBounds(key: string): [[number, number], [number, number]] {
-	const [row, col] = key.split(':').map(Number);
-	const dLng = degLng(row);
+function toMercator(lat: number, lng: number): [number, number] {
+	const clamped = Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
 	return [
-		[col * dLng, row * DEG_LAT],
-		[(col + 1) * dLng, (row + 1) * DEG_LAT],
+		(lng * Math.PI * EARTH_RADIUS_M) / 180,
+		EARTH_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360)),
 	];
 }
 
+function fromMercator(x: number, y: number): [number, number] {
+	return [
+		(2 * Math.atan(Math.exp(y / EARTH_RADIUS_M)) - Math.PI / 2) * (180 / Math.PI),
+		(x * 180) / (Math.PI * EARTH_RADIUS_M),
+	];
+}
+
+/** The tile containing a point, as "col:row" — indices into the one global
+ * grid, so the same ground always yields the same key. */
+export function tileKey(lat: number, lng: number): string {
+	const [x, y] = toMercator(lat, lng);
+	return `${Math.floor(x / CELL)}:${Math.floor(y / CELL)}`;
+}
+
+/** A tile's corners as [[w,s],[e,n]] in degrees. A mercator square has edges
+ * of constant x and constant y, so it is still a lat/lng rectangle — just a
+ * slightly shorter one the further north it sits. */
+export function tileBounds(key: string): [[number, number], [number, number]] {
+	const [col, row] = key.split(':').map(Number);
+	const [s, w] = fromMercator(col * CELL, row * CELL);
+	const [n, e] = fromMercator((col + 1) * CELL, (row + 1) * CELL);
+	return [
+		[w, s],
+		[e, n],
+	];
+}
+
+/** The ground size of a tile at a given latitude, in metres — TILE_M at
+ * REF_LAT by construction, and what the sampling step below is derived from. */
+export function tileGroundMeters(lat: number): number {
+	return CELL * Math.cos((Math.max(-MAX_LAT, Math.min(MAX_LAT, lat)) * Math.PI) / 180);
+}
+
+const M_PER_DEG_LAT = 111_320;
+
 /**
- * Every tile a track passes through, added to `counts` once per track — so a
- * tile's number is "how many activities crossed it", not "how many GPS samples
- * landed in it" (which would just measure how slowly you went through it).
+ * Every tile a track unlocks, added to `counts` once per track — so a tile's
+ * number is "how many activities crossed it", not "how many GPS samples landed
+ * in it" (which would only measure how slowly you went through it). With the
+ * heatmap off the page reads the same map as a boolean: present or absent.
  *
  * Samples along each segment at half a tile so a gap between two recorded
  * points — a tunnel, a paused watch, a 30 mph descent at 1 Hz — doesn't leave
- * holes in the middle of a line the athlete plainly rode.
+ * a locked square in the middle of a road plainly ridden.
  */
 export function addTrackTiles(points: [number, number][], counts: Map<string, number>): void {
 	const seen = new Set<string>();
@@ -69,9 +102,14 @@ export function addTrackTiles(points: [number, number][], counts: Map<string, nu
 		if (!next) continue;
 		const [lat2, lng2] = next;
 		// Metres between the two points, flat-earth over a segment this short.
+		const cosLat = Math.cos((lat * Math.PI) / 180);
 		const dy = (lat2 - lat) * M_PER_DEG_LAT;
-		const dx = (lng2 - lng) * M_PER_DEG_LAT * cosLat(Math.floor(lat / DEG_LAT));
-		const steps = Math.floor(Math.hypot(dx, dy) / (TILE_M / 2));
+		const dx = (lng2 - lng) * M_PER_DEG_LAT * cosLat;
+		// Half a tile *at this latitude* — the ground square gets smaller the
+		// further from REF_LAT you are, and a fixed step would start skipping
+		// squares up north.
+		const step = Math.max(1, tileGroundMeters(lat) / 2);
+		const steps = Math.floor(Math.hypot(dx, dy) / step);
 		for (let s = 1; s < steps; s++) {
 			const t = s / steps;
 			seen.add(tileKey(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
@@ -80,8 +118,8 @@ export function addTrackTiles(points: [number, number][], counts: Map<string, nu
 	for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
-/** The bucket boundaries the tile fill ramps over: touched once, a couple of
- * times, a habit, a rut. Counts are heavily skewed (one commute route can be
+/** The bucket boundaries the heatmap fill ramps over: unlocked once, a couple
+ * of times, a habit, a rut. Counts are heavily skewed (one commute can be
  * ridden hundreds of times while most ground is crossed once), so fixed
  * thresholds read better than a linear ramp to the maximum, which would push
  * everything but the commute into the palest colour. */
@@ -101,16 +139,18 @@ export interface TileCollection {
 const round = (n: number) => Math.round(n * 1e6) / 1e6;
 
 /**
- * The counted tiles as drawable rectangles, grouped into one MultiPolygon per
- * bucket of TILE_BUCKETS.
+ * The unlocked tiles as drawable rectangles, grouped into one MultiPolygon per
+ * bucket of TILE_BUCKETS. With the heatmap off the page paints every bucket
+ * the same colour, which is the boolean reading; with it on, the bucket picks
+ * the shade.
  *
- * ONE FEATURE PER BUCKET, NOT ONE PER TILE. A few years of riding quantises to
+ * ONE FEATURE PER BUCKET, NOT ONE PER TILE. A few years of riding unlocks
  * ~185,000 tiles; as individual features that is a GeoJSON source MapLibre
  * spends hundreds of megabytes and several seconds on. As four MultiPolygons
  * it is the same rectangles with none of the per-feature overhead, and the
- * fill colour still varies — it just reads the bucket off the feature instead
- * of an exact count off each tile, which is all the eye was getting from a
- * ramp anyway.
+ * fill still varies — it just reads a bucket off the feature instead of an
+ * exact count off each tile, which is all the eye was getting from a ramp
+ * anyway.
  */
 export function tilesToGeoJSON(counts: Map<string, number>): TileCollection {
 	/** One MultiPolygon's worth of rectangles per bucket. */

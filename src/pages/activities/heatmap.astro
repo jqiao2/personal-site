@@ -4,20 +4,29 @@
 //
 //   routes — the tracks themselves, drawn faintly and stacked, so a road
 //            ridden a hundred times burns in and a one-off ride stays a thread.
-//   tiles  — the ground covered, quantised to ~150 ft squares (src/lib/
-//            heatmap.ts), so "where have I actually been" stops being a
-//            question about how often the GPS happened to sample.
+//   tiles  — the ground unlocked, on one world-spanning grid of ~150 ft
+//            squares (src/lib/heatmap.ts). Fog of war: a square is either
+//            ridden through or it isn't, and "where have I been" stops being
+//            a question about how often the GPS happened to sample.
 //
 // The two are a toggle rather than two pages because they answer the same
 // question at different resolutions, and switching in place is what makes the
 // difference between them legible.
 //
+// THE HEATMAP IS ITS OWN TOGGLE, and only means anything over tiles. Off, the
+// squares are one colour and the map is the boolean the grid actually is.
+// On, the same squares shade by how many activities crossed them — which is
+// worth *asking* for rather than being the default, because the boolean is
+// the honest picture of ground covered and the shading is a second question
+// laid over it. (The route view is already a heatmap by construction: it is
+// stacked translucent lines, so the toggle sits out while it's showing.)
+//
 // VIRTUAL RIDES ARE EXCLUDED at the query (listRoutePolylines) — a Zwift
 // polyline is a road in Watopia, and putting it on a map of ground covered
 // would be a claim that isn't true.
 //
-// THE CAMERA STARTS WHERE THE READER IS. A heatmap of years fits a continent,
-// at which zoom every tile is sub-pixel and the page shows nothing. So it asks
+// THE CAMERA STARTS WHERE THE READER IS. A map of years fits a continent, at
+// which zoom every square is sub-pixel and the page shows nothing. So it asks
 // for geolocation on load and opens there; the all-time bounds are the
 // fallback for a denial, a timeout, or a browser without the API — never a
 // blank world view.
@@ -69,6 +78,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 						<button class="seg__btn seg__btn--on" type="button" data-view="routes" aria-pressed="true">Routes</button>
 						<button class="seg__btn" type="button" data-view="tiles" aria-pressed="false">{TILE_FEET} ft tiles</button>
 					</div>
+					<button class="toggle" type="button" data-heat aria-pressed="false" disabled>Heatmap</button>
 					<button class="locate" type="button" data-locate>Locate me</button>
 				</div>
 			</header>
@@ -152,6 +162,8 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		 *  free after the first flip. */
 		let tileData: ReturnType<typeof tilesToGeoJSON> | null = null;
 		let view: 'routes' | 'tiles' = 'routes';
+		let heat = false;
+		const heatBtn = document.querySelector<HTMLButtonElement>('[data-heat]');
 
 		function routeGeoJSON() {
 			return {
@@ -196,20 +208,24 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			});
 		}
 
+		// Heatmap off: every unlocked square is the same colour, and the map is a
+		// boolean — visited or not, which is the fog-of-war reading. Heatmap on:
+		// the same squares, shaded by how often they were crossed. One hue,
+		// four steps; a second colour would read as a second variable.
+		const TILE_SHADES = ['#a9dde3', '#63b8c9', '#1c6e8c', '#12495e'];
+		const tileFill = () =>
+			heat
+				? (['step', ['get', 'bucket'], ...TILE_SHADES.flatMap((c, i) => (i === 0 ? [c] : [i, c]))] as never)
+				: ('#1c6e8c' as never);
+
 		function addTileLayer() {
 			if (map.getSource('tiles')) return;
 			map.addSource('tiles', { type: 'geojson', data: buildTiles() as never });
-			// One hue, four steps — glacier for ground touched once, lake-deep for
-			// ground worn in. A second colour here would read as a second
-			// variable when there is only one.
 			map.addLayer({
 				id: 'tiles-fill',
 				type: 'fill',
 				source: 'tiles',
-				paint: {
-					'fill-color': ['step', ['get', 'bucket'], '#a9dde3', 1, '#63b8c9', 2, '#1c6e8c', 3, '#12495e'],
-					'fill-opacity': 0.72,
-				},
+				paint: { 'fill-color': tileFill(), 'fill-opacity': 0.72 },
 			});
 		}
 
@@ -220,8 +236,12 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			}
 			if (map.getLayer('tiles-fill')) {
 				map.setLayoutProperty('tiles-fill', 'visibility', view === 'tiles' ? 'visible' : 'none');
+				map.setPaintProperty('tiles-fill', 'fill-color', tileFill());
 			}
-			if (legend) legend.hidden = view !== 'tiles';
+			// The route view is the heatmap by construction (stacked lines), so
+			// the toggle only has anything to say about tiles.
+			heatBtn?.toggleAttribute('disabled', view !== 'tiles');
+			if (legend) legend.hidden = view !== 'tiles' || !heat;
 		}
 
 		for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
@@ -237,6 +257,13 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 				whenStyleReady(applyView);
 			});
 		}
+
+		heatBtn?.addEventListener('click', () => {
+			heat = !heat;
+			heatBtn.classList.toggle('toggle--on', heat);
+			heatBtn.setAttribute('aria-pressed', String(heat));
+			whenStyleReady(applyView);
+		});
 
 		fetch('/api/activities/routes')
 			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
@@ -370,7 +397,8 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		background: var(--snow);
 	}
 	.seg__btn,
-	.locate {
+	.locate,
+	.toggle {
 		font-family: 'Instrument Sans', Arial, sans-serif;
 		font-size: 13px;
 		color: var(--granite-soft);
@@ -387,12 +415,24 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		color: var(--snow);
 		font-weight: 600;
 	}
-	.locate {
+	.locate,
+	.toggle {
 		border: 1px solid var(--scree);
 		border-radius: 8px;
 		background: var(--snow);
 	}
+	.toggle--on {
+		background: var(--lake);
+		border-color: var(--lake);
+		color: var(--snow);
+		font-weight: 600;
+	}
+	.toggle:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
 	.locate:hover,
+	.toggle:not(:disabled):not(.toggle--on):hover,
 	.seg__btn:not(.seg__btn--on):hover {
 		color: var(--lake);
 	}
