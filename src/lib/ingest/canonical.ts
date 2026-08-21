@@ -263,55 +263,50 @@ export interface ActivityRowSet {
 	laps: Record<string, unknown>[];
 }
 
-/**
- * How many samples of each stream are STORED. A four-hour ride at 1 Hz is
- * 14,400 samples across ten arrays — about 2 MB of JSONB for one activity, and
- * roughly 400 MB across this athlete's history, which is more than the whole
- * database is allowed to be.
- *
- * The resolution is only ever spent on two things: the detail page's map and
- * its charts. Neither can show more than a couple of thousand points on a
- * screen a thousand pixels wide, and the route poster is already simplified to
- * 200 points by §7. So streams are decimated to this many samples on the way
- * in, evenly, always keeping the first and last.
- *
- * WHAT THIS COSTS, STATED PLAINLY. `exertion` is computed from the FULL
- * resolution stream before any of this happens, so every stored score is exact.
- * But §3 promises the table can be recomputed when a threshold changes, and a
- * recompute reads these decimated streams — normalized power off a 12-second
- * sampling is a slightly smoothed NP, a percent or so low on a spiky ride. That
- * is the trade: exact scores now and a marginally softer recompute later,
- * versus a database that cannot hold the history at all.
- *
- * ponytail: fixed cap, decimated evenly. If the recompute drift ever matters,
- * the upgrade is to keep power/HR at full rate and decimate only latlng and
- * altitude — the two that dominate the bytes.
- */
-export const MAX_STORED_SAMPLES = 1500;
+// STREAMS ARE STORED WHOLE, at whatever rate the device recorded — a four-hour
+// ride at 1 Hz keeps all 14,400 samples.
+//
+// An earlier version decimated them to 1500 on the way in, to hold the
+// database down. That was the wrong place to spend the saving: the file is the
+// primary record, an ingest-time decimation is irreversible without re-reading
+// the archive, and it quietly weakens the recompute §3 promises (normalized
+// power off a 12-second sampling is a smoothed NP). The rule now is that the
+// database holds what the sensors saw.
+//
+// The detail page still must not push 14,400 points at a browser — but that is
+// a RENDERING concern, decided by how wide the chart is, and it belongs to
+// whatever draws it. Storage keeps the truth; display picks a resolution.
+//
+// The one thing trimmed on the way in is FLOAT NOISE, not samples. A device
+// that knows where it is to within a few metres still emits
+// `47.61234567890123`, and those trailing digits are an artifact of binary
+// float conversion rather than anything the GPS measured. Every sample is kept
+// at the precision its sensor actually has:
 
-/** Evenly-spaced indices covering [0, length), always including the last. */
-function decimationIndices(length: number, max: number): number[] | null {
-	if (length <= max) return null;
-	const idx: number[] = [];
-	const stride = (length - 1) / (max - 1);
-	for (let i = 0; i < max; i++) idx.push(Math.round(i * stride));
-	idx[idx.length - 1] = length - 1;
-	return idx;
-}
+/** Decimal places per stream, at or above each sensor's real resolution.
+ *  latlng at 6dp is ~11cm; altitude and distance at 0.1m; speed at 1cm/s. */
+const STREAM_PRECISION: Record<string, number> = {
+	altitude_m: 1,
+	distance_m: 1,
+	speed_ms: 2,
+	grade: 2,
+	temp_c: 1,
+};
+const LATLNG_DP = 6;
 
-/** Applies one index set to every array in the stream bundle, so the arrays
- *  stay parallel — sample N must mean the same instant in all of them. */
-function decimateStreams(s: CanonicalStreams, max: number): CanonicalStreams {
-	const length = streamLength(s);
-	const idx = decimationIndices(length, max);
-	if (!idx) return s;
+function trimFloatNoise(s: CanonicalStreams): CanonicalStreams {
+	const round = (v: unknown, dp: number) =>
+		typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(dp)) : v;
 
-	const out: CanonicalStreams = {};
-	for (const [key, arr] of Object.entries(s)) {
-		if (!Array.isArray(arr)) continue;
-		// A short array that doesn't run the full length of the activity can't be
-		// indexed by these positions; leave it alone rather than scramble it.
-		(out as Record<string, unknown>)[key] = arr.length === length ? idx.map((i) => arr[i]) : arr;
+	const out: CanonicalStreams = { ...s };
+	if (out.latlng) {
+		out.latlng = out.latlng.map((p) =>
+			Array.isArray(p) ? ([round(p[0], LATLNG_DP), round(p[1], LATLNG_DP)] as [number, number]) : p,
+		);
+	}
+	for (const [key, dp] of Object.entries(STREAM_PRECISION)) {
+		const arr = (out as Record<string, unknown>)[key];
+		if (Array.isArray(arr)) (out as Record<string, unknown>)[key] = arr.map((v) => round(v, dp));
 	}
 	return out;
 }
@@ -425,9 +420,7 @@ export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRo
 		device_name: a.device_name ?? null,
 	};
 
-	// Decimated only now — everything above (exertion especially) has already
-	// read the stream at full resolution.
-	const stored = hasStreams ? decimateStreams(a.streams as CanonicalStreams, MAX_STORED_SAMPLES) : null;
+	const stored = hasStreams ? trimFloatNoise(a.streams as CanonicalStreams) : null;
 
 	const streams = stored
 		? {

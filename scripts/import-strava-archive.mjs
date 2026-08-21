@@ -34,7 +34,7 @@ import { createHash } from 'node:crypto';
 import { join, basename } from 'node:path';
 import { Decoder, Stream } from '@garmin/fitsdk';
 
-import { parseFit } from '../src/lib/ingest/fit.ts';
+import { parseFit, parseFitSessions } from '../src/lib/ingest/fit.ts';
 import { parseGpx, parseTcx } from '../src/lib/ingest/gpx.ts';
 import {
 	parseCsv,
@@ -43,7 +43,7 @@ import {
 	csvRowToCanonical,
 	mergeCanonical,
 } from '../src/lib/ingest/strava-archive.ts';
-import { toRows, localDate, UnknownSportError } from '../src/lib/ingest/canonical.ts';
+import { toRows, localDate, UnknownSportError, sportFromStrava } from '../src/lib/ingest/canonical.ts';
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -234,7 +234,50 @@ function offsetNear(offsets, t) {
  * The estimated and assumed ones are printed at the end of the run so they are
  * never silently load-bearing.
  */
+/**
+ * The athlete's real FTP history, from TrainerRoad (provided 2026-08-21).
+ *
+ * This REPLACES the FTP the head units reported. The device number is whatever
+ * was configured on the unit at the time — often stale, sometimes disagreeing
+ * between two units, and produced by Zwift/Wahoo auto-detection rather than by
+ * a test. This list is the athlete's own record of what his threshold actually
+ * was, including a `Ramp Test` provenance on several entries, and it reaches
+ * back to 2016 where the devices only went back to 2021.
+ *
+ * `[effective_from, watts, how it was set]`, oldest last as TrainerRoad shows
+ * it. Where two entries share a date, the one listed FIRST is the later of the
+ * two (the list is newest-first), and it wins — `effective_from` is uniquely
+ * indexed, so exactly one value can be in force on a day.
+ */
+const TRAINERROAD_FTP = [
+	['2026-05-17', 258, 'AI FTP Detection'],
+	['2026-04-16', 278, 'AI FTP Detection'],
+	['2026-04-09', 289, 'Manual Entry'],
+	['2026-03-19', 295, 'AI FTP Detection'],
+	['2026-02-19', 279, 'AI FTP Detection'],
+	['2026-01-22', 243, 'AI FTP Detection'],
+	['2026-01-16', 240, 'AI FTP Detection'],
+	['2025-11-06', 256, 'AI FTP Detection'],
+	['2025-09-02', 258, 'FTP Adjustment'],
+	['2025-07-17', 253, 'AI FTP Detection'],
+	['2025-05-29', 250, 'AI FTP Detection'],
+	['2025-05-01', 242, 'AI FTP Detection'],
+	['2025-04-03', 239, 'AI FTP Detection'],
+	['2025-02-12', 237, 'AI FTP Detection'],
+	['2025-01-14', 230, 'Ramp Test'],
+	['2023-01-24', 242, 'Ramp Test'],
+	['2023-01-24', 250, 'Manual Entry'],
+	['2023-01-17', 259, 'Other'],
+	['2023-01-17', 217, 'Ramp Test'],
+	['2022-11-30', 259, 'AI FTP Detection'],
+	['2022-10-28', 251, 'Manual Entry'],
+	['2021-08-03', 244, 'Manual Entry'],
+	['2021-07-26', 212, 'Other'],
+	['2016-11-04', 160, 'Other'],
+];
+
 function buildThresholds({ ftps, hrs }, weights) {
+	if (TRAINERROAD_FTP.length) return buildThresholdsFromTrainerRoad({ hrs }, weights);
 	if (!ftps.length) return [];
 
 	// --- FTP: monthly median, then one row per real change -----------------
@@ -301,6 +344,41 @@ function median(values) {
 	const sorted = [...values].sort((a, b) => a - b);
 	const mid = sorted.length >> 1;
 	return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
+}
+
+/**
+ * The real FTP list, plus the heart rate figures the devices did observe.
+ *
+ * No smoothing here, unlike the device-derived path: these are stated values,
+ * not a noisy signal, so every entry becomes a row exactly as given. Max HR
+ * and LTHR still come from the archive because TrainerRoad's list says nothing
+ * about them — see `buildThresholds` for why they are one figure for all
+ * history rather than one per period.
+ */
+function buildThresholdsFromTrainerRoad({ hrs }, weights) {
+	const observed = hrs.map((h) => h.maxHr).sort((a, b) => a - b);
+	const maxHr = observed.length ? observed[Math.floor(observed.length * 0.99)] : null;
+	const lthr = maxHr ? Math.round(maxHr * 0.9) : null;
+
+	// Newest-first order means the first entry seen for a date is the later of
+	// two set on the same day, and `effective_from` allows only one.
+	const byDate = new Map();
+	for (const [date, watts] of TRAINERROAD_FTP) {
+		if (!byDate.has(date)) byDate.set(date, watts);
+	}
+
+	return [...byDate]
+		.sort((a, b) => a[0].localeCompare(b[0]))
+		.map(([effective_from, ftp_w]) => ({
+			effective_from,
+			ftp_w,
+			max_hr: maxHr,
+			lthr_bpm: lthr,
+			rest_hr: REST_HR,
+			threshold_pace_s_per_km: null,
+			css_pace_s_per_100m: null,
+			weight_kg: nearestValue(weights, Date.parse(`${effective_from}T12:00:00Z`)),
+		}));
 }
 
 function nearestValue(points, t) {
@@ -454,6 +532,37 @@ const targets = (LIMIT ? csvRows.slice(0, LIMIT) : csvRows).filter((r) => !alrea
 const gearNames = new Set(targets.map((r) => r.gear).filter(Boolean));
 const gearIds = await ensureGear(catalog, gearNames);
 
+// Group the rows that share one recorded file. Two csv rows backed by the same
+// bytes are the same effort — see `buildGroup`. Grouping is by CONTENT, not by
+// filename: a multisport export copies the identical file once per leg under a
+// different name each time, so filenames alone would miss it.
+const groups = (() => {
+	const byChecksum = new Map();
+	const singles = [];
+	for (const row of targets) {
+		let checksum = null;
+		if (row.filename) {
+			try {
+				checksum = readActivityFile(row.filename)?.checksum ?? null;
+			} catch {
+				checksum = null;
+			}
+		}
+		if (!checksum) {
+			singles.push([row]);
+			continue;
+		}
+		if (!byChecksum.has(checksum)) byChecksum.set(checksum, []);
+		byChecksum.get(checksum).push(row);
+	}
+	return [...singles, ...byChecksum.values()];
+})();
+
+const sharedGroups = groups.filter((g) => g.length > 1);
+if (sharedGroups.length) {
+	log(`${sharedGroups.length} recordings are shared by more than one csv row (split rides and multisport events)`);
+}
+
 const stats = {
 	imported: 0,
 	skipped: 0,
@@ -462,12 +571,16 @@ const stats = {
 	byMethod: {},
 	bySport: {},
 	withRoute: 0,
+	duplicatesMerged: 0,
+	multisportEvents: 0,
 	failures: [],
 	unknownSports: new Set(),
 };
 
-/** Parse one csv row (plus its file, if any) into database rows. */
-function buildRows(row) {
+/** Parse one csv row (plus its file, if any) into database rows.
+ *  `parsedOverride` supplies an already-parsed canonical (one leg of a
+ *  multisport file, say) so the file isn't decoded twice. */
+function buildRows(row, parsedOverride) {
 	let fromCsv;
 	try {
 		fromCsv = csvRowToCanonical(row);
@@ -484,7 +597,11 @@ function buildRows(row) {
 	let file = null;
 	let parsed = null;
 
-	if (row.filename) {
+	if (parsedOverride) {
+		file = parsedOverride.file ?? null;
+		parsed = parsedOverride.canonical;
+		canonical = mergeCanonical(parsed, fromCsv);
+	} else if (row.filename) {
 		const kind = extOf(row.filename);
 		file = readActivityFile(row.filename);
 		if (!file) {
@@ -530,21 +647,249 @@ function buildRows(row) {
 	return { activity, streams, laps, source };
 }
 
-async function writeOne(built) {
-	const { data, error } = await db.from('activities').insert(built.activity).select('id').single();
+// ---------------------------------------------------------------------------
+// Groups — several csv rows sharing one recording
+// ---------------------------------------------------------------------------
+//
+// The archive contains two cases where N csv rows are backed by ONE recorded
+// file, and both were silently wrong before this existed. This is §4's dedupe
+// section, which the first pass skipped as speculative — wrongly, since the
+// data has always had both.
+//
+// 1. A SPLIT RIDE. One upload, renamed into two or three Strava activities
+//    ("Ride from DR" / "Ride to DR"). Each csv row carries the WHOLE ride's
+//    distance and power, so importing all of them counts a 66km ride twice.
+//    One activity is stored; every Strava id is kept as its own
+//    `activity_sources` row, which is exactly what that table is for.
+//
+// 2. A MULTISPORT EVENT. A triathlon is one file with five sessions, and the
+//    export copies that whole file once per leg under five filenames. Reading
+//    session[0] each time gave all five legs the swim's numbers. Now the file
+//    is parsed into its sessions and stored as a `triathlon` parent with the
+//    legs as children (§5's parent_id/leg), transitions included.
+
+/** Longest common prefix of the leg titles — "Sunny 70.3 Swim", "Sunny 70.3
+ *  Bike"… names the parent "Sunny 70.3" without anybody typing it. */
+function commonPrefix(titles) {
+	const usable = titles.filter(Boolean);
+	if (!usable.length) return null;
+	let prefix = usable[0];
+	for (const t of usable.slice(1)) {
+		let i = 0;
+		while (i < prefix.length && i < t.length && prefix[i] === t[i]) i++;
+		prefix = prefix.slice(0, i);
+	}
+	prefix = prefix.replace(/[\s\-—–:]+$/, '').trim();
+	return prefix.length >= 3 ? prefix : null;
+}
+
+/** The cascade's rungs, weakest last — a parent is only as trustworthy as its
+ *  least-trustworthy leg, so that is the method and confidence it reports. */
+const METHOD_RANK = { tss: 0, hrtss: 1, ptss: 2, avghr: 3, met: 4 };
+const CONFIDENCE_RANK = { measured: 0, estimated: 1, assumed: 2 };
+
+function buildGroup(rows) {
+	if (rows.length === 1) {
+		const built = buildRows(rows[0]);
+		return built ? [built] : [];
+	}
+
+	// Every row here shares one file, so read and parse it once.
+	const withFile = rows.find((r) => r.filename);
+	const file = withFile ? readActivityFile(withFile.filename) : null;
+	if (!file || extOf(withFile.filename) !== 'fit') {
+		// Not a FIT file (or missing): treat as duplicates of the first row.
+		return buildDuplicates(rows);
+	}
+
+	let sessions = [];
+	try {
+		sessions = parseFitSessions(file.buf, { sport: csvSportOf(rows[0]) ?? 'other' });
+	} catch (err) {
+		stats.failures.push(`${rows[0].activityId}: ${err.message}`);
+	}
+
+	if (sessions.length <= 1) return buildDuplicates(rows, file, sessions[0]);
+	return buildMultisport(rows, file, sessions);
+}
+
+function csvSportOf(row) {
+	try {
+		return sportFromStrava(row.type);
+	} catch {
+		return null;
+	}
+}
+
+/** One activity, every Strava id kept as provenance. */
+function buildDuplicates(rows, file, canonical) {
+	const primary = rows[0];
+	const built = buildRows(primary, canonical ? { canonical, file } : undefined);
+	if (!built) return [];
+
+	built.extraSources = rows.slice(1).map((r) => ({
+		provider: 'strava_archive',
+		external_id: r.activityId,
+		external_url: `https://www.strava.com/activities/${r.activityId}`,
+		file_name: r.filename ?? null,
+		// Only one row may carry the checksum — it is uniquely indexed, and
+		// these are all the same bytes. The id is what makes each row findable.
+		file_checksum: null,
+		fidelity: 40,
+		raw: r.values,
+	}));
+	stats.duplicatesMerged += rows.length - 1;
+	return [built];
+}
+
+/** A `triathlon` parent with its legs as children. */
+function buildMultisport(rows, file, sessions) {
+	const pool = rows.slice();
+	const legs = sessions.map((canonical, i) => {
+		// Match this leg to the csv row that describes it, by sport, so the
+		// athlete's own leg titles survive. Transitions are Strava "Workout"
+		// rows and are taken in order.
+		const wanted = canonical.sport;
+		let matchIdx = pool.findIndex((r) => csvSportOf(r) === wanted);
+		if (matchIdx < 0 && wanted === 'transition') matchIdx = pool.findIndex((r) => csvSportOf(r) === 'strength');
+		if (matchIdx < 0 && wanted === 'open_water_swim') matchIdx = pool.findIndex((r) => csvSportOf(r) === 'swim');
+		if (matchIdx < 0 && wanted === 'ride') matchIdx = pool.findIndex((r) => csvSportOf(r) === 'ride');
+		const row = matchIdx >= 0 ? pool.splice(matchIdx, 1)[0] : rows[Math.min(i, rows.length - 1)];
+
+		const built = buildRows(row, { canonical, file });
+		if (built) {
+			built.activity.leg = i + 1;
+			// The file's own sport is the authority for a leg (see fit.ts).
+			built.activity.sport = canonical.sport;
+			built.activity.sub_sport = canonical.sub_sport ?? null;
+		}
+		return built;
+	}).filter(Boolean);
+
+	if (!legs.length) return [];
+
+	// The parent: the whole day, summed. Its route is every leg's track laid
+	// end to end, which is what the day actually looked like.
+	const sum = (key) => legs.reduce((t, l) => t + (Number(l.activity[key]) || 0), 0);
+	const track = sessions.flatMap((s) => s.streams?.latlng ?? []);
+	const first = legs[0].activity;
+	const last = legs[legs.length - 1].activity;
+	const endMs = Date.parse(last.started_at) + (last.elapsed_seconds ?? 0) * 1000;
+
+	const parentCanonical = {
+		sport: 'triathlon',
+		title: commonPrefix(legs.map((l) => l.activity.title)) ?? 'Triathlon',
+		started_at: first.started_at,
+		utc_offset_minutes: first.utc_offset_minutes,
+		elapsed_seconds: Math.max(1, Math.round((endMs - Date.parse(first.started_at)) / 1000)),
+		moving_seconds: sum('moving_seconds') || null,
+		distance_m: sum('distance_m') || null,
+		elevation_gain_m: sum('elevation_gain_m') || null,
+		avg_hr: Math.round(sum('avg_hr') / legs.length) || null,
+		max_hr: Math.max(...legs.map((l) => Number(l.activity.max_hr) || 0)) || null,
+		calories: sum('calories') || null,
+		device_name: first.device_name,
+		// Geometry only — no per-sample arrays on the parent, since each leg
+		// already holds its own and they would be stored twice.
+		streams: track.length ? { latlng: track } : undefined,
+	};
+
+	const parent = buildRowsFromCanonical(parentCanonical, rows[0], file);
+	// Exertion is the sum of the legs, each scored by its own sport — a
+	// triathlon has no single method of its own, and the MET floor for
+	// "triathlon" would be a worse answer than adding up three real ones.
+	const weakest = legs.reduce((w, l) =>
+		CONFIDENCE_RANK[l.activity.exertion_confidence] > CONFIDENCE_RANK[w.activity.exertion_confidence] ||
+		(l.activity.exertion_confidence === w.activity.exertion_confidence &&
+			METHOD_RANK[l.activity.exertion_method] > METHOD_RANK[w.activity.exertion_method])
+			? l
+			: w,
+	);
+	parent.activity.exertion = Number(legs.reduce((t, l) => t + (Number(l.activity.exertion) || 0), 0).toFixed(2));
+	parent.activity.exertion_method = weakest.activity.exertion_method;
+	parent.activity.exertion_confidence = weakest.activity.exertion_confidence;
+	parent.activity.intensity_factor = null;
+	parent.streams = null;
+	parent.laps = [];
+
+	// Every leg's Strava id hangs off the parent too, so any of the five links
+	// still resolves to this day.
+	parent.extraSources = rows.slice(1).map((r) => ({
+		provider: 'strava_archive',
+		external_id: r.activityId,
+		external_url: `https://www.strava.com/activities/${r.activityId}`,
+		file_name: r.filename ?? null,
+		file_checksum: null,
+		fidelity: 40,
+		raw: r.values,
+	}));
+	// …and the legs themselves carry no source row, because their ids are on
+	// the parent. Recording each id twice would break the unique index.
+	for (const leg of legs) leg.source = null;
+
+	parent.children = legs;
+	stats.multisportEvents++;
+	return [parent];
+}
+
+/** `buildRows` for a canonical with no csv row of its own (the parent). */
+function buildRowsFromCanonical(canonical, row, file) {
+	const date = localDate(canonical.started_at, canonical.utc_offset_minutes ?? 0);
+	const { activity, streams, laps } = toRows(canonical, thresholdsOn(thresholdRows, date));
+	return {
+		activity,
+		streams,
+		laps,
+		source: {
+			provider: 'strava_archive',
+			external_id: row.activityId,
+			external_url: `https://www.strava.com/activities/${row.activityId}`,
+			file_name: row.filename ?? null,
+			file_checksum: file?.checksum ?? null,
+			fidelity: 80,
+			raw: row.values,
+		},
+	};
+}
+
+async function insertActivity(built, parentId) {
+	const payload = parentId ? { ...built.activity, parent_id: parentId } : built.activity;
+	const { data, error } = await db.from('activities').insert(payload).select('id').single();
 	if (error) throw new Error(`insert activities: ${error.message}`);
 	const id = data.id;
 
-	if (built.streams) {
-		const { error: e } = await db.from('activity_streams').insert({ activity_id: id, ...built.streams });
-		if (e) throw new Error(`insert activity_streams: ${e.message}`);
+	// Provenance FIRST after the row itself. If it fails, the activity is
+	// removed again rather than left behind with no source — an activity with
+	// no `activity_sources` row is invisible to the resume check, so the next
+	// run would import it a second time.
+	try {
+		const sources = [
+			...(built.source ? [{ ...built.source, activity_id: id }] : []),
+			...(built.extraSources ?? []).map((s) => ({ ...s, activity_id: id })),
+		];
+		if (sources.length) {
+			const { error: e } = await db.from('activity_sources').insert(sources);
+			if (e) throw new Error(`insert activity_sources: ${e.message}`);
+		}
+
+		if (built.streams) {
+			const { error: e } = await db.from('activity_streams').insert({ activity_id: id, ...built.streams });
+			if (e) throw new Error(`insert activity_streams: ${e.message}`);
+		}
+		if (built.laps?.length) {
+			const { error: e } = await db.from('activity_laps').insert(built.laps.map((l) => ({ ...l, activity_id: id })));
+			if (e) throw new Error(`insert activity_laps: ${e.message}`);
+		}
+	} catch (err) {
+		await db.from('activities').delete().eq('id', id);
+		throw err;
 	}
-	if (built.laps.length) {
-		const { error: e } = await db.from('activity_laps').insert(built.laps.map((l) => ({ ...l, activity_id: id })));
-		if (e) throw new Error(`insert activity_laps: ${e.message}`);
-	}
-	const { error: e3 } = await db.from('activity_sources').insert({ ...built.source, activity_id: id });
-	if (e3) throw new Error(`insert activity_sources: ${e3.message}`);
+	return id;
+}
+
+async function writeOne(built) {
+	const parentId = await insertActivity(built, null);
+	for (const child of built.children ?? []) await insertActivity(child, parentId);
 }
 
 // ponytail: one activity per round trip rather than a batch insert. A bulk
@@ -553,41 +898,47 @@ async function writeOne(built) {
 // to somebody else's swim — permanently, and silently. This runs once. The
 // worker pool below is what makes it finish in minutes anyway.
 async function run() {
-	const queue = targets.slice();
+	const queue = groups.slice();
 	let active = 0;
 	let done = 0;
+
+	const count = (built) => {
+		stats.imported++;
+		const m = built.activity.exertion_method ?? 'none';
+		stats.byMethod[m] = (stats.byMethod[m] ?? 0) + 1;
+		stats.bySport[built.activity.sport] = (stats.bySport[built.activity.sport] ?? 0) + 1;
+		if (built.activity.route_path) stats.withRoute++;
+		for (const child of built.children ?? []) count(child);
+	};
 
 	await new Promise((resolve, reject) => {
 		const next = () => {
 			if (!queue.length && active === 0) return resolve();
 			while (active < CONCURRENCY && queue.length) {
-				const row = queue.shift();
+				const group = queue.shift();
 				active++;
 				(async () => {
-					let built = null;
+					let builts = [];
 					try {
-						built = buildRows(row);
+						builts = buildGroup(group);
 					} catch (err) {
-						stats.failures.push(`${row.activityId}: ${err.message}`);
+						stats.failures.push(`${group[0].activityId}: ${err.message}`);
 					}
-					if (!built) {
-						stats.skipped++;
-					} else {
+					if (!builts.length) {
+						stats.skipped += group.length;
+					}
+					for (const built of builts) {
 						try {
 							if (!DRY) await writeOne(built);
-							stats.imported++;
-							const m = built.activity.exertion_method ?? 'none';
-							stats.byMethod[m] = (stats.byMethod[m] ?? 0) + 1;
-							stats.bySport[built.activity.sport] = (stats.bySport[built.activity.sport] ?? 0) + 1;
-							if (built.activity.route_path) stats.withRoute++;
+							count(built);
 						} catch (err) {
-							stats.failures.push(`${row.activityId}: ${err.message}`);
+							stats.failures.push(`${group[0].activityId}: ${err.message}`);
 							stats.skipped++;
 						}
 					}
 					active--;
 					done++;
-					if (done % 100 === 0) log(`  ${done}/${targets.length} (${stats.imported} written)`);
+					if (done % 100 === 0) log(`  ${done}/${groups.length} (${stats.imported} written)`);
 					next();
 				})().catch(reject);
 			}
@@ -596,7 +947,7 @@ async function run() {
 	});
 }
 
-log(`${DRY ? 'parsing' : 'importing'} ${targets.length} activities, concurrency ${CONCURRENCY}...`);
+log(`${DRY ? 'parsing' : 'importing'} ${targets.length} activities in ${groups.length} groups, concurrency ${CONCURRENCY}...`);
 const startedAt = Date.now();
 await run();
 const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);

@@ -47,24 +47,68 @@ export interface FitParseOptions {
  * of those must skip rather than abort a 1700-file import.
  */
 export function parseFit(buf: Buffer | Uint8Array, opts: FitParseOptions): CanonicalActivity | null {
+	return parseFitSessions(buf, opts)[0] ?? null;
+}
+
+/**
+ * Every session in the file, in recorded order.
+ *
+ * WHY THIS EXISTS. A FIT file usually holds one session and one activity. A
+ * MULTISPORT file holds several — a triathlon is swim, transition, bike,
+ * transition, run, five sessions in one recording — and Strava's export copies
+ * that same whole file once per leg, under a different filename each time.
+ * Reading only `sessionMesgs[0]` therefore gives every leg the SWIM's numbers,
+ * which is how a half ironman ends up stored five times as a 34-minute
+ * 1.9km effort. The records are sliced per session so each leg gets its own
+ * track, its own heart rate, and its own exertion.
+ */
+export function parseFitSessions(buf: Buffer | Uint8Array, opts: FitParseOptions): CanonicalActivity[] {
 	const decoder = new Decoder(Stream.fromBuffer(buf));
-	if (!decoder.isFIT()) return null;
+	if (!decoder.isFIT()) return [];
 
 	// Not checking integrity: a truncated tail (a head unit that ran out of
 	// battery mid-save) still decodes every record before the break, and
 	// dropping the whole ride over a missing CRC loses real data for nothing.
 	const { messages } = decoder.read({ mesgListener: undefined }) as { messages: FitMessages };
 
-	const session = messages.sessionMesgs?.[0];
-	if (!session) return null;
+	const sessions = messages.sessionMesgs ?? [];
+	if (!sessions.length) return [];
 
-	const records = messages.recordMesgs ?? [];
-	const streams = toStreams(records, session.startTime);
+	const multisport = sessions.length > 1;
+	return sessions
+		.map((session) => oneSession(session, messages, opts, multisport))
+		.filter((a): a is CanonicalActivity => a !== null);
+}
 
-	const { sport, sub_sport } = refineSport(opts.sport, session.sport, session.subSport);
-
+function oneSession(
+	session: Record<string, any>,
+	messages: FitMessages,
+	opts: FitParseOptions,
+	multisport: boolean,
+): CanonicalActivity | null {
 	const startedAt: Date = session.startTime ?? session.timestamp;
 	if (!startedAt) return null;
+
+	// Slice the file's records down to this session's window. A single-session
+	// file keeps everything, so this costs nothing in the common case.
+	const from = new Date(startedAt).getTime();
+	const to = from + (num(session.totalElapsedTime) ?? 0) * 1000;
+	const allRecords = messages.recordMesgs ?? [];
+	const records = multisport
+		? allRecords.filter((r) => {
+				const t = new Date(r.timestamp).getTime();
+				return t >= from && t <= to;
+			})
+		: allRecords;
+
+	const streams = toStreams(records, startedAt);
+
+	// In a multisport file each session states its own sport, and THAT is the
+	// authority for a leg — the csv row for "Sunny 70.3 T1" says "Workout",
+	// which is Strava's best guess and not what the leg is.
+	const { sport, sub_sport } = multisport
+		? { sport: sportFromFit(session.sport, session.subSport) ?? opts.sport, sub_sport: subSportOf(session.subSport) }
+		: refineSport(opts.sport, session.sport, session.subSport);
 
 	return {
 		sport,
@@ -101,9 +145,41 @@ export function parseFit(buf: Buffer | Uint8Array, opts: FitParseOptions): Canon
 		device_ftp_w: int(session.thresholdPower),
 
 		streams,
-		laps: toLaps(messages.lapMesgs ?? [], sport),
+		laps: toLaps(
+			multisport
+				? (messages.lapMesgs ?? []).filter((l) => {
+						const t = new Date(l.startTime ?? l.timestamp).getTime();
+						return t >= from && t <= to;
+					})
+				: (messages.lapMesgs ?? []),
+			sport,
+		),
 	};
 }
+
+/** A FIT session's own sport vocabulary → ours. Only consulted for a
+ *  multisport file's legs, where the file knows better than Strava's label
+ *  (see `oneSession`); everything else goes through `refineSport`. */
+export function sportFromFit(fitSport?: string, fitSubSport?: string): Sport | null {
+	switch (fitSport) {
+		case 'swimming':
+			return fitSubSport === 'openWater' ? 'open_water_swim' : 'swim';
+		case 'transition':
+			return 'transition';
+		case 'cycling':
+			return fitSubSport === 'indoorCycling' || fitSubSport === 'virtualActivity' ? 'virtual_ride' : 'ride';
+		case 'running':
+			return fitSubSport === 'treadmill' ? 'treadmill_run' : fitSubSport === 'trail' ? 'trail_run' : 'run';
+		case 'hiking':
+			return 'hike';
+		case 'walking':
+			return 'walk';
+		default:
+			return null;
+	}
+}
+
+const subSportOf = (sub?: string): string | null => (sub && sub !== 'generic' ? sub : null);
 
 // ---------------------------------------------------------------------------
 // Streams

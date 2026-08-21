@@ -468,7 +468,14 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	// samples, arbitrarily: shorter than that and NP degenerates toward
 	// simple average anyway, so there's nothing rung 1 offers over rung 3
 	// that's worth the extra complexity).
-	if (streams?.power_w && streams.time_s && thresholds.ftp_w) {
+	// Gated on the BIKE family, not merely on "there is a power stream". FTP is
+	// a cycling threshold, and a running watch also reports watts — but running
+	// power is a different quantity on a different scale, and dividing it by a
+	// cycling FTP is a unit error wearing a plausible-looking number. Ungated,
+	// this archive's runs scored an average of 187 TSS and a maximum of 971,
+	// against a definition where an hour at threshold is 100. Runs with power
+	// fall through to the HR rungs, which are true for them.
+	if (sportMeta(input.sport).family === 'bike' && streams?.power_w && streams.time_s && thresholds.ftp_w) {
 		const power = filterMoving(streams.power_w, streams.moving) ?? streams.power_w;
 		const time = filterMoving(streams.time_s, streams.moving) ?? streams.time_s;
 		if (power.length >= 20 && power.length === time.length) {

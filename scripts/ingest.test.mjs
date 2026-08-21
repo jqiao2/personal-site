@@ -32,7 +32,6 @@ import {
 	localDate,
 	toRows,
 	UnknownSportError,
-	MAX_STORED_SAMPLES,
 } from '../src/lib/ingest/canonical.ts';
 import { parseGpx, parseTcx } from '../src/lib/ingest/gpx.ts';
 import { parseFit } from '../src/lib/ingest/fit.ts';
@@ -224,14 +223,12 @@ const TH = {
 }
 
 // ---------------------------------------------------------------------------
-// 8. Stream decimation keeps the arrays parallel
+// 8. Streams are stored whole, at the rate the device recorded
 // ---------------------------------------------------------------------------
 //
-// Storing every sample would need more space than the database is allowed, so
-// streams are decimated on the way in. The failure this guards against is
-// silent and total: if two arrays are indexed differently, sample N is a
-// different instant in each, and every chart on the detail page is subtly
-// wrong with nothing to show for it.
+// The file is the primary record and the database holds what the sensors saw.
+// An ingest-time decimation is irreversible without re-reading the archive, so
+// it is display's job to pick a resolution, not storage's.
 {
 	const n = 5000;
 	const withStreams = {
@@ -252,34 +249,55 @@ const TH = {
 
 	const { activity, streams } = toRows(withStreams, TH);
 
-	assert.equal(streams.sample_count, MAX_STORED_SAMPLES, 'a long stream is decimated to the cap');
+	assert.equal(streams.sample_count, n, 'every sample is stored, not a decimated subset');
 	for (const key of ['time_s', 'power_w', 'heartrate', 'latlng', 'moving']) {
-		assert.equal(streams[key].length, MAX_STORED_SAMPLES, `${key} must be decimated to the same length`);
+		assert.equal(streams[key].length, n, `${key} must be stored whole`);
 	}
 
-	// The parallel-index property, checked against a value that encodes its own
-	// original position: time_s[k] IS the original index.
-	for (const k of [0, 1, 500, MAX_STORED_SAMPLES - 1]) {
-		const original = streams.time_s[k];
-		assert.equal(streams.power_w[k], 200 + (original % 7), `power_w[${k}] came from a different sample than time_s[${k}]`);
-		assert.equal(streams.heartrate[k], 140 + (original % 5), `heartrate[${k}] is out of step`);
-		assert.ok(Math.abs(streams.latlng[k][0] - (47 + original / 1e5)) < 1e-9, `latlng[${k}] is out of step`);
+	// The arrays stay parallel: sample N is the same instant in all of them.
+	// Checked against values that encode their own position.
+	for (const k of [0, 1, 500, n - 1]) {
+		assert.equal(streams.time_s[k], k, `time_s[${k}] moved`);
+		assert.equal(streams.power_w[k], 200 + (k % 7), `power_w[${k}] is out of step`);
+		assert.equal(streams.heartrate[k], 140 + (k % 5), `heartrate[${k}] is out of step`);
+		assert.ok(Math.abs(streams.latlng[k][0] - (47 + k / 1e5)) < 1e-9, `latlng[${k}] is out of step`);
 	}
-	assert.equal(streams.time_s[0], 0, 'the first sample is kept');
-	assert.equal(streams.time_s[MAX_STORED_SAMPLES - 1], n - 1, 'and so is the last');
 
-	// Exertion is computed before decimation, so a power file still scores off
-	// the full-resolution stream.
 	assert.equal(activity.exertion_method, 'tss');
 	assert.equal(activity.exertion_confidence, 'measured');
+}
 
-	// A short stream is left exactly as it is.
-	const short = toRows(
-		{ ...withStreams, streams: { time_s: [0, 1, 2], heartrate: [130, 131, 132] } },
-		TH,
-	);
-	assert.equal(short.streams.sample_count, 3, 'a stream under the cap is stored whole');
-	assert.deepEqual(short.streams.heartrate, [130, 131, 132]);
+// ---------------------------------------------------------------------------
+// 8b. Cycling power only — a running watch's watts are not a cycling FTP
+// ---------------------------------------------------------------------------
+//
+// The top rung of §3's cascade divides normalized power by FTP. Both are
+// cycling quantities. A modern running watch also reports watts on a different
+// scale entirely, and dividing those by a bike FTP is a unit error that looks
+// like a plausible number — ungated it scored this athlete's runs at an average
+// of 187 TSS (max 971) against a scale where an hour at threshold is 100.
+{
+	const n = 400;
+	const base = {
+		started_at: '2026-05-01T14:00:00.000Z',
+		utc_offset_minutes: -420,
+		elapsed_seconds: n,
+		moving_seconds: n,
+		distance_m: 3000,
+		streams: {
+			time_s: Array.from({ length: n }, (_, i) => i),
+			power_w: Array.from({ length: n }, () => 300),
+			heartrate: Array.from({ length: n }, () => 150),
+			moving: Array.from({ length: n }, () => true),
+		},
+	};
+
+	assert.equal(toRows({ ...base, sport: 'ride' }, TH).activity.exertion_method, 'tss', 'a ride with power uses the power rung');
+	for (const sport of ['run', 'trail_run', 'hike', 'open_water_swim']) {
+		const method = toRows({ ...base, sport }, TH).activity.exertion_method;
+		assert.notEqual(method, 'tss', `${sport} must not be scored against a cycling FTP`);
+		assert.equal(method, 'hrtss', `${sport} should fall to the heart-rate rung, which is true for it`);
+	}
 }
 
 // ---------------------------------------------------------------------------

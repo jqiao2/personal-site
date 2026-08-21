@@ -43,6 +43,7 @@ export type Sport =
 	| 'trail_run'
 	| 'swim'
 	| 'open_water_swim'
+	| 'triathlon'
 	| 'transition'
 	| 'hike'
 	| 'walk'
@@ -69,6 +70,7 @@ export const SPORTS: readonly Sport[] = [
 	'trail_run',
 	'swim',
 	'open_water_swim',
+	'triathlon',
 	'transition',
 	'hike',
 	'walk',
@@ -249,6 +251,22 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 		paceStyle: 'per_100m',
 		primaryStats: ['distance', 'moving_time', 'pace_100m', 'water_temp', 'exertion'],
 		met: 8, // open water, current/wetsuit drag, treated as vigorous
+	},
+	triathlon: {
+		label: 'Triathlon',
+		family: 'other',
+		icon: 'triathlon',
+		indoor: false,
+		hasDistance: true,
+		paceStyle: 'none',
+		// The parent row of a multisport day (§5). Its stats are the DAY's
+		// totals, so it leads with the shape of the whole event rather than any
+		// one leg's pace — a half ironman's "average speed" is a meaningless
+		// blend of swimming, riding and running.
+		primaryStats: ['distance', 'moving_time', 'elapsed_time', 'avg_hr', 'exertion'],
+		// Never actually used: a parent's exertion is the sum of its legs',
+		// each scored by its own sport. Present because the table is total.
+		met: 7,
 	},
 	transition: {
 		label: 'Transition',
