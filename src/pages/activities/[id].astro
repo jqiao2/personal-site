@@ -1,0 +1,1019 @@
+---
+// The activity detail page — ACTIVITIES.md §1: "primarily a view of the
+// activity on an interactive map", with sport-aware stats leading below it.
+//
+// STRUCTURE, TOP TO BOTTOM: a route map (or, when there is no GPS, a
+// stats-forward hero in its place — §7's "must read as deliberate, not
+// broken"), the sport's `primaryStats` set large, the exertion score with its
+// method and confidence spelled out (§3: never an unexplained claim), the
+// terrain/HR/power/speed charts built straight from `activity_streams`, a lap
+// table when the activity has laps, and the multisport thread (child legs for
+// a parent, a link back up for a child).
+//
+// WHY THE EXERTION SENTENCE IS RECOMPUTED RATHER THAN JUST READ OFF THE ROW.
+// `activities.exertion`/`exertion_method`/`exertion_confidence` are the
+// persisted, authoritative numbers — this page always displays *those*, the
+// same ones every list and card on the site would show, so the number here
+// never disagrees with the number anywhere else. But the *sentence* that
+// explains it (`ExertionResult.detail`) isn't a stored column — exertion.ts is
+// built as "pure functions over streams… so it can be re-run… when a
+// threshold changes", so this page re-runs the same cascade with the
+// activity's current streams and the threshold row in force on its date, and
+// only trusts the resulting sentence when the recomputed method matches the
+// stored one (proof the same rung produced both). When it doesn't match —
+// streams that existed at ingest aren't available now, say — this falls back
+// to a plain, still-honest sentence built from the stored method and
+// confidence alone, rather than presenting a mismatched explanation as if it
+// justified the stored number.
+//
+// WHY CHARTS ARE SERVER-RENDERED SVG, NOT A CLIENT CHART LIBRARY. The streams
+// are already arrays by the time this runs; turning them into an area/line
+// path is arithmetic, not a rendering problem that needs a dependency. It also
+// means the potentially-thousands-of-samples stream arrays never have to be
+// serialised to the client at all — only the small, already-computed path
+// strings are.
+import ActivityLayout from '../../layouts/ActivityLayout.astro';
+import ActivityMap from '../../components/ActivityMap.astro';
+import {
+	getActivity,
+	getActivityStreams,
+	listActivityLaps,
+	listActivityChildren,
+	thresholdsOn,
+	setFavoriteRank,
+	type ActivityLap,
+	type ActivityRow,
+} from '../../lib/activities';
+import { requireOwner } from '../../lib/auth';
+import { siteNav } from '../../lib/nav';
+import { sportMeta, sportIcon, formatStat, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
+import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
+import { ALPINE, exertionInk, exertionLabel } from '../../lib/activity-tokens';
+
+export const prerender = false;
+
+const id = Number(Astro.params.id);
+const validId = Number.isInteger(id) && id > 0;
+
+// ---------------------------------------------------------------------------
+// Owner-only write: a favourite-rank star, self-handled by this page rather
+// than a dedicated API route (a route lives outside the three files this
+// track owns — ACTIVITIES.md §9). Deliberately the only write here: an
+// editor for title/notes would need an `updateActivity` this track has no
+// business adding to activities.ts (the schema track's file), so per the
+// brief's "skip entirely if it costs the map quality," it's left out rather
+// than reached for.
+// ---------------------------------------------------------------------------
+if (Astro.request.method === 'POST') {
+	const isOwner = validId && (await requireOwner(Astro.cookies));
+	if (!isOwner) {
+		return new Response('Forbidden', { status: 403 });
+	}
+	const form = await Astro.request.formData();
+	if (form.get('action') === 'toggle-favorite') {
+		const current = await getActivity(id);
+		if (current) {
+			// Toggle: claim rank 1 if unset, clear if already favourited.
+			// setFavoriteRank frees the slot from whoever holds it first, so this
+			// never has to know who that was.
+			await setFavoriteRank(id, current.favorite_rank ? null : 1);
+		}
+	}
+	return Astro.redirect(Astro.url.pathname, 303);
+}
+
+const nav = siteNav(Astro.url.pathname);
+const isOwner = await requireOwner(Astro.cookies);
+const activity = validId ? await getActivity(id) : null;
+
+if (!activity) {
+	return new Response(
+		`<!doctype html><html lang="en"><head><meta charset="utf-8">
+		<meta name="viewport" content="width=device-width,initial-scale=1">
+		<title>Not found</title>
+		<style>
+			body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+				padding:40px 24px;background:linear-gradient(180deg,#dceaf4 0%,#f8fbfd 640px);
+				color:#3d4a55;font-family:'Instrument Sans',Arial,sans-serif}
+			.box{max-width:420px;text-align:center}
+			.code{font-family:'Instrument Serif',Georgia,serif;font-size:64px;color:#9fc4dd;line-height:1}
+			.head{font-family:'Instrument Serif',Georgia,serif;font-size:24px;color:#3d4a55;margin-top:14px;line-height:1.4}
+			p{font-size:14px;color:#6b7b88;margin:12px 0 0;line-height:1.65}
+			a{display:inline-block;margin-top:22px;font-size:13px;color:#1c6e8c;text-decoration:none}
+		</style></head><body><div class="box">
+		<div class="code">404</div>
+		<div class="head">There is nothing at this address.</div>
+		<p>No redacted page, no placeholder — as far as this log is concerned the activity was never here.</p>
+		<a href="/activities">&larr; Back to Activities</a>
+		</div></body></html>`,
+		{ status: 404, headers: { 'content-type': 'text/html; charset=utf-8' } },
+	);
+}
+
+const meta = sportMeta(activity.sport);
+const hasRoute = Boolean(activity.polyline);
+
+const [streams, laps, parent, children, thresholds] = await Promise.all([
+	getActivityStreams(activity.id),
+	listActivityLaps(activity.id),
+	activity.parent_id ? getActivity(activity.parent_id) : Promise.resolve(null),
+	activity.parent_id ? Promise.resolve([]) : listActivityChildren(activity.id),
+	thresholdsOn(activity.local_date),
+]);
+
+// ---------------------------------------------------------------------------
+// Sport-aware stats — §6. `sportMeta(activity.sport).primaryStats` decides
+// both which stats lead and in what order; everything else in the StatKey
+// union that has an actual value on this activity goes in the secondary
+// block below it. formatStat is already null-safe (returns '—' for a missing
+// input) — filtered out here rather than rendered, per §7's "never a dash".
+// ---------------------------------------------------------------------------
+// 'exertion' is deliberately excluded from both grids below — it always gets
+// its own explained section (score + method + confidence + the sentence
+// behind it), never a bare number sitting in a tile with no context, which is
+// exactly the "unexplained claim" §3 rules out.
+const ALL_STAT_KEYS: StatKey[] = [
+	'distance',
+	'moving_time',
+	'elapsed_time',
+	'elevation_gain',
+	'avg_power',
+	'normalized_power',
+	'avg_speed',
+	'avg_pace',
+	'pace_100m',
+	'avg_hr',
+	'max_hr',
+	'swolf',
+	'pool_length',
+	'work_kj',
+	'elev_high',
+	'vertical_descent',
+	'max_speed',
+	'runs',
+	'water_temp',
+	'calories',
+];
+
+const runsCount = laps.length > 0 ? laps.filter((l) => l.lap_type === 'lap').length : null;
+
+const statRow: StatRow = {
+	distance_m: activity.distance_m,
+	moving_seconds: activity.moving_seconds,
+	elapsed_seconds: activity.elapsed_seconds,
+	elevation_gain_m: activity.elevation_gain_m,
+	elev_high_m: activity.elev_high_m,
+	elevation_loss_m: activity.elevation_loss_m,
+	avg_power_w: activity.avg_power_w,
+	normalized_power_w: activity.normalized_power_w,
+	avg_speed_ms: activity.avg_speed_ms,
+	max_speed_ms: activity.max_speed_ms,
+	avg_hr: activity.avg_hr,
+	max_hr: activity.max_hr,
+	avg_swolf: activity.avg_swolf,
+	pool_length_m: activity.pool_length_m,
+	work_kj: activity.work_kj,
+	exertion: activity.exertion,
+	avg_temp_c: activity.avg_temp_c,
+	calories: activity.calories,
+	runs: runsCount,
+};
+
+function statsFor(keys: StatKey[]): FormattedStat[] {
+	return keys.map((k) => formatStat(k, statRow)).filter((s) => s.value !== '—');
+}
+
+const primaryKeys: StatKey[] = meta.primaryStats.filter((k) => k !== 'exertion');
+const primaryStats = statsFor(primaryKeys);
+const secondaryKeys = ALL_STAT_KEYS.filter((k) => !primaryKeys.includes(k));
+const secondaryStats = statsFor(secondaryKeys);
+
+// ---------------------------------------------------------------------------
+// Exertion — §3. See the header comment for why the sentence is recomputed
+// and the score is not.
+// ---------------------------------------------------------------------------
+const EMPTY_THRESHOLDS: Thresholds = {
+	ftp_w: null,
+	lthr_bpm: null,
+	max_hr: null,
+	rest_hr: null,
+	threshold_pace_s_per_km: null,
+	css_pace_s_per_100m: null,
+	weight_kg: null,
+};
+
+const METHOD_LABEL: Record<string, string> = {
+	tss: 'power-based TSS',
+	hrtss: 'HR-based TSS (Banister TRIMP)',
+	avghr: 'flat average-HR TRIMP',
+	ptss: 'pace-based TSS',
+	met: 'MET-minutes',
+};
+const CONFIDENCE_LABEL: Record<string, string> = {
+	measured: 'Measured',
+	estimated: 'Estimated',
+	assumed: 'Assumed',
+};
+
+// Takes `act` as a parameter rather than closing over the page-level
+// `activity` purely for TypeScript's benefit: the 404 check above narrows
+// `activity` to non-null in this scope, but that narrowing doesn't survive
+// into a separately-declared function's body, so a plain closure would need
+// `activity!` sprinkled everywhere it's touched.
+function exertionDetail(act: ActivityRow): string | null {
+	if (act.exertion == null || !act.exertion_method) return null;
+	try {
+		const exStreams: ExertionStreams | undefined = streams
+			? {
+					time_s: streams.time_s ?? undefined,
+					power_w: streams.power_w ?? undefined,
+					heartrate: streams.heartrate ?? undefined,
+					altitude_m: streams.altitude_m ?? undefined,
+					distance_m: streams.distance_m ?? undefined,
+					moving: streams.moving ?? undefined,
+				}
+			: undefined;
+		const result = computeExertion(
+			{
+				sport: act.sport,
+				moving_seconds: act.moving_seconds,
+				elapsed_seconds: act.elapsed_seconds,
+				distance_m: act.distance_m,
+				elevation_gain_m: act.elevation_gain_m,
+				avg_hr: act.avg_hr,
+				avg_power_w: act.avg_power_w,
+				streams: exStreams,
+			},
+			thresholds ?? EMPTY_THRESHOLDS,
+		);
+		// Only trust the recomputed sentence when it took the same rung the
+		// stored value did — a method mismatch means the data that produced the
+		// stored number isn't fully available to recompute against right now.
+		if (result.method === act.exertion_method) return result.detail;
+	} catch {
+		// Recomputation is best-effort; the generic fallback below always works.
+	}
+	return null;
+}
+
+const durationLabel = formatDuration(activity.moving_seconds ?? activity.elapsed_seconds);
+const detail =
+	exertionDetail(activity) ??
+	(activity.exertion != null && activity.exertion_method
+		? `${durationLabel} of ${meta.label.toLowerCase()} — ${(CONFIDENCE_LABEL[activity.exertion_confidence ?? ''] ?? 'Assumed').toLowerCase()} via ${METHOD_LABEL[activity.exertion_method] ?? activity.exertion_method}.`
+		: null);
+
+// ---------------------------------------------------------------------------
+// Charts — §2's "elevation is drawn as terrain, not as a chart" and "keep the
+// other series restrained." Server-rendered SVG straight off the streams;
+// see the header comment for why this isn't a client chart library.
+// ---------------------------------------------------------------------------
+const CHART_W = 900;
+const ELEV_H = 160;
+const MINI_H = 64;
+const M_TO_FT = 3.28084;
+const MS_TO_MPH = 2.236936;
+
+function downsample(values: number[], max: number): number[] {
+	if (values.length <= max) return values;
+	const out: number[] = [];
+	const step = values.length / max;
+	for (let i = 0; i < max; i++) out.push(values[Math.floor(i * step)]);
+	return out;
+}
+
+interface Geometry {
+	points: [number, number][];
+	min: number;
+	max: number;
+	avg: number;
+}
+
+function geometry(values: number[], w: number, h: number, topPad: number, bottomPad: number): Geometry | null {
+	const vals = downsample(values.filter((v) => Number.isFinite(v)), 400);
+	const n = vals.length;
+	if (n < 2) return null;
+	let min = Infinity;
+	let max = -Infinity;
+	let sum = 0;
+	for (const v of vals) {
+		if (v < min) min = v;
+		if (v > max) max = v;
+		sum += v;
+	}
+	const span = max - min || 1;
+	const usableH = h - topPad - bottomPad;
+	const points: [number, number][] = vals.map((v, i) => {
+		const x = (i / (n - 1)) * w;
+		const y = topPad + usableH - ((v - min) / span) * usableH;
+		return [x, y];
+	});
+	return { points, min, max, avg: sum / n };
+}
+
+function linePath(points: [number, number][]): string {
+	return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
+}
+
+function areaPath(points: [number, number][], w: number, h: number): string {
+	return `${linePath(points)} L${w} ${h} L0 ${h} Z`;
+}
+
+const altitudeGeo = streams?.altitude_m ? geometry(streams.altitude_m, CHART_W, ELEV_H, 10, 4) : null;
+const hrGeo = streams?.heartrate ? geometry(streams.heartrate, CHART_W, MINI_H, 8, 8) : null;
+const powerGeo = streams?.power_w ? geometry(streams.power_w, CHART_W, MINI_H, 8, 8) : null;
+const speedGeo = streams?.speed_ms ? geometry(streams.speed_ms, CHART_W, MINI_H, 8, 8) : null;
+const hasCharts = Boolean(altitudeGeo || hrGeo || powerGeo || speedGeo);
+
+// ---------------------------------------------------------------------------
+// Formatting helpers local to this page.
+// ---------------------------------------------------------------------------
+function formatDuration(seconds: number | null | undefined): string {
+	if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '—';
+	const s = Math.round(seconds);
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const ss = s % 60;
+	if (h > 0) return `${h}h ${m}m`;
+	if (m > 0) return `${m}m`;
+	return `${ss}s`;
+}
+
+function formatDateLong(dateStr: string): string {
+	const [y, m, d] = dateStr.split('-').map(Number);
+	const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+	return dt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
+}
+
+function legLabel(leg: number | null): string {
+	if (leg == null) return '';
+	return `Leg ${leg}`;
+}
+
+const pageTitle = `${activity.title} — Jason's activity log`;
+const glyph = sportIcon(activity.sport);
+const exInk = exertionInk(activity.exertion);
+const exWord = exertionLabel(activity.exertion);
+---
+
+<ActivityLayout title={pageTitle}>
+	<div class="page">
+		<nav class="tabs">
+			{
+				nav.map((n) => (
+					<a class:list={['tabs__link', n.active && 'tabs__link--active']} href={n.href} aria-current={n.active ? 'page' : undefined}>
+						{n.label}
+					</a>
+				))
+			}
+		</nav>
+
+		<a class="back" href="/activities" data-back>&larr; Activities</a>
+
+		{
+			parent && (
+				<a class="parent-banner" href={`/activities/${parent.id}`}>
+					<span class="parent-banner__leg">{legLabel(activity.leg)}</span>
+					of <strong>{parent.title}</strong> — back to the full day &rarr;
+				</a>
+			)
+		}
+
+		<header class="head">
+			<div class="head__top">
+				<svg class="head__icon" viewBox="0 0 24 24" fill="none" stroke={ALPINE.granite} stroke-width="1.5" aria-hidden="true" set:html={glyph} />
+				<span class="head__sport">{meta.label}</span>
+				{activity.favorite_rank && <span class="head__fav" title={`Favourite #${activity.favorite_rank}`}>★</span>}
+				{
+					isOwner && (
+						<form method="POST" class="head__fav-form">
+							<input type="hidden" name="action" value="toggle-favorite" />
+							<button type="submit" class="head__fav-btn" title={activity.favorite_rank ? 'Remove from favourites' : 'Make a favourite'}>
+								{activity.favorite_rank ? 'Unfavourite' : 'Favourite'}
+							</button>
+						</form>
+					)
+				}
+			</div>
+			<h1 class="head__title">{activity.title}</h1>
+			<div class="head__meta">
+				<span>{formatDateLong(activity.local_date)}</span>
+				{activity.start_place && <span class="head__dot">·</span>}
+				{activity.start_place && <span>{activity.start_place}</span>}
+				{activity.device_name && <span class="head__dot">·</span>}
+				{activity.device_name && <span class="head__device">{activity.device_name}</span>}
+			</div>
+			{activity.notes && <p class="head__notes">{activity.notes}</p>}
+		</header>
+
+		{
+			hasRoute ? (
+				<>
+					<ActivityMap title={activity.title} sport={activity.sport} polyline={activity.polyline!} />
+					{
+						primaryStats.length > 0 && (
+							<div class="stats stats--row">
+								{
+									primaryStats.map((s) => (
+										<div class="stat">
+											<div class="stat__value figure">{s.value}</div>
+											<div class="stat__label">{s.label}</div>
+										</div>
+									))
+								}
+							</div>
+						)
+					}
+				</>
+			) : (
+				<div class="nogps">
+					<div class="nogps__note">
+						No GPS recorded for this {meta.label.toLowerCase()} — the numbers below are the whole story.
+					</div>
+					{
+						primaryStats.length > 0 && (
+							<div class="stats stats--hero">
+								{
+									primaryStats.map((s) => (
+										<div class="stat stat--hero">
+											<div class="stat__value stat__value--hero figure">{s.value}</div>
+											<div class="stat__label">{s.label}</div>
+										</div>
+									))
+								}
+							</div>
+						)
+					}
+				</div>
+			)
+		}
+
+		{
+			activity.exertion != null && (
+				<section class="exertion">
+					<div class="exertion__score">
+						<span class="exertion__value figure" style={`color:${exInk}`}>{Math.round(activity.exertion)}</span>
+						<span class="exertion__word" style={`color:${exInk}`}>{exWord}</span>
+					</div>
+					<div class="exertion__body">
+						<div class="exertion__badges">
+							{activity.exertion_method && <span class="badge">{METHOD_LABEL[activity.exertion_method] ?? activity.exertion_method}</span>}
+							{activity.exertion_confidence && (
+								<span class:list={['badge', `badge--${activity.exertion_confidence}`]}>
+									{CONFIDENCE_LABEL[activity.exertion_confidence] ?? activity.exertion_confidence}
+								</span>
+							)}
+							{activity.intensity_factor != null && <span class="badge badge--quiet">IF {activity.intensity_factor.toFixed(2)}</span>}
+						</div>
+						{detail && <p class="exertion__detail">{detail}</p>}
+					</div>
+				</section>
+			)
+		}
+
+		{
+			secondaryStats.length > 0 && (
+				<section class="secondary">
+					<h2 class="section-h">Details</h2>
+					<div class="stats stats--secondary">
+						{
+							secondaryStats.map((s) => (
+								<div class="stat stat--sm">
+									<div class="stat__value stat__value--sm figure">{s.value}</div>
+									<div class="stat__label">{s.label}</div>
+								</div>
+							))
+						}
+					</div>
+				</section>
+			)
+		}
+
+		{
+			hasCharts && (
+				<section class="charts">
+					<h2 class="section-h">Charts</h2>
+
+					{
+						altitudeGeo && (
+							<div class="chart chart--elev">
+								<div class="chart__label">
+									Elevation <span class="chart__range">{Math.round(altitudeGeo.min * M_TO_FT).toLocaleString()}–{Math.round(altitudeGeo.max * M_TO_FT).toLocaleString()} ft</span>
+								</div>
+								<svg viewBox={`0 0 ${CHART_W} ${ELEV_H}`} preserveAspectRatio="none" class="chart__svg chart__svg--elev">
+									<path d={areaPath(altitudeGeo.points, CHART_W, ELEV_H)} fill={ALPINE.fir} fill-opacity="0.28" stroke="none" />
+									<path d={linePath(altitudeGeo.points)} fill="none" stroke={ALPINE.fir} stroke-width="1.6" vector-effect="non-scaling-stroke" />
+								</svg>
+							</div>
+						)
+					}
+
+					{
+						hrGeo && (
+							<div class="chart">
+								<div class="chart__label">
+									Heart rate <span class="chart__range">{Math.round(hrGeo.min)}–{Math.round(hrGeo.max)} bpm, avg {Math.round(hrGeo.avg)}</span>
+								</div>
+								<svg viewBox={`0 0 ${CHART_W} ${MINI_H}`} preserveAspectRatio="none" class="chart__svg">
+									<path d={linePath(hrGeo.points)} fill="none" stroke={ALPINE.granite} stroke-width="1.4" vector-effect="non-scaling-stroke" />
+								</svg>
+							</div>
+						)
+					}
+
+					{
+						powerGeo && (
+							<div class="chart">
+								<div class="chart__label">
+									Power <span class="chart__range">{Math.round(powerGeo.min)}–{Math.round(powerGeo.max)} W, avg {Math.round(powerGeo.avg)}</span>
+								</div>
+								<svg viewBox={`0 0 ${CHART_W} ${MINI_H}`} preserveAspectRatio="none" class="chart__svg">
+									<path d={linePath(powerGeo.points)} fill="none" stroke={ALPINE.granite} stroke-width="1.4" vector-effect="non-scaling-stroke" />
+								</svg>
+							</div>
+						)
+					}
+
+					{
+						speedGeo && (
+							<div class="chart">
+								<div class="chart__label">
+									Speed <span class="chart__range">{(speedGeo.min * MS_TO_MPH).toFixed(1)}–{(speedGeo.max * MS_TO_MPH).toFixed(1)} mph, avg {(speedGeo.avg * MS_TO_MPH).toFixed(1)}</span>
+								</div>
+								<svg viewBox={`0 0 ${CHART_W} ${MINI_H}`} preserveAspectRatio="none" class="chart__svg">
+									<path d={linePath(speedGeo.points)} fill="none" stroke={ALPINE.graniteSoft} stroke-width="1.4" vector-effect="non-scaling-stroke" />
+								</svg>
+							</div>
+						)
+					}
+				</section>
+			)
+		}
+
+		{
+			laps.length > 0 && (
+				<section class="laps">
+					<h2 class="section-h">Laps <span class="section-h__meta">{laps.length}</span></h2>
+					<div class="laps__scroll">
+						<table class="laps__table">
+							<thead>
+								<tr>
+									<th>#</th>
+									<th>Type</th>
+									<th>Distance</th>
+									<th>Time</th>
+									{meta.paceStyle !== 'none' && <th>{meta.paceStyle === 'speed' ? 'Speed' : 'Pace'}</th>}
+									<th>Avg HR</th>
+									<th>Avg power</th>
+									<th>Elev gain</th>
+								</tr>
+							</thead>
+							<tbody>
+								{
+									laps.map((lap: ActivityLap) => {
+										const lapRow: StatRow = {
+											distance_m: lap.distance_m,
+											moving_seconds: lap.moving_seconds ?? lap.elapsed_seconds,
+											avg_hr: lap.avg_hr,
+											avg_power_w: lap.avg_power_w,
+											avg_speed_ms: lap.avg_speed_ms,
+											elevation_gain_m: lap.elevation_gain_m,
+										};
+										const paceKey: StatKey = meta.paceStyle === 'speed' ? 'avg_speed' : meta.paceStyle === 'per_100m' ? 'pace_100m' : 'avg_pace';
+										return (
+											<tr class:list={[lap.lap_type === 'transition' && 'laps__row--transition']}>
+												<td>{lap.lap_index}</td>
+												<td><span class:list={['laps__type', `laps__type--${lap.lap_type}`]}>{lap.lap_type}</span></td>
+												<td class="figure">{formatStat('distance', lapRow).value}</td>
+												<td class="figure">{formatStat('moving_time', lapRow).value}</td>
+												{meta.paceStyle !== 'none' && <td class="figure">{formatStat(paceKey, lapRow).value}</td>}
+												<td class="figure">{formatStat('avg_hr', lapRow).value}</td>
+												<td class="figure">{formatStat('avg_power', lapRow).value}</td>
+												<td class="figure">{formatStat('elevation_gain', lapRow).value}</td>
+											</tr>
+										);
+									})
+								}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			)
+		}
+
+		{
+			children.length > 0 && (
+				<section class="legs">
+					<h2 class="section-h">Multisport day <span class="section-h__meta">{children.length} legs</span></h2>
+					<div class="legs__list">
+						{
+							children.map((c) => {
+								const cMeta = sportMeta(c.sport);
+								const cGlyph = sportIcon(c.sport);
+								return (
+									<a class="leg" href={`/activities/${c.id}`}>
+										<svg class="leg__icon" viewBox="0 0 24 24" fill="none" stroke={ALPINE.lake} stroke-width="1.6" aria-hidden="true" set:html={cGlyph} />
+										<div class="leg__body">
+											<div class="leg__title">{legLabel(c.leg)} — {cMeta.label}</div>
+											<div class="leg__name">{c.title}</div>
+										</div>
+										<div class="leg__time figure">{formatDuration(c.moving_seconds ?? c.elapsed_seconds)}</div>
+									</a>
+								);
+							})
+						}
+					</div>
+				</section>
+			)
+		}
+	</div>
+</ActivityLayout>
+
+<style>
+	.page {
+		max-width: 1100px;
+		margin: 0 auto;
+		padding: 2rem 1.5rem 5rem;
+	}
+	.tabs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1.25rem;
+		padding-bottom: 1.25rem;
+		margin-bottom: 1.25rem;
+		border-bottom: 1px solid #c9d4dc;
+	}
+	.tabs__link {
+		font-size: 0.9rem;
+		color: #6b7b88;
+	}
+	.tabs__link--active {
+		color: #1c6e8c;
+		font-weight: 600;
+	}
+	.back {
+		display: inline-block;
+		font-size: 0.85rem;
+		color: #6b7b88;
+		margin-bottom: 1rem;
+	}
+	.back:hover {
+		color: #1c6e8c;
+	}
+
+	.parent-banner {
+		display: block;
+		font-size: 0.85rem;
+		color: #3d4a55;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
+		padding: 0.6rem 0.9rem;
+		margin-bottom: 1.25rem;
+	}
+	.parent-banner__leg {
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		font-size: 0.7rem;
+		color: #6b7b88;
+		margin-right: 0.35rem;
+	}
+	.parent-banner:hover {
+		border-color: #1c6e8c;
+	}
+
+	.head {
+		margin-bottom: 1.5rem;
+	}
+	.head__top {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.4rem;
+	}
+	.head__icon {
+		width: 1.15rem;
+		height: 1.15rem;
+	}
+	.head__sport {
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: #6b7b88;
+	}
+	.head__fav {
+		color: #d99a3a;
+		font-size: 0.95rem;
+	}
+	.head__fav-form {
+		margin-left: auto;
+	}
+	.head__fav-btn {
+		font-size: 0.75rem;
+		color: #6b7b88;
+		background: transparent;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+		padding: 0.25rem 0.6rem;
+		cursor: pointer;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+	}
+	.head__fav-btn:hover {
+		border-color: #d99a3a;
+		color: #d99a3a;
+	}
+	.head__title {
+		font-size: clamp(1.7rem, 4vw, 2.4rem);
+		margin: 0;
+		line-height: 1.15;
+	}
+	.head__meta {
+		margin-top: 0.5rem;
+		font-size: 0.9rem;
+		color: #6b7b88;
+	}
+	.head__dot {
+		margin: 0 0.4rem;
+		color: #c9d4dc;
+	}
+	.head__notes {
+		margin: 0.85rem 0 0;
+		max-width: 640px;
+		font-size: 0.95rem;
+		line-height: 1.6;
+		color: #3d4a55;
+	}
+
+	/* No-GPS hero */
+	.nogps {
+		border: 1px solid #c9d4dc;
+		border-radius: 12px;
+		background: #f8fbfd;
+		padding: 2.5rem 1.5rem;
+	}
+	.nogps__note {
+		text-align: center;
+		font-size: 0.85rem;
+		color: #6b7b88;
+		margin-bottom: 1.5rem;
+	}
+
+	/* Stats */
+	.stats {
+		display: grid;
+		gap: 1px;
+		background: #c9d4dc;
+		border: 1px solid #c9d4dc;
+	}
+	.stats--row {
+		margin-top: 1.25rem;
+		grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+		border-radius: 10px;
+		overflow: hidden;
+	}
+	.stats--hero {
+		grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+		max-width: 760px;
+		margin: 0 auto;
+		border: none;
+		background: transparent;
+		gap: 1.5rem 2.5rem;
+	}
+	.stats--secondary {
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+		border-radius: 10px;
+		overflow: hidden;
+	}
+	.stat {
+		background: #f8fbfd;
+		padding: 0.85rem 1rem;
+	}
+	.stat--hero {
+		background: transparent;
+		padding: 0;
+		text-align: center;
+	}
+	.stat--sm {
+		padding: 0.7rem 0.9rem;
+	}
+	.stat__value {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: 1.5rem;
+		color: #3d4a55;
+		line-height: 1.1;
+	}
+	.stat__value--hero {
+		font-size: clamp(2.4rem, 6vw, 3.4rem);
+	}
+	.stat__value--sm {
+		font-size: 1.15rem;
+	}
+	.stat__label {
+		margin-top: 0.2rem;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #6b7b88;
+	}
+
+	.section-h {
+		font-size: 1.05rem;
+		font-family: 'Instrument Serif', Georgia, serif;
+		color: #3d4a55;
+		margin: 2.5rem 0 1rem;
+	}
+	.section-h__meta {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.75rem;
+		color: #6b7b88;
+		font-weight: 400;
+		margin-left: 0.4rem;
+	}
+
+	/* Exertion */
+	.exertion {
+		margin-top: 1.75rem;
+		display: flex;
+		gap: 1.5rem;
+		align-items: flex-start;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 10px;
+		padding: 1.1rem 1.3rem;
+		flex-wrap: wrap;
+	}
+	.exertion__score {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		flex: none;
+		min-width: 88px;
+	}
+	.exertion__value {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: 2.6rem;
+		line-height: 1;
+	}
+	.exertion__word {
+		margin-top: 0.2rem;
+		font-size: 0.72rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+	}
+	.exertion__body {
+		flex: 1 1 280px;
+		min-width: 0;
+	}
+	.exertion__badges {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+	.badge {
+		font-size: 0.72rem;
+		color: #3d4a55;
+		background: #dceaf4;
+		border-radius: 5px;
+		padding: 0.2rem 0.55rem;
+	}
+	.badge--measured {
+		background: #1c6e8c;
+		color: #f8fbfd;
+	}
+	.badge--estimated {
+		background: #9fc4dd;
+		color: #12495e;
+	}
+	.badge--assumed {
+		background: #dceaf4;
+		color: #6b7b88;
+	}
+	.badge--quiet {
+		background: transparent;
+		border: 1px solid #c9d4dc;
+		color: #6b7b88;
+	}
+	.exertion__detail {
+		margin: 0.6rem 0 0;
+		font-size: 0.88rem;
+		line-height: 1.55;
+		color: #3d4a55;
+	}
+
+	/* Charts */
+	.chart {
+		margin-bottom: 1.1rem;
+	}
+	.chart__label {
+		font-size: 0.75rem;
+		color: #6b7b88;
+		margin-bottom: 0.3rem;
+	}
+	.chart__range {
+		color: #6b7b88;
+		font-variant-numeric: tabular-nums;
+	}
+	.chart__svg {
+		display: block;
+		width: 100%;
+		height: 64px;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+	}
+	.chart__svg--elev {
+		height: 160px;
+	}
+
+	/* Laps */
+	.laps__scroll {
+		overflow-x: auto;
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
+	}
+	.laps__table {
+		width: 100%;
+		border-collapse: collapse;
+		font-size: 0.85rem;
+	}
+	.laps__table th {
+		text-align: left;
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: #6b7b88;
+		background: #dceaf4;
+		padding: 0.5rem 0.75rem;
+		white-space: nowrap;
+	}
+	.laps__table td {
+		padding: 0.5rem 0.75rem;
+		border-top: 1px solid #c9d4dc;
+		color: #3d4a55;
+		white-space: nowrap;
+	}
+	.laps__row--transition td {
+		color: #6b7b88;
+		font-style: italic;
+	}
+	.laps__type {
+		font-size: 0.72rem;
+		text-transform: capitalize;
+		color: #6b7b88;
+	}
+	.laps__type--transition {
+		color: #12495e;
+	}
+
+	/* Multisport legs */
+	.legs__list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.leg {
+		display: flex;
+		align-items: center;
+		gap: 0.9rem;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
+		padding: 0.7rem 1rem;
+		color: #3d4a55;
+	}
+	.leg:hover {
+		border-color: #1c6e8c;
+	}
+	.leg__icon {
+		width: 1.2rem;
+		height: 1.2rem;
+		flex: none;
+	}
+	.leg__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.leg__title {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #6b7b88;
+	}
+	.leg__name {
+		font-size: 0.95rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.leg__time {
+		flex: none;
+		font-size: 0.95rem;
+		color: #3d4a55;
+	}
+
+	@media (max-width: 640px) {
+		.head__fav-form {
+			margin-left: 0;
+		}
+	}
+</style>

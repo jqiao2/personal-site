@@ -1,0 +1,287 @@
+---
+// The detail page's hero — ACTIVITIES.md §1: "primarily a view of the
+// activity on an interactive map." Full content width, tall, MapLibre GL over
+// MapTiler vector tiles on the alpine basemap this section authors itself
+// (src/lib/activity-map.ts — read that file's header for the palette
+// argument, the same way src/lib/map-style.ts argues the restaurant log's).
+//
+// ONLY RENDERED WHEN THERE IS A ROUTE. §1's "no GPS = no map" rule is a
+// page-level decision (a trainer ride gets a whole different, stats-forward
+// hero — see src/pages/activities/[id].astro), not something this component
+// papers over: it always receives a real `polyline` and never has to ask "do
+// I have anything to draw."
+//
+// THE FULL POLYLINE, NOT THE THUMBNAIL SHAPE. ActivityCard's route_path is a
+// ≤200-point shape fit to a 0-0-100-100 box for a 60px tile (route-shape.ts's
+// whole reason to exist). This is the one-at-a-time, full-fidelity view the
+// header comment on that file calls out as a different problem — it decodes
+// the original encoded `polyline` column client-side and lets MapLibre draw
+// every recorded point at whatever zoom the reader lands on.
+//
+// START AND FINISH ARE THE SAME HUE, DIFFERENT WEIGHT. §2 rations saturated
+// colour to one thing per view — the route already spent it. So start and
+// finish are both `lake`, told apart by fill (a solid dot to leave from) vs.
+// ring (a hollow dot to arrive at) rather than by introducing a second colour
+// this page would then have to explain.
+//
+// DEGRADES LIKE RestaurantMap.astro DOES: no `PUBLIC_MAPTILER_KEY` still
+// draws the route, on a bare alpine ground, with a note explaining why there
+// are no streets or terrain under it — never a blank box.
+import { ACTIVITY_MAP_TOKENS } from '../lib/activity-map';
+
+interface Props {
+	title: string;
+	sport: string;
+	/** The full-fidelity encoded polyline (`activities.polyline`). Callers
+	 *  must not render this component without one — see the page's no-GPS
+	 *  hero for the alternative. */
+	polyline: string;
+}
+
+const { title, sport, polyline } = Astro.props;
+
+const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
+const hasKey = Boolean(key);
+
+const config = {
+	key,
+	polyline,
+	tokens: ACTIVITY_MAP_TOKENS,
+};
+---
+
+<div class="am">
+	<div class="am__canvas">
+		<div class="am__gl" data-activity-map role="img" aria-label={`Route map for the ${sport.replace(/_/g, ' ')} — ${title}`}></div>
+
+		{
+			!hasKey && (
+				<p class="am__note">
+					The basemap needs <code>PUBLIC_MAPTILER_KEY</code> set. The route is still
+					drawn; only the terrain and streets under it are missing.
+				</p>
+			)
+		}
+
+		<div class="am__legend">
+			<span class="am__legend-item"><i class="am__legend-mark am__legend-mark--start"></i>Start</span>
+			<span class="am__legend-item"><i class="am__legend-mark am__legend-mark--finish"></i>Finish</span>
+		</div>
+	</div>
+</div>
+
+<script type="application/json" id="activity-map-config" set:html={JSON.stringify(config)} is:inline />
+
+<script>
+	import * as maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	// See RestaurantMap.astro's script for the full explanation — MapLibre's
+	// tile-decoding worker has to be routed through Vite's worker build
+	// (`?worker&url`, matched by astro.config.mjs's `vite.worker.format: 'es'`)
+	// or every tile silently fails to decode while the rest of the map looks
+	// like it loaded.
+	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+	import { alpineBasemap, bareAlpineGround, polylineToGeoJSON, startFinish, routeBoundsLngLat } from '../lib/activity-map';
+
+	const tag = document.getElementById('activity-map-config');
+	const host = document.querySelector<HTMLElement>('[data-activity-map]');
+	if (tag && host) {
+		const cfg = JSON.parse(tag.textContent || '{}') as {
+			key: string;
+			polyline: string;
+			tokens: { route: string; routeCasing: string; start: string; finish: string };
+		};
+
+		const route = polylineToGeoJSON(cfg.polyline);
+		const ends = startFinish(cfg.polyline);
+		const bbox = routeBoundsLngLat(cfg.polyline);
+
+		const map = new maplibregl.Map({
+			container: host,
+			style: cfg.key
+				? (alpineBasemap(cfg.key) as maplibregl.StyleSpecification)
+				: (bareAlpineGround() as maplibregl.StyleSpecification),
+			center: ends ? ends.start : [0, 0],
+			zoom: 12,
+			attributionControl: { compact: true },
+			pitchWithRotate: false,
+			dragRotate: false,
+			touchPitch: false,
+		});
+		map.touchZoomRotate.disableRotation();
+		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+		map.on('error', (e) => {
+			// A tile 404 at the edge of a fitBounds is routine, not a failure to
+			// surface twice — see RestaurantMap.astro's identical handler.
+			console.warn('activity map:', e.error?.message ?? 'tile or style request failed');
+		});
+
+		function frame() {
+			// Frame to the activity's own bbox on load (§1) — computed from the
+			// decoded track itself, not the stored bbox_* columns, so this still
+			// works if those are null. Padded on the right for the legend card.
+			if (bbox) {
+				map.fitBounds(bbox, { padding: { top: 48, bottom: 48, left: 48, right: 48 }, maxZoom: 16, animate: false });
+			}
+		}
+
+		function addRoute() {
+			if (map.getSource('route')) return;
+			map.addSource('route', { type: 'geojson', data: route as maplibregl.GeoJSONSourceSpecification['data'] });
+			// A pale casing under the route line so it separates from a dark
+			// hillshade slope or a similarly-toned lake fill — the same reason a
+			// road gets a casing in the basemap itself.
+			map.addLayer({
+				id: 'route-casing',
+				type: 'line',
+				source: 'route',
+				layout: { 'line-cap': 'round', 'line-join': 'round' },
+				paint: { 'line-color': cfg.tokens.routeCasing, 'line-width': 6.5, 'line-opacity': 0.85 },
+			});
+			map.addLayer({
+				id: 'route-line',
+				type: 'line',
+				source: 'route',
+				layout: { 'line-cap': 'round', 'line-join': 'round' },
+				paint: { 'line-color': cfg.tokens.route, 'line-width': 3.4 },
+			});
+
+			if (ends) {
+				const startEl = document.createElement('div');
+				startEl.className = 'am-marker am-marker--start';
+				new maplibregl.Marker({ element: startEl, anchor: 'center' }).setLngLat(ends.start).addTo(map);
+
+				const finishEl = document.createElement('div');
+				finishEl.className = 'am-marker am-marker--finish';
+				new maplibregl.Marker({ element: finishEl, anchor: 'center' }).setLngLat(ends.finish).addTo(map);
+			}
+		}
+
+		function whenStyleReady(fn: () => void) {
+			if (map.isStyleLoaded()) fn();
+			else map.once('styledata', fn);
+		}
+
+		whenStyleReady(() => {
+			frame();
+			addRoute();
+		});
+	}
+</script>
+
+<style is:global>
+	.am__gl .maplibregl-ctrl-group {
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+		box-shadow: none;
+	}
+	.am__gl .maplibregl-ctrl-group button + button {
+		border-top: 1px solid #c9d4dc;
+	}
+	.am__gl .maplibregl-ctrl-attrib {
+		background: rgba(248, 251, 253, 0.86);
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 10px;
+	}
+	.am__gl .maplibregl-ctrl-attrib a {
+		color: #6b7b88;
+	}
+
+	.am-marker {
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		box-shadow: 0 1px 2px rgba(18, 73, 94, 0.35);
+	}
+	.am-marker--start {
+		background: #1c6e8c;
+		border: 2px solid #f8fbfd;
+	}
+	.am-marker--finish {
+		background: #f8fbfd;
+		border: 3px solid #1c6e8c;
+	}
+</style>
+
+<style>
+	.am {
+		margin-top: 0;
+		border: 1px solid #c9d4dc;
+		border-radius: 12px;
+		overflow: hidden;
+	}
+	.am__canvas {
+		position: relative;
+		background: #eef3f6;
+		height: min(78vh, 640px);
+		min-height: 420px;
+	}
+	.am__gl {
+		position: absolute;
+		inset: 0;
+	}
+	.am__note {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		z-index: 2;
+		transform: translate(-50%, -50%);
+		max-width: 340px;
+		text-align: center;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 14px;
+		color: #6b7b88;
+		background: rgba(248, 251, 253, 0.94);
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
+		padding: 14px 16px;
+	}
+	.am__note code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 12px;
+	}
+
+	.am__legend {
+		position: absolute;
+		left: 14px;
+		bottom: 14px;
+		z-index: 2;
+		display: flex;
+		gap: 14px;
+		background: rgba(248, 251, 253, 0.94);
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
+		padding: 8px 12px;
+		pointer-events: none;
+	}
+	.am__legend-item {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 11.5px;
+		color: #6b7b88;
+	}
+	.am__legend-mark {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		display: block;
+	}
+	.am__legend-mark--start {
+		background: #1c6e8c;
+	}
+	.am__legend-mark--finish {
+		background: #f8fbfd;
+		border: 2px solid #1c6e8c;
+	}
+
+	@media (max-width: 760px) {
+		.am__canvas {
+			height: min(70vh, 520px);
+		}
+	}
+</style>
