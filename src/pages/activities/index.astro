@@ -49,6 +49,8 @@ let stats: Awaited<ReturnType<typeof getActivityStats>> = {
 	totalExertion: 0,
 	bySportFamily: {},
 };
+/** Set when the query layer could not be reached at all — see the catch below. */
+let unreachable = false;
 try {
 	[favorites, days, stats] = await Promise.all([
 		listFavoriteActivities(4),
@@ -56,7 +58,18 @@ try {
 		getActivityStats(),
 	]);
 } catch (err) {
-	console.error('activities landing page: falling back to the empty state —', err);
+	// AN UNREACHABLE LOG IS NOT AN EMPTY LOG, and the page must not say it is.
+	// Falling through to the empty state here would print "nothing logged in the
+	// last 12 weeks" over a database we simply failed to ask — which is a
+	// sentence about the athlete rather than about the outage, and the one
+	// reading a visitor can neither verify nor discount. So the failure is
+	// carried into the markup as its own state and said out loud.
+	//
+	// This stays a caught error rather than a 500 because everything else on
+	// the page — the nav, the shell, the links into the rest of the section —
+	// is still true and still useful when the query layer is down.
+	unreachable = true;
+	console.error('activities landing page: could not reach the activity log —', err);
 }
 
 const weeks = groupIntoWeeks(days, { weeks: WEEKS_TO_SHOW });
@@ -163,7 +176,13 @@ function weekStatText(t: ActivityWeek['totals']) {
 							<a class="sec-head__link" href="/activities/all">Everything →</a>
 						</div>
 
-						{calendarIsEmpty && (
+						{unreachable ? (
+							<p class="cal-empty cal-empty--error">
+								The activity log couldn’t be reached, so this grid is showing nothing
+								rather than showing that nothing happened. The two look alike and are
+								not the same — try again in a moment.
+							</p>
+						) : calendarIsEmpty && (
 							<p class="cal-empty">
 								Nothing logged in the last {WEEKS_TO_SHOW} weeks. Once activities are imported they'll
 								show up here, newest week first.
@@ -367,6 +386,15 @@ function weekStatText(t: ActivityWeek['totals']) {
 		margin: 0 0 8px;
 		font-size: 14px;
 		color: var(--granite-soft);
+	}
+
+	/* An outage is the one thing on this page allowed the warm accent — it is
+	   not part of the record, and it should not read like the quiet grey of a
+	   week with no riding in it. */
+	.cal-empty--error {
+		color: var(--granite);
+		border-left: 2px solid var(--larch);
+		padding-left: 10px;
 	}
 
 	.grid4 {
