@@ -423,6 +423,43 @@ export function sportMeta(slug: string): SportMeta {
 	return (SPORT_META as Record<string, SportMeta>)[slug] ?? SPORT_META.other;
 }
 
+/**
+ * Stats that mean something for exactly one family, and are a LIE anywhere else.
+ *
+ * A page that lists "every stat whose column happens to be non-null" will put
+ * "Water temp 57°F" on a gravel ride, because `water_temp` reads `avg_temp_c`
+ * and on a bike that column is the AIR. The number is real and the label is
+ * false, which is worse than omitting it — the reader has no way to know the
+ * stat changed meaning. The same trap holds for the two ski figures: every
+ * outdoor activity descends, so `vertical_descent` (from `elevation_loss_m`)
+ * will happily render for a ride, where it means rolling terrain rather than
+ * the lift-served vertical the label promises.
+ *
+ * So these keys are gated by family rather than by whether data exists. A key
+ * absent from this map is unrestricted and shows wherever it has a value.
+ */
+const FAMILY_ONLY_STATS: Partial<Record<StatKey, readonly SportFamily[]>> = {
+	water_temp: ['swim'],
+	pace_100m: ['swim'],
+	swolf: ['swim'],
+	pool_length: ['swim'],
+	vertical_descent: ['snow'],
+	runs: ['snow'],
+};
+
+/**
+ * Whether a stat is meaningful for a sport — the check a secondary "everything
+ * else" block needs before it renders a key it did not choose deliberately.
+ * A sport's own `primaryStats` are always relevant: that list is the
+ * deliberate choice, and this never second-guesses it.
+ */
+export function isStatRelevant(slug: string, key: StatKey): boolean {
+	const meta = sportMeta(slug);
+	if (meta.primaryStats.includes(key)) return true;
+	const families = FAMILY_ONLY_STATS[key];
+	return !families || families.includes(meta.family);
+}
+
 // ---------------------------------------------------------------------------
 // Stat formatting
 // ---------------------------------------------------------------------------

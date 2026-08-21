@@ -1,230 +1,579 @@
 ---
-// PLACEHOLDER — proves the shell (ActivityLayout) and the card (ActivityCard)
-// render and look right. The real landing page (top-four favourites + the
-// reverse-chronological week grid, per ACTIVITIES.md §1) is a different
-// track's job (see §9 "Landing": src/lib/activity-week.ts + this file) and
-// will overwrite this. Data below is hardcoded on purpose — the schema is
-// being built concurrently in this same window and may not exist on disk yet,
-// so this page must never touch the database.
+// The activity log's landing page — ACTIVITIES.md §1: top-four favourites,
+// then a reverse-chronological Mon–Sun week calendar where every day is a
+// vertical list of that day's activities (never a stack that hides all but
+// one, the way the film log's month grid stacks posters — see
+// ActivityCard.astro's header comment on why "cell" size exists).
+//
+// Rendered on demand — reflects the live database, which is being seeded
+// concurrently with this page's own construction. Every read below already
+// degrades to an empty result rather than throwing (activities.ts's
+// isDegraded), so an empty or not-yet-migrated database renders the real
+// empty state below, not a 500.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
-import ActivityCard, { type ActivityRow } from '../../components/ActivityCard.astro';
+import ActivityCard from '../../components/ActivityCard.astro';
 import { siteNav } from '../../lib/nav';
+import { listActivityDays, listFavoriteActivities, getActivityStats } from '../../lib/activities';
+import { groupIntoWeeks, type ActivityWeek } from '../../lib/activity-week';
+import { formatStat } from '../../lib/sports';
+import { ALPINE } from '../../lib/activity-tokens';
+import { siteYear } from '../../lib/day';
+
+export const prerender = false;
+
+// 12 weeks reads as "the last quarter" without asking the browser to paint
+// 14 months of mostly-empty grid — /activities/all is the answer to "show me
+// everything." DAYS_FETCH_LIMIT is a day-with-activity count, not a calendar-
+// day count (listActivityDays only returns days that have a row at all — see
+// its doc comment), so it's set comfortably above WEEKS_TO_SHOW * 7 = 84: even
+// if literally every day in the window had an activity, 100 rows would still
+// cover all of them, with headroom to spare.
+const WEEKS_TO_SHOW = 12;
+const DAYS_FETCH_LIMIT = 100;
+
+// activities.ts already turns a missing-table/column error into an empty
+// result (isDegraded) — but a Supabase client pointed at unreachable
+// credentials (a placeholder `.env`, a project that's paused) fails at the
+// network layer instead, which isDegraded doesn't classify as "no data" and
+// so it throws. That's a real distinction everywhere else (a network error
+// should be loud), but a landing page has no form to fail out of — the
+// worst response to "the database didn't answer" is a 500 where an empty
+// calendar would do. So this one call site swallows it too.
+let favorites: Awaited<ReturnType<typeof listFavoriteActivities>> = [];
+let days: Awaited<ReturnType<typeof listActivityDays>> = [];
+let stats: Awaited<ReturnType<typeof getActivityStats>> = {
+	activitiesThisYear: 0,
+	totalDistanceM: 0,
+	totalElevationGainM: 0,
+	totalMovingHours: 0,
+	totalExertion: 0,
+	bySportFamily: {},
+};
+/** Set when the query layer could not be reached at all — see the catch below. */
+let unreachable = false;
+try {
+	[favorites, days, stats] = await Promise.all([
+		listFavoriteActivities(4),
+		listActivityDays({ limit: DAYS_FETCH_LIMIT }),
+		getActivityStats(),
+	]);
+} catch (err) {
+	// AN UNREACHABLE LOG IS NOT AN EMPTY LOG, and the page must not say it is.
+	// Falling through to the empty state here would print "nothing logged in the
+	// last 12 weeks" over a database we simply failed to ask — which is a
+	// sentence about the athlete rather than about the outage, and the one
+	// reading a visitor can neither verify nor discount. So the failure is
+	// carried into the markup as its own state and said out loud.
+	//
+	// This stays a caught error rather than a 500 because everything else on
+	// the page — the nav, the shell, the links into the rest of the section —
+	// is still true and still useful when the query layer is down.
+	unreachable = true;
+	console.error('activities landing page: could not reach the activity log —', err);
+}
+
+const weeks = groupIntoWeeks(days, { weeks: WEEKS_TO_SHOW });
+const calendarIsEmpty = weeks.every((w) => w.totals.activityCount === 0);
 
 const nav = siteNav(Astro.url.pathname);
+const num = (n: number) => n.toLocaleString('en-US');
 
-// A couple of representative route shapes, already in the 0-0-100-100,
-// "M x y L x y…" form route-shape.ts is specced to emit.
-const RIDE_ROUTE = 'M12 82 L22 70 L28 74 L38 55 L46 58 L52 40 L61 44 L70 22 L78 26 L88 10';
-const RUN_ROUTE = 'M20 30 L28 45 L24 60 L36 65 L40 80 L55 78 L58 60 L48 50 L52 34 L38 22 L20 30';
-const HIKE_ROUTE = 'M10 90 L20 78 L18 62 L32 55 L30 38 L44 30 L46 15 L60 10';
-const SKI_ROUTE = 'M50 8 L46 20 L52 30 L40 40 L48 52 L34 62 L42 74 L28 88';
+// bySportFamily is all-time and only counts families that have at least one
+// activity (getActivityStats' doc comment) — summing it is the one place this
+// page needs an all-time activity count, and it's cheaper than a second query.
+const totalActivities = Object.values(stats.bySportFamily).reduce((a, b) => a + (b ?? 0), 0);
+const rideCount = stats.bySportFamily.bike ?? 0;
+const yearStart = `${siteYear()}-01-01`;
 
-const activities: ActivityRow[] = [
-	{
-		id: 1,
-		sport: 'gravel_ride',
-		title: 'Rattlesnake Ridge loop',
-		local_date: '2026-08-16',
-		distance_m: 68000,
-		moving_seconds: 11400,
-		elapsed_seconds: 12100,
-		elevation_gain_m: 980,
-		avg_power_w: 188,
-		exertion: 142,
-		route_path: RIDE_ROUTE,
-		favorite_rank: 1,
-		start_place: 'North Bend, WA',
-	},
-	{
-		id: 2,
-		sport: 'trail_run',
-		title: 'Poo Poo Point, before work',
-		local_date: '2026-08-14',
-		distance_m: 12500,
-		moving_seconds: 4620,
-		elapsed_seconds: 4800,
-		elevation_gain_m: 640,
-		avg_hr: 156,
-		exertion: 88,
-		route_path: RUN_ROUTE,
-		favorite_rank: 2,
-		start_place: 'Issaquah, WA',
-	},
-	{
-		id: 3,
-		sport: 'hike',
-		title: 'Snow Lake, first snowmelt',
-		local_date: '2026-08-09',
-		distance_m: 14200,
-		moving_seconds: 13800,
-		elapsed_seconds: 16200,
-		elevation_gain_m: 570,
-		exertion: 61,
-		route_path: HIKE_ROUTE,
-		start_place: 'Snoqualmie Pass, WA',
-	},
-	{
-		id: 4,
-		sport: 'backcountry_ski',
-		title: 'Kendall Peak dawn patrol',
-		local_date: '2026-03-02',
-		distance_m: 9800,
-		moving_seconds: 10200,
-		elapsed_seconds: 12600,
-		elevation_gain_m: 910,
-		avg_hr: 138,
-		exertion: 121,
-		route_path: SKI_ROUTE,
-		favorite_rank: 3,
-		start_place: 'Snoqualmie Pass, WA',
-	},
-	{
-		id: 5,
-		sport: 'virtual_ride',
-		title: 'Zwift — threshold 4x8',
-		local_date: '2026-08-18',
-		distance_m: 42000,
-		moving_seconds: 5400,
-		elapsed_seconds: 5460,
-		elevation_gain_m: 210,
-		avg_power_w: 231,
-		exertion: 118,
-		route_path: null,
-	},
-	{
-		id: 6,
-		sport: 'swim',
-		title: 'Masters — threshold set',
-		local_date: '2026-08-17',
-		distance_m: 3000,
-		moving_seconds: 3300,
-		elapsed_seconds: 3600,
-		elevation_gain_m: 0,
-		avg_hr: 142,
-		exertion: 76,
-		route_path: null,
-	},
-	{
-		id: 7,
-		sport: 'treadmill_run',
-		title: 'Rain day intervals',
-		local_date: '2026-08-12',
-		distance_m: 8000,
-		moving_seconds: 2100,
-		elapsed_seconds: 2160,
-		elevation_gain_m: 0,
-		avg_hr: 161,
-		exertion: 54,
-		route_path: null,
-	},
-	{
-		id: 8,
-		sport: 'transition',
-		title: 'T1 — swim to bike',
-		local_date: '2026-07-20',
-		distance_m: null,
-		moving_seconds: null,
-		elapsed_seconds: 95,
-		elevation_gain_m: null,
-		exertion: null,
-		route_path: null,
-	},
-];
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** 'YYYY-MM-DD' → its day-of-month, unpadded — the numeral a calendar cell
+ * shows. A plain string slice; no Date needed for a value this literal. */
+function dayNum(date: string): string {
+	return String(Number(date.slice(8, 10)));
+}
+
+/** A week's totals through sports.ts's one formatter, so this page's numbers
+ * agree with every other page's rather than keeping a second mi/ft/clock. */
+function weekStatText(t: ActivityWeek['totals']) {
+	return {
+		distance: formatStat('distance', { distance_m: t.distanceM }).value,
+		elevation: formatStat('elevation_gain', { elevation_gain_m: t.elevationGainM }).value,
+		moving: formatStat('moving_time', { moving_seconds: t.movingSeconds }).value,
+		exertion: Math.round(t.exertion).toString(),
+	};
+}
 ---
 
 <ActivityLayout title="Jason's activity log">
-	<div class="page">
-		<nav class="tabs">
-			{nav.map((n) => (
-				<a
-					class:list={['tabs__link', n.active && 'tabs__link--active']}
-					href={n.href}
-					aria-current={n.active ? 'page' : undefined}
-				>
-					{n.label}
-				</a>
-			))}
-		</nav>
+	<div
+		class="page"
+		style={{
+			'--sky': ALPINE.sky,
+			'--snow': ALPINE.snow,
+			'--granite': ALPINE.granite,
+			'--granite-soft': ALPINE.graniteSoft,
+			'--lake': ALPINE.lake,
+			'--lake-deep': ALPINE.lakeDeep,
+			'--larch': ALPINE.larch,
+			'--scree': ALPINE.scree,
+		}}
+	>
+		<div class="card">
+			<nav class="tabs">
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
+			</nav>
 
-		<p class="note">Placeholder landing page — proves ActivityLayout + ActivityCard. The real grid lands separately.</p>
+			<div class="card__body">
+				<!-- Sidebar -->
+				<aside class="side">
+					<div class="brand">Jason's<br />activity log</div>
+					<div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>
 
-		<section>
-			<h2>Tile — landing page top four</h2>
-			<div class="grid grid--tile">
-				{activities.slice(0, 4).map((a) => <ActivityCard activity={a} size="tile" />)}
+					<div class="side__rule"></div>
+					<nav class="side__nav">
+						<a class="navrow navrow--link" href="/activities/all">
+							<span>All activities</span><span class="navrow__n">{num(totalActivities)}</span>
+						</a>
+						<a class="navrow navrow--link" href="/activities/all?sports=ride,gravel_ride,mountain_bike,virtual_ride">
+							<span>Rides</span><span class="navrow__n">{num(rideCount)}</span>
+						</a>
+						<a class="navrow navrow--link" href={`/activities/all?dateFrom=${yearStart}&sort=elevation`}>
+							<span>This year's climbing</span><span class="navrow__n">→</span>
+						</a>
+						<a class="navrow navrow--link navrow--last" href="/activities/month">
+							<span>The month in review</span><span class="navrow__n">→</span>
+						</a>
+					</nav>
+				</aside>
+
+				<!-- Main -->
+				<main class="main">
+					<section>
+						<div class="sec-head">
+							<span class="sec-head__title">Favourite activities</span>
+						</div>
+						{favorites.length > 0 ? (
+							<div class="grid4">
+								{favorites.map((a) => <ActivityCard activity={a} size="tile" />)}
+							</div>
+						) : (
+							<p class="fav-empty">No favourites picked yet.</p>
+						)}
+					</section>
+
+					<section>
+						<div class="sec-head">
+							<span class="sec-head__title">The last {WEEKS_TO_SHOW} weeks</span>
+							<a class="sec-head__link" href="/activities/all">Everything →</a>
+						</div>
+
+						{unreachable ? (
+							<p class="cal-empty cal-empty--error">
+								The activity log couldn’t be reached, so this grid is showing nothing
+								rather than showing that nothing happened. The two look alike and are
+								not the same — try again in a moment.
+							</p>
+						) : calendarIsEmpty && (
+							<p class="cal-empty">
+								Nothing logged in the last {WEEKS_TO_SHOW} weeks. Once activities are imported they'll
+								show up here, newest week first.
+							</p>
+						)}
+
+						<div class="calendar">
+							<div class="dow" aria-hidden="true">
+								{DOW.map((d) => <span>{d}</span>)}
+							</div>
+
+							{weeks.map((week) => {
+								const t = weekStatText(week.totals);
+								const weekHasActivity = week.totals.activityCount > 0;
+								return (
+									<div class="week">
+										<div class="week__head">
+											<span class="week__span figure">{week.label}</span>
+											{weekHasActivity ? (
+												<div class="week__totals figure">
+													<span>{t.distance}</span>
+													<span class="dot">·</span>
+													<span>{t.elevation}</span>
+													<span class="dot">·</span>
+													<span>{t.moving}</span>
+													<span class="dot">·</span>
+													<span>{t.exertion} exertion</span>
+												</div>
+											) : (
+												<span class="week__totals week__totals--quiet">Rest week</span>
+											)}
+										</div>
+										<div class="week__grid">
+											{week.days.map((day) => (
+												<div
+													class:list={[
+														'day',
+														day.activities.length === 0 && 'day--empty',
+														day.isToday && 'day--today',
+														day.isFuture && 'day--future',
+													]}
+												>
+													<div class="day__label">
+														<span class="day__dow">{DOW[week.days.indexOf(day)]}</span>
+														<span class="day__num figure">{dayNum(day.date)}</span>
+													</div>
+													{day.activities.length > 0 ? (
+														<div class="day__list">
+															{day.activities.map((a) => <ActivityCard activity={a} size="cell" />)}
+														</div>
+													) : (
+														<div class="day__quiet"></div>
+													)}
+												</div>
+											))}
+										</div>
+									</div>
+								);
+							})}
+						</div>
+					</section>
+				</main>
 			</div>
-		</section>
-
-		<section>
-			<h2>Row — list view</h2>
-			<div class="grid grid--row">
-				{activities.map((a) => <ActivityCard activity={a} size="row" />)}
-			</div>
-		</section>
-
-		<section>
-			<h2>Cell — week grid's per-day list</h2>
-			<div class="grid grid--cell">
-				{activities.map((a) => <ActivityCard activity={a} size="cell" />)}
-			</div>
-		</section>
+		</div>
 	</div>
-</ActivityLayout>
 
 <style>
 	.page {
-		max-width: 1100px;
-		margin: 0 auto;
-		padding: 2rem 1.5rem 5rem;
+		min-height: 100vh;
+		display: flex;
+		justify-content: center;
+		overflow-x: hidden;
 	}
+	.card {
+		width: 100%;
+		max-width: 1360px;
+		display: flex;
+		flex-direction: column;
+	}
+	.card__body {
+		display: flex;
+	}
+
+	/* Site nav — spans the viewport while its content stays aligned to the
+	   column, same trick films/index.astro uses. */
 	.tabs {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 1.25rem;
-		padding-bottom: 1.25rem;
-		margin-bottom: 1.5rem;
-		border-bottom: 1px solid #c9d4dc;
+		align-items: stretch;
+		gap: 2px;
+		width: 100vw;
+		margin-left: calc(50% - 50vw);
+		padding: 0 calc(50vw - 50% + 28px);
+		border-bottom: 1px solid var(--scree);
 	}
 	.tabs__link {
-		font-size: 0.9rem;
-		color: #6b7b88;
+		font-size: 13px;
+		letter-spacing: 0.4px;
+		color: var(--granite-soft);
+		padding: 26px 16px 24px;
+		border-bottom: 2px solid transparent;
+		transition: color 0.12s;
+	}
+	.tabs__link:hover {
+		color: var(--granite);
 	}
 	.tabs__link--active {
-		color: #1c6e8c;
+		color: var(--lake);
+		font-weight: 600;
+		border-bottom-color: var(--lake);
+	}
+
+	/* Sidebar */
+	.side {
+		width: 268px;
+		flex: none;
+		border-right: 1px solid var(--scree);
+		padding: 36px 26px;
+		display: flex;
+		flex-direction: column;
+	}
+	.brand {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: 29px;
+		font-weight: 400;
+		color: var(--granite);
+		letter-spacing: -0.2px;
+		line-height: 1.08;
+	}
+	.brand__sub {
+		margin-top: 8px;
+		font-size: 13px;
+		color: var(--lake);
 		font-weight: 600;
 	}
-	.note {
-		font-size: 0.8rem;
-		color: #6b7b88;
-		border: 1px dashed #c9d4dc;
-		border-radius: 6px;
-		padding: 0.5rem 0.75rem;
-		display: inline-block;
-		margin-bottom: 2rem;
+	.side__rule {
+		height: 1px;
+		background: var(--scree);
+		margin: 26px 0 8px;
 	}
-	h2 {
-		font-size: 1.4rem;
-		margin: 0 0 1rem;
+	.side__nav {
+		display: flex;
+		flex-direction: column;
 	}
-	section {
-		margin-bottom: 3rem;
+	.navrow {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 11px 0;
+		font-size: 14px;
+		color: var(--granite);
+		border-bottom: 1px solid var(--scree);
 	}
-	.grid {
+	.navrow--last {
+		border-bottom: none;
+	}
+	.navrow--link:hover {
+		color: var(--lake);
+	}
+	.navrow__n {
+		color: var(--granite-soft);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Main */
+	.main {
+		flex: 1;
+		min-width: 0;
+		padding: 38px 40px 60px;
+		display: flex;
+		flex-direction: column;
+		gap: 40px;
+	}
+	.sec-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		border-bottom: 1px solid var(--scree);
+		padding-bottom: 9px;
+		margin-bottom: 16px;
+		gap: 12px;
+	}
+	.sec-head__title {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-style: italic;
+		font-size: 20px;
+		color: var(--granite);
+	}
+	.sec-head__link {
+		font-size: 12px;
+		color: var(--lake);
+		font-weight: 600;
+		letter-spacing: 0.3px;
+		white-space: nowrap;
+	}
+	.sec-head__link:hover {
+		color: var(--lake-deep);
+	}
+	.fav-empty,
+	.cal-empty {
+		margin: 0 0 8px;
+		font-size: 14px;
+		color: var(--granite-soft);
+	}
+
+	/* An outage is the one thing on this page allowed the warm accent — it is
+	   not part of the record, and it should not read like the quiet grey of a
+	   week with no riding in it. */
+	.cal-empty--error {
+		color: var(--granite);
+		border-left: 2px solid var(--larch);
+		padding-left: 10px;
+	}
+
+	.grid4 {
 		display: grid;
-		gap: 1rem;
-	}
-	.grid--tile {
 		grid-template-columns: repeat(4, 1fr);
+		gap: 16px;
 	}
-	.grid--row {
-		grid-template-columns: 1fr;
+
+	/* ---- the week calendar ---- */
+	.calendar {
+		display: flex;
+		flex-direction: column;
+		gap: 26px;
 	}
-	.grid--cell {
-		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+	.dow {
+		display: grid;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		gap: 10px;
+		font-size: 11.5px;
+		letter-spacing: 1.5px;
+		text-transform: uppercase;
+		color: var(--granite-soft);
+		padding: 0 2px 2px;
 	}
+	.week {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.week__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+		padding-bottom: 6px;
+		border-bottom: 1px solid var(--scree);
+	}
+	.week__span {
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--granite);
+	}
+	.week__totals {
+		font-size: 12.5px;
+		color: var(--granite-soft);
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+	}
+	.week__totals--quiet {
+		font-style: italic;
+	}
+	.dot {
+		color: var(--scree);
+	}
+
+	.week__grid {
+		display: grid;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		gap: 10px;
+		align-items: start;
+	}
+	.day {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-height: 40px;
+	}
+	.day__label {
+		display: none;
+	}
+	.day__num {
+		font-size: 11px;
+		color: var(--granite-soft);
+	}
+	.day--today .day__num {
+		color: var(--lake);
+		font-weight: 700;
+	}
+	.day--future {
+		opacity: 0.4;
+	}
+	.day__list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.day__quiet {
+		height: 34px;
+		border: 1px solid var(--scree);
+		border-radius: 6px;
+	}
+	.day--today .day__quiet {
+		border-color: var(--lake);
+	}
+
 	@media (max-width: 900px) {
-		.grid--tile {
+		.card__body {
+			flex-direction: column;
+		}
+		.side {
+			width: 100%;
+			border-right: none;
+			border-bottom: 1px solid var(--scree);
+		}
+		.main {
+			padding: 28px 22px 44px;
+		}
+		.grid4 {
 			grid-template-columns: repeat(2, 1fr);
+		}
+		/* Eight links no longer fit in one row once the page itself has shrunk —
+		   they wrap rather than clipping, since .page's overflow-x:hidden (there
+		   to guard the full-bleed tabs against a scrollbar) would otherwise hide
+		   "Activities" and "Subway" off the edge entirely. */
+		.tabs {
+			flex-wrap: wrap;
+			padding-left: calc(50vw - 50% + 16px);
+			padding-right: calc(50vw - 50% + 16px);
+		}
+		.tabs__link {
+			padding: 16px 10px 14px;
+		}
+	}
+
+	/* Below ~720px a 7-across grid squeezes each card under ~90px, too narrow for
+	   a title and stats to read — so the week folds into a single-column agenda
+	   instead, with each day's own weekday+date label shown inline (the shared
+	   .dow header above the calendar no longer lines up with one column). */
+	@media (max-width: 720px) {
+		.dow {
+			display: none;
+		}
+		.week__grid {
+			grid-template-columns: 1fr;
+		}
+		.day {
+			flex-direction: row;
+			align-items: flex-start;
+			gap: 12px;
+			min-height: 0;
+		}
+		.day__label {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 2px;
+			flex: none;
+			width: 34px;
+			padding-top: 2px;
+		}
+		.day__dow {
+			font-size: 10px;
+			letter-spacing: 1px;
+			text-transform: uppercase;
+			color: var(--granite-soft);
+		}
+		.day__num {
+			font-size: 13px;
+			color: var(--granite);
+		}
+		.day--today .day__dow,
+		.day--today .day__num {
+			color: var(--lake);
+			font-weight: 700;
+		}
+		.day__list {
+			flex: 1;
+			min-width: 0;
+		}
+		.day__quiet {
+			flex: 1;
+			height: 32px;
+		}
+		.grid4 {
+			grid-template-columns: repeat(2, 1fr);
+			gap: 10px;
 		}
 	}
 </style>
+</ActivityLayout>
