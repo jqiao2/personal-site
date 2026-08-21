@@ -122,9 +122,16 @@ const config = {
 			// Frame to the activity's own bbox on load (§1) — computed from the
 			// decoded track itself, not the stored bbox_* columns, so this still
 			// works if those are null. Padded on the right for the legend card.
-			if (bbox) {
-				map.fitBounds(bbox, { padding: { top: 48, bottom: 48, left: 48, right: 48 }, maxZoom: 16, animate: false });
-			}
+			if (!bbox) return;
+			// RESIZE FIRST, ALWAYS. fitBounds solves for the zoom that makes the
+			// bounds fit the container, so it needs the container's real size —
+			// and `styledata` can fire before layout has settled, at which point
+			// MapLibre is still holding whatever dimensions it measured at
+			// construction. Fitting against those puts the camera at a zoom
+			// computed for a box that no longer exists, which is how a whole
+			// ride ends up drawn as two lines running off the top of the frame.
+			map.resize();
+			map.fitBounds(bbox, { padding: { top: 48, bottom: 48, left: 48, right: 48 }, maxZoom: 16, animate: false });
 		}
 
 		function addRoute() {
@@ -168,6 +175,25 @@ const config = {
 			frame();
 			addRoute();
 		});
+
+		// And again whenever the container's size actually changes — the first
+		// layout pass, a window resize, a phone rotating. Re-fitting is cheap and
+		// idempotent, and it means the route is framed correctly even when the
+		// basemap never loads at all (no key, offline, a blocked tile host):
+		// that fallback is a designed state, not a broken one, so the route in it
+		// has to be as well framed as the route over real terrain.
+		if (typeof ResizeObserver !== 'undefined') {
+			let first = true;
+			new ResizeObserver(() => {
+				// Skip the observer's initial synchronous callback; whenStyleReady
+				// has that case, and re-fitting twice on load is just a flicker.
+				if (first) {
+					first = false;
+					return;
+				}
+				frame();
+			}).observe(host);
+		}
 	}
 </script>
 
