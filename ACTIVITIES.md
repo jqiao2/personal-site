@@ -10,27 +10,56 @@ Built so far, on `claude/strava-activities-feature-26rgcy` (PR #115):
 | `src/lib/activities.ts` | Query layer over the schema. Untested against real rows. |
 | `src/lib/exertion.ts` | The §3 cascade. Anchors verified: an hour at FTP scores 100.00; 4h at 0.65 IF scores 169.00; a hike with no thresholds falls to the MET floor. |
 | `src/lib/route-shape.ts` | Polyline codec, mercator, RDP simplify, the §7 `routePath` pipeline. |
-| `src/lib/sports.ts` | 21 sport slugs, per-sport stat ordering, family glyphs. |
+| `src/lib/sports.ts` | 23 sport slugs, per-sport stat ordering, family glyphs. |
 | `ActivityLayout` + `activity-tokens` + `ActivityCard` | The alpine shell and the route poster, all three sizes. Looked at and iterated on. |
 | `nav.ts` | `Activities` added. |
 | `/activities` | **Placeholder** — hardcoded fixtures, no database. Proves the shell and the card. |
+| `src/lib/ingest/**` | **Built.** §4's canonical pipeline: `canonical.ts`, `fit.ts`, `gpx.ts` (GPX + TCX), `strava-archive.ts`. |
+| `scripts/import-strava-archive.mjs` | **Built**, and dry-run against the real export: 1773 activities parsed in 80s. |
+| `scripts/ingest.test.mjs` | The checks for what fails silently. `npm run activities:test`. |
 
 Not built yet: the real landing page, `/activities/all`, the detail page, the
-month in review, and the whole of §4 (ingestion).
+month in review, §4's file-drop endpoint (step 2) and the OAuth providers
+(step 3).
 
-### Note for whoever picks this up
+### The importer
 
-**Real data beats the seed script.** There is a local Strava bulk export. That
-archive should never need to reach a server — the right move is to build the
-importer, then run it locally against the full export with real credentials, so
-hundreds of megabytes and every GPS track that starts at the athlete's front
-door stay on his own machine. Two things pin the parser down before any code is
-written, and both are small enough to paste:
+```
+npm run activities:import -- <archive-dir> [--dry] [--limit N] [--rest-hr N]
+```
 
-1. The `activities.csv` header row and two or three data rows. Column names vary
-   by export vintage; guessing them is the main way this goes wrong.
-2. A listing of the archive — whether the per-activity files are `.fit.gz`,
-   `.gpx`, `.tcx` or a mix decides which parser is worth writing first.
+It runs locally on purpose — the archive is hundreds of megabytes and every
+outdoor track starts at the athlete's front door, so only derived rows leave
+the machine. Re-running is safe: each activity carries an `activity_sources`
+row with a uniquely-indexed Strava id, and the script skips what it already
+imported, so an interrupted run resumes.
+
+**Plain-node scripts can import the site's own TypeScript** via
+`--import ./scripts/ts-hook.mjs` (eleven lines, no dependency). Use it rather
+than reimplementing §3 or §7 in a script — `scripts/seed-activities.mjs`
+carries its own copy of the §7 route pipeline and that is the thing to avoid
+repeating.
+
+### What the real archive turned out to contain
+
+- **1751 files: 1303 FIT, 270 GPX, 177 TCX**, mostly gzipped. All three
+  parsers are needed; FIT covers everything recent.
+- `activities.csv` has **103 columns and repeats four names** — `Elapsed
+  Time`, `Distance`, `Max Heart Rate`, `Relative Effort`. The first of each
+  pair is Strava's rounded display copy (distance in **km**), the second the
+  precise one (**metres**). Address columns by index, not name.
+- **The athlete moved.** Recorded UTC offsets run −7/−8 through 2024 and −4/−5
+  from 2025. §2's "alpine, PNW" art direction and the Seattle place names in
+  the seed script are now a description of the older half of the history.
+- **FIT sessions carry the FTP that was set on the head unit** — 540 readings,
+  a dated FTP history nobody wrote down. Raw it is too noisy to use (two head
+  units disagreeing gives 230 → 200 → 240 inside eight days), so the importer
+  takes a monthly median with a 5W gate.
+
+**Streams are decimated to 1500 samples on the way in.** Stored whole they
+project to ~395MB against a database that also holds the film and book logs.
+Exertion is computed from the full-resolution stream *before* decimation, so
+every stored score is exact; only a future recompute reads the shortened one.
 
 **A placeholder `.env` may be present.** A remote session created one with fake
 Supabase values so `astro.config.mjs` (which hard-requires `SUPABASE_URL`) would
