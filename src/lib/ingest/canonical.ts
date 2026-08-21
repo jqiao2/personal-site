@@ -1,0 +1,482 @@
+// The shape every provider is converted into before anything is stored —
+// ACTIVITIES.md §4's "canonical Activity + Streams".
+//
+// WHY A CANONICAL SHAPE AT ALL, given that only one importer exists today.
+// Because the schema has six tables and five providers are coming, and the
+// alternative is that each provider learns to write `activities`,
+// `activity_streams`, `activity_laps` and `activity_sources` itself. Then the
+// day `avg_swolf` changes meaning, four parsers have to agree about it. Here a
+// parser's whole job is "turn your file into this", and exactly one function
+// (`toRows`) knows what a database row looks like.
+//
+// The split that matters: a PARSER produces measurements (what the file says),
+// and `toRows` produces the record (what we store, including the derived
+// things — exertion, the normalised route path, the local calendar date). No
+// parser computes exertion, and no parser touches the database. That is what
+// makes it possible to re-run §3's cascade over the whole table when a
+// threshold changes without re-reading a single FIT file.
+
+import { computeExertion, type Thresholds } from './../exertion';
+import { encodePolyline, routePath, bounds } from './../route-shape';
+import { SPORT_META, type Sport } from './../sports';
+
+// ---------------------------------------------------------------------------
+// The canonical shapes
+// ---------------------------------------------------------------------------
+
+/** Per-sample arrays, all parallel and all optional. A trainer ride has power
+ *  and no latlng; a treadmill run has heartrate and no altitude; a 2016 GPX
+ *  has latlng and nothing else. Every consumer must cope with a missing one,
+ *  which is why these are optional rather than empty-array-filled. */
+export interface CanonicalStreams {
+	time_s?: number[];
+	latlng?: [number, number][];
+	altitude_m?: number[];
+	distance_m?: number[];
+	heartrate?: number[];
+	cadence?: number[];
+	power_w?: number[];
+	speed_ms?: number[];
+	temp_c?: number[];
+	grade?: number[];
+	moving?: boolean[];
+}
+
+export interface CanonicalLap {
+	lap_index: number;
+	name?: string | null;
+	start_time?: string | null;
+	elapsed_seconds?: number | null;
+	moving_seconds?: number | null;
+	distance_m?: number | null;
+	avg_hr?: number | null;
+	max_hr?: number | null;
+	avg_power_w?: number | null;
+	avg_speed_ms?: number | null;
+	elevation_gain_m?: number | null;
+	lap_type?: 'lap' | 'interval' | 'rest' | 'transition' | 'length';
+}
+
+/** What a parser produces. Deliberately close to the `activities` columns —
+ *  the mapping is meant to be boring — but with the DERIVED columns absent:
+ *  no exertion, no route_path, no local_date. Those are `toRows`' business. */
+export interface CanonicalActivity {
+	sport: Sport;
+	sub_sport?: string | null;
+
+	title?: string | null;
+	notes?: string | null;
+	private_notes?: string | null;
+
+	/** ISO instant. The one field no activity can be stored without. */
+	started_at: string;
+	/** Minutes east of UTC at the start. Null when the file doesn't say and
+	 *  the caller has no better idea — `toRows` then falls back, see
+	 *  `localDate`. */
+	utc_offset_minutes?: number | null;
+	timezone?: string | null;
+
+	elapsed_seconds: number;
+	moving_seconds?: number | null;
+	distance_m?: number | null;
+	elevation_gain_m?: number | null;
+	elevation_loss_m?: number | null;
+	elev_high_m?: number | null;
+	elev_low_m?: number | null;
+
+	avg_speed_ms?: number | null;
+	max_speed_ms?: number | null;
+	avg_hr?: number | null;
+	max_hr?: number | null;
+	avg_cadence?: number | null;
+	avg_power_w?: number | null;
+	max_power_w?: number | null;
+	normalized_power_w?: number | null;
+	work_kj?: number | null;
+	calories?: number | null;
+	avg_temp_c?: number | null;
+
+	pool_length_m?: number | null;
+	total_strokes?: number | null;
+	avg_swolf?: number | null;
+
+	device_name?: string | null;
+
+	streams?: CanonicalStreams;
+	laps?: CanonicalLap[];
+
+	/** Thresholds the recording device itself reported (FIT sessions carry the
+	 *  FTP that was set on the head unit). Not stored on the activity — the
+	 *  importer collects these to seed `athlete_thresholds`, which is the only
+	 *  honest source for an FTP history nobody wrote down at the time. */
+	device_ftp_w?: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Sport mapping
+// ---------------------------------------------------------------------------
+
+/**
+ * Strava's `Activity Type` (from the archive's activities.csv) → our slug.
+ *
+ * WHY THIS THROWS ON AN UNKNOWN TYPE instead of falling back to 'other'.
+ * `sportMeta()` deliberately degrades to 'other' so an unrecognised slug can
+ * never 500 a page — that is a RENDERING safety net, and it must stay. Using
+ * the same fallback at INGEST time would be a different thing entirely: a
+ * silent, permanent, lossy write. Thirty activities land in 'other', nobody
+ * ever notices, and the sport-aware detail page has nothing to lead with. So
+ * the importer stops and asks for the table to be extended, which is a
+ * two-minute edit to sports.ts and the reason `inline_skate` and `kayak`
+ * exist at all.
+ */
+const STRAVA_SPORTS: Record<string, Sport> = {
+	Ride: 'ride',
+	'Gravel Ride': 'gravel_ride',
+	'Mountain Bike Ride': 'mountain_bike',
+	'Mountain Biking': 'mountain_bike',
+	'Virtual Ride': 'virtual_ride',
+	'E-Bike Ride': 'ride',
+	Run: 'run',
+	'Trail Run': 'trail_run',
+	'Virtual Run': 'treadmill_run',
+	Swim: 'swim',
+	Hike: 'hike',
+	Walk: 'walk',
+	Snowshoe: 'snowshoe',
+	'Alpine Ski': 'alpine_ski',
+	'Backcountry Ski': 'backcountry_ski',
+	'Nordic Ski': 'nordic_ski',
+	Snowboard: 'snowboard',
+	'Inline Skate': 'inline_skate',
+	Kayaking: 'kayak',
+	Canoeing: 'kayak',
+	Rowing: 'rowing',
+	'Weight Training': 'strength',
+	Workout: 'strength',
+	Yoga: 'yoga',
+};
+
+export class UnknownSportError extends Error {
+	readonly providerType: string;
+	constructor(providerType: string) {
+		super(
+			`Unknown activity type ${JSON.stringify(providerType)}. Add a slug for it to ` +
+				`src/lib/sports.ts (Sport union, SPORTS order, SPORT_META with a MET value) ` +
+				`and map it in STRAVA_SPORTS — do not fall back to 'other'.`,
+		);
+		this.name = 'UnknownSportError';
+		this.providerType = providerType;
+	}
+}
+
+export function sportFromStrava(providerType: string): Sport {
+	const slug = STRAVA_SPORTS[providerType.trim()];
+	if (!slug) throw new UnknownSportError(providerType);
+	return slug;
+}
+
+/**
+ * A FIT file's sport/subSport refines what the CSV already told us; it never
+ * overrides it. Strava's own type is the authority because it covers all 1773
+ * rows including the ones with no file at all, and because the owner may have
+ * corrected it on Strava after the fact — the head unit's guess is older
+ * information than the athlete's own correction.
+ *
+ * The one thing the file knows better is INDOORS: a ride recorded as
+ * `indoorCycling` is a trainer ride whatever Strava's label says, and that
+ * decides whether the card draws a route or gives its face to the stats (§7).
+ */
+export function refineSport(sport: Sport, fitSport?: string, fitSubSport?: string): { sport: Sport; sub_sport: string | null } {
+	const sub = fitSubSport && fitSubSport !== 'generic' ? fitSubSport : null;
+
+	if (sport === 'ride' && (fitSubSport === 'indoorCycling' || fitSubSport === 'virtualActivity')) {
+		return { sport: 'virtual_ride', sub_sport: 'indoor' };
+	}
+	if (sport === 'ride' && fitSubSport === 'gravelCycling') return { sport: 'gravel_ride', sub_sport: sub };
+	if (sport === 'ride' && fitSubSport === 'mountain') return { sport: 'mountain_bike', sub_sport: sub };
+	if (sport === 'run' && fitSubSport === 'treadmill') return { sport: 'treadmill_run', sub_sport: 'indoor' };
+	if (sport === 'run' && fitSubSport === 'trail') return { sport: 'trail_run', sub_sport: sub };
+	if (sport === 'swim' && fitSubSport === 'openWater') return { sport: 'open_water_swim', sub_sport: 'open_water' };
+
+	return { sport, sub_sport: sub };
+}
+
+// ---------------------------------------------------------------------------
+// Local date
+// ---------------------------------------------------------------------------
+
+/**
+ * The calendar day WHERE IT HAPPENED (§5) — the column the whole week grid
+ * keys off, so a 5pm Pacific ride must never land on tomorrow.
+ *
+ * A FIT file answers this exactly: it carries both a UTC timestamp and a
+ * localTimestamp, and the difference is the offset that was in force. GPX and
+ * TCX carry UTC only, so for those we fall back to this athlete's home zone at
+ * that instant, which is right for everything but travel.
+ *
+ * ponytail: home-zone fallback for GPX/TCX. Correct offset needs the start
+ * coordinate resolved to a timezone (a tz-lookup dependency and a shapefile);
+ * worth it only if a trip abroad ever shows up on the wrong day. The error is
+ * bounded at one day and only for activities within a few hours of midnight.
+ */
+export const HOME_TZ = 'America/Los_Angeles';
+
+export function offsetMinutesInZone(instant: Date, timeZone: string): number {
+	// Intl gives us the wall-clock reading in the zone; the gap between that and
+	// the same fields read in UTC is the offset. No dependency, no DST table.
+	const fmt = new Intl.DateTimeFormat('en-US', {
+		timeZone,
+		hour12: false,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+	});
+	const p: Record<string, string> = {};
+	for (const { type, value } of fmt.formatToParts(instant)) p[type] = value;
+	const asUtc = Date.UTC(
+		Number(p.year),
+		Number(p.month) - 1,
+		Number(p.day),
+		Number(p.hour === '24' ? '00' : p.hour),
+		Number(p.minute),
+		Number(p.second),
+	);
+	return Math.round((asUtc - instant.getTime()) / 60000);
+}
+
+/** `YYYY-MM-DD` of the instant as read on a clock `offsetMinutes` east of UTC. */
+export function localDate(startedAt: string, offsetMinutes: number): string {
+	const shifted = new Date(new Date(startedAt).getTime() + offsetMinutes * 60000);
+	return shifted.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------------------
+// Canonical → database rows
+// ---------------------------------------------------------------------------
+
+export interface ActivityRowSet {
+	activity: Record<string, unknown>;
+	streams: Record<string, unknown> | null;
+	laps: Record<string, unknown>[];
+}
+
+/**
+ * How many samples of each stream are STORED. A four-hour ride at 1 Hz is
+ * 14,400 samples across ten arrays — about 2 MB of JSONB for one activity, and
+ * roughly 400 MB across this athlete's history, which is more than the whole
+ * database is allowed to be.
+ *
+ * The resolution is only ever spent on two things: the detail page's map and
+ * its charts. Neither can show more than a couple of thousand points on a
+ * screen a thousand pixels wide, and the route poster is already simplified to
+ * 200 points by §7. So streams are decimated to this many samples on the way
+ * in, evenly, always keeping the first and last.
+ *
+ * WHAT THIS COSTS, STATED PLAINLY. `exertion` is computed from the FULL
+ * resolution stream before any of this happens, so every stored score is exact.
+ * But §3 promises the table can be recomputed when a threshold changes, and a
+ * recompute reads these decimated streams — normalized power off a 12-second
+ * sampling is a slightly smoothed NP, a percent or so low on a spiky ride. That
+ * is the trade: exact scores now and a marginally softer recompute later,
+ * versus a database that cannot hold the history at all.
+ *
+ * ponytail: fixed cap, decimated evenly. If the recompute drift ever matters,
+ * the upgrade is to keep power/HR at full rate and decimate only latlng and
+ * altitude — the two that dominate the bytes.
+ */
+export const MAX_STORED_SAMPLES = 1500;
+
+/** Evenly-spaced indices covering [0, length), always including the last. */
+function decimationIndices(length: number, max: number): number[] | null {
+	if (length <= max) return null;
+	const idx: number[] = [];
+	const stride = (length - 1) / (max - 1);
+	for (let i = 0; i < max; i++) idx.push(Math.round(i * stride));
+	idx[idx.length - 1] = length - 1;
+	return idx;
+}
+
+/** Applies one index set to every array in the stream bundle, so the arrays
+ *  stay parallel — sample N must mean the same instant in all of them. */
+function decimateStreams(s: CanonicalStreams, max: number): CanonicalStreams {
+	const length = streamLength(s);
+	const idx = decimationIndices(length, max);
+	if (!idx) return s;
+
+	const out: CanonicalStreams = {};
+	for (const [key, arr] of Object.entries(s)) {
+		if (!Array.isArray(arr)) continue;
+		// A short array that doesn't run the full length of the activity can't be
+		// indexed by these positions; leave it alone rather than scramble it.
+		(out as Record<string, unknown>)[key] = arr.length === length ? idx.map((i) => arr[i]) : arr;
+	}
+	return out;
+}
+
+const round = (v: number | null | undefined, dp = 2): number | null =>
+	v === null || v === undefined || !Number.isFinite(v) ? null : Number(v.toFixed(dp));
+
+const int = (v: number | null | undefined): number | null =>
+	v === null || v === undefined || !Number.isFinite(v) ? null : Math.round(v);
+
+/**
+ * The one place that knows what a database row looks like. Takes what a parser
+ * measured plus the thresholds in force on the day, and adds the three derived
+ * things: the local date, the route geometry (§7), and exertion (§3).
+ */
+export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRowSet {
+	const startedAt = new Date(a.started_at);
+	const offset =
+		a.utc_offset_minutes ?? offsetMinutesInZone(startedAt, a.timezone ?? HOME_TZ);
+
+	// --- geometry (§7) -----------------------------------------------------
+	// A pool swim, a trainer ride and a treadmill run reach this with no latlng
+	// and every geometry column stays null — a normal reading, not a gap.
+	const track = (a.streams?.latlng ?? []).filter(
+		(p): p is [number, number] =>
+			Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && !(p[0] === 0 && p[1] === 0),
+	);
+	const bb = track.length ? bounds(track) : null;
+
+	// --- exertion (§3) -----------------------------------------------------
+	const exertion = computeExertion(
+		{
+			sport: a.sport,
+			moving_seconds: a.moving_seconds ?? null,
+			elapsed_seconds: a.elapsed_seconds,
+			distance_m: a.distance_m ?? null,
+			elevation_gain_m: a.elevation_gain_m ?? null,
+			avg_hr: a.avg_hr ?? null,
+			avg_power_w: a.avg_power_w ?? null,
+			streams: a.streams
+				? {
+						time_s: a.streams.time_s,
+						power_w: a.streams.power_w,
+						heartrate: a.streams.heartrate,
+						altitude_m: a.streams.altitude_m,
+						distance_m: a.streams.distance_m,
+						moving: a.streams.moving,
+					}
+				: undefined,
+		},
+		thresholds,
+	);
+
+	const hasStreams = Boolean(
+		a.streams && Object.values(a.streams).some((arr) => Array.isArray(arr) && arr.length > 0),
+	);
+
+	const activity: Record<string, unknown> = {
+		sport: a.sport,
+		sub_sport: a.sub_sport ?? null,
+		title: a.title?.trim() || defaultTitle(a),
+		notes: a.notes?.trim() || null,
+		private_notes: a.private_notes?.trim() || null,
+
+		started_at: startedAt.toISOString(),
+		local_date: localDate(a.started_at, offset),
+		utc_offset_minutes: offset,
+		timezone: a.timezone ?? null,
+
+		elapsed_seconds: Math.round(a.elapsed_seconds),
+		moving_seconds: int(a.moving_seconds),
+		distance_m: round(a.distance_m, 1),
+		elevation_gain_m: round(a.elevation_gain_m, 1),
+		elevation_loss_m: round(a.elevation_loss_m, 1),
+		elev_high_m: round(a.elev_high_m, 1),
+		elev_low_m: round(a.elev_low_m, 1),
+
+		avg_speed_ms: round(a.avg_speed_ms, 3),
+		max_speed_ms: round(a.max_speed_ms, 3),
+		avg_hr: int(a.avg_hr),
+		max_hr: int(a.max_hr),
+		avg_cadence: int(a.avg_cadence),
+		avg_power_w: int(a.avg_power_w),
+		max_power_w: int(a.max_power_w),
+		normalized_power_w: int(a.normalized_power_w),
+		work_kj: round(a.work_kj, 1),
+		calories: int(a.calories),
+		avg_temp_c: round(a.avg_temp_c, 1),
+
+		pool_length_m: round(a.pool_length_m, 2),
+		total_strokes: int(a.total_strokes),
+		avg_swolf: int(a.avg_swolf),
+
+		exertion: round(exertion.score, 2),
+		exertion_method: exertion.method,
+		exertion_confidence: exertion.confidence,
+		intensity_factor: round(exertion.intensityFactor, 3),
+
+		polyline: track.length ? encodePolyline(track) : null,
+		route_path: track.length ? routePath(track) : null,
+		start_lat: track.length ? round(track[0][0], 6) : null,
+		start_lng: track.length ? round(track[0][1], 6) : null,
+		end_lat: track.length ? round(track[track.length - 1][0], 6) : null,
+		end_lng: track.length ? round(track[track.length - 1][1], 6) : null,
+		bbox_w: bb ? round(bb.w, 6) : null,
+		bbox_s: bb ? round(bb.s, 6) : null,
+		bbox_e: bb ? round(bb.e, 6) : null,
+		bbox_n: bb ? round(bb.n, 6) : null,
+
+		has_streams: hasStreams,
+		device_name: a.device_name ?? null,
+	};
+
+	// Decimated only now — everything above (exertion especially) has already
+	// read the stream at full resolution.
+	const stored = hasStreams ? decimateStreams(a.streams as CanonicalStreams, MAX_STORED_SAMPLES) : null;
+
+	const streams = stored
+		? {
+				sample_count: streamLength(stored),
+				time_s: stored.time_s ?? null,
+				latlng: stored.latlng ?? null,
+				altitude_m: stored.altitude_m ?? null,
+				distance_m: stored.distance_m ?? null,
+				heartrate: stored.heartrate ?? null,
+				cadence: stored.cadence ?? null,
+				power_w: stored.power_w ?? null,
+				speed_ms: stored.speed_ms ?? null,
+				temp_c: stored.temp_c ?? null,
+				grade: stored.grade ?? null,
+				moving: stored.moving ?? null,
+			}
+		: null;
+
+	const laps = (a.laps ?? []).map((l) => ({
+		lap_index: l.lap_index,
+		name: l.name ?? null,
+		start_time: l.start_time ?? null,
+		elapsed_seconds: int(l.elapsed_seconds),
+		moving_seconds: int(l.moving_seconds),
+		distance_m: round(l.distance_m, 1),
+		avg_hr: int(l.avg_hr),
+		max_hr: int(l.max_hr),
+		avg_power_w: int(l.avg_power_w),
+		avg_speed_ms: round(l.avg_speed_ms, 3),
+		elevation_gain_m: round(l.elevation_gain_m, 1),
+		lap_type: l.lap_type ?? 'lap',
+	}));
+
+	return { activity, streams, laps };
+}
+
+function streamLength(s: CanonicalStreams): number {
+	let n = 0;
+	for (const arr of Object.values(s)) if (Array.isArray(arr)) n = Math.max(n, arr.length);
+	return n;
+}
+
+/** `title` is not null in the schema, and a device file often has no name at
+ *  all. "Morning Ride" is Strava's own convention and reads better than the
+ *  slug alone. */
+function defaultTitle(a: CanonicalActivity): string {
+	const label = SPORT_META[a.sport].label;
+	const hour = new Date(a.started_at).getUTCHours() + (a.utc_offset_minutes ?? 0) / 60;
+	const h = ((hour % 24) + 24) % 24;
+	const part = h < 5 ? 'Night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night';
+	return `${part} ${label}`;
+}

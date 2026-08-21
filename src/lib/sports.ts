@@ -51,9 +51,11 @@ export type Sport =
 	| 'backcountry_ski'
 	| 'nordic_ski'
 	| 'snowboard'
+	| 'inline_skate'
 	| 'strength'
 	| 'yoga'
 	| 'rowing'
+	| 'kayak'
 	| 'other';
 
 /** Canonical order — §6: roughly how much of this athlete's life each sport is. */
@@ -75,9 +77,11 @@ export const SPORTS: readonly Sport[] = [
 	'backcountry_ski',
 	'nordic_ski',
 	'snowboard',
+	'inline_skate',
 	'strength',
 	'yoga',
 	'rowing',
+	'kayak',
 	'other',
 ];
 
@@ -329,6 +333,16 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 		primaryStats: SNOW_PRIMARY,
 		met: 5.3, // general snowboarding
 	},
+	inline_skate: {
+		label: 'Inline skate',
+		family: 'other',
+		icon: 'inline_skate',
+		indoor: false,
+		hasDistance: true,
+		paceStyle: 'speed',
+		primaryStats: ['distance', 'moving_time', 'avg_speed', 'avg_hr', 'elevation_gain', 'exertion'],
+		met: 9.8, // Compendium 15592 — in-line skating, 12 mph, recreational
+	},
 	strength: {
 		label: 'Strength',
 		family: 'other',
@@ -358,6 +372,16 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 		paceStyle: 'per_km',
 		primaryStats: ['distance', 'moving_time', 'avg_power', 'avg_hr', 'exertion'],
 		met: 7, // ergometer, moderate effort
+	},
+	kayak: {
+		label: 'Kayak',
+		family: 'other',
+		icon: 'kayak',
+		indoor: false,
+		hasDistance: true,
+		paceStyle: 'speed',
+		primaryStats: ['distance', 'moving_time', 'avg_speed', 'avg_hr', 'exertion'],
+		met: 5, // Compendium 18070 — kayaking, moderate effort
 	},
 	other: {
 		label: 'Other',
