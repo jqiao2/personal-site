@@ -16,6 +16,7 @@ export const NAV_LINKS: readonly NavLink[] = [
 	{ href: '/films', label: 'Films' },
 	{ href: '/books', label: 'Books' },
 	{ href: '/restaurants', label: 'Restaurants' },
+	{ href: '/activities', label: 'Activities' },
 	{ href: '/subway', label: 'Subway' },
 ];
 

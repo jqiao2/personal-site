@@ -1,0 +1,1735 @@
+---
+// /activities/all — every activity, reverse chronological, with filters and
+// sorts (ACTIVITIES.md §8). Same shape as /films/watched: a server-rendered
+// first page whose filters come off the URL through activity-params.ts, a
+// filter panel with a badge count, a sort control, a plain-English filter
+// summary sentence, and a client script that pages in more results from
+// /api/activities/list and rewrites the query string as you go.
+//
+// WHY THE FACETS AREN'T DEFERRED THE WAY FILMS' ARE. /films/watched puts off
+// fetching its filter chips until after the grid paints, because reading
+// every credit across the whole watched collection costs several times what
+// the first 100 tiles do. This collection is a few hundred activities, and
+// fetchActivityFacets pages that same small table once — cheap enough to
+// read right here, so the panel is fully server-rendered on first paint and
+// there is no "loading filters…" state to design for.
+import ActivityLayout from '../../layouts/ActivityLayout.astro';
+import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
+import { siteNav } from '../../lib/nav';
+import { SPORTS, sportMeta, type SportFamily } from '../../lib/sports';
+import { exertionLabel } from '../../lib/activity-tokens';
+import {
+	activityQueryFromParams,
+	activityFilterCount,
+	activityFilterSentence,
+	fetchActivityFacets,
+	fetchActivityPage,
+	type ActivityFacetsPayload,
+	type ActivityFilterQuery,
+} from '../../lib/activity-params';
+import type { ActivityListRow, ActivitySort } from '../../lib/activities';
+
+export const prerender = false;
+
+const BATCH = 30;
+const METERS_PER_MILE = 1609.344;
+const METERS_PER_FOOT = 0.3048;
+
+const mi = (m: number) => m / METERS_PER_MILE;
+const ft = (m: number) => m / METERS_PER_FOOT;
+const min = (s: number) => s / 60;
+
+const nav = siteNav(Astro.url.pathname);
+const query: ActivityFilterQuery = activityQueryFromParams(Astro.url.searchParams);
+const filterCount = activityFilterCount(query);
+const hasFilters = filterCount > 0;
+
+// Defensive: a placeholder-credentialed Supabase client (see ACTIVITIES.md's
+// handoff note) or an unmigrated database can throw outright rather than
+// degrade gracefully the way a PostgREST "column doesn't exist" error does —
+// this page must still render its real empty state rather than 500.
+let rows: ActivityListRow[] = [];
+let total = 0;
+let facets: ActivityFacetsPayload = {
+	sports: [],
+	gear: [],
+	places: [],
+	distanceM: null,
+	durationS: null,
+	elevationM: null,
+	exertion: null,
+};
+try {
+	const [page, f] = await Promise.all([fetchActivityPage(query, { limit: BATCH, offset: 0 }), fetchActivityFacets()]);
+	rows = page.rows;
+	total = page.total;
+	facets = f;
+} catch (e) {
+	console.error('activities/all: failed to load activities', e);
+}
+
+// The whole collection's size — every sport count sums to it, since the
+// facet is built off the same top-level, non-deleted rows the filters run
+// over. Free: no extra query beyond the facets already fetched above.
+const collectionTotal = facets.sports.reduce((sum, s) => sum + s.count, 0);
+const hasMore = total > rows.length;
+const num = (n: number) => n.toLocaleString('en-US');
+
+const gearNames = query.gearIds?.length
+	? facets.gear.filter((g) => query.gearIds!.includes(g.id)).map((g) => g.name)
+	: [];
+
+const summary = hasFilters
+	? activityFilterSentence({
+			total,
+			sports: query.sports ?? [],
+			dateFrom: query.dateFrom ?? null,
+			dateTo: query.dateTo ?? null,
+			distanceMinM: query.distanceMinM ?? null,
+			distanceMaxM: query.distanceMaxM ?? null,
+			durationMinS: query.durationMinS ?? null,
+			durationMaxS: query.durationMaxS ?? null,
+			elevationMinM: query.elevationMinM ?? null,
+			elevationMaxM: query.elevationMaxM ?? null,
+			exertionMin: query.exertionMin ?? null,
+			exertionMax: query.exertionMax ?? null,
+			hasGps: query.hasGps ?? null,
+			indoor: query.indoor ?? null,
+			hasPower: Boolean(query.hasPower),
+			hasHr: Boolean(query.hasHr),
+			place: query.place ?? null,
+			favoritesOnly: Boolean(query.favoritesOnly),
+			personalBestOnly: Boolean(query.personalBestOnly),
+			measuredOnly: Boolean(query.measuredOnly),
+			gearNames,
+		})
+	: [];
+
+// Sport chips, grouped by family in §6's canonical order — static from
+// sports.ts, so (unlike films' tags/directors) these need no round trip at
+// all to draw; a family with a zero count still shows, dimmed, so the panel
+// reads as the whole taxonomy rather than only what happens to be logged.
+const FAMILY_LABEL: Record<SportFamily, string> = {
+	bike: 'Bike',
+	run: 'Run',
+	swim: 'Swim',
+	foot: 'Hike & walk',
+	snow: 'Snow',
+	other: 'Other',
+	transition: 'Transition',
+};
+const FAMILY_ORDER: SportFamily[] = ['bike', 'run', 'swim', 'foot', 'snow', 'other', 'transition'];
+const sportCounts = new Map(facets.sports.map((s) => [s.sport, s.count]));
+const sportsByFamily = FAMILY_ORDER.map((family) => ({
+	family,
+	label: FAMILY_LABEL[family],
+	sports: SPORTS.filter((s) => sportMeta(s).family === family),
+})).filter((g) => g.sports.length > 0);
+
+const SORT_LABEL: Record<ActivitySort, string> = {
+	date: 'Date',
+	exertion: 'Exertion',
+	distance: 'Distance',
+	duration: 'Duration',
+	elevation: 'Elevation gain',
+	pace: 'Avg speed / pace',
+	power: 'Avg power',
+	hr: 'Avg heart rate',
+	calories: 'Calories',
+};
+const SORTS: ActivitySort[] = ['date', 'exertion', 'distance', 'duration', 'elevation', 'pace', 'power', 'hr', 'calories'];
+const currentSort: ActivitySort = query.sort ?? 'date';
+const currentDir: 'asc' | 'desc' = query.sortDir ?? 'desc';
+
+// Range bounds for the four sliders, rounded to friendly steps and only
+// drawn when the collection actually spans one — a single-activity log (or
+// an empty one) has nothing to narrow between, same convention as the film
+// log's release/diary sliders.
+function bounds(lo: number, hi: number, step: number, round: (n: number) => number) {
+	const lov = round(lo / step) * step;
+	const hiv = Math.max(lov + step, Math.ceil(hi / step) * step);
+	return { lo: lov, hi: hiv };
+}
+const distBounds = facets.distanceM
+	? bounds(mi(facets.distanceM.min), mi(facets.distanceM.max), 1, Math.floor)
+	: null;
+const durBounds = facets.durationS
+	? bounds(min(facets.durationS.min), min(facets.durationS.max), 5, Math.floor)
+	: null;
+const elevBounds = facets.elevationM
+	? bounds(ft(facets.elevationM.min), ft(facets.elevationM.max), 50, Math.floor)
+	: null;
+const exBounds = facets.exertion ? bounds(facets.exertion.min, facets.exertion.max, 5, Math.floor) : null;
+
+const distVal = {
+	min: query.distanceMinM != null ? mi(query.distanceMinM) : (distBounds?.lo ?? 0),
+	max: query.distanceMaxM != null ? mi(query.distanceMaxM) : (distBounds?.hi ?? 0),
+};
+const durVal = {
+	min: query.durationMinS != null ? min(query.durationMinS) : (durBounds?.lo ?? 0),
+	max: query.durationMaxS != null ? min(query.durationMaxS) : (durBounds?.hi ?? 0),
+};
+const elevVal = {
+	min: query.elevationMinM != null ? ft(query.elevationMinM) : (elevBounds?.lo ?? 0),
+	max: query.elevationMaxM != null ? ft(query.elevationMaxM) : (elevBounds?.hi ?? 0),
+};
+const exVal = {
+	min: query.exertionMin ?? exBounds?.lo ?? 0,
+	max: query.exertionMax ?? exBounds?.hi ?? 0,
+};
+
+// A hidden, off-DOM ActivityCard purely to source its component's scoped
+// style hash (Astro's data-astro-cid-* attribute) for the client script:
+// rows paged in after the first render are built by hand in JS (Astro
+// components only ever render on the server), and without this hash on
+// every hand-built node, ActivityCard's <style> block — which targets
+// `.ac`, `.ac__face`, etc. under that same generated attribute — would
+// never match them. Always rendered, independent of whether any real
+// activity exists yet, so the first client-side batch can always find it.
+const scopeDummy: ActivityCardRow = {
+	id: 0,
+	sport: 'other',
+	title: '',
+	local_date: '2000-01-01',
+	distance_m: null,
+	moving_seconds: null,
+	elapsed_seconds: 0,
+	elevation_gain_m: null,
+	route_path: null,
+};
+---
+
+<ActivityLayout title="All activities — Jason's activity log">
+	<div class="page">
+		<nav class="tabs">
+			{
+				nav.map((n) => (
+					<a class:list={['tabs__link', n.active && 'tabs__link--active']} href={n.href} aria-current={n.active ? 'page' : undefined}>
+						{n.label}
+					</a>
+				))
+			}
+		</nav>
+
+		<div id="scope-source" hidden aria-hidden="true">
+			<ActivityCard activity={scopeDummy} size="row" />
+		</div>
+
+		<header class="head">
+			<a class="back" href="/activities">← Jason's activity log</a>
+			<h1>All activities</h1>
+			<div class="sub">
+				<span class="sub__n">{num(collectionTotal)}</span> activities logged · showing{' '}
+				<span class="sub__n" id="shown">{num(total)}</span>
+			</div>
+		</header>
+
+		<div class="toolbar">
+			<div class="sortby">
+				<label for="sort" class="sortby__label">Sort</label>
+				<select id="sort">
+					{SORTS.map((s) => (
+						<option value={s} selected={s === currentSort}>
+							{SORT_LABEL[s]}
+						</option>
+					))}
+				</select>
+				<button type="button" id="dir-toggle" aria-label="Toggle sort direction" data-dir={currentDir}>
+					{currentDir === 'asc' ? '↑' : '↓'}
+				</button>
+			</div>
+			<button
+				type="button"
+				id="filters-toggle"
+				class={hasFilters ? 'pill pill--on' : 'pill'}
+				aria-expanded="false"
+				aria-controls="filters"
+			>
+				Filters<span id="filters-count">{hasFilters ? ` · ${filterCount}` : ''}</span>
+			</button>
+		</div>
+
+		<div class="panel" id="filters" hidden>
+			<div class="panel__head">
+				<span class="panel__title">Filter activities</span>
+				<button type="button" id="clear-all" class="clear" hidden={!hasFilters}>Clear all</button>
+			</div>
+
+			<div class="panel__grid">
+				<section class="panel__wide">
+					<h2 class="grp">Sport</h2>
+					<div class="sport-groups">
+						{
+							sportsByFamily.map((g) => (
+								<div class="sport-family">
+									<span class="sport-family__label">{g.label}</span>
+									<div class="chips">
+										{g.sports.map((slug) => {
+											const count = sportCounts.get(slug) ?? 0;
+											return (
+												<button
+													type="button"
+													class="chip"
+													data-sport={slug}
+													aria-pressed={(query.sports?.includes(slug) ?? false) ? 'true' : 'false'}
+													disabled={count === 0}
+												>
+													{sportMeta(slug).label}
+													{count > 0 && <span class="chip__count">{count}</span>}
+												</button>
+											);
+										})}
+									</div>
+								</div>
+							))
+						}
+					</div>
+				</section>
+
+				<section>
+					<h2 class="grp">Date</h2>
+					<div class="daterange">
+						<input type="date" id="datefrom" value={query.dateFrom ?? ''} aria-label="Earliest date" />
+						<span class="daterange__sep">–</span>
+						<input type="date" id="dateto" value={query.dateTo ?? ''} aria-label="Latest date" />
+					</div>
+				</section>
+
+				<section>
+					<h2 class="grp">Type</h2>
+					<div class="chips chips--gap">
+						<button type="button" class="chip" data-tri="gps" data-value="1" aria-pressed={(query.hasGps === true) ? 'true' : 'false'}>GPS route</button>
+						<button type="button" class="chip" data-tri="gps" data-value="0" aria-pressed={(query.hasGps === false) ? 'true' : 'false'}>No GPS</button>
+						<button type="button" class="chip" data-tri="indoor" data-value="1" aria-pressed={(query.indoor === true) ? 'true' : 'false'}>Indoor</button>
+						<button type="button" class="chip" data-tri="indoor" data-value="0" aria-pressed={(query.indoor === false) ? 'true' : 'false'}>Outdoor</button>
+					</div>
+				</section>
+
+				<section>
+					<h2 class="grp">Data &amp; highlights</h2>
+					<div class="chips chips--gap">
+						<button type="button" class="chip" data-flag="power" aria-pressed={(!!query.hasPower) ? 'true' : 'false'}>Has power</button>
+						<button type="button" class="chip" data-flag="hr" aria-pressed={(!!query.hasHr) ? 'true' : 'false'}>Has HR</button>
+						<button type="button" class="chip" data-flag="measured" aria-pressed={(!!query.measuredOnly) ? 'true' : 'false'} title="Only activities whose exertion score came from a measured stream (power or heart rate), not an estimate.">
+							Measured exertion only
+						</button>
+						<button type="button" class="chip" data-flag="fav" aria-pressed={(!!query.favoritesOnly) ? 'true' : 'false'}>★ Favourites</button>
+						<button type="button" class="chip" data-flag="pr" aria-pressed={(!!query.personalBestOnly) ? 'true' : 'false'}>Personal bests</button>
+					</div>
+				</section>
+
+				{distBounds && (
+					<section>
+						<h2 class="grp">Distance</h2>
+						<div class="range" id="dist-range">
+							<div class="range__track"></div>
+							<div class="range__fill" id="dist-fill"></div>
+							<input type="range" id="dist-min" min={distBounds.lo} max={distBounds.hi} step="1" value={distVal.min} aria-label="Minimum distance" />
+							<input type="range" id="dist-max" min={distBounds.lo} max={distBounds.hi} step="1" value={distVal.max} aria-label="Maximum distance" />
+							<div class="range__ends">
+								<span id="dist-min-label">{Math.round(distVal.min)} mi</span>
+								<span id="dist-max-label">{Math.round(distVal.max)} mi</span>
+							</div>
+						</div>
+					</section>
+				)}
+
+				{durBounds && (
+					<section>
+						<h2 class="grp">Duration</h2>
+						<div class="range" id="dur-range">
+							<div class="range__track"></div>
+							<div class="range__fill" id="dur-fill"></div>
+							<input type="range" id="dur-min" min={durBounds.lo} max={durBounds.hi} step="5" value={durVal.min} aria-label="Minimum duration" />
+							<input type="range" id="dur-max" min={durBounds.lo} max={durBounds.hi} step="5" value={durVal.max} aria-label="Maximum duration" />
+							<div class="range__ends">
+								<span id="dur-min-label">{Math.round(durVal.min)}m</span>
+								<span id="dur-max-label">{Math.round(durVal.max)}m</span>
+							</div>
+						</div>
+					</section>
+				)}
+
+				{elevBounds && (
+					<section>
+						<h2 class="grp">Elevation gain</h2>
+						<div class="range" id="elev-range">
+							<div class="range__track"></div>
+							<div class="range__fill" id="elev-fill"></div>
+							<input type="range" id="elev-min" min={elevBounds.lo} max={elevBounds.hi} step="50" value={elevVal.min} aria-label="Minimum elevation gain" />
+							<input type="range" id="elev-max" min={elevBounds.lo} max={elevBounds.hi} step="50" value={elevVal.max} aria-label="Maximum elevation gain" />
+							<div class="range__ends">
+								<span id="elev-min-label">{Math.round(elevVal.min).toLocaleString('en-US')} ft</span>
+								<span id="elev-max-label">{Math.round(elevVal.max).toLocaleString('en-US')} ft</span>
+							</div>
+						</div>
+					</section>
+				)}
+
+				{exBounds && (
+					<section class="panel__wide">
+						<h2 class="grp">
+							Exertion
+							<span class="grp__hint">an hour at threshold scores 100 — easy &lt;50 · steady 50–100 · hard 100–200 · brutal 200+</span>
+						</h2>
+						<div class="range range--exertion" id="ex-range">
+							<div class="range__track"></div>
+							<div class="range__fill" id="ex-fill"></div>
+							<input type="range" id="ex-min" min={exBounds.lo} max={exBounds.hi} step="5" value={exVal.min} aria-label="Minimum exertion" />
+							<input type="range" id="ex-max" min={exBounds.lo} max={exBounds.hi} step="5" value={exVal.max} aria-label="Maximum exertion" />
+							<div class="range__ends">
+								<span id="ex-min-label">{Math.round(exVal.min)} · {exertionLabel(exVal.min)}</span>
+								<span id="ex-max-label">{Math.round(exVal.max)} · {exertionLabel(exVal.max)}</span>
+							</div>
+						</div>
+					</section>
+				)}
+
+				{facets.gear.length > 0 && (
+					<section class="panel__wide">
+						<h2 class="grp">Gear</h2>
+						<div class="chips">
+							{facets.gear.map((g) => (
+								<button type="button" class="chip" data-gear={g.id} aria-pressed={(query.gearIds?.includes(g.id) ?? false) ? 'true' : 'false'}>
+									{g.name}
+								</button>
+							))}
+						</div>
+					</section>
+				)}
+
+				<section class="panel__wide">
+					<h2 class="grp">Start place</h2>
+					<input type="text" id="place" class="place-input" placeholder="e.g. Snoqualmie Pass" value={query.place ?? ''} autocomplete="off" />
+					{facets.places.length > 0 && (
+						<div class="chips" id="place-chips">
+							{facets.places.slice(0, 10).map((p) => (
+								<button type="button" class="chip" data-place={p.place} aria-pressed={(query.place === p.place) ? 'true' : 'false'}>
+									{p.place}
+								</button>
+							))}
+						</div>
+					)}
+				</section>
+			</div>
+		</div>
+
+		<div class="filterinfo" id="filterinfo" hidden={!hasFilters}>
+			<span class="filterinfo__tag">Filter</span>
+			<p class="filterinfo__text" id="filterinfo-text">
+				{summary.map((part) => <span class={part.em ? 'finfo__em' : undefined}>{part.t}</span>)}
+			</p>
+		</div>
+
+		<div class="grid" id="grid">
+			{
+				rows.map((row) => (
+					<div class="row-item">
+						<ActivityCard activity={row} size="row" />
+						{row.exertion != null && row.exertion_confidence && row.exertion_confidence !== 'measured' && (
+							<span
+								class="conf-badge"
+								title={`Exertion ${row.exertion_confidence} — via ${row.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream, so treat it as a rough read rather than a precise one.`}
+							>
+								{row.exertion_confidence === 'estimated' ? 'Est.' : 'Assumed'}
+							</span>
+						)}
+					</div>
+				))
+			}
+		</div>
+
+		<p class="empty" id="empty-unfiltered" hidden={!(total === 0 && !hasFilters)}>
+			No activities logged yet. The <a href="/activities/import">import</a> hasn't run.
+		</p>
+		<p class="empty" id="empty-filtered" hidden={!(total === 0 && hasFilters)}>
+			No activities match these filters.
+		</p>
+
+		<div id="sentinel" data-batch={BATCH} hidden={!hasMore}>
+			<span class="sentinel__spinner" aria-hidden="true"></span>
+			<span class="sentinel__text">Loading more…</span>
+		</div>
+		<p id="load-error" class="load-error" hidden>
+			Couldn't load more activities. <button type="button" id="retry">Retry</button>
+		</p>
+	</div>
+
+	<style>
+		.page {
+			max-width: 1100px;
+			margin: 0 auto;
+			padding: 2rem 1.5rem 6rem;
+		}
+		.tabs {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 1.25rem;
+			padding-bottom: 1.25rem;
+			margin-bottom: 1.75rem;
+			border-bottom: 1px solid #c9d4dc;
+		}
+		.tabs__link {
+			font-size: 0.9rem;
+			color: #6b7b88;
+		}
+		.tabs__link--active {
+			color: #1c6e8c;
+			font-weight: 600;
+		}
+		#scope-source {
+			display: none;
+		}
+
+		.head {
+			margin-bottom: 1.5rem;
+		}
+		.back {
+			display: inline-block;
+			font-size: 0.8rem;
+			color: #6b7b88;
+			margin-bottom: 0.6rem;
+		}
+		.back:hover {
+			color: #1c6e8c;
+		}
+		h1 {
+			font-size: 2.6rem;
+			margin: 0 0 0.4rem;
+			letter-spacing: -0.5px;
+		}
+		.sub {
+			font-size: 0.85rem;
+			color: #6b7b88;
+		}
+		.sub__n {
+			color: #1c6e8c;
+			font-weight: 600;
+			font-variant-numeric: tabular-nums;
+		}
+
+		.toolbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			flex-wrap: wrap;
+			gap: 0.75rem;
+			margin-bottom: 0.9rem;
+		}
+		.sortby {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+		}
+		.sortby__label {
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 1.2px;
+			color: #6b7b88;
+		}
+		#sort {
+			font: inherit;
+			font-size: 0.85rem;
+			padding: 0.45rem 0.6rem;
+			border-radius: 8px;
+			border: 1px solid #c9d4dc;
+			background: #f8fbfd;
+			color: #3d4a55;
+		}
+		#dir-toggle {
+			font-size: 0.95rem;
+			width: 2rem;
+			height: 2rem;
+			border-radius: 8px;
+			border: 1px solid #c9d4dc;
+			background: #f8fbfd;
+			color: #1c6e8c;
+			cursor: pointer;
+		}
+		#dir-toggle:hover {
+			border-color: #1c6e8c;
+		}
+		.pill {
+			font-size: 0.82rem;
+			padding: 0.5rem 0.85rem;
+			border-radius: 8px;
+			cursor: pointer;
+			border: 1px solid #c9d4dc;
+			background: #f8fbfd;
+			color: #3d4a55;
+		}
+		.pill:hover {
+			border-color: #1c6e8c;
+		}
+		.pill--on {
+			background: #1c6e8c;
+			color: #f8fbfd;
+			border-color: #1c6e8c;
+			font-weight: 600;
+		}
+
+		.filterinfo {
+			background: #f8fbfd;
+			border: 1px solid #c9d4dc;
+			border-radius: 10px;
+			padding: 0.85rem 1.1rem;
+			margin-bottom: 1rem;
+			display: flex;
+			align-items: baseline;
+			gap: 0.9rem;
+		}
+		.filterinfo[hidden] {
+			display: none;
+		}
+		.filterinfo__tag {
+			font-size: 0.65rem;
+			text-transform: uppercase;
+			letter-spacing: 1.6px;
+			color: #6b7b88;
+			flex: none;
+		}
+		.filterinfo__text {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-size: 1.05rem;
+			line-height: 1.5;
+			margin: 0;
+			color: #3d4a55;
+		}
+		.finfo__em {
+			color: #1c6e8c;
+			font-weight: 600;
+			font-style: normal;
+		}
+
+		.panel {
+			background: #f8fbfd;
+			border: 1px solid #c9d4dc;
+			border-radius: 12px;
+			padding: 1.3rem 1.4rem;
+			margin-bottom: 1.2rem;
+		}
+		.panel[hidden] {
+			display: none;
+		}
+		.panel__head {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			margin-bottom: 1.1rem;
+		}
+		.panel__title {
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 1.4px;
+			color: #6b7b88;
+		}
+		.clear {
+			font-size: 0.78rem;
+			font-weight: 600;
+			color: #1c6e8c;
+			background: none;
+			border: none;
+			cursor: pointer;
+			padding: 0;
+		}
+		.clear[hidden] {
+			display: none;
+		}
+		.clear:hover {
+			color: #12495e;
+		}
+		.panel__grid {
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 1.5rem 2.2rem;
+		}
+		.panel__wide {
+			grid-column: 1 / -1;
+		}
+		.grp {
+			font-size: 0.7rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 1.2px;
+			color: #6b7b88;
+			margin: 0 0 0.7rem;
+			display: flex;
+			align-items: baseline;
+			gap: 0.6rem;
+			flex-wrap: wrap;
+		}
+		.grp__hint {
+			font-size: 0.68rem;
+			font-weight: 400;
+			text-transform: none;
+			letter-spacing: 0;
+			color: #8fa0ab;
+		}
+
+		.sport-groups {
+			display: flex;
+			flex-direction: column;
+			gap: 0.7rem;
+		}
+		.sport-family {
+			display: flex;
+			align-items: baseline;
+			gap: 0.7rem;
+			flex-wrap: wrap;
+		}
+		.sport-family__label {
+			font-size: 0.75rem;
+			color: #6b7b88;
+			width: 82px;
+			flex: none;
+		}
+		.chips {
+			display: flex;
+			gap: 0.45rem;
+			flex-wrap: wrap;
+		}
+		.chips--gap {
+			row-gap: 0.5rem;
+		}
+		.chip {
+			font-size: 0.78rem;
+			padding: 0.4rem 0.7rem;
+			border-radius: 20px;
+			cursor: pointer;
+			border: 1px solid #c9d4dc;
+			background: transparent;
+			color: #3d4a55;
+			display: inline-flex;
+			align-items: center;
+			gap: 0.35rem;
+		}
+		.chip:hover:not(:disabled) {
+			border-color: #1c6e8c;
+		}
+		.chip[aria-pressed='true'] {
+			background: #1c6e8c;
+			color: #f8fbfd;
+			border-color: #1c6e8c;
+			font-weight: 600;
+		}
+		.chip:disabled {
+			opacity: 0.35;
+			cursor: default;
+		}
+		.chip__count {
+			font-size: 0.68rem;
+			opacity: 0.7;
+		}
+
+		.daterange {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
+		}
+		.daterange input {
+			font: inherit;
+			font-size: 0.82rem;
+			padding: 0.4rem 0.5rem;
+			border-radius: 6px;
+			border: 1px solid #c9d4dc;
+			background: #fff;
+			color: #3d4a55;
+		}
+		.daterange__sep {
+			color: #6b7b88;
+		}
+
+		.place-input {
+			font: inherit;
+			font-size: 0.85rem;
+			width: 100%;
+			max-width: 320px;
+			padding: 0.5rem 0.7rem;
+			border-radius: 8px;
+			border: 1px solid #c9d4dc;
+			background: #fff;
+			color: #3d4a55;
+			margin-bottom: 0.6rem;
+			outline: none;
+		}
+		.place-input:focus {
+			border-color: #1c6e8c;
+		}
+
+		/* Dual-thumb range: two native sliders stacked on one track. */
+		.range {
+			position: relative;
+			height: 2.1rem;
+			max-width: 420px;
+		}
+		.range__track,
+		.range__fill {
+			position: absolute;
+			top: 0.9rem;
+			height: 4px;
+			border-radius: 2px;
+			pointer-events: none;
+		}
+		.range__track {
+			left: 0;
+			right: 0;
+			background: #c9d4dc;
+		}
+		.range__fill {
+			background: #1c6e8c;
+		}
+		.range--exertion .range__fill {
+			background: #d99a3a;
+		}
+		.range input[type='range'] {
+			position: absolute;
+			top: 0;
+			left: 0;
+			width: 100%;
+			height: 2.1rem;
+			margin: 0;
+			background: none;
+			appearance: none;
+			-webkit-appearance: none;
+			pointer-events: none;
+		}
+		.range input[type='range']::-webkit-slider-thumb {
+			appearance: none;
+			-webkit-appearance: none;
+			pointer-events: auto;
+			width: 15px;
+			height: 15px;
+			border-radius: 50%;
+			background: #1c6e8c;
+			border: 2px solid #f8fbfd;
+			box-shadow: 0 1px 3px rgba(18, 73, 94, 0.4);
+			cursor: pointer;
+		}
+		.range input[type='range']::-moz-range-thumb {
+			pointer-events: auto;
+			width: 15px;
+			height: 15px;
+			border-radius: 50%;
+			background: #1c6e8c;
+			border: 2px solid #f8fbfd;
+			box-shadow: 0 1px 3px rgba(18, 73, 94, 0.4);
+			cursor: pointer;
+		}
+		.range--exertion input[type='range']::-webkit-slider-thumb {
+			background: #d99a3a;
+		}
+		.range--exertion input[type='range']::-moz-range-thumb {
+			background: #d99a3a;
+		}
+		.range__ends {
+			position: absolute;
+			top: 1.4rem;
+			left: 0;
+			right: 0;
+			display: flex;
+			justify-content: space-between;
+			font-size: 0.75rem;
+			color: #3d4a55;
+			font-variant-numeric: tabular-nums;
+			pointer-events: none;
+		}
+
+		.grid {
+			display: flex;
+			flex-direction: column;
+			gap: 0.7rem;
+			margin-top: 1rem;
+		}
+		.row-item {
+			position: relative;
+		}
+		.conf-badge {
+			position: absolute;
+			top: 0.5rem;
+			left: 0.5rem;
+			font-size: 0.62rem;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.6px;
+			padding: 0.15rem 0.4rem;
+			border-radius: 4px;
+			background: rgba(61, 74, 85, 0.78);
+			color: #f8fbfd;
+			pointer-events: none;
+		}
+
+		.empty {
+			padding: 3rem 0;
+			text-align: center;
+			color: #6b7b88;
+			font-size: 0.95rem;
+			font-family: 'Instrument Serif', Georgia, serif;
+		}
+		.empty[hidden] {
+			display: none;
+		}
+		.empty a {
+			color: #1c6e8c;
+		}
+
+		#sentinel {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 0.6rem;
+			padding: 1.6rem 0 0.5rem;
+			font-size: 0.72rem;
+			text-transform: uppercase;
+			letter-spacing: 1.2px;
+			color: #6b7b88;
+		}
+		#sentinel[hidden] {
+			display: none;
+		}
+		.sentinel__spinner {
+			width: 12px;
+			height: 12px;
+			border: 2px solid #c9d4dc;
+			border-top-color: #1c6e8c;
+			border-radius: 50%;
+			animation: spin 0.7s linear infinite;
+		}
+		@keyframes spin {
+			to {
+				transform: rotate(360deg);
+			}
+		}
+		@media (prefers-reduced-motion: reduce) {
+			.sentinel__spinner {
+				animation: none;
+			}
+		}
+		.load-error {
+			padding: 1.5rem 0;
+			text-align: center;
+			font-size: 0.82rem;
+			color: #6b7b88;
+		}
+		.load-error[hidden] {
+			display: none;
+		}
+		.load-error button {
+			font: inherit;
+			color: #1c6e8c;
+			background: none;
+			border: none;
+			padding: 0;
+			cursor: pointer;
+			text-decoration: underline;
+		}
+
+		@media (max-width: 860px) {
+			.panel__grid {
+				grid-template-columns: minmax(0, 1fr);
+			}
+		}
+		@media (max-width: 560px) {
+			h1 {
+				font-size: 2rem;
+			}
+			.panel {
+				padding: 1rem 0.9rem;
+			}
+		}
+	</style>
+
+	<script>
+		// NOTE ON WHAT THIS SCRIPT DOES NOT IMPORT. activity-params.ts (this
+		// track's own file) is the single parser both this page's frontmatter
+		// and /api/activities/list read a URL through — but it also re-exports
+		// fetchActivityPage/fetchActivityFacets, which pull in lib/activities.ts
+		// and, through it, lib/supabase.ts's service-role client. Importing
+		// activity-params.ts here would drag that whole chain into the browser
+		// bundle and throw at load ("SUPABASE_SERVICE_ROLE_KEY is not set") the
+		// moment a client env lacks the server-only secret it needs — which a
+		// browser always does. So the filter-sentence builder below is a
+		// deliberate, small duplicate of activityFilterSentence's logic rather
+		// than an import of it; sports.ts and activity-tokens.ts have no such
+		// server dependency and are imported directly.
+		import { sportMeta, sportIcon, formatStat, type StatKey } from '../../lib/sports';
+		import { exertionLabel } from '../../lib/activity-tokens';
+		// Type-only — erased at build, so this brings in none of activities.ts's
+		// runtime code (and, through it, supabase.ts) the way a value import
+		// would.
+		import type { ActivityListRow } from '../../lib/activities';
+		type ApiActivity = ActivityListRow;
+
+		interface SentencePart {
+			t: string;
+			em: boolean;
+		}
+
+		const SPORT_VERB: Record<string, string> = {
+			ride: 'ridden',
+			gravel_ride: 'ridden',
+			mountain_bike: 'ridden',
+			virtual_ride: 'ridden',
+			run: 'run',
+			treadmill_run: 'run',
+			trail_run: 'run',
+			swim: 'swum',
+			open_water_swim: 'swum',
+			hike: 'hiked',
+			walk: 'walked',
+			snowshoe: 'snowshoed',
+			alpine_ski: 'skied',
+			backcountry_ski: 'skied',
+			nordic_ski: 'skied',
+			snowboard: 'ridden',
+			strength: 'lifted through',
+			yoga: 'practiced',
+			rowing: 'rowed',
+			transition: 'logged',
+			other: 'logged',
+		};
+
+		function andList(items: string[], conj = 'and'): string {
+			if (items.length <= 1) return items.join('');
+			if (items.length === 2) return `${items[0]} ${conj} ${items[1]}`;
+			return `${items.slice(0, -1).join(', ')}, ${conj} ${items[items.length - 1]}`;
+		}
+		function miTxt(m: number): string {
+			const val = m / 1609.344;
+			return `${val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)} mi`;
+		}
+		function ftTxt(m: number): string {
+			return `${Math.round(m / 0.3048).toLocaleString('en-US')} ft`;
+		}
+		function durTxt(s: number): string {
+			const h = Math.floor(s / 3600);
+			const m = Math.round((s % 3600) / 60);
+			return h > 0 ? `${h}h ${m}m` : `${m}m`;
+		}
+
+		interface FilterSummary {
+			total: number;
+			sports: string[];
+			dateFrom: string | null;
+			dateTo: string | null;
+			distanceMinM: number | null;
+			distanceMaxM: number | null;
+			durationMinS: number | null;
+			durationMaxS: number | null;
+			elevationMinM: number | null;
+			elevationMaxM: number | null;
+			exertionMin: number | null;
+			exertionMax: number | null;
+			hasGps: boolean | null;
+			indoor: boolean | null;
+			hasPower: boolean;
+			hasHr: boolean;
+			place: string | null;
+			favoritesOnly: boolean;
+			personalBestOnly: boolean;
+			measuredOnly: boolean;
+			gearNames: string[];
+		}
+
+		/** Client-side twin of activity-params.ts's activityFilterSentence — see
+		 * the note above the imports for why this isn't a shared function. Keep
+		 * the two in step by eye; the wording, not the filtering, is all that's
+		 * ever at stake if they drift. */
+		function activityFilterSentence(s: FilterSummary): SentencePart[] {
+			const parts: SentencePart[] = [];
+			const lit = (t: string) => parts.push({ t, em: false });
+			const em = (t: string) => parts.push({ t, em: true });
+
+			const verb = s.sports.length === 1 ? (SPORT_VERB[s.sports[0]] ?? 'logged') : 'logged';
+			lit(`You have ${verb} `);
+			em(s.total.toLocaleString('en-US'));
+			lit(s.total === 1 ? ' activity' : ' activities');
+
+			if (s.sports.length > 1) {
+				lit(' across ');
+				em(andList(s.sports.map((slug) => sportMeta(slug).label)));
+			} else if (s.sports.length === 1 && verb === 'logged') {
+				lit(' of ');
+				em(sportMeta(s.sports[0]).label);
+			}
+
+			if (s.favoritesOnly) {
+				lit(' that are ');
+				em('favourites');
+			}
+			if (s.personalBestOnly) {
+				lit(s.favoritesOnly ? ' and ' : ' that are ');
+				em('personal bests');
+			}
+
+			if (s.dateFrom || s.dateTo) {
+				if (s.dateFrom && s.dateTo) {
+					lit(' between ');
+					em(`${s.dateFrom} and ${s.dateTo}`);
+				} else if (s.dateFrom) {
+					lit(' since ');
+					em(s.dateFrom);
+				} else {
+					lit(' before ');
+					em(s.dateTo!);
+				}
+			}
+
+			if (s.distanceMinM != null || s.distanceMaxM != null) {
+				if (s.distanceMinM != null && s.distanceMaxM != null) {
+					lit(' between ');
+					em(`${miTxt(s.distanceMinM)} and ${miTxt(s.distanceMaxM)}`);
+				} else if (s.distanceMinM != null) {
+					lit(' over ');
+					em(miTxt(s.distanceMinM));
+				} else {
+					lit(' under ');
+					em(miTxt(s.distanceMaxM!));
+				}
+			}
+
+			if (s.durationMinS != null || s.durationMaxS != null) {
+				if (s.durationMinS != null && s.durationMaxS != null) {
+					lit(' lasting between ');
+					em(`${durTxt(s.durationMinS)} and ${durTxt(s.durationMaxS)}`);
+				} else if (s.durationMinS != null) {
+					lit(' lasting over ');
+					em(durTxt(s.durationMinS));
+				} else {
+					lit(' lasting under ');
+					em(durTxt(s.durationMaxS!));
+				}
+			}
+
+			if (s.elevationMinM != null || s.elevationMaxM != null) {
+				if (s.elevationMinM != null && s.elevationMaxM != null) {
+					lit(' climbing between ');
+					em(`${ftTxt(s.elevationMinM)} and ${ftTxt(s.elevationMaxM)}`);
+				} else if (s.elevationMinM != null) {
+					lit(' climbing over ');
+					em(ftTxt(s.elevationMinM));
+				} else {
+					lit(' climbing under ');
+					em(ftTxt(s.elevationMaxM!));
+				}
+			}
+
+			if (s.exertionMin != null || s.exertionMax != null) {
+				if (s.exertionMin != null && s.exertionMax != null) {
+					lit(' at ');
+					em(`${exertionLabel(s.exertionMin)} to ${exertionLabel(s.exertionMax)}`);
+					lit(' effort');
+				} else if (s.exertionMin != null) {
+					lit(' at ');
+					em(`${exertionLabel(s.exertionMin)} or above`);
+				} else {
+					lit(' at ');
+					em(`${exertionLabel(s.exertionMax!)} or below`);
+				}
+			}
+
+			if (s.hasGps === true) {
+				lit(' with a ');
+				em('GPS route');
+			} else if (s.hasGps === false) {
+				lit(' with ');
+				em('no GPS');
+			}
+
+			if (s.indoor === true) {
+				lit(' ');
+				em('indoors');
+			} else if (s.indoor === false) {
+				lit(' ');
+				em('outdoors');
+			}
+
+			if (s.hasPower) {
+				lit(' with ');
+				em('power data');
+			}
+			if (s.hasHr) {
+				lit(' with ');
+				em('heart-rate data');
+			}
+			if (s.measuredOnly) {
+				lit(' with ');
+				em('measured');
+				lit(' exertion only');
+			}
+
+			if (s.gearNames.length) {
+				lit(' using ');
+				em(andList(s.gearNames));
+			}
+			if (s.place) {
+				lit(' starting near ');
+				em(`"${s.place}"`);
+			}
+
+			lit('.');
+			return parts;
+		}
+
+		const grid = document.getElementById('grid');
+		const sentinel = document.getElementById('sentinel');
+		if (!grid || !sentinel) throw new Error('activities/all: missing #grid or #sentinel');
+
+		const shown = document.getElementById('shown')!;
+		const emptyUnfiltered = document.getElementById('empty-unfiltered')!;
+		const emptyFiltered = document.getElementById('empty-filtered')!;
+		const errorBox = document.getElementById('load-error')!;
+		const retry = document.getElementById('retry')!;
+		const BATCH = Number(sentinel.dataset.batch);
+
+		let offset = grid.childElementCount;
+		let loading = false;
+		let done = sentinel.hidden;
+		let seq = 0;
+
+		const fmt = (n: number) => n.toLocaleString('en-US');
+
+		// --- Filter state, mirroring activity-params.ts's units ------------
+		let sort = (document.getElementById('sort') as HTMLSelectElement).value;
+		let dir = (document.getElementById('dir-toggle') as HTMLButtonElement).dataset.dir as 'asc' | 'desc';
+		const sports = new Set<string>(
+			Array.from(document.querySelectorAll<HTMLButtonElement>('.chip[data-sport][aria-pressed="true"]')).map(
+				(c) => c.dataset.sport!,
+			),
+		);
+		const gear = new Set<number>(
+			Array.from(document.querySelectorAll<HTMLButtonElement>('.chip[data-gear][aria-pressed="true"]')).map((c) =>
+				Number(c.dataset.gear),
+			),
+		);
+		const flags = {
+			power: false,
+			hr: false,
+			measured: false,
+			fav: false,
+			pr: false,
+		};
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-flag]')) {
+			flags[chip.dataset.flag as keyof typeof flags] = chip.getAttribute('aria-pressed') === 'true';
+		}
+		let gps: boolean | null = null;
+		let indoor: boolean | null = null;
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-tri]')) {
+			if (chip.getAttribute('aria-pressed') !== 'true') continue;
+			const key = chip.dataset.tri as 'gps' | 'indoor';
+			const val = chip.dataset.value === '1';
+			if (key === 'gps') gps = val;
+			else indoor = val;
+		}
+		const dateFromInput = document.getElementById('datefrom') as HTMLInputElement;
+		const dateToInput = document.getElementById('dateto') as HTMLInputElement;
+		const placeInput = document.getElementById('place') as HTMLInputElement;
+		let place = placeInput.value.trim();
+
+		function activeCount(): number {
+			let n =
+				sports.size +
+				gear.size +
+				(dateFromInput.value || dateToInput.value ? 1 : 0) +
+				(gps != null ? 1 : 0) +
+				(indoor != null ? 1 : 0) +
+				(flags.power ? 1 : 0) +
+				(flags.hr ? 1 : 0) +
+				(flags.measured ? 1 : 0) +
+				(flags.fav ? 1 : 0) +
+				(flags.pr ? 1 : 0) +
+				(place ? 1 : 0) +
+				(distRange && distRange.isActive() ? 1 : 0) +
+				(durRange && durRange.isActive() ? 1 : 0) +
+				(elevRange && elevRange.isActive() ? 1 : 0) +
+				(exRange && exRange.isActive() ? 1 : 0);
+			return n;
+		}
+
+		// --- Generic dual-thumb range control -------------------------------
+		interface RangeHandle {
+			min: number;
+			max: number;
+			setValues(a: number, b: number): void;
+			isActive(): boolean;
+			reset(): void;
+		}
+
+		function makeRange(prefix: string, lo: number, hi: number, format: (v: number) => string): RangeHandle | null {
+			const minInput = document.getElementById(`${prefix}-min`) as HTMLInputElement | null;
+			const maxInput = document.getElementById(`${prefix}-max`) as HTMLInputElement | null;
+			const fill = document.getElementById(`${prefix}-fill`);
+			const minLabel = document.getElementById(`${prefix}-min-label`);
+			const maxLabel = document.getElementById(`${prefix}-max-label`);
+			if (!minInput || !maxInput || !fill || !minLabel || !maxLabel) return null;
+
+			let curMin = Number(minInput.value);
+			let curMax = Number(maxInput.value);
+
+			function sync() {
+				const pct = (v: number) => (hi > lo ? ((v - lo) / (hi - lo)) * 100 : 0);
+				fill!.style.left = `${pct(curMin)}%`;
+				fill!.style.width = `${pct(curMax) - pct(curMin)}%`;
+				minLabel!.textContent = format(curMin);
+				maxLabel!.textContent = format(curMax);
+				const overlap = curMin > (lo + hi) / 2;
+				minInput!.style.zIndex = overlap ? '2' : '1';
+				maxInput!.style.zIndex = overlap ? '1' : '2';
+			}
+
+			function setValues(a: number, b: number) {
+				curMin = Math.min(a, b);
+				curMax = Math.max(a, b);
+				minInput!.value = String(curMin);
+				maxInput!.value = String(curMax);
+				sync();
+			}
+
+			minInput.addEventListener('input', () => {
+				setValues(Number(minInput.value), curMax);
+			});
+			maxInput.addEventListener('input', () => {
+				setValues(curMin, Number(maxInput.value));
+			});
+			for (const input of [minInput, maxInput]) {
+				input.addEventListener('change', () => applyFilters());
+			}
+
+			sync();
+			return {
+				get min() {
+					return curMin;
+				},
+				get max() {
+					return curMax;
+				},
+				setValues,
+				isActive: () => curMin > lo || curMax < hi,
+				reset: () => setValues(lo, hi),
+			};
+		}
+
+		const distRange = makeRange(
+			'dist',
+			Number((document.getElementById('dist-min') as HTMLInputElement | null)?.min ?? 0),
+			Number((document.getElementById('dist-min') as HTMLInputElement | null)?.max ?? 0),
+			(v) => `${Math.round(v)} mi`,
+		);
+		const durRange = makeRange(
+			'dur',
+			Number((document.getElementById('dur-min') as HTMLInputElement | null)?.min ?? 0),
+			Number((document.getElementById('dur-min') as HTMLInputElement | null)?.max ?? 0),
+			(v) => `${Math.round(v)}m`,
+		);
+		const elevRange = makeRange(
+			'elev',
+			Number((document.getElementById('elev-min') as HTMLInputElement | null)?.min ?? 0),
+			Number((document.getElementById('elev-min') as HTMLInputElement | null)?.max ?? 0),
+			(v) => `${Math.round(v).toLocaleString('en-US')} ft`,
+		);
+		const exRange = makeRange(
+			'ex',
+			Number((document.getElementById('ex-min') as HTMLInputElement | null)?.min ?? 0),
+			Number((document.getElementById('ex-min') as HTMLInputElement | null)?.max ?? 0),
+			(v) => `${Math.round(v)} · ${exertionLabel(v)}`,
+		);
+
+		function buildQuery(from: number): string {
+			const p = new URLSearchParams();
+			p.set('limit', String(BATCH));
+			p.set('offset', String(from));
+			if (sort !== 'date') p.set('sort', sort);
+			if (dir !== 'desc') p.set('dir', dir);
+			for (const s of sports) p.append('sport', s);
+			if (dateFromInput.value) p.set('datefrom', dateFromInput.value);
+			if (dateToInput.value) p.set('dateto', dateToInput.value);
+			if (distRange?.isActive()) {
+				p.set('distmin', String(distRange.min));
+				p.set('distmax', String(distRange.max));
+			}
+			if (durRange?.isActive()) {
+				p.set('durmin', String(durRange.min));
+				p.set('durmax', String(durRange.max));
+			}
+			if (elevRange?.isActive()) {
+				p.set('elevmin', String(elevRange.min));
+				p.set('elevmax', String(elevRange.max));
+			}
+			if (exRange?.isActive()) {
+				p.set('exmin', String(exRange.min));
+				p.set('exmax', String(exRange.max));
+			}
+			if (gps != null) p.set('gps', gps ? '1' : '0');
+			if (indoor != null) p.set('indoor', indoor ? '1' : '0');
+			if (flags.power) p.set('power', '1');
+			if (flags.hr) p.set('hr', '1');
+			if (flags.measured) p.set('measured', '1');
+			if (flags.fav) p.set('fav', '1');
+			if (flags.pr) p.set('pr', '1');
+			for (const id of gear) p.append('gear', String(id));
+			if (place) p.set('place', place);
+			return p.toString();
+		}
+
+		function writeUrl() {
+			const qs = buildQuery(0);
+			// offset/limit are paging, not filters — never belong in the shareable URL.
+			const p = new URLSearchParams(qs);
+			p.delete('offset');
+			p.delete('limit');
+			const url = location.pathname + (p.toString() ? `?${p.toString()}` : '');
+			if (url !== location.pathname + location.search) history.replaceState(null, '', url);
+		}
+
+		// Card markup for rows paged in after the first render, mirroring
+		// ActivityCard.astro's own template so the same scoped CSS applies —
+		// see the scopeDummy comment in the frontmatter for why the hash has
+		// to be read off a real rendered instance rather than guessed.
+		const cardSample = document.querySelector('#scope-source .ac');
+		const cardScope = cardSample
+			? Array.from(cardSample.attributes)
+					.map((a) => a.name)
+					.find((n) => n.startsWith('data-astro-cid-'))
+			: undefined;
+		const pageScope = Array.from(grid.attributes)
+			.map((a) => a.name)
+			.find((n) => n.startsWith('data-astro-cid-'));
+
+		function el(tag: string, cls: string | undefined, scope: string | undefined, text?: string): HTMLElement {
+			const node = document.createElement(tag);
+			if (scope) node.setAttribute(scope, '');
+			if (cls) node.className = cls;
+			if (text != null) node.textContent = text;
+			return node;
+		}
+		function svgEl(tag: string, scope: string | undefined): SVGElement {
+			const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+			if (scope) node.setAttribute(scope, '');
+			return node;
+		}
+
+		function buildRow(a: ApiActivity): HTMLElement {
+			const wrap = el('div', 'row-item', pageScope);
+			const card = el('a', 'ac ac--row', cardScope) as HTMLAnchorElement;
+			card.href = `/activities/${a.id}`;
+
+			const face = el('div', 'ac__face', cardScope);
+			if (a.route_path) {
+				const svg = svgEl('svg', cardScope) as unknown as SVGSVGElement;
+				svg.setAttribute('class', 'ac__route');
+				svg.setAttribute('viewBox', '0 0 100 100');
+				svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+				svg.setAttribute('aria-hidden', 'true');
+				const path = svgEl('path', cardScope);
+				path.setAttribute('d', a.route_path);
+				path.setAttribute('fill', 'none');
+				path.setAttribute('stroke', 'var(--lake)');
+				path.setAttribute('stroke-width', '2.2');
+				path.setAttribute('stroke-linecap', 'round');
+				path.setAttribute('stroke-linejoin', 'round');
+				path.setAttribute('vector-effect', 'non-scaling-stroke');
+				svg.appendChild(path);
+				const m = a.route_path.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+				if (m) {
+					const dot = svgEl('circle', cardScope);
+					dot.setAttribute('cx', m[1]);
+					dot.setAttribute('cy', m[2]);
+					dot.setAttribute('r', '1.8');
+					dot.setAttribute('fill', 'var(--lake)');
+					svg.appendChild(dot);
+				}
+				face.appendChild(svg as unknown as Node);
+			} else {
+				const nogps = el('div', 'ac__nogps', cardScope);
+				const meta = sportMeta(a.sport);
+				const keys = meta.primaryStats.filter((k) => k !== 'exertion').slice(0, 2);
+				const vals = keys.map((k) => formatStat(k as StatKey, a)).filter((s) => s.value !== '—');
+				vals.slice(0, 2).forEach((s, i) => {
+					const stat = el('div', i === 0 ? 'ac__nogps-stat' : 'ac__nogps-stat ac__nogps-stat--sub', cardScope);
+					stat.appendChild(el('span', i === 0 ? 'ac__nogps-value figure' : 'ac__nogps-value ac__nogps-value--sub figure', cardScope, s.value));
+					nogps.appendChild(stat);
+				});
+				face.appendChild(nogps);
+			}
+			if (a.favorite_rank) {
+				const favEl = el('span', 'ac__fav', cardScope, '★');
+				favEl.title = `Favourite #${a.favorite_rank}`;
+				face.appendChild(favEl);
+			}
+			card.appendChild(face);
+
+			const metaBox = el('div', 'ac__meta', cardScope);
+			metaBox.appendChild(el('div', 'ac__title', cardScope, a.title));
+			const sportRow = el('div', 'ac__sport', cardScope);
+			const iconSvg = svgEl('svg', cardScope) as unknown as SVGSVGElement;
+			iconSvg.setAttribute('class', 'ac__sport-mark');
+			iconSvg.setAttribute('viewBox', '0 0 24 24');
+			iconSvg.setAttribute('fill', 'none');
+			iconSvg.setAttribute('stroke', 'currentColor');
+			iconSvg.setAttribute('stroke-width', '1.6');
+			iconSvg.setAttribute('aria-hidden', 'true');
+			const iconPath = svgEl('path', cardScope);
+			iconPath.setAttribute('d', sportIcon(a.sport));
+			iconSvg.appendChild(iconPath);
+			sportRow.appendChild(iconSvg as unknown as Node);
+			sportRow.appendChild(el('span', undefined, cardScope, sportMeta(a.sport).label));
+			metaBox.appendChild(sportRow);
+
+			const statsRow = el('div', 'ac__stats figure', cardScope);
+			const shown = sportMeta(a.sport)
+				.primaryStats.map((k) => formatStat(k as StatKey, a))
+				.filter((s) => s.value !== '—')
+				.slice(0, 3);
+			shown.forEach((s, i) => {
+				if (i > 0) statsRow.appendChild(el('span', 'ac__stats-sep', cardScope, '·'));
+				statsRow.appendChild(document.createTextNode(s.value));
+			});
+			metaBox.appendChild(statsRow);
+			card.appendChild(metaBox);
+			wrap.appendChild(card);
+
+			if (a.exertion != null && a.exertion_confidence && a.exertion_confidence !== 'measured') {
+				const badge = el(
+					'span',
+					'conf-badge',
+					pageScope,
+					a.exertion_confidence === 'estimated' ? 'Est.' : 'Assumed',
+				);
+				badge.title = `Exertion ${a.exertion_confidence} — via ${a.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream, so treat it as a rough read rather than a precise one.`;
+				wrap.appendChild(badge);
+			}
+			return wrap;
+		}
+
+		function armSentinel() {
+			observer.unobserve(sentinel!);
+			sentinel!.hidden = done;
+			if (!done) observer.observe(sentinel!);
+		}
+
+		async function load(reset = false) {
+			if (!reset && (loading || done)) return;
+			if (reset) writeUrl();
+			const mySeq = ++seq;
+			loading = true;
+			errorBox.hidden = true;
+			const from = reset ? 0 : offset;
+			try {
+				const res = await fetch(`/api/activities/list?${buildQuery(from)}`);
+				if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				const { activities, total } = (await res.json()) as { activities: ApiActivity[]; total: number };
+				if (mySeq !== seq) return;
+
+				if (reset) {
+					grid!.replaceChildren();
+					offset = 0;
+				}
+				const batch = document.createDocumentFragment();
+				for (const a of activities) batch.append(buildRow(a));
+				grid!.append(batch);
+				offset += activities.length;
+
+				shown.textContent = fmt(total);
+				renderFilterInfo(total);
+				const filtered = activeCount() > 0;
+				emptyUnfiltered.hidden = !(total === 0 && !filtered);
+				emptyFiltered.hidden = !(total === 0 && filtered);
+				done = offset >= total || activities.length < BATCH;
+				armSentinel();
+			} catch (e) {
+				if (mySeq !== seq) return;
+				console.error('activities/all: failed to load activities', e);
+				errorBox.hidden = false;
+			} finally {
+				if (mySeq === seq) loading = false;
+			}
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((entry) => entry.isIntersecting)) load();
+			},
+			{ rootMargin: '600px' },
+		);
+		armSentinel();
+		retry.addEventListener('click', () => load(offset === 0));
+
+		// --- Filter summary sentence -----------------------------------------
+		const filterInfo = document.getElementById('filterinfo')!;
+		const filterInfoText = document.getElementById('filterinfo-text')!;
+
+		function metersFromMiles(v: number) {
+			return v * 1609.344;
+		}
+		function metersFromFeet(v: number) {
+			return v * 0.3048;
+		}
+		function secondsFromMinutes(v: number) {
+			return v * 60;
+		}
+
+		function renderFilterInfo(total: number) {
+			const n = activeCount();
+			filterInfo.hidden = n === 0;
+			if (filterInfo.hidden) return;
+			const parts: SentencePart[] = activityFilterSentence({
+				total,
+				sports: [...sports],
+				dateFrom: dateFromInput.value || null,
+				dateTo: dateToInput.value || null,
+				distanceMinM: distRange?.isActive() ? metersFromMiles(distRange.min) : null,
+				distanceMaxM: distRange?.isActive() ? metersFromMiles(distRange.max) : null,
+				durationMinS: durRange?.isActive() ? secondsFromMinutes(durRange.min) : null,
+				durationMaxS: durRange?.isActive() ? secondsFromMinutes(durRange.max) : null,
+				elevationMinM: elevRange?.isActive() ? metersFromFeet(elevRange.min) : null,
+				elevationMaxM: elevRange?.isActive() ? metersFromFeet(elevRange.max) : null,
+				exertionMin: exRange?.isActive() ? exRange.min : null,
+				exertionMax: exRange?.isActive() ? exRange.max : null,
+				hasGps: gps,
+				indoor,
+				hasPower: flags.power,
+				hasHr: flags.hr,
+				place: place || null,
+				favoritesOnly: flags.fav,
+				personalBestOnly: flags.pr,
+				measuredOnly: flags.measured,
+				gearNames: Array.from(gear).map((id) => {
+					const chip = document.querySelector<HTMLButtonElement>(`.chip[data-gear="${id}"]`);
+					return chip?.textContent?.trim() ?? String(id);
+				}),
+			});
+			filterInfoText.replaceChildren(...parts.map((p) => el('span', p.em ? 'finfo__em' : undefined, undefined, p.t)));
+		}
+
+		function applyFilters() {
+			const n = activeCount();
+			countBadge.textContent = n ? ` · ${n}` : '';
+			toggle.classList.toggle('pill--on', panel.hidden === false || n > 0);
+			clearAll.hidden = n === 0;
+			load(true);
+		}
+
+		// --- Wiring ------------------------------------------------------------
+		const panel = document.getElementById('filters')!;
+		const toggle = document.getElementById('filters-toggle')!;
+		const countBadge = document.getElementById('filters-count')!;
+		const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
+
+		toggle.addEventListener('click', () => {
+			panel.hidden = !panel.hidden;
+			toggle.setAttribute('aria-expanded', String(!panel.hidden));
+		});
+
+		const sortSelect = document.getElementById('sort') as HTMLSelectElement;
+		sortSelect.addEventListener('change', () => {
+			sort = sortSelect.value;
+			applyFilters();
+		});
+		const dirToggle = document.getElementById('dir-toggle') as HTMLButtonElement;
+		dirToggle.addEventListener('click', () => {
+			dir = dir === 'asc' ? 'desc' : 'asc';
+			dirToggle.dataset.dir = dir;
+			dirToggle.textContent = dir === 'asc' ? '↑' : '↓';
+			applyFilters();
+		});
+
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-sport]')) {
+			chip.addEventListener('click', () => {
+				const slug = chip.dataset.sport!;
+				if (sports.has(slug)) sports.delete(slug);
+				else sports.add(slug);
+				chip.setAttribute('aria-pressed', String(sports.has(slug)));
+				applyFilters();
+			});
+		}
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-gear]')) {
+			chip.addEventListener('click', () => {
+				const id = Number(chip.dataset.gear);
+				if (gear.has(id)) gear.delete(id);
+				else gear.add(id);
+				chip.setAttribute('aria-pressed', String(gear.has(id)));
+				applyFilters();
+			});
+		}
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-flag]')) {
+			chip.addEventListener('click', () => {
+				const key = chip.dataset.flag as keyof typeof flags;
+				flags[key] = !flags[key];
+				chip.setAttribute('aria-pressed', String(flags[key]));
+				applyFilters();
+			});
+		}
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-tri]')) {
+			chip.addEventListener('click', () => {
+				const key = chip.dataset.tri as 'gps' | 'indoor';
+				const val = chip.dataset.value === '1';
+				const current = key === 'gps' ? gps : indoor;
+				const next = current === val ? null : val;
+				if (key === 'gps') gps = next;
+				else indoor = next;
+				for (const sibling of document.querySelectorAll<HTMLButtonElement>(`.chip[data-tri="${key}"]`)) {
+					sibling.setAttribute('aria-pressed', String(sibling.dataset.value === '1' ? next === true : next === false));
+				}
+				applyFilters();
+			});
+		}
+		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-place]')) {
+			chip.addEventListener('click', () => {
+				const value = chip.dataset.place!;
+				place = place === value ? '' : value;
+				placeInput.value = place;
+				for (const sibling of document.querySelectorAll<HTMLButtonElement>('.chip[data-place]')) {
+					sibling.setAttribute('aria-pressed', String(sibling.dataset.place === place && place !== ''));
+				}
+				applyFilters();
+			});
+		}
+		let placeDebounce = 0;
+		placeInput.addEventListener('input', () => {
+			window.clearTimeout(placeDebounce);
+			placeDebounce = window.setTimeout(() => {
+				const next = placeInput.value.trim();
+				if (next === place) return;
+				place = next;
+				for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-place]')) {
+					chip.setAttribute('aria-pressed', String(chip.dataset.place === place && place !== ''));
+				}
+				applyFilters();
+			}, 300);
+		});
+		for (const input of [dateFromInput, dateToInput]) {
+			input.addEventListener('change', applyFilters);
+		}
+
+		clearAll.addEventListener('click', () => {
+			sports.clear();
+			gear.clear();
+			gps = null;
+			indoor = null;
+			place = '';
+			placeInput.value = '';
+			flags.power = flags.hr = flags.measured = flags.fav = flags.pr = false;
+			dateFromInput.value = '';
+			dateToInput.value = '';
+			distRange?.reset();
+			durRange?.reset();
+			elevRange?.reset();
+			exRange?.reset();
+			for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[aria-pressed]')) {
+				chip.setAttribute('aria-pressed', 'false');
+			}
+			applyFilters();
+		});
+
+		// Deliberately no chrome hydration here. The server already rendered the
+		// badge, "Clear all" visibility and the filter sentence from this exact
+		// URL — and did it from the real ActivityQuery, not from what DOM
+		// controls happen to exist. Recomputing from activeCount() here would
+		// actively regress a filter the URL set but the panel can't represent
+		// yet (e.g. an ?exmin= narrower than any slider drawn, because the
+		// collection has no range to size one from): the request already
+		// honoured it, but a DOM-only recount would silently drop it from the
+		// badge and sentence, and then from the query itself on the next
+		// interaction. Chrome only needs to move once state actually changes,
+		// which is exactly what applyFilters() does.
+	</script>
+</ActivityLayout>

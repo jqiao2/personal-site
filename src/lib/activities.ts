@@ -1,0 +1,918 @@
+// Service layer for the activity log — the fourth section, and the first
+// whose records are ingested rather than typed. Reads go through the anon
+// client (the tables are publicly readable, RLS enabled, like the film and
+// restaurant logs); the one write here (setFavoriteRank) goes through the
+// service-role client and is only ever called after requireOwner() at the
+// API-route layer, same convention as films.ts's setFavorite.
+//
+// Schema: supabase/migrations/0034_activity_log.sql. Design contract:
+// ACTIVITIES.md §5 (schema), §6 (sports.ts is imported from, not duplicated —
+// sportMeta() is the one place a sport's family is decided) and §8 (filters
+// and sorts, mirrored here as ActivityQuery/ACTIVITY_SORTS the way
+// WatchedQuery/isWatchedSort work in films.ts).
+import { supabaseAdmin, supabasePublic } from './supabase';
+import { siteYear } from './day';
+import { sportMeta, type SportFamily } from './sports';
+
+// ---------------------------------------------------------------------------
+// Migration-tier degradation — mirrors films.ts's isMissingCreditColumn /
+// isMissingRelation. This section's whole schema lands in one migration
+// (0034), so these mostly guard a *later* migration (e.g. a 0035 adding a
+// column) that hasn't been applied yet in some environment — the reads below
+// step down to an empty/null result instead of a 500.
+// ---------------------------------------------------------------------------
+function isMissingColumn(err: { code?: string; message?: string } | null): boolean {
+	if (!err) return false;
+	const msg = (err.message ?? '').toLowerCase();
+	return (
+		err.code === '42703' || // undefined_column
+		err.code === 'PGRST204' || // column not found in schema cache
+		(msg.includes('column') && msg.includes('does not exist')) ||
+		msg.includes('schema cache')
+	);
+}
+
+function isMissingRelation(err: { code?: string; message?: string } | null): boolean {
+	if (!err) return false;
+	const msg = (err.message ?? '').toLowerCase();
+	return (
+		err.code === '42P01' || // undefined_table
+		err.code === 'PGRST200' || // no such relationship in the schema cache
+		msg.includes('does not exist') ||
+		msg.includes('schema cache')
+	);
+}
+
+function isDegraded(err: { code?: string; message?: string } | null): boolean {
+	return isMissingColumn(err) || isMissingRelation(err);
+}
+
+// ---------------------------------------------------------------------------
+// Row shapes — one-for-one with the SQL columns (snake_case, as PostgREST
+// returns them). Kept flat rather than nested; the pages reshape as needed.
+// ---------------------------------------------------------------------------
+
+export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met';
+export type ExertionConfidence = 'measured' | 'estimated' | 'assumed';
+export type LapType = 'lap' | 'interval' | 'rest' | 'transition' | 'length';
+export type GearKind = 'bike' | 'shoes' | 'skis' | 'board' | 'other';
+
+/** The full `activities` row — the detail page's read model. */
+export interface ActivityRow {
+	id: number;
+	sport: string;
+	sub_sport: string | null;
+	parent_id: number | null;
+	leg: number | null;
+	title: string;
+	notes: string | null;
+	/**
+	 * Always null here. `private_notes` is "never rendered publicly" per the
+	 * schema comment, and the strongest place to hold that line is the data
+	 * layer rather than trusting every future template to remember to omit
+	 * it — getActivity() never selects the column over the public (anon-key)
+	 * client. There's no owner-side editor built in this track to need the
+	 * real value; when one exists, it should read the column directly via
+	 * supabaseAdmin rather than through this function.
+	 */
+	private_notes: string | null;
+	started_at: string;
+	local_date: string;
+	utc_offset_minutes: number | null;
+	timezone: string | null;
+	elapsed_seconds: number;
+	moving_seconds: number | null;
+	distance_m: number | null;
+	elevation_gain_m: number | null;
+	elevation_loss_m: number | null;
+	elev_high_m: number | null;
+	elev_low_m: number | null;
+	avg_speed_ms: number | null;
+	max_speed_ms: number | null;
+	avg_hr: number | null;
+	max_hr: number | null;
+	avg_cadence: number | null;
+	avg_power_w: number | null;
+	max_power_w: number | null;
+	normalized_power_w: number | null;
+	work_kj: number | null;
+	calories: number | null;
+	avg_temp_c: number | null;
+	pool_length_m: number | null;
+	total_strokes: number | null;
+	avg_swolf: number | null;
+	exertion: number | null;
+	exertion_method: ExertionMethod | null;
+	exertion_confidence: ExertionConfidence | null;
+	intensity_factor: number | null;
+	polyline: string | null;
+	route_path: string | null;
+	start_lat: number | null;
+	start_lng: number | null;
+	end_lat: number | null;
+	end_lng: number | null;
+	bbox_w: number | null;
+	bbox_s: number | null;
+	bbox_e: number | null;
+	bbox_n: number | null;
+	start_place: string | null;
+	gear_id: number | null;
+	favorite_rank: number | null;
+	has_streams: boolean;
+	device_name: string | null;
+	created_at: string;
+	updated_at: string;
+}
+
+/** A row of the `activity_list` view — everything the list/landing pages need
+ * and nothing they don't (no streams, no raw source payloads). */
+export interface ActivityListRow {
+	id: number;
+	sport: string;
+	sub_sport: string | null;
+	parent_id: number | null;
+	leg: number | null;
+	title: string;
+	notes: string | null;
+	started_at: string;
+	local_date: string;
+	utc_offset_minutes: number | null;
+	timezone: string | null;
+	elapsed_seconds: number;
+	moving_seconds: number | null;
+	distance_m: number | null;
+	elevation_gain_m: number | null;
+	elevation_loss_m: number | null;
+	elev_high_m: number | null;
+	elev_low_m: number | null;
+	avg_speed_ms: number | null;
+	max_speed_ms: number | null;
+	avg_hr: number | null;
+	max_hr: number | null;
+	avg_cadence: number | null;
+	avg_power_w: number | null;
+	max_power_w: number | null;
+	normalized_power_w: number | null;
+	work_kj: number | null;
+	calories: number | null;
+	avg_temp_c: number | null;
+	pool_length_m: number | null;
+	total_strokes: number | null;
+	avg_swolf: number | null;
+	exertion: number | null;
+	exertion_method: ExertionMethod | null;
+	exertion_confidence: ExertionConfidence | null;
+	intensity_factor: number | null;
+	polyline: string | null;
+	route_path: string | null;
+	start_lat: number | null;
+	start_lng: number | null;
+	end_lat: number | null;
+	end_lng: number | null;
+	bbox_w: number | null;
+	bbox_s: number | null;
+	bbox_e: number | null;
+	bbox_n: number | null;
+	start_place: string | null;
+	gear_id: number | null;
+	gear_name: string | null;
+	gear_nickname: string | null;
+	favorite_rank: number | null;
+	has_streams: boolean;
+	device_name: string | null;
+	created_at: string;
+	updated_at: string;
+	/** The winning (highest-fidelity) source's provider, e.g. 'strava_archive'.
+	 * Null for an activity with no recorded source (a bare manual entry). */
+	source_provider: string | null;
+}
+
+/** The `activity_streams` row for one activity — big arrays, detail page only. */
+export interface ActivityStreams {
+	activity_id: number;
+	sample_count: number;
+	time_s: number[] | null;
+	latlng: [number, number][] | null;
+	altitude_m: number[] | null;
+	distance_m: number[] | null;
+	heartrate: number[] | null;
+	cadence: number[] | null;
+	power_w: number[] | null;
+	speed_ms: number[] | null;
+	temp_c: number[] | null;
+	grade: number[] | null;
+	moving: boolean[] | null;
+}
+
+export interface ActivityLap {
+	id: number;
+	activity_id: number;
+	lap_index: number;
+	name: string | null;
+	start_time: string | null;
+	elapsed_seconds: number | null;
+	moving_seconds: number | null;
+	distance_m: number | null;
+	avg_hr: number | null;
+	max_hr: number | null;
+	avg_power_w: number | null;
+	avg_speed_ms: number | null;
+	elevation_gain_m: number | null;
+	lap_type: LapType;
+}
+
+export interface ActivityGear {
+	id: number;
+	kind: GearKind;
+	name: string;
+	brand: string | null;
+	model: string | null;
+	nickname: string | null;
+	retired_at: string | null;
+	distance_m: number;
+	external_ids: Record<string, unknown>;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface AthleteThresholds {
+	id: number;
+	effective_from: string;
+	ftp_w: number | null;
+	lthr_bpm: number | null;
+	max_hr: number | null;
+	rest_hr: number | null;
+	threshold_pace_s_per_km: number | null;
+	css_pace_s_per_100m: number | null;
+	weight_kg: number | null;
+	created_at: string;
+}
+
+/** A row of the `activity_days` view — one calendar day's rollup. */
+export interface ActivityDay {
+	local_date: string;
+	activity_count: number;
+	total_distance_m: number;
+	total_elevation_gain_m: number;
+	total_moving_seconds: number;
+	total_exertion: number;
+	sports: string[];
+}
+
+/** A row of the `activity_months` view — one calendar month's rollup. */
+export interface ActivityMonth {
+	month_key: string;
+	activity_count: number;
+	total_distance_m: number;
+	total_elevation_gain_m: number;
+	total_moving_seconds: number;
+	total_exertion: number;
+	sports: string[];
+}
+
+// ---------------------------------------------------------------------------
+// listActivities — /activities/all. Every filter and sort in ACTIVITIES.md §8.
+// ---------------------------------------------------------------------------
+
+/** Sorts /activities/all offers. All but 'date' default to descending — the
+ * point of sorting by exertion/distance/etc is almost always "show me the
+ * biggest ones first". */
+export type ActivitySort =
+	| 'date'
+	| 'exertion'
+	| 'distance'
+	| 'duration'
+	| 'elevation'
+	| 'pace'
+	| 'power'
+	| 'hr'
+	| 'calories';
+
+export const ACTIVITY_SORTS: readonly ActivitySort[] = [
+	'date',
+	'exertion',
+	'distance',
+	'duration',
+	'elevation',
+	'pace',
+	'power',
+	'hr',
+	'calories',
+];
+
+/** Whether a sort name is one we support; anything else falls back to 'date'. */
+export function isActivitySort(v: unknown): v is ActivitySort {
+	return typeof v === 'string' && (ACTIVITY_SORTS as readonly string[]).includes(v);
+}
+
+/** Which slice of the activity collection to read — src/lib/activity-params.ts
+ * parses the query string into this shape for both the server-rendered first
+ * page and the batches paged in afterwards, the same split films.ts uses for
+ * WatchedQuery. */
+export interface ActivityQuery {
+	sort?: ActivitySort;
+	/** 'date' defaults to newest first; every other sort defaults to biggest
+	 * first. Set 'asc' to flip either. */
+	sortDir?: 'asc' | 'desc';
+	limit?: number;
+	offset?: number;
+
+	/** Canonical sport slugs (src/lib/sports.ts), OR'd together. */
+	sports?: string[];
+	/** Inclusive local_date bounds, "YYYY-MM-DD". */
+	dateFrom?: string;
+	dateTo?: string;
+	distanceMinM?: number;
+	distanceMaxM?: number;
+	/** Moving-time bounds, in seconds — the same clock exertion is computed
+	 * against (ACTIVITIES.md §3: "Exertion always uses moving time"). */
+	durationMinS?: number;
+	durationMaxS?: number;
+	elevationMinM?: number;
+	elevationMaxM?: number;
+	exertionMin?: number;
+	exertionMax?: number;
+	/** Only activities with a route to draw (route_path is not null). */
+	hasGps?: boolean;
+	gearIds?: number[];
+	/** true = indoor only, false = outdoor only, omit = either.
+	 * "Indoor" is sub_sport = 'indoor' OR sport in (virtual_ride, treadmill_run)
+	 * — there's no first-class indoor/outdoor column, so this is a heuristic
+	 * over the two places that fact actually shows up. */
+	indoor?: boolean;
+	hasPower?: boolean;
+	hasHr?: boolean;
+	/** Case-insensitive substring against start_place. */
+	place?: string;
+	favoritesOnly?: boolean;
+	/**
+	 * "Personal best" has no dedicated column in the schema (ACTIVITIES.md §8
+	 * names the filter but §5's schema has no PR flag) — a real PR detector
+	 * belongs to the ingest/exertion tracks, which own the streams. This is a
+	 * defensible stand-in until that exists: an activity is a "PR" here if it
+	 * is the longest, all-time, standalone activity for its sport. Documented
+	 * as a deviation in the schema-track report.
+	 */
+	personalBestOnly?: boolean;
+	/** Include multisport child legs (swim/T1/bike/T2/run) as their own rows.
+	 * Off by default — a triathlon shows as its one parent row, the way
+	 * activity_days and activity_months already roll it up. */
+	includeChildren?: boolean;
+}
+
+const DEFAULT_LIST_LIMIT = 50;
+
+/** The all-time longest standalone activity per sport — see personalBestOnly's
+ * doc comment for why this heuristic exists. Paged past PostgREST's 1000-row
+ * cap the way films.ts's countWatchesByMonth is, since the whole table is read. */
+async function personalBestIds(): Promise<Set<number>> {
+	const PAGE = 1000;
+	const bestBySport = new Map<string, { id: number; distance: number }>();
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('activity_list')
+			.select('id, sport, distance_m')
+			.is('parent_id', null)
+			.not('distance_m', 'is', null)
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isDegraded(error)) return new Set();
+			throw new Error(`personalBestIds failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as { id: number; sport: string; distance_m: number }[];
+		for (const row of rows) {
+			const best = bestBySport.get(row.sport);
+			if (!best || row.distance_m > best.distance) {
+				bestBySport.set(row.sport, { id: row.id, distance: row.distance_m });
+			}
+		}
+		if (rows.length < PAGE) break;
+	}
+	return new Set([...bestBySport.values()].map((b) => b.id));
+}
+
+/** The column each sort reads, for both the ORDER BY and the ascending default. */
+const SORT_COLUMN: Record<ActivitySort, string> = {
+	date: 'local_date',
+	exertion: 'exertion',
+	distance: 'distance_m',
+	duration: 'moving_seconds',
+	elevation: 'elevation_gain_m',
+	pace: 'avg_speed_ms',
+	power: 'avg_power_w',
+	hr: 'avg_hr',
+	calories: 'calories',
+};
+
+/**
+ * The reverse-chronological, filterable, sortable list behind /activities/all
+ * (and the API route it shares a parser with). Reads the activity_list view,
+ * so streams/raw sources never enter the query.
+ */
+export async function listActivities(
+	query: ActivityQuery = {},
+): Promise<{ rows: ActivityListRow[]; total: number }> {
+	const { sort = 'date', limit = DEFAULT_LIST_LIMIT, offset = 0 } = query;
+	const ascending = query.sortDir ? query.sortDir === 'asc' : sort === 'date' ? false : false;
+	// (sort === 'date' also defaults to descending — spelled out so the intent
+	// reads plainly rather than relying on the ternary collapsing to the same
+	// value both ways.)
+
+	const prIds = query.personalBestOnly ? await personalBestIds() : null;
+	if (prIds && prIds.size === 0) return { rows: [], total: 0 };
+
+	let req = supabasePublic.from('activity_list').select('*', { count: 'exact' });
+
+	if (!query.includeChildren) req = req.is('parent_id', null);
+	if (prIds) req = req.in('id', [...prIds]);
+
+	if (query.sports?.length) req = req.in('sport', query.sports);
+	if (query.dateFrom) req = req.gte('local_date', query.dateFrom);
+	if (query.dateTo) req = req.lte('local_date', query.dateTo);
+	if (query.distanceMinM != null) req = req.gte('distance_m', query.distanceMinM);
+	if (query.distanceMaxM != null) req = req.lte('distance_m', query.distanceMaxM);
+	if (query.durationMinS != null) req = req.gte('moving_seconds', query.durationMinS);
+	if (query.durationMaxS != null) req = req.lte('moving_seconds', query.durationMaxS);
+	if (query.elevationMinM != null) req = req.gte('elevation_gain_m', query.elevationMinM);
+	if (query.elevationMaxM != null) req = req.lte('elevation_gain_m', query.elevationMaxM);
+	if (query.exertionMin != null) req = req.gte('exertion', query.exertionMin);
+	if (query.exertionMax != null) req = req.lte('exertion', query.exertionMax);
+
+	if (query.hasGps === true) req = req.not('route_path', 'is', null);
+	if (query.hasGps === false) req = req.is('route_path', null);
+
+	if (query.gearIds?.length) req = req.in('gear_id', query.gearIds);
+
+	if (query.indoor === true) {
+		req = req.or('sub_sport.eq.indoor,sport.in.(virtual_ride,treadmill_run)');
+	} else if (query.indoor === false) {
+		req = req.not('sub_sport', 'eq', 'indoor').not('sport', 'in', '(virtual_ride,treadmill_run)');
+	}
+
+	if (query.hasPower) req = req.not('avg_power_w', 'is', null);
+	if (query.hasHr) req = req.not('avg_hr', 'is', null);
+
+	const place = query.place?.trim();
+	if (place) req = req.ilike('start_place', `%${place.replace(/[%_]/g, '\\$&')}%`);
+
+	if (query.favoritesOnly) req = req.not('favorite_rank', 'is', null);
+
+	req = req.order(SORT_COLUMN[sort], { ascending, nullsFirst: false });
+	// Tiebreak for a deterministic order (matters for paging): newest id last
+	// unless we're already sorting by date, in which case id order and date
+	// order agree closely enough that a second date-adjacent key would be
+	// redundant.
+	if (sort !== 'date') req = req.order('local_date', { ascending: false, nullsFirst: false });
+	req = req.order('id', { ascending: false });
+
+	const { data, error, count } = await req.range(offset, offset + limit - 1);
+	if (error) {
+		if (isDegraded(error)) return { rows: [], total: 0 };
+		throw new Error(`listActivities failed: ${error.message}`);
+	}
+	return { rows: (data ?? []) as ActivityListRow[], total: count ?? 0 };
+}
+
+/** The (<=4) activities flagged favorite_rank 1-4, in rank order — the
+ * landing page's top row. */
+export async function listFavoriteActivities(limit = 4): Promise<ActivityListRow[]> {
+	const { data, error } = await supabasePublic
+		.from('activity_list')
+		.select('*')
+		.not('favorite_rank', 'is', null)
+		.order('favorite_rank', { ascending: true })
+		.limit(limit);
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listFavoriteActivities failed: ${error.message}`);
+	}
+	return (data ?? []) as ActivityListRow[];
+}
+
+// ---------------------------------------------------------------------------
+// listActivityDays — the landing page's week grid.
+// ---------------------------------------------------------------------------
+
+export interface ActivityDayWithActivities extends ActivityDay {
+	/** That day's top-level activities (multisport legs folded under their
+	 * parent), oldest first — the order a vertical day list reads naturally. */
+	activities: ActivityListRow[];
+}
+
+/**
+ * Days with at least one activity, newest first, each carrying its own
+ * activities — the read model for the landing page's reverse-chronological
+ * week calendar. `before` pages backward (strictly older than that date) so
+ * the grid can load more weeks on scroll without re-fetching what's shown.
+ */
+export async function listActivityDays(
+	opts: { limit?: number; before?: string } = {},
+): Promise<ActivityDayWithActivities[]> {
+	const limit = opts.limit ?? 14;
+
+	let dayReq = supabasePublic
+		.from('activity_days')
+		.select('*')
+		.order('local_date', { ascending: false })
+		.limit(limit);
+	if (opts.before) dayReq = dayReq.lt('local_date', opts.before);
+
+	const { data: days, error: dayErr } = await dayReq;
+	if (dayErr) {
+		if (isDegraded(dayErr)) return [];
+		throw new Error(`listActivityDays failed: ${dayErr.message}`);
+	}
+	const dayRows = (days ?? []) as ActivityDay[];
+	if (dayRows.length === 0) return [];
+
+	const dates = dayRows.map((d) => d.local_date);
+	const { data: activities, error: actErr } = await supabasePublic
+		.from('activity_list')
+		.select('*')
+		.in('local_date', dates)
+		.is('parent_id', null)
+		.order('started_at', { ascending: true });
+	if (actErr) {
+		if (isDegraded(actErr)) return dayRows.map((d) => ({ ...d, activities: [] }));
+		throw new Error(`listActivityDays (activities) failed: ${actErr.message}`);
+	}
+
+	const byDate = new Map<string, ActivityListRow[]>();
+	for (const row of (activities ?? []) as ActivityListRow[]) {
+		const list = byDate.get(row.local_date);
+		if (list) list.push(row);
+		else byDate.set(row.local_date, [row]);
+	}
+	return dayRows.map((d) => ({ ...d, activities: byDate.get(d.local_date) ?? [] }));
+}
+
+// ---------------------------------------------------------------------------
+// Single-activity reads — the detail page.
+// ---------------------------------------------------------------------------
+
+/** Every column except `private_notes` — see ActivityRow.private_notes for why. */
+const PUBLIC_ACTIVITY_COLUMNS = [
+	'id',
+	'sport',
+	'sub_sport',
+	'parent_id',
+	'leg',
+	'title',
+	'notes',
+	'started_at',
+	'local_date',
+	'utc_offset_minutes',
+	'timezone',
+	'elapsed_seconds',
+	'moving_seconds',
+	'distance_m',
+	'elevation_gain_m',
+	'elevation_loss_m',
+	'elev_high_m',
+	'elev_low_m',
+	'avg_speed_ms',
+	'max_speed_ms',
+	'avg_hr',
+	'max_hr',
+	'avg_cadence',
+	'avg_power_w',
+	'max_power_w',
+	'normalized_power_w',
+	'work_kj',
+	'calories',
+	'avg_temp_c',
+	'pool_length_m',
+	'total_strokes',
+	'avg_swolf',
+	'exertion',
+	'exertion_method',
+	'exertion_confidence',
+	'intensity_factor',
+	'polyline',
+	'route_path',
+	'start_lat',
+	'start_lng',
+	'end_lat',
+	'end_lng',
+	'bbox_w',
+	'bbox_s',
+	'bbox_e',
+	'bbox_n',
+	'start_place',
+	'gear_id',
+	'favorite_rank',
+	'has_streams',
+	'device_name',
+	'created_at',
+	'updated_at',
+].join(', ');
+
+/** One activity by id, in full (bar `private_notes` — always null; see
+ * ActivityRow). Null if it doesn't exist or is soft-deleted. */
+export async function getActivity(id: number): Promise<ActivityRow | null> {
+	const { data, error } = await supabasePublic
+		.from('activities')
+		.select(PUBLIC_ACTIVITY_COLUMNS)
+		.eq('id', id)
+		.is('deleted_at', null)
+		.maybeSingle();
+	if (error) {
+		if (isDegraded(error)) return null;
+		throw new Error(`getActivity failed: ${error.message}`);
+	}
+	if (!data) return null;
+	return { ...(data as unknown as Omit<ActivityRow, 'private_notes'>), private_notes: null };
+}
+
+/** The 1Hz-ish sample streams for one activity. Null when the activity has
+ * none (no device data, or a GPS-less indoor session with no streams at all). */
+export async function getActivityStreams(id: number): Promise<ActivityStreams | null> {
+	const { data, error } = await supabasePublic
+		.from('activity_streams')
+		.select('*')
+		.eq('activity_id', id)
+		.maybeSingle();
+	if (error) {
+		if (isDegraded(error)) return null;
+		throw new Error(`getActivityStreams failed: ${error.message}`);
+	}
+	return (data as ActivityStreams | null) ?? null;
+}
+
+/** An activity's laps, in order. [] for an activity with none. */
+export async function listActivityLaps(id: number): Promise<ActivityLap[]> {
+	const { data, error } = await supabasePublic
+		.from('activity_laps')
+		.select('*')
+		.eq('activity_id', id)
+		.order('lap_index', { ascending: true });
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listActivityLaps failed: ${error.message}`);
+	}
+	return (data ?? []) as ActivityLap[];
+}
+
+/** A multisport parent's child legs (swim/T1/bike/T2/run…), in leg order.
+ * [] for a standalone activity. */
+export async function listActivityChildren(parentId: number): Promise<ActivityListRow[]> {
+	const { data, error } = await supabasePublic
+		.from('activity_list')
+		.select('*')
+		.eq('parent_id', parentId)
+		.order('leg', { ascending: true, nullsFirst: false });
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listActivityChildren failed: ${error.message}`);
+	}
+	return (data ?? []) as ActivityListRow[];
+}
+
+// ---------------------------------------------------------------------------
+// listActivitiesForMonth — /activities/month/[month].
+// ---------------------------------------------------------------------------
+
+/** The first day of the month after "YYYY-MM", as "YYYY-MM-DD" — a small local
+ * version of month-view.ts's shiftMonth rather than importing that file,
+ * which belongs to the Month track and pulls in its share-card geometry. */
+function firstOfNextMonth(monthKey: string): string {
+	const [y, m] = monthKey.split('-').map(Number);
+	const nextY = m === 12 ? y + 1 : y;
+	const nextM = m === 12 ? 1 : m + 1;
+	return `${nextY}-${String(nextM).padStart(2, '0')}-01`;
+}
+
+/**
+ * Every top-level activity in one "YYYY-MM" month, oldest first — the read
+ * model for the month-in-review page. Multisport legs are excluded (parent_id
+ * is null) for the same reason activity_months rolls them up under the
+ * parent: a triathlon is one entry in the month, not three.
+ */
+export async function listActivitiesForMonth(monthKey: string): Promise<ActivityListRow[]> {
+	const { data, error } = await supabasePublic
+		.from('activity_list')
+		.select('*')
+		.gte('local_date', `${monthKey}-01`)
+		.lt('local_date', firstOfNextMonth(monthKey))
+		.is('parent_id', null)
+		.order('started_at', { ascending: true });
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listActivitiesForMonth failed: ${error.message}`);
+	}
+	return (data ?? []) as ActivityListRow[];
+}
+
+// ---------------------------------------------------------------------------
+// getActivityStats — the landing page's sidebar totals.
+// ---------------------------------------------------------------------------
+
+export interface ActivityStats {
+	/** Top-level activities logged in the current calendar year (siteYear). */
+	activitiesThisYear: number;
+	/** All-time. */
+	totalDistanceM: number;
+	totalElevationGainM: number;
+	totalMovingHours: number;
+	totalExertion: number;
+	/** All-time count, keyed by src/lib/sports.ts's SportFamily. Only families
+	 * with at least one activity are present. */
+	bySportFamily: Partial<Record<SportFamily, number>>;
+}
+
+/**
+ * Sidebar totals for the /activities landing page: this-year count alongside
+ * all-time distance/elevation/moving-time/exertion and a by-family breakdown
+ * — the same "one this-year callout beside the lifetime numbers" shape as
+ * films.ts's FilmLogStats. Reads activity_list a page at a time (paged past
+ * PostgREST's 1000-row cap, as films.ts's countWatchesByMonth does) and folds
+ * in JS rather than five separate aggregate round-trips, since every number
+ * needs the same row set (top-level, non-deleted activities).
+ */
+export async function getActivityStats(): Promise<ActivityStats> {
+	const year = siteYear();
+	const PAGE = 1000;
+	let activitiesThisYear = 0;
+	let totalDistanceM = 0;
+	let totalElevationGainM = 0;
+	let totalMovingSeconds = 0;
+	let totalExertion = 0;
+	const bySportFamily = new Map<SportFamily, number>();
+
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('activity_list')
+			.select('sport, local_date, distance_m, elevation_gain_m, moving_seconds, exertion')
+			.is('parent_id', null)
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isDegraded(error)) {
+				return {
+					activitiesThisYear: 0,
+					totalDistanceM: 0,
+					totalElevationGainM: 0,
+					totalMovingHours: 0,
+					totalExertion: 0,
+					bySportFamily: {},
+				};
+			}
+			throw new Error(`getActivityStats failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as {
+			sport: string;
+			local_date: string;
+			distance_m: number | null;
+			elevation_gain_m: number | null;
+			moving_seconds: number | null;
+			exertion: number | null;
+		}[];
+		for (const row of rows) {
+			if (row.local_date >= `${year}-01-01`) activitiesThisYear++;
+			totalDistanceM += row.distance_m ?? 0;
+			totalElevationGainM += row.elevation_gain_m ?? 0;
+			totalMovingSeconds += row.moving_seconds ?? 0;
+			totalExertion += row.exertion ?? 0;
+			const family = sportMeta(row.sport).family;
+			bySportFamily.set(family, (bySportFamily.get(family) ?? 0) + 1);
+		}
+		if (rows.length < PAGE) break;
+	}
+
+	return {
+		activitiesThisYear,
+		totalDistanceM,
+		totalElevationGainM,
+		totalMovingHours: totalMovingSeconds / 3600,
+		totalExertion,
+		bySportFamily: Object.fromEntries(bySportFamily) as Partial<Record<SportFamily, number>>,
+	};
+}
+
+// ---------------------------------------------------------------------------
+// thresholdsOn — the exertion calculator's input for a given date.
+// ---------------------------------------------------------------------------
+
+/** The athlete_thresholds row in force on `date` — the latest one with
+ * effective_from <= date. Null if the table is empty or every row is later
+ * than `date` (nothing was in force yet). */
+export async function thresholdsOn(date: string): Promise<AthleteThresholds | null> {
+	const { data, error } = await supabasePublic
+		.from('athlete_thresholds')
+		.select('*')
+		.lte('effective_from', date)
+		.order('effective_from', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	if (error) {
+		if (isDegraded(error)) return null;
+		throw new Error(`thresholdsOn failed: ${error.message}`);
+	}
+	return (data as AthleteThresholds | null) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Gear + facets — the filter panel on /activities/all.
+// ---------------------------------------------------------------------------
+
+/** All gear, active first (retired_at null), then by kind/name. */
+export async function listGear(): Promise<ActivityGear[]> {
+	const { data, error } = await supabasePublic
+		.from('activity_gear')
+		.select('*')
+		.order('retired_at', { ascending: true, nullsFirst: true })
+		.order('kind', { ascending: true })
+		.order('name', { ascending: true });
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listGear failed: ${error.message}`);
+	}
+	return (data ?? []) as ActivityGear[];
+}
+
+export interface ActivityFacets {
+	sports: { sport: string; count: number }[];
+	gear: { gear_id: number; name: string; count: number }[];
+	places: { place: string; count: number }[];
+}
+
+/**
+ * Distinct sports / gear / start places with counts, for the filter panel.
+ * PostgREST has no server-side GROUP BY over a view, so this pages the (small,
+ * top-level) activity set once and folds the three facets in JS together —
+ * one read instead of three.
+ */
+export async function listActivityFacets(): Promise<ActivityFacets> {
+	const PAGE = 1000;
+	const sportCounts = new Map<string, number>();
+	const gearCounts = new Map<number, { name: string; count: number }>();
+	const placeCounts = new Map<string, number>();
+
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('activity_list')
+			.select('sport, gear_id, gear_name, gear_nickname, start_place')
+			.is('parent_id', null)
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isDegraded(error)) return { sports: [], gear: [], places: [] };
+			throw new Error(`listActivityFacets failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as {
+			sport: string;
+			gear_id: number | null;
+			gear_name: string | null;
+			gear_nickname: string | null;
+			start_place: string | null;
+		}[];
+		for (const row of rows) {
+			sportCounts.set(row.sport, (sportCounts.get(row.sport) ?? 0) + 1);
+			if (row.gear_id != null) {
+				const label = row.gear_nickname || row.gear_name || `gear ${row.gear_id}`;
+				const existing = gearCounts.get(row.gear_id);
+				gearCounts.set(row.gear_id, { name: label, count: (existing?.count ?? 0) + 1 });
+			}
+			if (row.start_place) placeCounts.set(row.start_place, (placeCounts.get(row.start_place) ?? 0) + 1);
+		}
+		if (rows.length < PAGE) break;
+	}
+
+	return {
+		sports: [...sportCounts.entries()]
+			.map(([sport, count]) => ({ sport, count }))
+			.sort((a, b) => b.count - a.count),
+		gear: [...gearCounts.entries()]
+			.map(([gear_id, v]) => ({ gear_id, name: v.name, count: v.count }))
+			.sort((a, b) => b.count - a.count),
+		places: [...placeCounts.entries()]
+			.map(([place, count]) => ({ place, count }))
+			.sort((a, b) => b.count - a.count),
+	};
+}
+
+// ---------------------------------------------------------------------------
+// Writes (owner only — the caller checks requireOwner() first, same
+// convention as films.ts's setFavorite and restaurants.ts's writes).
+// ---------------------------------------------------------------------------
+
+/**
+ * Set (or clear, with `rank: null`) an activity's landing-page favourite
+ * rank, 1-4. The partial unique index on activities.favorite_rank means a
+ * rank already held by another activity has to be freed first — this clears
+ * it from whoever holds it, then claims it, so the caller never has to know
+ * who that was.
+ */
+export async function setFavoriteRank(activityId: number, rank: number | null): Promise<void> {
+	if (rank != null && (rank < 1 || rank > 4)) {
+		throw new Error('favorite_rank must be between 1 and 4, or null');
+	}
+	if (rank != null) {
+		const { error: clearErr } = await supabaseAdmin
+			.from('activities')
+			.update({ favorite_rank: null })
+			.eq('favorite_rank', rank)
+			.neq('id', activityId);
+		if (clearErr) throw new Error(`clear favorite_rank ${rank} failed: ${clearErr.message}`);
+	}
+	const { error } = await supabaseAdmin.from('activities').update({ favorite_rank: rank }).eq('id', activityId);
+	if (error) throw new Error(`setFavoriteRank failed: ${error.message}`);
+}

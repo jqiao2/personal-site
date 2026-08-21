@@ -1,0 +1,528 @@
+---
+// The activity log's poster (ACTIVITIES.md §7). Where FilmPoster.astro shows
+// what TMDB already drew, this component draws the tile itself — there is no
+// third-party art for a bike ride, so the card's face has to be manufactured
+// from the numbers a head unit recorded.
+//
+// TWO FACES BY DESIGN, NOT BY ACCIDENT. Most activities have `route_path`: a
+// normalised `M x y L x y…` string already fitted to a 0-0-100-100 viewBox at
+// ingest time (src/lib/route-shape.ts owns that math). Those get a static
+// stroked-line map — no tiles, no JS, cheap enough to run forty-to-a-page. A
+// trainer ride, a treadmill run and a pool swim have no GPS at all, and that
+// is a normal reading rather than a broken one (ACTIVITIES.md's whole §0 makes
+// this point), so route-less cards do not get an empty box with a "no map"
+// apology in it. They get a second, deliberately different face: the numbers
+// the workout *does* have, set large in Instrument Serif, because a number
+// said with real display type reads as a considered answer instead of a
+// placeholder for a map that didn't load.
+//
+// WHY THE ROUTE IS AN SVG STROKE AND NOT A CANVAS OR A STATIC MAP TILE. A map
+// tile costs a network request and a tile provider's rate limit per card;
+// forty of them on one page is forty requests for a shape that a 200-point
+// path string already encodes losslessly enough for a 60px thumbnail. Canvas
+// would need JS to run before anything paints. An inline `<path>` needs
+// neither — it's in the server-rendered HTML, it scales losslessly at any
+// card size via `vector-effect="non-scaling-stroke"`, and the browser paints
+// it in the same pass as the text next to it.
+import { ALPINE, exertionLabel } from '../lib/activity-tokens';
+
+// ---------------------------------------------------------------------------
+// TEMPORARY — sport labelling and stat formatting.
+//
+// src/lib/sports.ts (a concurrent track — see ACTIVITIES.md §9 "Effort") will
+// own `sportMeta(slug)`, `formatStat(key, row)` and `sportIcon(slug)` for real.
+// It doesn't exist on disk yet, so this card can't import it without breaking
+// the build for whoever lands second. Everything in this block is the
+// smallest stand-in that lets the card be designed and judged today; when
+// sports.ts lands, this whole block is deleted and its two call sites
+// (`familyOf`/`SPORT_LABEL` below, and the stat pickers) point at the real
+// module instead. Kept small and in one place on purpose — that's the whole
+// point of marking it out like this.
+type Family = 'ride' | 'run' | 'swim' | 'hike' | 'ski' | 'transition' | 'other';
+
+const SPORT_LABEL: Record<string, string> = {
+	ride: 'Ride',
+	gravel_ride: 'Gravel ride',
+	mountain_bike: 'Mountain bike',
+	virtual_ride: 'Virtual ride',
+	run: 'Run',
+	treadmill_run: 'Treadmill run',
+	trail_run: 'Trail run',
+	swim: 'Swim',
+	open_water_swim: 'Open water swim',
+	transition: 'Transition',
+	hike: 'Hike',
+	walk: 'Walk',
+	snowshoe: 'Snowshoe',
+	alpine_ski: 'Alpine ski',
+	backcountry_ski: 'Backcountry ski',
+	nordic_ski: 'Nordic ski',
+	snowboard: 'Snowboard',
+	strength: 'Strength',
+	yoga: 'Yoga',
+	rowing: 'Rowing',
+	other: 'Other',
+};
+
+const SPORT_FAMILY: Record<string, Family> = {
+	ride: 'ride',
+	gravel_ride: 'ride',
+	mountain_bike: 'ride',
+	virtual_ride: 'ride',
+	run: 'run',
+	treadmill_run: 'run',
+	trail_run: 'run',
+	swim: 'swim',
+	open_water_swim: 'swim',
+	transition: 'transition',
+	hike: 'hike',
+	walk: 'hike',
+	snowshoe: 'hike',
+	alpine_ski: 'ski',
+	backcountry_ski: 'ski',
+	nordic_ski: 'ski',
+	snowboard: 'ski',
+};
+
+function familyOf(sport: string): Family {
+	return SPORT_FAMILY[sport] ?? 'other';
+}
+
+function sportLabel(sport: string): string {
+	return SPORT_LABEL[sport] ?? sport.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+}
+
+// One small monoline mark per family, 0 0 24 24, drawn in `currentColor` —
+// a shape, never a hue, per the "sport is a mark and a word" rule in §2.
+const FAMILY_GLYPH: Record<Family, string> = {
+	ride: '<circle cx="6" cy="17" r="3.2"/><circle cx="18" cy="17" r="3.2"/><path d="M6 17 10 9h4M10 9l4 8M14 17h4M14 9h3"/>',
+	run: '<path d="M4 19 19 4M11 4h8v8"/>',
+	swim: '<path d="M3 9q3-3 6 0t6 0 6 0M3 14q3-3 6 0t6 0 6 0M3 19q3-3 6 0t6 0 6 0"/>',
+	hike: '<path d="M3 19 9 8l3 5 3-7 6 13z"/>',
+	ski: '<path d="M6 4 4 20M18 4l-2 16M4 12l4-2M16 12l4-2"/>',
+	transition: '<path d="M4 12a8 8 0 1 1 2.6 5.9M4 12v5.5h5.5"/>',
+	other: '<path d="M4 12H2M22 12h-2M6 8v8M18 8v8M6 12h12"/>',
+};
+
+/** Metres → miles, one decimal, e.g. "12.4". */
+function mi(m: number | null | undefined): string {
+	if (!m) return '0.0';
+	return (m / 1609.344).toFixed(1);
+}
+
+/** Metres of climb → feet, thousands-separated, e.g. "3,412". */
+function ft(m: number | null | undefined): string {
+	if (!m) return '0';
+	return Math.round(m * 3.28084).toLocaleString('en-US');
+}
+
+/** Seconds → clock, "1:32:04" past an hour, "24:33" under. */
+function clock(s: number | null | undefined): string {
+	if (!s) return '0:00';
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const sec = Math.floor(s % 60);
+	return h > 0
+		? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+		: `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+/** Moving seconds + distance → running pace, "7:42" (per mile). */
+function pace(movingSeconds: number | null | undefined, distanceM: number | null | undefined): string {
+	if (!movingSeconds || !distanceM) return '–:––';
+	const perMi = movingSeconds / (distanceM / 1609.344);
+	const m = Math.floor(perMi / 60);
+	const s = Math.round(perMi % 60);
+	return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+interface Stat {
+	value: string;
+	unit: string;
+}
+
+/** The 2-3 stats a card shows under its face, chosen by sport per §7. */
+function cardStats(a: ActivityRow): Stat[] {
+	const family = familyOf(a.sport);
+	const out: Stat[] = [];
+	switch (family) {
+		case 'ride':
+			out.push({ value: mi(a.distance_m), unit: 'mi' });
+			out.push({ value: ft(a.elevation_gain_m), unit: 'ft' });
+			break;
+		case 'run':
+			out.push({ value: mi(a.distance_m), unit: 'mi' });
+			out.push({ value: pace(a.moving_seconds, a.distance_m), unit: '/mi' });
+			break;
+		case 'swim':
+			out.push({ value: mi(a.distance_m), unit: 'mi' });
+			out.push({ value: clock(a.moving_seconds), unit: '' });
+			break;
+		case 'hike':
+			out.push({ value: mi(a.distance_m), unit: 'mi' });
+			out.push({ value: ft(a.elevation_gain_m), unit: 'ft' });
+			break;
+		case 'ski':
+			out.push({ value: ft(a.elevation_gain_m), unit: 'ft' });
+			out.push({ value: clock(a.moving_seconds), unit: '' });
+			break;
+		case 'transition':
+			out.push({ value: clock(a.elapsed_seconds), unit: '' });
+			return out; // "Elapsed only" — a transition doesn't earn a third stat.
+		default:
+			out.push({ value: clock(a.moving_seconds ?? a.elapsed_seconds), unit: '' });
+	}
+	if (a.exertion != null && out.length < 3) {
+		out.push({ value: exertionLabel(a.exertion), unit: '' });
+	}
+	return out;
+}
+
+/**
+ * The no-GPS face's big numbers — chosen so the absence of a route never reads
+ * as an absence of design (§7's "must read as deliberate, not broken").
+ *
+ * ONE OR TWO, NEVER A DASH. The face is the whole card here, so a stat with
+ * nothing in it is worse than no stat at all: a large "–" next to "bpm avg" is
+ * the exact "something failed to load" reading this face exists to avoid. A
+ * transition genuinely has one number — the clock — and a pool swim on a watch
+ * that logged no heart rate has two; both are complete answers, so the second
+ * slot is dropped rather than filled with a placeholder.
+ */
+function noGpsFace(a: ActivityRow): (Stat & { label: string })[] {
+	const family = familyOf(a.sport);
+	if (family === 'transition') {
+		// Elapsed only. A transition's whole story is how long it took.
+		return [{ value: clock(a.elapsed_seconds), unit: '', label: 'time' }];
+	}
+	if (family === 'ride' && a.avg_power_w) {
+		return [
+			{ value: String(a.avg_power_w), unit: 'W avg', label: 'power' },
+			{ value: clock(a.moving_seconds), unit: '', label: 'time' },
+		];
+	}
+	if (family === 'run' || family === 'swim') {
+		return [
+			{ value: mi(a.distance_m), unit: 'mi', label: 'distance' },
+			family === 'run'
+				? { value: pace(a.moving_seconds, a.distance_m), unit: '/mi', label: 'pace' }
+				: { value: clock(a.moving_seconds), unit: '', label: 'time' },
+		];
+	}
+	const face: (Stat & { label: string })[] = [
+		{ value: clock(a.moving_seconds ?? a.elapsed_seconds), unit: '', label: 'time' },
+	];
+	if (a.avg_hr) face.push({ value: String(a.avg_hr), unit: 'bpm avg', label: 'heart rate' });
+	return face;
+}
+// --------------------------------- end temporary block ---------------------
+
+export interface ActivityRow {
+	id: number | string;
+	sport: string;
+	sub_sport?: string | null;
+	title: string;
+	local_date: string;
+	started_at?: string;
+	distance_m: number | null;
+	moving_seconds: number | null;
+	elapsed_seconds: number;
+	elevation_gain_m: number | null;
+	avg_power_w?: number | null;
+	avg_hr?: number | null;
+	exertion?: number | null;
+	exertion_method?: string | null;
+	route_path: string | null;
+	favorite_rank?: number | null;
+	start_place?: string | null;
+}
+
+interface Props {
+	activity: ActivityRow;
+	size?: 'tile' | 'row' | 'cell';
+}
+
+const { activity: a, size = 'tile' } = Astro.props;
+
+const family = familyOf(a.sport);
+const label = sportLabel(a.sport);
+const glyph = FAMILY_GLYPH[family];
+const hasRoute = !!a.route_path;
+const stats = cardStats(a).slice(0, size === 'cell' ? 2 : 3);
+const face = hasRoute ? null : noGpsFace(a);
+
+// Pull the route's start point out of "M x y …" to place the start dot —
+// route_path is always emitted by route-shape.ts in this exact form.
+const startMatch = a.route_path?.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) } : null;
+---
+
+<a
+	class:list={['ac', `ac--${size}`]}
+	href={`/activities/${a.id}`}
+	style={{
+		'--sky': ALPINE.sky,
+		'--snow': ALPINE.snow,
+		'--granite': ALPINE.granite,
+		'--granite-soft': ALPINE.graniteSoft,
+		'--lake': ALPINE.lake,
+		'--lake-deep': ALPINE.lakeDeep,
+		'--larch': ALPINE.larch,
+		'--scree': ALPINE.scree,
+	}}
+>
+	<div class="ac__face">
+		{
+			hasRoute ? (
+				<svg class="ac__route" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+					<path
+						d={a.route_path!}
+						fill="none"
+						stroke="var(--lake)"
+						stroke-width="2.2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						vector-effect="non-scaling-stroke"
+					/>
+					{start && <circle cx={start.x} cy={start.y} r="1.8" fill="var(--lake)" />}
+				</svg>
+			) : (
+				<div class="ac__nogps">
+					<div class="ac__nogps-stat">
+						<span class="ac__nogps-value figure">{face![0].value}</span>
+						<span class="ac__nogps-unit">{face![0].unit}</span>
+					</div>
+					{face![1] && (
+						<div class="ac__nogps-stat ac__nogps-stat--sub">
+							<span class="ac__nogps-value ac__nogps-value--sub figure">{face![1].value}</span>
+							<span class="ac__nogps-unit">{face![1].unit}</span>
+						</div>
+					)}
+					<svg class="ac__nogps-mark" viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" aria-hidden="true" set:html={glyph} />
+				</div>
+			)
+		}
+		{a.favorite_rank && (
+			<span class="ac__fav" title={`Favourite #${a.favorite_rank}`}>★</span>
+		)}
+	</div>
+	<div class="ac__meta">
+		<div class="ac__title">{a.title}</div>
+		<div class="ac__sport">
+			<svg class="ac__sport-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" set:html={glyph} />
+			<span>{label}</span>
+		</div>
+		<div class="ac__stats figure">
+			{stats.map((s, i) => (
+				<>
+					{i > 0 && <span class="ac__stats-sep">·</span>}
+					<span>{s.value}{s.unit && <span class="ac__stats-unit">{s.unit}</span>}</span>
+				</>
+			))}
+		</div>
+	</div>
+</a>
+
+<style>
+	.ac {
+		display: flex;
+		flex-direction: column;
+		background: var(--snow);
+		border: 1px solid var(--scree);
+		border-radius: 10px;
+		overflow: hidden;
+		color: var(--granite);
+		transition: border-color 0.15s ease, transform 0.15s ease;
+	}
+	.ac:hover {
+		border-color: var(--lake);
+		transform: translateY(-1px);
+	}
+	.ac__face {
+		position: relative;
+		aspect-ratio: 4 / 3;
+		background: var(--snow);
+		border-bottom: 1px solid var(--scree);
+	}
+	.ac__route {
+		width: 100%;
+		height: 100%;
+		display: block;
+	}
+	.ac__fav {
+		position: absolute;
+		top: 0.5rem;
+		right: 0.5rem;
+		color: var(--larch);
+		font-size: 0.9rem;
+		line-height: 1;
+	}
+
+	/* No-GPS face: the whole face goes to two figures in Instrument Serif. */
+	.ac__nogps {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.15em;
+	}
+	.ac__nogps-stat {
+		display: flex;
+		align-items: baseline;
+		gap: 0.3em;
+	}
+	.ac__nogps-value {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: 2.6rem;
+		line-height: 1;
+		color: var(--granite);
+	}
+	.ac__nogps-value--sub {
+		font-size: 1.3rem;
+		color: var(--granite-soft);
+	}
+	.ac__nogps-unit {
+		font-size: 0.85rem;
+		color: var(--granite-soft);
+	}
+	.ac__nogps-mark {
+		position: absolute;
+		bottom: 0.6rem;
+		left: 0.6rem;
+		width: 1.1rem;
+		height: 1.1rem;
+		opacity: 0.6;
+	}
+
+	.ac__meta {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		padding: 0.75rem 0.85rem 0.9rem;
+	}
+	.ac__title {
+		font-weight: 600;
+		font-size: 0.95rem;
+		line-height: 1.25;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.ac__sport {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.78rem;
+		color: var(--granite-soft);
+	}
+	.ac__sport-mark {
+		width: 0.95rem;
+		height: 0.95rem;
+		flex: none;
+	}
+	.ac__stats {
+		font-size: 0.85rem;
+		color: var(--granite);
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+	}
+	.ac__stats-sep {
+		color: var(--scree);
+	}
+	.ac__stats-unit {
+		margin-left: 0.15em;
+		font-size: 0.78em;
+		color: var(--granite-soft);
+	}
+
+	/* tile — the landing page's top-four, largest of the three. */
+	.ac--tile .ac__nogps-value {
+		font-size: 3rem;
+	}
+	.ac--tile .ac__title {
+		font-size: 1.05rem;
+	}
+
+	/* cell — the week grid's per-day list: narrow and short. */
+	.ac--cell {
+		border-radius: 8px;
+	}
+	.ac--cell .ac__face {
+		aspect-ratio: 16 / 9;
+	}
+	.ac--cell .ac__nogps-value {
+		font-size: 1.7rem;
+	}
+	.ac--cell .ac__nogps-value--sub {
+		font-size: 1rem;
+	}
+	.ac--cell .ac__meta {
+		padding: 0.55rem 0.6rem 0.65rem;
+		gap: 0.2rem;
+	}
+	.ac--cell .ac__title {
+		font-size: 0.85rem;
+	}
+	.ac--cell .ac__sport {
+		font-size: 0.72rem;
+	}
+	.ac--cell .ac__stats {
+		font-size: 0.76rem;
+	}
+
+	/* row — a wide horizontal variant for list views. */
+	.ac--row {
+		flex-direction: row;
+		align-items: stretch;
+	}
+	.ac--row .ac__face {
+		aspect-ratio: 1 / 1;
+		width: 120px;
+		flex: none;
+		border-bottom: none;
+		border-right: 1px solid var(--scree);
+	}
+	.ac--row .ac__meta {
+		flex: 1;
+		flex-direction: row;
+		align-items: center;
+		gap: 1.25rem;
+		padding: 0 1rem;
+	}
+	.ac--row .ac__title {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	.ac--row .ac__sport {
+		flex: none;
+	}
+	.ac--row .ac__stats {
+		flex: none;
+		white-space: nowrap;
+	}
+	.ac--row .ac__nogps-value {
+		font-size: 1.9rem;
+	}
+
+	/* Below ~560px the row's four columns (face / title / sport / stats) no
+	   longer fit on one line without truncating numbers, which is the one
+	   thing a stat card must never do — so the meta block wraps instead. */
+	@media (max-width: 560px) {
+		.ac--row .ac__face {
+			width: 88px;
+		}
+		.ac--row .ac__meta {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.25rem;
+			padding: 0.65rem 0.75rem;
+		}
+		.ac--row .ac__stats {
+			white-space: normal;
+		}
+	}
+</style>
