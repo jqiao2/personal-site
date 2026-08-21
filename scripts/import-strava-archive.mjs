@@ -17,6 +17,7 @@
 //     scripts/import-strava-archive.mjs <archive-dir> [options]
 //
 //   --dry              parse everything, print the summary, write nothing
+//   --reset            delete everything this importer previously wrote, first
 //   --limit N          only the N most recent activities (a rehearsal)
 //   --rest-hr N        resting heart rate for the TRIMP rungs (default 50)
 //   --skip-scan        don't re-derive thresholds; use what's already in the DB
@@ -70,6 +71,7 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const DRY = has('--dry');
+const RESET = has('--reset');
 const LIMIT = Number(flag('--limit', 0)) || 0;
 const REST_HR = Number(flag('--rest-hr', 50));
 const SKIP_SCAN = has('--skip-scan');
@@ -493,6 +495,10 @@ const weights = csvRows
 
 const context = SKIP_SCAN ? { offsets: [], ftps: [], hrs: [] } : scanFitFiles();
 
+// Before anything is written — a reset after the thresholds were upserted
+// would delete the rows this run just put there.
+if (RESET && !DRY) await reset();
+
 let thresholdRows = buildThresholds(context, weights);
 if (!DRY && thresholdRows.length) {
 	log(`writing ${thresholdRows.length} athlete_thresholds rows...`);
@@ -510,6 +516,55 @@ if (SKIP_SCAN && !DRY) {
 	thresholdRows = data ?? [];
 }
 thresholdRows.sort((a, b) => a.effective_from.localeCompare(b.effective_from));
+
+/**
+ * Remove everything a previous run of THIS importer wrote, so a corrected run
+ * can replace it. Scoped by `provider = 'strava_archive'`, the same way
+ * seed-activities.mjs scopes its own --reset by its marker: nothing that
+ * arrived from a file drop, a device sync or by hand is touched, and neither
+ * is any other section of the site.
+ *
+ * Also takes activities with NO source row at all. Those can only be the
+ * wreckage of a run that died between writing an activity and writing its
+ * provenance — they are invisible to the resume check below, so left alone
+ * they would be silently duplicated on the next run.
+ */
+async function reset() {
+	log('--reset: removing everything this importer previously wrote...');
+
+	const { data: mine, error } = await db
+		.from('activity_sources')
+		.select('activity_id')
+		.eq('provider', 'strava_archive');
+	if (error) throw new Error(`read activity_sources: ${error.message}`);
+
+	const ids = new Set((mine ?? []).map((s) => s.activity_id));
+
+	const { data: all, error: e2 } = await db.from('activities').select('id');
+	if (e2) throw new Error(`read activities: ${e2.message}`);
+	const { data: sourced, error: e3 } = await db.from('activity_sources').select('activity_id');
+	if (e3) throw new Error(`read activity_sources: ${e3.message}`);
+	const hasSource = new Set((sourced ?? []).map((s) => s.activity_id));
+	for (const a of all ?? []) if (!hasSource.has(a.id)) ids.add(a.id);
+
+	// Children go with their parent through the FK cascade, but deleting a
+	// parent whose child is also listed is harmless — the second delete simply
+	// matches nothing.
+	const list = [...ids];
+	for (let i = 0; i < list.length; i += 200) {
+		const { error: delErr } = await db.from('activities').delete().in('id', list.slice(i, i + 200));
+		if (delErr) throw new Error(`delete activities: ${delErr.message}`);
+	}
+
+	// Gear and thresholds this importer created are rebuilt from the archive on
+	// every run, so they go too rather than accumulating duplicates.
+	const { error: gErr } = await db.from('activity_gear').delete().not('external_ids->>strava_archive', 'is', null);
+	if (gErr) throw new Error(`delete activity_gear: ${gErr.message}`);
+	const { error: tErr } = await db.from('athlete_thresholds').delete().gte('effective_from', '1900-01-01');
+	if (tErr) throw new Error(`delete athlete_thresholds: ${tErr.message}`);
+
+	log(`--reset: removed ${list.length} activities (streams, laps and sources cascade with them)`);
+}
 
 // Already imported? Skip. This is what makes an interrupted run resumable.
 const alreadyImported = new Set();
