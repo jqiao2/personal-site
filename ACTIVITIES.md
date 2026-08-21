@@ -1,5 +1,45 @@
 # The activity log
 
+## Where this is up to
+
+Built so far, on `claude/strava-activities-feature-26rgcy` (PR #115):
+
+| Piece | State |
+| --- | --- |
+| `0034_activity_log.sql` | **Applied** to the live project. All six tables and the three views exist; every table is empty. |
+| `src/lib/activities.ts` | Query layer over the schema. Untested against real rows. |
+| `src/lib/exertion.ts` | The §3 cascade. Anchors verified: an hour at FTP scores 100.00; 4h at 0.65 IF scores 169.00; a hike with no thresholds falls to the MET floor. |
+| `src/lib/route-shape.ts` | Polyline codec, mercator, RDP simplify, the §7 `routePath` pipeline. |
+| `src/lib/sports.ts` | 21 sport slugs, per-sport stat ordering, family glyphs. |
+| `ActivityLayout` + `activity-tokens` + `ActivityCard` | The alpine shell and the route poster, all three sizes. Looked at and iterated on. |
+| `nav.ts` | `Activities` added. |
+| `/activities` | **Placeholder** — hardcoded fixtures, no database. Proves the shell and the card. |
+
+Not built yet: the real landing page, `/activities/all`, the detail page, the
+month in review, and the whole of §4 (ingestion).
+
+### Note for whoever picks this up
+
+**Real data beats the seed script.** There is a local Strava bulk export. That
+archive should never need to reach a server — the right move is to build the
+importer, then run it locally against the full export with real credentials, so
+hundreds of megabytes and every GPS track that starts at the athlete's front
+door stay on his own machine. Two things pin the parser down before any code is
+written, and both are small enough to paste:
+
+1. The `activities.csv` header row and two or three data rows. Column names vary
+   by export vintage; guessing them is the main way this goes wrong.
+2. A listing of the archive — whether the per-activity files are `.fit.gz`,
+   `.gpx`, `.tcx` or a mix decides which parser is worth writing first.
+
+**A placeholder `.env` may be present.** A remote session created one with fake
+Supabase values so `astro.config.mjs` (which hard-requires `SUPABASE_URL`) would
+load. It is git-ignored and holds no real credentials, but anything run as
+`node --env-file=.env` against it will silently talk to nothing. Check `.env`
+points at the real project before seeding or importing.
+
+---
+
 The fourth section of the family. The film log models the owner's relationship
 to a MOVIE, the book log to a BOOK, the restaurant log to a PLACE YOU EAT — this
 one models **a thing the body did**, and it is the first section whose records
