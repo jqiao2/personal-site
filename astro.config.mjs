@@ -9,15 +9,15 @@ import { PHOTO_WIDTHS } from './src/lib/photo-src.ts';
 // deployment declared, which is what stops it being an open image proxy for
 // the whole internet.
 //
-// Read from SUPABASE_URL rather than written out here so there is one place a
-// project move has to be edited. `loadEnv` because astro.config runs before
+// Read from R2_PUBLIC_URL rather than written out here so there is one place a
+// bucket move has to be edited. `loadEnv` because astro.config runs before
 // Astro has populated `import.meta.env`, and it reads .env files and the real
 // environment both — which is what makes this work locally and on Vercel.
-const { SUPABASE_URL } = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '');
-if (!SUPABASE_URL) {
-	throw new Error('SUPABASE_URL is not set — the image optimiser needs the photo bucket’s hostname');
+const { R2_PUBLIC_URL } = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '');
+if (!R2_PUBLIC_URL) {
+	throw new Error('R2_PUBLIC_URL is not set — the image optimiser needs the photo bucket’s hostname');
 }
-const photoHost = new URL(SUPABASE_URL).hostname;
+const photoHost = new URL(R2_PUBLIC_URL).hostname;
 
 // The site is static by default; individual routes that need a server
 // (everything under src/pages/api/**) opt in with `export const prerender = false`.

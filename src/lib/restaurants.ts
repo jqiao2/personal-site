@@ -3,10 +3,9 @@
 // like the film log's); writes go through the service-role client and are only
 // ever called after requireOwner().
 import { supabaseAdmin, supabasePublic } from './supabase';
+import { putPhoto, deletePhotoObject, r2PublicUrl } from './r2';
 import { siteDay, siteYear } from './day';
 import { monthLabel } from './share-card';
-
-export const PHOTO_BUCKET = 'restaurant-photos';
 
 /** The four price bands, in order. Four steps, no half steps. */
 export const PRICE_BANDS = ['$', '$$', '$$$', '$$$$'] as const;
@@ -164,7 +163,7 @@ const PLACE_COLUMNS = '*';
  * assembly — no round trip, and safe to call once per photo in a render loop.
  */
 export function photoUrl(storagePath: string): string {
-	return supabasePublic.storage.from(PHOTO_BUCKET).getPublicUrl(storagePath).data.publicUrl;
+	return r2PublicUrl(storagePath);
 }
 
 function withUrl(row: Omit<Photo, 'url'>): Photo {
@@ -1065,18 +1064,8 @@ export async function uploadPhoto(
 ): Promise<string> {
 	const ext = (filename.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
 	const path = `${visitId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-	const { error } = await supabaseAdmin.storage.from(PHOTO_BUCKET).upload(path, file, {
-		contentType: file instanceof File ? file.type || undefined : undefined,
-		upsert: false,
-		// A year, against Supabase's default of an hour. The path above is
-		// unique per upload and `upsert: false` keeps it that way, so an object
-		// here can never change under a cache — the usual reason not to do this
-		// does not apply. It matters twice: a reader revisiting the diary, and
-		// the image optimiser, which re-reads this URL as its source whenever a
-		// rendition falls out of its own cache.
-		cacheControl: '31536000',
-	});
-	if (error) throw new Error(error.message);
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	await putPhoto(path, bytes, file instanceof File ? file.type || undefined : undefined);
 	return path;
 }
 
@@ -1090,6 +1079,6 @@ export async function deletePhoto(id: number): Promise<void> {
 	const { error } = await supabaseAdmin.from('restaurant_photos').delete().eq('id', id);
 	if (error) throw new Error(error.message);
 	if (data?.storage_path) {
-		await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([data.storage_path as string]);
+		await deletePhotoObject(data.storage_path as string);
 	}
 }

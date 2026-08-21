@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.4",
+    "@aws-sdk/client-s3": "^3.1115.0",
     "@sigma/node-piechart": "^3.0.1",
     "@supabase/supabase-js": "^2.110.2",
     "astro": "^7.0.7",
@@ -29,5 +30,9 @@
   },
   "allowScripts": {
     "esbuild@0.28.1": true
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^6.0.3"
   }
 }

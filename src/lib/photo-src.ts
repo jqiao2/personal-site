@@ -12,11 +12,10 @@
 // each `<img>` carries a `srcset` of the widths it might actually need plus a
 // `sizes` telling the browser which to take.
 //
-// WHY VERCEL AND NOT SUPABASE. Supabase Storage has its own transformer and it
-// would be the closer fit — same host as the object, no second service. It is
-// a Pro-plan feature and this project is on the free plan, so it is not
-// available to us. Vercel's is, the site is already deployed there, and it
-// works on the photographs already in the bucket rather than only on new ones.
+// WHY VERCEL AND NOT THE BUCKET ITSELF. R2 has no built-in image transform
+// (that's a separate Cloudflare product, Images, with its own bill). Vercel's
+// optimiser is already part of the deployment at no extra cost, and it works
+// on the photographs already in the bucket rather than only on new ones.
 //
 // WHAT IT COSTS. Vercel meters image transformations. The bill is bounded by
 // the CATALOGUE, not by traffic: a transformation is cached and reused, so the
