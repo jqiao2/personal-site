@@ -297,9 +297,12 @@ export interface RoutePathOptions {
  * `maxPoints`, fit to a square viewBox preserving aspect ratio, centre it
  * with padding, and emit an `M x y L x y …` path string at 1 decimal place.
  *
- * Returns `null` for fewer than 2 points. That is deliberately not an error
- * path — a pool swim, a trainer ride and a treadmill run have no GPS at all
- * (ACTIVITIES.md's second bullet), and "this activity has no route" is a
+ * Returns `null` for fewer than 2 points, and also for 2-or-more points that
+ * never actually move (every point identical — a GPS fix logged twice at a
+ * dead stop, not a route). Both are the same case in disguise: neither has a
+ * line to draw, only `M x y` with nowhere to go. That is deliberately not an
+ * error path — a pool swim, a trainer ride and a treadmill run have no GPS at
+ * all (ACTIVITIES.md's second bullet), and "this activity has no route" is a
  * normal, common answer that the card layer (§7: "must read as a deliberate
  * second design") is built to handle, not a malformed-input case this
  * function should throw on.
@@ -327,14 +330,22 @@ export function routePath(points: [number, number][], opts: RoutePathOptions = {
 	}
 	const spanX = maxX - minX;
 	const spanY = maxY - minY;
+
+	// No movement at all — every surviving point projects to the same spot.
+	// This is the "2 identical points" case: not fewer than 2 points, but
+	// there is still no *line*, only a stack of coincident ones, so it gets
+	// the same null a too-short track gets rather than degrading into a
+	// path string that's just `M x y` with an accidental repeat. A real GPS
+	// track essentially never has exactly-zero span (device jitter alone
+	// guarantees float noise), so this only ever fires on the genuinely
+	// degenerate case, not on a real short-and-slow activity.
+	if (spanX === 0 && spanY === 0) return null;
+
 	const drawable = size - padding * 2;
 
 	// A single-scale fit (not independent x/y scales) so a route's shape isn't
 	// stretched to fill a square it was never square in — a straight-line
-	// out-and-back stays a straight line, not a diagonal-to-square smear. The
-	// degenerate case (a route that never moves — a GPS glitch, not a real
-	// activity) falls back to 1 so the divide-by-zero doesn't produce NaNs;
-	// it'll draw as a dot, which is an honest picture of "no movement."
+	// out-and-back stays a straight line, not a diagonal-to-square smear.
 	const largestSpan = Math.max(spanX, spanY) || 1;
 	const scale = drawable / largestSpan;
 
