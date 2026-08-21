@@ -87,9 +87,10 @@ export const SPORTS: readonly Sport[] = [
 	'other',
 ];
 
-/** Groups a sport for icon selection and for any "by family" rollup. Not the
- *  same axis as `Sport` itself — a gravel ride and a mountain bike ride get
- *  different labels but draw the same bike glyph. */
+/** Groups a sport for stat relevance and for any "by family" rollup. Not the
+ *  same axis as `Sport` itself, and no longer the axis icons pick on — a
+ *  gravel ride and a mountain bike ride share this family and share the SWOLF
+ *  gating that hangs off it, but each draws its own glyph. */
 export type SportFamily = 'bike' | 'run' | 'swim' | 'foot' | 'snow' | 'other' | 'transition';
 
 /** Every stat key any sport's `primaryStats` refers to (§6), plus a few every
@@ -126,10 +127,9 @@ export interface SportMeta {
 	label: string;
 	family: SportFamily;
 	/** Icon key, not the path itself — `sportIcon()` resolves the actual
-	 *  24x24 path data by family (see the icon set below). Kept as its own
-	 *  field, one per sport rather than one per family, so a future finer
-	 *  icon (a downhill-specific mark distinct from nordic, say) has
-	 *  somewhere to attach without changing this table's shape. */
+	 *  24x24 path data out of SPORT_ICONS below. One per sport, so two sports
+	 *  in the same family can share a glyph (they just name the same key) or
+	 *  diverge (gravel and road ride) without changing this table's shape. */
 	icon: string;
 	indoor: boolean;
 	hasDistance: boolean;
@@ -175,7 +175,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	gravel_ride: {
 		label: 'Gravel ride',
 		family: 'bike',
-		icon: 'bike',
+		icon: 'bike_gravel',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'speed',
@@ -185,7 +185,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	mountain_bike: {
 		label: 'Mountain bike',
 		family: 'bike',
-		icon: 'bike',
+		icon: 'bike_mtb',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'speed',
@@ -195,7 +195,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	virtual_ride: {
 		label: 'Virtual ride',
 		family: 'bike',
-		icon: 'bike',
+		icon: 'bike_indoor',
 		indoor: true,
 		hasDistance: true,
 		paceStyle: 'speed',
@@ -215,7 +215,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	treadmill_run: {
 		label: 'Treadmill run',
 		family: 'run',
-		icon: 'run',
+		icon: 'run_indoor',
 		indoor: true,
 		hasDistance: true,
 		paceStyle: 'per_km',
@@ -225,7 +225,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	trail_run: {
 		label: 'Trail run',
 		family: 'run',
-		icon: 'run',
+		icon: 'run_trail',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_km',
@@ -245,7 +245,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	open_water_swim: {
 		label: 'Open water swim',
 		family: 'swim',
-		icon: 'swim',
+		icon: 'swim_open',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_100m',
@@ -294,7 +294,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	walk: {
 		label: 'Walk',
 		family: 'foot',
-		icon: 'hike',
+		icon: 'walk',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_km',
@@ -304,7 +304,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	snowshoe: {
 		label: 'Snowshoe',
 		family: 'foot',
-		icon: 'hike',
+		icon: 'snowshoe',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_km',
@@ -324,7 +324,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	backcountry_ski: {
 		label: 'Backcountry ski',
 		family: 'snow',
-		icon: 'ski',
+		icon: 'ski_touring',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_km',
@@ -334,7 +334,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	nordic_ski: {
 		label: 'Nordic ski',
 		family: 'snow',
-		icon: 'ski',
+		icon: 'ski_nordic',
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_km',
@@ -344,7 +344,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 	snowboard: {
 		label: 'Snowboard',
 		family: 'snow',
-		icon: 'ski',
+		icon: 'snowboard',
 		indoor: false,
 		hasDistance: false,
 		paceStyle: 'speed',
@@ -627,45 +627,99 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 // ---------------------------------------------------------------------------
 
 /**
- * One inline path per sport family, 24x24 viewBox, stroke-based single-line
- * glyphs — no fills, so they inherit `currentColor` and sit flat on `granite`
- * text the way the rest of the UI does (§2: "sport is said with a mark and a
- * word, not with twelve hues"). Deliberately NOT one-per-sport: `gravel_ride`
- * and `mountain_bike` are still bikes, and a fourteen-icon set stops reading
- * as a system at 16px, where sixteen glyphs collapse into noise long before
- * seven families do. `sportIcon` looks up by family so a card only has to
- * know a slug.
+ * One inline path per sport, 24x24 viewBox, stroke-based single-line glyphs —
+ * no fills, so they inherit `currentColor` and sit flat on `granite` text the
+ * way the rest of the UI does (§2: "sport is said with a mark and a word, not
+ * with twelve hues").
  *
- * Every path was drawn and checked at 16px on both `snow` and `sky` before
- * being kept — a shape that only reads at 24px is not a usable icon here,
- * since the week grid draws these at 16.
+ * THE SYSTEM. Each glyph is the sport's *object* — a bike, a running shoe, a
+ * pair of skis — and its variants are that same object plus one mark in the
+ * band under it, never a second object:
+ *
+ *   - dashes  (`M3 21h3.5…`) — loose surface: gravel ride, trail run.
+ *   - a jagged ridge         — mountains: mountain bike, backcountry ski.
+ *   - one solid line         — a fixed floor or a pool wall: virtual ride,
+ *                              treadmill run, pool swim.
+ *   - a wave                 — open water.
+ *   - two straight tracks    — set nordic tracks.
+ *
+ * Reading the modifier is optional: a glance gets "bike" or "shoe" from the
+ * object alone, which is all a 16px calendar cell can carry anyway, and the
+ * band adds the surface for anyone who looks closer. That is why the variants
+ * are NOT distinct drawings — sixteen unrelated glyphs stop reading as a
+ * system at 16px, one object plus a surface never does.
+ *
+ * Keyed by `SportMeta.icon` rather than by family, so a sport can be given its
+ * own mark by editing one field in the table above. Every path was drawn and
+ * checked at 16, 24 and 48px before being kept — a shape that only reads at
+ * 24px is not a usable icon here, since the week grid draws these at 16.
  */
-const FAMILY_ICONS: Record<SportFamily, string> = {
-	// Bike: frame triangle + two wheels, drawn as three circles' worth of
-	// geometry via arcs so it survives being squashed to 16px — a full
-	// spoked-wheel glyph disappears at that size, an open triangle doesn't.
+const SPORT_ICONS: Record<string, string> = {
+	// Bike: frame triangle + two wheels, drawn as arcs so it survives being
+	// squashed to 16px — a full spoked-wheel glyph disappears at that size, an
+	// open triangle doesn't. The variants raise the bike 2px to clear the
+	// surface band.
 	bike: 'M5 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 18a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 15l4-7h5l4 7M9 8h5M12 15l2-4',
-	// Run: a single running stick figure — head, angled torso, forward arm/leg.
-	run: 'M15 4a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM10 21l2-6 3 2 2 4M8 14l3-3-1-4 4 1 2 3M6 10l4-2',
-	// Swim: wavy water line under a raised-arm stroke stub, not a swimmer
-	// figure — legible at 16px where a full stroke pose isn't.
-	swim: 'M4 19c1.5 0 1.5-1.5 3-1.5S8.5 19 10 19s1.5-1.5 3-1.5 1.5 1.5 3 1.5 1.5-1.5 3-1.5M9 13l4-6 3 3-2 3M13 7l2-2',
-	// Foot (hike/walk/snowshoe): a boot print + trail dots ahead of it.
-	foot: 'M6 20c0-3 1-5 1-8 0-2-1-3-1-5a2 2 0 0 1 4 0c0 2 2 2 2 5v8M14 8l2 2M17 6l2 2M19 10l2 1',
-	// Snow: a single ski/board with two poles crossed behind it — reads as
-	// "on snow" without pretending to distinguish alpine from nordic.
-	snow: 'M3 17l14-3M6 20l14-3M9 4v14M13 9l6-4M13 13l6 3',
-	// Transition: the wetsuit-strip arrow — a bag with an arrow through it,
-	// standing for "gear change", the one thing this sport is.
+	bike_gravel:
+		'M5 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 13l4-7h5l4 7M9 6h5M12 13l2-4M3 21h3.5M10.5 21h3.5M17.5 21h3.5',
+	bike_mtb:
+		'M5 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 13l4-7h5l4 7M9 6h5M12 13l2-4M2 23l3.5-2.5L9 23l4-2.5 4 2.5 3-2 2 2.5',
+	bike_indoor:
+		'M5 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 13l4-7h5l4 7M9 6h5M12 13l2-4M3 21h18',
+	// Run: a running shoe in profile — heel, ankle collar, tongue, toe box,
+	// with the sole as its own line so the silhouette still reads when the
+	// laces stop resolving around 16px.
+	run: 'M3 17v-4a1 1 0 0 1 1.3-.95l3.2 1.05 2.5-2.6a1 1 0 0 1 1.55.1l1.75 2.5 4 1.4 2.9 2.1a1.8 1.8 0 0 1-1.05 3.25H5a2 2 0 0 1-2-2zM3.5 17.5h16.5M9.5 13.5l2 1.2M11.3 11.6l2 1.2',
+	run_trail:
+		'M3 15v-4a1 1 0 0 1 1.3-.95l3.2 1.05 2.5-2.6a1 1 0 0 1 1.55.1l1.75 2.5 4 1.4 2.9 2.1a1.8 1.8 0 0 1-1.05 3.25H5a2 2 0 0 1-2-2zM3.5 15.5h16.5M9.5 11.5l2 1.2M11.3 9.6l2 1.2M3 21h3.5M10.5 21h3.5M17.5 21h3.5',
+	run_indoor:
+		'M3 15v-4a1 1 0 0 1 1.3-.95l3.2 1.05 2.5-2.6a1 1 0 0 1 1.55.1l1.75 2.5 4 1.4 2.9 2.1a1.8 1.8 0 0 1-1.05 3.25H5a2 2 0 0 1-2-2zM3.5 15.5h16.5M9.5 11.5l2 1.2M11.3 9.6l2 1.2M3 21h18',
+	// Swim: head, the recovering arm over it, and the body's line — a
+	// freestyle stroke, over the pool wall or over open water.
+	swim: 'M7.6 11.2a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2zM8.8 8.6C10 5.4 13 4.4 15.4 6.2M6 14l5.5-1.7 4.5 2 4-1.5M3 20h18',
+	swim_open:
+		'M7.6 11.2a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2zM8.8 8.6C10 5.4 13 4.4 15.4 6.2M6 14l5.5-1.7 4.5 2 4-1.5M3 20c1.5 0 1.5-1.5 3-1.5S7.5 20 9 20s1.5-1.5 3-1.5S13.5 20 15 20s1.5-1.5 3-1.5S19.5 20 21 20',
+	// Hike: the mountain itself, not a boot — at 16px a boot print and a
+	// running shoe are the same blob, and two peaks never are.
+	hike: 'M2 20l6.5-10 4 6 2.5-3.5L21 20zM8.5 10l2 3',
+	walk: 'M13 5a1.6 1.6 0 1 0 0-3.2 1.6 1.6 0 0 0 0 3.2zM12.5 7v6M13 13l-3 8M13 13l3 8M12.6 9.5l-3.2 2M12.6 9.5l3.2 2',
+	// Snowshoe: the racket seen from above — teardrop frame, three lacings.
+	snowshoe:
+		'M12 3c3.2 0 5 3 5 7 0 4-1.4 6.6-1.9 10.6a1.5 1.5 0 0 1-1.5 1.3h-3.2a1.5 1.5 0 0 1-1.5-1.3C8.4 16.6 7 14 7 10c0-4 1.8-7 5-7zM7.8 9.5h8.4M8.3 13h7.4M9.2 16.5h5.6',
+	// Ski: a pair of skis in perspective, tips curled. The three ski sports
+	// differ only in what's under them — mountains skinned up, set tracks, or
+	// nothing at all for a lift-served day.
+	ski: 'M2.5 15l12-4c1.6-.5 2.6-.2 3.3.9M4.5 18l12-4c1.6-.5 2.6-.2 3.3.9',
+	ski_touring: 'M2.5 14l12-4c1.6-.5 2.6-.2 3.3.9M4.5 17l12-4c1.6-.5 2.6-.2 3.3.9M2 23l3.5-2.5L9 23l4-2.5 4 2.5 3-2 2 2.5',
+	ski_nordic: 'M2.5 14l12-4c1.6-.5 2.6-.2 3.3.9M4.5 17l12-4c1.6-.5 2.6-.2 3.3.9M3 20h18M3 23h18',
+	snowboard: 'M4.6 18.6a3 3 0 0 1 0-4.24L14.36 4.6a3 3 0 0 1 4.24 4.24L8.84 18.6a3 3 0 0 1-4.24 0zM8.2 11.3l3.5 3.5M11.5 8l3.5 3.5',
+	inline_skate:
+		'M5 17V8l4 1 2.5-2.5L14 9l4 1.5 3 2V17zM6 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM11 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM16 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM20.5 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z',
+	strength: 'M3 9v6M6.5 6.5v11M6.5 12h11M17.5 6.5v11M21 9v6',
+	// Yoga: the seated figure — head over a lotus base, arms across it.
+	yoga: 'M12 6.4a1.9 1.9 0 1 0 0-3.8 1.9 1.9 0 0 0 0 3.8zM12 8.6L5.5 19.5h13zM8.2 14h7.6',
+	// Rowing: the erg, which is what this sport actually is here — rail, seat,
+	// chain and flywheel. A boat-and-oars mark would promise water there isn't.
+	rowing: 'M3 19h18M8.5 19v-2.5h3.5V19M19 12.5a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM16.4 11.2L11.5 15.2M11.5 15.2l-2.5.6',
+	// Kayak: hull from above with the double paddle laid across it.
+	kayak: 'M3 13c4.5 4.5 13.5 4.5 18 0-4.5-4.5-13.5-4.5-18 0zM4 5l16 16M3.5 4l2-1 1 2-2 1zM20.5 20l-2 1-1-2 2-1z',
+	// Triathlon: three chevrons — the three legs, in order. Drawing a swim, a
+	// bike and a run inside one 24px square gives three unreadable marks
+	// instead of one readable one.
+	triathlon: 'M4 8l4 4-4 4M11 8l4 4-4 4M18 8l4 4-4 4',
+	// Transition: the gear bag with the arrow through it — "gear change", the
+	// one thing this sport is.
 	transition: 'M5 10h10l4 4-4 4H5zM9 10V6h6v4',
 	// Other: an unfilled diamond — deliberately the least specific mark in the
 	// set, so an unrecognised sport never accidentally borrows another
-	// family's meaning.
+	// sport's meaning.
 	other: 'M12 3l7 9-7 9-7-9z',
 };
 
-/** Icon path for a sport slug, looked up via its family. Unknown slugs fall
- *  through `sportMeta`'s 'other' default, same as everywhere else. */
+/** Icon path for a sport slug. Unknown slugs fall through `sportMeta`'s
+ *  'other' default, same as everywhere else; an icon key with no path (a row
+ *  added to the table above before its glyph was drawn) falls back to the
+ *  same generic mark rather than rendering an empty `<path>`. */
 export function sportIcon(slug: string): string {
-	return FAMILY_ICONS[sportMeta(slug).family];
+	return SPORT_ICONS[sportMeta(slug).icon] ?? SPORT_ICONS.other;
 }

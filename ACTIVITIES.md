@@ -10,7 +10,7 @@ Built so far, on `claude/strava-activities-feature-26rgcy` (PR #115):
 | `src/lib/activities.ts` | Query layer over the schema. Untested against real rows. |
 | `src/lib/exertion.ts` | The §3 cascade. Anchors verified: an hour at FTP scores 100.00; 4h at 0.65 IF scores 169.00; a hike with no thresholds falls to the MET floor. |
 | `src/lib/route-shape.ts` | Polyline codec, mercator, RDP simplify, the §7 `routePath` pipeline. |
-| `src/lib/sports.ts` | 23 sport slugs, per-sport stat ordering, family glyphs. |
+| `src/lib/sports.ts` | 23 sport slugs, per-sport stat ordering, per-sport glyphs. |
 | `ActivityLayout` + `activity-tokens` + `ActivityCard` | The alpine shell and the route poster, all three sizes. Looked at and iterated on. |
 | `nav.ts` | `Activities` added. |
 | `/activities` | **Placeholder** — hardcoded fixtures, no database. Proves the shell and the card. |
