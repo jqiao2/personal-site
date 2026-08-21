@@ -499,7 +499,11 @@ const context = SKIP_SCAN ? { offsets: [], ftps: [], hrs: [] } : scanFitFiles();
 // would delete the rows this run just put there.
 if (RESET && !DRY) await reset();
 
-let thresholdRows = buildThresholds(context, weights);
+// --skip-scan means "trust what's already in the database". It must NOT rebuild
+// the thresholds: with no scan there are no heart-rate readings, so a rebuild
+// would write max_hr and lthr_bpm as null over good rows — and every HR-based
+// score computed afterwards silently drops to the MET floor.
+let thresholdRows = SKIP_SCAN ? [] : buildThresholds(context, weights);
 if (!DRY && thresholdRows.length) {
 	log(`writing ${thresholdRows.length} athlete_thresholds rows...`);
 	for (const row of thresholdRows) {
@@ -800,6 +804,9 @@ function buildDuplicates(rows, file, canonical) {
 /** A `triathlon` parent with its legs as children. */
 function buildMultisport(rows, file, sessions) {
 	const pool = rows.slice();
+	const eventName = commonPrefix(rows.map((r) => r.name)) ?? 'Triathlon';
+	let transitionSeen = 0;
+
 	const legs = sessions.map((canonical, i) => {
 		// Match this leg to the csv row that describes it, by sport, so the
 		// athlete's own leg titles survive. Transitions are Strava "Workout"
@@ -817,6 +824,16 @@ function buildMultisport(rows, file, sessions) {
 			// The file's own sport is the authority for a leg (see fit.ts).
 			built.activity.sport = canonical.sport;
 			built.activity.sub_sport = canonical.sub_sport ?? null;
+
+			// Transitions are named by POSITION, not by which csv row matched.
+			// Strava types both T1 and T2 as "Workout", so they are
+			// interchangeable to the matcher above — and it duly labelled one
+			// event's first transition "T2". The file's session order is the
+			// truth: the first transition of a triathlon is T1.
+			if (canonical.sport === 'transition') {
+				transitionSeen++;
+				built.activity.title = `${eventName} T${transitionSeen}`;
+			}
 		}
 		return built;
 	}).filter(Boolean);
@@ -833,7 +850,7 @@ function buildMultisport(rows, file, sessions) {
 
 	const parentCanonical = {
 		sport: 'triathlon',
-		title: commonPrefix(legs.map((l) => l.activity.title)) ?? 'Triathlon',
+		title: eventName,
 		started_at: first.started_at,
 		utc_offset_minutes: first.utc_offset_minutes,
 		elapsed_seconds: Math.max(1, Math.round((endMs - Date.parse(first.started_at)) / 1000)),

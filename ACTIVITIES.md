@@ -51,15 +51,38 @@ repeating.
 - **The athlete moved.** Recorded UTC offsets run −7/−8 through 2024 and −4/−5
   from 2025. §2's "alpine, PNW" art direction and the Seattle place names in
   the seed script are now a description of the older half of the history.
-- **FIT sessions carry the FTP that was set on the head unit** — 540 readings,
-  a dated FTP history nobody wrote down. Raw it is too noisy to use (two head
-  units disagreeing gives 230 → 200 → 240 inside eight days), so the importer
-  takes a monthly median with a 5W gate.
+- **FTP comes from the athlete's TrainerRoad history**, not from the archive.
+  FIT sessions do carry the FTP configured on the head unit (540 readings), but
+  it is stale, disagrees between units, and is mostly auto-detected — raw it
+  gives 230 → 200 → 240 inside eight days. The real list is 22 dated entries
+  from 2016 to 2026, several of them ramp tests, and it lives in
+  `TRAINERROAD_FTP` in the importer. The device readings are kept only as the
+  fallback path.
 
-**Streams are decimated to 1500 samples on the way in.** Stored whole they
-project to ~395MB against a database that also holds the film and book logs.
-Exertion is computed from the full-resolution stream *before* decimation, so
-every stored score is exact; only a future recompute reads the shortened one.
+- **Eight recordings back more than one csv row**, and both kinds were silently
+  wrong until §4's dedupe was actually built:
+  - **Six split rides.** One upload renamed into two or three Strava
+    activities ("Ride from DR" / "Ride to DR"), each carrying the *whole*
+    ride's distance and power. Stored as one activity with every Strava id
+    kept in `activity_sources`.
+  - **Two triathlons.** A multisport FIT file holds one session per leg, and
+    the export copies that same file once per leg under a different filename.
+    Reading `sessionMesgs[0]` gave all five legs the swim's numbers. Now
+    parsed per session into a `triathlon` parent with its legs as children —
+    the first thing to use §5's `parent_id`/`leg`.
+
+**Streams are stored whole**, at whatever rate the device recorded. Only float
+noise is trimmed, at each sensor's real precision (lat/lng 6dp ≈ 11cm). The
+detail page must pick its own display resolution — storage keeps the truth.
+Budget: ~37 bytes per sample on disk, so the full history is ~230MB of streams
+against a 500MB free-tier database that already holds 160MB of films and books.
+
+**Running power is not cycling power.** §3's top rung divides normalized power
+by FTP, and both are cycling quantities — but a running watch reports watts
+too, on a different scale. Ungated, this athlete's runs scored an average of
+187 TSS (max 971) where an hour at threshold is 100. `exertion.ts` now gates
+that rung on the bike family. If a running-power model is ever wanted, it needs
+its own threshold and its own rung, not this one.
 
 **A placeholder `.env` may be present.** A remote session created one with fake
 Supabase values so `astro.config.mjs` (which hard-requires `SUPABASE_URL`) would
