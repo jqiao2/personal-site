@@ -515,9 +515,12 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		.ac--row .ac__meta {
 			display: flex;
 			flex-direction: column;
-			align-items: flex-start;
+			align-items: stretch;
 			gap: 0.25rem;
 			padding: 0.65rem 0.75rem;
+		}
+		.ac--row .ac__title {
+			max-width: 100%;
 		}
 		.ac--row .ac__stats {
 			white-space: normal;
