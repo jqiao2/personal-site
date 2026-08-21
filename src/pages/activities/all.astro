@@ -952,7 +952,7 @@ const scopeDummy: ActivityCardRow = {
 		// than an import of it; sports.ts and activity-tokens.ts have no such
 		// server dependency and are imported directly.
 		import { sportMeta, sportIcon, formatStat, type StatKey } from '../../lib/sports';
-		import { exertionLabel } from '../../lib/activity-tokens';
+		import { ALPINE, exertionLabel } from '../../lib/activity-tokens';
 		// Type-only — erased at build, so this brings in none of activities.ts's
 		// runtime code (and, through it, supabase.ts) the way a value import
 		// would.
@@ -1411,6 +1411,14 @@ const scopeDummy: ActivityCardRow = {
 			const wrap = el('div', 'row-item', pageScope);
 			const card = el('a', 'ac ac--row', cardScope) as HTMLAnchorElement;
 			card.href = `/activities/${a.id}`;
+			card.style.setProperty('--sky', ALPINE.sky);
+			card.style.setProperty('--snow', ALPINE.snow);
+			card.style.setProperty('--granite', ALPINE.granite);
+			card.style.setProperty('--granite-soft', ALPINE.graniteSoft);
+			card.style.setProperty('--lake', ALPINE.lake);
+			card.style.setProperty('--lake-deep', ALPINE.lakeDeep);
+			card.style.setProperty('--larch', ALPINE.larch);
+			card.style.setProperty('--scree', ALPINE.scree);
 
 			const face = el('div', 'ac__face', cardScope);
 			if (a.route_path) {
