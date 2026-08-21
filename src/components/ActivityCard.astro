@@ -178,10 +178,23 @@ function cardStats(a: ActivityRow): Stat[] {
 	return out;
 }
 
-/** The no-GPS face's two big numbers — chosen so the absence of a route never
- *  reads as an absence of design (§7's "must read as deliberate, not broken"). */
-function noGpsFace(a: ActivityRow): [Stat & { label: string }, Stat & { label: string }] {
+/**
+ * The no-GPS face's big numbers — chosen so the absence of a route never reads
+ * as an absence of design (§7's "must read as deliberate, not broken").
+ *
+ * ONE OR TWO, NEVER A DASH. The face is the whole card here, so a stat with
+ * nothing in it is worse than no stat at all: a large "–" next to "bpm avg" is
+ * the exact "something failed to load" reading this face exists to avoid. A
+ * transition genuinely has one number — the clock — and a pool swim on a watch
+ * that logged no heart rate has two; both are complete answers, so the second
+ * slot is dropped rather than filled with a placeholder.
+ */
+function noGpsFace(a: ActivityRow): (Stat & { label: string })[] {
 	const family = familyOf(a.sport);
+	if (family === 'transition') {
+		// Elapsed only. A transition's whole story is how long it took.
+		return [{ value: clock(a.elapsed_seconds), unit: '', label: 'time' }];
+	}
 	if (family === 'ride' && a.avg_power_w) {
 		return [
 			{ value: String(a.avg_power_w), unit: 'W avg', label: 'power' },
@@ -196,10 +209,11 @@ function noGpsFace(a: ActivityRow): [Stat & { label: string }, Stat & { label: s
 				: { value: clock(a.moving_seconds), unit: '', label: 'time' },
 		];
 	}
-	return [
+	const face: (Stat & { label: string })[] = [
 		{ value: clock(a.moving_seconds ?? a.elapsed_seconds), unit: '', label: 'time' },
-		{ value: a.avg_hr ? String(a.avg_hr) : '–', unit: 'bpm avg', label: 'heart rate' },
 	];
+	if (a.avg_hr) face.push({ value: String(a.avg_hr), unit: 'bpm avg', label: 'heart rate' });
+	return face;
 }
 // --------------------------------- end temporary block ---------------------
 
@@ -278,10 +292,12 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 						<span class="ac__nogps-value figure">{face![0].value}</span>
 						<span class="ac__nogps-unit">{face![0].unit}</span>
 					</div>
-					<div class="ac__nogps-stat ac__nogps-stat--sub">
-						<span class="ac__nogps-value ac__nogps-value--sub figure">{face![1].value}</span>
-						<span class="ac__nogps-unit">{face![1].unit}</span>
-					</div>
+					{face![1] && (
+						<div class="ac__nogps-stat ac__nogps-stat--sub">
+							<span class="ac__nogps-value ac__nogps-value--sub figure">{face![1].value}</span>
+							<span class="ac__nogps-unit">{face![1].unit}</span>
+						</div>
+					)}
 					<svg class="ac__nogps-mark" viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" aria-hidden="true" set:html={glyph} />
 				</div>
 			)
