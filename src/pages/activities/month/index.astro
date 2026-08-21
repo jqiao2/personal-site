@@ -1,0 +1,163 @@
+---
+// Index of months that have at least one activity, newest first — the
+// jumping-off point for /activities/month/[month]'s share card, same role
+// restaurants/month/index.astro plays for the restaurant log (the film log's
+// equivalent has no such index; it always opens on the current month instead,
+// since watches are dense enough that "the current month" is rarely empty —
+// activities are not, so a reader landing here needs to see which months
+// actually have something to show before picking one).
+//
+// Reads activity_months directly (a plain view select — see the same call in
+// [month].astro) rather than adding a listing function to activities.ts,
+// which this track doesn't own (ACTIVITIES.md §9: "Month" owns only
+// src/pages/activities/month/*.astro and src/lib/activity-month.ts).
+import ActivityLayout from '../../../layouts/ActivityLayout.astro';
+import { ALPINE, monthLabel } from '../../../lib/activity-month';
+import { supabasePublic } from '../../../lib/supabase';
+
+export const prerender = false;
+
+interface MonthRow {
+	key: string;
+	count: number;
+}
+
+async function listMonths(): Promise<MonthRow[]> {
+	const { data, error } = await supabasePublic
+		.from('activity_months')
+		.select('month_key, activity_count')
+		.order('month_key', { ascending: false });
+	if (error) return [];
+	return (data ?? [])
+		.map((row) => ({ key: row.month_key as string, count: row.activity_count as number }))
+		.filter((m) => m.count > 0);
+}
+
+const months = await listMonths();
+const years = [...new Set(months.map((m) => m.key.slice(0, 4)))];
+---
+
+<ActivityLayout title="Month in activities — Jason's activity log">
+	<div class="page" style={{ '--sky': ALPINE.sky, '--snow': ALPINE.snow, '--granite': ALPINE.granite, '--granite-soft': ALPINE.graniteSoft, '--lake': ALPINE.lake, '--scree': ALPINE.scree }}>
+		<div class="wrap">
+			<header class="head">
+				<div>
+					<a class="back" href="/activities">&larr; Jason&rsquo;s activity log</a>
+					<div class="head__title">Month in activities</div>
+				</div>
+				<span class="count">{months.length} month{months.length === 1 ? '' : 's'}</span>
+			</header>
+
+			{
+				months.length === 0 ? (
+					<p class="empty">
+						No months yet. One shareable card per month, once there are activities logged in one.
+					</p>
+				) : (
+					years.map((year) => (
+						<section class="year">
+							<div class="year__head">{year}</div>
+							<div class="grid">
+								{months
+									.filter((m) => m.key.startsWith(year))
+									.map((m) => (
+										<a class="mcard" href={`/activities/month/${m.key}`}>
+											<div class="mcard__name">{monthLabel(m.key).split(' ')[0]}</div>
+											<div class="mcard__meta">
+												{m.count} {m.count === 1 ? 'activity' : 'activities'}
+											</div>
+										</a>
+									))}
+							</div>
+						</section>
+					))
+				)
+			}
+		</div>
+	</div>
+
+	<style>
+		.page {
+			min-height: 100vh;
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 90px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 900px;
+		}
+		.head {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			gap: 16px;
+			flex-wrap: wrap;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid var(--scree);
+			margin-bottom: 30px;
+		}
+		.back {
+			font-size: 13px;
+			color: var(--granite-soft);
+		}
+		.back:hover {
+			color: var(--lake);
+		}
+		.head__title {
+			margin-top: 8px;
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-size: 38px;
+			color: var(--granite);
+			letter-spacing: -0.3px;
+			line-height: 1;
+		}
+		.count {
+			font-size: 12.5px;
+			color: var(--granite-soft);
+			padding-bottom: 6px;
+		}
+		.empty {
+			color: var(--granite-soft);
+			font-size: 14px;
+		}
+		.year {
+			margin-bottom: 30px;
+		}
+		.year__head {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-style: italic;
+			font-size: 20px;
+			color: var(--granite);
+			border-bottom: 1px solid var(--scree);
+			padding-bottom: 9px;
+			margin-bottom: 14px;
+		}
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+			gap: 12px;
+		}
+		.mcard {
+			background: var(--snow);
+			border: 1px solid var(--scree);
+			border-radius: 8px;
+			padding: 16px 16px 18px;
+			color: var(--granite);
+		}
+		.mcard:hover {
+			border-color: var(--lake);
+			color: var(--lake);
+		}
+		.mcard__name {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-size: 21px;
+			line-height: 1;
+		}
+		.mcard__meta {
+			margin-top: 8px;
+			font-size: 12px;
+			color: var(--granite-soft);
+		}
+	</style>
+</ActivityLayout>
