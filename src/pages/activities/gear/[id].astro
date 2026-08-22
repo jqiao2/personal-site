@@ -239,9 +239,10 @@ function usedText(w: ComponentWear): string {
 											</div>
 
 											<div class="part__meta figure">
-												<span>fitted {w.component.installed_on}</span>
+												<span data-fitted={w.component.installed_on}>fitted {w.component.installed_on}</span>
 												{isOwner && (
 													<span class="part__acts">
+														<button class="link-btn" data-act="fitted">date</button>
 														<button class="link-btn" data-act="replace">replace</button>
 														<button class="link-btn link-btn--danger" data-act="delete">delete</button>
 													</span>
@@ -431,7 +432,12 @@ function usedText(w: ComponentWear): string {
 				const id = Number(li?.dataset.componentId);
 				if (!Number.isInteger(id)) return;
 
-				if (btn.dataset.act === 'replace') {
+				if (btn.dataset.act === 'fitted') {
+					const current = li?.querySelector<HTMLElement>('[data-fitted]')?.dataset.fitted ?? '';
+					const on = prompt('Fitted on (YYYY-MM-DD)', current);
+					if (!on) return;
+					send('PATCH', { target: 'component', id, installedOn: on }, null);
+				} else if (btn.dataset.act === 'replace') {
 					// Prefilled with today, but editable: a part is usually noticed
 					// as worn out some days after the ride that finished it.
 					const on = prompt('Removed on (YYYY-MM-DD)', new Date().toISOString().slice(0, 10));
