@@ -8,8 +8,11 @@
 //            squares (src/lib/heatmap.ts). Fog of war: a square is either
 //            ridden through or it isn't, and "where have I been" stops being
 //            a question about how often the GPS happened to sample.
+//   hexes  — the same board, same cell area, tessellated as a honeycomb. The
+//            stagger reads as coverage rather than as a street grid, which a
+//            square grid can accidentally imply on a gridded city.
 //
-// The two are a toggle rather than two pages because they answer the same
+// They are a toggle rather than separate pages because they answer the same
 // question at different resolutions, and switching in place is what makes the
 // difference between them legible.
 //
@@ -77,6 +80,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 					<div class="seg" role="group" aria-label="Map view">
 						<button class="seg__btn seg__btn--on" type="button" data-view="routes" aria-pressed="true">Routes</button>
 						<button class="seg__btn" type="button" data-view="tiles" aria-pressed="false">{TILE_FEET} ft tiles</button>
+						<button class="seg__btn" type="button" data-view="hexes" aria-pressed="false">{TILE_FEET} ft hexes</button>
 					</div>
 					<button class="toggle" type="button" data-heat aria-pressed="false" disabled>Heatmap</button>
 					<button class="locate" type="button" data-locate>Locate me</button>
@@ -105,7 +109,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
 	import { alpineBasemap, bareAlpineGround } from '../../lib/activity-map';
 	import { decodePolyline, bounds as trackBounds } from '../../lib/route-shape';
-	import { addTrackTiles, tilesToGeoJSON } from '../../lib/heatmap';
+	import { addTrackTiles, tilesToGeoJSON, addTrackHexes, hexesToGeoJSON } from '../../lib/heatmap';
 
 	const tag = document.getElementById('heatmap-config');
 	const host = document.querySelector<HTMLElement>('[data-heatmap]');
@@ -160,8 +164,10 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		/** Built on the first switch to tile view, then kept — quantising every
 		 *  track costs real time on a large collection, and the toggle should be
 		 *  free after the first flip. */
-		let tileData: ReturnType<typeof tilesToGeoJSON> | null = null;
-		let view: 'routes' | 'tiles' = 'routes';
+		const cellData: Record<CellView, ReturnType<typeof tilesToGeoJSON> | null> = { tiles: null, hexes: null };
+		type CellView = 'tiles' | 'hexes';
+		type View = 'routes' | CellView;
+		let view: View = 'routes';
 		let heat = false;
 		const heatBtn = document.querySelector<HTMLButtonElement>('[data-heat]');
 
@@ -176,12 +182,13 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			};
 		}
 
-		function buildTiles() {
-			if (tileData) return tileData;
+		function buildCells(kind: CellView) {
+			const cached = cellData[kind];
+			if (cached) return cached;
 			const counts = new Map<string, number>();
-			for (const points of tracks) addTrackTiles(points, counts);
-			tileData = tilesToGeoJSON(counts);
-			return tileData;
+			const add = kind === 'tiles' ? addTrackTiles : addTrackHexes;
+			for (const points of tracks) add(points, counts);
+			return (cellData[kind] = (kind === 'tiles' ? tilesToGeoJSON : hexesToGeoJSON)(counts));
 		}
 
 		function whenStyleReady(fn: () => void) {
@@ -218,35 +225,36 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 				? (['step', ['get', 'bucket'], ...TILE_SHADES.flatMap((c, i) => (i === 0 ? [c] : [i, c]))] as never)
 				: ('#1c6e8c' as never);
 
-		function addTileLayer() {
-			if (map.getSource('tiles')) return;
-			map.addSource('tiles', { type: 'geojson', data: buildTiles() as never });
+		function addCellLayer(kind: CellView) {
+			if (map.getSource(kind)) return;
+			map.addSource(kind, { type: 'geojson', data: buildCells(kind) as never });
 			map.addLayer({
-				id: 'tiles-fill',
+				id: `${kind}-fill`,
 				type: 'fill',
-				source: 'tiles',
+				source: kind,
 				paint: { 'fill-color': tileFill(), 'fill-opacity': 0.72 },
 			});
 		}
 
 		function applyView() {
-			if (view === 'tiles') addTileLayer();
+			if (view !== 'routes') addCellLayer(view);
 			if (map.getLayer('routes-line')) {
 				map.setLayoutProperty('routes-line', 'visibility', view === 'routes' ? 'visible' : 'none');
 			}
-			if (map.getLayer('tiles-fill')) {
-				map.setLayoutProperty('tiles-fill', 'visibility', view === 'tiles' ? 'visible' : 'none');
-				map.setPaintProperty('tiles-fill', 'fill-color', tileFill());
+			for (const kind of ['tiles', 'hexes'] as CellView[]) {
+				if (!map.getLayer(`${kind}-fill`)) continue;
+				map.setLayoutProperty(`${kind}-fill`, 'visibility', view === kind ? 'visible' : 'none');
+				map.setPaintProperty(`${kind}-fill`, 'fill-color', tileFill());
 			}
 			// The route view is the heatmap by construction (stacked lines), so
-			// the toggle only has anything to say about tiles.
-			heatBtn?.toggleAttribute('disabled', view !== 'tiles');
-			if (legend) legend.hidden = view !== 'tiles' || !heat;
+			// the toggle only has anything to say about the cell grids.
+			heatBtn?.toggleAttribute('disabled', view === 'routes');
+			if (legend) legend.hidden = view === 'routes' || !heat;
 		}
 
 		for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
 			btn.addEventListener('click', () => {
-				const next = btn.dataset.view as 'routes' | 'tiles';
+				const next = btn.dataset.view as View;
 				if (next === view) return;
 				view = next;
 				for (const b of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {

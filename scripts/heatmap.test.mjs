@@ -16,6 +16,10 @@ import {
 	tileGroundMeters,
 	addTrackTiles,
 	tilesToGeoJSON,
+	hexKey,
+	hexRing,
+	addTrackHexes,
+	hexesToGeoJSON,
 } from '../src/lib/heatmap.ts';
 import { haversine } from '../src/lib/route-shape.ts';
 
@@ -102,4 +106,85 @@ for (const lat of [REF_LAT, 64.1]) {
 	assert.deepEqual(ring[0], ring[4], 'ring must close');
 }
 
-console.log('heatmap tiles: ok');
+// --- hexes -----------------------------------------------------------------
+
+// 6. A hex covers the same ground as a tile — the two views are the same
+//    resolution, or the honeycomb is just a different map.
+{
+	const ring = hexRing(hexKey(REF_LAT, -73.98));
+	// Shoelace on local metres, which is exact enough over 50 m.
+	const [lng0, lat0] = ring[0];
+	const xy = ring.map(([lng, lat]) => [
+		(lng - lng0) * 111_320 * Math.cos((lat0 * Math.PI) / 180),
+		(lat - lat0) * 111_320,
+	]);
+	let area = 0;
+	for (let i = 0; i < xy.length - 1; i++) area += xy[i][0] * xy[i + 1][1] - xy[i + 1][0] * xy[i][1];
+	area = Math.abs(area) / 2;
+	assert.ok(Math.abs(area - TILE_M ** 2) / TILE_M ** 2 < 0.03, `hex is ${area.toFixed(0)} m², want ${TILE_M ** 2}`);
+}
+
+// 7. ONE GLOBAL HONEYCOMB: every point falls in the hex whose ring contains
+//    it. Gaps or overlaps in the layout show up here as a point keyed to a hex
+//    it isn't inside.
+{
+	const inside = (ring, [lng, lat]) => {
+		let hit = false;
+		for (let i = 0, j = ring.length - 2; i < ring.length - 1; j = i++) {
+			const [xi, yi] = ring[i];
+			const [xj, yj] = ring[j];
+			if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) hit = !hit;
+		}
+		return hit;
+	};
+	for (let i = 0; i < 400; i++) {
+		const lat = REF_LAT + (i % 20) * 3e-4;
+		const lng = -73.98 + Math.floor(i / 20) * 3e-4;
+		assert.ok(inside(hexRing(hexKey(lat, lng)), [lng, lat]), `point ${lat},${lng} is outside its own hex`);
+	}
+}
+
+// 8. Once per activity, and a sparse track leaves no hole: every hex a dense
+//    walk of the same line lands in must be unlocked by the two-point version.
+{
+	const counts = new Map();
+	const jitter = Array.from({ length: 200 }, (_, i) => [REF_LAT + i * 1e-8, -73.98 + i * 1e-8]);
+	addTrackHexes(jitter, counts);
+	assert.equal(counts.size, 1, 'samples inside one hex are one hex');
+	addTrackHexes(jitter, counts);
+	assert.equal([...counts.values()][0], 2, 'a second activity increments it');
+
+	const sparse = new Map();
+	const north = 1000 / 111_320;
+	addTrackHexes(
+		[
+			[REF_LAT, -73.98],
+			[REF_LAT + north, -73.98],
+		],
+		sparse,
+	);
+	for (let m = 0; m <= 1000; m++) {
+		const key = hexKey(REF_LAT + (north * m) / 1000, -73.98);
+		assert.ok(sparse.has(key), `hole in the honeycomb at ${m} m`);
+	}
+}
+
+// 9. Hex rings come out closed, in the bucket their count belongs to.
+{
+	const fc = hexesToGeoJSON(
+		new Map([
+			[hexKey(REF_LAT, -73.98), 1],
+			[hexKey(REF_LAT + 0.01, -73.98), 3],
+			[hexKey(REF_LAT + 0.02, -73.98), 40],
+		]),
+	);
+	assert.deepEqual(
+		fc.features.map((f) => f.properties.tiles),
+		[1, 1, 0, 1],
+	);
+	const ring = fc.features[0].geometry.coordinates[0][0];
+	assert.equal(ring.length, 7, 'six corners, closed');
+	assert.deepEqual(ring[0], ring[6], 'ring must close');
+}
+
+console.log('heatmap tiles + hexes: ok');
