@@ -410,6 +410,8 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		-webkit-text-size-adjust: 100%;
+		text-size-adjust: 100%;
 	}
 	.ac__sport {
 		display: flex;
@@ -488,21 +490,18 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	}
 	.ac--row .ac__meta {
 		flex: 1;
-		flex-direction: row;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto auto;
 		align-items: center;
-		gap: 1.25rem;
+		column-gap: 1.25rem;
 		padding: 0 1rem;
 	}
 	.ac--row .ac__title {
-		flex: 1 1 auto;
 		min-width: 0;
 	}
-	.ac--row .ac__sport {
-		flex: none;
-	}
 	.ac--row .ac__stats {
-		flex: none;
 		white-space: nowrap;
+		text-align: right;
 	}
 	.ac--row .ac__nogps-value {
 		font-size: 1.9rem;
@@ -516,13 +515,18 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 			width: 88px;
 		}
 		.ac--row .ac__meta {
+			display: flex;
 			flex-direction: column;
-			align-items: flex-start;
+			align-items: stretch;
 			gap: 0.25rem;
 			padding: 0.65rem 0.75rem;
 		}
+		.ac--row .ac__title {
+			max-width: 100%;
+		}
 		.ac--row .ac__stats {
 			white-space: normal;
+			text-align: left;
 		}
 	}
 </style>
