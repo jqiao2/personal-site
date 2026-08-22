@@ -5,14 +5,15 @@
 //
 // Same shape as scripts/ingest.test.mjs — plain asserts, no framework.
 import assert from 'node:assert/strict';
-import { sumRides, wearOf, daysBetween, ageText, parseInterval, effectiveMeta } from '../src/lib/gear-wear.ts';
+import { sumRides, wearOf, daysBetween, ageText, parseInterval, effectiveMeta, isIndoorRide } from '../src/lib/gear-wear.ts';
 
 const MI = 1609.344;
-const ride = (local_date, miles) => ({
+const ride = (local_date, miles, indoor = false) => ({
 	local_date,
 	distance_m: miles * MI,
 	moving_seconds: miles * 200,
 	elevation_gain_m: 0,
+	indoor,
 });
 
 // A year of rides, one per quarter.
@@ -88,6 +89,46 @@ const sealantFresh = wearOf(component({ kind: 'sealant', installed_on: '2025-12-
 assert.equal(sealantFresh.status, 'ok');
 const sealantOld = wearOf(component({ kind: 'sealant', installed_on: '2025-01-01' }), rides, '2025-12-31');
 assert.equal(sealantOld.status, 'overdue', 'a year-old sealant is well past 3–6 months');
+
+// --- indoor miles don't wear brakes, wheels or tires ------------------------
+// A trainer turns the cranks but the bike doesn't move: the chain wears
+// normally, the tires aren't on the road and the brakes are never touched.
+const mixed = [
+	ride('2026-01-10', 1000),         // outdoors
+	ride('2026-02-10', 500, true),    // trainer
+	ride('2026-03-10', 1000),         // outdoors
+];
+const chainMixed = wearOf(component({ installed_on: '2026-01-01' }), mixed, '2026-04-01');
+assert.equal(Math.round(chainMixed.miles), 2500, 'the drivetrain sees every mile');
+assert.equal(chainMixed.rides, 3);
+assert.equal(chainMixed.excludedIndoorMiles, 0);
+
+for (const kind of ['tires', 'brake_pads', 'brake_rotors', 'wheels']) {
+	const w = wearOf(component({ kind, installed_on: '2026-01-01' }), mixed, '2026-04-01');
+	assert.equal(Math.round(w.miles), 2000, `${kind} counts outdoor miles only`);
+	assert.equal(w.rides, 2, `${kind} counts outdoor rides only`);
+	assert.equal(Math.round(w.excludedIndoorMiles), 500, `${kind} reports what it discarded`);
+}
+
+// The exclusion has to be able to change the verdict, or it is decoration:
+// 4,500 outdoor + 800 indoor is overdue on a tire only if the indoor counts.
+const tireEdge = [ride('2026-01-10', 4500), ride('2026-02-10', 800, true)];
+assert.equal(wearOf(component({ kind: 'tires', installed_on: '2026-01-01' }), tireEdge, '2026-03-01').status, 'due');
+assert.equal(wearOf(component({ kind: 'chain', installed_on: '2026-01-01' }), tireEdge, '2026-03-01').status, 'overdue');
+
+// A baseline is a real mile that happened elsewhere, so it survives the filter.
+const tireCarried = wearOf(
+	component({ kind: 'tires', installed_on: '2026-01-01', baseline_distance_m: 1000 * MI }),
+	mixed,
+	'2026-04-01',
+);
+assert.equal(Math.round(tireCarried.miles), 3000);
+
+// isIndoorRide is the one heuristic: the sport's own flag, or the marker.
+assert.equal(isIndoorRide({ sport: 'virtual_ride', sub_sport: null }), true);
+assert.equal(isIndoorRide({ sport: 'ride', sub_sport: 'indoor' }), true);
+assert.equal(isIndoorRide({ sport: 'ride', sub_sport: null }), false);
+assert.equal(isIndoorRide({ sport: 'gravel_ride', sub_sport: 'gravel' }), false);
 
 // --- per-instance overrides (0037) ------------------------------------------
 // The same 4,100 miles that make a default chain overdue leave a chain given a

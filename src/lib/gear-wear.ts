@@ -7,6 +7,7 @@
 // scripts/gear.test.mjs, which is the check on all of it). gear.ts owns the
 // queries and re-exports this, so callers only ever import from gear.ts.
 import type { GearKind } from './activities';
+import { sportMeta } from './sports';
 
 const METERS_PER_MILE = 1609.344;
 /** Mean Gregorian month. The intervals below are "about three months", not
@@ -45,6 +46,18 @@ export interface ComponentMeta {
 	lifeMiles?: [number, number];
 	/** Typical replacement window in months, same two-sided reading. */
 	lifeMonths?: [number, number];
+	/**
+	 * Set when the part only wears OUTDOORS, so indoor miles don't count
+	 * against it.
+	 *
+	 * A trainer ride turns the cranks and the chain, so the drivetrain wears
+	 * normally — but the bike isn't moving. The tires aren't rolling on road
+	 * (they're off the bike, or on a trainer drum), the brakes are never
+	 * touched, and the wheels carry no load over anything. Counting a
+	 * four-hour Zwift session against a tire's 2,000–5,000 mile window would
+	 * retire a tire that hasn't touched tarmac.
+	 */
+	outdoorOnly?: true;
 }
 
 // The intervals are windows, not thresholds — a chain is not "dead at 3,000
@@ -55,14 +68,14 @@ export const COMPONENT_KINDS: Record<ComponentKind, ComponentMeta> = {
 	chain: { label: 'Chain', trackBy: 'Miles', lifeMiles: [2000, 4000] },
 	cassette: { label: 'Cassette', trackBy: 'Miles', lifeMiles: [5000, 15000] },
 	chainrings: { label: 'Chainrings', trackBy: 'Miles', lifeMiles: [5000, 20000] },
-	brake_pads: { label: 'Brake pads', trackBy: 'Miles + wear', lifeMiles: [1000, 5000] },
-	brake_rotors: { label: 'Brake rotors', trackBy: 'Miles + thickness', lifeMiles: [5000, 15000] },
+	brake_pads: { outdoorOnly: true, label: 'Brake pads', trackBy: 'Miles + wear', lifeMiles: [1000, 5000] },
+	brake_rotors: { outdoorOnly: true, label: 'Brake rotors', trackBy: 'Miles + thickness', lifeMiles: [5000, 15000] },
 	// The wheel, not the bearings inside it — those are their own kind below,
 	// because a wheelset outlives several sets of bearings and the two are
 	// replaced for entirely different reasons. A disc-brake wheel has no
 	// scheduled life at all (nothing rubs the rim), so it carries no interval.
-	wheels: { label: 'Wheels', trackBy: 'Miles + condition' },
-	tires: { label: 'Tires', trackBy: 'Miles', lifeMiles: [2000, 5000] },
+	wheels: { outdoorOnly: true, label: 'Wheels', trackBy: 'Miles + condition' },
+	tires: { outdoorOnly: true, label: 'Tires', trackBy: 'Miles', lifeMiles: [2000, 5000] },
 	sealant: { label: 'Tubeless sealant', trackBy: 'Date added', lifeMonths: [3, 6] },
 	valves: { label: 'Tubeless valves', trackBy: 'Condition' },
 	bar_tape: { label: 'Bar tape', trackBy: 'Miles + date', lifeMonths: [12, 24] },
@@ -139,6 +152,21 @@ export interface GearRide {
 	distance_m: number;
 	moving_seconds: number;
 	elevation_gain_m: number;
+	/** Trainer/indoor. See isIndoorRide — decided once at read time so the
+	 * per-component sums don't each re-derive it. */
+	indoor: boolean;
+}
+
+/**
+ * Whether an activity happened indoors, by the same rule the rest of the
+ * section uses (activities.ts's route reader and its `indoor` filter): the
+ * sport's own flag in sports.ts, or the explicit `sub_sport = 'indoor'` marker.
+ * There is no first-class indoor column, so this is the one heuristic, defined
+ * once.
+ */
+export function isIndoorRide(row: { sport?: string | null; sub_sport?: string | null }): boolean {
+	if (row.sub_sport === 'indoor') return true;
+	return !!row.sport && sportMeta(row.sport).indoor;
 }
 
 const EMPTY_USE: GearUse = {
@@ -189,6 +217,10 @@ export interface ComponentWear {
 	 */
 	fraction: number | null;
 	status: 'ok' | 'due' | 'overdue' | 'monitor' | 'retired';
+	/** Indoor miles inside this part's window that were NOT counted against it
+	 * (0 unless the kind is outdoorOnly). Surfaced so the page can say why a
+	 * tire's odometer disagrees with the chain's on the same bike. */
+	excludedIndoorMiles: number;
 }
 
 /**
@@ -218,8 +250,15 @@ export function effectiveMeta(component: GearComponent): ComponentMeta {
 export function wearOf(component: GearComponent, rides: GearRide[], today = isoToday()): ComponentWear {
 	const meta = effectiveMeta(component);
 	const end = component.removed_on ?? today;
-	const use = sumRides(rides, component.installed_on, end);
+	// Brakes, wheels and tires don't wear on a trainer: the cranks turn but the
+	// bike doesn't move, so those parts see the window's OUTDOOR rides only.
+	// The drivetrain sees all of them — a chain wears exactly the same indoors.
+	const eligible = meta.outdoorOnly ? rides.filter((r) => !r.indoor) : rides;
+	const use = sumRides(eligible, component.installed_on, end);
 	const miles = (use.distanceM + component.baseline_distance_m) / METERS_PER_MILE;
+	const excludedIndoorMiles = meta.outdoorOnly
+		? (sumRides(rides, component.installed_on, end).distanceM - use.distanceM) / METERS_PER_MILE
+		: 0;
 	const days = Math.max(0, daysBetween(component.installed_on, end));
 
 	// Each axis reports a fraction of its own far end; the part is as worn as
@@ -236,7 +275,7 @@ export function wearOf(component: GearComponent, rides: GearRide[], today = isoT
 	else if (dueStarted(meta, miles, days)) status = 'due';
 	else status = 'ok';
 
-	return { component, meta, miles, days, rides: use.activityCount, fraction, status };
+	return { component, meta, miles, days, rides: use.activityCount, fraction, status, excludedIndoorMiles };
 }
 
 /** Past the near end of the window on any axis — "start thinking about it". */

@@ -470,6 +470,17 @@ The windows are a **rough heuristic for when to go and look**, not a
 measurement: wear is read by hand off the part and never recorded digitally, so
 the bar's job is to schedule the inspection, not to replace it.
 
+**Not every part wears indoors.** A trainer turns the cranks but the bike
+doesn't move, so the drivetrain wears normally while the tires aren't on the
+road, the brakes are never touched and the wheels carry no load over anything.
+`brake_pads`, `brake_rotors`, `wheels` and `tires` are marked `outdoorOnly` in
+`COMPONENT_KINDS` and see the window's outdoor rides only; everything else sees
+all of them. "Indoor" is `sportMeta(sport).indoor || sub_sport === 'indoor'` —
+`isIndoorRide()`, the same heuristic the route reader and the `indoor` filter
+already use, not a second one. When the exclusion actually discarded something
+the part says so, since otherwise a tire's odometer and the chain's disagree on
+the same bike with no account of why.
+
 `wheels` and `wheel_bearings` are deliberately separate kinds (0040). A
 wheelset outlives several sets of the bearings inside it, so folding them
 together would either erase the wheel's history on a bearing service or leave

@@ -95,9 +95,19 @@ function duePercent(w: ComponentWear): number {
 	return 100;
 }
 
-/** The one line under a component's name: what it is, and what it's done. */
+/** The one line under a component's name: what it is, and what it's done.
+ *
+ * Brakes, wheels and tires don't wear on a trainer, so their odometer is
+ * outdoor miles only. When that has actually discarded something, it's said —
+ * otherwise a reader comparing a tire's total to the chain's on the same bike
+ * finds two numbers that disagree with no account of why. Below a mile it
+ * stays quiet; there is nothing to explain. */
 function usedText(w: ComponentWear): string {
-	return [`${Math.round(w.miles).toLocaleString('en-US')} mi`, ageText(w.days), `${num(w.rides)} rides`].join(' · ');
+	const parts = [`${Math.round(w.miles).toLocaleString('en-US')} mi`, ageText(w.days), `${num(w.rides)} rides`];
+	if (w.excludedIndoorMiles >= 1) {
+		parts.push(`${Math.round(w.excludedIndoorMiles).toLocaleString('en-US')} mi indoors not counted`);
+	}
+	return parts.join(' · ');
 }
 ---
 

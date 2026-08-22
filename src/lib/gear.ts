@@ -22,6 +22,7 @@ import type { ActivityGear, GearKind } from './activities';
 import {
 	COMPONENT_ORDER,
 	METERS_PER_MILE,
+	isIndoorRide,
 	sumRides,
 	wearOf,
 	type ComponentKind,
@@ -68,7 +69,7 @@ async function readRides(gearId?: number): Promise<Map<number, GearRide[]>> {
 	for (let offset = 0; ; offset += PAGE) {
 		let req = supabasePublic
 			.from('activity_list')
-			.select('gear_id, local_date, distance_m, moving_seconds, elevation_gain_m')
+			.select('gear_id, sport, sub_sport, local_date, distance_m, moving_seconds, elevation_gain_m')
 			.not('gear_id', 'is', null);
 		if (gearId != null) req = req.eq('gear_id', gearId);
 		const { data, error } = await req.range(offset, offset + PAGE - 1);
@@ -76,7 +77,11 @@ async function readRides(gearId?: number): Promise<Map<number, GearRide[]>> {
 			if (isDegraded(error)) return byGear;
 			throw new Error(`readRides failed: ${error.message}`);
 		}
-		const rows = (data ?? []) as (GearRide & { gear_id: number | null })[];
+		const rows = (data ?? []) as (GearRide & {
+			gear_id: number | null;
+			sport: string | null;
+			sub_sport: string | null;
+		})[];
 		for (const row of rows) {
 			if (row.gear_id == null) continue;
 			const list = byGear.get(row.gear_id) ?? [];
@@ -85,6 +90,8 @@ async function readRides(gearId?: number): Promise<Map<number, GearRide[]>> {
 				distance_m: row.distance_m ?? 0,
 				moving_seconds: row.moving_seconds ?? 0,
 				elevation_gain_m: row.elevation_gain_m ?? 0,
+				// Decided here, once, rather than in each component's sum.
+				indoor: isIndoorRide(row),
 			});
 			byGear.set(row.gear_id, list);
 		}
