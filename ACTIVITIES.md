@@ -435,8 +435,8 @@ One row per PART INSTANCE on a bike, open or closed. Replacing a chain closes
 one row (`removed_on`) and opens another; the service history IS the table.
 
 ```
-id, gear_id, kind (chain|cassette|chainrings|brake_pads|brake_rotors|tires|
-sealant|valves|bar_tape|cables|bottom_bracket|headset_bearings|
+id, gear_id, kind (chain|cassette|chainrings|brake_pads|brake_rotors|wheels|
+tires|sealant|valves|bar_tape|cables|bottom_bracket|headset_bearings|
 wheel_bearings|cleats|other),
 label, installed_on, removed_on, baseline_distance_m, condition, notes,
 life_miles int[2], life_months int[2]   -- 0037, per-instance overrides
@@ -469,6 +469,20 @@ judged against a different ruler.
 The windows are a **rough heuristic for when to go and look**, not a
 measurement: wear is read by hand off the part and never recorded digitally, so
 the bar's job is to schedule the inspection, not to replace it.
+
+`wheels` and `wheel_bearings` are deliberately separate kinds (0040). A
+wheelset outlives several sets of the bearings inside it, so folding them
+together would either erase the wheel's history on a bearing service or leave
+the wheel's mileage counting from one.
+
+**Component mileage will not match Strava's.** Strava's per-component figure is
+a counter accrued at upload time; this site's is a live sum over the activities
+in the window the part was fitted. Loading the Cervélo's history (0041) showed
+them agreeing to a tenth of a mile on every component closed before Nov 2024
+and diverging by 2–10% on everything still accruing since. The derived figure
+is the one to trust — that is the whole reason nothing here is denormalised —
+and Strava's numbers are deliberately **not** written into
+`baseline_distance_m`, which would only reinstate the disagreement as data.
 
 ### `activity_sources`
 

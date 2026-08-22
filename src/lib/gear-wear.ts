@@ -25,6 +25,7 @@ export type ComponentKind =
 	| 'chainrings'
 	| 'brake_pads'
 	| 'brake_rotors'
+	| 'wheels'
 	| 'tires'
 	| 'sealant'
 	| 'valves'
@@ -56,6 +57,11 @@ export const COMPONENT_KINDS: Record<ComponentKind, ComponentMeta> = {
 	chainrings: { label: 'Chainrings', trackBy: 'Miles', lifeMiles: [5000, 20000] },
 	brake_pads: { label: 'Brake pads', trackBy: 'Miles + wear', lifeMiles: [1000, 5000] },
 	brake_rotors: { label: 'Brake rotors', trackBy: 'Miles + thickness', lifeMiles: [5000, 15000] },
+	// The wheel, not the bearings inside it — those are their own kind below,
+	// because a wheelset outlives several sets of bearings and the two are
+	// replaced for entirely different reasons. A disc-brake wheel has no
+	// scheduled life at all (nothing rubs the rim), so it carries no interval.
+	wheels: { label: 'Wheels', trackBy: 'Miles + condition' },
 	tires: { label: 'Tires', trackBy: 'Miles', lifeMiles: [2000, 5000] },
 	sealant: { label: 'Tubeless sealant', trackBy: 'Date added', lifeMonths: [3, 6] },
 	valves: { label: 'Tubeless valves', trackBy: 'Condition' },
