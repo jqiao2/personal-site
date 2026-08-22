@@ -41,12 +41,14 @@ import {
 	listActivityChildren,
 	thresholdsOn,
 	setFavoriteRank,
+	updateActivity,
+	listGear,
 	type ActivityLap,
 	type ActivityRow,
 } from '../../lib/activities';
 import { requireOwner } from '../../lib/auth';
 import { siteNav } from '../../lib/nav';
-import { sportMeta, sportIcon, formatStat, isStatRelevant, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
+import { sportMeta, sportIcon, formatStat, isStatRelevant, SPORTS, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
 import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
 import { ALPINE, exertionInk, exertionLabel } from '../../lib/activity-tokens';
 
@@ -56,13 +58,19 @@ const id = Number(Astro.params.id);
 const validId = Number.isInteger(id) && id > 0;
 
 // ---------------------------------------------------------------------------
-// Owner-only write: a favourite-rank star, self-handled by this page rather
-// than a dedicated API route (a route lives outside the three files this
-// track owns — ACTIVITIES.md §9). Deliberately the only write here: an
-// editor for title/notes would need an `updateActivity` this track has no
-// business adding to activities.ts (the schema track's file), so per the
-// brief's "skip entirely if it costs the map quality," it's left out rather
-// than reached for.
+// Owner-only writes, self-handled by this page rather than a dedicated API
+// route: both are a form post from this page and nowhere else, so a route
+// would only add a file and a fetch() between the button and the row.
+//
+// The edit state is a second rendering of the header (`?edit=1`), not a
+// dialog and not an inline contenteditable — a plain GET away and a plain
+// POST back, which is why it needs no client JavaScript at all and works with
+// the browser's own back button as an undo of the *opening*, not of the save.
+//
+// ONLY AUTHORED FIELDS ARE EDITABLE. Title, notes, sport, gear and tags are
+// things a person decides. Distance, heart rate and exertion are things a
+// device recorded — typing over those would turn every number on this site
+// from a reading into a claim, so they aren't offered.
 // ---------------------------------------------------------------------------
 if (Astro.request.method === 'POST') {
 	const isOwner = validId && (await requireOwner(Astro.cookies));
@@ -70,7 +78,8 @@ if (Astro.request.method === 'POST') {
 		return new Response('Forbidden', { status: 403 });
 	}
 	const form = await Astro.request.formData();
-	if (form.get('action') === 'toggle-favorite') {
+	const action = form.get('action');
+	if (action === 'toggle-favorite') {
 		const current = await getActivity(id);
 		if (current) {
 			// Toggle: claim rank 1 if unset, clear if already favourited.
@@ -78,6 +87,32 @@ if (Astro.request.method === 'POST') {
 			// never has to know who that was.
 			await setFavoriteRank(id, current.favorite_rank ? null : 1);
 		}
+	} else if (action === 'save') {
+		const title = String(form.get('title') ?? '').trim();
+		const sport = String(form.get('sport') ?? '');
+		const gearRaw = String(form.get('gear_id') ?? '');
+		// An empty title is the one input that can't be saved as given — the
+		// header would have nothing to say. Reopen the editor rather than
+		// silently keeping the old one.
+		if (!title) return Astro.redirect(`${Astro.url.pathname}?edit=1&error=title`, 303);
+		await updateActivity(id, {
+			title,
+			notes: String(form.get('notes') ?? ''),
+			// A sport off the canonical list would break every icon, stat set and
+			// filter that reads it, so an unknown one leaves the sport alone.
+			...(SPORTS.includes(sport as (typeof SPORTS)[number]) ? { sport } : {}),
+			gearId: Number.isInteger(Number(gearRaw)) && gearRaw !== '' ? Number(gearRaw) : null,
+			// Comma-separated in, deduped and trimmed here — the input is a
+			// sentence to type, the column is a set.
+			tags: [
+				...new Set(
+					String(form.get('tags') ?? '')
+						.split(',')
+						.map((t) => t.trim())
+						.filter(Boolean),
+				),
+			],
+		});
 	}
 	return Astro.redirect(Astro.url.pathname, 303);
 }
@@ -372,6 +407,15 @@ function legLabel(leg: number | null): string {
 	return `Leg ${leg}`;
 }
 
+// The gear catalog: read whenever the activity has gear to name, and again
+// for the editor's picker. Retired gear is kept in the list — an old ride was
+// ridden on the bike that's since been retired, and that has to stay sayable.
+const gear = activity.gear_id != null || isOwner ? await listGear() : [];
+const activityGear = gear.find((g) => g.id === activity.gear_id) ?? null;
+const gearLabel = (g: (typeof gear)[number]) => g.nickname || g.name;
+const editing = isOwner && Astro.url.searchParams.has('edit');
+const titleError = Astro.url.searchParams.get('error') === 'title';
+
 const pageTitle = `${activity.title} — Jason's activity log`;
 const glyph = sportIcon(activity.sport);
 const exInk = exertionInk(activity.exertion);
@@ -407,7 +451,7 @@ const exWord = exertionLabel(activity.exertion);
 				<span class="head__sport">{meta.label}</span>
 				{activity.favorite_rank && <span class="head__fav" title={`Favourite #${activity.favorite_rank}`}>★</span>}
 				{
-					isOwner && (
+					isOwner && !editing && (
 						<form method="POST" class="head__fav-form">
 							<input type="hidden" name="action" value="toggle-favorite" />
 							<button type="submit" class="head__fav-btn" title={activity.favorite_rank ? 'Remove from favourites' : 'Make a favourite'}>
@@ -416,16 +460,99 @@ const exWord = exertionLabel(activity.exertion);
 						</form>
 					)
 				}
+				{isOwner && !editing && <a class="head__fav-btn" href="?edit=1">Edit</a>}
 			</div>
-			<h1 class="head__title">{activity.title}</h1>
-			<div class="head__meta">
-				<span>{formatDateLong(activity.local_date)}</span>
-				{activity.start_place && <span class="head__dot">·</span>}
-				{activity.start_place && <span>{activity.start_place}</span>}
-				{activity.device_name && <span class="head__dot">·</span>}
-				{activity.device_name && <span class="head__device">{activity.device_name}</span>}
-			</div>
-			{activity.notes && <p class="head__notes">{activity.notes}</p>}
+
+			{
+				editing ? (
+					/* The edit state: the same header, with its authored parts
+					   opened up. Fields keep the size and weight they have when
+					   read, so opening the editor moves nothing on the page. */
+					<form method="POST" class="edit">
+						<input type="hidden" name="action" value="save" />
+
+						<label class="edit__field">
+							<span class="edit__label">Title</span>
+							<input class="edit__title" name="title" type="text" value={activity.title} required autofocus />
+							{titleError && <span class="edit__error">An activity needs a title.</span>}
+						</label>
+
+						<div class="head__meta">
+							<span>{formatDateLong(activity.local_date)}</span>
+							{activity.start_place && <span class="head__dot">·</span>}
+							{activity.start_place && <span>{activity.start_place}</span>}
+						</div>
+
+						<label class="edit__field">
+							<span class="edit__label">Notes</span>
+							<textarea class="edit__input edit__notes" name="notes" rows="4" placeholder="How it went.">{activity.notes ?? ''}</textarea>
+						</label>
+
+						<div class="edit__row">
+							<label class="edit__field">
+								<span class="edit__label">Sport</span>
+								<select class="edit__input" name="sport">
+									{SPORTS.map((slug) => (
+										<option value={slug} selected={slug === activity.sport}>
+											{sportMeta(slug).label}
+										</option>
+									))}
+								</select>
+							</label>
+
+							<label class="edit__field">
+								<span class="edit__label">Gear</span>
+								<select class="edit__input" name="gear_id">
+									<option value="">None</option>
+									{gear.map((g) => (
+										<option value={g.id} selected={g.id === activity.gear_id}>
+											{gearLabel(g)}
+											{g.retired_at ? ' (retired)' : ''}
+										</option>
+									))}
+								</select>
+							</label>
+						</div>
+
+						<label class="edit__field">
+							<span class="edit__label">Tags</span>
+							<input
+								class="edit__input"
+								name="tags"
+								type="text"
+								value={activity.tags.join(', ')}
+								placeholder="commute, z2, with dad"
+							/>
+						</label>
+
+						<div class="edit__actions">
+							<button type="submit" class="edit__save">Save</button>
+							<a class="edit__cancel" href={Astro.url.pathname}>Cancel</a>
+						</div>
+					</form>
+				) : (
+					<>
+						<h1 class="head__title">{activity.title}</h1>
+						<div class="head__meta">
+							<span>{formatDateLong(activity.local_date)}</span>
+							{activity.start_place && <span class="head__dot">·</span>}
+							{activity.start_place && <span>{activity.start_place}</span>}
+							{activityGear && <span class="head__dot">·</span>}
+							{activityGear && <span>{gearLabel(activityGear)}</span>}
+							{activity.device_name && <span class="head__dot">·</span>}
+							{activity.device_name && <span class="head__device">{activity.device_name}</span>}
+						</div>
+						{activity.notes && <p class="head__notes">{activity.notes}</p>}
+						{activity.tags.length > 0 && (
+							<div class="head__tags">
+								{activity.tags.map((t) => (
+									<span class="head__tag">{t}</span>
+								))}
+							</div>
+						)}
+					</>
+				)
+			}
 		</header>
 
 		{
@@ -731,6 +858,8 @@ const exWord = exertionLabel(activity.exertion);
 		margin-left: auto;
 	}
 	.head__fav-btn {
+		display: inline-block;
+		text-decoration: none;
 		font-size: 0.75rem;
 		color: #6b7b88;
 		background: transparent;
@@ -763,6 +892,105 @@ const exWord = exertionLabel(activity.exertion);
 		max-width: 640px;
 		font-size: 0.95rem;
 		line-height: 1.6;
+		color: #3d4a55;
+	}
+	.head__tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-top: 0.8rem;
+	}
+	.head__tag {
+		font-size: 0.75rem;
+		color: #6b7b88;
+		background: #eef4f8;
+		border-radius: 999px;
+		padding: 0.2rem 0.6rem;
+	}
+
+	/* Edit state — the header's authored fields, opened up. */
+	.edit {
+		display: flex;
+		flex-direction: column;
+		gap: 0.9rem;
+		max-width: 640px;
+		margin-top: 0.4rem;
+	}
+	.edit__field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+	.edit__row {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.9rem;
+	}
+	.edit__row .edit__field {
+		flex: 1 1 12rem;
+	}
+	.edit__label {
+		font-size: 0.7rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #6b7b88;
+	}
+	.edit__input,
+	.edit__title {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.95rem;
+		color: #3d4a55;
+		background: #fff;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+		padding: 0.45rem 0.6rem;
+		width: 100%;
+	}
+	/* The title reads at the size it will be read at, so saving changes nothing
+	   about how the page looks except the words. */
+	.edit__title {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: clamp(1.7rem, 4vw, 2.4rem);
+		line-height: 1.15;
+		padding: 0.1rem 0.5rem;
+	}
+	.edit__notes {
+		resize: vertical;
+		line-height: 1.6;
+	}
+	.edit__input:focus,
+	.edit__title:focus {
+		outline: none;
+		border-color: #1c6e8c;
+	}
+	.edit__error {
+		font-size: 0.8rem;
+		color: #b4553a;
+	}
+	.edit__actions {
+		display: flex;
+		align-items: center;
+		gap: 0.9rem;
+	}
+	.edit__save {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.85rem;
+		color: #fff;
+		background: #1c6e8c;
+		border: 1px solid #1c6e8c;
+		border-radius: 6px;
+		padding: 0.4rem 1.1rem;
+		cursor: pointer;
+	}
+	.edit__save:hover {
+		background: #17596f;
+	}
+	.edit__cancel {
+		font-size: 0.85rem;
+		color: #6b7b88;
+		text-decoration: none;
+	}
+	.edit__cancel:hover {
 		color: #3d4a55;
 	}
 

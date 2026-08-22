@@ -67,6 +67,8 @@ export interface ActivityRow {
 	leg: number | null;
 	title: string;
 	notes: string | null;
+	/** Free-text tags, applied by hand after ingest. `[]` when none. */
+	tags: string[];
 	/**
 	 * Always null here. `private_notes` is "never rendered publicly" per the
 	 * schema comment, and the strongest place to hold that line is the data
@@ -560,6 +562,7 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'leg',
 	'title',
 	'notes',
+	'tags',
 	'started_at',
 	'local_date',
 	'utc_offset_minutes',
@@ -611,18 +614,25 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 /** One activity by id, in full (bar `private_notes` — always null; see
  * ActivityRow). Null if it doesn't exist or is soft-deleted. */
 export async function getActivity(id: number): Promise<ActivityRow | null> {
-	const { data, error } = await supabasePublic
-		.from('activities')
-		.select(PUBLIC_ACTIVITY_COLUMNS)
-		.eq('id', id)
-		.is('deleted_at', null)
-		.maybeSingle();
-	if (error) {
-		if (isDegraded(error)) return null;
-		throw new Error(`getActivity failed: ${error.message}`);
+	// `tags` arrives in a later migration (0035) than the rest of the schema, so
+	// an environment one migration behind gets the activity without its tags
+	// rather than a 404 for every activity on the site.
+	for (const columns of [PUBLIC_ACTIVITY_COLUMNS, PUBLIC_ACTIVITY_COLUMNS.replace(', tags', '')]) {
+		const { data, error } = await supabasePublic
+			.from('activities')
+			.select(columns)
+			.eq('id', id)
+			.is('deleted_at', null)
+			.maybeSingle();
+		if (error) {
+			if (isMissingColumn(error) && columns === PUBLIC_ACTIVITY_COLUMNS) continue;
+			if (isDegraded(error)) return null;
+			throw new Error(`getActivity failed: ${error.message}`);
+		}
+		if (!data) return null;
+		return { tags: [], ...(data as unknown as Omit<ActivityRow, 'private_notes'>), private_notes: null };
 	}
-	if (!data) return null;
-	return { ...(data as unknown as Omit<ActivityRow, 'private_notes'>), private_notes: null };
+	return null;
 }
 
 /** The 1Hz-ish sample streams for one activity. Null when the activity has
@@ -894,6 +904,63 @@ export async function listActivityFacets(): Promise<ActivityFacets> {
 // Writes (owner only — the caller checks requireOwner() first, same
 // convention as films.ts's setFavorite and restaurants.ts's writes).
 // ---------------------------------------------------------------------------
+
+/** The fields the owner's edit state can change. Absent key = leave alone. */
+export interface UpdateActivityInput {
+	title?: string;
+	notes?: string | null;
+	sport?: string;
+	gearId?: number | null;
+	tags?: string[];
+}
+
+/**
+ * Edit an activity's authored fields — the ones a human decides rather than a
+ * device records. Nothing measured is editable here: a title is a caption, a
+ * distance is evidence, and letting the second be typed over would make every
+ * number on the site a claim rather than a reading.
+ *
+ * GEAR MOVES ITS MILEAGE WITH IT. `activity_gear.distance_m` is a
+ * denormalised total "kept in sync by the app on write" (0034), so re-gearing
+ * a ride subtracts its distance from the old bike and adds it to the new one.
+ * Without that the sidebar total drifts every time a mis-tagged ride is
+ * fixed — silently, and in the direction of over-counting.
+ */
+export async function updateActivity(id: number, input: UpdateActivityInput): Promise<boolean> {
+	const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	if (input.title !== undefined) {
+		const title = input.title.trim();
+		if (!title) throw new Error('title cannot be empty');
+		patch.title = title;
+	}
+	if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+	if (input.sport !== undefined) patch.sport = input.sport;
+	if (input.gearId !== undefined) patch.gear_id = input.gearId;
+	if (input.tags !== undefined) patch.tags = input.tags;
+
+	const current = await getActivity(id);
+	if (!current) return false;
+
+	const { error } = await supabaseAdmin.from('activities').update(patch).eq('id', id).is('deleted_at', null);
+	if (error) throw new Error(`updateActivity failed: ${error.message}`);
+
+	if (input.gearId !== undefined && input.gearId !== current.gear_id) {
+		await moveGearDistance(current.gear_id, input.gearId, current.distance_m ?? 0);
+	}
+	return true;
+}
+
+/** Shift one activity's distance from one gear row's running total to another. */
+async function moveGearDistance(from: number | null, to: number | null, distanceM: number): Promise<void> {
+	if (!distanceM) return;
+	for (const [gearId, delta] of [[from, -distanceM], [to, distanceM]] as const) {
+		if (gearId == null) continue;
+		const { data } = await supabaseAdmin.from('activity_gear').select('distance_m').eq('id', gearId).maybeSingle();
+		if (!data) continue;
+		const next = Math.max(0, (data.distance_m ?? 0) + delta);
+		await supabaseAdmin.from('activity_gear').update({ distance_m: next, updated_at: new Date().toISOString() }).eq('id', gearId);
+	}
+}
 
 /**
  * Set (or clear, with `rank: null`) an activity's landing-page favourite
