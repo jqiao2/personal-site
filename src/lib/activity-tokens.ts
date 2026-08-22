@@ -40,6 +40,8 @@
 // way the actual climb felt: a shape you recognise as a hill before you've
 // consciously parsed a single axis. Fills over lines, everywhere elevation
 // appears, for the same reason a topo map shades slope instead of labelling it.
+import { formatStat, sportMeta, type StatRow } from './sports';
+
 export const ALPINE = {
 	sky: '#dceaf4', // the page's ground — a washed high-altitude blue-white
 	skyDeep: '#9fc4dd', // the gradient's far end, top of frame
@@ -80,6 +82,66 @@ export function exertionInk(score: number | null | undefined): AlpineColor {
 export function exertionLabel(score: number | null | undefined): 'easy' | 'steady' | 'hard' | 'brutal' {
 	const bucket = EXERTION_SCALE.find((b) => (score ?? 0) < b.max) ?? EXERTION_SCALE[EXERTION_SCALE.length - 1];
 	return bucket.label;
+}
+
+// ---------------------------------------------------------------------------
+// What a card says under its face
+// ---------------------------------------------------------------------------
+
+/** What choosing and formatting a card's stats needs: a sport, an exertion
+ *  score, and whatever stat columns the row happens to carry. `ActivityListRow`
+ *  satisfies this structurally, so query rows pass straight in. */
+export interface CardStatRow extends StatRow {
+	sport: string;
+	exertion?: number | null;
+}
+
+/** The sport's own lead figures, in its own order, minus the ones this row has
+ *  no value for. Exertion is excluded here because it is never a figure on a
+ *  card — see `cardStats`. */
+function leadFigures(row: CardStatRow, count: number): string[] {
+	return sportMeta(row.sport)
+		.primaryStats.filter((key) => key !== 'exertion')
+		.map((key) => formatStat(key, row).value)
+		.filter((value) => value !== '—')
+		.slice(0, count);
+}
+
+/**
+ * The stat line under a card's face (ACTIVITIES.md §7's "two or three stats"):
+ * the sport's two lead figures, then how hard it was.
+ *
+ * WHICH FIGURES IS NOT THIS FILE'S OPINION. The order comes from that sport's
+ * `primaryStats` in sports.ts, which is already the considered answer to "what
+ * is this sport about" — a card that kept its own per-family list was a second
+ * opinion that drifted from the first the moment either was edited, which is
+ * exactly what happened on /activities/all.
+ *
+ * WHY THE WORD AND NOT THE SCORE. §3 is explicit that the exertion number must
+ * never appear without a way to see how it was got, and a card has no room for
+ * a method or a confidence. 'steady' claims only what the scale can support at
+ * this size.
+ *
+ * WHY THE WORD ONLY BEHIND A FULL PAIR. A transition has exactly one figure —
+ * its clock — and §6 calls that the whole story of one. A second thing said
+ * about a two-minute shoe change would be padding.
+ */
+export function cardStats(row: CardStatRow, limit = 3): string[] {
+	const stats = leadFigures(row, 2);
+	if (stats.length === 2 && row.exertion != null) stats.push(exertionLabel(row.exertion));
+	return stats.slice(0, limit);
+}
+
+/**
+ * The big numbers on a no-GPS face — trainer, treadmill, pool.
+ *
+ * ONE OR TWO, NEVER A DASH. The face is the whole card here, so a stat with
+ * nothing in it is worse than no stat at all: a large "–" is the exact
+ * "something failed to load" reading this face exists to avoid (§7). Both are
+ * complete answers, so the second slot is dropped rather than filled.
+ */
+export function noGpsStats(row: CardStatRow): string[] {
+	return leadFigures(row, 2);
 }
 
 // One string so ActivityLayout and any future share card (the month-in-review

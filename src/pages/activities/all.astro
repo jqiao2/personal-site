@@ -951,8 +951,8 @@ const scopeDummy: ActivityCardRow = {
 		// deliberate, small duplicate of activityFilterSentence's logic rather
 		// than an import of it; sports.ts and activity-tokens.ts have no such
 		// server dependency and are imported directly.
-		import { sportMeta, sportIcon, formatStat, type StatKey } from '../../lib/sports';
-		import { ALPINE, exertionLabel } from '../../lib/activity-tokens';
+		import { sportMeta, sportIcon } from '../../lib/sports';
+		import { ALPINE, cardStats, exertionLabel, noGpsStats } from '../../lib/activity-tokens';
 		// Type-only — erased at build, so this brings in none of activities.ts's
 		// runtime code (and, through it, supabase.ts) the way a value import
 		// would.
@@ -1448,12 +1448,9 @@ const scopeDummy: ActivityCardRow = {
 				face.appendChild(svg as unknown as Node);
 			} else {
 				const nogps = el('div', 'ac__nogps', cardScope);
-				const meta = sportMeta(a.sport);
-				const keys = meta.primaryStats.filter((k) => k !== 'exertion').slice(0, 2);
-				const vals = keys.map((k) => formatStat(k as StatKey, a)).filter((s) => s.value !== '—');
-				vals.slice(0, 2).forEach((s, i) => {
+				noGpsStats(a).forEach((value, i) => {
 					const stat = el('div', i === 0 ? 'ac__nogps-stat' : 'ac__nogps-stat ac__nogps-stat--sub', cardScope);
-					stat.appendChild(el('span', i === 0 ? 'ac__nogps-value figure' : 'ac__nogps-value ac__nogps-value--sub figure', cardScope, s.value));
+					stat.appendChild(el('span', i === 0 ? 'ac__nogps-value figure' : 'ac__nogps-value ac__nogps-value--sub figure', cardScope, value));
 					nogps.appendChild(stat);
 				});
 				face.appendChild(nogps);
@@ -1483,13 +1480,9 @@ const scopeDummy: ActivityCardRow = {
 			metaBox.appendChild(sportRow);
 
 			const statsRow = el('div', 'ac__stats figure', cardScope);
-			const shown = sportMeta(a.sport)
-				.primaryStats.map((k) => formatStat(k as StatKey, a))
-				.filter((s) => s.value !== '—')
-				.slice(0, 3);
-			shown.forEach((s, i) => {
+			cardStats(a).forEach((value, i) => {
 				if (i > 0) statsRow.appendChild(el('span', 'ac__stats-sep', cardScope, '·'));
-				statsRow.appendChild(document.createTextNode(s.value));
+				statsRow.appendChild(document.createTextNode(value));
 			});
 			metaBox.appendChild(statsRow);
 			card.appendChild(metaBox);
