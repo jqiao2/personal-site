@@ -24,151 +24,31 @@
 // neither — it's in the server-rendered HTML, it scales losslessly at any
 // card size via `vector-effect="non-scaling-stroke"`, and the browser paints
 // it in the same pass as the text next to it.
-import { ALPINE, exertionLabel } from '../lib/activity-tokens';
-import { sportIcon, sportMeta, type SportFamily } from '../lib/sports';
+import { ALPINE, cardStats, noGpsStats, type CardStatRow } from '../lib/activity-tokens';
+import { sportIcon, sportMeta } from '../lib/sports';
 
-// ---------------------------------------------------------------------------
-// Stat formatting.
-//
-// This block used to also carry a stand-in sport table — a label map, a family
-// map and a seven-glyph icon set — from before src/lib/sports.ts existed. It
-// has been deleted: labels, families and glyphs all come from `sportMeta()` /
-// `sportIcon()` now. Keeping a second copy was not merely redundant, it was
-// visibly wrong on /activities/all, where the server-rendered first page drew
-// this file's glyphs and every row paged in afterwards drew sports.ts's.
-//
-// What is still local is the *number formatting* below. sports.ts's
-// `formatStat` returns one string per stat ("12.4 mi"); this card sets the
-// figure and its unit at different sizes, so it needs them apart. That is a
-// presentation difference, not a second opinion about what a sport is.
+// The card asks activity-tokens.ts what to say under its face — cardStats()
+// for the stat line, noGpsStats() for the big numbers a routeless card gives
+// its whole face to. Both used to be written out here, over a private set of
+// mi/ft/clock/pace helpers and a per-family switch, which is how the same list
+// on /activities/all ended up showing one set of stats in its first page and a
+// different set in every page after it: the rows JS builds could not import an
+// .astro file, so they had already been rewritten against sports.ts. There is
+// one rule now, in a module both of them can reach.
 
-/** Metres → miles, one decimal, e.g. "12.4". */
-function mi(m: number | null | undefined): string {
-	if (!m) return '0.0';
-	return (m / 1609.344).toFixed(1);
-}
 
-/** Metres of climb → feet, thousands-separated, e.g. "3,412". */
-function ft(m: number | null | undefined): string {
-	if (!m) return '0';
-	return Math.round(m * 3.28084).toLocaleString('en-US');
-}
-
-/** Seconds → clock, "1:32:04" past an hour, "24:33" under. */
-function clock(s: number | null | undefined): string {
-	if (!s) return '0:00';
-	const h = Math.floor(s / 3600);
-	const m = Math.floor((s % 3600) / 60);
-	const sec = Math.floor(s % 60);
-	return h > 0
-		? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-		: `${m}:${String(sec).padStart(2, '0')}`;
-}
-
-/** Moving seconds + distance → running pace, "7:42" (per mile). */
-function pace(movingSeconds: number | null | undefined, distanceM: number | null | undefined): string {
-	if (!movingSeconds || !distanceM) return '–:––';
-	const perMi = movingSeconds / (distanceM / 1609.344);
-	const m = Math.floor(perMi / 60);
-	const s = Math.round(perMi % 60);
-	return `${m}:${String(s).padStart(2, '0')}`;
-}
-
-interface Stat {
-	value: string;
-	unit: string;
-}
-
-/** The 2-3 stats a card shows under its face, chosen by sport per §7. */
-function cardStats(a: ActivityRow): Stat[] {
-	const family: SportFamily = sportMeta(a.sport).family;
-	const out: Stat[] = [];
-	switch (family) {
-		case 'bike':
-			out.push({ value: mi(a.distance_m), unit: 'mi' });
-			out.push({ value: ft(a.elevation_gain_m), unit: 'ft' });
-			break;
-		case 'run':
-			out.push({ value: mi(a.distance_m), unit: 'mi' });
-			out.push({ value: pace(a.moving_seconds, a.distance_m), unit: '/mi' });
-			break;
-		case 'swim':
-			out.push({ value: mi(a.distance_m), unit: 'mi' });
-			out.push({ value: clock(a.moving_seconds), unit: '' });
-			break;
-		case 'foot':
-			out.push({ value: mi(a.distance_m), unit: 'mi' });
-			out.push({ value: ft(a.elevation_gain_m), unit: 'ft' });
-			break;
-		case 'snow':
-			out.push({ value: ft(a.elevation_gain_m), unit: 'ft' });
-			out.push({ value: clock(a.moving_seconds), unit: '' });
-			break;
-		case 'transition':
-			out.push({ value: clock(a.elapsed_seconds), unit: '' });
-			return out; // "Elapsed only" — a transition doesn't earn a third stat.
-		default:
-			out.push({ value: clock(a.moving_seconds ?? a.elapsed_seconds), unit: '' });
-	}
-	if (a.exertion != null && out.length < 3) {
-		out.push({ value: exertionLabel(a.exertion), unit: '' });
-	}
-	return out;
-}
-
-/**
- * The no-GPS face's big numbers — chosen so the absence of a route never reads
- * as an absence of design (§7's "must read as deliberate, not broken").
- *
- * ONE OR TWO, NEVER A DASH. The face is the whole card here, so a stat with
- * nothing in it is worse than no stat at all: a large "–" next to "bpm avg" is
- * the exact "something failed to load" reading this face exists to avoid. A
- * transition genuinely has one number — the clock — and a pool swim on a watch
- * that logged no heart rate has two; both are complete answers, so the second
- * slot is dropped rather than filled with a placeholder.
- */
-function noGpsFace(a: ActivityRow): (Stat & { label: string })[] {
-	const family: SportFamily = sportMeta(a.sport).family;
-	if (family === 'transition') {
-		// Elapsed only. A transition's whole story is how long it took.
-		return [{ value: clock(a.elapsed_seconds), unit: '', label: 'time' }];
-	}
-	if (family === 'bike' && a.avg_power_w) {
-		return [
-			{ value: String(a.avg_power_w), unit: 'W avg', label: 'power' },
-			{ value: clock(a.moving_seconds), unit: '', label: 'time' },
-		];
-	}
-	if (family === 'run' || family === 'swim') {
-		return [
-			{ value: mi(a.distance_m), unit: 'mi', label: 'distance' },
-			family === 'run'
-				? { value: pace(a.moving_seconds, a.distance_m), unit: '/mi', label: 'pace' }
-				: { value: clock(a.moving_seconds), unit: '', label: 'time' },
-		];
-	}
-	const face: (Stat & { label: string })[] = [
-		{ value: clock(a.moving_seconds ?? a.elapsed_seconds), unit: '', label: 'time' },
-	];
-	if (a.avg_hr) face.push({ value: String(a.avg_hr), unit: 'bpm avg', label: 'heart rate' });
-	return face;
-}
-// --------------------------------- end stat formatting --------------------
-
-export interface ActivityRow {
+/** Extends `CardStatRow` (activity-tokens.ts, itself sports.ts's `StatRow`)
+ *  rather than re-listing the stat columns: every column `formatStat` can read
+ *  is optional there, so a sport whose lead figure is SWOLF or vertical descent
+ *  gets it whenever the caller passed a full `ActivityListRow`, and falls
+ *  through to the next figure it does have when it didn't. */
+export interface ActivityRow extends CardStatRow {
 	id: number | string;
-	sport: string;
 	sub_sport?: string | null;
 	title: string;
 	local_date: string;
 	started_at?: string;
-	distance_m: number | null;
-	moving_seconds: number | null;
 	elapsed_seconds: number;
-	elevation_gain_m: number | null;
-	avg_power_w?: number | null;
-	avg_hr?: number | null;
-	exertion?: number | null;
 	exertion_method?: string | null;
 	route_path: string | null;
 	favorite_rank?: number | null;
@@ -185,8 +65,8 @@ const { activity: a, size = 'tile' } = Astro.props;
 const label = sportMeta(a.sport).label;
 const glyph = sportIcon(a.sport);
 const hasRoute = !!a.route_path;
-const stats = cardStats(a).slice(0, size === 'cell' ? 2 : 3);
-const face = hasRoute ? null : noGpsFace(a);
+const stats = cardStats(a, size === 'cell' ? 2 : 3);
+const face = hasRoute ? null : noGpsStats(a);
 
 // Pull the route's start point out of "M x y …" to place the start dot —
 // route_path is always emitted by route-shape.ts in this exact form.
@@ -226,13 +106,11 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 			) : (
 				<div class="ac__nogps">
 					<div class="ac__nogps-stat">
-						<span class="ac__nogps-value figure">{face![0].value}</span>
-						<span class="ac__nogps-unit">{face![0].unit}</span>
+						<span class="ac__nogps-value figure">{face![0]}</span>
 					</div>
 					{face![1] && (
 						<div class="ac__nogps-stat ac__nogps-stat--sub">
-							<span class="ac__nogps-value ac__nogps-value--sub figure">{face![1].value}</span>
-							<span class="ac__nogps-unit">{face![1].unit}</span>
+							<span class="ac__nogps-value ac__nogps-value--sub figure">{face![1]}</span>
 						</div>
 					)}
 					<svg class="ac__nogps-mark" viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" aria-hidden="true">
@@ -257,7 +135,7 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 			{stats.map((s, i) => (
 				<>
 					{i > 0 && <span class="ac__stats-sep">·</span>}
-					<span>{s.value}{s.unit && <span class="ac__stats-unit">{s.unit}</span>}</span>
+					<span>{s}</span>
 				</>
 			))}
 		</div>
@@ -325,10 +203,6 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		font-size: 1.3rem;
 		color: var(--granite-soft);
 	}
-	.ac__nogps-unit {
-		font-size: 0.85rem;
-		color: var(--granite-soft);
-	}
 	/* Round caps and joins are part of how the sport glyphs are drawn — see
 	   SPORT_ICONS in sports.ts. Set in CSS rather than as attributes so the
 	   rows all.astro builds by hand get them from the same place. */
@@ -381,11 +255,6 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	}
 	.ac__stats-sep {
 		color: var(--scree);
-	}
-	.ac__stats-unit {
-		margin-left: 0.15em;
-		font-size: 0.78em;
-		color: var(--granite-soft);
 	}
 
 	/* tile — the landing page's top-four, largest of the three. */
