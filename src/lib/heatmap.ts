@@ -178,3 +178,102 @@ export function tilesToGeoJSON(counts: Map<string, number>): TileCollection {
 		})),
 	};
 }
+
+// --- hexes -----------------------------------------------------------------
+//
+// The same board, tessellated with hexagons instead of squares — the beehive
+// reading of the identical data. Everything above still applies: one global
+// grid, indexed from the mercator origin, fixed forever, so a cell means the
+// same ground on every device and every year.
+//
+// A hexagon is sized by area, not by side, so a hex covers the same ground as
+// a TILE_FEET square and the two views read at the same resolution. Pointy-top
+// axial layout (rows offset by half a hex), which is what gives the honeycomb
+// its stagger.
+//
+// ponytail: the tile functions above are kept as-is, not refactored into a
+// shared "cell grid" abstraction — two concrete grids are less code than one
+// parameterised one, and the tiles are the fallback if hexes don't stick.
+
+/** Circumradius of a hex whose area equals CELL². area = (3√3/2)R². */
+const HEX_R = CELL / Math.sqrt((3 * Math.sqrt(3)) / 2);
+const SQRT3 = Math.sqrt(3);
+
+/** Axial rounding — the cube-round from redblobgames, in axial terms. */
+function axialRound(q: number, r: number): [number, number] {
+	const s = -q - r;
+	let rq = Math.round(q);
+	let rr = Math.round(r);
+	const rs = Math.round(s);
+	const dq = Math.abs(rq - q);
+	const dr = Math.abs(rr - r);
+	const ds = Math.abs(rs - s);
+	if (dq > dr && dq > ds) rq = -rr - rs;
+	else if (dr > ds) rr = -rq - rs;
+	return [rq, rr];
+}
+
+/** The hex containing a point, as "q:r" in the one global axial grid. */
+export function hexKey(lat: number, lng: number): string {
+	const [x, y] = toMercator(lat, lng);
+	const [q, r] = axialRound(((SQRT3 / 3) * x - y / 3) / HEX_R, (2 / 3) * y / HEX_R);
+	return `${q}:${r}`;
+}
+
+/** A hex's six corners in degrees, closed (first point repeated). */
+export function hexRing(key: string): [number, number][] {
+	const [q, r] = key.split(':').map(Number);
+	const cx = HEX_R * SQRT3 * (q + r / 2);
+	const cy = HEX_R * (3 / 2) * r;
+	const ring: [number, number][] = [];
+	for (let i = 0; i < 6; i++) {
+		const a = (Math.PI / 180) * (60 * i - 30);
+		const [lat, lng] = fromMercator(cx + HEX_R * Math.cos(a), cy + HEX_R * Math.sin(a));
+		ring.push([round(lng), round(lat)]);
+	}
+	ring.push(ring[0]);
+	return ring;
+}
+
+/** addTrackTiles, on the hex grid. Same once-per-track counting, same
+ *  half-a-cell sampling so a GPS gap doesn't leave a hole in a ridden road. */
+export function addTrackHexes(points: [number, number][], counts: Map<string, number>): void {
+	const seen = new Set<string>();
+	for (let i = 0; i < points.length; i++) {
+		const [lat, lng] = points[i];
+		seen.add(hexKey(lat, lng));
+		const next = points[i + 1];
+		if (!next) continue;
+		const [lat2, lng2] = next;
+		const cosLat = Math.cos((lat * Math.PI) / 180);
+		const dy = (lat2 - lat) * M_PER_DEG_LAT;
+		const dx = (lng2 - lng) * M_PER_DEG_LAT * cosLat;
+		const step = Math.max(1, tileGroundMeters(lat) / 2);
+		const steps = Math.floor(Math.hypot(dx, dy) / step);
+		for (let s = 1; s < steps; s++) {
+			const t = s / steps;
+			seen.add(hexKey(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
+		}
+	}
+	for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+
+/** tilesToGeoJSON, on the hex grid — one MultiPolygon per TILE_BUCKETS bucket,
+ *  for the same reason (185k features is a source MapLibre chokes on). */
+export function hexesToGeoJSON(counts: Map<string, number>): TileCollection {
+	type MultiPolygon = TileCollection['features'][number]['geometry']['coordinates'];
+	const byBucket: MultiPolygon[] = TILE_BUCKETS.map(() => []);
+	for (const [key, count] of counts) {
+		let bucket = 0;
+		while (bucket + 1 < TILE_BUCKETS.length && count >= TILE_BUCKETS[bucket + 1]) bucket++;
+		byBucket[bucket].push([hexRing(key)]);
+	}
+	return {
+		type: 'FeatureCollection',
+		features: byBucket.map((polygons, bucket) => ({
+			type: 'Feature' as const,
+			geometry: { type: 'MultiPolygon' as const, coordinates: polygons },
+			properties: { bucket, min: TILE_BUCKETS[bucket], tiles: polygons.length },
+		})),
+	};
+}
