@@ -535,6 +535,18 @@ function weekStatText(t: ActivityWeek['totals']) {
 		.week__grid {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	/* Stacked on a phone held upright, the week reads as a list — so run it
+	   newest day first, matching the newest-week-first order around it. */
+	@media (max-width: 720px) and (orientation: portrait) {
+		.week__grid {
+			display: flex;
+			flex-direction: column-reverse;
+		}
+	}
+
+	@media (max-width: 720px) {
 		.day {
 			flex-direction: row;
 			align-items: flex-start;
