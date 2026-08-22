@@ -22,6 +22,7 @@
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import { requireOwner } from '../../../lib/auth';
+import { photoSrc } from '../../../lib/photo-src';
 import { listMonthKeys, listMonthVisits, placesForMonth } from '../../../lib/restaurants';
 import { monthCalendar, monthFigures } from '../../../lib/restaurant-view';
 import type { MapPoint } from '../../../lib/restaurant-view';
@@ -149,16 +150,18 @@ const query = monthQuery(aspect);
 							</div>
 						</div>
 
-						{/* THE PHOTOGRAPHS HERE ARE DELIBERATELY NOT PUT THROUGH THE IMAGE
-						    OPTIMISER, unlike every other photograph on the site — see
-						    src/lib/photo-src.ts. This card is an artboard, not a page: it
-						    is 1080px wide whatever the screen is, and `toPng` below redraws
-						    it at that size to be saved as a file. It also passes
-						    `cacheBust`, which appends a query parameter to every image URL
-						    it fetches — harmless on a storage URL, unverified against an
-						    optimiser endpoint that parses its own query string. Getting
-						    that wrong breaks the export, and the export is the whole point
-						    of the page.
+						{/* THE PHOTOGRAPHS GO THROUGH THE IMAGE OPTIMISER, and here that is
+						    about ORIGIN rather than bytes. The export rasterises the card
+						    through a canvas, so every photograph on it has to be readable
+						    cross-origin — and the bucket's public r2.dev host answers with
+						    no `Access-Control-Allow-Origin` at all, which no bucket CORS
+						    policy fixes (that policy applies to custom domains and the S3
+						    API, not to r2.dev). A `crossorigin="anonymous"` <img> against
+						    it therefore fails outright, which is what emptied every cell.
+						    `/_vercel/image` is same-origin, so there is nothing to allow.
+						    The card is a fixed 1080px artboard exported at pixelRatio 1,
+						    so a cell is ~150px and the 320 rung is already 2x it.
+						    `cacheBust` below appends a `&v=` the optimiser ignores.
 
 						    A DAY WITH TWO MEALS IN IT stacks: the better-ranked cover sits
 						    on top and the one under it is turned a few degrees so its
@@ -190,7 +193,7 @@ const query = monthQuery(aspect);
 													style={`--i:${i}`}
 												>
 													{cover.kind === 'photo' ? (
-														<img src={cover.url} alt="" crossorigin="anonymous" data-cover />
+														<img src={photoSrc(cover.url, 320)} alt="" data-cover />
 													) : (
 														<Fragment>
 															<span data-place-map data-lat={cover.at.lat} data-lng={cover.at.lng} />
