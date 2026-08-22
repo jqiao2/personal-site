@@ -403,7 +403,18 @@ const exWord = exertionLabel(activity.exertion);
 
 		<header class="head">
 			<div class="head__top">
-				<svg class="head__icon" viewBox="0 0 24 24" fill="none" stroke={ALPINE.granite} stroke-width="1.5" aria-hidden="true" set:html={glyph} />
+				<svg
+					class="head__icon"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke={ALPINE.granite}
+					stroke-width="1.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					aria-hidden="true"
+				>
+					<path d={glyph} />
+				</svg>
 				<span class="head__sport">{meta.label}</span>
 				{activity.favorite_rank && <span class="head__fav" title={`Favourite #${activity.favorite_rank}`}>★</span>}
 				{
@@ -634,7 +645,18 @@ const exWord = exertionLabel(activity.exertion);
 								const cGlyph = sportIcon(c.sport);
 								return (
 									<a class="leg" href={`/activities/${c.id}`}>
-										<svg class="leg__icon" viewBox="0 0 24 24" fill="none" stroke={ALPINE.lake} stroke-width="1.6" aria-hidden="true" set:html={cGlyph} />
+										<svg
+											class="leg__icon"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke={ALPINE.lake}
+											stroke-width="1.6"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											aria-hidden="true"
+										>
+											<path d={cGlyph} />
+										</svg>
 										<div class="leg__body">
 											<div class="leg__title">{legLabel(c.leg)} — {cMeta.label}</div>
 											<div class="leg__name">{c.title}</div>
