@@ -638,8 +638,8 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
  *
  *   - dashes  (`M3 21h3.5…`) — loose surface: gravel ride, trail run.
  *   - a jagged ridge         — mountains: mountain bike, backcountry ski.
- *   - one solid line         — a fixed floor or a pool wall: virtual ride,
- *                              treadmill run, pool swim.
+ *   - one solid line         — a fixed floor or a pool wall: treadmill run,
+ *                              pool swim.
  *   - a wave                 — open water.
  *   - two straight tracks    — set nordic tracks.
  *
@@ -648,6 +648,12 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
  * band adds the surface for anyone who looks closer. That is why the variants
  * are NOT distinct drawings — sixteen unrelated glyphs stop reading as a
  * system at 16px, one object plus a surface never does.
+ *
+ * The virtual ride is the one deliberate exception, and the exception proves
+ * where the rule stops: it is not a ride on a different surface, it is a
+ * different object — the rear wheel is out and the bike is bolted to a
+ * trainer. A floor line under an otherwise normal bike said "a bike", which is
+ * the one thing a virtual ride is not.
  *
  * Keyed by `SportMeta.icon` rather than by family, so a sport can be given its
  * own mark by editing one field in the table above. Every path was drawn and
@@ -664,8 +670,15 @@ const SPORT_ICONS: Record<string, string> = {
 		'M5 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 13l4-7h5l4 7M9 6h5M12 13l2-4M3 21h3.5M10.5 21h3.5M17.5 21h3.5',
 	bike_mtb:
 		'M5 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 13l4-7h5l4 7M9 6h5M12 13l2-4M2 23l3.5-2.5L9 23l4-2.5 4 2.5 3-2 2 2.5',
+	// The one variant that is NOT the object plus a band mark, because a virtual
+	// ride isn't a ride on a different surface — it's a different object. The
+	// rear wheel is out and the axle is clamped in a trainer, which is the whole
+	// picture of the sport and reads at 16px where a floor line under a normal
+	// bike just read as "a bike". Drawn at its own scale so the front wheel and
+	// the trainer's feet share one ground line: a bike in a trainer is not
+	// standing on tiptoe.
 	bike_indoor:
-		'M5 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 16a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM5 13l4-7h5l4 7M9 6h5M12 13l2-4M3 21h18',
+		'M18.2 21a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM5.5 15.5L9 9h5l4.2 8.8M9 9h5M12 15.5l2-4M5.5 15.5L2 21M5.5 15.5L9 21M1.4 21h8.2',
 	// Run: a running shoe in profile — heel, ankle collar, tongue, toe box,
 	// with the sole as its own line so the silhouette still reads when the
 	// laces stop resolving around 16px.
@@ -686,12 +699,14 @@ const SPORT_ICONS: Record<string, string> = {
 	// Snowshoe: the racket seen from above — teardrop frame, three lacings.
 	snowshoe:
 		'M12 3c3.2 0 5 3 5 7 0 4-1.4 6.6-1.9 10.6a1.5 1.5 0 0 1-1.5 1.3h-3.2a1.5 1.5 0 0 1-1.5-1.3C8.4 16.6 7 14 7 10c0-4 1.8-7 5-7zM7.8 9.5h8.4M8.3 13h7.4M9.2 16.5h5.6',
-	// Ski: a pair of skis in perspective, tips curled. The three ski sports
-	// differ only in what's under them — mountains skinned up, set tracks, or
-	// nothing at all for a lift-served day.
-	ski: 'M2.5 15l12-4c1.6-.5 2.6-.2 3.3.9M4.5 18l12-4c1.6-.5 2.6-.2 3.3.9',
-	ski_touring: 'M2.5 14l12-4c1.6-.5 2.6-.2 3.3.9M4.5 17l12-4c1.6-.5 2.6-.2 3.3.9M2 23l3.5-2.5L9 23l4-2.5 4 2.5 3-2 2 2.5',
-	ski_nordic: 'M2.5 14l12-4c1.6-.5 2.6-.2 3.3.9M4.5 17l12-4c1.6-.5 2.6-.2 3.3.9M3 20h18M3 23h18',
+	// Ski: a pair of skis in perspective, tips curling UP at the front — the
+	// first cut of these ran the other way, which drew a ski upside down. The
+	// three ski sports share this geometry exactly and differ only in what's
+	// under them: mountains skinned up, set tracks, or nothing at all for a
+	// lift-served day.
+	ski: 'M21.5 11.5l-12 4c-1.6.5-2.6.2-3.3-.9M19.5 8.5l-12 4c-1.6.5-2.6.2-3.3-.9',
+	ski_touring: 'M21.5 11.5l-12 4c-1.6.5-2.6.2-3.3-.9M19.5 8.5l-12 4c-1.6.5-2.6.2-3.3-.9M2 23l3.5-2.5L9 23l4-2.5 4 2.5 3-2 2 2.5',
+	ski_nordic: 'M21.5 11.5l-12 4c-1.6.5-2.6.2-3.3-.9M19.5 8.5l-12 4c-1.6.5-2.6.2-3.3-.9M3 20h18M3 23h18',
 	snowboard: 'M4.6 18.6a3 3 0 0 1 0-4.24L14.36 4.6a3 3 0 0 1 4.24 4.24L8.84 18.6a3 3 0 0 1-4.24 0zM8.2 11.3l3.5 3.5M11.5 8l3.5 3.5',
 	inline_skate:
 		'M5 17V8l4 1 2.5-2.5L14 9l4 1.5 3 2V17zM6 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM11 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM16 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6zM20.5 20.5a1.3 1.3 0 1 0 0-2.6 1.3 1.3 0 0 0 0 2.6z',
