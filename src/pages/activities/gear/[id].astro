@@ -6,8 +6,9 @@
 // page would be that row printed larger. A bike is a dozen lifecycles running
 // at different rates on the same odometer: the chain is on its fourth, the
 // frame is on its first. That's the thing a list can't hold, so that's what
-// this page is. Non-bike gear still resolves here (a link from elsewhere
-// shouldn't 404) — it just shows its totals and stops.
+// this page is. Non-bike gear resolves here too and simply stops after its
+// totals and its dates — a shoe has nothing bolted to it, and saying so in a
+// sentence would be the page explaining its own absence.
 //
 // WHY THE WEAR BAR IS A RANGE AND NOT A PERCENTAGE. "72% worn" is a claim
 // about a chain nobody measured. The honest reading is an interval — fine
@@ -60,7 +61,17 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 const title = gear.nickname || gear.name;
 const catalog = [gear.brand, gear.model].filter(Boolean).join(' ');
-const subtitle = catalog || (gear.nickname ? gear.name : '');
+// Most of the rack is named exactly what its brand and model spell out, so the
+// subtitle would print the title back at you. Compare loosely — "cervelo S3" is
+// not a different fact from "Cervélo S3", just differently typed.
+const norm = (v: string) =>
+	v.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const subtitle =
+	catalog && norm(catalog) !== norm(title)
+		? catalog
+		: gear.nickname && norm(gear.name) !== norm(title)
+			? gear.name
+			: '';
 
 // The gear's own start date if it's known; otherwise the earliest activity
 // tagged to it, which is a floor and is labelled as one.
@@ -198,12 +209,7 @@ function usedText(w: ComponentWear): string {
 					</section>
 				)}
 
-				{!isBike ? (
-					<p class="note">
-						Component tracking is kept for bikes only.
-						<a href="/activities/gear"> Back to the gear list →</a>
-					</p>
-				) : (
+				{isBike && (
 					<Fragment>
 						<section>
 							<div class="sec-head">

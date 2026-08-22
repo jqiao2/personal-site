@@ -12,14 +12,16 @@
 // served between — it does not remove it, because the total at the top of this
 // page would then be a lie about your own legs.
 //
-// Only bikes link through (gear.ts's hasDetailPage): a bike has a parts list
-// worth a page, a pair of shoes has one lifecycle and it is the shoe's own.
+// Every piece of gear links through, not just bikes. A bike's page is its parts
+// list; a pair of shoes has no parts and its page is just its totals and its
+// two dates — which is thin, but those dates have to be settable somewhere, and
+// a second editor bolted onto this list would be a whole parallel way to edit a
+// thing that already has one.
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
 import { siteNav } from '../../../lib/nav';
 import { ALPINE } from '../../../lib/activity-tokens';
 import {
 	GEAR_KIND_LABELS,
-	hasDetailPage,
 	hoursText,
 	listGearWithUse,
 	milesText,
@@ -72,11 +74,23 @@ function displayName(g: GearWithUse): string {
 }
 
 /** Brand + model, or the catalog name when the nickname already took the top
- * line. Empty when there's nothing left to say. */
+ * line. Empty when there's nothing left to say — including the common case
+ * where brand + model just spells the name back ("Brooks" + "Ghost Max 2"
+ * under a row already titled "Brooks Ghost Max 2"), which is most of the shoe
+ * rack. */
 function subtitle(g: GearWithUse): string {
 	const catalog = [g.brand, g.model].filter(Boolean).join(' ');
-	if (catalog) return catalog;
-	return g.nickname ? g.name : '';
+	const title = displayName(g);
+	if (catalog && !sameText(catalog, title)) return catalog;
+	return g.nickname && !sameText(g.name, title) ? g.name : '';
+}
+
+/** Case- and space-insensitive comparison, so "cervelo S3" doesn't count as
+ * different from "Cervélo S3" only because of how it was typed. */
+function sameText(a: string, b: string): boolean {
+	const norm = (v: string) =>
+		v.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+	return norm(a) === norm(b);
 }
 
 /** "In service since 2021-04-02" — the gear's own start date if it's known,
@@ -166,9 +180,9 @@ function servedText(g: GearWithUse): string {
 								<span class="sec-head__title">{group.label}</span>
 							</div>
 							<ul class="rack">
-								{group.items.map((g) => {
-									const inner = (
-										<Fragment>
+								{group.items.map((g) => (
+									<li class="item">
+										<a class="item__link" href={`/activities/gear/${g.id}`}>
 											<div class="item__head">
 												<span class="item__name">{displayName(g)}</span>
 												{subtitle(g) && <span class="item__sub">{subtitle(g)}</span>}
@@ -181,21 +195,10 @@ function servedText(g: GearWithUse): string {
 												<span>{num(g.use.activityCount)} activities</span>
 											</div>
 											<div class="item__served">{servedText(g)}</div>
-										</Fragment>
-									);
-									return (
-										<li class="item">
-											{hasDetailPage(g.kind) ? (
-												<a class="item__link" href={`/activities/gear/${g.id}`}>
-													{inner}
-													<span class="item__chev" aria-hidden="true">→</span>
-												</a>
-											) : (
-												<div class="item__link item__link--plain">{inner}</div>
-											)}
-										</li>
-									);
-								})}
+											<span class="item__chev" aria-hidden="true">→</span>
+										</a>
+									</li>
+								))}
 							</ul>
 						</section>
 					))}
@@ -403,9 +406,6 @@ function servedText(g: GearWithUse): string {
 			gap: 6px 18px;
 			padding: 15px 4px;
 			color: var(--granite);
-		}
-		.item__link--plain {
-			cursor: default;
 		}
 		a.item__link:hover .item__name {
 			color: var(--lake);

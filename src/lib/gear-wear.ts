@@ -53,9 +53,9 @@ export interface ComponentMeta {
 	 * A trainer ride turns the cranks and the chain, so the drivetrain wears
 	 * normally — but the bike isn't moving. The tires aren't rolling on road
 	 * (they're off the bike, or on a trainer drum), the brakes are never
-	 * touched, and the wheels carry no load over anything. Counting a
-	 * four-hour Zwift session against a tire's 2,000–5,000 mile window would
-	 * retire a tire that hasn't touched tarmac.
+	 * touched, and the wheels and their bearings carry no load over anything.
+	 * Counting a four-hour Zwift session against a tire's 2,000–5,000 mile
+	 * window would retire a tire that hasn't touched tarmac.
 	 */
 	outdoorOnly?: true;
 }
@@ -82,7 +82,7 @@ export const COMPONENT_KINDS: Record<ComponentKind, ComponentMeta> = {
 	cables: { label: 'Cables / housing', trackBy: 'Miles + date', lifeMonths: [12, 36] },
 	bottom_bracket: { label: 'Bottom bracket', trackBy: 'Miles + symptoms' },
 	headset_bearings: { label: 'Headset bearings', trackBy: 'Miles + symptoms' },
-	wheel_bearings: { label: 'Wheel bearings', trackBy: 'Miles + symptoms' },
+	wheel_bearings: { outdoorOnly: true, label: 'Wheel bearings', trackBy: 'Miles + symptoms' },
 	// Not on the bike. It's here because the shoes it bolts to aren't tracked
 	// as gear, and a cleat with no home is a cleat nobody replaces.
 	cleats: { label: 'Cleats', trackBy: 'Miles + symptoms' },
@@ -96,12 +96,6 @@ export const COMPONENT_ORDER = Object.keys(COMPONENT_KINDS) as ComponentKind[];
 
 export function isComponentKind(v: unknown): v is ComponentKind {
 	return typeof v === 'string' && v in COMPONENT_KINDS;
-}
-
-/** Which gear kinds get a detail page. Only bikes have a parts list worth
- * keeping — a pair of shoes has one lifecycle and it's the shoe's own. */
-export function hasDetailPage(kind: GearKind): boolean {
-	return kind === 'bike';
 }
 
 /** The plural heading a gear kind sits under on the index. */
