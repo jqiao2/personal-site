@@ -421,8 +421,39 @@ leg you can look at on its own and a marker inside the whole day's effort.
 
 ```
 id, kind ('bike'|'shoes'|'skis'|'board'|'other'), name, brand, model,
-nickname, retired_at, distance_m (denormalised), external_ids jsonb
+nickname, first_used_on (date), retired_at, distance_m (denormalised),
+external_ids jsonb
 ```
+
+`first_used_on` is when the thing entered service. Null means unknown, and
+/activities/gear then falls back to the earliest activity tagged to it — a
+floor, not the truth, and the page says so.
+
+### `gear_components`  (0036)
+
+One row per PART INSTANCE on a bike, open or closed. Replacing a chain closes
+one row (`removed_on`) and opens another; the service history IS the table.
+
+```
+id, gear_id, kind (chain|cassette|chainrings|brake_pads|brake_rotors|tires|
+sealant|valves|bar_tape|cables|bottom_bracket|headset_bearings|
+wheel_bearings|cleats|other),
+label, installed_on, removed_on, baseline_distance_m, condition, notes
+```
+
+There is deliberately **no mileage column**. A component's miles are
+`sum(activities.distance_m) where gear_id = this bike and local_date between
+installed_on and coalesce(removed_on, today)` — derived in src/lib/gear.ts, so
+re-tagging an old ride can't leave a stale total behind.
+`baseline_distance_m` is the one figure that can't be derived: miles the part
+carried in from another bike or from before it was tracked.
+
+Labels, wear axes and replacement intervals live in `src/lib/gear-wear.ts`
+(`COMPONENT_KINDS`), not in the schema — the check constraint only owns "is it
+one of these". Intervals are **windows** (`[due, overdue]`), never single
+thresholds, because a chain is not dead at exactly 3,000 miles. Parts with no
+mileage or calendar interval at all (bearings, valves) get no wear bar rather
+than a fabricated one.
 
 ### `activity_sources`
 
