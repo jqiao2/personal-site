@@ -106,6 +106,10 @@ export interface GearComponent {
 	installed_on: string;
 	removed_on: string | null;
 	baseline_distance_m: number;
+	/** Per-instance replacement window overriding this kind's default (0037).
+	 * `[due, overdue]`, or null to use COMPONENT_KINDS. */
+	life_miles: [number, number] | null;
+	life_months: [number, number] | null;
 	condition: string | null;
 	notes: string | null;
 	created_at: string;
@@ -182,12 +186,31 @@ export interface ComponentWear {
 }
 
 /**
+ * This kind's defaults with the instance's own windows laid over them.
+ *
+ * An override REPLACES an axis rather than adding one, and clearing it falls
+ * back to the default — so a 45mm gravel tire can say 4,000–8,000 miles
+ * without teaching COMPONENT_KINDS a new part kind. An override on an axis the
+ * kind doesn't otherwise have (months on a chain, say) is honoured too: the
+ * axis simply exists for that instance, which is the point of an override.
+ */
+export function effectiveMeta(component: GearComponent): ComponentMeta {
+	const base = COMPONENT_KINDS[component.kind] ?? COMPONENT_KINDS.other;
+	if (!component.life_miles && !component.life_months) return base;
+	return {
+		...base,
+		lifeMiles: component.life_miles ?? base.lifeMiles,
+		lifeMonths: component.life_months ?? base.lifeMonths,
+	};
+}
+
+/**
  * Wear for one component. `rides` is that gear's full ride list — the window is
  * applied here rather than at the query, so one read serves every part on the
  * bike.
  */
 export function wearOf(component: GearComponent, rides: GearRide[], today = isoToday()): ComponentWear {
-	const meta = COMPONENT_KINDS[component.kind] ?? COMPONENT_KINDS.other;
+	const meta = effectiveMeta(component);
 	const end = component.removed_on ?? today;
 	const use = sumRides(rides, component.installed_on, end);
 	const miles = (use.distanceM + component.baseline_distance_m) / METERS_PER_MILE;
@@ -265,6 +288,31 @@ export function intervalText(meta: ComponentMeta): string {
 	if (meta.lifeMiles) return `${meta.lifeMiles[0].toLocaleString()}–${meta.lifeMiles[1].toLocaleString()} mi`;
 	if (meta.lifeMonths) return `${meta.lifeMonths[0]}–${meta.lifeMonths[1]} months`;
 	return '';
+}
+
+/** Whether a component is running on its own window rather than its kind's —
+ * the page marks these, because a reader comparing two chains needs to know
+ * one of them is being judged against a different ruler. */
+export function hasOwnInterval(component: GearComponent): boolean {
+	return !!component.life_miles || !!component.life_months;
+}
+
+/**
+ * Parse a window the way it's written on the page: "2500-5000 mi",
+ * "4–8 mo", "3-6 months". Returns which axis it names and the pair, or null if
+ * it isn't one — an unparseable string must not silently become a window,
+ * since a wrong window is worse than no override.
+ */
+export function parseInterval(
+	input: string,
+): { axis: 'miles' | 'months'; window: [number, number] } | null {
+	const m = /^\s*(\d+)\s*[-–—]\s*(\d+)\s*(mi|mile|miles|mo|month|months)\s*$/i.exec(input);
+	if (!m) return null;
+	const lo = Number(m[1]);
+	const hi = Number(m[2]);
+	// Same rule the DB check enforces: both ends positive and in order.
+	if (!(lo > 0 && hi >= lo)) return null;
+	return { axis: /^mi/i.test(m[3]) ? 'miles' : 'months', window: [lo, hi] };
 }
 
 export { METERS_PER_MILE };

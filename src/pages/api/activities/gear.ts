@@ -33,6 +33,24 @@ function dateOrNull(v: unknown): string | null | undefined {
 	return typeof v === 'string' && DATE_RE.test(v) ? v : undefined;
 }
 
+/**
+ * A replacement window: a two-element `[due, overdue]` array, or null to clear
+ * the override. `undefined` means "not an acceptable value" so the caller can
+ * tell that apart from a deliberate null — the same contract as dateOrNull.
+ *
+ * The DB has these rules too (0037's check constraints); repeating them here
+ * turns a 500 with a constraint name in it into a sentence.
+ */
+function windowOrNull(v: unknown): [number, number] | null | undefined {
+	if (v == null || (Array.isArray(v) && v.length === 0)) return null;
+	if (!Array.isArray(v) || v.length !== 2) return undefined;
+	const lo = Number(v[0]);
+	const hi = Number(v[1]);
+	if (!Number.isFinite(lo) || !Number.isFinite(hi)) return undefined;
+	if (!(lo > 0 && hi >= lo)) return undefined;
+	return [Math.round(lo), Math.round(hi)];
+}
+
 function textOrNull(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const trimmed = v.trim();
@@ -128,6 +146,16 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				if (!Number.isFinite(mi) || mi < 0) return apiError('baselineMiles must be a positive number', 400);
 				patch.baselineMiles = mi;
 			}
+			if ('lifeMiles' in b) {
+				const w = windowOrNull(b.lifeMiles);
+				if (w === undefined) return apiError('lifeMiles must be [due, overdue] in order, or null', 400);
+				patch.lifeMiles = w;
+			}
+			if ('lifeMonths' in b) {
+				const w = windowOrNull(b.lifeMonths);
+				if (w === undefined) return apiError('lifeMonths must be [due, overdue] in order, or null', 400);
+				patch.lifeMonths = w;
+			}
 			if ('condition' in b) patch.condition = textOrNull(b.condition);
 			if ('notes' in b) patch.notes = textOrNull(b.notes);
 			await updateComponent(id, patch);
@@ -197,6 +225,11 @@ function componentInput(b: Record<string, unknown>): ComponentInput | Response {
 		return apiError('baselineMiles must be a positive number', 400);
 	}
 
+	const lifeMiles = windowOrNull(b.lifeMiles);
+	if (lifeMiles === undefined) return apiError('lifeMiles must be [due, overdue] in order, or null', 400);
+	const lifeMonths = windowOrNull(b.lifeMonths);
+	if (lifeMonths === undefined) return apiError('lifeMonths must be [due, overdue] in order, or null', 400);
+
 	return {
 		gearId,
 		kind: b.kind,
@@ -204,6 +237,8 @@ function componentInput(b: Record<string, unknown>): ComponentInput | Response {
 		installedOn,
 		removedOn,
 		baselineMiles,
+		lifeMiles,
+		lifeMonths,
 		condition: textOrNull(b.condition),
 		notes: textOrNull(b.notes),
 	};

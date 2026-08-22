@@ -178,6 +178,10 @@ export interface ComponentInput {
 	installedOn: string;
 	removedOn?: string | null;
 	baselineMiles?: number;
+	/** Per-instance replacement window, `[due, overdue]`, overriding this
+	 * kind's default (0037). Null clears the override. */
+	lifeMiles?: [number, number] | null;
+	lifeMonths?: [number, number] | null;
 	condition?: string | null;
 	notes?: string | null;
 }
@@ -192,6 +196,8 @@ export async function createComponent(input: ComponentInput): Promise<number> {
 			installed_on: input.installedOn,
 			removed_on: input.removedOn ?? null,
 			baseline_distance_m: (input.baselineMiles ?? 0) * METERS_PER_MILE,
+			life_miles: input.lifeMiles ?? null,
+			life_months: input.lifeMonths ?? null,
 			condition: input.condition ?? null,
 			notes: input.notes ?? null,
 		})
@@ -213,6 +219,8 @@ export async function updateComponent(
 	if ('installedOn' in patch) row.installed_on = patch.installedOn;
 	if ('removedOn' in patch) row.removed_on = patch.removedOn ?? null;
 	if ('baselineMiles' in patch) row.baseline_distance_m = (patch.baselineMiles ?? 0) * METERS_PER_MILE;
+	if ('lifeMiles' in patch) row.life_miles = patch.lifeMiles ?? null;
+	if ('lifeMonths' in patch) row.life_months = patch.lifeMonths ?? null;
 	if ('condition' in patch) row.condition = patch.condition ?? null;
 	if ('notes' in patch) row.notes = patch.notes ?? null;
 	const { error } = await supabaseAdmin.from('gear_components').update(row).eq('id', id);

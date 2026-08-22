@@ -438,7 +438,8 @@ one row (`removed_on`) and opens another; the service history IS the table.
 id, gear_id, kind (chain|cassette|chainrings|brake_pads|brake_rotors|tires|
 sealant|valves|bar_tape|cables|bottom_bracket|headset_bearings|
 wheel_bearings|cleats|other),
-label, installed_on, removed_on, baseline_distance_m, condition, notes
+label, installed_on, removed_on, baseline_distance_m, condition, notes,
+life_miles int[2], life_months int[2]   -- 0037, per-instance overrides
 ```
 
 There is deliberately **no mileage column**. A component's miles are
@@ -454,6 +455,20 @@ one of these". Intervals are **windows** (`[due, overdue]`), never single
 thresholds, because a chain is not dead at exactly 3,000 miles. Parts with no
 mileage or calendar interval at all (bearings, valves) get no wear bar rather
 than a fabricated one.
+
+Those intervals are **defaults about a category, and a category is not a
+part** — a 28mm race tire and a 45mm gravel tire are both `tires` and are not
+the same question. `life_miles` / `life_months` (0037) let any instance carry
+its own window; `effectiveMeta()` lays them over the default, so an override
+*replaces* an axis rather than adding to it, and clearing it falls back. An
+override on an axis the kind doesn't otherwise have is honoured too — that is
+how a bottom bracket gets a wear bar at all. Overridden rows are marked `*` on
+the detail page, because a reader comparing two chains has to know one is being
+judged against a different ruler.
+
+The windows are a **rough heuristic for when to go and look**, not a
+measurement: wear is read by hand off the part and never recorded digitally, so
+the bar's job is to schedule the inspection, not to replace it.
 
 ### `activity_sources`
 
