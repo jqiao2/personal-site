@@ -58,7 +58,10 @@ const QUALITY = 75;
  * ones. Local development therefore keeps the plain bucket URL, which is the
  * behaviour this module replaced and is correct, just heavier.
  */
-const RAW = import.meta.env.DEV;
+// Optional-chained so a plain-node importer (the test scripts, via
+// scripts/ts-hook.mjs) can load this module — outside Vite there is no
+// `import.meta.env` at all, and reading `.DEV` off it throws at import time.
+const RAW = import.meta.env?.DEV;
 
 /**
  * One optimised URL, big enough to be painted `width` CSS pixels wide.
