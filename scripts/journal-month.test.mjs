@@ -1,4 +1,6 @@
-// The combined month card's one piece of real arithmetic: the size weights.
+// The combined month card's arithmetic — the size weights, the scatter — plus
+// the one piece of its stylesheet that failed silently and had to be measured
+// out of a saved PNG to find.
 //
 // What is worth failing over is the CALIBRATION, not the drawing — that marks
 // stay in the right order and the right ratio as the constants get tuned, that
@@ -7,6 +9,7 @@
 //
 // Run: node --import ./scripts/ts-hook.mjs scripts/journal-month.test.mjs
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { weekRows as weekRowsOf } from '../src/lib/share-card.ts';
 import {
 	BOOK_BOOST,
@@ -281,5 +284,46 @@ assert.ok(
 	Math.abs(feedSpill - storySpill) < 0.2,
 	`the pile should spill a similar share of its day at either aspect — feed ${(feedSpill * 100).toFixed(0)}%, story ${(storySpill * 100).toFixed(0)}%`,
 );
+
+// 16. A FACE MUST NOT BE OVER-CONSTRAINED. `.mark__route` was written as
+//     `inset: 8%; width: 84%; height: 84%` — an absolutely positioned box with
+//     all four offsets AND a size, which is over-constrained. The export
+//     resolved it by drawing the svg at its intrinsic size, so the route
+//     overflowed its print and got cropped by `overflow: hidden`; because a
+//     print is tilted a few degrees, the crop was lopsided and the route read
+//     as sitting off-centre in its square.
+//
+//     It is invisible in every way a test usually catches things — the markup
+//     is right, the path data is right (centred on 50,50), only the drawing is
+//     wrong — so the check is on the rule itself: a face fills its print, and
+//     any margin it wants belongs in the viewBox.
+const card = readFileSync('src/pages/month/[month].astro', 'utf8');
+
+// Split rather than built regexes: `[\s\S]` inside a template literal is not a
+// character class, it is the two letters s and S, which is its own silent bug.
+const ruleOf = (face) => card.split(`.${face} {`)[1]?.split('}')[0] ?? '';
+const tagOf = (face) => card.split(`class="${face}"`)[1]?.split('>')[0] ?? '';
+
+for (const face of ['mark__route', 'mark__glyph']) {
+	const rule = ruleOf(face);
+	assert.ok(rule, `.${face} has no rule`);
+	assert.ok(
+		rule.includes('inset: 0;'),
+		`.${face} must fill its print — any margin it wants belongs in the viewBox`,
+	);
+	assert.ok(
+		!/inset:\s*[1-9]/.test(rule),
+		`.${face} sets a non-zero inset as well as a size; that is over-constrained, and the export resolves it by drawing the svg at its intrinsic size`,
+	);
+
+	// Centring is preserveAspectRatio's job — the one part of this that cannot
+	// be got wrong — so both faces have to actually ask for it.
+	const tag = tagOf(face);
+	assert.ok(tag.includes('viewBox="'), `.${face} needs a viewBox to centre against`);
+	assert.ok(
+		tag.includes('preserveAspectRatio="xMidYMid meet"'),
+		`.${face} must centre its drawing explicitly rather than relying on the default`,
+	);
+}
 
 console.log('journal-month: ok');

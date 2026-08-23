@@ -178,7 +178,12 @@ const query = monthQuery(aspect);
 																<path d={m.route} />
 															</svg>
 														) : m.icon ? (
-															<svg class="mark__glyph" viewBox="0 0 24 24" aria-hidden="true">
+															<svg
+																class="mark__glyph"
+																viewBox="-9 -9 42 42"
+																preserveAspectRatio="xMidYMid meet"
+																aria-hidden="true"
+															>
 																<path d={m.icon} />
 															</svg>
 														) : (
@@ -584,13 +589,23 @@ const query = monthQuery(aspect);
 		object-fit: cover;
 		display: block;
 	}
-	/* The route fills its print the way a photograph would; the fallback glyph
-	   sits small and centred, so the two never read as the same kind of face. */
+	/* THE MARGIN IS IN THE viewBox, NOT IN CSS. These were inset with
+	   `inset: 8%; width: 84%` — an absolutely positioned box with all four
+	   offsets AND a width set, which is over-constrained, and which the export
+	   resolved by drawing the svg at its intrinsic size instead. The route then
+	   overflowed the print and was cropped by its `overflow: hidden`, and
+	   because a print is tilted a few degrees the crop was lopsided: the route
+	   read as sitting off-centre in its square.
+	   Filling the print and padding inside the viewBox instead leaves nothing to
+	   over-constrain. Centring becomes preserveAspectRatio's job, which is the
+	   one piece of this that cannot be got wrong — routePath already centres the
+	   line on (50,50) with a 6-unit margin (route-shape.ts), so a square print
+	   and a square viewBox land it dead centre. */
 	.mark__route {
 		position: absolute;
-		inset: 8%;
-		width: 84%;
-		height: 84%;
+		inset: 0;
+		width: 100%;
+		height: 100%;
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 2.6;
@@ -598,11 +613,13 @@ const query = monthQuery(aspect);
 		stroke-linejoin: round;
 		vector-effect: non-scaling-stroke;
 	}
+	/* Same rule, same reason — the glyph's margin is the widened viewBox below,
+	   which holds the 24-unit icon at ~57% of the print. */
 	.mark__glyph {
 		position: absolute;
-		inset: 22%;
-		width: 56%;
-		height: 56%;
+		inset: 0;
+		width: 100%;
+		height: 100%;
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 2;
