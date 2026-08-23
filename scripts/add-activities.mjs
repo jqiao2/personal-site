@@ -11,6 +11,7 @@
 //   npm run activities:add -- <dir-or-file> [options]
 //
 //   --sport SLUG   force the sport, for a file that doesn't state one
+//   --gear NAME    tag it to a piece of gear, by the name in activity_gear
 //   --dry          parse and report, write nothing, move nothing
 //   --keep         write, but leave the files where they are
 //
@@ -48,9 +49,14 @@ const flag = (name, fallback) => {
 const DRY = has('--dry');
 const KEEP = has('--keep');
 const SPORT = flag('--sport', null);
+// No gear is guessed from the sport or from what was ridden last: gear decides
+// component mileage, and a chain silently credited with someone else's miles is
+// worse than a ride with no bike on it. Say which, or leave it off.
+const GEAR = flag('--gear', null);
 
 const DEFAULT_DIR = process.env.ACTIVITY_DROP ?? join(homedir(), 'Desktop', 'activities');
-const target = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--sport') ?? DEFAULT_DIR;
+const VALUE_FLAGS = new Set(['--sport', '--gear']);
+const target = args.find((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(args[i - 1])) ?? DEFAULT_DIR;
 
 const log = (...a) => console.error(...a);
 
@@ -101,6 +107,22 @@ if (db) {
 	if (error) throw new Error(`read athlete_thresholds: ${error.message}`);
 	thresholdRows = data ?? [];
 	if (!thresholdRows.length) log('WARNING: athlete_thresholds is empty — everything will score on the MET floor.');
+}
+
+let gearId = null;
+if (GEAR && db) {
+	const { data, error } = await db.from('activity_gear').select('id, name').ilike('name', GEAR).limit(2);
+	if (error) throw new Error(`read activity_gear: ${error.message}`);
+	if (!data?.length) {
+		log(`no gear named ${JSON.stringify(GEAR)} — see /activities/gear for the names in use.`);
+		process.exit(1);
+	}
+	if (data.length > 1) {
+		log(`${JSON.stringify(GEAR)} matches more than one piece of gear. Use the full name.`);
+		process.exit(1);
+	}
+	gearId = data[0].id;
+	log(`tagging everything to ${data[0].name}`);
 }
 
 /** The row in force on a date — §5's rule, the same one the app applies. */
@@ -260,7 +282,7 @@ for (const path of files) {
 
 	try {
 		const id = await insertActivity({
-			activity,
+			activity: gearId ? { ...activity, gear_id: gearId } : activity,
 			streams,
 			laps,
 			source: {

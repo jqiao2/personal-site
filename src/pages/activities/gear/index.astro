@@ -1,0 +1,517 @@
+---
+// /activities/gear — the shed. Every bike, pair of shoes, pair of skis, with
+// what it has actually done under it.
+//
+// WHY THE ODOMETER IS THE HEADLINE AND THE NAME IS NOT. A gear list sorted by
+// name is a receipt; the only reason to open this page is "how much is on
+// that." So each row leads with miles, hours and rides, and the name is the
+// label on them rather than the other way round.
+//
+// WHY RETIRED GEAR STAYS. A retired bike's miles are still miles you rode.
+// Retiring moves it to its own quiet group at the bottom with the dates it
+// served between — it does not remove it, because the total at the top of this
+// page would then be a lie about your own legs.
+//
+// Every piece of gear links through, not just bikes. A bike's page is its parts
+// list; a pair of shoes has no parts and its page is just its totals and its
+// two dates — which is thin, but those dates have to be settable somewhere, and
+// a second editor bolted onto this list would be a whole parallel way to edit a
+// thing that already has one.
+import ActivityLayout from '../../../layouts/ActivityLayout.astro';
+import { siteNav } from '../../../lib/nav';
+import { ALPINE } from '../../../lib/activity-tokens';
+import {
+	GEAR_KIND_LABELS,
+	hoursText,
+	listGearWithUse,
+	milesText,
+	retiredDate,
+	type GearWithUse,
+} from '../../../lib/gear';
+import type { GearKind } from '../../../lib/activities';
+
+export const prerender = false;
+
+// Same bargain as the activities landing page: a database we failed to reach
+// is not a shed with nothing in it, and the page must not say it is.
+let gear: GearWithUse[] = [];
+let unreachable = false;
+try {
+	gear = await listGearWithUse();
+} catch (err) {
+	unreachable = true;
+	console.error('gear page: could not reach the activity log —', err);
+}
+
+const nav = siteNav(Astro.url.pathname);
+
+const active = gear.filter((g) => !g.retired_at);
+const retired = gear.filter((g) => g.retired_at);
+
+// Kind groups, in the order gear actually accumulates: bikes first because
+// they're the only ones with a page behind them.
+const KIND_ORDER: GearKind[] = ['bike', 'shoes', 'skis', 'board', 'other'];
+const groups = KIND_ORDER.map((kind) => ({
+	kind,
+	label: GEAR_KIND_LABELS[kind],
+	items: active.filter((g) => g.kind === kind),
+})).filter((group) => group.items.length > 0);
+
+const totals = gear.reduce(
+	(acc, g) => ({
+		distanceM: acc.distanceM + g.use.distanceM,
+		movingSeconds: acc.movingSeconds + g.use.movingSeconds,
+		activityCount: acc.activityCount + g.use.activityCount,
+	}),
+	{ distanceM: 0, movingSeconds: 0, activityCount: 0 },
+);
+
+const num = (n: number) => n.toLocaleString('en-US');
+
+/** The name to print: the nickname if there is one, else the catalog name. */
+function displayName(g: GearWithUse): string {
+	return g.nickname || g.name;
+}
+
+/** Brand + model, or the catalog name when the nickname already took the top
+ * line. Empty when there's nothing left to say — including the common case
+ * where brand + model just spells the name back ("Brooks" + "Ghost Max 2"
+ * under a row already titled "Brooks Ghost Max 2"), which is most of the shoe
+ * rack. */
+function subtitle(g: GearWithUse): string {
+	const catalog = [g.brand, g.model].filter(Boolean).join(' ');
+	const title = displayName(g);
+	if (catalog && !sameText(catalog, title)) return catalog;
+	return g.nickname && !sameText(g.name, title) ? g.name : '';
+}
+
+/** Case- and space-insensitive comparison, so "cervelo S3" doesn't count as
+ * different from "Cervélo S3" only because of how it was typed. */
+function sameText(a: string, b: string): boolean {
+	const norm = (v: string) =>
+		v.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+	return norm(a) === norm(b);
+}
+
+/** "In service since 2021-04-02" — the gear's own start date if it's known,
+ * otherwise the first activity tagged to it, which is a floor rather than the
+ * truth and is said as such. */
+function servedText(g: GearWithUse): string {
+	const start = g.first_used_on ?? g.use.firstDate;
+	const end = retiredDate(g);
+	if (!start) return end ? `retired ${end}` : '';
+	const since = g.first_used_on ? start : `${start} at the latest`;
+	return end ? `${start} – ${end}` : `since ${since}`;
+}
+---
+
+<ActivityLayout title="Gear — Jason's activity log">
+	<div
+		class="page"
+		style={{
+			'--sky': ALPINE.sky,
+			'--snow': ALPINE.snow,
+			'--granite': ALPINE.granite,
+			'--granite-soft': ALPINE.graniteSoft,
+			'--lake': ALPINE.lake,
+			'--lake-deep': ALPINE.lakeDeep,
+			'--larch': ALPINE.larch,
+			'--scree': ALPINE.scree,
+		}}
+	>
+		<div class="card">
+			<nav class="tabs">
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
+			</nav>
+
+			<div class="card__body">
+				<aside class="side">
+					<div class="brand">The<br />gear</div>
+					<div class="brand__sub">{num(gear.length)} pieces</div>
+
+					<div class="side__rule"></div>
+					<dl class="totals">
+						<div class="totals__row">
+							<dt>Distance</dt>
+							<dd class="figure">{milesText(totals.distanceM)}</dd>
+						</div>
+						<div class="totals__row">
+							<dt>Moving time</dt>
+							<dd class="figure">{hoursText(totals.movingSeconds)}</dd>
+						</div>
+						<div class="totals__row">
+							<dt>Activities</dt>
+							<dd class="figure">{num(totals.activityCount)}</dd>
+						</div>
+					</dl>
+
+					<div class="side__rule"></div>
+					<nav class="side__nav">
+						<a class="navrow navrow--link navrow--last" href="/activities">
+							<span>Back to the log</span><span class="navrow__n">→</span>
+						</a>
+					</nav>
+				</aside>
+
+				<main class="main">
+					{unreachable && (
+						<p class="empty empty--error">
+							The activity log couldn’t be reached, so this shed is showing nothing
+							rather than showing that it’s empty. The two look alike and are not the
+							same — try again in a moment.
+						</p>
+					)}
+
+					{!unreachable && gear.length === 0 && (
+						<p class="empty">No gear yet.</p>
+					)}
+
+					{groups.map((group) => (
+						<section>
+							<div class="sec-head">
+								<span class="sec-head__title">{group.label}</span>
+							</div>
+							<ul class="rack">
+								{group.items.map((g) => (
+									<li class="item">
+										<a class="item__link" href={`/activities/gear/${g.id}`}>
+											<div class="item__head">
+												<span class="item__name">{displayName(g)}</span>
+												{subtitle(g) && <span class="item__sub">{subtitle(g)}</span>}
+											</div>
+											<div class="item__stats figure">
+												<span class="item__odo">{milesText(g.use.distanceM)}</span>
+												<span class="dot">·</span>
+												<span>{hoursText(g.use.movingSeconds)}</span>
+												<span class="dot">·</span>
+												<span>{num(g.use.activityCount)} activities</span>
+											</div>
+											<div class="item__served">{servedText(g)}</div>
+											<span class="item__chev" aria-hidden="true">→</span>
+										</a>
+									</li>
+								))}
+							</ul>
+						</section>
+					))}
+
+					{retired.length > 0 && (
+						<section>
+							<div class="sec-head">
+								<span class="sec-head__title">Retired</span>
+							</div>
+							<ul class="rack rack--retired">
+								{retired.map((g) => (
+									<li class="item">
+										<a class="item__link" href={`/activities/gear/${g.id}`}>
+											<div class="item__head">
+												<span class="item__name">{displayName(g)}</span>
+												<span class="item__sub">{GEAR_KIND_LABELS[g.kind]}</span>
+											</div>
+											<div class="item__stats figure">
+												<span class="item__odo">{milesText(g.use.distanceM)}</span>
+												<span class="dot">·</span>
+												<span>{hoursText(g.use.movingSeconds)}</span>
+											</div>
+											<div class="item__served">{servedText(g)}</div>
+										</a>
+									</li>
+								))}
+							</ul>
+						</section>
+					)}
+				</main>
+			</div>
+		</div>
+	</div>
+
+	<style>
+		.page {
+			min-height: 100vh;
+			display: flex;
+			justify-content: center;
+			overflow-x: hidden;
+		}
+		.card {
+			width: 100%;
+			max-width: 1360px;
+			display: flex;
+			flex-direction: column;
+		}
+		.card__body {
+			display: flex;
+		}
+
+		.tabs {
+			display: flex;
+			align-items: stretch;
+			gap: 2px;
+			width: 100vw;
+			margin-left: calc(50% - 50vw);
+			padding: 0 calc(50vw - 50% + 28px);
+			border-bottom: 1px solid var(--scree);
+		}
+		.tabs__link {
+			font-size: 13px;
+			letter-spacing: 0.4px;
+			color: var(--granite-soft);
+			padding: 26px 16px 24px;
+			border-bottom: 2px solid transparent;
+			transition: color 0.12s;
+		}
+		.tabs__link:hover {
+			color: var(--granite);
+		}
+		.tabs__link--active {
+			color: var(--lake);
+			font-weight: 600;
+			border-bottom-color: var(--lake);
+		}
+
+		.side {
+			width: 268px;
+			flex: none;
+			border-right: 1px solid var(--scree);
+			padding: 36px 26px;
+			display: flex;
+			flex-direction: column;
+		}
+		.brand {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-size: 29px;
+			font-weight: 400;
+			color: var(--granite);
+			letter-spacing: -0.2px;
+			line-height: 1.08;
+		}
+		.brand__sub {
+			margin-top: 8px;
+			font-size: 13px;
+			color: var(--lake);
+			font-weight: 600;
+		}
+		.side__rule {
+			height: 1px;
+			background: var(--scree);
+			margin: 26px 0 8px;
+		}
+		.totals {
+			margin: 0;
+			display: flex;
+			flex-direction: column;
+		}
+		.totals__row {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			padding: 9px 0;
+			border-bottom: 1px solid var(--scree);
+		}
+		.totals__row:last-child {
+			border-bottom: none;
+		}
+		.totals dt {
+			font-size: 13px;
+			color: var(--granite-soft);
+		}
+		.totals dd {
+			margin: 0;
+			font-size: 14px;
+			color: var(--granite);
+			font-weight: 600;
+		}
+		.side__nav {
+			display: flex;
+			flex-direction: column;
+		}
+		.navrow {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 11px 0;
+			font-size: 14px;
+			color: var(--granite);
+			border-bottom: 1px solid var(--scree);
+		}
+		.navrow--last {
+			border-bottom: none;
+		}
+		.navrow--link:hover {
+			color: var(--lake);
+		}
+		.navrow__n {
+			color: var(--granite-soft);
+			font-size: 13px;
+		}
+
+		.main {
+			flex: 1;
+			min-width: 0;
+			padding: 38px 40px 60px;
+			display: flex;
+			flex-direction: column;
+			gap: 40px;
+		}
+		.sec-head {
+			display: flex;
+			justify-content: space-between;
+			align-items: baseline;
+			border-bottom: 1px solid var(--scree);
+			padding-bottom: 9px;
+			margin-bottom: 4px;
+		}
+		.sec-head__title {
+			font-family: 'Instrument Serif', Georgia, serif;
+			font-style: italic;
+			font-size: 20px;
+			color: var(--granite);
+		}
+		.empty {
+			margin: 0;
+			font-size: 14px;
+			color: var(--granite-soft);
+		}
+		.empty--error {
+			color: var(--granite);
+			border-left: 2px solid var(--larch);
+			padding-left: 10px;
+		}
+
+		/* One row per piece, ruled like a ledger rather than boxed like a card —
+		   the point of the list is comparing the odometers down the column, and a
+		   card's padding puts them too far apart to compare at a glance. */
+		.rack {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+		}
+		.item {
+			border-bottom: 1px solid var(--scree);
+		}
+		.item:last-child {
+			border-bottom: none;
+		}
+		.item__link {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) auto auto;
+			align-items: baseline;
+			gap: 6px 18px;
+			padding: 15px 4px;
+			color: var(--granite);
+		}
+		a.item__link:hover .item__name {
+			color: var(--lake);
+		}
+		a.item__link:hover .item__chev {
+			color: var(--lake);
+			transform: translateX(2px);
+		}
+		.item__head {
+			display: flex;
+			align-items: baseline;
+			gap: 9px;
+			min-width: 0;
+		}
+		.item__name {
+			font-size: 16px;
+			font-weight: 600;
+			transition: color 0.12s;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.item__sub {
+			font-size: 12.5px;
+			color: var(--granite-soft);
+			white-space: nowrap;
+		}
+		.item__stats {
+			font-size: 13px;
+			color: var(--granite-soft);
+			display: flex;
+			align-items: baseline;
+			gap: 6px;
+			white-space: nowrap;
+		}
+		/* The one number this page exists for gets the section's one accent. */
+		.item__odo {
+			color: var(--lake);
+			font-weight: 700;
+			font-size: 14.5px;
+		}
+		.dot {
+			color: var(--scree);
+		}
+		.item__served {
+			grid-column: 1;
+			font-size: 12px;
+			color: var(--granite-soft);
+		}
+		.item__chev {
+			grid-row: 1;
+			grid-column: 3;
+			color: var(--scree);
+			font-size: 14px;
+			transition: color 0.12s, transform 0.12s;
+		}
+
+		/* Retired gear keeps its numbers and loses its volume. */
+		.rack--retired .item__odo {
+			color: var(--granite-soft);
+			font-weight: 600;
+		}
+		.rack--retired .item__name {
+			font-weight: 500;
+		}
+
+		.figure {
+			font-variant-numeric: tabular-nums;
+		}
+
+		@media (max-width: 900px) {
+			.card__body {
+				flex-direction: column;
+			}
+			.side {
+				width: 100%;
+				border-right: none;
+				border-bottom: 1px solid var(--scree);
+			}
+			.main {
+				padding: 28px 22px 44px;
+			}
+			.tabs {
+				flex-wrap: wrap;
+				padding-left: calc(50vw - 50% + 16px);
+				padding-right: calc(50vw - 50% + 16px);
+			}
+			.tabs__link {
+				padding: 16px 10px 14px;
+			}
+		}
+
+		/* Below ~640px the three columns can't share a line — the stats drop under
+		   the name rather than shrinking past reading size. */
+		@media (max-width: 640px) {
+			.item__link {
+				grid-template-columns: minmax(0, 1fr) auto;
+			}
+			.item__stats {
+				grid-column: 1;
+				flex-wrap: wrap;
+				white-space: normal;
+			}
+			.item__chev {
+				grid-column: 2;
+			}
+		}
+	</style>
+</ActivityLayout>

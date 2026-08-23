@@ -44,7 +44,7 @@ repeating.
 
 ```
 npm run activities:add                      # ~/Desktop/activities, or $ACTIVITY_DROP
-npm run activities:add -- <dir|file> [--dry] [--sport SLUG] [--keep]
+npm run activities:add -- <dir|file> [--dry] [--sport SLUG] [--gear NAME] [--keep]
 ```
 
 §4's step 2, except that the "file drop" is a folder on the desktop rather
@@ -60,6 +60,10 @@ Two things it needs that an archive import got for free:
   squashed (`Gravel Ride` arrives as `gravelride`, which `sportFromXmlType`
   handles). Anything else stops and asks for `--sport`, rather than filing a
   ride as `other`.
+- **The gear, if the miles are to count.** A file names no bike, and nothing
+  is guessed from the sport or from what was ridden last — a chain credited
+  with someone else's miles is worse than a ride with no bike on it. Pass
+  `--gear "2023 Salsa Cutthroat"` and every file in the run is tagged to it.
 - **Not importing the same ride twice**, since one session can arrive as a
   Garmin FIT and again as a Strava GPX. §4's first two rules do it: the file's
   sha256 against the unique `activity_sources.file_checksum`, then same sport
@@ -458,8 +462,85 @@ leg you can look at on its own and a marker inside the whole day's effort.
 
 ```
 id, kind ('bike'|'shoes'|'skis'|'board'|'other'), name, brand, model,
-nickname, retired_at, distance_m (denormalised), external_ids jsonb
+nickname, first_used_on (date), retired_at, distance_m (denormalised),
+external_ids jsonb
 ```
+
+`first_used_on` is when the thing entered service. Null means unknown, and
+/activities/gear then falls back to the earliest activity tagged to it — a
+floor, not the truth, and the page says so.
+
+### `gear_components`  (0036)
+
+One row per PART INSTANCE on a bike, open or closed. Replacing a chain closes
+one row (`removed_on`) and opens another; the service history IS the table.
+
+```
+id, gear_id, kind (chain|cassette|chainrings|brake_pads|brake_rotors|wheels|
+tires|sealant|valves|bar_tape|cables|bottom_bracket|headset_bearings|
+wheel_bearings|cleats|other),
+label, installed_on, removed_on, baseline_distance_m, condition, notes,
+life_miles int[2], life_months int[2]   -- 0037, per-instance overrides
+```
+
+There is deliberately **no mileage column**. A component's miles are
+`sum(activities.distance_m) where gear_id = this bike and local_date between
+installed_on and coalesce(removed_on, today)` — derived in src/lib/gear.ts, so
+re-tagging an old ride can't leave a stale total behind.
+`baseline_distance_m` is the one figure that can't be derived: miles the part
+carried in from another bike or from before it was tracked.
+
+Labels, wear axes and replacement intervals live in `src/lib/gear-wear.ts`
+(`COMPONENT_KINDS`), not in the schema — the check constraint only owns "is it
+one of these". Intervals are **windows** (`[due, overdue]`), never single
+thresholds, because a chain is not dead at exactly 3,000 miles. Parts with no
+mileage or calendar interval at all (bearings, valves) get no wear bar rather
+than a fabricated one.
+
+Those intervals are **defaults about a category, and a category is not a
+part** — a 28mm race tire and a 45mm gravel tire are both `tires` and are not
+the same question. `life_miles` / `life_months` (0037) let any instance carry
+its own window; `effectiveMeta()` lays them over the default, so an override
+*replaces* an axis rather than adding to it, and clearing it falls back. An
+override on an axis the kind doesn't otherwise have is honoured too — that is
+how a bottom bracket gets a wear bar at all. Overridden rows are marked `*` on
+the detail page, because a reader comparing two chains has to know one is being
+judged against a different ruler.
+
+The windows are a **rough heuristic for when to go and look**, not a
+measurement: wear is read by hand off the part and never recorded digitally, so
+the bar's job is to schedule the inspection, not to replace it.
+
+**Not every part wears indoors.** A trainer turns the cranks but the bike
+doesn't move, so the drivetrain wears normally while the tires aren't on the
+road, the brakes are never touched and the wheels carry no load over anything.
+`brake_pads`, `brake_rotors`, `wheels`, `wheel_bearings` and `tires` are marked
+`outdoorOnly` in `COMPONENT_KINDS` and see the window's outdoor rides only;
+everything else sees all of them. "Indoor" is `sportMeta(sport).indoor || sub_sport === 'indoor'` —
+`isIndoorRide()`, the same heuristic the route reader and the `indoor` filter
+already use, not a second one. When the exclusion actually discarded something
+the part says so, since otherwise a tire's odometer and the chain's disagree on
+the same bike with no account of why.
+
+Every piece of gear has a detail page, not only bikes. A bike's page is its
+parts list; a pair of shoes has no parts and its page is just its totals and
+its two dates — thin, but those dates have to be settable somewhere, and a
+second editor bolted onto the index would be a parallel way to edit a thing
+that already has one.
+
+`wheels` and `wheel_bearings` are deliberately separate kinds (0040). A
+wheelset outlives several sets of the bearings inside it, so folding them
+together would either erase the wheel's history on a bearing service or leave
+the wheel's mileage counting from one.
+
+**Component mileage will not match Strava's.** Strava's per-component figure is
+a counter accrued at upload time; this site's is a live sum over the activities
+in the window the part was fitted. Loading the Cervélo's history (0041) showed
+them agreeing to a tenth of a mile on every component closed before Nov 2024
+and diverging by 2–10% on everything still accruing since. The derived figure
+is the one to trust — that is the whole reason nothing here is denormalised —
+and Strava's numbers are deliberately **not** written into
+`baseline_distance_m`, which would only reinstate the disagreement as data.
 
 ### `activity_sources`
 
