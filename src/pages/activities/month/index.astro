@@ -14,8 +14,17 @@
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
 import { ALPINE, monthLabel } from '../../../lib/activity-month';
 import { supabasePublic } from '../../../lib/supabase';
+import { requireOwner } from '../../../lib/auth';
 
 export const prerender = false;
+
+// OWNER ONLY. A month in review is a dense summary of one person's month —
+// what they read/watched/ate/did, on which days, from which places. It is the
+// most concentrated disclosure any of these sections makes, and it is one
+// page rather than a hundred, so it gates as a whole rather than per entry.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
 
 interface MonthRow {
 	key: string;

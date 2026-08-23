@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { fetchActivityFacets } from '../../../lib/activity-params';
+import { requireOwner } from '../../../lib/auth';
 import { json, apiError } from '../../../lib/http';
 
 export const prerender = false;
@@ -15,12 +16,15 @@ export const prerender = false;
 // never has to show a loading state on first paint. This route exists for
 // the client script's re-fetch on retry and for anyone hitting it directly.
 // Cached briefly at the edge: the values only move when something is logged.
-export const GET: APIRoute = async () => {
+// OWNER ONLY. The facets describe the private collection — gear nicknames,
+// the places rides start from, the longest ride ever — so there is no useful
+// visitor version, and the cache header goes private with it: a shared cache
+// must not be able to hand one reader's answer to the next one.
+export const GET: APIRoute = async ({ cookies }) => {
+	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	try {
-		const facets = await fetchActivityFacets();
-		return json(facets, 200, {
-			'cache-control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=600',
-		});
+		const facets = await fetchActivityFacets(true);
+		return json(facets, 200, { 'cache-control': 'private, no-store' });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to list activity filters', 500);
 	}

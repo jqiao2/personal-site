@@ -44,7 +44,17 @@ import {
 } from '../../../lib/activity-month';
 
 // Rendered on demand — reflects the live database.
+import { requireOwner } from '../../../lib/auth';
+
 export const prerender = false;
+
+// OWNER ONLY. A month in review is a dense summary of one person's month —
+// what they read/watched/ate/did, on which days, from which places. It is the
+// most concentrated disclosure any of these sections makes, and it is one
+// page rather than a hundred, so it gates as a whole rather than per entry.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
 
 const key = Astro.params.month ?? '';
 const parsed = parseMonthKey(key);
@@ -70,7 +80,7 @@ async function monthCounts(): Promise<Record<string, number>> {
 	return out;
 }
 
-const [activities, counts] = await Promise.all([listActivitiesForMonth(key), monthCounts()]);
+const [activities, counts] = await Promise.all([listActivitiesForMonth(key, true), monthCounts()]);
 
 const rows = weekRows(key);
 const geometry = geometries(rows);

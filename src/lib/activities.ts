@@ -53,6 +53,9 @@ function isDegraded(err: { code?: string; message?: string } | null): boolean {
 // returns them). Kept flat rather than nested; the pages reshape as needed.
 // ---------------------------------------------------------------------------
 
+import { redactActivities } from './activity-privacy';
+export { redactActivities };
+
 export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met';
 export type ExertionConfidence = 'measured' | 'estimated' | 'assumed';
 export type LapType = 'lap' | 'interval' | 'rest' | 'transition' | 'length';
@@ -79,6 +82,15 @@ export interface ActivityRow {
 	 * supabaseAdmin rather than through this function.
 	 */
 	private_notes: string | null;
+	/** Owner-only when true — the default for every activity (migration 0043).
+	 * Read `false` as "deliberately published", and read a missing column (an
+	 * environment behind on migrations) as private: this is the one field where
+	 * the safe reading of "I don't know" is the restrictive one. */
+	private: boolean;
+	/** Owner's choice to keep this activity off /month (migration 0044).
+	 * Presentation only — /month is owner-gated either way, so unlike
+	 * `private` a missing column reads as `false` (show it). */
+	hide_from_review: boolean;
 	started_at: string;
 	local_date: string;
 	utc_offset_minutes: number | null;
@@ -188,6 +200,16 @@ export interface ActivityListRow {
 	/** The winning (highest-fidelity) source's provider, e.g. 'strava_archive'.
 	 * Null for an activity with no recorded source (a bare manual entry). */
 	source_provider: string | null;
+	/** See ActivityRow.private. */
+	private: boolean;
+	/** Owner's choice to keep this activity off /month (migration 0044).
+	 * Presentation only — /month is owner-gated either way, so unlike
+	 * `private` a missing column reads as `false` (show it). */
+	hide_from_review: boolean;
+	/** Set by `redactActivities` on a private row a visitor is being shown:
+	 * everything but the sport and the day has been stripped. Never set on a
+	 * row the owner is looking at, and never a database column. */
+	redacted?: boolean;
 }
 
 /** The `activity_streams` row for one activity — big arrays, detail page only. */
@@ -414,6 +436,7 @@ const SORT_COLUMN: Record<ActivitySort, string> = {
  */
 export async function listActivities(
 	query: ActivityQuery = {},
+	isOwner = false,
 ): Promise<{ rows: ActivityListRow[]; total: number }> {
 	const { sort = 'date', limit = DEFAULT_LIST_LIMIT, offset = 0 } = query;
 	const ascending = query.sortDir ? query.sortDir === 'asc' : sort === 'date' ? false : false;
@@ -473,12 +496,12 @@ export async function listActivities(
 		if (isDegraded(error)) return { rows: [], total: 0 };
 		throw new Error(`listActivities failed: ${error.message}`);
 	}
-	return { rows: (data ?? []) as ActivityListRow[], total: count ?? 0 };
+	return { rows: redactActivities((data ?? []) as ActivityListRow[], isOwner), total: count ?? 0 };
 }
 
 /** The (<=4) activities flagged favorite_rank 1-4, in rank order — the
  * landing page's top row. */
-export async function listFavoriteActivities(limit = 4): Promise<ActivityListRow[]> {
+export async function listFavoriteActivities(limit = 4, isOwner = false): Promise<ActivityListRow[]> {
 	const { data, error } = await supabasePublic
 		.from('activity_list')
 		.select('*')
@@ -489,7 +512,7 @@ export async function listFavoriteActivities(limit = 4): Promise<ActivityListRow
 		if (isDegraded(error)) return [];
 		throw new Error(`listFavoriteActivities failed: ${error.message}`);
 	}
-	return (data ?? []) as ActivityListRow[];
+	return redactActivities((data ?? []) as ActivityListRow[], isOwner);
 }
 
 // ---------------------------------------------------------------------------
@@ -509,7 +532,7 @@ export interface ActivityDayWithActivities extends ActivityDay {
  * the grid can load more weeks on scroll without re-fetching what's shown.
  */
 export async function listActivityDays(
-	opts: { limit?: number; before?: string } = {},
+	opts: { limit?: number; before?: string; isOwner?: boolean } = {},
 ): Promise<ActivityDayWithActivities[]> {
 	const limit = opts.limit ?? 14;
 
@@ -541,7 +564,7 @@ export async function listActivityDays(
 	}
 
 	const byDate = new Map<string, ActivityListRow[]>();
-	for (const row of (activities ?? []) as ActivityListRow[]) {
+	for (const row of redactActivities((activities ?? []) as ActivityListRow[], opts.isOwner ?? false)) {
 		const list = byDate.get(row.local_date);
 		if (list) list.push(row);
 		else byDate.set(row.local_date, [row]);
@@ -609,15 +632,24 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'device_name',
 	'created_at',
 	'updated_at',
+	'private',
+	'hide_from_review',
 ].join(', ');
 
 /** One activity by id, in full (bar `private_notes` — always null; see
  * ActivityRow). Null if it doesn't exist or is soft-deleted. */
 export async function getActivity(id: number): Promise<ActivityRow | null> {
-	// `tags` arrives in a later migration (0035) than the rest of the schema, so
-	// an environment one migration behind gets the activity without its tags
-	// rather than a 404 for every activity on the site.
-	for (const columns of [PUBLIC_ACTIVITY_COLUMNS, PUBLIC_ACTIVITY_COLUMNS.replace(', tags', '')]) {
+	// `tags` (0035), `private` (0043) and `hide_from_review` (0044) arrive in
+	// later migrations than the rest of the schema, so an environment behind on
+	// any of them gets the activity without them rather than a 404 for every
+	// activity on the site. Each step drops one more, newest first.
+	const attempts = [
+		PUBLIC_ACTIVITY_COLUMNS,
+		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', ''),
+		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', '').replace(', private', ''),
+		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', '').replace(', private', '').replace(', tags', ''),
+	];
+	for (const [i, columns] of attempts.entries()) {
 		const { data, error } = await supabasePublic
 			.from('activities')
 			.select(columns)
@@ -625,12 +657,33 @@ export async function getActivity(id: number): Promise<ActivityRow | null> {
 			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) {
-			if (isMissingColumn(error) && columns === PUBLIC_ACTIVITY_COLUMNS) continue;
+			// Keep dropping columns while there's a shorter select left to try.
+			// (This used to compare against the first entry, which made every
+			// step after the second unreachable.)
+			if (isMissingColumn(error) && i < attempts.length - 1) continue;
 			if (isDegraded(error)) return null;
 			throw new Error(`getActivity failed: ${error.message}`);
 		}
 		if (!data) return null;
-		return { tags: [], ...(data as unknown as Omit<ActivityRow, 'private_notes'>), private_notes: null };
+		// The three late columns may be absent (the fallback selects above), so
+		// they're defaulted rather than spread over. `private` defaults the
+		// restrictive way — anything but an explicit false is private — while
+		// `hide_from_review` defaults to showing, since it guards nothing.
+		const row = data as unknown as Omit<
+			ActivityRow,
+			'private_notes' | 'tags' | 'private' | 'hide_from_review'
+		> & {
+			tags?: string[];
+			private?: boolean;
+			hide_from_review?: boolean;
+		};
+		return {
+			...row,
+			tags: row.tags ?? [],
+			private: row.private !== false,
+			hide_from_review: row.hide_from_review === true,
+			private_notes: null,
+		};
 	}
 	return null;
 }
@@ -666,7 +719,7 @@ export async function listActivityLaps(id: number): Promise<ActivityLap[]> {
 
 /** A multisport parent's child legs (swim/T1/bike/T2/run…), in leg order.
  * [] for a standalone activity. */
-export async function listActivityChildren(parentId: number): Promise<ActivityListRow[]> {
+export async function listActivityChildren(parentId: number, isOwner = false): Promise<ActivityListRow[]> {
 	const { data, error } = await supabasePublic
 		.from('activity_list')
 		.select('*')
@@ -676,7 +729,7 @@ export async function listActivityChildren(parentId: number): Promise<ActivityLi
 		if (isDegraded(error)) return [];
 		throw new Error(`listActivityChildren failed: ${error.message}`);
 	}
-	return (data ?? []) as ActivityListRow[];
+	return redactActivities((data ?? []) as ActivityListRow[], isOwner);
 }
 
 // ---------------------------------------------------------------------------
@@ -699,7 +752,7 @@ function firstOfNextMonth(monthKey: string): string {
  * is null) for the same reason activity_months rolls them up under the
  * parent: a triathlon is one entry in the month, not three.
  */
-export async function listActivitiesForMonth(monthKey: string): Promise<ActivityListRow[]> {
+export async function listActivitiesForMonth(monthKey: string, isOwner = false): Promise<ActivityListRow[]> {
 	const { data, error } = await supabasePublic
 		.from('activity_list')
 		.select('*')
@@ -711,7 +764,7 @@ export async function listActivitiesForMonth(monthKey: string): Promise<Activity
 		if (isDegraded(error)) return [];
 		throw new Error(`listActivitiesForMonth failed: ${error.message}`);
 	}
-	return (data ?? []) as ActivityListRow[];
+	return redactActivities((data ?? []) as ActivityListRow[], isOwner);
 }
 
 // ---------------------------------------------------------------------------
@@ -731,6 +784,17 @@ export interface ActivityStats {
 	bySportFamily: Partial<Record<SportFamily, number>>;
 }
 
+/** The zeroed stats — what a visitor gets, and what a database that can't
+ * answer gets. */
+const EMPTY_ACTIVITY_STATS: ActivityStats = {
+	activitiesThisYear: 0,
+	totalDistanceM: 0,
+	totalElevationGainM: 0,
+	totalMovingHours: 0,
+	totalExertion: 0,
+	bySportFamily: {},
+};
+
 /**
  * Sidebar totals for the /activities landing page: this-year count alongside
  * all-time distance/elevation/moving-time/exertion and a by-family breakdown
@@ -740,7 +804,14 @@ export interface ActivityStats {
  * in JS rather than five separate aggregate round-trips, since every number
  * needs the same row set (top-level, non-deleted activities).
  */
-export async function getActivityStats(): Promise<ActivityStats> {
+export async function getActivityStats(isOwner = false): Promise<ActivityStats> {
+	// Every total here is a sum over private rows, so to a visitor it is the
+	// same disclosure the cards were making, only pre-added: lifetime mileage,
+	// hours out of the house, a fitness curve. There is no public-only version
+	// of these worth computing — with `private` defaulting to true the answer
+	// would be zeros anyway — so a visitor gets the empty stats and the pages
+	// that draw them leave the space out entirely.
+	if (!isOwner) return EMPTY_ACTIVITY_STATS;
 	const year = siteYear();
 	const PAGE = 1000;
 	let activitiesThisYear = 0;
@@ -757,16 +828,7 @@ export async function getActivityStats(): Promise<ActivityStats> {
 			.is('parent_id', null)
 			.range(offset, offset + PAGE - 1);
 		if (error) {
-			if (isDegraded(error)) {
-				return {
-					activitiesThisYear: 0,
-					totalDistanceM: 0,
-					totalElevationGainM: 0,
-					totalMovingHours: 0,
-					totalExertion: 0,
-					bySportFamily: {},
-				};
-			}
+			if (isDegraded(error)) return EMPTY_ACTIVITY_STATS;
 			throw new Error(`getActivityStats failed: ${error.message}`);
 		}
 		const rows = (data ?? []) as {
@@ -852,7 +914,11 @@ export interface ActivityFacets {
  * top-level) activity set once and folds the three facets in JS together —
  * one read instead of three.
  */
-export async function listActivityFacets(): Promise<ActivityFacets> {
+export async function listActivityFacets(isOwner = false): Promise<ActivityFacets> {
+	// The facets are a description of the private rows — every gear nickname,
+	// every start place, every sport count. A visitor gets none of them, which
+	// also means the filter panel they feed draws itself empty.
+	if (!isOwner) return { sports: [], gear: [], places: [] };
 	const PAGE = 1000;
 	const sportCounts = new Map<string, number>();
 	const gearCounts = new Map<number, { name: string; count: number }>();
@@ -912,6 +978,11 @@ export interface UpdateActivityInput {
 	sport?: string;
 	gearId?: number | null;
 	tags?: string[];
+	/** The one switch that decides whether anyone but the owner sees any of the
+	 * above. See migration 0043 and `redactActivities`. */
+	private?: boolean;
+	/** Keep this activity off /month. Presentation only — see migration 0044. */
+	hideFromReview?: boolean;
 }
 
 /**
@@ -937,6 +1008,8 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 	if (input.sport !== undefined) patch.sport = input.sport;
 	if (input.gearId !== undefined) patch.gear_id = input.gearId;
 	if (input.tags !== undefined) patch.tags = input.tags;
+	if (input.private !== undefined) patch.private = input.private;
+	if (input.hideFromReview !== undefined) patch.hide_from_review = input.hideFromReview;
 
 	const current = await getActivity(id);
 	if (!current) return false;
@@ -951,6 +1024,33 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 }
 
 /** Shift one activity's distance from one gear row's running total to another. */
+/**
+ * Delete an activity. Soft: every read in this file (and the activity_list
+ * view) already filters on `deleted_at is null`, so stamping it removes the
+ * activity from the site completely while leaving the row — and the streams
+ * table that references it — intact for a hand-written `update ... set
+ * deleted_at = null` if it turns out to have been a mistake.
+ *
+ * The gear it was logged against gets its distance back, which is the reason
+ * this can't just be an `update` at the call site: an activity's distance is
+ * on a bike's odometer as well as its own row, and deleting one without the
+ * other leaves the gear reading permanently long.
+ */
+export async function deleteActivity(id: number): Promise<boolean> {
+	const current = await getActivity(id);
+	if (!current) return false;
+
+	const { error } = await supabaseAdmin
+		.from('activities')
+		.update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+		.eq('id', id)
+		.is('deleted_at', null);
+	if (error) throw new Error(`deleteActivity failed: ${error.message}`);
+
+	await moveGearDistance(current.gear_id, null, current.distance_m ?? 0);
+	return true;
+}
+
 async function moveGearDistance(from: number | null, to: number | null, distanceM: number): Promise<void> {
 	if (!distanceM) return;
 	for (const [gearId, delta] of [[from, -distanceM], [to, distanceM]] as const) {
@@ -1056,16 +1156,21 @@ function simplifyTrack(polyline: string): string {
 	return encodePolyline(out);
 }
 
-export async function listRoutePolylines(): Promise<string[]> {
+export async function listRoutePolylines(isOwner = false): Promise<string[]> {
 	const PAGE = 1000;
 	const rows: { id: number; parent_id: number | null; sport: string; sub_sport: string | null; polyline: string }[] = [];
 
 	for (let offset = 0; ; offset += PAGE) {
-		const { data, error } = await supabasePublic
+		// A track is the single most identifying thing this table holds — it
+		// starts at a front door. A visitor gets the published ones only, at the
+		// query, so a private route is never even loaded into a process that is
+		// answering a stranger.
+		let req = supabasePublic
 			.from('activity_list')
 			.select('id, parent_id, sport, sub_sport, polyline')
-			.not('polyline', 'is', null)
-			.range(offset, offset + PAGE - 1);
+			.not('polyline', 'is', null);
+		if (!isOwner) req = req.eq('private', false);
+		const { data, error } = await req.range(offset, offset + PAGE - 1);
 		if (error) {
 			if (isDegraded(error)) return [];
 			throw new Error(`listRoutePolylines failed: ${error.message}`);

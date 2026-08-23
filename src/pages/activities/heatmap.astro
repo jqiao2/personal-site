@@ -34,12 +34,22 @@
 // fallback for a denial, a timeout, or a browser without the API — never a
 // blank world view.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
+import { requireOwner } from '../../lib/auth';
 import { siteNav } from '../../lib/nav';
 import { ALPINE } from '../../lib/activity-tokens';
 import { ACTIVITY_MAP_TOKENS } from '../../lib/activity-map';
 import { TILE_FEET } from '../../lib/heatmap';
 
 export const prerender = false;
+
+// OWNER ONLY. This page is every track ever recorded on one map — the single
+// most identifying thing the log holds, and the exact disclosure activities
+// being private by default (migration 0043) exists to stop. There is no
+// redacted version of a heatmap: a map with the private routes taken out is,
+// by default, an empty map, and one with them in is the whole leak.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
 
 const nav = siteNav(Astro.url.pathname);
 const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';

@@ -38,14 +38,20 @@ import {
 
 export const prerender = false;
 
+// OWNER ONLY. A month in review is a dense summary of one person's month —
+// what they read/watched/ate/did, on which days, from which places. It is the
+// most concentrated disclosure any of these sections makes, and it is one
+// page rather than a hundred, so it gates as a whole rather than per entry.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
 const key = Astro.params.month ?? '';
 if (!parseMonthKey(key)) return Astro.redirect('/restaurants/month');
 
-const [visits, allKeys, isOwner] = await Promise.all([
-	listMonthVisits(key),
-	listMonthKeys(),
-	requireOwner(Astro.cookies),
-]);
+const [visits, allKeys] = await Promise.all([listMonthVisits(key), listMonthKeys()]);
+// The gate above already established this.
+const isOwner = true;
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
 

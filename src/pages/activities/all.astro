@@ -15,6 +15,7 @@
 // there is no "loading filters…" state to design for.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
+import { requireOwner } from '../../lib/auth';
 import { siteNav } from '../../lib/nav';
 import { SPORTS, sportMeta, type SportFamily } from '../../lib/sports';
 import { exertionLabel } from '../../lib/activity-tokens';
@@ -40,9 +41,18 @@ const ft = (m: number) => m / METERS_PER_FOOT;
 const min = (s: number) => s / 60;
 
 const nav = siteNav(Astro.url.pathname);
+// A visitor gets redacted rows (sport glyph, no link) and an empty facet set,
+// both decided in the data layer — see redactActivities and fetchActivityPage.
+// The toolbar and filter panel come off the page entirely rather than being
+// left to draw themselves empty: with no chips, no gear, no places and no
+// slider bounds there is nothing in them to operate.
+const isOwner = await requireOwner(Astro.cookies);
 const query: ActivityFilterQuery = activityQueryFromParams(Astro.url.searchParams);
 const filterCount = activityFilterCount(query);
-const hasFilters = filterCount > 0;
+// Visitors have no filters, because fetchActivityPage drops all but sport and
+// date for them — so the summary sentence and the badge would both be
+// describing a filter that wasn't applied.
+const hasFilters = isOwner && filterCount > 0;
 
 // Defensive: a placeholder-credentialed Supabase client (see ACTIVITIES.md's
 // handoff note) or an unmigrated database can throw outright rather than
@@ -60,7 +70,10 @@ let facets: ActivityFacetsPayload = {
 	exertion: null,
 };
 try {
-	const [page, f] = await Promise.all([fetchActivityPage(query, { limit: BATCH, offset: 0 }), fetchActivityFacets()]);
+	const [page, f] = await Promise.all([
+		fetchActivityPage(query, { limit: BATCH, offset: 0 }, isOwner),
+		fetchActivityFacets(isOwner),
+	]);
 	rows = page.rows;
 	total = page.total;
 	facets = f;
@@ -70,8 +83,10 @@ try {
 
 // The whole collection's size — every sport count sums to it, since the
 // facet is built off the same top-level, non-deleted rows the filters run
-// over. Free: no extra query beyond the facets already fetched above.
-const collectionTotal = facets.sports.reduce((sum, s) => sum + s.count, 0);
+// over. Free: no extra query beyond the facets already fetched above. A
+// visitor has no facets, and no filters either, so their `total` is already
+// the whole collection.
+const collectionTotal = isOwner ? facets.sports.reduce((sum, s) => sum + s.count, 0) : total;
 const hasMore = total > rows.length;
 const num = (n: number) => n.toLocaleString('en-US');
 
@@ -224,7 +239,13 @@ const scopeDummy: ActivityCardRow = {
 			</div>
 		</header>
 
-		<div class="toolbar">
+		<!-- Owner only: with no facets there is nothing in the panel to draw and
+		     nothing but sport and date the server would honour anyway. Hidden
+		     rather than removed so the client script below — which wires the
+		     sort, the chips and the sliders on load — still finds every node it
+		     expects instead of dying on the first null and taking the infinite
+		     scroll down with it. -->
+		<div class="toolbar" hidden={!isOwner}>
 			<div class="sortby">
 				<label for="sort" class="sortby__label">Sort</label>
 				<select id="sort">
@@ -601,7 +622,12 @@ const scopeDummy: ActivityCardRow = {
 			font-style: normal;
 		}
 
-		.panel {
+		/* .toolbar is display:flex, which beats the `hidden` attribute's UA rule —
+	   so the visitor view needs this to actually hide it. */
+	.toolbar[hidden] {
+		display: none;
+	}
+	.panel {
 			background: #f8fbfd;
 			border: 1px solid #c9d4dc;
 			border-radius: 12px;
@@ -1407,18 +1433,48 @@ const scopeDummy: ActivityCardRow = {
 			return node;
 		}
 
+		/** The card's palette, which every .ac rule reads through. */
+		function setAlpine(node: HTMLElement): void {
+			node.style.setProperty('--sky', ALPINE.sky);
+			node.style.setProperty('--snow', ALPINE.snow);
+			node.style.setProperty('--granite', ALPINE.granite);
+			node.style.setProperty('--granite-soft', ALPINE.graniteSoft);
+			node.style.setProperty('--lake', ALPINE.lake);
+			node.style.setProperty('--lake-deep', ALPINE.lakeDeep);
+			node.style.setProperty('--larch', ALPINE.larch);
+			node.style.setProperty('--scree', ALPINE.scree);
+		}
+
 		function buildRow(a: ApiActivity): HTMLElement {
 			const wrap = el('div', 'row-item', pageScope);
+			// Mirrors ActivityCard.astro's redacted branch — a private activity
+			// seen by a visitor is a sport glyph in a <div>, not a link to a page
+			// that would 404. The API has already emptied every other field; this
+			// only has to agree with it about what to draw.
+			if (a.redacted) {
+				const box = el('div', 'ac ac--row ac--redacted', cardScope);
+				setAlpine(box);
+				box.setAttribute('aria-label', sportMeta(a.sport).label);
+				box.title = sportMeta(a.sport).label;
+				const rface = el('div', 'ac__face', cardScope);
+				const rsvg = svgEl('svg', cardScope) as unknown as SVGSVGElement;
+				rsvg.setAttribute('class', 'ac__redacted-mark');
+				rsvg.setAttribute('viewBox', '0 0 24 24');
+				rsvg.setAttribute('fill', 'none');
+				rsvg.setAttribute('stroke', 'currentColor');
+				rsvg.setAttribute('stroke-width', '1.5');
+				rsvg.setAttribute('aria-hidden', 'true');
+				const rpath = svgEl('path', cardScope);
+				rpath.setAttribute('d', sportIcon(a.sport));
+				rsvg.appendChild(rpath);
+				rface.appendChild(rsvg as unknown as Node);
+				box.appendChild(rface);
+				wrap.appendChild(box);
+				return wrap;
+			}
 			const card = el('a', 'ac ac--row', cardScope) as HTMLAnchorElement;
 			card.href = `/activities/${a.id}`;
-			card.style.setProperty('--sky', ALPINE.sky);
-			card.style.setProperty('--snow', ALPINE.snow);
-			card.style.setProperty('--granite', ALPINE.granite);
-			card.style.setProperty('--granite-soft', ALPINE.graniteSoft);
-			card.style.setProperty('--lake', ALPINE.lake);
-			card.style.setProperty('--lake-deep', ALPINE.lakeDeep);
-			card.style.setProperty('--larch', ALPINE.larch);
-			card.style.setProperty('--scree', ALPINE.scree);
+			setAlpine(card);
 
 			const face = el('div', 'ac__face', cardScope);
 			if (a.route_path) {

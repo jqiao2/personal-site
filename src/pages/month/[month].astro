@@ -42,20 +42,33 @@ import {
 	weekRows,
 } from '../../lib/share-card';
 import { listJournalMonths } from '../../lib/journal-months';
+import { requireOwner } from '../../lib/auth';
 
 // The books query runs on the service-role client (the reading tables have RLS
 // with no policies), so this can only ever be a request-time render.
 export const prerender = false;
 
+// OWNER ONLY, and more so than the per-section month pages: this is all four
+// logs on one sheet — where they ate, what they read, what they watched and
+// the routes they rode, day by day for a month. The single-section versions
+// already gate (films, books, restaurants, activities); this one is their
+// union and has to gate at least as hard.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
 const key = Astro.params.month ?? '';
 if (!parseMonthKey(key)) return Astro.redirect('/month');
 
 // Four independent round trips; nothing here needs anything from the others.
+// `true` on the activities call is isOwner — unredacted, which the gate above
+// has just established. Without it every activity arrives stripped to a sport
+// and a date, since 0043 made them private by default.
 const [watches, reading, visits, activities, months] = await Promise.all([
 	listMonthWatches(key),
 	getReadingMonth(key),
 	listMonthVisits(key),
-	listActivitiesForMonth(key),
+	listActivitiesForMonth(key, true),
 	listJournalMonths(),
 ]);
 
@@ -63,7 +76,11 @@ const items = [
 	...filmItems(watches),
 	...bookItems(reading.days, reading.books),
 	...mealItems(visits),
-	...activityItems(activities),
+	// The one editorial filter on this page: activities the owner has ticked
+	// "hide from the month in review" (0044). Applied here rather than in the
+	// query so the column stays a /month concern and nothing else has to know
+	// about it.
+	...activityItems(activities.filter((a) => !a.hide_from_review)),
 ];
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));

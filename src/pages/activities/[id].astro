@@ -42,6 +42,7 @@ import {
 	thresholdsOn,
 	setFavoriteRank,
 	updateActivity,
+	deleteActivity,
 	listGear,
 	type ActivityLap,
 	type ActivityRow,
@@ -88,6 +89,11 @@ if (Astro.request.method === 'POST') {
 		if (rank == null || (Number.isInteger(rank) && rank >= 1 && rank <= 4)) {
 			await setFavoriteRank(id, rank);
 		}
+	} else if (action === 'delete') {
+		// Soft — see deleteActivity. The redirect goes to the index rather than
+		// back here, because "here" is now a 404.
+		await deleteActivity(id);
+		return Astro.redirect('/activities', 303);
 	} else if (action === 'save') {
 		const title = String(form.get('title') ?? '').trim();
 		const sport = String(form.get('sport') ?? '');
@@ -103,6 +109,13 @@ if (Astro.request.method === 'POST') {
 			// filter that reads it, so an unknown one leaves the sport alone.
 			...(SPORTS.includes(sport as (typeof SPORTS)[number]) ? { sport } : {}),
 			gearId: Number.isInteger(Number(gearRaw)) && gearRaw !== '' ? Number(gearRaw) : null,
+			// A checkbox that isn't ticked isn't submitted, so "public" is the
+			// absence of the field rather than a value — which is the right way
+			// round here: a malformed post publishes nothing.
+			private: form.get('private') !== 'public',
+			// Same unticked-means-absent shape as `private` above, but the plain
+			// way round: the box says "hide", so ticked is true.
+			hideFromReview: form.get('hide_from_review') === 'hide',
 			// Comma-separated in, deduped and trimmed here — the input is a
 			// sentence to type, the column is a set.
 			tags: [
@@ -122,7 +135,11 @@ const nav = siteNav(Astro.url.pathname);
 const isOwner = await requireOwner(Astro.cookies);
 const activity = validId ? await getActivity(id) : null;
 
-if (!activity) {
+// A private activity does not exist for anyone but the owner — not as a stub,
+// not as a "log in to see this", which would itself confirm there was
+// something here on this date. It falls into the same 404 as an id that was
+// never used, and the copy in that 404 already says exactly this.
+if (!activity || (activity.private && !isOwner)) {
 	return new Response(
 		`<!doctype html><html lang="en"><head><meta charset="utf-8">
 		<meta name="viewport" content="width=device-width,initial-scale=1">
@@ -153,7 +170,7 @@ const [streams, laps, parent, children, thresholds] = await Promise.all([
 	getActivityStreams(activity.id),
 	listActivityLaps(activity.id),
 	activity.parent_id ? getActivity(activity.parent_id) : Promise.resolve(null),
-	activity.parent_id ? Promise.resolve([]) : listActivityChildren(activity.id),
+	activity.parent_id ? Promise.resolve([]) : listActivityChildren(activity.id, isOwner),
 	thresholdsOn(activity.local_date),
 ]);
 
@@ -489,6 +506,7 @@ const exWord = exertionLabel(activity.exertion);
 						</form>
 					)
 				}
+				{isOwner && !editing && !activity.private && <span class="head__public" title="Visible to everyone">Public</span>}
 				{isOwner && !editing && <a class="head__fav-btn" href="?edit=1">Edit</a>}
 			</div>
 
@@ -543,6 +561,21 @@ const exWord = exertionLabel(activity.exertion);
 							</label>
 						</div>
 
+						<label class="edit__toggle">
+							<input type="checkbox" name="private" value="public" checked={!activity.private} />
+							<span>Public — anyone can see this activity, its route and its numbers</span>
+						</label>
+
+						<label class="edit__toggle">
+							<input
+								type="checkbox"
+								name="hide_from_review"
+								value="hide"
+								checked={activity.hide_from_review}
+							/>
+							<span>Hide from the month in review</span>
+						</label>
+
 						<label class="edit__field">
 							<span class="edit__label">Tags</span>
 							<input
@@ -557,7 +590,16 @@ const exWord = exertionLabel(activity.exertion);
 						<div class="edit__actions">
 							<button type="submit" class="edit__save">Save</button>
 							<a class="edit__cancel" href={Astro.url.pathname}>Cancel</a>
+							{/* Submits the sibling form below, not this one: the edit form
+							    carries a hidden action=save that a second value can't
+							    override (formData.get returns the first). The `form`
+							    attribute is how HTML lets the button sit here anyway. */}
+							<button type="submit" form="delete-activity" class="edit__delete">Delete</button>
 						</div>
+					</form>
+
+					<form method="POST" id="delete-activity" hidden>
+						<input type="hidden" name="action" value="delete" />
 					</form>
 				) : (
 					<>
@@ -818,6 +860,19 @@ const exWord = exertionLabel(activity.exertion);
 	</div>
 </ActivityLayout>
 
+{/* The only client JavaScript on this page. Everything else here is a plain
+    GET/POST on purpose (see the note above the POST handler); a confirm is the
+    one thing HTML has no element for. It's an enhancement rather than a gate —
+    with JS off the delete still posts, and the server is what actually checks
+    the owner cookie. */}
+<script>
+	document.getElementById('delete-activity')?.addEventListener('submit', (e) => {
+		if (!window.confirm('Delete this activity? It stops appearing anywhere on the site.')) {
+			e.preventDefault();
+		}
+	});
+</script>
+
 <style>
 	.page {
 		max-width: 1100px;
@@ -898,6 +953,22 @@ const exWord = exertionLabel(activity.exertion);
 		margin-left: auto;
 		display: inline-flex;
 		gap: 0.25rem;
+	}
+	.head__public {
+		font-size: 11px;
+		letter-spacing: 0.6px;
+		text-transform: uppercase;
+		color: #d99a3a;
+		border: 1px solid #d99a3a;
+		border-radius: 999px;
+		padding: 2px 8px;
+	}
+	.edit__toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
+		color: #6b7b88;
 	}
 	.head__fav-btn {
 		display: inline-block;
@@ -1036,6 +1107,26 @@ const exWord = exertionLabel(activity.exertion);
 		font-size: 0.85rem;
 		color: #6b7b88;
 		text-decoration: none;
+	}
+
+	/* Pushed to the far end, away from Save — the two buttons sit in the same
+	   row and only one of them is reversible. */
+	.edit__delete {
+		margin-left: auto;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.85rem;
+		color: #a8323a;
+		background: none;
+		border: 1px solid #e0c3c5;
+		border-radius: 6px;
+		padding: 0.4rem 1.1rem;
+		cursor: pointer;
+	}
+
+	.edit__delete:hover {
+		background: #a8323a;
+		border-color: #a8323a;
+		color: #fff;
 	}
 	.edit__cancel:hover {
 		color: #3d4a55;
