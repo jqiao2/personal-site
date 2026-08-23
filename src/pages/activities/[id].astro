@@ -102,6 +102,10 @@ if (Astro.request.method === 'POST') {
 			// filter that reads it, so an unknown one leaves the sport alone.
 			...(SPORTS.includes(sport as (typeof SPORTS)[number]) ? { sport } : {}),
 			gearId: Number.isInteger(Number(gearRaw)) && gearRaw !== '' ? Number(gearRaw) : null,
+			// A checkbox that isn't ticked isn't submitted, so "public" is the
+			// absence of the field rather than a value — which is the right way
+			// round here: a malformed post publishes nothing.
+			private: form.get('private') !== 'public',
 			// Comma-separated in, deduped and trimmed here — the input is a
 			// sentence to type, the column is a set.
 			tags: [
@@ -121,7 +125,11 @@ const nav = siteNav(Astro.url.pathname);
 const isOwner = await requireOwner(Astro.cookies);
 const activity = validId ? await getActivity(id) : null;
 
-if (!activity) {
+// A private activity does not exist for anyone but the owner — not as a stub,
+// not as a "log in to see this", which would itself confirm there was
+// something here on this date. It falls into the same 404 as an id that was
+// never used, and the copy in that 404 already says exactly this.
+if (!activity || (activity.private && !isOwner)) {
 	return new Response(
 		`<!doctype html><html lang="en"><head><meta charset="utf-8">
 		<meta name="viewport" content="width=device-width,initial-scale=1">
@@ -152,7 +160,7 @@ const [streams, laps, parent, children, thresholds] = await Promise.all([
 	getActivityStreams(activity.id),
 	listActivityLaps(activity.id),
 	activity.parent_id ? getActivity(activity.parent_id) : Promise.resolve(null),
-	activity.parent_id ? Promise.resolve([]) : listActivityChildren(activity.id),
+	activity.parent_id ? Promise.resolve([]) : listActivityChildren(activity.id, isOwner),
 	thresholdsOn(activity.local_date),
 ]);
 
@@ -471,6 +479,7 @@ const exWord = exertionLabel(activity.exertion);
 						</form>
 					)
 				}
+				{isOwner && !editing && !activity.private && <span class="head__public" title="Visible to everyone">Public</span>}
 				{isOwner && !editing && <a class="head__fav-btn" href="?edit=1">Edit</a>}
 			</div>
 
@@ -524,6 +533,11 @@ const exWord = exertionLabel(activity.exertion);
 								</select>
 							</label>
 						</div>
+
+						<label class="edit__toggle">
+							<input type="checkbox" name="private" value="public" checked={!activity.private} />
+							<span>Public — anyone can see this activity, its route and its numbers</span>
+						</label>
 
 						<label class="edit__field">
 							<span class="edit__label">Tags</span>
@@ -878,6 +892,22 @@ const exWord = exertionLabel(activity.exertion);
 	}
 	.head__fav-form {
 		margin-left: auto;
+	}
+	.head__public {
+		font-size: 11px;
+		letter-spacing: 0.6px;
+		text-transform: uppercase;
+		color: #d99a3a;
+		border: 1px solid #d99a3a;
+		border-radius: 999px;
+		padding: 2px 8px;
+	}
+	.edit__toggle {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 13px;
+		color: #6b7b88;
 	}
 	.head__fav-btn {
 		display: inline-block;

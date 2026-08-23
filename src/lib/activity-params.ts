@@ -25,6 +25,7 @@ import { siteYear } from './day';
 import { exertionLabel } from './activity-tokens';
 import { sportMeta } from './sports';
 import { supabasePublic } from './supabase';
+import { visitorQuery } from './activity-privacy';
 import {
 	isActivitySort,
 	listActivities,
@@ -170,12 +171,13 @@ const MEASURED_FETCH_CAP = 5000; // headroom over the whole collection today (~1
 export async function fetchActivityPage(
 	query: ActivityFilterQuery,
 	page: { limit: number; offset: number },
+	isOwner = false,
 ): Promise<{ rows: ActivityListRow[]; total: number }> {
-	const { measuredOnly, ...rest } = query;
+	const { measuredOnly, ...rest } = isOwner ? query : visitorQuery(query);
 	if (!measuredOnly) {
-		return listActivities({ ...rest, limit: page.limit, offset: page.offset });
+		return listActivities({ ...rest, limit: page.limit, offset: page.offset }, isOwner);
 	}
-	const { rows: all } = await listActivities({ ...rest, limit: MEASURED_FETCH_CAP, offset: 0 });
+	const { rows: all } = await listActivities({ ...rest, limit: MEASURED_FETCH_CAP, offset: 0 }, isOwner);
 	const measured = all.filter((r) => r.exertion_confidence === 'measured');
 	return {
 		rows: measured.slice(page.offset, page.offset + page.limit),
@@ -194,6 +196,16 @@ export interface ActivityBounds {
 	min: number;
 	max: number;
 }
+
+export const EMPTY_FACETS: ActivityFacetsPayload = {
+	sports: [],
+	gear: [],
+	places: [],
+	distanceM: null,
+	durationS: null,
+	elevationM: null,
+	exertion: null,
+};
 
 export interface ActivityFacetsPayload {
 	sports: { sport: string; count: number }[];
@@ -238,9 +250,13 @@ async function columnBounds(column: string): Promise<ActivityBounds | null> {
 	}
 }
 
-export async function fetchActivityFacets(): Promise<ActivityFacetsPayload> {
+export async function fetchActivityFacets(isOwner = false): Promise<ActivityFacetsPayload> {
+	// Every bound below is a private activity's number said out loud — the
+	// longest ride, the biggest day of climbing. A visitor gets the empty
+	// payload, which draws as a panel with no chips and no sliders.
+	if (!isOwner) return EMPTY_FACETS;
 	const [facets, gear, distanceM, durationS, elevationM, exertion] = await Promise.all([
-		listActivityFacets(),
+		listActivityFacets(isOwner),
 		listGear(),
 		columnBounds('distance_m'),
 		columnBounds('moving_seconds'),

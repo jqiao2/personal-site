@@ -94,9 +94,11 @@ const nav = siteNav(Astro.url.pathname);
 					<a class="navrow navrow--link" href="/films/stats">
 						<span>Stats</span><span class="navrow__n">→</span>
 					</a>
-					<a class="navrow navrow--link navrow--last" href="/films/month">
-						<span>The month in film</span><span class="navrow__n">→</span>
-					</a>
+					{isOwner && (
+						<a class="navrow navrow--link navrow--last" href="/films/month">
+							<span>The month in film</span><span class="navrow__n">→</span>
+						</a>
+					)}
 				</nav>
 			</aside>
 

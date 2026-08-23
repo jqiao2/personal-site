@@ -251,9 +251,11 @@ const hasActivity = days.length > 0;
 						{
 							hasActivity && (
 								<div class="sec-head__tools">
-									<a class="month-link" href="/books/month">
-										Month in reading →
-									</a>
+									{isOwner && (
+										<a class="month-link" href="/books/month">
+											Month in reading →
+										</a>
+									)}
 									<div class="pills">
 										<button
 											type="button"

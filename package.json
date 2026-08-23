@@ -17,7 +17,8 @@
     "activities:import": "node --import ./scripts/ts-hook.mjs --env-file=.env scripts/import-strava-archive.mjs",
     "activities:add": "node --import ./scripts/ts-hook.mjs --env-file=.env scripts/add-activities.mjs",
     "activities:test": "node --import ./scripts/ts-hook.mjs scripts/ingest.test.mjs",
-    "gear:test": "node --import ./scripts/ts-hook.mjs scripts/gear.test.mjs"
+    "gear:test": "node --import ./scripts/ts-hook.mjs scripts/gear.test.mjs",
+    "privacy:test": "node --import ./scripts/ts-hook.mjs scripts/privacy.test.mjs"
   },
   "dependencies": {
     "@astrojs/vercel": "^11.0.4",

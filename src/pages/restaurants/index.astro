@@ -53,14 +53,19 @@ const navRows = [
 	{ label: 'Diary', href: '/restaurants/diary', count: num(stats.visits) },
 	{ label: 'To try', href: '/restaurants/to-try', count: num(stats.toTry) },
 	{ label: 'Stats', href: '/restaurants/stats', count: '—' },
-	{
-		label: 'Month in review',
-		href: stats.latestMonth ? `/restaurants/month/${stats.latestMonth}` : '/restaurants/month',
-		count: stats.latestMonth
-			? new Date(Number(stats.latestMonth.slice(0, 4)), Number(stats.latestMonth.slice(5, 7)) - 1, 1)
-					.toLocaleDateString('en-US', { month: 'short' })
-			: '—',
-	},
+	// Owner only, like the page it points at.
+	...(isOwner
+		? [
+				{
+					label: 'Month in review',
+					href: stats.latestMonth ? `/restaurants/month/${stats.latestMonth}` : '/restaurants/month',
+					count: stats.latestMonth
+						? new Date(Number(stats.latestMonth.slice(0, 4)), Number(stats.latestMonth.slice(5, 7)) - 1, 1)
+								.toLocaleDateString('en-US', { month: 'short' })
+						: '—',
+				},
+			]
+		: []),
 ];
 ---
 

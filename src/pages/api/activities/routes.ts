@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { listRoutePolylines } from '../../../lib/activities';
+import { requireOwner } from '../../../lib/auth';
 import { apiError } from '../../../lib/http';
 
 export const prerender = false;
@@ -21,15 +22,21 @@ export const prerender = false;
 const TTL_MS = 10 * 60 * 1000;
 let cached: { at: number; body: string } | null = null;
 
-export const GET: APIRoute = async () => {
+// OWNER ONLY, and the cache above is why the check has to be the first thing
+// in the handler rather than a filter inside listRoutePolylines: one body is
+// memoised per instance, so if a visitor's request could ever populate it the
+// next reader would be served whichever version happened to be built first.
+// The header is private/no-store for the same reason, one layer out.
+export const GET: APIRoute = async ({ cookies }) => {
+	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	try {
 		if (!cached || Date.now() - cached.at > TTL_MS) {
-			cached = { at: Date.now(), body: JSON.stringify({ routes: await listRoutePolylines() }) };
+			cached = { at: Date.now(), body: JSON.stringify({ routes: await listRoutePolylines(true) }) };
 		}
 		return new Response(cached.body, {
 			headers: {
 				'content-type': 'application/json; charset=utf-8',
-				'cache-control': 'public, max-age=300, stale-while-revalidate=3600',
+				'cache-control': 'private, no-store',
 			},
 		});
 	} catch (e) {

@@ -53,6 +53,10 @@ export interface ActivityRow extends CardStatRow {
 	route_path: string | null;
 	favorite_rank?: number | null;
 	start_place?: string | null;
+	/** Set by activities.ts's `redactActivities` — this is a private activity
+	 * being shown to a visitor, and every field above it except `sport` has
+	 * already been emptied. See the redacted branch below. */
+	redacted?: boolean;
 }
 
 interface Props {
@@ -64,9 +68,13 @@ const { activity: a, size = 'tile' } = Astro.props;
 
 const label = sportMeta(a.sport).label;
 const glyph = sportIcon(a.sport);
-const hasRoute = !!a.route_path;
-const stats = cardStats(a, size === 'cell' ? 2 : 3);
-const face = hasRoute ? null : noGpsStats(a);
+const hasRoute = !a.redacted && !!a.route_path;
+const stats = a.redacted ? [] : cardStats(a, size === 'cell' ? 2 : 3);
+const face = a.redacted || hasRoute ? null : noGpsStats(a);
+
+// A redacted card has nowhere to go, so it isn't a link. Astro renders a
+// dynamic tag name from a capitalised variable.
+const Element = a.redacted ? 'div' : 'a';
 
 // Pull the route's start point out of "M x y …" to place the start dot —
 // route_path is always emitted by route-shape.ts in this exact form.
@@ -74,9 +82,18 @@ const startMatch = a.route_path?.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
 const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) } : null;
 ---
 
-<a
-	class:list={['ac', `ac--${size}`]}
-	href={`/activities/${a.id}`}
+<!-- REDACTED CARD. A private activity, seen by a visitor: the sport glyph and
+     nothing else — no title, no stats, no route. It is a <div> and not an <a>
+     because the detail page it would link to 404s for this reader, and a link
+     that is always a dead end is worse than no link. The sport label lives in
+     aria-label/title rather than on the face, so a screen reader gets the one
+     fact the card is making and a sighted reader gets the same fact as a
+     glyph. -->
+<Element
+	class:list={['ac', `ac--${size}`, a.redacted && 'ac--redacted']}
+	href={a.redacted ? undefined : `/activities/${a.id}`}
+	aria-label={a.redacted ? label : undefined}
+	title={a.redacted ? label : undefined}
 	style={{
 		'--sky': ALPINE.sky,
 		'--snow': ALPINE.snow,
@@ -88,6 +105,14 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		'--scree': ALPINE.scree,
 	}}
 >
+	{a.redacted ? (
+		<div class="ac__face">
+			<svg class="ac__redacted-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+				<path d={glyph} />
+			</svg>
+		</div>
+	) : (
+	<Fragment>
 	<div class="ac__face">
 		{
 			hasRoute ? (
@@ -140,7 +165,9 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 			))}
 		</div>
 	</div>
-</a>
+	</Fragment>
+	)}
+</Element>
 
 <style>
 	.ac {
@@ -257,6 +284,37 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	}
 	.ac__stats-sep {
 		color: var(--scree);
+	}
+
+	/* Redacted: the whole card is the face, and the face is one glyph. No meta
+	   block, so the card is square-ish at every size instead of leaving an
+	   empty strip where the title used to be. */
+	.ac--redacted .ac__face {
+		border-bottom: none;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+	.ac--redacted:hover {
+		border-color: var(--scree);
+		transform: none;
+	}
+	.ac__redacted-mark {
+		width: 40%;
+		max-width: 2.2rem;
+		height: auto;
+		color: var(--granite-soft);
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.ac--redacted.ac--row {
+		/* No meta block to fill the rest of the line, so the card is its face
+		   rather than a 120px glyph with a metre of empty card after it. */
+		width: fit-content;
+	}
+	.ac--redacted.ac--row .ac__face {
+		border-right: none;
+		width: 88px;
 	}
 
 	/* tile — the landing page's top-four, largest of the three. */

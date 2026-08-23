@@ -12,12 +12,12 @@
 // empty state below, not a 500.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard from '../../components/ActivityCard.astro';
+import { requireOwner } from '../../lib/auth';
 import { siteNav } from '../../lib/nav';
 import { listActivityDays, listFavoriteActivities, getActivityStats } from '../../lib/activities';
 import { groupIntoWeeks, type ActivityWeek } from '../../lib/activity-week';
 import { formatStat } from '../../lib/sports';
 import { ALPINE } from '../../lib/activity-tokens';
-import { siteYear } from '../../lib/day';
 
 export const prerender = false;
 
@@ -51,11 +51,17 @@ let stats: Awaited<ReturnType<typeof getActivityStats>> = {
 };
 /** Set when the query layer could not be reached at all — see the catch below. */
 let unreachable = false;
+// WHAT A VISITOR GETS. Activities are private by default (migration 0043), so
+// for anyone but the owner every card below comes back redacted to a sport
+// glyph, and the totals come back zeroed. The grid keeps its shape — a
+// visitor can see that there were three days on the bike last week — and
+// stops exactly there: no title, no distance, no route, no link through.
+const isOwner = await requireOwner(Astro.cookies);
 try {
 	[favorites, days, stats] = await Promise.all([
-		listFavoriteActivities(4),
-		listActivityDays({ limit: DAYS_FETCH_LIMIT }),
-		getActivityStats(),
+		listFavoriteActivities(4, isOwner),
+		listActivityDays({ limit: DAYS_FETCH_LIMIT, isOwner }),
+		getActivityStats(isOwner),
 	]);
 } catch (err) {
 	// AN UNREACHABLE LOG IS NOT AN EMPTY LOG, and the page must not say it is.
@@ -82,8 +88,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 // activity (getActivityStats' doc comment) — summing it is the one place this
 // page needs an all-time activity count, and it's cheaper than a second query.
 const totalActivities = Object.values(stats.bySportFamily).reduce((a, b) => a + (b ?? 0), 0);
-const rideCount = stats.bySportFamily.bike ?? 0;
-const yearStart = `${siteYear()}-01-01`;
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -136,28 +140,28 @@ function weekStatText(t: ActivityWeek['totals']) {
 				<!-- Sidebar -->
 				<aside class="side">
 					<div class="brand">Jason's<br />activity log</div>
-					<div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>
+					{isOwner && <div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>}
 
 					<div class="side__rule"></div>
 					<nav class="side__nav">
-						<a class="navrow navrow--link" href="/activities/all">
-							<span>All activities</span><span class="navrow__n">{num(totalActivities)}</span>
+						<a class:list={['navrow', 'navrow--link', !isOwner && 'navrow--last']} href="/activities/all">
+							<span>All activities</span>{isOwner && <span class="navrow__n">{num(totalActivities)}</span>}
 						</a>
-						<a class="navrow navrow--link" href="/activities/all?sports=ride,gravel_ride,mountain_bike,virtual_ride">
-							<span>Rides</span><span class="navrow__n">{num(rideCount)}</span>
-						</a>
-						<a class="navrow navrow--link" href={`/activities/all?dateFrom=${yearStart}&sort=elevation`}>
-							<span>This year's climbing</span><span class="navrow__n">→</span>
-						</a>
-						<a class="navrow navrow--link" href="/activities/heatmap">
-							<span>Heatmap</span><span class="navrow__n">→</span>
-						</a>
-						<a class="navrow navrow--link" href="/activities/gear">
-							<span>Gear</span><span class="navrow__n">→</span>
-						</a>
-						<a class="navrow navrow--link navrow--last" href="/activities/month">
-							<span>The month in review</span><span class="navrow__n">→</span>
-						</a>
+						{isOwner && (
+							<a class="navrow navrow--link" href="/activities/heatmap">
+								<span>Heatmap</span><span class="navrow__n">→</span>
+							</a>
+						)}
+						{isOwner && (
+							<a class="navrow navrow--link" href="/activities/gear">
+								<span>Gear</span><span class="navrow__n">→</span>
+							</a>
+						)}
+						{isOwner && (
+							<a class="navrow navrow--link navrow--last" href="/activities/month">
+								<span>The month in review</span><span class="navrow__n">→</span>
+							</a>
+						)}
 					</nav>
 				</aside>
 
@@ -207,7 +211,7 @@ function weekStatText(t: ActivityWeek['totals']) {
 									<div class="week">
 										<div class="week__head">
 											<span class="week__span figure">{week.label}</span>
-											{weekHasActivity ? (
+											{!isOwner ? null : weekHasActivity ? (
 												<div class="week__totals figure">
 													<span>{t.distance}</span>
 													<span class="dot">·</span>

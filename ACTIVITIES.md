@@ -175,10 +175,41 @@ That difference decides most of the design:
 | `/activities` | Landing. Top-four favourites, then a reverse-chronological Mon–Sun **week** calendar; each day is a vertical list of that day's activities. |
 | `/activities/all` | Every activity, reverse chronological, with filters and sorts. |
 | `/activities/[id]` | One activity. Interactive map first; the stats shown depend on the sport. |
-| `/activities/month` | Index of months. |
-| `/activities/month/[month]` | The month in activities — a share card, same family as `/films/month/[month]`. |
+| `/activities/heatmap` | Owner-only. Every outdoor track on one map. |
+| `/activities/month` | Owner-only. Index of months. |
+| `/activities/month/[month]` | Owner-only. The month in activities — a share card, same family as `/films/month/[month]`. |
 | `/activities/import` | Owner-only. Strava archive import + file drop. |
-| `/api/activities/**` | Reads and writes. Reads public, writes owner-only. |
+| `/api/activities/list` | Reads, redacted for a visitor exactly as the pages are. |
+| `/api/activities/facets`, `/api/activities/routes` | Owner-only — both describe the private collection outright. |
+| `/api/activities/**` (writes) | Owner-only. |
+
+### Privacy
+
+**Every activity is private by default** (`activities.private`, migration
+0043 — `not null default true`, which backfilled every row that existed before
+it). Private means owner-only: a visitor sees the activity in the day grid as a
+**bare sport icon** — no title, no stats, no route, and no link, because
+`/activities/[id]` 404s for them — and gets nothing else anywhere. `private =
+false` opts one activity back into the full public card, from the checkbox in
+its own edit form.
+
+The rule lives in `src/lib/activity-privacy.ts` and nowhere else, and it has
+two halves because there are two ways to leak a private activity:
+
+- `redactActivities` — the **row**. Everything but sport and `local_date` is
+  nulled before it leaves the data layer, so the three renderers (the .astro
+  card, the DOM nodes `/activities/all` pages in, the JSON the list API hands
+  out) cannot disagree about it and a fourth one can't forget.
+- `visitorQuery` — the **question**. A filter is answered about rows the reader
+  can't see: `?distmin=100000` returns the icons of every ride over 100 km, and
+  moving the bound reads the private distance to any precision you like. So a
+  visitor's query keeps sport, date range and paging, is forced back to date
+  order, and everything else is dropped server-side.
+
+Both fail closed: `isOwner` defaults to `false` at every call site, and only an
+explicit `private === false` publishes — a database behind on migration 0043
+redacts everything rather than nothing. `scripts/privacy.test.mjs`
+(`npm run privacy:test`) is the runnable check on all of it.
 
 `Activities` is added to `NAV_LINKS` in `src/lib/nav.ts`, after `Restaurants`.
 
@@ -379,6 +410,7 @@ leg                 smallint               -- order within a multisport parent (
 title               text not null          -- owner's, or the device's default
 notes               text                   -- the owner's own writing
 private_notes       text                   -- never rendered publicly
+private             boolean not null default true  -- owner-only unless explicitly false (0043). See §1's Privacy.
 
 started_at          timestamptz not null   -- the instant
 local_date          date not null          -- the calendar day WHERE IT HAPPENED. Grid keys off this.
