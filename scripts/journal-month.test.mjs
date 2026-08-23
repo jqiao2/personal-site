@@ -10,20 +10,22 @@ import assert from 'node:assert/strict';
 import {
 	BOOK_BOOST,
 	FILM_MINUTES,
+	ASPECT_MAX,
+	ASPECT_MIN,
 	MARK_MAX,
 	MARK_MIN,
+	PRINT_ASPECT,
 	MEAL_MINUTES,
 	SNACK_MINUTES,
 	activityItems,
 	bookItems,
 	buildCells,
 	filmItems,
-	headline,
 	isSnack,
-	clusterScale,
+	dayLayer,
+	markBox,
 	markSize,
 	mealItems,
-	summarise,
 } from '../src/lib/journal-month.ts';
 
 // 1. Area, not width. Four times the minutes is twice the mark — the whole
@@ -36,7 +38,7 @@ assert.ok(Math.abs(big / small - 2) < 0.06, `4x time should be ~2x side, got ${b
 //    a ten-hour day doesn't evict the rest of its cluster.
 assert.equal(markSize(0), MARK_MIN);
 assert.equal(markSize(1), MARK_MIN);
-assert.equal(markSize(600), MARK_MAX);
+assert.equal(markSize(900), MARK_MAX);
 assert.ok(markSize(MEAL_MINUTES) > MARK_MIN && markSize(MEAL_MINUTES) < MARK_MAX);
 
 // 3. Ordering across the four tracks at their real weights: a snack is the
@@ -79,18 +81,23 @@ assert.notEqual(secret.title, '');
 // 7. Activities use moving time when they have it, elapsed when they don't —
 //    a ride with a long coffee stop was a ride, not three hours.
 const moves = activityItems([
-	{ id: 1, sport: 'ride', title: 'Bear Mtn', local_date: '2026-03-04', moving_seconds: 7200, elapsed_seconds: 10800 },
-	{ id: 2, sport: 'run', title: 'Loop', local_date: '2026-03-05', moving_seconds: null, elapsed_seconds: 1800 },
+	{ id: 1, sport: 'ride', title: 'Bear Mtn', local_date: '2026-03-04', moving_seconds: 7200, elapsed_seconds: 10800, route_path: 'M6 6 L94 94' },
+	{ id: 2, sport: 'swim', title: 'Pool', local_date: '2026-03-05', moving_seconds: null, elapsed_seconds: 1800, route_path: null },
 ]);
 assert.equal(moves[0].minutes, 120);
 assert.equal(moves[1].minutes, 30);
-assert.ok(moves[0].icon, 'an activity always has a glyph to draw');
+// A ride with GPS draws its route and nothing else; a pool swim has no route to
+// draw and falls back to its sport glyph. Never both — they are two faces.
+assert.equal(moves[0].route, 'M6 6 L94 94');
+assert.equal(moves[0].icon, null);
+assert.equal(moves[1].route, null);
+assert.ok(moves[1].icon, 'a no-GPS activity still has a face');
 
 // 8. A day is a cluster of every track at once, biggest first — the one thing
 //    this card does that none of the other four can.
 const items = [
 	...filmItems([
-		{ id: 9, watched_date: '2026-03-04', tmdb_id: 1, title: 'Chungking Express', release_year: 1994, poster_path: '/a.jpg', runtime: 102, rating: 4.5 },
+	{ id: 9, watched_date: '2026-03-04', tmdb_id: 1, title: 'Chungking Express', release_year: 1994, poster_path: '/a.jpg', runtime: 102, rating: 4.5 },
 	]),
 	...mealItems([
 		{ id: 7, visited_on: '2026-03-04', restaurant_name: 'Fan Fried Rice', cuisines: ['Chinese'], tags: [], neighborhood: 'Chinatown', photos: [] },
@@ -127,29 +134,36 @@ assert.ok(cells.some((c) => c.outside && c.marks.length === 0));
 // An item from another month never lands in this grid.
 assert.equal(buildCells('2026-04', items).every((c) => c.marks.length === 0), true);
 
-// 10. The summary is one figure per track, in hours, in TRACKS order.
-const figures = summarise(items);
-assert.deepEqual(figures.map((f) => f.label), ['Films', 'Books', 'Meals', 'Activities']);
-assert.equal(figures[2].value, '1h', '60 + 20 minutes of eating');
-assert.equal(headline(items).days, 1);
+// 11. A mark's box spends its area at the thing's real shape. AREA is the
+//     invariant: a 2:3 poster and a square photograph standing for the same two
+//     hours must cover the same paper, or the card stops meaning what it says.
+const square = markBox(60, 1);
+assert.deepEqual(square, { w: 60, h: 60 });
+const poster = markBox(60, PRINT_ASPECT);
+assert.ok(poster.h > poster.w, 'a poster is taller than it is wide');
+assert.ok(Math.abs(poster.w * poster.h - 60 * 60) / 3600 < 0.02, 'same area as the square');
+const wide = markBox(60, 3 / 2);
+assert.ok(Math.abs(wide.w * wide.h - 3600) / 3600 < 0.02);
+// A panorama is clamped rather than drawn as a splinter, and a missing/zero
+// aspect falls back to square instead of collapsing.
+assert.equal(markBox(60, 12).w / markBox(60, 12).h <= ASPECT_MAX + 0.05, true);
+assert.equal(markBox(60, 0.01).w / markBox(60, 0.01).h >= ASPECT_MIN - 0.05, true);
+assert.deepEqual(markBox(60, 0), { w: 60, h: 60 });
 
-// 11. A busy day shrinks as a whole; an ordinary one doesn't shrink at all.
-//     Shrinking must not reorder or re-rank anything — every ratio inside the
-//     day survives, which is the only reason this is allowed to happen.
-assert.equal(clusterScale([]), 1);
-assert.equal(clusterScale([{ size: 50 }]), 1);
-assert.equal(clusterScale([{ size: 38 }, { size: 22 }]), 1);
-const busy = [{ size: 67 }, { size: 54 }, { size: 53 }, { size: 45 }, { size: 38 }];
-const s = clusterScale(busy);
-assert.ok(s > 0.8 && s < 1, `the busiest day should tighten, not collapse — got ${s}`);
-// The shrunk cluster fits. That day wraps into three rows (67+54 and 53+45 each
-// fill the ~120px width, then 38 alone), and the marks' -3px margins pull each
-// row junction 6px into the one above — so the stack is the three row heights
-// less 12px, against the 137px a cell has inside at the shortest aspect.
-const shrunk = busy.map((m) => m.size * s);
-const stacked = shrunk[0] + shrunk[2] + shrunk[4] - 12;
-assert.ok(stacked <= 137, `three wrapped rows must fit the cell, got ${stacked.toFixed(1)}px`);
-// And a genuinely absurd day still leaves marks big enough to see.
-assert.ok(clusterScale(Array.from({ length: 12 }, () => ({ size: MARK_MAX }))) * MARK_MAX > 8);
+// 12. A film mark carries the print ratio, a plate carries its own, and a
+//     photograph with no recorded size falls back to square.
+const [plate] = mealItems([
+	{ id: 1, visited_on: '2026-03-04', restaurant_name: 'x', cuisines: [], tags: [], neighborhood: null, photos: [{ url: 'https://x/a.jpg', width: 1600, height: 1200 }] },
+]);
+assert.ok(Math.abs(plate.aspect - 4 / 3) < 1e-9);
+const [noshot] = mealItems([
+	{ id: 2, visited_on: '2026-03-04', restaurant_name: 'x', cuisines: [], tags: [], neighborhood: null, photos: [] },
+]);
+assert.equal(noshot.aspect, 1);
+
+// 13. Later days paint over earlier ones, so the spill reads as things stuck in
+//     over the course of the month rather than in an arbitrary order.
+assert.ok(dayLayer(31) > dayLayer(30));
+assert.ok(dayLayer(2) > dayLayer(1));
 
 console.log('journal-month: ok');

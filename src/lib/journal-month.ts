@@ -163,59 +163,66 @@ export function isSnack(fields: {
 /**
  * The mark geometry, in px on the 1080 artboard.
  *
- * `MARK_K` is set so a typical feature film (105 min) draws at ~50px: about a
- * third of a cell, so three ordinary things fit a day without the cluster
- * spilling. `MARK_MIN` is the floor at which a mark is still a picture of
- * something rather than a dot — a 20-minute snack lands just above it.
- * `MARK_MAX` caps the marathon days; past ~4h the mark has already said
- * "this was the day", and letting it grow further just evicts everything else
- * from the square.
+ * `MARK_K` is set so a typical feature film (105 min) draws at ~66px on its
+ * long side, which is half again the width of the ~128px cell it sits in. That
+ * is deliberate: a mark is allowed to spill onto its neighbours (see
+ * `dayLayer`), so the size that reads best is the one a Polaroid actually is
+ * relative to a page's daily square, not the largest one that would fit inside
+ * the lines.
  *
- *   20 min  → 22px    60 min  → 38px    105 min → 50px
- *   180 min → 66px    300+ min → 76px (capped)
+ * `MARK_MIN` is the floor at which a mark is still a picture of something
+ * rather than a dot. `MARK_MAX` caps the marathon days: past ~4½ hours the
+ * mark has already said "this was the day", and a bigger one just buries the
+ * week around it.
+ *
+ *   20 min → 29px    60 min → 50px    105 min → 66px
+ *   180 min → 86px   270+ min → 104px (capped)
  */
-export const MARK_K = 4.9;
-export const MARK_MIN = 22;
-export const MARK_MAX = 76;
+export const MARK_K = 6.4;
+export const MARK_MIN = 26;
+export const MARK_MAX = 104;
 
-/**
- * How much of a cell a day's marks may cover before the cluster is shrunk to
- * fit — see `clusterScale`. A cell on the artboard is ~128px wide and, at the
- * shortest aspect, ~145px tall, less the cluster's 4px inset.
- */
-export const CELL_INNER_AREA = 120 * 137;
-export const INK_BUDGET = 0.66;
-
-/**
- * How far a day's cluster has to shrink to stay inside its square.
- *
- * A busy day is real — five marks on one Saturday is a good Saturday, not a
- * bug — and the marks are already at the sizes the time earned, so the fix
- * cannot be to drop any of them or to cap them individually: both would break
- * the one promise the card makes, that a mark's size is its hours. Shrinking
- * the whole cluster by one factor keeps every ratio inside the day intact and
- * costs only the comparison BETWEEN days, which the cell is too small to carry
- * honestly anyway.
- *
- * Area-based rather than a real packing solve: the marks wrap, overlap and are
- * tilted, so their true footprint isn't computable here, and a budget with a
- * constant in front of it is one knob instead of a layout engine. `INK_BUDGET`
- * is calibrated against the busiest day in the log (five marks, 67px down to
- * 38px), which comes out at ~0.9 — visibly tightened, still a cluster.
- *
- * ponytail: area heuristic, not a packing solve. If a day ever spills, lower
- * INK_BUDGET rather than reaching for a bin-packer.
- */
-export function clusterScale(marks: { size: number }[]): number {
-	const ink = marks.reduce((total, m) => total + m.size * m.size, 0);
-	if (ink === 0) return 1;
-	return Math.min(1, Math.round(Math.sqrt((INK_BUDGET * CELL_INNER_AREA) / ink) * 100) / 100);
-}
-
-/** A mark's side, in artboard px, for `minutes` spent on it. Area ∝ minutes. */
+/** A mark's nominal side, in artboard px, for `minutes` spent on it. This is
+ *  the side of the SQUARE the mark's area has to fill; `markBox` spends that
+ *  area at the mark's real aspect ratio. */
 export function markSize(minutes: number): number {
 	const side = MARK_K * Math.sqrt(Math.max(0, minutes));
 	return Math.round(Math.min(MARK_MAX, Math.max(MARK_MIN, side)));
+}
+
+/**
+ * How far from square a mark is allowed to get.
+ *
+ * A photograph is whatever shape it was taken in, and a panorama at its true
+ * ratio would come out as a 260px splinter twelve pixels tall — technically the
+ * right area, useless as a picture. Clamping keeps every mark recognisable as
+ * an object stuck to a page. Posters (2:3) and covers sit well inside it.
+ */
+export const ASPECT_MIN = 0.55;
+export const ASPECT_MAX = 1.8;
+
+/** TMDB posters are uniformly 2:3, and Open Library covers are near enough to
+ *  it that assuming so is better than drawing them square. */
+export const PRINT_ASPECT = 2 / 3;
+
+export interface MarkBox {
+	w: number;
+	h: number;
+}
+
+/**
+ * A mark's real width and height: `size`² of area, spent at aspect ratio
+ * `aspect` (width ÷ height).
+ *
+ * AREA IS THE INVARIANT, NOT THE SIDE. A poster and a square photograph
+ * standing for the same two hours must cover the same amount of paper, or the
+ * card stops meaning what it says — so the box is w = size·√aspect,
+ * h = size/√aspect, whose product is size² whatever the shape.
+ */
+export function markBox(size: number, aspect: number): MarkBox {
+	const a = Math.min(ASPECT_MAX, Math.max(ASPECT_MIN, aspect || 1));
+	const root = Math.sqrt(a);
+	return { w: Math.round(size * root), h: Math.round(size / root) };
 }
 
 // ---------------------------------------------------------------------------
@@ -239,15 +246,24 @@ export interface JournalItem {
 	detail: string;
 	/** Cover, poster or photograph, already at the size it will be drawn. */
 	image: string | null;
-	/** A 24x24 path, drawn when there is no image. Activities always have one. */
+	/** Width ÷ height of whatever the mark draws, so the box can be cut to the
+	 *  real shape of the thing rather than cropped square. */
+	aspect: number;
+	/** A route as an `M x y L …` path on a 0 0 100 100 viewBox — an activity's
+	 *  face when it has GPS. */
+	route: string | null;
+	/** A 24x24 glyph path. An activity with no route falls back to it; nothing
+	 *  else has one. */
 	icon: string | null;
 	/** Where the mark links to, if that thing has a page of its own. */
 	href: string | null;
 }
 
 export interface JournalMark extends JournalItem {
-	/** Side in artboard px. */
+	/** Side of the square the mark's area fills — see `markSize`. */
 	size: number;
+	/** The box that area is actually spent on, at the mark's aspect ratio. */
+	box: MarkBox;
 	/** Degrees of tilt — pinned to `key`, small, and never zero, so a cluster
 	 *  looks stuck in by hand rather than laid out. */
 	tilt: number;
@@ -265,7 +281,8 @@ export function toMark(item: JournalItem): JournalMark {
 	// Roughly -4°..+3°, and never 0 — a mark that happens to land square reads
 	// as a layout, and the whole point of a cluster is that it isn't one.
 	const tilt = ((h % 8) - 4 + (h % 2 ? 0.5 : -0.5)) * 0.9;
-	return { ...item, size: markSize(item.minutes), tilt };
+	const size = markSize(item.minutes);
+	return { ...item, size, box: markBox(size, item.aspect), tilt };
 }
 
 // ---------------------------------------------------------------------------
@@ -298,6 +315,8 @@ export function filmItems(watches: WatchRow[]): JournalItem[] {
 		title: w.title,
 		detail: w.release_year ? String(w.release_year) : 'Film',
 		image: imageUrl(w.poster_path, 'w185'),
+		aspect: PRINT_ASPECT,
+		route: null,
 		icon: null,
 		href: `/films/diary/${w.id}`,
 	}));
@@ -349,6 +368,8 @@ export function bookItems(days: DayRow[], books: BookRow[]): JournalItem[] {
 			title: open ? book!.title : 'A book',
 			detail: open ? (book!.authors ?? 'Book') : 'Private',
 			image: open ? cover(book!.cover_url) : null,
+			aspect: PRINT_ASPECT,
+			route: null,
 			icon: null,
 			href: open ? `/books/${d.book_id}` : null,
 		};
@@ -362,13 +383,13 @@ interface VisitRow {
 	cuisines: string[] | null;
 	tags: string[] | null;
 	neighborhood: string | null;
-	photos?: { url: string }[];
+	photos?: { url: string; width: number | null; height: number | null }[];
 }
 
 export function mealItems(visits: VisitRow[]): JournalItem[] {
 	return visits.map((v) => {
 		const snack = isSnack(v);
-		const photo = v.photos?.[0]?.url;
+		const photo = v.photos?.[0];
 		return {
 			track: 'meal' as const,
 			key: String(v.id),
@@ -376,7 +397,12 @@ export function mealItems(visits: VisitRow[]): JournalItem[] {
 			minutes: snack ? SNACK_MINUTES : MEAL_MINUTES,
 			title: v.restaurant_name,
 			detail: v.cuisines?.join(' · ') || v.neighborhood || (snack ? 'Snack' : 'Meal'),
-			image: photo ? photoSrc(photo, 320) : null,
+			image: photo ? photoSrc(photo.url, 320) : null,
+			// The photograph's own shape, when the row recorded it. A plate shot
+			// with no dimensions falls back to square rather than guessing
+			// landscape — a square is wrong in one direction, a guess in two.
+			aspect: photo?.width && photo?.height ? photo.width / photo.height : 1,
+			route: null,
 			icon: null,
 			href: `/restaurants/diary/${v.id}`,
 		};
@@ -390,6 +416,7 @@ interface ActivityRow {
 	local_date: string;
 	moving_seconds: number | null;
 	elapsed_seconds: number;
+	route_path: string | null;
 }
 
 export function activityItems(activities: ActivityRow[]): JournalItem[] {
@@ -403,7 +430,14 @@ export function activityItems(activities: ActivityRow[]): JournalItem[] {
 		title: a.title,
 		detail: sportMeta(a.sport).label,
 		image: null,
-		icon: sportIcon(a.sport),
+		// A route is fitted to a square viewBox by route-shape.ts, so it spends
+		// its area square whatever shape the ride was.
+		aspect: 1,
+		route: a.route_path,
+		// The glyph is the fallback, not the face: a pool swim, a trainer ride
+		// and a treadmill run have no GPS at all, and that is normal rather than
+		// missing (ACTIVITIES.md's second bullet).
+		icon: a.route_path ? null : sportIcon(a.sport),
 		href: `/activities/${a.id}`,
 	}));
 }
@@ -422,9 +456,27 @@ export interface JournalCell {
 	minutes: number;
 	/** Which tracks the day touched, in TRACKS order — the day's little rubric. */
 	tracks: Track[];
-	/** 0..1 — how far the whole cluster shrinks so a busy day stays in its
-	 *  square. See `clusterScale`. */
-	scale: number;
+	/** Paint order for the day's spill — see `dayLayer`. */
+	layer: number;
+}
+
+/**
+ * Which day paints on top where two days' marks overlap.
+ *
+ * MARKS ARE ALLOWED OUT OF THEIR SQUARE. A cell is ~128px wide and a good
+ * Saturday is bigger than that, so the marks spill onto the days around them —
+ * which is what a page of a real journal looks like once you have stuck things
+ * to it. Sizing every mark down to fit inside the ruled box would trade the one
+ * thing this card is for (an honest picture of how much of the day a thing
+ * took) for tidiness.
+ *
+ * Spill needs a paint order, and the order is chronological: a later day sits
+ * on top of an earlier one, because that is the order the things were stuck
+ * in. It follows that a big Saturday can cover Friday's date numeral, and that
+ * is fine — you can still read the date off the column and the row.
+ */
+export function dayLayer(date: number): number {
+	return date;
 }
 
 /**
@@ -453,7 +505,7 @@ export function buildCells(key: string, items: JournalItem[]): JournalCell[] {
 	for (let i = 0; i < weekRows(key) * 7; i++) {
 		const date = i - first + 1;
 		if (date < 1 || date > days) {
-			cells.push({ outside: true, date: 0, marks: [], minutes: 0, tracks: [], scale: 1 });
+			cells.push({ outside: true, date: 0, marks: [], minutes: 0, tracks: [], layer: 0 });
 			continue;
 		}
 		const day = (byDay.get(date) ?? [])
@@ -467,51 +519,10 @@ export function buildCells(key: string, items: JournalItem[]): JournalCell[] {
 			outside: false,
 			date,
 			marks,
-			scale: clusterScale(marks),
+			layer: dayLayer(date),
 			minutes: day.reduce((total, d) => total + d.minutes, 0),
 			tracks: TRACKS.filter((t) => present.has(t.id)).map((t) => t.id),
 		});
 	}
 	return cells;
-}
-
-// ---------------------------------------------------------------------------
-// The summary
-// ---------------------------------------------------------------------------
-
-export interface SummaryStat {
-	label: string;
-	value: string;
-}
-
-const hours = (minutes: number) => `${Math.round(minutes / 60)}h`;
-
-/**
- * One figure per track: the hours it took. Counts, not hours, is the tempting
- * alternative — but this whole card is drawn in minutes, and a summary in a
- * different unit than the picture above it would be reading the same month off
- * two scales. Hours also let the four sit next to each other honestly: nine
- * meals and nine films are not the same month.
- */
-export function summarise(items: JournalItem[]): SummaryStat[] {
-	return TRACKS.map((track) => ({
-		label: track.label,
-		value: hours(
-			items.reduce((total, i) => (i.track === track.id ? total + i.minutes : total), 0),
-		),
-	}));
-}
-
-/** Days with at least one item, and total hours — the card's headline pair. */
-export function headline(items: JournalItem[]): { days: number; hours: string } {
-	return {
-		days: new Set(items.map((i) => i.day)).size,
-		hours: hours(items.reduce((total, i) => total + i.minutes, 0)),
-	};
-}
-
-/** The 24x24 glyph for an activity's sport, and its label. Thin re-export so
- *  the page has one import for the card. */
-export function sportMark(sport: string): { icon: string; label: string } {
-	return { icon: sportIcon(sport), label: sportMeta(sport).label };
 }

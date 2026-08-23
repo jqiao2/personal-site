@@ -23,16 +23,7 @@ import { listMonthWatches } from '../../lib/films';
 import { getReadingMonth } from '../../lib/books-queries';
 import { listMonthVisits } from '../../lib/restaurants';
 import { listActivitiesForMonth } from '../../lib/activities';
-import {
-	activityItems,
-	bookItems,
-	buildCells,
-	filmItems,
-	headline,
-	mealItems,
-	summarise,
-	TRACKS,
-} from '../../lib/journal-month';
+import { activityItems, bookItems, buildCells, filmItems, mealItems } from '../../lib/journal-month';
 import {
 	ASPECTS,
 	aspectBySlug,
@@ -69,8 +60,6 @@ const items = [
 
 const cells = buildCells(key, items);
 const rows = Math.max(1, cells.length / 7);
-const figures = summarise(items);
-const total = headline(items);
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
 const prev = shiftMonth(key, -1);
@@ -134,16 +123,8 @@ const query = monthQuery(aspect);
 						<span class="card__holes"></span>
 
 						<div class="card__head">
-							<div>
-								<div class="card__kicker">The month in review</div>
-								<div class="card__month">{monthLabel(key)}</div>
-							</div>
-							<div class="card__count">
-								<div class="card__countn">{total.hours}</div>
-								<div class="card__countl">
-									over {total.days} day{total.days === 1 ? '' : 's'}
-								</div>
-							</div>
+							<div class="card__kicker">The month in review</div>
+							<div class="card__month">{monthLabel(key)}</div>
 						</div>
 
 						<div class="strip">
@@ -151,24 +132,38 @@ const query = monthQuery(aspect);
 							<div class="strip__grid">
 								{
 									cells.map((c) => (
-										<div class:list={['cell', c.outside && 'cell--pad', c.marks.length > 0 && 'cell--used']}>
+										<div
+											class:list={['cell', c.outside && 'cell--pad', c.marks.length > 0 && 'cell--used']}
+											style={`--layer:${c.layer}`}
+										>
 											{!c.outside && <span class="cell__n">{c.date}</span>}
-											{/* Biggest first and centred, so the cluster grows out
-											    from the day's main event. Negative gap: the marks
-											    overlap slightly, which is what a handful of things
-											    stuck onto one square looks like. */}
-											<div class="cluster" style={`--cs:${c.scale}`}>
+											{/* Biggest first, so the cluster anchors on the day's main
+											    event and the smaller things land on top of it — the
+											    order you would have stuck them in. */}
+											<div class="cluster">
 												{c.marks.map((m) => (
 													<a
-														class:list={['mark', `mark--${m.track}`, !m.image && 'mark--bare']}
+														class:list={['mark', `mark--${m.track}`, !m.image && !m.route && 'mark--bare']}
 														href={m.href ?? undefined}
-														style={`--z:${m.size}px; --t:${m.tilt}deg`}
+														style={`--w:${m.box.w}px; --h:${m.box.h}px; --t:${m.tilt}deg`}
 														title={`${m.title} · ${m.detail} · ${Math.round(m.minutes)} min`}
 													>
 														{m.image ? (
 															<img src={m.image} alt="" data-cover />
+														) : m.route ? (
+															/* The route as it was ridden. route-shape.ts has
+															   already fitted it to this square viewBox, so the
+															   stroke is all that's left to say. */
+															<svg
+																class="mark__route"
+																viewBox="0 0 100 100"
+																preserveAspectRatio="xMidYMid meet"
+																aria-hidden="true"
+															>
+																<path d={m.route} />
+															</svg>
 														) : m.icon ? (
-															<svg viewBox="0 0 24 24" aria-hidden="true">
+															<svg class="mark__glyph" viewBox="0 0 24 24" aria-hidden="true">
 																<path d={m.icon} />
 															</svg>
 														) : (
@@ -183,20 +178,8 @@ const query = monthQuery(aspect);
 							</div>
 						</div>
 
-						<div class="figures">
-							{
-								figures.map((f, i) => (
-									<div class={`figure figure--${TRACKS[i].id}`}>
-										<div class="figure__v">{f.value}</div>
-										<div class="figure__l">{f.label}</div>
-									</div>
-								))
-							}
-						</div>
-
 						<div class="card__foot">
 							<span class="card__url">jqiao.vercel.app</span>
-							<span class="card__note">Marks scaled by time spent</span>
 						</div>
 					</div>
 				</div>
@@ -446,10 +429,6 @@ const query = monthQuery(aspect);
 	}
 
 	.card__head {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 24px;
 		border-bottom: 2px solid var(--ink);
 		padding-bottom: 16px;
 	}
@@ -467,26 +446,11 @@ const query = monthQuery(aspect);
 		line-height: 0.98;
 		letter-spacing: -1.5px;
 	}
-	.card__count {
-		text-align: right;
-		white-space: nowrap;
-	}
-	.card__countn {
-		font-family: var(--prose);
-		font-size: 60px;
-		line-height: 1;
-	}
-	.card__countl {
-		margin-top: 4px;
-		font-size: 18px;
-		letter-spacing: 1.6px;
-		text-transform: uppercase;
-		color: var(--ink-3);
-	}
 
-	/* The calendar takes whatever the head, the figures and the foot leave. Rows
-	   share it evenly, so one grid serves all three aspects — capped so the tall
-	   artboard doesn't stretch every cluster into a column of air. */
+	/* The calendar takes everything the head and the foot leave, which since the
+	   summary band came out is nearly the whole artboard. Rows share it evenly,
+	   so one grid serves all three aspects — capped so the tall artboard doesn't
+	   stretch every cluster into a column of air. */
 	.strip {
 		margin-top: 22px;
 		flex: 1 1 auto;
@@ -508,7 +472,7 @@ const query = monthQuery(aspect);
 	.strip__grid {
 		flex: 1 1 auto;
 		min-height: 0;
-		max-height: calc(var(--rows) * 200px + (var(--rows) - 1) * 6px);
+		max-height: calc(var(--rows) * 230px + (var(--rows) - 1) * 6px);
 		display: grid;
 		grid-template-columns: repeat(7, 1fr);
 		grid-auto-rows: 1fr;
@@ -532,10 +496,13 @@ const query = monthQuery(aspect);
 		border-color: transparent;
 		background: none;
 	}
+	/* THE SPILL. A day's marks are bigger than its square on purpose, so they
+	   overlap the days around them, and the overlap needs a paint order: later
+	   days on top, because that is the order things got stuck in. --layer is the
+	   date, so the 31st covers the 30th covers the 29th. */
 	.cell--used {
 		border-color: var(--rule-2);
-		/* A day that happened sits on the page rather than in it. */
-		z-index: 1;
+		z-index: var(--layer, 1);
 	}
 	.cell__n {
 		position: absolute;
@@ -550,9 +517,14 @@ const query = monthQuery(aspect);
 		color: var(--ink-2);
 	}
 
+	/* The pile. Its box is WIDER than the cell it centres on (negative inset), so
+	   two big prints sit side by side and spill onto the neighbouring days
+	   instead of stacking into a column inside the lines — which is what a
+	   handful of Polaroids on a page does, and the only way marks this size
+	   arrange themselves as a cluster rather than a stack. */
 	.cluster {
 		position: absolute;
-		inset: 4px;
+		inset: -16px;
 		display: flex;
 		flex-wrap: wrap;
 		align-content: center;
@@ -560,30 +532,37 @@ const query = monthQuery(aspect);
 		justify-content: center;
 		/* Negative, so the marks overlap a little. A cluster of things stuck onto
 		   one square is never a neat row of them. */
-		gap: 1px;
-		margin: -3px;
-		/* A busy day shrinks as a whole rather than dropping anything or capping
-		   marks one by one — see clusterScale in src/lib/journal-month.ts. --cs
-		   is 1 on nearly every day, so this transform usually does nothing. */
-		transform: scale(var(--cs, 1));
+		gap: 0;
+		/* Deep negative margins: prints overlap by ~18px in both axes, which is
+		   what pulls the pile together and lets three rows of them still fit the
+		   day's own height. */
+		margin: -9px;
 	}
 
+	/* A mark is a print stuck to the page: its own shape, its own white margin,
+	   a shadow that lifts it off the paper. The box comes from the lib — area is
+	   the time it took, the ratio is the shape of the thing — so a poster is
+	   tall, a plate is whatever it was shot at, and a route is square. */
 	.mark {
 		display: block;
 		position: relative;
 		flex: 0 0 auto;
-		width: var(--z);
-		height: var(--z);
-		margin: -3px;
+		width: var(--w);
+		height: var(--h);
+		margin: -9px;
 		transform: rotate(var(--t));
 		background: var(--paper-2);
-		/* The white border is the print margin — it is what makes a poster and a
-		   plate and a sport glyph read as the same KIND of object at four wildly
-		   different sizes. */
-		border: 2px solid #fdf9ef;
-		box-shadow: 0 1px 3px rgba(70, 55, 35, 0.32);
+		border: 3px solid #fdfaf1;
+		box-shadow:
+			0 1px 2px rgba(70, 55, 35, 0.3),
+			0 3px 8px rgba(70, 55, 35, 0.18);
 		overflow: hidden;
 		color: var(--ink-2);
+	}
+	/* A print sits above the ruled paper of whatever day it lands on, including
+	   the date numeral — the grid is a scaffold, the pictures are the page. */
+	.mark:hover {
+		z-index: 40;
 	}
 	.mark img {
 		width: 100%;
@@ -591,11 +570,25 @@ const query = monthQuery(aspect);
 		object-fit: cover;
 		display: block;
 	}
-	.mark svg {
+	/* The route fills its print the way a photograph would; the fallback glyph
+	   sits small and centred, so the two never read as the same kind of face. */
+	.mark__route {
 		position: absolute;
-		inset: 18%;
-		width: 64%;
-		height: 64%;
+		inset: 8%;
+		width: 84%;
+		height: 84%;
+		fill: none;
+		stroke: currentColor;
+		stroke-width: 2.6;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+		vector-effect: non-scaling-stroke;
+	}
+	.mark__glyph {
+		position: absolute;
+		inset: 22%;
+		width: 56%;
+		height: 56%;
 		fill: none;
 		stroke: currentColor;
 		stroke-width: 2;
@@ -609,9 +602,9 @@ const query = monthQuery(aspect);
 		align-items: center;
 		justify-content: center;
 		font-family: var(--prose);
-		/* Scales with the mark, so a 22px snack and a 76px meal both get a letter
-		   that fits rather than one that was sized for the average. */
-		font-size: calc(var(--z) * 0.44);
+		/* Scales with the mark, so a small snack and a big meal both get a letter
+		   that fits rather than one sized for the average. */
+		font-size: calc(var(--h) * 0.44);
 		line-height: 1;
 	}
 
@@ -647,51 +640,6 @@ const query = monthQuery(aspect);
 			0 1px 3px rgba(70, 55, 35, 0.32);
 	}
 
-	.figures {
-		margin-top: 24px;
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		border-top: 1px solid var(--rule);
-		border-bottom: 1px solid var(--rule);
-	}
-	.figure {
-		padding: 16px 18px;
-		border-left: 1px solid var(--rule-3);
-	}
-	.figure:first-child {
-		border-left: none;
-		padding-left: 0;
-	}
-	.figure__v {
-		font-family: var(--prose);
-		font-size: 50px;
-		line-height: 1;
-	}
-	/* The label carries the track's colour as a rule under it — the legend for
-	   the marks above, without a legend row. */
-	.figure__l {
-		margin-top: 8px;
-		display: inline-block;
-		font-size: 18px;
-		letter-spacing: 2px;
-		text-transform: uppercase;
-		color: var(--ink-3);
-		border-bottom: 3px solid currentColor;
-		padding-bottom: 3px;
-	}
-	.figure--film .figure__l {
-		color: var(--film);
-	}
-	.figure--book .figure__l {
-		color: var(--book);
-	}
-	.figure--meal .figure__l {
-		color: var(--meal);
-	}
-	.figure--move .figure__l {
-		color: var(--move);
-	}
-
 	.card__foot {
 		padding-top: 20px;
 		display: flex;
@@ -704,11 +652,5 @@ const query = monthQuery(aspect);
 		letter-spacing: 2.6px;
 		text-transform: uppercase;
 		color: var(--ink-4);
-	}
-	.card__note {
-		font-size: 15px;
-		letter-spacing: 1.2px;
-		text-transform: uppercase;
-		color: var(--rule);
 	}
 </style>
