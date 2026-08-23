@@ -1,0 +1,146 @@
+---
+// Shell for "The month in review" — the fifth card in the family, and the only
+// one that isn't a section's own. Films, books, meals and activities each have
+// a month card already; this one draws all four on the same calendar, so it
+// can't borrow any one section's art direction without implying that section
+// owns the page.
+//
+// So it takes the one reference all four share: a paper journal. Cream stock,
+// a printed rule, a red margin line down the left, ink in the margin. The
+// palette is deliberately the restaurant log's warm neutrals (it is the only
+// light section, and its ground is already "cheap warm paper") with the accents
+// dropped — each of the four sections brings its own accent colour to the card,
+// and a fifth would just be noise.
+//
+// Same anatomy as BookLayout.astro: an <html> shell that loads the shared
+// Archivo + Newsreader pair, a reset, the history-aware `a.back` script, slot.
+interface Props {
+	title: string;
+}
+const { title } = Astro.props;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link
+			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&display=swap"
+			rel="stylesheet"
+		/>
+	</head>
+	<body>
+		<slot />
+		<script>
+			// "Back" goes to the page that sent you here when that page was ours; the
+			// href stays the fallback for direct loads. Same rule as every other
+			// section's layout.
+			for (const a of document.querySelectorAll('a.back')) {
+				a.addEventListener('click', (e) => {
+					const ref = document.referrer;
+					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+					if (history.length > 1 && sameOrigin) {
+						e.preventDefault();
+						history.back();
+					}
+				});
+			}
+
+			// Stepping to another month is a navigation, but the card is one place, so
+			// a step replaces its history entry instead of stacking one per month —
+			// otherwise Back walks you through every month you looked at. The
+			// restaurant log's layout carries the long version of this note.
+			document.addEventListener('click', (e) => {
+				if (e.defaultPrevented) return;
+				if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+				const target = e.target;
+				if (!(target instanceof Element)) return;
+				const link = target.closest('a[href]');
+				if (!(link instanceof HTMLAnchorElement)) return;
+				if (link.target || link.hasAttribute('download')) return;
+				const url = new URL(link.href);
+				if (url.origin !== location.origin) return;
+				const restating = url.pathname === location.pathname && !url.hash;
+				if (!restating && !link.hasAttribute('data-replace')) return;
+				e.preventDefault();
+				location.replace(link.href);
+			});
+		</script>
+		<style is:global>
+			:root {
+				--ground: #f4ecda; /* the desk the journal is open on */
+				--paper: #fbf5e6; /* the page itself */
+				--paper-2: #f3ead5; /* a heavier stock: chips, wells */
+
+				--ink: #2c2118;
+				--ink-2: #6a5b49;
+				--ink-3: #8d7c65;
+				--ink-4: #ab9a83;
+
+				--rule: #c9b795; /* the printed rule */
+				--rule-2: #ddd0b3;
+				--rule-3: #e8dec6;
+				--margin-red: #c2604f; /* the margin line, and nothing else */
+
+				--film: #8e3b2f;
+				--book: #8a6a2f;
+				--meal: #a8642a;
+				--move: #3f6f63;
+
+				--ui: 'Archivo', Helvetica, Arial, sans-serif;
+				--prose: 'Newsreader', Georgia, serif;
+				--mono: ui-monospace, Menlo, Consolas, monospace;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				min-height: 100vh;
+				background: var(--ground);
+				color: var(--ink);
+				font-family: var(--ui);
+				-webkit-font-smoothing: antialiased;
+			}
+			a {
+				text-decoration: none;
+				color: var(--ink);
+			}
+			a:hover {
+				color: var(--margin-red);
+			}
+			button {
+				font-family: var(--ui);
+			}
+			.j-page {
+				max-width: 1120px;
+				margin: 0 auto;
+				padding: 26px clamp(14px, 4vw, 32px) 60px;
+			}
+			.j-back {
+				font-size: 12.5px;
+				color: var(--ink-3);
+			}
+			.j-btn {
+				background: var(--paper);
+				border: 1px solid var(--rule);
+				color: var(--ink);
+				font-size: 12.5px;
+				padding: 6px 12px;
+				cursor: pointer;
+			}
+			.j-btn:hover {
+				border-color: var(--ink-3);
+			}
+		</style>
+	</body>
+</html>
