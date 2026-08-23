@@ -965,24 +965,43 @@ async function moveGearDistance(from: number | null, to: number | null, distance
 /**
  * Set (or clear, with `rank: null`) an activity's landing-page favourite
  * rank, 1-4. The partial unique index on activities.favorite_rank means a
- * rank already held by another activity has to be freed first — this clears
- * it from whoever holds it, then claims it, so the caller never has to know
- * who that was.
+ * rank already held by another activity has to be freed first — that holder
+ * takes over *this* activity's old rank, so moving a favourite up the list
+ * swaps the two rather than evicting one of them.
  */
 export async function setFavoriteRank(activityId: number, rank: number | null): Promise<void> {
 	if (rank != null && (rank < 1 || rank > 4)) {
 		throw new Error('favorite_rank must be between 1 and 4, or null');
 	}
+	const { data: self } = await supabaseAdmin
+		.from('activities')
+		.select('favorite_rank')
+		.eq('id', activityId)
+		.maybeSingle();
+	const mine = self?.favorite_rank ?? null;
+	if (mine === rank) return;
+
+	const set = async (id: number, value: number | null) => {
+		const { error } = await supabaseAdmin.from('activities').update({ favorite_rank: value }).eq('id', id);
+		if (error) throw new Error(`setFavoriteRank failed: ${error.message}`);
+	};
+
+	let holderId: number | null = null;
 	if (rank != null) {
-		const { error: clearErr } = await supabaseAdmin
+		const { data: holder } = await supabaseAdmin
 			.from('activities')
-			.update({ favorite_rank: null })
+			.select('id')
 			.eq('favorite_rank', rank)
-			.neq('id', activityId);
-		if (clearErr) throw new Error(`clear favorite_rank ${rank} failed: ${clearErr.message}`);
+			.is('deleted_at', null)
+			.neq('id', activityId)
+			.maybeSingle();
+		holderId = holder?.id ?? null;
+		// The unique index rejects two rows sharing a rank even mid-swap, so the
+		// slot is emptied before it is claimed.
+		if (holderId != null) await set(holderId, null);
 	}
-	const { error } = await supabaseAdmin.from('activities').update({ favorite_rank: rank }).eq('id', activityId);
-	if (error) throw new Error(`setFavoriteRank failed: ${error.message}`);
+	await set(activityId, rank);
+	if (holderId != null && mine != null) await set(holderId, mine);
 }
 
 // ---------------------------------------------------------------------------
