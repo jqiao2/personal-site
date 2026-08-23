@@ -79,13 +79,14 @@ if (Astro.request.method === 'POST') {
 	}
 	const form = await Astro.request.formData();
 	const action = form.get('action');
-	if (action === 'toggle-favorite') {
-		const current = await getActivity(id);
-		if (current) {
-			// Toggle: claim rank 1 if unset, clear if already favourited.
-			// setFavoriteRank frees the slot from whoever holds it first, so this
-			// never has to know who that was.
-			await setFavoriteRank(id, current.favorite_rank ? null : 1);
+	if (action === 'set-favorite') {
+		// One of the five rank buttons — 1-4, or empty for "not a favourite".
+		// setFavoriteRank swaps with whoever holds the slot, so this never has
+		// to know who that was.
+		const raw = String(form.get('rank') ?? '');
+		const rank = raw === '' ? null : Number(raw);
+		if (rank == null || (Number.isInteger(rank) && rank >= 1 && rank <= 4)) {
+			await setFavoriteRank(id, rank);
 		}
 	} else if (action === 'save') {
 		const title = String(form.get('title') ?? '').trim();
@@ -464,9 +465,26 @@ const exWord = exertionLabel(activity.exertion);
 				{
 					isOwner && !editing && (
 						<form method="POST" class="head__fav-form">
-							<input type="hidden" name="action" value="toggle-favorite" />
-							<button type="submit" class="head__fav-btn" title={activity.favorite_rank ? 'Remove from favourites' : 'Make a favourite'}>
-								{activity.favorite_rank ? 'Unfavourite' : 'Favourite'}
+							<input type="hidden" name="action" value="set-favorite" />
+							{[1, 2, 3, 4].map((r) => (
+								<button
+									type="submit"
+									name="rank"
+									value={r}
+									class:list={['head__fav-btn', activity.favorite_rank === r && 'head__fav-btn--on']}
+									title={`Favourite #${r}`}
+								>
+									★{r}
+								</button>
+							))}
+							<button
+								type="submit"
+								name="rank"
+								value=""
+								class:list={['head__fav-btn', activity.favorite_rank == null && 'head__fav-btn--on']}
+								title="Not a favourite"
+							>
+								none
 							</button>
 						</form>
 					)
@@ -878,6 +896,8 @@ const exWord = exertionLabel(activity.exertion);
 	}
 	.head__fav-form {
 		margin-left: auto;
+		display: inline-flex;
+		gap: 0.25rem;
 	}
 	.head__fav-btn {
 		display: inline-block;
@@ -894,6 +914,11 @@ const exWord = exertionLabel(activity.exertion);
 	.head__fav-btn:hover {
 		border-color: #d99a3a;
 		color: #d99a3a;
+	}
+	.head__fav-btn--on {
+		border-color: #d99a3a;
+		color: #d99a3a;
+		background: #fdf5e8;
 	}
 	.head__title {
 		font-size: clamp(1.7rem, 4vw, 2.4rem);
