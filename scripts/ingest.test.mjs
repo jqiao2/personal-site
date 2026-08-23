@@ -29,6 +29,7 @@ import {
 	sportFromStrava,
 	refineSport,
 	offsetMinutesInZone,
+	sportFromXmlType,
 	localDate,
 	toRows,
 	UnknownSportError,
@@ -125,6 +126,41 @@ const TH = {
 	assert.deepEqual(refineSport('run', 'running', 'treadmill'), { sport: 'treadmill_run', sub_sport: 'indoor' });
 	assert.equal(refineSport('ride', 'cycling', 'generic').sport, 'ride', 'generic must not invent a sub_sport');
 	assert.equal(refineSport('ride', 'cycling', 'generic').sub_sport, null);
+
+	// A file dropped in by hand has no csv beside it, so the file's own type is
+	// all there is. Strava squashes the csv vocabulary in a single-activity
+	// download (`Gravel Ride` -> `gravelride`), which is exactly the kind of
+	// mismatch that would silently file every gravel ride as unknown.
+	assert.equal(sportFromXmlType('ride'), 'ride');
+	assert.equal(sportFromXmlType('gravelride'), 'gravel_ride');
+	assert.equal(sportFromXmlType('Trail Run'), 'trail_run');
+	assert.equal(sportFromXmlType('Biking'), 'ride', 'TCX has its own word for it');
+	assert.equal(sportFromXmlType('9'), null, 'an unrecognised type must not guess');
+	assert.equal(sportFromXmlType(null), null);
+	assert.equal(sportFromXmlType('Other'), null, "'Other' means the file does not know");
+}
+
+// ---------------------------------------------------------------------------
+// 4b. A dropped file with no csv beside it (scripts/add-activities.mjs)
+// ---------------------------------------------------------------------------
+
+{
+	const gpx = [
+		'<gpx><trk><name>Evening Gravel Ride</name><type>gravelride</type><trkseg>',
+		'<trkpt lat="47.6" lon="-122.3"><ele>10</ele><time>2026-08-20T01:00:00Z</time></trkpt>',
+		'<trkpt lat="47.61" lon="-122.3"><ele>12</ele><time>2026-08-20T01:10:00Z</time></trkpt>',
+		'</trkseg></trk></gpx>',
+	].join('');
+
+	const a = parseGpx(gpx, {});
+	assert.equal(a.sport, 'gravel_ride', 'with no sport passed, the file has to speak for itself');
+	assert.equal(a.title, 'Evening Gravel Ride');
+	assert.equal(a.elapsed_seconds, 600);
+
+	assert.equal(parseGpx(gpx, { sport: 'ride' }).sport, 'ride', 'a passed sport still wins — the csv knows about corrections');
+
+	const untyped = gpx.replace('<type>gravelride</type>', '');
+	assert.throws(() => parseGpx(untyped, {}), UnknownSportError, 'no type and no override must stop, not become other');
 }
 
 // ---------------------------------------------------------------------------

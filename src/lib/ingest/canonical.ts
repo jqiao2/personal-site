@@ -176,6 +176,31 @@ export function sportFromStrava(providerType: string): Sport {
 }
 
 /**
+ * A single-activity GPX/TCX download's `<type>` → our slug.
+ *
+ * Strava writes the same vocabulary as `activities.csv` but squashed —
+ * `Gravel Ride` comes down as `gravelride`, `Trail Run` as `trailrun`, and
+ * older files use the plain lowercase word. So the table above is reused with
+ * its keys normalised rather than copied and drifted. Returns null instead of
+ * throwing: a dropped file's type is a hint, and the caller has a `--sport`
+ * override to fall back on.
+ */
+const STRAVA_SPORTS_SQUASHED: Record<string, Sport> = Object.fromEntries(
+	Object.entries(STRAVA_SPORTS).map(([k, v]) => [k.toLowerCase().replace(/[^a-z]/g, ''), v]),
+);
+
+/** TCX has its own three-word vocabulary in `<Activity Sport="Biking">`.
+ *  `Other` is deliberately absent — it means the file doesn't know, which is
+ *  the case `--sport` exists for. */
+const TCX_SPORTS: Record<string, Sport> = { biking: 'ride', running: 'run' };
+
+export function sportFromXmlType(type: string | null | undefined): Sport | null {
+	if (!type) return null;
+	const key = type.toLowerCase().replace(/[^a-z]/g, '');
+	return STRAVA_SPORTS_SQUASHED[key] ?? TCX_SPORTS[key] ?? null;
+}
+
+/**
  * A FIT file's sport/subSport refines what the CSV already told us; it never
  * overrides it. Strava's own type is the authority because it covers all 1773
  * rows including the ones with no file at all, and because the owner may have

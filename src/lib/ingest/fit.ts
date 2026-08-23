@@ -10,7 +10,7 @@
 // derive: no exertion, no route path, no database. See canonical.ts.
 
 import { Decoder, Stream } from '@garmin/fitsdk';
-import { refineSport, type CanonicalActivity, type CanonicalLap, type CanonicalStreams } from './canonical';
+import { refineSport, UnknownSportError, type CanonicalActivity, type CanonicalLap, type CanonicalStreams } from './canonical';
 import type { Sport } from './../sports';
 
 /** FIT stores lat/lng as "semicircles": a signed 32-bit sweep of the globe.
@@ -36,7 +36,7 @@ export interface FitParseOptions {
 	/** The sport Strava already told us, from activities.csv. The file's own
 	 *  sport only refines it (see `refineSport`) — it never overrides, because
 	 *  the athlete may have corrected the type on Strava after the upload. */
-	sport: Sport;
+	sport?: Sport;
 }
 
 /**
@@ -106,9 +106,10 @@ function oneSession(
 	// In a multisport file each session states its own sport, and THAT is the
 	// authority for a leg — the csv row for "Sunny 70.3 T1" says "Workout",
 	// which is Strava's best guess and not what the leg is.
-	const { sport, sub_sport } = multisport
-		? { sport: sportFromFit(session.sport, session.subSport) ?? opts.sport, sub_sport: subSportOf(session.subSport) }
-		: refineSport(opts.sport, session.sport, session.subSport);
+	const { sport, sub_sport } =
+		multisport || !opts.sport
+			? { sport: fileSport(session, opts), sub_sport: subSportOf(session.subSport) }
+			: refineSport(opts.sport, session.sport, session.subSport);
 
 	return {
 		sport,
@@ -174,9 +175,36 @@ export function sportFromFit(fitSport?: string, fitSubSport?: string): Sport | n
 			return 'hike';
 		case 'walking':
 			return 'walk';
+		case 'training':
+			return 'strength';
+		case 'rowing':
+			return 'rowing';
+		case 'paddling':
+			return 'kayak';
+		case 'alpineSkiing':
+			return 'alpine_ski';
+		case 'crossCountrySkiing':
+			return 'nordic_ski';
+		case 'snowboarding':
+			return 'snowboard';
+		case 'snowshoeing':
+			return 'snowshoe';
+		case 'inlineSkating':
+			return 'inline_skate';
 		default:
 			return null;
 	}
+}
+
+/**
+ * The sport for a session nobody outside the file described — a file dropped
+ * in by hand, or a leg of a multisport recording. Throws rather than filing an
+ * unmapped sport as 'other'; --sport is the override.
+ */
+function fileSport(session: Record<string, any>, opts: FitParseOptions): Sport {
+	const slug = sportFromFit(session.sport, session.subSport) ?? opts.sport;
+	if (!slug) throw new UnknownSportError(String(session.sport ?? '(the file states no sport)'));
+	return slug;
 }
 
 const subSportOf = (sub?: string): string | null => (sub && sub !== 'generic' ? sub : null);

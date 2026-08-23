@@ -16,11 +16,11 @@ Built so far, on `claude/strava-activities-feature-26rgcy` (PR #115):
 | `/activities` | **Placeholder** — hardcoded fixtures, no database. Proves the shell and the card. |
 | `src/lib/ingest/**` | **Built.** §4's canonical pipeline: `canonical.ts`, `fit.ts`, `gpx.ts` (GPX + TCX), `strava-archive.ts`. |
 | `scripts/import-strava-archive.mjs` | **Built**, and dry-run against the real export: 1773 activities parsed in 80s. |
+| `scripts/add-activities.mjs` | **Built.** §4 step 2, as a drop folder rather than an endpoint. Verified live: parse, exertion, route, both dedupe rules. |
 | `scripts/ingest.test.mjs` | The checks for what fails silently. `npm run activities:test`. |
 
 Not built yet: the real landing page, `/activities/all`, the detail page, the
-month in review, §4's file-drop endpoint (step 2) and the OAuth providers
-(step 3).
+month in review, and the OAuth providers (step 3).
 
 ### The importer
 
@@ -39,6 +39,47 @@ imported, so an interrupted run resumes.
 than reimplementing §3 or §7 in a script — `scripts/seed-activities.mjs`
 carries its own copy of the §7 route pipeline and that is the thing to avoid
 repeating.
+
+### The drop folder
+
+```
+npm run activities:add                      # ~/Desktop/activities, or $ACTIVITY_DROP
+npm run activities:add -- <dir|file> [--dry] [--sport SLUG] [--gear NAME] [--keep]
+```
+
+§4's step 2, except that the "file drop" is a folder on the desktop rather
+than an upload page. It is the same thing one rung lower: no endpoint, no auth,
+no multipart parsing, and the file still never leaves the machine. Drop whatever
+Garmin, Wahoo, TrainerRoad or Strava's per-activity **Export GPX** hands you
+into the folder, run it, and what lands is moved to `imported/`.
+
+Two things it needs that an archive import got for free:
+
+- **The sport.** There is no `activities.csv` beside a dropped file, so the
+  file has to say. A FIT states it outright; a Strava GPX carries `<type>`
+  squashed (`Gravel Ride` arrives as `gravelride`, which `sportFromXmlType`
+  handles). Anything else stops and asks for `--sport`, rather than filing a
+  ride as `other`.
+- **The gear, if the miles are to count.** A file names no bike, and nothing
+  is guessed from the sport or from what was ridden last — a chain credited
+  with someone else's miles is worse than a ride with no bike on it. Pass
+  `--gear "2023 Salsa Cutthroat"` and every file in the run is tagged to it.
+- **Not importing the same ride twice**, since one session can arrive as a
+  Garmin FIT and again as a Strava GPX. §4's first two rules do it: the file's
+  sha256 against the unique `activity_sources.file_checksum`, then same sport
+  starting within five minutes.
+
+A Strava GPX is the lossier of the two — it carries no summary at all, so
+distance, elevation and elapsed time are re-derived from the trackpoints, and
+an indoor trainer ride has no GPX to export in the first place. Where the
+original FIT is available, drop that.
+
+To make it automatic, put it on a schedule:
+
+```
+schtasks /create /tn activities-add /sc hourly ^
+  /tr "cmd /c cd /d C:\Users\Jason Qiao\Documents\coding\personal-site && npm run activities:add"
+```
 
 ### What the real archive turned out to contain
 
