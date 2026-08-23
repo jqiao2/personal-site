@@ -1,9 +1,11 @@
--- APPLIED BY HAND (through PostgREST with the service-role key) on
--- 2026-08-22, because `supabase link` currently fails in this worktree with a
--- CLI-side parse error on the API-keys response, so `db push` could not run.
--- It is therefore NOT in `supabase_migrations.schema_migrations`, and a later
--- `db push` WILL run this file. Both statements are written to survive that:
--- the update is idempotent and the insert is guarded by `not exists`.
+-- Applied by hand (through PostgREST with the service-role key) on 2026-08-22,
+-- because `supabase link` failed in this worktree with a CLI-side parse error
+-- on the API-keys response, so `db push` could not run. It went into
+-- `supabase_migrations.schema_migrations` late, on 2026-08-23, via
+-- `migration repair` once CLI 2.115.0 fixed that parse bug. It is recorded as
+-- version 0042 now, so `db push` will not read this file again -- but the
+-- guards below (an idempotent update, an insert fenced by `not exists`) are
+-- what made the gap survivable, and they stay.
 -- See CLAUDE.md on why the file has to exist either way.
 
 -- The trail shoe changed hands on 2026-07-01: the HOKA Speedgoat 5 came out of
