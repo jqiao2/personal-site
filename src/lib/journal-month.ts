@@ -280,12 +280,12 @@ function hash(key: string): number {
 	return Math.abs(h);
 }
 
-export function toMark(item: JournalItem): JournalMark {
+export function toMark(item: JournalItem, scale = 1): JournalMark {
 	const h = hash(`${item.track}:${item.key}`);
 	// Roughly -4°..+3°, and never 0 — a mark that happens to land square reads
 	// as a layout, and the whole point of a cluster is that it isn't one.
 	const tilt = ((h % 8) - 4 + (h % 2 ? 0.5 : -0.5)) * 0.9;
-	const size = markSize(item.minutes);
+	const size = Math.round(markSize(item.minutes) * scale);
 	return { ...item, size, box: markBox(size, item.aspect), tilt, dx: 0, dy: 0 };
 }
 
@@ -447,6 +447,75 @@ export function activityItems(activities: ActivityRow[]): JournalItem[] {
 }
 
 // ---------------------------------------------------------------------------
+// The day's square
+//
+// The other four cards derive a cell size and then draw to it. This one has to
+// as well, and for a reason they don't share: its prints are scattered around
+// the middle of a day rather than fitted inside it, so how far they may travel
+// is a question about the SQUARE, and the square is a different shape at every
+// aspect. A Feed card's cell is ~167px tall and a Story card's is 230 — the
+// same pile of prints spills a quarter of the way into the next week on one and
+// half of it on the other.
+// ---------------------------------------------------------------------------
+
+/**
+ * Vertical space the header, the weekday row and the footer take, measured
+ * against this card's own CSS at 1080 wide (padding 52/44, the two-line header
+ * and its rule, the strip's margin, the weekday row, and the footer). Kept in
+ * lockstep with the stylesheet by hand — the same contract month-view.ts's and
+ * activity-month.ts's chrome constants keep.
+ */
+export const CARD_CHROME = 315;
+export const CELL_GAP = 6;
+/** Past this a cell stops growing, so the tall artboard doesn't stretch every
+ *  pile into a column of air. Mirrors `.strip__grid`'s max-height. */
+export const CELL_MAX_H = 230;
+/** Constant at every aspect: only the height of a cell changes. */
+export const CELL_W = (1080 - 96 - 54 - 6 * CELL_GAP) / 7;
+
+export interface CellBox {
+	w: number;
+	h: number;
+}
+
+/** The size one day's square comes out at, for a card `cardHeight` tall. */
+export function cellBox(rows: number, cardHeight: number): CellBox {
+	const grid = cardHeight - CARD_CHROME;
+	return {
+		w: CELL_W,
+		h: Math.min(CELL_MAX_H, Math.max(60, (grid - (rows - 1) * CELL_GAP) / rows)),
+	};
+}
+
+/**
+ * The cell the mark sizes are calibrated against: the tallest one, which is a
+ * Story card's. Deliberately the roomiest rather than the default, because the
+ * scale below only ever shrinks from here — sizing to the Feed card instead
+ * would mean the Story card grew past what was checked, and the Story card is
+ * the one whose piles read correctly.
+ */
+export const REF_CELL_H = CELL_MAX_H;
+
+/**
+ * How much bigger or smaller the prints are drawn on this card than on the one
+ * the weights were calibrated against.
+ *
+ * A print's size means minutes, and it still does — WITHIN one card, which is
+ * the only place two prints are ever compared. Across aspects the whole drawing
+ * scales, because a 108px poster is proportionate in a 230px-tall cell and
+ * enormous in a 167px one. Leaving the sizes fixed is what made the Feed card
+ * bury the days above it while the Story card looked right.
+ *
+ * Square-rooted because a cell only SHRINKS in one direction — its width is the
+ * same at every aspect — so scaling by the full height ratio would make the
+ * prints far too narrow for a column that never got any narrower. Capped at 1:
+ * the reference is the roomiest cell there is, so this only ever takes away.
+ */
+export function cellScale(cell: CellBox): number {
+	return Math.min(1, Math.max(0.7, Math.sqrt(cell.h / REF_CELL_H)));
+}
+
+// ---------------------------------------------------------------------------
 // The pile
 // ---------------------------------------------------------------------------
 
@@ -509,10 +578,12 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  * outside every print already placed. Two rules, because "how much is hidden"
  * and "is it stuck on top of something" are two different complaints.
  *
- * `SPREAD_X` / `SPREAD_Y` — the pile is an ellipse, not a circle, because a
- * day's square isn't square: ~128px across and ~180px down. Spilling up and
+ * The pile is an ellipse, not a circle, because a day's square isn't square —
+ * and its axes come from that square rather than from two constants, since the
+ * square is a different shape at every aspect (see `spreadOf`). Spilling up and
  * down lands prints on the week above and below; spilling sideways lands them
- * on the days most easily confused with the one they belong to.
+ * on the days most easily confused with the one they belong to, so the taller
+ * the cell the more of the travel is given to the vertical.
  *
  * `MAX_RADIUS` — where a print stops being pushed outward and is allowed to
  * cover more than its share after all. Only a day with more prints than will
@@ -520,9 +591,14 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  * marooned two cells from its own date.
  */
 export const MAX_COVER = 0.3;
-export const SPREAD_X = 0.82;
-export const SPREAD_Y = 1.18;
 export const MAX_RADIUS = 130;
+
+/** The ellipse's two axes, normalised so their mean is 1 — the pile stretches
+ *  to the shape of the day it sits in without getting larger overall. */
+export function spreadOf(cell: CellBox): { x: number; y: number } {
+	const mean = (cell.w + cell.h) / 2;
+	return { x: cell.w / mean, y: cell.h / mean };
+}
 
 interface Placed {
 	dx: number;
@@ -555,8 +631,9 @@ function overlapArea(a: Placed, b: { dx: number; dy: number; w: number; h: numbe
  * A day holds at most a handful of prints, so walking out in 3px steps costs
  * nothing worth measuring.
  */
-export function placeCluster(marks: JournalMark[]): JournalMark[] {
+export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[] {
 	if (marks.length <= 1) return marks;
+	const spread = spreadOf(cell);
 	const placed: Placed[] = [];
 	return marks.map((mark, i) => {
 		const { w, h } = mark.box;
@@ -568,8 +645,8 @@ export function placeCluster(marks: JournalMark[]): JournalMark[] {
 		// ±0.5 rad off the golden step, so the pile never reads as the spiral it
 		// is underneath.
 		const angle = i * GOLDEN_ANGLE + ((key % 100) / 100 - 0.5);
-		const cos = Math.cos(angle) * SPREAD_X;
-		const sin = Math.sin(angle) * SPREAD_Y;
+		const cos = Math.cos(angle) * spread.x;
+		const sin = Math.sin(angle) * spread.y;
 
 		let radius = 0;
 		let added: number[] = [];
@@ -635,9 +712,11 @@ export function dayLayer(date: number): number {
  * rather than one section's stack — the whole point of this card is that a
  * Tuesday with a ride, a chapter and a taco is one picture.
  */
-export function buildCells(key: string, items: JournalItem[]): JournalCell[] {
+export function buildCells(key: string, items: JournalItem[], cell?: CellBox): JournalCell[] {
 	const parsed = parseMonthKey(key);
 	if (!parsed) return [];
+	const square = cell ?? cellBox(weekRows(key), 1350);
+	const scale = cellScale(square);
 	const { year, month } = parsed;
 	const days = daysInMonth(year, month);
 	const first = firstWeekdayIndex(year, month);
@@ -664,7 +743,10 @@ export function buildCells(key: string, items: JournalItem[]): JournalCell[] {
 			// doesn't depend on which query came back first.
 			.sort((a, b) => b.minutes - a.minutes || a.track.localeCompare(b.track) || a.key.localeCompare(b.key));
 		const present = new Set(day.map((d) => d.track));
-		const marks = placeCluster(day.map(toMark));
+		const marks = placeCluster(
+			day.map((d) => toMark(d, scale)),
+			square,
+		);
 		cells.push({
 			outside: false,
 			date,

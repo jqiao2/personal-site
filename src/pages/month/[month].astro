@@ -23,7 +23,14 @@ import { listMonthWatches } from '../../lib/films';
 import { getReadingMonth } from '../../lib/books-queries';
 import { listMonthVisits } from '../../lib/restaurants';
 import { listActivitiesForMonth } from '../../lib/activities';
-import { activityItems, bookItems, buildCells, filmItems, mealItems } from '../../lib/journal-month';
+import {
+	activityItems,
+	bookItems,
+	buildCells,
+	cellBox,
+	filmItems,
+	mealItems,
+} from '../../lib/journal-month';
 import {
 	ASPECTS,
 	aspectBySlug,
@@ -32,6 +39,7 @@ import {
 	parseMonthKey,
 	shiftMonth,
 	WEEKDAYS,
+	weekRows,
 } from '../../lib/share-card';
 import { listJournalMonths } from '../../lib/journal-months';
 
@@ -58,10 +66,16 @@ const items = [
 	...activityItems(activities),
 ];
 
-const cells = buildCells(key, items);
-const rows = Math.max(1, cells.length / 7);
-
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+const rows = weekRows(key);
+
+// The pile is scattered around the middle of a day rather than fitted inside
+// it, so how far a print may travel is a question about the day's square — and
+// that square is 167px tall on a Feed card and 230 on a Story one. Both the
+// print sizes and the shape of the scatter come off it, which is why the aspect
+// has to be known before the cells are built rather than after.
+const cells = buildCells(key, items, cellBox(rows, aspect.height));
+
 const prev = shiftMonth(key, -1);
 const next = shiftMonth(key, 1);
 const has = (k: string) => months.some((m) => m.key === k);

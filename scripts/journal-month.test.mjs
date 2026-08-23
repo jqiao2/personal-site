@@ -7,6 +7,7 @@
 //
 // Run: node --import ./scripts/ts-hook.mjs scripts/journal-month.test.mjs
 import assert from 'node:assert/strict';
+import { weekRows as weekRowsOf } from '../src/lib/share-card.ts';
 import {
 	BOOK_BOOST,
 	FILM_MINUTES,
@@ -24,9 +25,13 @@ import {
 	isSnack,
 	dayLayer,
 	markBox,
+	CELL_MAX_H,
 	MAX_COVER,
+	cellBox,
+	cellScale,
 	markSize,
 	placeCluster,
+	toMark,
 	mealItems,
 } from '../src/lib/journal-month.ts';
 
@@ -171,7 +176,8 @@ assert.ok(dayLayer(2) > dayLayer(1));
 // 14. The pile is a cluster, not a row. The day's biggest print anchors the
 //     middle and the rest scatter around it in two dimensions — the thing a
 //     wrapping flex line structurally cannot do.
-const pile = placeCluster(march4.marks);
+const CELL = cellBox(6, 1350);
+const pile = placeCluster(march4.marks, CELL);
 assert.equal(pile.length, march4.marks.length);
 assert.equal(pile[0].dx, 0, 'the main event anchors the centre');
 assert.equal(pile[0].dy, 0);
@@ -186,7 +192,7 @@ const far = Math.max(...pile.map((m) => Math.hypot(m.dx, m.dy)));
 assert.ok(far > 20 && far < 190, `the pile should spread, not fly apart — got ${far}`);
 // Stable: same marks in, same pile out, so a reload never reshuffles the page.
 assert.deepEqual(
-	placeCluster(march4.marks).map((m) => [m.dx, m.dy]),
+	placeCluster(march4.marks, CELL).map((m) => [m.dx, m.dy]),
 	pile.map((m) => [m.dx, m.dy]),
 );
 // NOTHING GETS BURIED. This is the property that matters and the one that has
@@ -219,7 +225,7 @@ for (let i = 0; i < pile.length; i++) {
 const lopsided = placeCluster([
 	{ ...pile[0], key: 'big', box: { w: 72, h: 108 }, dx: 0, dy: 0 },
 	{ ...pile[0], key: 'small', box: { w: 30, h: 30 }, dx: 0, dy: 0 },
-]);
+], CELL);
 assert.ok(hiddenOf(lopsided, 0) / area(lopsided[0]) <= MAX_COVER + 0.01);
 // The coverage budget alone would have allowed this one: a 30px print laid dead
 // centre on a 72x108 poster hides only 11% of it. Its centre still has to clear
@@ -235,13 +241,45 @@ const posters = placeCluster([
 	{ ...pile[0], key: 'a', box: { w: 72, h: 108 }, dx: 0, dy: 0 },
 	{ ...pile[0], key: 'b', box: { w: 69, h: 103 }, dx: 0, dy: 0 },
 	{ ...pile[0], key: 'c', box: { w: 60, h: 89 }, dx: 0, dy: 0 },
-]);
+], CELL);
 for (let i = 0; i < posters.length; i++) {
 	assert.ok(hiddenOf(posters, i) / area(posters[i]) <= MAX_COVER + 0.01);
 }
 
 // Degenerate days don't throw.
-assert.deepEqual(placeCluster([]), []);
-assert.equal(placeCluster([pile[0]])[0].dx, 0);
+assert.deepEqual(placeCluster([], CELL), []);
+assert.equal(placeCluster([pile[0]], CELL)[0].dx, 0);
+
+// 15. THE SCATTER IS A QUESTION ABOUT THE DAY'S SQUARE, and that square is a
+//     different shape at every aspect: a Feed cell is ~167px tall, a Story one
+//     230. Holding the pile's travel fixed is what let the Feed card bury the
+//     week above it while the Story card looked right.
+const feed = cellBox(weekRowsOf('2026-08'), 1350);
+const story = cellBox(weekRowsOf('2026-08'), 1920);
+assert.ok(story.h > feed.h, 'a taller artboard gives a day more room');
+assert.equal(story.h, CELL_MAX_H, 'and the cell stops growing at the cap');
+assert.equal(feed.w, story.w, 'only the height of a cell ever changes');
+
+// Prints scale with the square, so the same pile takes up the same PROPORTION
+// of its day whatever the card is cut to.
+assert.ok(cellScale(story) > cellScale(feed));
+assert.equal(cellScale(story), 1, 'the roomiest cell is the reference, so it never scales');
+assert.ok(cellScale(feed) >= 0.7 && cellScale(feed) < 1, 'and a shorter cell only ever shrinks');
+
+// The spill is measured against the cell it spills out of, and stays comparable.
+function spillOf(cell) {
+	const marks = placeCluster(
+		march4.marks.map((m) => toMark(m, cellScale(cell))),
+		cell,
+	);
+	const ys = marks.flatMap((m) => [m.dy - m.box.h / 2, m.dy + m.box.h / 2]);
+	return (Math.max(...ys.map(Math.abs)) - cell.h / 2) / cell.h;
+}
+const feedSpill = spillOf(feed);
+const storySpill = spillOf(story);
+assert.ok(
+	Math.abs(feedSpill - storySpill) < 0.2,
+	`the pile should spill a similar share of its day at either aspect — feed ${(feedSpill * 100).toFixed(0)}%, story ${(storySpill * 100).toFixed(0)}%`,
+);
 
 console.log('journal-month: ok');
