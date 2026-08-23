@@ -11,7 +11,8 @@
 //   npm run activities:add -- <dir-or-file> [options]
 //
 //   --sport SLUG   force the sport, for a file that doesn't state one
-//   --gear NAME    tag it to a piece of gear, by the name in activity_gear
+//   --gear NAME    tag every file to this gear, by its name in activity_gear
+//   --no-gear      tag nothing, not even the per-sport default
 //   --dry          parse and report, write nothing, move nothing
 //   --keep         write, but leave the files where they are
 //
@@ -49,10 +50,38 @@ const flag = (name, fallback) => {
 const DRY = has('--dry');
 const KEEP = has('--keep');
 const SPORT = flag('--sport', null);
-// No gear is guessed from the sport or from what was ridden last: gear decides
-// component mileage, and a chain silently credited with someone else's miles is
-// worse than a ride with no bike on it. Say which, or leave it off.
 const GEAR = flag('--gear', null);
+const NO_GEAR = has('--no-gear');
+
+/**
+ * What each sport is done on, when nothing says otherwise.
+ *
+ * A file names no gear, and gear is what turns a ride into chain mileage — so
+ * the choice is between defaulting and having every drop-imported activity sit
+ * outside the component wear numbers until someone remembers to tag it. This
+ * is the owner's own list, and the site can correct any single activity
+ * afterwards, which is what makes a default safe here: it is a first guess on
+ * a record that stays editable, not a fact being asserted.
+ *
+ * Only sports with an unambiguous answer are here. A mountain bike ride, a
+ * swim, a ski day get nothing rather than something plausible — an unmapped
+ * sport is a question the site can ask, whereas a wrongly-tagged one is
+ * mileage on the wrong part that nobody goes looking for.
+ *
+ * Names, not ids, because a name is checkable by eye against /activities/gear
+ * and an id is not. They are resolved at startup and a miss is fatal, so a
+ * renamed or retired pair fails loudly here rather than silently tagging
+ * nothing for a year.
+ */
+const DEFAULT_GEAR = {
+	ride: 'Cervélo S3',
+	virtual_ride: 'Cervélo S3',
+	gravel_ride: 'Burple',
+	run: 'Brooks Ghost Max 2',
+	treadmill_run: 'Brooks Ghost Max 2',
+	trail_run: 'Altra Lone Peak 9',
+	hike: 'Altra Lone Peak 9',
+};
 
 const DEFAULT_DIR = process.env.ACTIVITY_DROP ?? join(homedir(), 'Desktop', 'activities');
 const VALUE_FLAGS = new Set(['--sport', '--gear']);
@@ -109,20 +138,64 @@ if (db) {
 	if (!thresholdRows.length) log('WARNING: athlete_thresholds is empty — everything will score on the MET floor.');
 }
 
-let gearId = null;
-if (GEAR && db) {
-	const { data, error } = await db.from('activity_gear').select('id, name').ilike('name', GEAR).limit(2);
+// ---------------------------------------------------------------------------
+// Gear
+// ---------------------------------------------------------------------------
+
+let gearRows = [];
+if (db && !NO_GEAR) {
+	const { data, error } = await db.from('activity_gear').select('id, name, first_used_on, retired_at');
 	if (error) throw new Error(`read activity_gear: ${error.message}`);
-	if (!data?.length) {
-		log(`no gear named ${JSON.stringify(GEAR)} — see /activities/gear for the names in use.`);
+	gearRows = data ?? [];
+}
+
+/** By name, case-insensitively — the name is what the flag and the table above
+ *  are written in. Exactly one match or nothing. */
+function gearNamed(name) {
+	const hits = gearRows.filter((g) => g.name.toLowerCase() === name.toLowerCase());
+	return hits.length === 1 ? hits[0] : null;
+}
+
+let forced = null;
+if (GEAR && db && !NO_GEAR) {
+	forced = gearNamed(GEAR);
+	if (!forced) {
+		log(`no single piece of gear named ${JSON.stringify(GEAR)} — see /activities/gear for the names in use.`);
 		process.exit(1);
 	}
-	if (data.length > 1) {
-		log(`${JSON.stringify(GEAR)} matches more than one piece of gear. Use the full name.`);
+	log(`tagging everything to ${forced.name}`);
+}
+
+// A default that names gear which has been renamed away would silently tag
+// nothing, forever. Checked once, at startup, out loud.
+if (db && !NO_GEAR && !forced) {
+	const missing = [...new Set(Object.values(DEFAULT_GEAR))].filter((n) => !gearNamed(n));
+	if (missing.length) {
+		log(`DEFAULT_GEAR names gear that is not in activity_gear: ${missing.join(', ')}`);
+		log('Fix the table in this script (or the names on /activities/gear) — a default that matches nothing tags nothing.');
 		process.exit(1);
 	}
-	gearId = data[0].id;
-	log(`tagging everything to ${data[0].name}`);
+}
+
+/**
+ * The gear for an activity, or null.
+ *
+ * A default only applies while the gear was IN SERVICE on the day. The trail
+ * shoe changed on 2026-07-01 (migration 0042) and both pairs are still in the
+ * table, so a June hike imported today must not be credited to the pair that
+ * replaced them. Outside the window it returns null and says so, rather than
+ * picking the nearest pair.
+ */
+function gearFor(sport, date) {
+	if (NO_GEAR) return null;
+	if (forced) return forced;
+
+	const name = DEFAULT_GEAR[sport];
+	if (!name) return null;
+	const g = gearNamed(name);
+	if (g.first_used_on && date < g.first_used_on) return { out: `${g.name} was not in service on ${date}` };
+	if (g.retired_at && date >= g.retired_at.slice(0, 10)) return { out: `${g.name} was retired by ${date}` };
+	return g;
 }
 
 /** The row in force on a date — §5's rule, the same one the app applies. */
@@ -264,7 +337,10 @@ for (const path of files) {
 	const date = localDate(canonical.started_at, canonical.utc_offset_minutes ?? 0);
 	const summary = `${canonical.sport} ${date} ${((canonical.distance_m ?? 0) / 1000).toFixed(1)}km`;
 	const { activity, streams, laps } = toRows(canonical, thresholdsOn(date));
-	const scored = `exertion ${activity.exertion ?? '-'} (${activity.exertion_method ?? 'none'})`;
+	const gear = gearFor(canonical.sport, date);
+	const scored =
+		`exertion ${activity.exertion ?? '-'} (${activity.exertion_method ?? 'none'})` +
+		(gear?.name ? `, on ${gear.name}` : gear?.out ? `, no gear: ${gear.out}` : '');
 
 	if (DRY) {
 		stats.added++;
@@ -282,7 +358,7 @@ for (const path of files) {
 
 	try {
 		const id = await insertActivity({
-			activity: gearId ? { ...activity, gear_id: gearId } : activity,
+			activity: gear?.id ? { ...activity, gear_id: gear.id } : activity,
 			streams,
 			laps,
 			source: {
