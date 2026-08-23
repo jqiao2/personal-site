@@ -10,7 +10,7 @@
 // derive: no exertion, no route path, no database. See canonical.ts.
 
 import { Decoder, Stream } from '@garmin/fitsdk';
-import { refineSport, UnknownSportError, type CanonicalActivity, type CanonicalLap, type CanonicalStreams } from './canonical';
+import { refineSport, sportFromFit, UnknownSportError, type CanonicalActivity, type CanonicalLap, type CanonicalStreams } from './canonical';
 import type { Sport } from './../sports';
 
 /** FIT stores lat/lng as "semicircles": a signed 32-bit sweep of the globe.
@@ -156,44 +156,6 @@ function oneSession(
 			sport,
 		),
 	};
-}
-
-/** A FIT session's own sport vocabulary → ours. Only consulted for a
- *  multisport file's legs, where the file knows better than Strava's label
- *  (see `oneSession`); everything else goes through `refineSport`. */
-export function sportFromFit(fitSport?: string, fitSubSport?: string): Sport | null {
-	switch (fitSport) {
-		case 'swimming':
-			return fitSubSport === 'openWater' ? 'open_water_swim' : 'swim';
-		case 'transition':
-			return 'transition';
-		case 'cycling':
-			return fitSubSport === 'indoorCycling' || fitSubSport === 'virtualActivity' ? 'virtual_ride' : 'ride';
-		case 'running':
-			return fitSubSport === 'treadmill' ? 'treadmill_run' : fitSubSport === 'trail' ? 'trail_run' : 'run';
-		case 'hiking':
-			return 'hike';
-		case 'walking':
-			return 'walk';
-		case 'training':
-			return 'strength';
-		case 'rowing':
-			return 'rowing';
-		case 'paddling':
-			return 'kayak';
-		case 'alpineSkiing':
-			return 'alpine_ski';
-		case 'crossCountrySkiing':
-			return 'nordic_ski';
-		case 'snowboarding':
-			return 'snowboard';
-		case 'snowshoeing':
-			return 'snowshoe';
-		case 'inlineSkating':
-			return 'inline_skate';
-		default:
-			return null;
-	}
 }
 
 /**

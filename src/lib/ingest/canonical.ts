@@ -184,6 +184,9 @@ export function sportFromStrava(providerType: string): Sport {
  * its keys normalised rather than copied and drifted. Returns null instead of
  * throwing: a dropped file's type is a hint, and the caller has a `--sport`
  * override to fall back on.
+ *
+ * A file Strava never touched uses FIT's words instead, so `sportFromFit`
+ * closes the chain.
  */
 const STRAVA_SPORTS_SQUASHED: Record<string, Sport> = Object.fromEntries(
 	Object.entries(STRAVA_SPORTS).map(([k, v]) => [k.toLowerCase().replace(/[^a-z]/g, ''), v]),
@@ -194,10 +197,55 @@ const STRAVA_SPORTS_SQUASHED: Record<string, Sport> = Object.fromEntries(
  *  the case `--sport` exists for. */
 const TCX_SPORTS: Record<string, Sport> = { biking: 'ride', running: 'run' };
 
+/**
+ * A FIT session's own sport vocabulary → ours. Consulted for a multisport
+ * file's legs, where the file knows better than Strava's label (see fit.ts's
+ * `oneSession`); everything else from a FIT file goes through `refineSport`.
+ *
+ * It is ALSO the last resort for a GPX/TCX `<type>`, because this is the
+ * vocabulary a device writes when it isn't Strava doing the writing — a head
+ * unit exporting straight to GPX says `cycling`, not `Ride`. Same words, two
+ * containers; one table.
+ */
+export function sportFromFit(fitSport?: string, fitSubSport?: string): Sport | null {
+	switch (fitSport) {
+		case 'swimming':
+			return fitSubSport === 'openWater' ? 'open_water_swim' : 'swim';
+		case 'transition':
+			return 'transition';
+		case 'cycling':
+			return fitSubSport === 'indoorCycling' || fitSubSport === 'virtualActivity' ? 'virtual_ride' : 'ride';
+		case 'running':
+			return fitSubSport === 'treadmill' ? 'treadmill_run' : fitSubSport === 'trail' ? 'trail_run' : 'run';
+		case 'hiking':
+			return 'hike';
+		case 'walking':
+			return 'walk';
+		case 'training':
+			return 'strength';
+		case 'rowing':
+			return 'rowing';
+		case 'paddling':
+			return 'kayak';
+		case 'alpineSkiing':
+			return 'alpine_ski';
+		case 'crossCountrySkiing':
+			return 'nordic_ski';
+		case 'snowboarding':
+			return 'snowboard';
+		case 'snowshoeing':
+			return 'snowshoe';
+		case 'inlineSkating':
+			return 'inline_skate';
+		default:
+			return null;
+	}
+}
+
 export function sportFromXmlType(type: string | null | undefined): Sport | null {
 	if (!type) return null;
 	const key = type.toLowerCase().replace(/[^a-z]/g, '');
-	return STRAVA_SPORTS_SQUASHED[key] ?? TCX_SPORTS[key] ?? null;
+	return STRAVA_SPORTS_SQUASHED[key] ?? TCX_SPORTS[key] ?? sportFromFit(type.trim()) ?? null;
 }
 
 /**
