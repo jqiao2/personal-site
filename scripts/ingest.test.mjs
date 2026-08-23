@@ -138,6 +138,11 @@ const TH = {
 	assert.equal(sportFromXmlType('9'), null, 'an unrecognised type must not guess');
 	assert.equal(sportFromXmlType(null), null);
 	assert.equal(sportFromXmlType('Other'), null, "'Other' means the file does not know");
+	// A GPX a device wrote itself uses FIT's vocabulary, not Strava's.
+	assert.equal(sportFromXmlType('cycling'), 'ride');
+	assert.equal(sportFromXmlType('running'), 'run');
+	assert.equal(sportFromXmlType('hiking'), 'hike');
+	assert.equal(sportFromXmlType('alpineSkiing'), 'alpine_ski');
 }
 
 // ---------------------------------------------------------------------------
