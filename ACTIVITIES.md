@@ -44,7 +44,7 @@ repeating.
 
 ```
 npm run activities:add                      # ~/Desktop/activities, or $ACTIVITY_DROP
-npm run activities:add -- <dir|file> [--dry] [--sport SLUG] [--gear NAME] [--keep]
+npm run activities:add -- <dir|file> [--dry] [--sport SLUG] [--gear NAME] [--no-gear] [--keep]
 ```
 
 §4's step 2, except that the "file drop" is a folder on the desktop rather
@@ -60,10 +60,20 @@ Two things it needs that an archive import got for free:
   squashed (`Gravel Ride` arrives as `gravelride`, which `sportFromXmlType`
   handles). Anything else stops and asks for `--sport`, rather than filing a
   ride as `other`.
-- **The gear, if the miles are to count.** A file names no bike, and nothing
-  is guessed from the sport or from what was ridden last — a chain credited
-  with someone else's miles is worse than a ride with no bike on it. Pass
-  `--gear "2023 Salsa Cutthroat"` and every file in the run is tagged to it.
+- **The gear, or the miles don't count.** A file names no bike, and gear is
+  what turns a ride into chain mileage, so each sport has a default in
+  `DEFAULT_GEAR` (rides on the Cervélo, gravel on the Burple, road and
+  treadmill runs on the Ghost Max 2, trail runs and hikes on the Altras).
+  Sports with no unambiguous answer — mountain bike, swim, ski — get nothing
+  rather than something plausible. A default is a first guess on a record that
+  stays editable on the site, not an assertion; `--gear NAME` forces one for
+  the whole run and `--no-gear` turns the lot off.
+
+  A default only applies while that gear was **in service on the day**, so a
+  June hike imported today is not credited to the pair that replaced the
+  Speedgoats on 2026-07-01 (migration 0042) — it comes in untagged and says
+  why. A name in `DEFAULT_GEAR` that matches nothing in `activity_gear` is
+  fatal at startup, because the alternative is tagging nothing for a year.
 - **Not importing the same ride twice**, since one session can arrive as a
   Garmin FIT and again as a Strava GPX. §4's first two rules do it: the file's
   sha256 against the unique `activity_sources.file_checksum`, then same sport
