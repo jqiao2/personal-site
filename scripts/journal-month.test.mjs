@@ -24,6 +24,7 @@ import {
 	isSnack,
 	dayLayer,
 	markBox,
+	MAX_COVER,
 	markSize,
 	placeCluster,
 	mealItems,
@@ -188,6 +189,57 @@ assert.deepEqual(
 	placeCluster(march4.marks).map((m) => [m.dx, m.dy]),
 	pile.map((m) => [m.dx, m.dy]),
 );
+// NOTHING GETS BURIED. This is the property that matters and the one that has
+// regressed twice — first from spacing off the day's mean print size, then from
+// modelling tall posters as circles. Measured the way you'd actually judge it:
+// how much of each print its neighbours hide, using the real rectangles.
+const area = (m) => m.box.w * m.box.h;
+const hiddenOf = (pile, i) =>
+	pile.reduce((total, other, j) => {
+		if (j <= i) return total; // only prints painted on top of this one
+		const x =
+			Math.min(pile[i].dx + pile[i].box.w / 2, other.dx + other.box.w / 2) -
+			Math.max(pile[i].dx - pile[i].box.w / 2, other.dx - other.box.w / 2);
+		const y =
+			Math.min(pile[i].dy + pile[i].box.h / 2, other.dy + other.box.h / 2) -
+			Math.max(pile[i].dy - pile[i].box.h / 2, other.dy - other.box.h / 2);
+		return total + (x > 0 && y > 0 ? x * y : 0);
+	}, 0);
+for (let i = 0; i < pile.length; i++) {
+	const frac = hiddenOf(pile, i) / area(pile[i]);
+	assert.ok(
+		frac <= MAX_COVER + 0.01,
+		`"${pile[i].title}" is ${(frac * 100).toFixed(0)}% buried — must stay under ${MAX_COVER * 100}%`,
+	);
+}
+
+// A small print dropped next to a big one clears the BIG one's real box, not
+// the average of the two and not a circle standing in for it — between them,
+// the two bugs that buried Magnolia behind a snapshot.
+const lopsided = placeCluster([
+	{ ...pile[0], key: 'big', box: { w: 72, h: 108 }, dx: 0, dy: 0 },
+	{ ...pile[0], key: 'small', box: { w: 30, h: 30 }, dx: 0, dy: 0 },
+]);
+assert.ok(hiddenOf(lopsided, 0) / area(lopsided[0]) <= MAX_COVER + 0.01);
+// The coverage budget alone would have allowed this one: a 30px print laid dead
+// centre on a 72x108 poster hides only 11% of it. Its centre still has to clear
+// the poster's box, or it reads as stuck to it rather than beside it.
+assert.ok(
+	Math.abs(lopsided[1].dx) > 36 || Math.abs(lopsided[1].dy) > 54,
+	'a small print must not sit dead centre on a big one',
+);
+
+// Two tall posters, the 16th's actual case: circles said they cleared, the
+// rectangles they really are did not.
+const posters = placeCluster([
+	{ ...pile[0], key: 'a', box: { w: 72, h: 108 }, dx: 0, dy: 0 },
+	{ ...pile[0], key: 'b', box: { w: 69, h: 103 }, dx: 0, dy: 0 },
+	{ ...pile[0], key: 'c', box: { w: 60, h: 89 }, dx: 0, dy: 0 },
+]);
+for (let i = 0; i < posters.length; i++) {
+	assert.ok(hiddenOf(posters, i) / area(posters[i]) <= MAX_COVER + 0.01);
+}
+
 // Degenerate days don't throw.
 assert.deepEqual(placeCluster([]), []);
 assert.equal(placeCluster([pile[0]])[0].dx, 0);

@@ -485,52 +485,110 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 /**
  * The knobs, and what each one does if you turn it.
  *
- * `PACK` — how far apart the prints sit, as a multiple of their own mean size.
- * Bigger spreads the pile out and lets more of it fall on the neighbouring
- * days; smaller buries the marks in each other. 0.52 puts a five-print day at
- * about a print's width from the middle.
+ * `MAX_COVER` — the most of any one print that may end up hidden under the
+ * prints laid over it. THIS IS THE ONE THAT MATTERS, and it has been wrong
+ * twice. First the spacing was computed from the day's MEAN print size, so a
+ * big print at the centre and a small one beside it were held apart by the
+ * same distance as two small ones — and the small one landed square on top of
+ * the big one. Then it was per-pair but modelled every print as a CIRCLE of
+ * its mean side, which is a poor stand-in for a 72 x 108 poster: two of them
+ * side by side clear as circles while their real rectangles still overlap by
+ * three fifths.
+ *
+ * So the constraint is the honest one, stated as what you actually want:
+ * measure the real rectangles, add up how much of each print its neighbours
+ * hide, and keep that under `MAX_COVER`. At 0.3 every print on the card is at
+ * least 70% visible — enough to recognise a poster by, which is the whole test
+ * (a route outline you can't trace and a film you can't name are both
+ * failures).
+ *
+ * A budget on its own isn't quite enough, though: a 26px snack laid dead in
+ * the middle of a 104px route hides only 6% of it, which is well inside the
+ * budget and still obviously wrong — it reads as one print stuck to another
+ * rather than as two things that happened. So a print's CENTRE must also fall
+ * outside every print already placed. Two rules, because "how much is hidden"
+ * and "is it stuck on top of something" are two different complaints.
  *
  * `SPREAD_X` / `SPREAD_Y` — the pile is an ellipse, not a circle, because a
- * day's square isn't square: ~128px across and ~180px down. Spreading wider
- * than tall would push prints onto the day either side, which are the days a
- * reader is most likely to confuse them with; spilling up and down lands them
- * on the week above and below, which is further away in every sense.
+ * day's square isn't square: ~128px across and ~180px down. Spilling up and
+ * down lands prints on the week above and below; spilling sideways lands them
+ * on the days most easily confused with the one they belong to.
  *
- * `SPACING_FLOOR` — the smallest print size the spacing may be computed from.
- * Without it a day of seven small things (two chapters, a coffee, a snack)
- * scatters over 85 x 94px and leaves most of its square empty, because the
- * spacing is derived from the prints and the prints are tiny. The day is still
- * a whole day and still owns its square, so the pile gets a minimum spread
- * whatever it happens to be made of.
+ * `MAX_RADIUS` — where a print stops being pushed outward and is allowed to
+ * cover more than its share after all. Only a day with more prints than will
+ * fit reaches it, and a crowded pile is a better failure than one print
+ * marooned two cells from its own date.
  */
-export const PACK = 0.52;
-export const SPACING_FLOOR = 46;
+export const MAX_COVER = 0.3;
 export const SPREAD_X = 0.82;
 export const SPREAD_Y = 1.18;
+export const MAX_RADIUS = 130;
+
+interface Placed {
+	dx: number;
+	dy: number;
+	w: number;
+	h: number;
+	/** Area of this print already hidden by the ones laid over it, in px². */
+	hidden: number;
+}
+
+/** How much of `a` the box `b` covers, in px². The prints are tilted by a few
+ *  degrees, which this ignores — at ±4° the difference is a rounding error. */
+function overlapArea(a: Placed, b: { dx: number; dy: number; w: number; h: number }): number {
+	const x = Math.min(a.dx + a.w / 2, b.dx + b.w / 2) - Math.max(a.dx - a.w / 2, b.dx - b.w / 2);
+	const y = Math.min(a.dy + a.h / 2, b.dy + b.h / 2) - Math.max(a.dy - a.h / 2, b.dy - b.h / 2);
+	return x > 0 && y > 0 ? x * y : 0;
+}
 
 /**
  * The day's marks with their offsets filled in. Pure, and stable: the jitter
  * comes from each mark's own key, so a reload doesn't reshuffle the pile.
+ *
+ * Each print after the first walks OUT along its own angle until it no longer
+ * buries anything already placed — a greedy solve rather than a formula,
+ * because the sizes in a day are wildly uneven (a five-hour ride and a
+ * croissant) and no single radius is right for both. Coverage is CUMULATIVE:
+ * three prints each hiding a fifth of the centre one is the same problem as
+ * one hiding three fifths, so what's already hidden is carried forward.
+ *
+ * A day holds at most a handful of prints, so walking out in 3px steps costs
+ * nothing worth measuring.
  */
 export function placeCluster(marks: JournalMark[]): JournalMark[] {
 	if (marks.length <= 1) return marks;
-	// Spacing scales with the prints themselves, so a day of long films spreads
-	// further than a day of snacks rather than both using one fixed radius.
-	const mean = Math.max(
-		SPACING_FLOOR,
-		marks.reduce((total, m) => total + (m.box.w + m.box.h) / 2, 0) / marks.length,
-	);
+	const placed: Placed[] = [];
 	return marks.map((mark, i) => {
-		if (i === 0) return mark;
-		const h = hash(`${mark.track}:${mark.key}:place`);
-		// ±0.5 rad off the golden step, and ±15% on the distance.
-		const angle = i * GOLDEN_ANGLE + ((h % 100) / 100 - 0.5);
-		const radius = PACK * mean * Math.sqrt(i) * (0.85 + ((h >> 7) % 100) / 100 / 3.33);
-		return {
-			...mark,
-			dx: Math.round(radius * Math.cos(angle) * SPREAD_X),
-			dy: Math.round(radius * Math.sin(angle) * SPREAD_Y),
-		};
+		const { w, h } = mark.box;
+		if (i === 0) {
+			placed.push({ dx: 0, dy: 0, w, h, hidden: 0 });
+			return mark;
+		}
+		const key = hash(`${mark.track}:${mark.key}:place`);
+		// ±0.5 rad off the golden step, so the pile never reads as the spiral it
+		// is underneath.
+		const angle = i * GOLDEN_ANGLE + ((key % 100) / 100 - 0.5);
+		const cos = Math.cos(angle) * SPREAD_X;
+		const sin = Math.sin(angle) * SPREAD_Y;
+
+		let radius = 0;
+		let added: number[] = [];
+		for (; radius < MAX_RADIUS; radius += 3) {
+			const box = { dx: radius * cos, dy: radius * sin, w, h };
+			added = placed.map((other) => overlapArea(other, box));
+			const clear = placed.every(
+				(other, j) =>
+					other.hidden + added[j] <= MAX_COVER * other.w * other.h &&
+					// ...and this print's own middle is not sitting on that one.
+					(Math.abs(box.dx - other.dx) > other.w / 2 || Math.abs(box.dy - other.dy) > other.h / 2),
+			);
+			if (clear) break;
+		}
+		const dx = radius * cos;
+		const dy = radius * sin;
+		for (const [j, other] of placed.entries()) other.hidden += added[j] ?? 0;
+		placed.push({ dx, dy, w, h, hidden: 0 });
+		return { ...mark, dx: Math.round(dx), dy: Math.round(dy) };
 	});
 }
 
