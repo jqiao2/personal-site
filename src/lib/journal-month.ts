@@ -267,6 +267,10 @@ export interface JournalMark extends JournalItem {
 	/** Degrees of tilt — pinned to `key`, small, and never zero, so a cluster
 	 *  looks stuck in by hand rather than laid out. */
 	tilt: number;
+	/** Offset from the centre of the day's square, in artboard px. Set by
+	 *  `placeCluster`, which needs the whole day, so it is 0,0 until then. */
+	dx: number;
+	dy: number;
 }
 
 /** A stable small number from a string — the tilt's only input. */
@@ -282,7 +286,7 @@ export function toMark(item: JournalItem): JournalMark {
 	// as a layout, and the whole point of a cluster is that it isn't one.
 	const tilt = ((h % 8) - 4 + (h % 2 ? 0.5 : -0.5)) * 0.9;
 	const size = markSize(item.minutes);
-	return { ...item, size, box: markBox(size, item.aspect), tilt };
+	return { ...item, size, box: markBox(size, item.aspect), tilt, dx: 0, dy: 0 };
 }
 
 // ---------------------------------------------------------------------------
@@ -443,6 +447,94 @@ export function activityItems(activities: ActivityRow[]): JournalItem[] {
 }
 
 // ---------------------------------------------------------------------------
+// The pile
+// ---------------------------------------------------------------------------
+
+/**
+ * How the day's prints are scattered.
+ *
+ * WHY NOT JUST WRAP THEM. The first version let the marks flow left to right
+ * and wrap, which is what a text layout does — and it looks like one: a row,
+ * then another row under it, every cluster reading as a line of things rather
+ * than a handful. It also wastes the square. A day is roughly 128 x 180px and a
+ * row only ever uses the top of it, so the marks had to stay small enough to
+ * queue up, which is the opposite of what this card wants.
+ *
+ * SO THEY GET REAL POSITIONS. Each print is placed at an angle and a distance
+ * from the middle of the day. The angles walk by the golden angle (137.5°),
+ * which is how a sunflower packs seeds — consecutive marks land nowhere near
+ * each other, and nothing clumps on one side the way stepping by a round
+ * fraction of a turn would. The distance grows as √i, which is what keeps the
+ * density even as the pile gets bigger rather than leaving a hole in the
+ * middle or a ring around the outside.
+ *
+ * THE BIGGEST PRINT IS AT THE CENTRE, because the marks arrive sorted biggest
+ * first and the first one gets distance zero. That is also the right editorial
+ * answer: the thing that took the most of the day anchors it and the rest are
+ * scattered over it.
+ *
+ * AND THEN IT'S KNOCKED OFF THE PATTERN. A perfect phyllotaxis is legible as a
+ * pattern, which is its own kind of wrong — so each mark's angle and distance
+ * are jittered by its own hash. Same input, same pile, every render; nothing on
+ * a grid.
+ */
+
+/** 137.5°, in radians — the angle a sunflower steps by. */
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+/**
+ * The knobs, and what each one does if you turn it.
+ *
+ * `PACK` — how far apart the prints sit, as a multiple of their own mean size.
+ * Bigger spreads the pile out and lets more of it fall on the neighbouring
+ * days; smaller buries the marks in each other. 0.52 puts a five-print day at
+ * about a print's width from the middle.
+ *
+ * `SPREAD_X` / `SPREAD_Y` — the pile is an ellipse, not a circle, because a
+ * day's square isn't square: ~128px across and ~180px down. Spreading wider
+ * than tall would push prints onto the day either side, which are the days a
+ * reader is most likely to confuse them with; spilling up and down lands them
+ * on the week above and below, which is further away in every sense.
+ *
+ * `SPACING_FLOOR` — the smallest print size the spacing may be computed from.
+ * Without it a day of seven small things (two chapters, a coffee, a snack)
+ * scatters over 85 x 94px and leaves most of its square empty, because the
+ * spacing is derived from the prints and the prints are tiny. The day is still
+ * a whole day and still owns its square, so the pile gets a minimum spread
+ * whatever it happens to be made of.
+ */
+export const PACK = 0.52;
+export const SPACING_FLOOR = 46;
+export const SPREAD_X = 0.82;
+export const SPREAD_Y = 1.18;
+
+/**
+ * The day's marks with their offsets filled in. Pure, and stable: the jitter
+ * comes from each mark's own key, so a reload doesn't reshuffle the pile.
+ */
+export function placeCluster(marks: JournalMark[]): JournalMark[] {
+	if (marks.length <= 1) return marks;
+	// Spacing scales with the prints themselves, so a day of long films spreads
+	// further than a day of snacks rather than both using one fixed radius.
+	const mean = Math.max(
+		SPACING_FLOOR,
+		marks.reduce((total, m) => total + (m.box.w + m.box.h) / 2, 0) / marks.length,
+	);
+	return marks.map((mark, i) => {
+		if (i === 0) return mark;
+		const h = hash(`${mark.track}:${mark.key}:place`);
+		// ±0.5 rad off the golden step, and ±15% on the distance.
+		const angle = i * GOLDEN_ANGLE + ((h % 100) / 100 - 0.5);
+		const radius = PACK * mean * Math.sqrt(i) * (0.85 + ((h >> 7) % 100) / 100 / 3.33);
+		return {
+			...mark,
+			dx: Math.round(radius * Math.cos(angle) * SPREAD_X),
+			dy: Math.round(radius * Math.sin(angle) * SPREAD_Y),
+		};
+	});
+}
+
+// ---------------------------------------------------------------------------
 // The grid
 // ---------------------------------------------------------------------------
 
@@ -514,7 +606,7 @@ export function buildCells(key: string, items: JournalItem[]): JournalCell[] {
 			// doesn't depend on which query came back first.
 			.sort((a, b) => b.minutes - a.minutes || a.track.localeCompare(b.track) || a.key.localeCompare(b.key));
 		const present = new Set(day.map((d) => d.track));
-		const marks = day.map(toMark);
+		const marks = placeCluster(day.map(toMark));
 		cells.push({
 			outside: false,
 			date,

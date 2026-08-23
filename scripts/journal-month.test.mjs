@@ -25,6 +25,7 @@ import {
 	dayLayer,
 	markBox,
 	markSize,
+	placeCluster,
 	mealItems,
 } from '../src/lib/journal-month.ts';
 
@@ -165,5 +166,30 @@ assert.equal(noshot.aspect, 1);
 //     over the course of the month rather than in an arbitrary order.
 assert.ok(dayLayer(31) > dayLayer(30));
 assert.ok(dayLayer(2) > dayLayer(1));
+
+// 14. The pile is a cluster, not a row. The day's biggest print anchors the
+//     middle and the rest scatter around it in two dimensions — the thing a
+//     wrapping flex line structurally cannot do.
+const pile = placeCluster(march4.marks);
+assert.equal(pile.length, march4.marks.length);
+assert.equal(pile[0].dx, 0, 'the main event anchors the centre');
+assert.equal(pile[0].dy, 0);
+// Nothing sits on top of anything else at the same spot.
+const spots = new Set(pile.map((m) => `${m.dx},${m.dy}`));
+assert.equal(spots.size, pile.length, 'every print gets its own place');
+// Both axes are used — a row layout would leave dy flat.
+assert.ok(pile.some((m) => Math.abs(m.dy) > 12), 'the pile uses the height of the day');
+assert.ok(pile.some((m) => Math.abs(m.dx) > 12), 'and its width');
+// The scatter grows outward, so the pile fills rather than ringing.
+const far = Math.max(...pile.map((m) => Math.hypot(m.dx, m.dy)));
+assert.ok(far > 20 && far < 190, `the pile should spread, not fly apart — got ${far}`);
+// Stable: same marks in, same pile out, so a reload never reshuffles the page.
+assert.deepEqual(
+	placeCluster(march4.marks).map((m) => [m.dx, m.dy]),
+	pile.map((m) => [m.dx, m.dy]),
+);
+// Degenerate days don't throw.
+assert.deepEqual(placeCluster([]), []);
+assert.equal(placeCluster([pile[0]])[0].dx, 0);
 
 console.log('journal-month: ok');

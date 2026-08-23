@@ -137,15 +137,16 @@ const query = monthQuery(aspect);
 											style={`--layer:${c.layer}`}
 										>
 											{!c.outside && <span class="cell__n">{c.date}</span>}
-											{/* Biggest first, so the cluster anchors on the day's main
-											    event and the smaller things land on top of it — the
+											{/* Biggest first: the day's main event is placed at the
+											    centre and the rest are scattered over it, so the later
+											    ones in source order also paint on top — which is the
 											    order you would have stuck them in. */}
 											<div class="cluster">
 												{c.marks.map((m) => (
 													<a
 														class:list={['mark', `mark--${m.track}`, !m.image && !m.route && 'mark--bare']}
 														href={m.href ?? undefined}
-														style={`--w:${m.box.w}px; --h:${m.box.h}px; --t:${m.tilt}deg`}
+														style={`--w:${m.box.w}px; --h:${m.box.h}px; --t:${m.tilt}deg; --dx:${m.dx}px; --dy:${m.dy}px`}
 														title={`${m.title} · ${m.detail} · ${Math.round(m.minutes)} min`}
 													>
 														{m.image ? (
@@ -517,26 +518,13 @@ const query = monthQuery(aspect);
 		color: var(--ink-2);
 	}
 
-	/* The pile. Its box is WIDER than the cell it centres on (negative inset), so
-	   two big prints sit side by side and spill onto the neighbouring days
-	   instead of stacking into a column inside the lines — which is what a
-	   handful of Polaroids on a page does, and the only way marks this size
-	   arrange themselves as a cluster rather than a stack. */
+	/* The pile. Every print is placed by hand — an angle and a distance from the
+	   middle of the day, worked out in src/lib/journal-month.ts — rather than
+	   flowed. A flex line can only make rows, and rows use the top of a square
+	   and leave the rest of it empty. */
 	.cluster {
 		position: absolute;
-		inset: -16px;
-		display: flex;
-		flex-wrap: wrap;
-		align-content: center;
-		align-items: center;
-		justify-content: center;
-		/* Negative, so the marks overlap a little. A cluster of things stuck onto
-		   one square is never a neat row of them. */
-		gap: 0;
-		/* Deep negative margins: prints overlap by ~18px in both axes, which is
-		   what pulls the pile together and lets three rows of them still fit the
-		   day's own height. */
-		margin: -9px;
+		inset: 0;
 	}
 
 	/* A mark is a print stuck to the page: its own shape, its own white margin,
@@ -545,12 +533,15 @@ const query = monthQuery(aspect);
 	   tall, a plate is whatever it was shot at, and a route is square. */
 	.mark {
 		display: block;
-		position: relative;
-		flex: 0 0 auto;
+		position: absolute;
+		left: 50%;
+		top: 50%;
 		width: var(--w);
 		height: var(--h);
-		margin: -9px;
-		transform: rotate(var(--t));
+		/* Centred on its own placement, then tilted. Order matters: rotating
+		   before the centring translate would swing the print around the day's
+		   centre instead of its own. */
+		transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(var(--t));
 		background: var(--paper-2);
 		border: 3px solid #fdfaf1;
 		box-shadow:
