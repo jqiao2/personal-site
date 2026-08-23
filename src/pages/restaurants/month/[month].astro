@@ -478,6 +478,15 @@ const query = monthQuery(aspect);
 			backgroundColor: '#fdf7e8',
 			// The card sits inside a scaled wrapper; the clone must not inherit it.
 			style: { transform: 'none' },
+			// EVERY OPTIMISED PHOTO IS THE SAME URL UNTIL THE `?`. html-to-image
+			// caches each fetched resource under `url.replace(/\?.*/, '')` unless
+			// this is set (dataurl.js, `getCacheKey`) — and `photoSrc` returns
+			// `/_vercel/image?url=…&w=320`, so every photograph on the card hashes
+			// to the one key `/_vercel/image`. The first one fetched was then
+			// handed back for all of them, and the export came out with the same
+			// plate on every day it drew. Posters and covers are absolute URLs with
+			// distinct paths, which is why only the photographs collapsed.
+			includeQueryParams: true,
 			cacheBust: true,
 		};
 		const first = await toBlob(card, options);

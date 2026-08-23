@@ -45,11 +45,14 @@ async function tmdbGet<T>(path: string, params: Record<string, string> = {}): Pr
 }
 
 export class TmdbError extends Error {
-	constructor(
-		public status: number,
-		message: string,
-	) {
+	// Declared and assigned rather than written as a constructor parameter
+	// property: Node's type stripping refuses those, and this module is imported
+	// by plain-node scripts through scripts/ts-hook.mjs.
+	status: number;
+
+	constructor(status: number, message: string) {
 		super(message);
+		this.status = status;
 		this.name = 'TmdbError';
 	}
 }
