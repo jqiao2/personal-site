@@ -23,10 +23,15 @@
 
 import { haversine } from './../route-shape';
 import type { CanonicalActivity, CanonicalStreams } from './canonical';
+import { sportFromXmlType, UnknownSportError } from './canonical';
 import type { Sport } from './../sports';
 
 export interface XmlParseOptions {
-	sport: Sport;
+	/** What the sport is when something outside the file already knows it —
+	 *  activities.csv during an archive import, or a --sport override. Left out,
+	 *  the file speaks for itself: a single-activity download from Strava carries
+	 *  its own type. */
+	sport?: Sport;
 }
 
 interface Point {
@@ -77,7 +82,7 @@ export function parseGpx(xml: string, opts: XmlParseOptions): CanonicalActivity 
 	if (points.length === 0) return null;
 
 	const name = firstTag(xml, 'name');
-	return fromPoints(points, opts.sport, name);
+	return fromPoints(points, opts.sport ?? xmlSport(firstTag(xml, 'type')), name);
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +120,7 @@ export function parseTcx(xml: string, opts: XmlParseOptions): CanonicalActivity 
 	}
 	if (points.length === 0) return null;
 
-	return fromPoints(points, opts.sport, null);
+	return fromPoints(points, opts.sport ?? xmlSport(sportAttr(xml)), null);
 }
 
 // ---------------------------------------------------------------------------
@@ -274,6 +279,23 @@ function tagTime(xml: string, local: string): number | null {
 	if (!m) return null;
 	const t = Date.parse(m[1].trim());
 	return Number.isFinite(t) ? t : null;
+}
+
+/** The `<Activity Sport="Biking">` attribute a TCX opens with. */
+function sportAttr(xml: string): string | null {
+	return /<Activity[^>]*Sport="([^"]+)"/.exec(xml)?.[1] ?? null;
+}
+
+/**
+ * A dropped file has to state its own sport, and this refuses to guess when it
+ * does not. Falling back to `other` here would file a ride under a slug with a
+ * generic MET value and no primary stats — permanently, and silently. Pass
+ * `--sport` instead; the message says so.
+ */
+function xmlSport(type: string | null): Sport {
+	const slug = sportFromXmlType(type);
+	if (!slug) throw new UnknownSportError(type ?? '(no type in the file)');
+	return slug;
 }
 
 function firstTag(xml: string, local: string): string | null {
