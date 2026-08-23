@@ -211,6 +211,26 @@ explicit `private === false` publishes — a database behind on migration 0043
 redacts everything rather than nothing. `scripts/privacy.test.mjs`
 (`npm run privacy:test`) is the runnable check on all of it.
 
+### Hiding from the month in review
+
+`activities.hide_from_review` (migration 0044) is **not** part of the above. It
+is a presentation choice: `/month` — the generic month in review, all four logs
+on one calendar — is owner-gated outright, so nothing this column does is
+load-bearing for disclosure. It exists so a composed page can leave out the
+third dog walk of the week. Hence `default false`, the opposite of `private`:
+hiding is opt-in and getting it wrong shows an activity on a page only its
+owner can open. The filter is applied in `src/pages/month/[month].astro` and
+nowhere else.
+
+### Deleting
+
+`deleteActivity` is a soft delete — it stamps `deleted_at`, which every read in
+`src/lib/activities.ts` and the `activity_list` view already filter on, so the
+activity leaves the site completely while the row and its streams survive for a
+hand-written `update … set deleted_at = null`. It also hands the activity's
+distance back to its gear, which is why deleting can't just be an `update` at
+the call site: the distance lives on the bike's odometer as well as the row.
+
 `Activities` is added to `NAV_LINKS` in `src/lib/nav.ts`, after `Restaurants`.
 
 ---
@@ -411,6 +431,7 @@ title               text not null          -- owner's, or the device's default
 notes               text                   -- the owner's own writing
 private_notes       text                   -- never rendered publicly
 private             boolean not null default true  -- owner-only unless explicitly false (0043). See §1's Privacy.
+hide_from_review    boolean not null default false -- keep off /month only (0044). Presentation, not privacy.
 
 started_at          timestamptz not null   -- the instant
 local_date          date not null          -- the calendar day WHERE IT HAPPENED. Grid keys off this.

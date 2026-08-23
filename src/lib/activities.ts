@@ -87,6 +87,10 @@ export interface ActivityRow {
 	 * environment behind on migrations) as private: this is the one field where
 	 * the safe reading of "I don't know" is the restrictive one. */
 	private: boolean;
+	/** Owner's choice to keep this activity off /month (migration 0044).
+	 * Presentation only — /month is owner-gated either way, so unlike
+	 * `private` a missing column reads as `false` (show it). */
+	hide_from_review: boolean;
 	started_at: string;
 	local_date: string;
 	utc_offset_minutes: number | null;
@@ -198,6 +202,10 @@ export interface ActivityListRow {
 	source_provider: string | null;
 	/** See ActivityRow.private. */
 	private: boolean;
+	/** Owner's choice to keep this activity off /month (migration 0044).
+	 * Presentation only — /month is owner-gated either way, so unlike
+	 * `private` a missing column reads as `false` (show it). */
+	hide_from_review: boolean;
 	/** Set by `redactActivities` on a private row a visitor is being shown:
 	 * everything but the sport and the day has been stripped. Never set on a
 	 * row the owner is looking at, and never a database column. */
@@ -625,20 +633,23 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'created_at',
 	'updated_at',
 	'private',
+	'hide_from_review',
 ].join(', ');
 
 /** One activity by id, in full (bar `private_notes` — always null; see
  * ActivityRow). Null if it doesn't exist or is soft-deleted. */
 export async function getActivity(id: number): Promise<ActivityRow | null> {
-	// `tags` (0035) and `private` (0043) arrive in later migrations than the rest
-	// of the schema, so an environment behind on either gets the activity without
-	// them rather than a 404 for every activity on the site. `private` falling
-	// away defaults to true below — behind on migrations must not mean published.
-	for (const columns of [
+	// `tags` (0035), `private` (0043) and `hide_from_review` (0044) arrive in
+	// later migrations than the rest of the schema, so an environment behind on
+	// any of them gets the activity without them rather than a 404 for every
+	// activity on the site. Each step drops one more, newest first.
+	const attempts = [
 		PUBLIC_ACTIVITY_COLUMNS,
-		PUBLIC_ACTIVITY_COLUMNS.replace(', private', ''),
-		PUBLIC_ACTIVITY_COLUMNS.replace(', private', '').replace(', tags', ''),
-	]) {
+		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', ''),
+		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', '').replace(', private', ''),
+		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', '').replace(', private', '').replace(', tags', ''),
+	];
+	for (const [i, columns] of attempts.entries()) {
 		const { data, error } = await supabasePublic
 			.from('activities')
 			.select(columns)
@@ -646,19 +657,33 @@ export async function getActivity(id: number): Promise<ActivityRow | null> {
 			.is('deleted_at', null)
 			.maybeSingle();
 		if (error) {
-			if (isMissingColumn(error) && columns === PUBLIC_ACTIVITY_COLUMNS) continue;
+			// Keep dropping columns while there's a shorter select left to try.
+			// (This used to compare against the first entry, which made every
+			// step after the second unreachable.)
+			if (isMissingColumn(error) && i < attempts.length - 1) continue;
 			if (isDegraded(error)) return null;
 			throw new Error(`getActivity failed: ${error.message}`);
 		}
 		if (!data) return null;
-		// `tags` and `private` may be absent (the fallback selects above), so
-		// they're defaulted rather than spread over — and `private` defaults the
-		// restrictive way: anything but an explicit false is private.
-		const row = data as unknown as Omit<ActivityRow, 'private_notes' | 'tags' | 'private'> & {
+		// The three late columns may be absent (the fallback selects above), so
+		// they're defaulted rather than spread over. `private` defaults the
+		// restrictive way — anything but an explicit false is private — while
+		// `hide_from_review` defaults to showing, since it guards nothing.
+		const row = data as unknown as Omit<
+			ActivityRow,
+			'private_notes' | 'tags' | 'private' | 'hide_from_review'
+		> & {
 			tags?: string[];
 			private?: boolean;
+			hide_from_review?: boolean;
 		};
-		return { ...row, tags: row.tags ?? [], private: row.private !== false, private_notes: null };
+		return {
+			...row,
+			tags: row.tags ?? [],
+			private: row.private !== false,
+			hide_from_review: row.hide_from_review === true,
+			private_notes: null,
+		};
 	}
 	return null;
 }
@@ -956,6 +981,8 @@ export interface UpdateActivityInput {
 	/** The one switch that decides whether anyone but the owner sees any of the
 	 * above. See migration 0043 and `redactActivities`. */
 	private?: boolean;
+	/** Keep this activity off /month. Presentation only — see migration 0044. */
+	hideFromReview?: boolean;
 }
 
 /**
@@ -982,6 +1009,7 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 	if (input.gearId !== undefined) patch.gear_id = input.gearId;
 	if (input.tags !== undefined) patch.tags = input.tags;
 	if (input.private !== undefined) patch.private = input.private;
+	if (input.hideFromReview !== undefined) patch.hide_from_review = input.hideFromReview;
 
 	const current = await getActivity(id);
 	if (!current) return false;
@@ -996,6 +1024,33 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 }
 
 /** Shift one activity's distance from one gear row's running total to another. */
+/**
+ * Delete an activity. Soft: every read in this file (and the activity_list
+ * view) already filters on `deleted_at is null`, so stamping it removes the
+ * activity from the site completely while leaving the row — and the streams
+ * table that references it — intact for a hand-written `update ... set
+ * deleted_at = null` if it turns out to have been a mistake.
+ *
+ * The gear it was logged against gets its distance back, which is the reason
+ * this can't just be an `update` at the call site: an activity's distance is
+ * on a bike's odometer as well as its own row, and deleting one without the
+ * other leaves the gear reading permanently long.
+ */
+export async function deleteActivity(id: number): Promise<boolean> {
+	const current = await getActivity(id);
+	if (!current) return false;
+
+	const { error } = await supabaseAdmin
+		.from('activities')
+		.update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+		.eq('id', id)
+		.is('deleted_at', null);
+	if (error) throw new Error(`deleteActivity failed: ${error.message}`);
+
+	await moveGearDistance(current.gear_id, null, current.distance_m ?? 0);
+	return true;
+}
+
 async function moveGearDistance(from: number | null, to: number | null, distanceM: number): Promise<void> {
 	if (!distanceM) return;
 	for (const [gearId, delta] of [[from, -distanceM], [to, distanceM]] as const) {

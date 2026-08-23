@@ -6,8 +6,15 @@ import JournalLayout from '../../layouts/JournalLayout.astro';
 import { listJournalMonths } from '../../lib/journal-months';
 import { TRACKS } from '../../lib/journal-month';
 import { monthLabel } from '../../lib/share-card';
+import { requireOwner } from '../../lib/auth';
 
 export const prerender = false;
+
+// OWNER ONLY — the index alone discloses which months have entries, and it
+// links to pages that are owner-gated anyway. See /month/[month].astro.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
 
 const months = await listJournalMonths();
 const years = [...new Set(months.map((m) => m.key.slice(0, 4)))];
