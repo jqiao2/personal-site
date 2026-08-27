@@ -1,0 +1,177 @@
+---
+// /activities/import — owner only. The Strava connection: authorise once, then
+// pull new rides (a daily cron does it hands-off; "Sync now" does it on demand).
+//
+// The whole back-catalogue is NOT this page's job — that's the offline archive
+// importer (`npm run activities:import`, ACTIVITIES.md §4 step 1). This is the
+// ongoing half: the OAuth token that keeps refreshing, and the sync that keeps
+// current. See src/lib/strava.ts and src/lib/strava-sync.ts.
+import ActivityLayout from '../../layouts/ActivityLayout.astro';
+import { requireOwner } from '../../lib/auth';
+import { siteNav } from '../../lib/nav';
+import { ALPINE } from '../../lib/activity-tokens';
+import { getConnection, type StravaConnection } from '../../lib/strava';
+
+export const prerender = false;
+
+// OWNER ONLY. It exposes the connection state and can trigger writes.
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const nav = siteNav(Astro.url.pathname);
+const params = Astro.url.searchParams;
+const connectedFlash = params.get('connected') === '1';
+const errorFlash = params.get('error');
+
+let connection: StravaConnection | null = null;
+let unreachable = false;
+try {
+	connection = await getConnection();
+} catch (err) {
+	unreachable = true;
+	console.error('import page: could not read strava_auth —', err);
+}
+
+const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+---
+
+<ActivityLayout title="Import · Jason's activity log">
+	<div
+		class="page"
+		style={{
+			'--snow': ALPINE.snow,
+			'--granite': ALPINE.granite,
+			'--granite-soft': ALPINE.graniteSoft,
+			'--lake': ALPINE.lake,
+			'--lake-deep': ALPINE.lakeDeep,
+			'--scree': ALPINE.scree,
+		}}
+	>
+		<div class="card">
+			<nav class="tabs">
+				{nav.map((n) => (
+					<a
+						class:list={['tabs__link', n.active && 'tabs__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))}
+			</nav>
+
+			<header class="head">
+				<a class="back" href="/activities">← Activity log</a>
+				<h1 class="head__title">Strava</h1>
+			</header>
+
+			{connectedFlash && <p class="flash flash--ok">Connected.</p>}
+			{errorFlash && <p class="flash flash--err">Couldn’t connect: {errorFlash}</p>}
+			{unreachable && <p class="flash flash--err">Couldn’t reach the database.</p>}
+
+			{connection ? (
+				<dl class="status">
+					<dt>Athlete</dt><dd>{connection.athleteId ?? '—'}</dd>
+					<dt>Scope</dt><dd>{connection.scope ?? '—'}</dd>
+					<dt>Token refreshes after</dt><dd>{fmt(connection.expiresAt)}</dd>
+					<dt>Last synced</dt><dd>{fmt(connection.lastSyncAt)}</dd>
+				</dl>
+			) : (
+				<p class="muted">Not connected. Connect once to start pulling new rides.</p>
+			)}
+
+			<div class="actions">
+				<a class="btn" href="/api/activities/strava/authorize">{connection ? 'Reconnect' : 'Connect Strava'}</a>
+				{connection && <button id="sync" class="btn btn--primary" type="button">Sync now</button>}
+			</div>
+			<pre id="out" class="out" hidden></pre>
+
+			<p class="powered">
+				<a href="https://www.strava.com" rel="noopener" target="_blank">Powered by Strava</a>
+			</p>
+		</div>
+	</div>
+</ActivityLayout>
+
+<script>
+	const btn = document.getElementById('sync') as HTMLButtonElement | null;
+	const out = document.getElementById('out') as HTMLPreElement | null;
+	btn?.addEventListener('click', async () => {
+		btn.disabled = true;
+		const label = btn.textContent;
+		btn.textContent = 'Syncing…';
+		try {
+			const res = await fetch('/api/activities/strava/sync', { method: 'POST' });
+			const body = await res.json();
+			if (out) {
+				out.hidden = false;
+				out.textContent = res.ok
+					? `added ${body.added}, ${body.duplicate} already stored, ${body.failed} failed` +
+						(body.unknownSports?.length ? `\nunknown sports: ${body.unknownSports.join(', ')}` : '')
+					: `error: ${body.error ?? res.status}`;
+			}
+			if (res.ok && body.added > 0) setTimeout(() => location.reload(), 1200);
+		} catch (e) {
+			if (out) {
+				out.hidden = false;
+				out.textContent = `error: ${e instanceof Error ? e.message : e}`;
+			}
+		} finally {
+			btn.disabled = false;
+			btn.textContent = label;
+		}
+	});
+</script>
+
+<style>
+	.page {
+		min-height: 100dvh;
+		background: var(--snow);
+		color: var(--granite);
+		padding: clamp(1rem, 4vw, 3rem);
+	}
+	.card {
+		max-width: 46rem;
+		margin: 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
+	}
+	.tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.tabs__link { color: var(--granite-soft); text-decoration: none; font-size: 0.9rem; }
+	.tabs__link--active { color: var(--granite); font-weight: 600; }
+	.head { display: flex; flex-direction: column; gap: 0.25rem; }
+	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
+	.head__title { margin: 0; font-size: 1.6rem; }
+	.status {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0.35rem 1rem;
+		margin: 0;
+		font-size: 0.95rem;
+	}
+	.status dt { color: var(--granite-soft); }
+	.status dd { margin: 0; }
+	.muted { color: var(--granite-soft); }
+	.actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
+	.btn {
+		display: inline-block;
+		padding: 0.5rem 1rem;
+		border: 1px solid var(--scree);
+		border-radius: 0.5rem;
+		background: var(--snow);
+		color: var(--granite);
+		text-decoration: none;
+		font: inherit;
+		cursor: pointer;
+	}
+	.btn--primary { background: var(--lake); border-color: var(--lake-deep); color: var(--snow); }
+	.btn:disabled { opacity: 0.6; cursor: default; }
+	.out { margin: 0; white-space: pre-wrap; font-size: 0.85rem; color: var(--granite-soft); }
+	.flash { margin: 0; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.9rem; }
+	.flash--ok { background: color-mix(in srgb, var(--lake) 15%, transparent); color: var(--lake-deep); }
+	.flash--err { background: color-mix(in srgb, #c0392b 12%, transparent); color: #c0392b; }
+	.powered { margin: 0; font-size: 0.8rem; }
+	.powered a { color: #fc4c02; text-decoration: none; }
+</style>
