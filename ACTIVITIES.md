@@ -18,9 +18,49 @@ Built so far, on `claude/strava-activities-feature-26rgcy` (PR #115):
 | `scripts/import-strava-archive.mjs` | **Built**, and dry-run against the real export: 1773 activities parsed in 80s. |
 | `scripts/add-activities.mjs` | **Built.** §4 step 2, as a drop folder rather than an endpoint. Verified live: parse, exertion, route, both dedupe rules. |
 | `scripts/ingest.test.mjs` | The checks for what fails silently. `npm run activities:test`. |
+| `src/lib/strava.ts` + `strava-sync.ts` + `ingest/providers/strava.ts` | **Built.** §4 step 3's Strava OAuth sync: the self-refreshing token store, the API→canonical mapper, and the polling engine. `scripts/strava.test.mjs` covers the mapping. See "The OAuth sync" below. |
+| `0045_strava_oauth.sql` | The single-row token store. **Needs `supabase db push`** to the live project. |
+| `/activities/import` + `/api/activities/strava/**` | Owner-only connect/status page and the authorize/callback/sync endpoints; a daily Vercel cron (`vercel.json`) hits sync. |
 
-Not built yet: the real landing page, `/activities/all`, the detail page, the
-month in review, and the OAuth providers (step 3).
+Not built yet: Garmin, Wahoo and TrainerRoad OAuth (the rest of step 3 — see
+the friction order below). Strava's own OAuth sync IS built.
+
+### The OAuth sync (Strava, step 3)
+
+The archive import carries the whole history offline; this keeps it current by
+polling `/athlete/activities` for rides started after a stored watermark and
+running each new one through the same canonical pipeline (parse → dedupe →
+exertion + route → store), recorded as `strava_api` (not `strava_archive`, so
+the API Agreement's attribution rule stays checkable — the import page carries
+the "Powered by Strava" mark).
+
+The token is the reason this needs code at all: Strava's access token expires
+in six hours and its refresh token rotates on every use, so the live pair lives
+in `strava_auth` (0045) and `getAccessToken()` refreshes-and-rewrites it.
+Nothing else reads the table.
+
+**One-time setup** (all on the user; none can be done unilaterally):
+
+1. At <https://www.strava.com/settings/api>, set the app's **Authorization
+   Callback Domain** to the site host (`jqiao.vercel.app`).
+2. Set env vars in Vercel **and** local `.env`: `STRAVA_CLIENT_ID`,
+   `STRAVA_CLIENT_SECRET`, and `CRON_SECRET` (any random string — Vercel sends
+   it as the cron's bearer token; without it the cron is rejected).
+3. `supabase db push` migration 0045.
+4. Visit `/activities/import` as the owner and click **Connect Strava**. The
+   grant must include `activity:read_all` or the callback refuses it (a
+   read-only grant would silently miss every private ride).
+
+After that the daily cron pulls new rides; "Sync now" on the same page forces a
+pull. The connection only ever syncs rides made *after* it was authorised —
+backfilling old rides stays the archive importer's job.
+
+Deliberately skipped: **webhooks** (Strava's push subscriptions) — polling a
+single athlete once a day is simpler and complete; add a webhook only if
+near-real-time ever matters. **Auto-gear beyond a name match** — a synced ride
+is tagged only when Strava's gear name matches a gear name/nickname here,
+otherwise it lands untagged and editable (the Strava `gear_id` is kept in
+`activity_sources.raw` for a future backfill).
 
 ### The importer
 
