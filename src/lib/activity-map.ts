@@ -40,7 +40,7 @@
 // ground rather than the restaurant map's readable street grid — enough to
 // orient by by, never enough to compete with the route line.
 import { ALPINE } from './activity-tokens';
-import { decodePolyline, bounds as trackBounds, type Bounds } from './route-shape';
+import { decodePolyline, bounds as trackBounds, splitOnGaps, type Bounds } from './route-shape';
 
 export const ACTIVITY_MAP_TOKENS = {
 	// Ground: colder and paler than ALPINE.snow itself, so the *route's* white
@@ -256,21 +256,50 @@ export function bareAlpineGround() {
 
 export interface RouteGeoJSON {
 	type: 'Feature';
-	geometry: { type: 'LineString'; coordinates: [number, number][] };
+	geometry: { type: 'MultiLineString'; coordinates: [number, number][][] };
 	properties: Record<string, never>;
 }
 
-/** Decodes the full-fidelity `polyline` column (not the thumbnail's
- *  simplified `route_path` — §1) to a GeoJSON LineString in [lng, lat] order,
- *  the way every GeoJSON/MapLibre source expects coordinates, the reverse of
- *  the `[lat, lng]` pairs route-shape.ts's decoder returns. */
+/** Decodes the full-fidelity `polyline` column (not the thumbnail's simplified
+ *  `route_path` — §1) to a GeoJSON MultiLineString in [lng, lat] order, the way
+ *  every GeoJSON/MapLibre source expects coordinates, the reverse of the
+ *  `[lat, lng]` pairs route-shape.ts's decoder returns.
+ *
+ *  MULTI, NOT SINGLE, so the drawn line *breaks* at a recording gap instead of
+ *  running a straight diagonal across ground never covered — a ride paused at
+ *  125th St and restarted in the Bronx is two lines, not one that cuts through
+ *  Harlem. The break itself is the honest picture; `routeGapsGeoJSON` adds the
+ *  faint dashed hop that says "recording paused here" across it. A continuous
+ *  track is a MultiLineString of one member — the layers below don't care. */
 export function polylineToGeoJSON(polyline: string): RouteGeoJSON {
-	const points = decodePolyline(polyline);
+	const pieces = splitOnGaps(decodePolyline(polyline));
 	return {
 		type: 'Feature',
-		geometry: { type: 'LineString', coordinates: points.map(([lat, lng]) => [lng, lat]) },
+		geometry: {
+			type: 'MultiLineString',
+			coordinates: pieces.map((piece) => piece.map(([lat, lng]) => [lng, lat])),
+		},
 		properties: {},
 	};
+}
+
+/** The straight hops the recording skipped over — one [lng, lat] segment per
+ *  gap, from where the track stopped to where it resumed. Drawn faint and
+ *  dashed so a pause reads as "jumped here", not as ground actually covered.
+ *  Empty (no members) for a continuous track. */
+export function routeGapsGeoJSON(polyline: string): RouteGeoJSON {
+	const pieces = splitOnGaps(decodePolyline(polyline));
+	const hops: [number, number][][] = [];
+	for (let i = 1; i < pieces.length; i++) {
+		const prev = pieces[i - 1];
+		const [aLat, aLng] = prev[prev.length - 1];
+		const [bLat, bLng] = pieces[i][0];
+		hops.push([
+			[aLng, aLat],
+			[bLng, bLat],
+		]);
+	}
+	return { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: hops }, properties: {} };
 }
 
 export interface StartFinish {

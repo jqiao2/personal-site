@@ -21,7 +21,7 @@ import {
 	addTrackHexes,
 	hexesToGeoJSON,
 } from '../src/lib/heatmap.ts';
-import { haversine } from '../src/lib/route-shape.ts';
+import { haversine, splitOnGaps, GPS_GAP_M } from '../src/lib/route-shape.ts';
 
 const TILE_M = TILE_FEET * 0.3048;
 
@@ -185,6 +185,26 @@ for (const lat of [REF_LAT, 64.1]) {
 	const ring = fc.features[0].geometry.coordinates[0][0];
 	assert.equal(ring.length, 7, 'six corners, closed');
 	assert.deepEqual(ring[0], ring[6], 'ring must close');
+}
+
+// 10. A paused-and-relocated track splits at the jump; a continuous one (even a
+//     km-long straight where 1 Hz samples still sit <30 m apart) stays whole.
+{
+	// A ~1 Hz block, then a pause that leaps ~1 km, then another block.
+	const dLat = 8 / 111_320; // ~8 m north per sample
+	const a = Array.from({ length: 5 }, (_, i) => [REF_LAT + i * dLat, -73.98]);
+	const b = Array.from({ length: 5 }, (_, i) => [REF_LAT + 0.01 + i * dLat, -73.9]);
+	const split = splitOnGaps([...a, ...b]);
+	assert.equal(split.length, 2, 'a pause jump cuts the track in two');
+	assert.equal(split[0].length, 5, 'first piece is the pre-pause block');
+	assert.equal(split[1].length, 5, 'second piece is the post-pause block');
+
+	const continuous = splitOnGaps(a);
+	assert.equal(continuous.length, 1, 'no gap, no split');
+	assert.equal(splitOnGaps([]).length, 0, 'empty track, no pieces');
+	// The jump used above is well over the threshold, and the steps within a
+	// block are well under it — the divide the constant claims.
+	assert.ok(haversine(a[4], b[0]) > GPS_GAP_M && dLat * 111_320 < GPS_GAP_M);
 }
 
 console.log('heatmap tiles + hexes: ok');

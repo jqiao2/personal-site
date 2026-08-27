@@ -13,7 +13,7 @@
 import { supabaseAdmin, supabasePublic } from './supabase';
 import { siteYear } from './day';
 import { sportMeta, type SportFamily } from './sports';
-import { decodePolyline, encodePolyline, mercator, simplify } from './route-shape';
+import { decodePolyline, encodePolyline, mercator, simplify, splitOnGaps } from './route-shape';
 
 // ---------------------------------------------------------------------------
 // Migration-tier degradation — mirrors films.ts's isMissingCreditColumn /
@@ -1136,9 +1136,8 @@ export async function setFavoriteRank(activityId: number, rank: number | null): 
  */
 const HEATMAP_SIMPLIFY_M = 8;
 
-function simplifyTrack(polyline: string): string {
-	const points = decodePolyline(polyline);
-	if (points.length < 3) return polyline;
+function simplifyPoints(points: [number, number][]): [number, number][] {
+	if (points.length < 3) return points;
 	// Projected, because RDP's tolerance has to be in metres and degrees of
 	// longitude aren't. Mercator's scale error doesn't matter at 8 m.
 	const projected = points.map(([lat, lng]) => mercator(lat, lng));
@@ -1153,7 +1152,26 @@ function simplifyTrack(polyline: string): string {
 			j++;
 		}
 	}
-	return encodePolyline(out);
+	return out;
+}
+
+/**
+ * One activity's polyline as one *or more* simplified polylines — split at the
+ * recording gaps a paused-and-relocated watch leaves behind (splitOnGaps), so
+ * the heatmap never draws (or unlocks tiles along) the straight diagonal
+ * between where a ride stopped and where it picked back up. A continuous track
+ * stays a single string; a paused one becomes one string per continuous piece.
+ *
+ * The split runs on the RAW ~1 Hz polyline, before simplification: after RDP a
+ * long straight road is also just two far-apart points, indistinguishable from
+ * a pause, so a gap can only be told from real travel while the 1 Hz samples
+ * that bracket it are still present.
+ */
+function splitTrack(polyline: string): string[] {
+	return splitOnGaps(decodePolyline(polyline))
+		.map(simplifyPoints)
+		.filter((piece) => piece.length >= 2)
+		.map(encodePolyline);
 }
 
 export async function listRoutePolylines(isOwner = false): Promise<string[]> {
@@ -1183,5 +1201,5 @@ export async function listRoutePolylines(isOwner = false): Promise<string[]> {
 	const parents = new Set(rows.map((r) => r.parent_id).filter((id): id is number => id != null));
 	return rows
 		.filter((r) => !parents.has(r.id) && r.sub_sport !== 'indoor' && !sportMeta(r.sport).indoor)
-		.map((r) => simplifyTrack(r.polyline));
+		.flatMap((r) => splitTrack(r.polyline));
 }
