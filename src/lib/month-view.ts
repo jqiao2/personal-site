@@ -58,16 +58,21 @@ export interface MonthWatch {
 }
 
 /**
- * A day's watches in stack order: best on top, ties broken by the entry logged
- * first, unrated last. `id` breaks the remaining ties because the Letterboxd
- * import stamps a whole batch with one `created_at`.
+ * A day's watches in stack order: theatre watches on top, then liked, then by
+ * rating (unrated last), then by title. `id` breaks any remaining ties because
+ * the Letterboxd import stamps a whole batch with one `created_at`.
  */
 export function sortDayWatches(watches: MonthWatch[]): MonthWatch[] {
 	return watches.slice().sort((a, b) => {
+		const at = a.medium === 'theater' ? 1 : 0;
+		const bt = b.medium === 'theater' ? 1 : 0;
+		if (at !== bt) return bt - at;
+		if (a.liked !== b.liked) return a.liked ? -1 : 1;
 		const ar = a.rating ?? -1;
 		const br = b.rating ?? -1;
 		if (ar !== br) return br - ar;
-		if (a.created_at !== b.created_at) return a.created_at < b.created_at ? -1 : 1;
+		const titles = a.title.localeCompare(b.title);
+		if (titles !== 0) return titles;
 		return a.id - b.id;
 	});
 }
