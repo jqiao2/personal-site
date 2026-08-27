@@ -7,9 +7,7 @@
 // geometry is drawn at data*k plus a fixed-pixel parallel offset. That keeps every
 // stroke, pill and label a constant on-screen size at any zoom while positions
 // scale. Each service is its own parallel line and toggles independently.
-import { siteNav } from '../lib/nav';
-
-const nav = siteNav(Astro.url.pathname);
+import SiteHeader from '../components/SiteHeader.astro';
 ---
 
 <html lang="en">
@@ -27,19 +25,7 @@ const nav = siteNav(Astro.url.pathname);
 	</head>
 	<body>
 		<section class="sm">
-			<nav class="sm-nav">
-				{
-					nav.map((n) => (
-						<a
-							href={n.href}
-							class={n.active ? 'active' : ''}
-							aria-current={n.active ? 'page' : undefined}
-						>
-							{n.label}
-						</a>
-					))
-				}
-			</nav>
+			<SiteHeader pathname={Astro.url.pathname} theme="subway" />
 
 			<div class="sm-body">
 				<div class="sm-mapwrap">
@@ -114,30 +100,6 @@ const nav = siteNav(Astro.url.pathname);
 				background: #2a1214;
 				display: flex;
 				flex-direction: column;
-			}
-			.sm-nav {
-				display: flex;
-				align-items: stretch;
-				gap: 2px;
-				padding: 0 28px;
-				background: #20100f;
-				border-bottom: 1px solid #4a2529;
-			}
-			.sm-nav a {
-				font-size: 13px;
-				letter-spacing: 0.4px;
-				color: #c2a99a;
-				text-decoration: none;
-				padding: 22px 16px 20px;
-				border-bottom: 2px solid transparent;
-			}
-			.sm-nav a:hover {
-				color: #f4e8d1;
-			}
-			.sm-nav a.active {
-				color: #f4e8d1;
-				font-weight: 600;
-				border-bottom-color: #d9b45a;
 			}
 			.sm-body {
 				display: flex;
