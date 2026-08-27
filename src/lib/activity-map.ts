@@ -48,7 +48,10 @@ export const ACTIVITY_MAP_TOKENS = {
 	// against it.
 	land: '#eef3f6',
 	water: ALPINE.glacier,
-	waterLine: ALPINE.lake,
+	// A deeper glacier tone — reads as the edge of a water fill without
+	// borrowing `lake`, which the route line owns. A river drawn in the exact
+	// route colour is indistinguishable from the track crossing it.
+	waterLine: '#5aa9b5',
 	park: '#dfe9e1', // a desaturated tint of ALPINE.fir — forest, not lawn-green
 	forest: ALPINE.fir,
 	building: '#e2e9ec',
