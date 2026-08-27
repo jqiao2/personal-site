@@ -52,7 +52,8 @@ if (!parsed) return Astro.redirect(`/films/month/${siteDay().slice(0, 7)}`, 302)
 // next month keeps them and a copied link opens the same card.
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
 const showLikes = Astro.url.searchParams.get('likes') !== '0';
-const query = monthQuery(aspect, showLikes);
+const showTheaters = Astro.url.searchParams.get('theaters') !== '0';
+const query = monthQuery(aspect, showLikes, showTheaters);
 
 const [watches, counts] = await Promise.all([listMonthWatches(key), countWatchesByMonth()]);
 
@@ -84,6 +85,7 @@ const clientData = JSON.stringify({
 	geometry,
 	aspect: aspect.slug,
 	showLikes,
+	showTheaters,
 	slugs: Object.fromEntries(ASPECTS.map((a) => [a.id, a.slug])),
 });
 ---
@@ -167,6 +169,16 @@ const clientData = JSON.stringify({
 					<span>Show likes</span>
 				</button>
 
+				<button
+					class="likes"
+					type="button"
+					data-theaters
+					aria-pressed={String(showTheaters) as 'true' | 'false'}
+				>
+					<span class="switch"><span class="switch__knob"></span></span>
+					<span>Show theatres</span>
+				</button>
+
 				<div class="actions">
 					<button class="btn" type="button" data-copy>Copy link</button>
 					<button class="btn btn--primary" type="button" data-download>Download image</button>
@@ -178,7 +190,12 @@ const clientData = JSON.stringify({
 				<div class="viewport" data-viewport>
 					<div class="scaler">
 						<div
-							class:list={['card', !showLikes && 'no-likes', initial.figures && 'card--figures']}
+							class:list={[
+							'card',
+							!showLikes && 'no-likes',
+							!showTheaters && 'no-theaters',
+							initial.figures && 'card--figures',
+						]}
 							data-card
 							style={`--cell:${initial.cell}px; --card-h:${initial.height}px; --grid-w:${initial.grid}px`}
 						>
@@ -236,6 +253,13 @@ const clientData = JSON.stringify({
 																</div>
 															)}
 															{cell.films[0].liked && <div class="heart">♥</div>}
+															{cell.films[0].inTheater && (
+																<div class="theater" aria-label="Watched in a theatre">
+																	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+																		<path d="M3 21V9a9 9 0 0 1 18 0v12M3 21h18M3 9q9 6 18 0M8 9q-2 6 0 12M16 9q2 6 0 12" />
+																	</svg>
+																</div>
+															)}
 															{cell.count > 1 && <div class="badge">{cell.count}</div>}
 														</div>
 													)}
@@ -721,6 +745,25 @@ const clientData = JSON.stringify({
 	.card.no-likes .heart {
 		display: none;
 	}
+	.theater {
+		position: absolute;
+		left: calc(var(--cell) * 0.05);
+		bottom: calc(var(--cell) * 0.05);
+		z-index: 14;
+		display: flex;
+		background: rgba(18, 8, 9, 0.6);
+		border-radius: 4px;
+		padding: calc(var(--cell) * 0.03);
+		color: #f4e8d1;
+	}
+	.theater svg {
+		width: calc(var(--cell) * 0.16);
+		height: calc(var(--cell) * 0.16);
+		display: block;
+	}
+	.card.no-theaters .theater {
+		display: none;
+	}
 	.badge {
 		position: absolute;
 		right: calc(var(--badge) * -0.32);
@@ -882,6 +925,7 @@ const clientData = JSON.stringify({
 		/** Slug of the aspect the page was rendered with. */
 		aspect: string;
 		showLikes: boolean;
+		showTheaters: boolean;
 		/** Aspect id ("4:5") to URL slug ("feed"). */
 		slugs: Record<string, string>;
 	}
@@ -893,6 +937,7 @@ const clientData = JSON.stringify({
 		const data = JSON.parse(dataEl.textContent) as MonthData;
 		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
 		let showLikes = data.showLikes;
+		let showTheaters = data.showTheaters;
 		const defaultSlug = data.slugs[Object.keys(data.geometry)[0]];
 
 		// ---- carry the settings across a month step ----
@@ -904,6 +949,7 @@ const clientData = JSON.stringify({
 			const parts: string[] = [];
 			if (data.slugs[aspect] !== defaultSlug) parts.push(`fmt=${data.slugs[aspect]}`);
 			if (!showLikes) parts.push('likes=0');
+			if (!showTheaters) parts.push('theaters=0');
 			return parts.length ? `?${parts.join('&')}` : '';
 		}
 		function syncLinks(): void {
@@ -988,6 +1034,15 @@ const clientData = JSON.stringify({
 			syncLinks();
 		});
 
+		// ---- theatres ----
+		const theaters = document.querySelector<HTMLElement>('[data-theaters]');
+		theaters?.addEventListener('click', () => {
+			showTheaters = !showTheaters;
+			theaters.setAttribute('aria-pressed', String(showTheaters));
+			card.classList.toggle('no-theaters', !showTheaters);
+			syncLinks();
+		});
+
 		// ---- month picker ----
 		// The twelve tiles are server-rendered and stay in the DOM; changing the
 		// year rewrites their text and hrefs. (Building them here instead would
@@ -1065,7 +1120,7 @@ const clientData = JSON.stringify({
 		// sheet without a live user gesture. Keeping the render means the second tap
 		// can share immediately, inside its own gesture.
 		let rendered: { state: string; file: File } | null = null;
-		const renderState = (): string => `${data.key}|${aspect}|${showLikes}`;
+		const renderState = (): string => `${data.key}|${aspect}|${showLikes}|${showTheaters}`;
 
 		// Safari and every iOS browser, which is Safari underneath.
 		const webkit =

@@ -49,6 +49,7 @@ export interface MonthWatch {
 	liked: boolean;
 	rewatched: boolean;
 	created_at: string;
+	medium: string | null;
 	tmdb_id: number;
 	title: string;
 	release_year: number | null;
@@ -78,6 +79,8 @@ export interface CellFilm {
 	year: number | null;
 	poster: string | null;
 	liked: boolean;
+	/** Watched in a cinema — draws the theatre mark. */
+	inTheater: boolean;
 	layer: number;
 	/** Degrees this print is rotated by; alternates so a stack looks hand-set. */
 	rotation: number;
@@ -145,6 +148,7 @@ function toCellFilm(watch: MonthWatch, layer: number): CellFilm {
 		year: watch.release_year,
 		poster: imageUrl(watch.poster_path, posterSize(layer)),
 		liked: watch.liked,
+		inTheater: watch.medium === 'theater',
 		layer,
 		rotation: layer % 2 ? 1.5 : -1.7,
 		ground: ground(watch.tmdb_id),
@@ -220,9 +224,12 @@ export function geometries(rows: number): Record<string, FilmGeometry> {
 	return out;
 }
 
-/** The film card's settings in a query string: the aspect, and the likes switch. */
-export function monthQuery(aspect: Aspect, showLikes: boolean): string {
-	return cardQuery(aspect, showLikes ? {} : { likes: '0' });
+/** The film card's settings in a query string: the aspect, and the two switches. */
+export function monthQuery(aspect: Aspect, showLikes: boolean, showTheaters: boolean): string {
+	return cardQuery(aspect, {
+		...(showLikes ? {} : { likes: '0' }),
+		...(showTheaters ? {} : { theaters: '0' }),
+	});
 }
 
 export interface SummaryStat {
