@@ -13,7 +13,7 @@
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard from '../../components/ActivityCard.astro';
 import { requireOwner } from '../../lib/auth';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 import { listActivityDays, listFavoriteActivities, getActivityStats } from '../../lib/activities';
 import { groupIntoWeeks, type ActivityWeek } from '../../lib/activity-week';
 import { formatStat } from '../../lib/sports';
@@ -81,7 +81,6 @@ try {
 const weeks = groupIntoWeeks(days, { weeks: WEEKS_TO_SHOW });
 const calendarIsEmpty = weeks.every((w) => w.totals.activityCount === 0);
 
-const nav = siteNav(Astro.url.pathname);
 const num = (n: number) => n.toLocaleString('en-US');
 
 // bySportFamily is all-time and only counts families that have at least one
@@ -124,17 +123,7 @@ function weekStatText(t: ActivityWeek['totals']) {
 		}}
 	>
 		<div class="card">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
+			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 			<div class="card__body">
 				<!-- Sidebar -->
@@ -279,34 +268,6 @@ function weekStatText(t: ActivityWeek['totals']) {
 	}
 	.card__body {
 		display: flex;
-	}
-
-	/* Site nav — spans the viewport while its content stays aligned to the
-	   column, same trick films/index.astro uses. */
-	.tabs {
-		display: flex;
-		align-items: stretch;
-		gap: 2px;
-		width: 100vw;
-		margin-left: calc(50% - 50vw);
-		padding: 0 calc(50vw - 50% + 28px);
-		border-bottom: 1px solid var(--scree);
-	}
-	.tabs__link {
-		font-size: 13px;
-		letter-spacing: 0.4px;
-		color: var(--granite-soft);
-		padding: 26px 16px 24px;
-		border-bottom: 2px solid transparent;
-		transition: color 0.12s;
-	}
-	.tabs__link:hover {
-		color: var(--granite);
-	}
-	.tabs__link--active {
-		color: var(--lake);
-		font-weight: 600;
-		border-bottom-color: var(--lake);
 	}
 
 	/* Sidebar */
@@ -521,18 +482,6 @@ function weekStatText(t: ActivityWeek['totals']) {
 		}
 		.grid4 {
 			grid-template-columns: repeat(2, 1fr);
-		}
-		/* Eight links no longer fit in one row once the page itself has shrunk —
-		   they wrap rather than clipping, since .page's overflow-x:hidden (there
-		   to guard the full-bleed tabs against a scrollbar) would otherwise hide
-		   "Activities" and "Subway" off the edge entirely. */
-		.tabs {
-			flex-wrap: wrap;
-			padding-left: calc(50vw - 50% + 16px);
-			padding-right: calc(50vw - 50% + 16px);
-		}
-		.tabs__link {
-			padding: 16px 10px 14px;
 		}
 	}
 

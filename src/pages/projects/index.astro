@@ -12,21 +12,17 @@ const projects = (await getCollection('projects')).sort(
 // would collide with the real /projects/credit-network route.
 const interactive = [
 	{
-		href: '/films',
-		title: 'Film Log',
-		tag: 'live',
-		description:
-			'My own Letterboxd replacement — diary, watchlist, ratings and stats over TMDB data, ' +
-			'built end to end with Claude Code so it does the handful of things I actually wanted ' +
-			'and none of the ones I did not.',
-	},
-	{
+		// The four logs and their combined calendar are one build, so they read as
+		// one project here rather than four rows plus a fifth for the calendar.
+		// Links to the month-in-review page, which is where all four meet — the
+		// same place the site's own Journal tab points.
 		href: '/month',
-		title: 'The month in review',
+		title: 'Journal',
 		tag: 'live',
 		description:
-			'Films, books, meals and activities on one calendar, drawn as a paper journal — ' +
-			'every day a cluster of what I did, each mark sized by the time it took.',
+			'My own Letterboxd, Goodreads, restaurant diary and Strava, built end to end with Claude ' +
+			'Code — films, books, meals and activities, each logged its own way, then drawn together on ' +
+			'one paper calendar where every day is a cluster of what I did, each mark sized by the time it took.',
 	},
 	{
 		href: '/projects/credit-network',
@@ -35,6 +31,14 @@ const interactive = [
 		description:
 			'A collaboration graph of actors, directors and composers drawn from ~36,000 TMDB films — ' +
 			'force-directed, filterable and draggable.',
+	},
+	{
+		href: '/subway',
+		title: 'Subway Map',
+		tag: 'wip',
+		description:
+			'An interactive MTA map, its geometry generated from the official schematic — click a line ' +
+			'to mark it ridden, a station to mark it visited, and watch the coverage add up.',
 	},
 ];
 ---

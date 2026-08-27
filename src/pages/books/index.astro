@@ -26,12 +26,10 @@ import {
 	today,
 	type BookView,
 } from '../../lib/books-view';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects whatever the Kindle last pushed.
 export const prerender = false;
-
-const nav = siteNav(Astro.url.pathname);
 
 const todayDay = today();
 
@@ -108,19 +106,7 @@ const hasActivity = days.length > 0;
 
 <BookLayout title="Books">
 	<div class="page">
-		<div class="tabs-bar">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
-		</div>
+		<SiteHeader pathname={Astro.url.pathname} theme="book" />
 
 		<div class="wrap">
 			<div class="col">
@@ -469,47 +455,6 @@ const hasActivity = days.length > 0;
 			background: #1a120a;
 		}
 
-		/* Site nav. The strip runs to both edges while the links sit on the same
-		   960px column as the page content — 1008px is that column plus the
-		   padding either side.
-
-		   The mock reaches for the bleed with a pair of ±2000px box-shadows, but
-		   an offset shadow of a box at most 1008px wide lands 1000px clear of it
-		   and never meets the edge. A wrapper carries the background and the rule
-		   out at every width instead. */
-		.tabs-bar {
-			background: #150e07;
-			border-bottom: 1px solid #45341f;
-		}
-		.tabs {
-			display: flex;
-			align-items: stretch;
-			gap: 2px;
-			max-width: 1008px;
-			margin: 0 auto;
-			padding: 0 clamp(14px, 4vw, 24px);
-			overflow-x: auto;
-		}
-		.tabs__link {
-			font-size: 13px;
-			letter-spacing: 0.4px;
-			color: #bfa886;
-			padding: 26px 16px 24px;
-			border-bottom: 2px solid transparent;
-			white-space: nowrap;
-			transition: color 0.12s;
-		}
-		.tabs__link:hover {
-			color: #f2e6cd;
-		}
-		.tabs__link--active {
-			color: #f2e6cd;
-			font-weight: 600;
-			border-bottom-color: #cfa452;
-		}
-		.tabs__link--active:hover {
-			color: #fff2da;
-		}
 
 		.wrap {
 			display: flex;
@@ -1030,9 +975,6 @@ const hasActivity = days.length > 0;
 		}
 
 		@media (max-width: 640px) {
-			.tabs__link {
-				padding: 18px 10px 16px;
-			}
 			/*
 				The facts are a desktop aside. Wrapped below the progress bar they
 				push the next book off the screen for four lines nobody came for,

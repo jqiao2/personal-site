@@ -3,7 +3,7 @@ import BookCover from '../../components/BookCover.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import { getCurrentlyReading, getToRead } from '../../lib/books-queries';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 import {
 	buildPile,
 	GHOST_HEIGHT,
@@ -15,7 +15,6 @@ import {
 // Rendered on demand — the pile changes from this page and from the Kindle.
 export const prerender = false;
 
-const nav = siteNav(Astro.url.pathname);
 const isOwner = await requireOwner(Astro.cookies);
 
 // The suggestion pass needs the books the Kindle has started lately, which is
@@ -44,19 +43,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 
 <BookLayout title="To read — Jason's books">
 	<div class="page">
-		<div class="tabs-bar">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
-		</div>
+		<SiteHeader pathname={Astro.url.pathname} theme="book" />
 
 		<div class="wrap">
 			<div class="col">
@@ -625,39 +612,6 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 			background: #1a120a;
 		}
 
-		/* Site nav — the strip bleeds to both edges while the links stay on the
-		   960px column. Same wrapper trick as /books. */
-		.tabs-bar {
-			background: #150e07;
-			border-bottom: 1px solid #45341f;
-		}
-		.tabs {
-			display: flex;
-			align-items: stretch;
-			gap: 2px;
-			max-width: 1008px;
-			margin: 0 auto;
-			padding: 0 clamp(14px, 4vw, 24px);
-			overflow-x: auto;
-		}
-		.tabs__link {
-			font-size: 13px;
-			letter-spacing: 0.4px;
-			color: #bfa886;
-			padding: 26px 16px 24px;
-			border-bottom: 2px solid transparent;
-			white-space: nowrap;
-			transition: color 0.12s;
-		}
-		.tabs__link:hover {
-			color: #f2e6cd;
-		}
-		.tabs__link--active {
-			color: #f2e6cd;
-			font-weight: 600;
-			border-bottom-color: #cfa452;
-		}
-
 		.wrap {
 			display: flex;
 			justify-content: center;
@@ -1215,9 +1169,6 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 		}
 
 		@media (max-width: 640px) {
-			.tabs__link {
-				padding: 18px 10px 16px;
-			}
 			.row__when {
 				text-align: left;
 			}

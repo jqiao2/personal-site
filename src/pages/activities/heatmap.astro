@@ -35,7 +35,7 @@
 // blank world view.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import { requireOwner } from '../../lib/auth';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 import { ALPINE } from '../../lib/activity-tokens';
 import { ACTIVITY_MAP_TOKENS } from '../../lib/activity-map';
 import { TILE_FEET } from '../../lib/heatmap';
@@ -51,7 +51,6 @@ if (!(await requireOwner(Astro.cookies))) {
 	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
 }
 
-const nav = siteNav(Astro.url.pathname);
 const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 ---
@@ -69,17 +68,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		}}
 	>
 		<div class="card">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
+			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 			<header class="head">
 				<div>
@@ -353,32 +342,6 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		display: flex;
 		flex-direction: column;
 	}
-	.tabs {
-		display: flex;
-		align-items: stretch;
-		gap: 2px;
-		width: 100vw;
-		margin-left: calc(50% - 50vw);
-		padding: 0 calc(50vw - 50% + 28px);
-		border-bottom: 1px solid var(--scree);
-	}
-	.tabs__link {
-		font-size: 13px;
-		letter-spacing: 0.4px;
-		color: var(--granite-soft);
-		padding: 26px 16px 24px;
-		border-bottom: 2px solid transparent;
-		transition: color 0.12s;
-	}
-	.tabs__link:hover {
-		color: var(--granite);
-	}
-	.tabs__link--active {
-		color: var(--lake);
-		font-weight: 600;
-		border-bottom-color: var(--lake);
-	}
-
 	.head {
 		display: flex;
 		align-items: flex-end;
@@ -511,14 +474,6 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	}
 
 	@media (max-width: 860px) {
-		.tabs {
-			flex-wrap: wrap;
-			padding-left: calc(50vw - 50% + 16px);
-			padding-right: calc(50vw - 50% + 16px);
-		}
-		.tabs__link {
-			padding: 16px 10px 14px;
-		}
 		.head {
 			padding: 22px 18px 14px;
 		}

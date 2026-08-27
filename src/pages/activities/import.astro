@@ -8,7 +8,7 @@
 // current. See src/lib/strava.ts and src/lib/strava-sync.ts.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import { requireOwner } from '../../lib/auth';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 import { ALPINE } from '../../lib/activity-tokens';
 import { getConnection, type StravaConnection } from '../../lib/strava';
 
@@ -19,7 +19,6 @@ if (!(await requireOwner(Astro.cookies))) {
 	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
 }
 
-const nav = siteNav(Astro.url.pathname);
 const params = Astro.url.searchParams;
 const connectedFlash = params.get('connected') === '1';
 const errorFlash = params.get('error');
@@ -49,17 +48,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 		}}
 	>
 		<div class="card">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
+			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 			<header class="head">
 				<a class="back" href="/activities">← Activity log</a>
@@ -138,9 +127,6 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 		flex-direction: column;
 		gap: 1.25rem;
 	}
-	.tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-	.tabs__link { color: var(--granite-soft); text-decoration: none; font-size: 0.9rem; }
-	.tabs__link--active { color: var(--granite); font-weight: 600; }
 	.head { display: flex; flex-direction: column; gap: 0.25rem; }
 	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
 	.head__title { margin: 0; font-size: 1.6rem; }

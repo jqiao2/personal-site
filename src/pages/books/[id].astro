@@ -12,12 +12,11 @@ import {
 } from '../../lib/book-queries';
 import { buildBookPage } from '../../lib/book-view';
 import { requireOwner } from '../../lib/auth';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects whatever the Kindle last pushed.
 export const prerender = false;
 
-const nav = siteNav(Astro.url.pathname);
 const id = Number(Astro.params.id);
 const isOwner = await requireOwner(Astro.cookies);
 const book = Number.isInteger(id) ? await getBook(id, isOwner) : null;
@@ -76,19 +75,7 @@ const spines = Array.from({ length: 18 }, () => ({
 
 <BookLayout title={v.pageTitle}>
 	<div class="page" style={`--hue:${v.hue}`}>
-		<div class="tabs-bar">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
-		</div>
+		<SiteHeader pathname={Astro.url.pathname} theme="book" />
 
 		<!-- Hero: a wash pulled from the book, on a shelf with one book missing -->
 		<div class="hero">
@@ -722,37 +709,6 @@ const spines = Array.from({ length: 18 }, () => ({
 		max-width: 960px;
 		margin: 0 auto;
 		padding: 0 clamp(14px, 4vw, 24px);
-	}
-
-	/* Tabs — the shelf's, unchanged */
-	.tabs-bar {
-		background: #150e07;
-		border-bottom: 1px solid #45341f;
-		position: relative;
-		z-index: 3;
-	}
-	.tabs {
-		display: flex;
-		gap: 2px;
-		max-width: 1008px;
-		margin: 0 auto;
-		padding: 0 clamp(14px, 4vw, 24px);
-		overflow-x: auto;
-	}
-	.tabs__link {
-		font-size: 13px;
-		letter-spacing: 0.4px;
-		color: #bfa886;
-		padding: 26px 16px 24px;
-		border-bottom: 2px solid transparent;
-		white-space: nowrap;
-	}
-	.tabs__link:hover {
-		color: #f2e6cd;
-	}
-	.tabs__link--active {
-		color: #f2e6cd;
-		border-bottom-color: #cfa452;
 	}
 
 	/* Hero */

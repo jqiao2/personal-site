@@ -1,0 +1,320 @@
+---
+// The one site header, themed to whichever section it's sitting in.
+//
+// This replaces the half-dozen hand-copied nav strips that used to live in each
+// section's pages — wine tabs in the film log, paper tabs in the book log, the
+// menu bar in the restaurant log, and so on. They only ever differed in colour
+// and typeface, so the markup is shared here and the look is a `theme` preset:
+// same four tabs, same Journal dropdown, same active logic everywhere, painted
+// to match the page.
+//
+// STRUCTURE. Always a full-viewport-width strip (the `100vw` bleed trick), with
+// its links held to a section-width column inside. That's what the film and
+// activity logs already did from inside their card; every other section is a
+// plain top strip, for which the bleed is a no-op. So one structure covers both
+// placements.
+import { siteNav } from '../lib/nav';
+
+interface Props {
+	/** Pathname used to light the active tab. */
+	pathname: string;
+	/** Which section's palette to wear. */
+	theme?: 'root' | 'film' | 'book' | 'restaurant' | 'activity' | 'subway';
+}
+
+const { pathname, theme = 'root' } = Astro.props;
+const nav = siteNav(pathname);
+
+// Each theme is just a bag of CSS custom properties. `--sh-max` caps the inner
+// column; `none` lets the strip run edge to edge (the subway map wants that).
+// `root` leans on the variables Layout.astro already defines so it follows the
+// light/dark scheme; every other section is art-directed to a fixed palette.
+const THEMES: Record<string, Record<string, string>> = {
+	root: {
+		'--sh-bg': 'transparent',
+		'--sh-border': 'var(--border, #ddd)',
+		'--sh-link': 'var(--fg, #111)',
+		'--sh-hover': 'var(--fg, #111)',
+		'--sh-active': 'var(--fg, #111)',
+		'--sh-accent': 'var(--fg, #111)',
+		'--sh-font': 'system-ui, sans-serif',
+		'--sh-max': '800px',
+		'--sh-menu-bg': 'var(--bg, #fff)',
+	},
+	film: {
+		'--sh-bg': '#20100f',
+		'--sh-border': '#4a2529',
+		'--sh-link': '#c2a99a',
+		'--sh-hover': '#f4e8d1',
+		'--sh-active': '#f4e8d1',
+		'--sh-accent': '#d9b45a',
+		'--sh-font': "'Archivo', sans-serif",
+		'--sh-max': '1120px',
+		'--sh-menu-bg': '#20100f',
+	},
+	book: {
+		'--sh-bg': '#150e07',
+		'--sh-border': '#45341f',
+		'--sh-link': '#bfa886',
+		'--sh-hover': '#f2e6cd',
+		'--sh-active': '#f2e6cd',
+		'--sh-accent': '#cfa452',
+		'--sh-font': "'Archivo', sans-serif",
+		'--sh-max': '1008px',
+		'--sh-menu-bg': '#150e07',
+	},
+	restaurant: {
+		'--sh-bg': '#efe1c3',
+		'--sh-border': '#c4ad86',
+		'--sh-link': '#6d5740',
+		'--sh-hover': '#8e3220',
+		'--sh-active': '#2f1e12',
+		'--sh-accent': '#b34328',
+		'--sh-font': "'Archivo', sans-serif",
+		'--sh-max': '1264px',
+		'--sh-menu-bg': '#fdf7e8',
+	},
+	activity: {
+		'--sh-bg': 'transparent',
+		'--sh-border': '#c9d4dc',
+		'--sh-link': '#6b7b88',
+		'--sh-hover': '#3d4a55',
+		'--sh-active': '#1c6e8c',
+		'--sh-accent': '#1c6e8c',
+		'--sh-font': "'Instrument Sans', sans-serif",
+		'--sh-max': '1120px',
+		'--sh-menu-bg': '#f8fbfd',
+	},
+	subway: {
+		'--sh-bg': '#20100f',
+		'--sh-border': '#4a2529',
+		'--sh-link': '#c2a99a',
+		'--sh-hover': '#f4e8d1',
+		'--sh-active': '#f4e8d1',
+		'--sh-accent': '#d9b45a',
+		'--sh-font': "'Archivo', sans-serif",
+		'--sh-max': 'none',
+		'--sh-menu-bg': '#20100f',
+	},
+};
+
+const vars = THEMES[theme] ?? THEMES.root;
+const style = Object.entries(vars)
+	.map(([k, v]) => `${k}:${v}`)
+	.join(';');
+---
+
+<header class="sh" style={style} data-theme={theme}>
+	<nav class="sh__inner" aria-label="Primary">
+		{
+			nav.map((n) =>
+				n.children ? (
+					<div class="sh-logs" data-logs>
+						<a
+							class:list={['sh__link', 'sh-logs__link', n.active && 'sh__link--active']}
+							href={n.href}
+							aria-current={n.active ? 'page' : undefined}
+						>
+							{n.label}
+						</a>
+						<button
+							type="button"
+							class="sh-logs__toggle"
+							aria-haspopup="true"
+							aria-expanded="false"
+							aria-label="Open logs menu"
+							data-logs-toggle
+						>
+							<svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
+								<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
+							</svg>
+						</button>
+						<ul class="sh-logs__menu">
+							{n.children.map((c) => (
+								<li>
+									<a
+										class:list={['sh-logs__item', c.active && 'sh-logs__item--active']}
+										href={c.href}
+										aria-current={c.active ? 'page' : undefined}
+									>
+										{c.label}
+									</a>
+								</li>
+							))}
+						</ul>
+					</div>
+				) : (
+					<a
+						class:list={['sh__link', n.active && 'sh__link--active']}
+						href={n.href}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				),
+			)
+		}
+		<div class="sh__actions"><slot name="actions" /></div>
+	</nav>
+</header>
+
+<script>
+	// The Journal dropdown. It opens on hover and keyboard focus by CSS alone
+	// (see .sh-logs:hover / :focus-within); this script only adds the touch path
+	// — a tap on the caret — plus outside-click and Escape to close. Kept tiny on
+	// purpose: the tab still navigates to the month page whether or not any of
+	// this runs.
+	for (const logs of document.querySelectorAll<HTMLElement>('[data-logs]')) {
+		const toggle = logs.querySelector<HTMLButtonElement>('[data-logs-toggle]');
+		if (!toggle) continue;
+		const set = (open: boolean) => {
+			logs.toggleAttribute('data-open', open);
+			toggle.setAttribute('aria-expanded', String(open));
+		};
+		toggle.addEventListener('click', (e) => {
+			e.stopPropagation();
+			set(!logs.hasAttribute('data-open'));
+		});
+		document.addEventListener('click', (e) => {
+			if (!logs.contains(e.target as Node)) set(false);
+		});
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') set(false);
+		});
+	}
+</script>
+
+<style>
+	/* The strip: full viewport width, its content held to the section column.
+	   `margin-left: calc(50% - 50vw)` is the bleed — a no-op when the header is
+	   already full width, and what lets it escape a centered card when it isn't
+	   (the film and activity logs place it inside one). */
+	.sh {
+		width: 100vw;
+		margin-left: calc(50% - 50vw);
+		background: var(--sh-bg);
+		border-bottom: 1px solid var(--sh-border);
+		font-family: var(--sh-font);
+	}
+	.sh__inner {
+		max-width: var(--sh-max);
+		margin: 0 auto;
+		padding: 0 clamp(14px, 4vw, 28px);
+		display: flex;
+		align-items: stretch;
+		gap: 2px;
+		flex-wrap: wrap;
+	}
+	.sh__link {
+		display: inline-flex;
+		align-items: center;
+		font-size: 13px;
+		letter-spacing: 0.4px;
+		color: var(--sh-link);
+		text-decoration: none;
+		padding: 22px 15px 20px;
+		border-bottom: 2px solid transparent;
+		transition: color 0.12s;
+		white-space: nowrap;
+	}
+	.sh__link:hover {
+		color: var(--sh-hover);
+	}
+	.sh__link--active {
+		color: var(--sh-active);
+		font-weight: 600;
+		border-bottom-color: var(--sh-accent);
+	}
+
+	/* Journal dropdown */
+	.sh-logs {
+		position: relative;
+		display: inline-flex;
+		align-items: stretch;
+	}
+	.sh-logs__link {
+		padding-right: 4px;
+	}
+	.sh-logs__toggle {
+		display: inline-flex;
+		align-items: center;
+		padding: 0 8px 0 2px;
+		background: none;
+		border: none;
+		color: var(--sh-link);
+		cursor: pointer;
+	}
+	.sh-logs:hover .sh-logs__toggle,
+	.sh-logs:focus-within .sh-logs__toggle {
+		color: var(--sh-hover);
+	}
+	.sh-logs__toggle svg {
+		transition: transform 0.14s;
+	}
+	.sh-logs:hover .sh-logs__toggle svg,
+	.sh-logs:focus-within .sh-logs__toggle svg,
+	.sh-logs[data-open] .sh-logs__toggle svg {
+		transform: rotate(180deg);
+	}
+
+	.sh-logs__menu {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		z-index: 60;
+		margin: 0;
+		padding: 6px;
+		list-style: none;
+		min-width: 168px;
+		background: var(--sh-menu-bg);
+		border: 1px solid var(--sh-border);
+		border-radius: 0 0 8px 8px;
+		box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+		/* Hidden until hovered, focused, or tapped open. visibility (not just
+		   opacity) so the links aren't tab-reachable while collapsed. */
+		opacity: 0;
+		visibility: hidden;
+		transform: translateY(-4px);
+		transition: opacity 0.12s, transform 0.12s, visibility 0.12s;
+	}
+	.sh-logs:hover .sh-logs__menu,
+	.sh-logs:focus-within .sh-logs__menu,
+	.sh-logs[data-open] .sh-logs__menu {
+		opacity: 1;
+		visibility: visible;
+		transform: translateY(0);
+	}
+	.sh-logs__item {
+		display: block;
+		padding: 9px 12px;
+		font-size: 13px;
+		color: var(--sh-link);
+		text-decoration: none;
+		border-radius: 5px;
+		white-space: nowrap;
+	}
+	.sh-logs__item:hover {
+		color: var(--sh-hover);
+		background: color-mix(in srgb, var(--sh-accent) 14%, transparent);
+	}
+	.sh-logs__item--active {
+		color: var(--sh-active);
+		font-weight: 600;
+	}
+
+	.sh__actions {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+	.sh__actions:empty {
+		display: none;
+	}
+
+	@media (max-width: 640px) {
+		.sh__link {
+			padding: 16px 11px 14px;
+		}
+	}
+</style>

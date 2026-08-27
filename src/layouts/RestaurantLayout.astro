@@ -26,7 +26,7 @@
 // because eight pages share one typographic vocabulary — the price column, the
 // section rule, the verdict mark in the left margin — and eight copies of it
 // would drift apart by the third page.
-import { siteNav } from '../lib/nav';
+import SiteHeader from '../components/SiteHeader.astro';
 
 interface Props {
 	title: string;
@@ -36,7 +36,6 @@ interface Props {
 }
 
 const { title, pathname, isOwner = false } = Astro.props;
-const nav = siteNav(pathname);
 ---
 
 <html lang="en">
@@ -53,29 +52,18 @@ const nav = siteNav(pathname);
 		/>
 	</head>
 	<body>
-		<div class="rl-nav">
-			<div class="rl-nav__inner">
-				{nav.map((n) => (
-					<a
-						class:list={['rl-nav__link', n.active && 'rl-nav__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-				<div class="rl-nav__actions">
-					{isOwner ? (
-						<>
-							<button type="button" class="rl-btn" data-open-try-editor>+ To try</button>
-							<button type="button" class="rl-btn rl-btn--primary" data-open-meal-editor>+ Log meal</button>
-						</>
-					) : (
-						<a class="rl-btn" href="/films/login">Log in</a>
-					)}
-				</div>
-			</div>
-		</div>
+		<SiteHeader pathname={pathname} theme="restaurant">
+			<Fragment slot="actions">
+				{isOwner ? (
+					<>
+						<button type="button" class="rl-btn" data-open-try-editor>+ To try</button>
+						<button type="button" class="rl-btn rl-btn--primary" data-open-meal-editor>+ Log meal</button>
+					</>
+				) : (
+					<a class="rl-btn" href="/films/login">Log in</a>
+				)}
+			</Fragment>
+		</SiteHeader>
 
 		<slot />
 
@@ -199,38 +187,10 @@ const nav = siteNav(pathname);
 				font-family: var(--ui);
 			}
 
-			/* --- Site nav ------------------------------------------------- */
-			.rl-nav {
-				background: var(--panel);
-				border-bottom: 1px solid var(--rule);
-			}
-			.rl-nav__inner {
-				max-width: var(--column);
-				margin: 0 auto;
-				padding: 9px var(--gutter);
-				min-height: 54px;
-				display: flex;
-				align-items: center;
-				gap: 10px 18px;
-				flex-wrap: wrap;
-			}
-			.rl-nav__link {
-				font-size: 13px;
-				color: var(--ink-2);
-				padding-bottom: 3px;
-				border-bottom: 2px solid transparent;
-			}
-			.rl-nav__link--active {
-				color: var(--ink);
-				font-weight: 600;
-				border-bottom-color: var(--terracotta);
-			}
-			.rl-nav__actions {
-				margin-left: auto;
-				display: flex;
-				gap: 8px;
-			}
-			/* Owner-only affordances: visible, but quiet — an outline on the
+			/* --- Site nav actions ----------------------------------------
+			   The nav strip itself is <SiteHeader>; these are the owner-only
+			   buttons it carries in its actions slot.
+			   Owner-only affordances: visible, but quiet — an outline on the
 			   paper rather than a filled button competing with the content. */
 			.rl-btn {
 				background: none;

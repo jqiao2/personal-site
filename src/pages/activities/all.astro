@@ -16,7 +16,7 @@
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
 import { requireOwner } from '../../lib/auth';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 import { SPORTS, sportMeta, type SportFamily } from '../../lib/sports';
 import { exertionLabel } from '../../lib/activity-tokens';
 import {
@@ -40,7 +40,6 @@ const mi = (m: number) => m / METERS_PER_MILE;
 const ft = (m: number) => m / METERS_PER_FOOT;
 const min = (s: number) => s / 60;
 
-const nav = siteNav(Astro.url.pathname);
 // A visitor gets redacted rows (sport glyph, no link) and an empty facet set,
 // both decided in the data layer — see redactActivities and fetchActivityPage.
 // The toolbar and filter panel come off the page entirely rather than being
@@ -216,15 +215,7 @@ const scopeDummy: ActivityCardRow = {
 
 <ActivityLayout title="All activities — Jason's activity log">
 	<div class="page">
-		<nav class="tabs">
-			{
-				nav.map((n) => (
-					<a class:list={['tabs__link', n.active && 'tabs__link--active']} href={n.href} aria-current={n.active ? 'page' : undefined}>
-						{n.label}
-					</a>
-				))
-			}
-		</nav>
+		<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 		<div id="scope-source" hidden aria-hidden="true">
 			<ActivityCard activity={scopeDummy} size="row" />
@@ -481,22 +472,6 @@ const scopeDummy: ActivityCardRow = {
 			max-width: 1100px;
 			margin: 0 auto;
 			padding: 2rem 1.5rem 6rem;
-		}
-		.tabs {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 1.25rem;
-			padding-bottom: 1.25rem;
-			margin-bottom: 1.75rem;
-			border-bottom: 1px solid #c9d4dc;
-		}
-		.tabs__link {
-			font-size: 0.9rem;
-			color: #6b7b88;
-		}
-		.tabs__link--active {
-			color: #1c6e8c;
-			font-weight: 600;
 		}
 		#scope-source {
 			display: none;

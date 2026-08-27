@@ -17,7 +17,7 @@
 // (bearings, valves) get no bar rather than a fabricated one: see
 // ComponentWear.fraction in src/lib/gear.ts.
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
-import { siteNav } from '../../../lib/nav';
+import SiteHeader from '../../../components/SiteHeader.astro';
 import { requireOwner } from '../../../lib/auth';
 import { ALPINE } from '../../../lib/activity-tokens';
 import {
@@ -51,7 +51,6 @@ try {
 if (!detail) return new Response('Not found', { status: 404 });
 
 const isOwner = await requireOwner(Astro.cookies);
-const nav = siteNav('/activities');
 const { gear, use, fitted, history } = detail;
 
 const isBike = gear.kind === 'bike';
@@ -140,17 +139,7 @@ function usedText(w: ComponentWear): string {
 		data-gear-id={String(gear.id)}
 	>
 		<div class="card">
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-			</nav>
+			<SiteHeader pathname="/activities" theme="activity" />
 
 			<div class="wrap">
 				<a class="back" href="/activities/gear">← Gear</a>
@@ -508,30 +497,6 @@ function usedText(w: ComponentWear): string {
 			gap: 34px;
 		}
 
-		.tabs {
-			display: flex;
-			align-items: stretch;
-			gap: 2px;
-			width: 100vw;
-			margin-left: calc(50% - 50vw);
-			padding: 0 calc(50vw - 50% + 28px);
-			border-bottom: 1px solid var(--scree);
-		}
-		.tabs__link {
-			font-size: 13px;
-			letter-spacing: 0.4px;
-			color: var(--granite-soft);
-			padding: 26px 16px 24px;
-			border-bottom: 2px solid transparent;
-		}
-		.tabs__link:hover {
-			color: var(--granite);
-		}
-		.tabs__link--active {
-			color: var(--lake);
-			font-weight: 600;
-			border-bottom-color: var(--lake);
-		}
 
 		.back {
 			font-size: 13px;
@@ -847,14 +812,6 @@ function usedText(w: ComponentWear): string {
 		@media (max-width: 820px) {
 			.wrap {
 				padding: 22px 20px 50px;
-			}
-			.tabs {
-				flex-wrap: wrap;
-				padding-left: calc(50vw - 50% + 16px);
-				padding-right: calc(50vw - 50% + 16px);
-			}
-			.tabs__link {
-				padding: 16px 10px 14px;
 			}
 			.head__name {
 				font-size: 30px;

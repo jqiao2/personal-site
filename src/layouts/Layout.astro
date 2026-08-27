@@ -1,5 +1,5 @@
 ---
-import { siteNav } from '../lib/nav';
+import SiteHeader from '../components/SiteHeader.astro';
 
 interface Props {
 	title: string;
@@ -7,7 +7,6 @@ interface Props {
 }
 
 const { title, showTmdbFooter = false } = Astro.props;
-const nav = siteNav(Astro.url.pathname);
 ---
 
 <html lang="en">
@@ -19,21 +18,7 @@ const nav = siteNav(Astro.url.pathname);
 		<title>{title}</title>
 	</head>
 	<body>
-		<header>
-			<nav>
-				{
-					nav.map((n) => (
-						<a
-							href={n.href}
-							class={n.active ? 'active' : ''}
-							aria-current={n.active ? 'page' : undefined}
-						>
-							{n.label}
-						</a>
-					))
-				}
-			</nav>
-		</header>
+		<SiteHeader pathname={Astro.url.pathname} theme="root" />
 		<main>
 			<slot />
 		</main>
@@ -69,28 +54,6 @@ const nav = siteNav(Astro.url.pathname);
 				background: var(--bg);
 				color: var(--fg);
 				margin: 0;
-			}
-			header {
-				border-bottom: 1px solid var(--border);
-				padding: 1rem 2rem;
-			}
-			nav {
-				display: flex;
-				gap: 1.5rem;
-				max-width: 800px;
-				margin: 0 auto;
-			}
-			nav a {
-				text-decoration: none;
-				color: var(--fg);
-				font-weight: 500;
-			}
-			nav a:hover {
-				text-decoration: underline;
-			}
-			nav a.active {
-				text-decoration: underline;
-				text-underline-offset: 4px;
 			}
 			main {
 				max-width: 800px;
