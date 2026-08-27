@@ -147,8 +147,13 @@ function weekStatText(t: ActivityWeek['totals']) {
 							</a>
 						)}
 						{isOwner && (
-							<a class="navrow navrow--link navrow--last" href="/activities/month">
+							<a class="navrow navrow--link" href="/activities/month">
 								<span>The month in review</span><span class="navrow__n">→</span>
+							</a>
+						)}
+						{isOwner && (
+							<a class="navrow navrow--link navrow--last" href="/activities/import">
+								<span>Strava</span><span class="navrow__n">→</span>
 							</a>
 						)}
 					</nav>

@@ -82,7 +82,7 @@ const config = {
 	// like it loaded.
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
-	import { alpineBasemap, bareAlpineGround, polylineToGeoJSON, startFinish, routeBoundsLngLat } from '../lib/activity-map';
+	import { alpineBasemap, bareAlpineGround, polylineToGeoJSON, routeGapsGeoJSON, startFinish, routeBoundsLngLat } from '../lib/activity-map';
 
 	const tag = document.getElementById('activity-map-config');
 	const host = document.querySelector<HTMLElement>('[data-activity-map]');
@@ -94,6 +94,7 @@ const config = {
 		};
 
 		const route = polylineToGeoJSON(cfg.polyline);
+		const gaps = routeGapsGeoJSON(cfg.polyline);
 		const ends = startFinish(cfg.polyline);
 		const bbox = routeBoundsLngLat(cfg.polyline);
 
@@ -136,6 +137,17 @@ const config = {
 
 		function addRoute() {
 			if (map.getSource('route')) return;
+			// The dashed hops across recording gaps go down first, under the route,
+			// so the solid line sits on top where the two ever meet. Empty for a
+			// continuous track, so this draws nothing in the common case.
+			map.addSource('route-gaps', { type: 'geojson', data: gaps as maplibregl.GeoJSONSourceSpecification['data'] });
+			map.addLayer({
+				id: 'route-gap-line',
+				type: 'line',
+				source: 'route-gaps',
+				layout: { 'line-cap': 'round', 'line-join': 'round' },
+				paint: { 'line-color': cfg.tokens.route, 'line-width': 1.5, 'line-opacity': 0.4, 'line-dasharray': [1, 2.5] },
+			});
 			map.addSource('route', { type: 'geojson', data: route as maplibregl.GeoJSONSourceSpecification['data'] });
 			// A pale casing under the route line so it separates from a dark
 			// hillshade slope or a similarly-toned lake fill — the same reason a

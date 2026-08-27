@@ -251,6 +251,42 @@ export function pathLength(points: [number, number][]): number {
 	return total;
 }
 
+/**
+ * A single step between consecutive samples longer than this is a break in the
+ * recording, not distance covered — a paused watch resumed somewhere else, or a
+ * long GPS blackout. The stored tracks are ~1 Hz, so a "step" is roughly one
+ * second of travel: real movement tops out around 30 m (a fast descent), and
+ * the collection's 99.9th-percentile step is 27 m, while a genuine pause leaps
+ * hundreds of metres to kilometres (activity 2086 jumps 12.9 km when a ride is
+ * stopped at 125th St and restarted in the Bronx). 200 m is the clean divide —
+ * at 1 Hz that is >700 km/h, which nothing here does.
+ */
+export const GPS_GAP_M = 200;
+
+/**
+ * Splits a `[lat, lng]` track into continuous pieces, cutting wherever one step
+ * exceeds `maxStepM` — the seam a pause-and-relocate (or a long signal loss)
+ * leaves in an otherwise ~1 Hz track. A track with no such step comes back as a
+ * single piece; an empty track as `[]`. Every returned piece has at least one
+ * point. Used to keep the interpolated line between two points from being drawn
+ * across ground that was never actually covered (heatmap tiles, the detail
+ * map's route line).
+ */
+export function splitOnGaps(points: [number, number][], maxStepM = GPS_GAP_M): [number, number][][] {
+	if (points.length === 0) return [];
+	const pieces: [number, number][][] = [];
+	let cur: [number, number][] = [points[0]];
+	for (let i = 1; i < points.length; i++) {
+		if (haversine(points[i - 1], points[i]) > maxStepM) {
+			pieces.push(cur);
+			cur = [];
+		}
+		cur.push(points[i]);
+	}
+	pieces.push(cur);
+	return pieces;
+}
+
 // ---------------------------------------------------------------------------
 // Bounds
 // ---------------------------------------------------------------------------

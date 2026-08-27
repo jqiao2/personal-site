@@ -630,7 +630,7 @@ export async function listMonthWatches(key: string): Promise<MonthWatch[]> {
 	const { data, error } = await supabasePublic
 		.from('logs')
 		.select(
-			'id, watched_date, rating, liked, rewatched, created_at, ' +
+			'id, watched_date, rating, liked, rewatched, created_at, medium, ' +
 				'movies(tmdb_id, title, release_year, poster_path, runtime)',
 		)
 		.gte('watched_date', `${key}-01`)
@@ -648,6 +648,7 @@ export async function listMonthWatches(key: string): Promise<MonthWatch[]> {
 		liked: boolean;
 		rewatched: boolean;
 		created_at: string;
+		medium: string | null;
 		movies: {
 			tmdb_id: number;
 			title: string;
@@ -670,6 +671,7 @@ export async function listMonthWatches(key: string): Promise<MonthWatch[]> {
 						liked: row.liked,
 						rewatched: row.rewatched,
 						created_at: row.created_at,
+						medium: row.medium,
 						tmdb_id: row.movies.tmdb_id,
 						title: row.movies.title,
 						release_year: row.movies.release_year,
