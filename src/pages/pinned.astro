@@ -1,0 +1,126 @@
+---
+import Layout from '../layouts/Layout.astro';
+import PinButton from '../components/PinButton.astro';
+import { TRACK_TAG } from '../lib/recent-journal';
+import { listPinnedItems } from '../lib/pins';
+import { requireOwner } from '../lib/auth';
+import { formatWatchedDate } from '../lib/format';
+
+// listPinnedItems applies recent-journal.ts's privacy rules against isOwner, so
+// nothing a visitor sees here can leak a private row.
+export const prerender = false;
+
+const isOwner = await requireOwner(Astro.cookies);
+const items = await listPinnedItems({ isOwner });
+
+// The pin's ref id is the first segment of a JournalItem key (book keys are just
+// the id; the others too).
+const refIdOf = (key: string) => Number(key.split(':')[0]);
+---
+
+<Layout title="Pinned" wide>
+	<div class="feed">
+		{
+			items.map((it) => (
+				<article class:list={['item', `item--${it.track}`]}>
+					<div class="item__body">
+						<p class="item__meta">
+							<time datetime={it.day}>{formatWatchedDate(it.day) ?? it.day}</time>
+							<span class="tag">{TRACK_TAG[it.track]}</span>
+						</p>
+						<h2 class="item__title">
+							{it.href ? <a href={it.href}>{it.title}</a> : <span>{it.title}</span>}
+						</h2>
+						{it.detail && <p class="item__note">{it.detail}</p>}
+						{isOwner && <PinButton track={it.track} refId={refIdOf(it.key)} pinned={true} />}
+					</div>
+					{it.image &&
+						(it.href ? (
+							<a class="item__thumb" href={it.href}>
+								<img src={it.image} alt="" width="46" height="69" loading="lazy" />
+							</a>
+						) : (
+							<span class="item__thumb">
+								<img src={it.image} alt="" width="46" height="69" loading="lazy" />
+							</span>
+						))}
+				</article>
+			))
+		}
+
+		{items.length === 0 && <p class="empty">Nothing pinned.</p>}
+	</div>
+</Layout>
+
+<style>
+	.feed {
+		max-width: 42rem;
+	}
+	.item {
+		display: flex;
+		gap: 1rem;
+		align-items: flex-start;
+		padding: 0.75rem 0 1.05rem;
+		border-bottom: 1px solid var(--rule-soft);
+	}
+	.item__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.item__meta {
+		font-family: var(--sans);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+		margin: 0 0 0.2rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		align-items: baseline;
+	}
+	.item__title {
+		font-size: 1.15rem;
+		font-weight: 600;
+		margin: 0;
+		line-height: 1.25;
+	}
+	.item__title a {
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.item__title a:hover {
+		text-decoration: underline;
+	}
+	.item__note {
+		margin: 0.35rem 0 0;
+		color: var(--ink-soft);
+		font-size: 0.95rem;
+	}
+	.item__body :global(.pin) {
+		margin-top: 0.5rem;
+	}
+	.item__thumb img {
+		display: block;
+		width: 46px;
+		height: 69px;
+		object-fit: cover;
+		border: 1px solid var(--rule);
+		background: var(--card);
+	}
+	.tag {
+		font-family: var(--sans);
+		font-size: 0.62rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		padding: 0.1rem 0.4rem;
+		border: 1px solid var(--rule);
+		background: var(--accent-bg);
+		color: var(--accent);
+		border-radius: 2px;
+	}
+	.empty {
+		color: var(--ink-soft);
+		padding: 1rem 0;
+	}
+</style>

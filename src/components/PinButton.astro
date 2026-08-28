@@ -1,0 +1,214 @@
+---
+// Owner-only pin toggle a detail page drops in. Talks to /api/pins.
+//
+// On a 409 (cap reached) the POST comes back with the current pinned entries;
+// the <dialog> below lists them so one can be removed, after which the original
+// pin is retried. The dialog rows are built in JS, so per the
+// astro-scoped-styles-dynamic-nodes note they are styled via :global() anchors.
+import type { PinTrack } from '../lib/pins';
+
+interface Props {
+	track: PinTrack;
+	refId: number;
+	pinned: boolean;
+}
+const { track, refId, pinned } = Astro.props;
+---
+
+<span class="pin">
+	<button
+		type="button"
+		class="pin__btn"
+		data-pin-toggle
+		data-track={track}
+		data-ref-id={refId}
+		aria-pressed={pinned}
+	>
+		<span class="pin__mark" aria-hidden="true">📌</span>
+		<span class="pin__label">{pinned ? 'Pinned' : 'Pin'}</span>
+	</button>
+	<span class="pin__msg" data-pin-msg hidden></span>
+
+	<dialog class="pin-full" data-pin-dialog>
+		<p class="pin-full__title">You already have the most pins allowed. Remove one to add this.</p>
+		<ul class="pin-full__list" data-pin-list></ul>
+		<form method="dialog"><button type="submit" class="pin-full__close">Cancel</button></form>
+	</dialog>
+</span>
+
+<style>
+	.pin {
+		display: inline-flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.pin__btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font: inherit;
+		font-size: 0.85rem;
+		padding: 0.3rem 0.65rem;
+		border: 1px solid currentColor;
+		border-radius: 3px;
+		background: transparent;
+		color: inherit;
+		cursor: pointer;
+		opacity: 0.75;
+	}
+	.pin__btn[aria-pressed='true'] {
+		opacity: 1;
+		font-weight: 600;
+	}
+	.pin__mark {
+		filter: grayscale(1);
+	}
+	.pin__btn[aria-pressed='true'] .pin__mark {
+		filter: none;
+	}
+	.pin__msg {
+		font-size: 0.75rem;
+		opacity: 0.8;
+	}
+	.pin-full {
+		max-width: 24rem;
+		border: 1px solid #888;
+		border-radius: 4px;
+		padding: 1rem 1.25rem;
+	}
+	.pin-full__title {
+		margin: 0 0 0.75rem;
+		font-size: 0.9rem;
+	}
+	.pin-full__list {
+		list-style: none;
+		margin: 0 0 0.75rem;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+	}
+	/* Rows are built in JS, so scoped class hashes never reach them — anchor
+	   with :global(). See astro-scoped-styles-dynamic-nodes. */
+	.pin-full__list :global(.pin-full__row) {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		font-size: 0.85rem;
+	}
+	.pin-full__list :global(.pin-full__remove) {
+		font: inherit;
+		font-size: 0.75rem;
+		padding: 0.2rem 0.5rem;
+		border: 1px solid currentColor;
+		border-radius: 3px;
+		background: transparent;
+		cursor: pointer;
+	}
+	.pin-full__close {
+		font: inherit;
+		font-size: 0.8rem;
+		padding: 0.25rem 0.6rem;
+		cursor: pointer;
+	}
+</style>
+
+<script>
+	async function post(track: string, refId: number): Promise<Response> {
+		return fetch('/api/pins', {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ track, refId }),
+		});
+	}
+	function del(track: string, refId: number): Promise<Response> {
+		return fetch(`/api/pins?track=${encodeURIComponent(track)}&refId=${refId}`, { method: 'DELETE' });
+	}
+
+	function setPinned(btn: HTMLElement, pinned: boolean): void {
+		btn.setAttribute('aria-pressed', String(pinned));
+		const label = btn.querySelector('.pin__label');
+		if (label) label.textContent = pinned ? 'Pinned' : 'Pin';
+	}
+
+	function showMsg(root: HTMLElement, text: string): void {
+		const msg = root.querySelector<HTMLElement>('[data-pin-msg]');
+		if (!msg) return;
+		msg.textContent = text;
+		msg.hidden = !text;
+	}
+
+	interface PinInfo {
+		track: string;
+		refId: number;
+		title: string;
+	}
+
+	function openFull(root: HTMLElement, btn: HTMLElement, track: string, refId: number, pins: PinInfo[]): void {
+		const dialog = root.querySelector<HTMLDialogElement>('[data-pin-dialog]');
+		const list = root.querySelector<HTMLUListElement>('[data-pin-list]');
+		if (!dialog || !list) return;
+		list.replaceChildren();
+		for (const p of pins) {
+			const li = document.createElement('li');
+			li.className = 'pin-full__row';
+			const name = document.createElement('span');
+			name.textContent = p.title || `${p.track} #${p.refId}`;
+			const remove = document.createElement('button');
+			remove.type = 'button';
+			remove.className = 'pin-full__remove';
+			remove.textContent = 'Remove';
+			remove.addEventListener('click', async () => {
+				remove.disabled = true;
+				const dResp = await del(p.track, p.refId);
+				if (!dResp.ok) {
+					showMsg(root, 'Could not remove that pin.');
+					return;
+				}
+				const pResp = await post(track, refId);
+				if (pResp.ok) {
+					setPinned(btn, true);
+					showMsg(root, '');
+					dialog.close();
+				} else {
+					showMsg(root, 'Removed one, but pinning still failed.');
+				}
+			});
+			li.append(name, remove);
+			list.append(li);
+		}
+		if (typeof dialog.showModal === 'function') dialog.showModal();
+		else dialog.setAttribute('open', '');
+	}
+
+	document.addEventListener('click', async (e) => {
+		const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-pin-toggle]');
+		if (!btn) return;
+		const root = btn.closest<HTMLElement>('.pin');
+		if (!root) return;
+		const track = btn.dataset.track ?? '';
+		const refId = Number(btn.dataset.refId);
+		const pinned = btn.getAttribute('aria-pressed') === 'true';
+		showMsg(root, '');
+
+		if (pinned) {
+			const resp = await del(track, refId);
+			if (resp.ok) setPinned(btn, false);
+			else showMsg(root, 'Could not unpin.');
+			return;
+		}
+
+		const resp = await post(track, refId);
+		if (resp.status === 201) {
+			setPinned(btn, true);
+			return;
+		}
+		if (resp.status === 409) {
+			const data = await resp.json().catch(() => ({ pins: [] }));
+			openFull(root, btn, track, refId, data.pins ?? []);
+			return;
+		}
+		showMsg(root, 'Could not pin.');
+	});
+</script>
