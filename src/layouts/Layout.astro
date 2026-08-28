@@ -17,11 +17,11 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<link rel="alternate" type="application/rss+xml" title="Jason Qiao — film diary" href="/rss.xml" />
+		<link rel="alternate" type="application/rss+xml" title="Jason Qiao" href="/rss.xml" />
 		<title>{title}</title>
 	</head>
 	<body>
-		<SiteHeader pathname={Astro.url.pathname} tagline="career work & hobbies" />
+		<SiteHeader pathname={Astro.url.pathname} theme="root" />
 		<main class={wide ? 'wide' : ''}>
 			<slot />
 		</main>
@@ -42,30 +42,29 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 			:root {
 				color-scheme: light dark;
 
-				/* Surfaces — warm paper, not #fff */
+				/* Warm paper spine — the "2008 indie-web" palette. */
 				--paper: #f4f1ea;
 				--card: #fbf9f4;
 				--ink: #2b2622;
 				--ink-soft: #6b6259;
-
-				/* Hairline rules, warm grey */
 				--rule: #d8d1c4;
 				--rule-soft: #e7e1d5;
-
-				/* Links — dusty blue + the mandatory 2008 purple visited */
 				--link: #2f5b8c;
 				--link-hover: #1d3f66;
 				--visited: #6b4a86;
-
-				/* One restrained accent, for tags & the RSS chip */
 				--accent: #8c4a2f;
 				--accent-bg: #efe3d7;
 
 				--serif: Georgia, 'Times New Roman', serif;
 				--sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
-
 				--measure: 720px;
 				--shell: 960px;
+
+				/* SiteHeader's `root` theme reads these, so mapping them to the warm
+				   palette makes the shared header follow the spine's look. */
+				--bg: var(--paper);
+				--fg: var(--ink);
+				--border: var(--rule);
 			}
 			@media (prefers-color-scheme: dark) {
 				:root {
@@ -91,7 +90,8 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 				margin: 0;
 			}
 
-			/* Links carry the whole personality — underline, and the visited purple. */
+			/* Content links carry the personality — underline + the 2008 visited purple.
+			   Scoped to main so the nav (in SiteHeader) keeps its own ink treatment. */
 			:global(main a) {
 				color: var(--link);
 				text-underline-offset: 2px;

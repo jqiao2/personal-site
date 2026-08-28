@@ -8,9 +8,7 @@
 // force-directed graph — same reasoning as /subway. The graph itself is rendered
 // client-side by src/scripts/credit-network.js from a static JSON built by
 // scripts/credit-graph/build.mjs.
-import { siteNav } from '../../lib/nav';
-
-const nav = siteNav(Astro.url.pathname);
+import SiteHeader from '../../components/SiteHeader.astro';
 ---
 
 <html lang="en">
@@ -25,19 +23,7 @@ const nav = siteNav(Astro.url.pathname);
 		/>
 	</head>
 	<body>
-		<nav class="cn-nav">
-			{
-				nav.map((n) => (
-					<a
-						href={n.href}
-						class={n.active ? 'active' : ''}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))
-			}
-		</nav>
+		<SiteHeader pathname={Astro.url.pathname} theme="root" />
 
 		<div class="cn-shell">
 			<aside class="cn-side">
@@ -176,26 +162,6 @@ const nav = siteNav(Astro.url.pathname);
 				flex-direction: column;
 				overflow: hidden;
 			}
-			.cn-nav {
-				display: flex;
-				gap: 1.5rem;
-				padding: 0.75rem 1.25rem;
-				border-bottom: 1px solid var(--border);
-				flex: 0 0 auto;
-			}
-			.cn-nav a {
-				text-decoration: none;
-				color: var(--fg);
-				font-weight: 500;
-				font-size: 0.9rem;
-			}
-			.cn-nav a:hover {
-				text-decoration: underline;
-			}
-			.cn-nav a.active {
-				color: var(--accent);
-			}
-
 			.cn-shell {
 				flex: 1 1 auto;
 				display: grid;

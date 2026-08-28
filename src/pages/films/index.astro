@@ -11,7 +11,7 @@ import {
 	listFriends,
 } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
-import { siteNav } from '../../lib/nav';
+import SiteHeader from '../../components/SiteHeader.astro';
 import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
@@ -46,30 +46,21 @@ const num = (n: number) => n.toLocaleString('en-US');
 // the same `rmin`/`rmax` pair the grid's own rating slider writes when both ends
 // land on the same star.
 const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars}`;
-
-const nav = siteNav(Astro.url.pathname);
 ---
 
 <FilmLayout title="Jason's film log">
 	<div class="page">
 		<div class="card">
 			<!-- Site nav -->
-			<nav class="tabs">
-				{nav.map((n) => (
-					<a
-						class:list={['tabs__link', n.active && 'tabs__link--active']}
-						href={n.href}
-						aria-current={n.active ? 'page' : undefined}
-					>
-						{n.label}
-					</a>
-				))}
-				{isOwner ? (
-					<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
-				) : (
-					<button type="button" class="nav-btn nav-btn--login" id="open-login">Log in</button>
-				)}
-			</nav>
+			<SiteHeader pathname={Astro.url.pathname} theme="film">
+				<Fragment slot="actions">
+					{isOwner ? (
+						<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
+					) : (
+						<button type="button" class="nav-btn nav-btn--login" id="open-login">Log in</button>
+					)}
+				</Fragment>
+			</SiteHeader>
 
 			<div class="card__body">
 			<!-- Sidebar -->
@@ -269,29 +260,9 @@ const nav = siteNav(Astro.url.pathname);
 			display: flex;
 		}
 
-		/* Site nav — spans the viewport while its content stays aligned to the
-		   1120px column. */
-		.tabs {
-			display: flex;
-			align-items: stretch;
-			gap: 2px;
-			width: 100vw;
-			margin-left: calc(50% - 50vw);
-			padding: 0 calc(50vw - 50% + 28px);
-			background: #20100f;
-			border-bottom: 1px solid #4a2529;
-		}
-		.tabs__link {
-			font-size: 13px;
-			letter-spacing: 0.4px;
-			color: #c2a99a;
-			padding: 26px 16px 24px;
-			border-bottom: 2px solid transparent;
-			transition: color 0.12s;
-		}
+		/* The site nav is <SiteHeader theme="film">; these are the owner/login
+		   buttons it carries in its actions slot. */
 		.nav-btn {
-			margin-left: auto;
-			align-self: center;
 			white-space: nowrap;
 			font-size: 13px;
 			font-weight: 700;
@@ -315,17 +286,6 @@ const nav = siteNav(Astro.url.pathname);
 		}
 		.nav-btn--login:hover {
 			border-color: #d9b45a;
-			color: #fff3df;
-		}
-		.tabs__link:hover {
-			color: #f4e8d1;
-		}
-		.tabs__link--active {
-			color: #f4e8d1;
-			font-weight: 600;
-			border-bottom-color: #d9b45a;
-		}
-		.tabs__link--active:hover {
 			color: #fff3df;
 		}
 
@@ -710,19 +670,6 @@ const nav = siteNav(Astro.url.pathname);
 			.tile__like,
 			.tile__rewatch {
 				font-size: clamp(9px, 2.4vw, 13px);
-			}
-			/* Tighten the tabs so the action button still fits; it wraps to its own
-			   row rather than overflowing, since the page clips horizontally. */
-			.tabs {
-				flex-wrap: wrap;
-				padding-left: calc(50vw - 50% + 14px);
-				padding-right: calc(50vw - 50% + 14px);
-			}
-			.tabs__link {
-				padding: 18px 10px 16px;
-			}
-			.nav-btn {
-				margin: 8px 0 8px auto;
 			}
 		}
 	</style>

@@ -52,7 +52,7 @@ const { title, pathname, isOwner = false } = Astro.props;
 		/>
 	</head>
 	<body>
-		<SiteHeader pathname={pathname} class="rl-siteheader">
+		<SiteHeader pathname={pathname} theme="restaurant">
 			<Fragment slot="actions">
 				{isOwner ? (
 					<>
@@ -187,21 +187,10 @@ const { title, pathname, isOwner = false } = Astro.props;
 				font-family: var(--ui);
 			}
 
-			/* --- Site nav -------------------------------------------------
-			   The shared SiteHeader, skinned to the menu palette: manila stock,
-			   ink links, a terracotta active underline, the Ultra wordmark. */
-			.rl-siteheader {
-				--sh-bg: var(--panel);
-				--sh-border: var(--rule);
-				--sh-brand: var(--ink);
-				--sh-brand-font: var(--display);
-				--sh-fg: var(--ink);
-				--sh-muted: var(--ink-2);
-				--sh-accent: var(--terracotta);
-				--sh-maxw: var(--column);
-				--sh-pad: var(--gutter);
-			}
-			/* Owner-only affordances: visible, but quiet — an outline on the
+			/* --- Site nav actions ----------------------------------------
+			   The nav strip itself is <SiteHeader>; these are the owner-only
+			   buttons it carries in its actions slot.
+			   Owner-only affordances: visible, but quiet — an outline on the
 			   paper rather than a filled button competing with the content. */
 			.rl-btn {
 				background: none;
