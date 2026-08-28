@@ -1,11 +1,215 @@
 ---
 import Layout from '../layouts/Layout.astro';
+import { recentJournal, TRACK_TAG } from '../lib/recent-journal';
+import { formatWatchedDate } from '../lib/format';
+
+// Reflects the live logs. recentJournal already reduces the four tracks to what
+// a visitor may see (see its header), so nothing here can leak a private row.
+export const prerender = false;
+
+const recent = await recentJournal(15);
 ---
 
-<Layout title="Home">
-	<h1>Welcome</h1>
-	<p>
-		This is where I document my career work and my hobbies. Check out my{' '}
-		<a href="/about">background</a> or browse my <a href="/projects">coding projects</a>.
-	</p>
+<Layout title="Jason Qiao" wide>
+	<div class="shell">
+		<div class="feed">
+			<p class="intro">
+				Where I document my career work and my hobbies. Start with my{' '}
+				<a href="/about">background</a> or my{' '}
+				<a href="/projects">coding projects</a>.
+			</p>
+
+			{
+				recent.map((it) => (
+					<article class:list={['item', `item--${it.track}`]}>
+						<div class="item__body">
+							<p class="item__meta">
+								<time datetime={it.day}>{formatWatchedDate(it.day) ?? it.day}</time>
+								<span class="tag">{TRACK_TAG[it.track]}</span>
+							</p>
+							<h2 class="item__title">
+								{it.href ? <a href={it.href}>{it.title}</a> : <span>{it.title}</span>}
+							</h2>
+							{it.detail && <p class="item__note">{it.detail}</p>}
+						</div>
+						{it.image &&
+							(it.href ? (
+								<a class="item__thumb" href={it.href}>
+									<img src={it.image} alt="" width="46" height="69" loading="lazy" />
+								</a>
+							) : (
+								<span class="item__thumb">
+									<img src={it.image} alt="" width="46" height="69" loading="lazy" />
+								</span>
+							))}
+					</article>
+				))
+			}
+
+			<p class="feed__more"><a href="/month">The month in review →</a></p>
+		</div>
+
+		<aside class="sidebar">
+			<section class="widget">
+				<h3 class="widget__title">Sections</h3>
+				<ul class="widget__list">
+					<li><a href="/films">Films</a></li>
+					<li><a href="/books">Books</a></li>
+					<li><a href="/restaurants">Restaurants</a></li>
+					<li><a href="/activities">Activities</a></li>
+					<li><a href="/subway">Subway</a></li>
+					<li><a href="/projects">Projects</a></li>
+				</ul>
+			</section>
+
+			<section class="widget">
+				<h3 class="widget__title">Elsewhere</h3>
+				<ul class="widget__list widget__list--plain">
+					<li><a href="/about">About me</a></li>
+				</ul>
+			</section>
+
+			<a class="rss" href="/rss.xml">RSS</a>
+		</aside>
+	</div>
 </Layout>
+
+<style>
+	.shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 200px;
+		gap: 2.5rem;
+	}
+	@media (max-width: 700px) {
+		.shell {
+			grid-template-columns: 1fr;
+		}
+		.sidebar {
+			order: 2;
+			border-top: 1px solid var(--rule);
+			padding-top: 1.5rem;
+		}
+	}
+
+	.intro {
+		margin: 0 0 1.5rem;
+		padding-bottom: 1.25rem;
+		border-bottom: 1px solid var(--rule);
+		color: var(--ink-soft);
+	}
+
+	/* Feed items — hairline-ruled rows, poster thumb on the right. */
+	.item {
+		display: flex;
+		gap: 1rem;
+		align-items: flex-start;
+		padding: 0.75rem 0 1.05rem;
+		border-bottom: 1px solid var(--rule-soft);
+	}
+	.item__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.item__meta {
+		font-family: var(--sans);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+		margin: 0 0 0.2rem;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		align-items: baseline;
+	}
+	.item__title {
+		font-size: 1.15rem;
+		font-weight: 600;
+		margin: 0;
+		line-height: 1.25;
+	}
+	.item__title a {
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.item__title a:hover {
+		text-decoration: underline;
+	}
+	.item__year {
+		color: var(--ink-soft);
+		font-weight: 400;
+	}
+	.item__note {
+		margin: 0.35rem 0 0;
+		color: var(--ink-soft);
+		font-size: 0.95rem;
+	}
+	.item__thumb img {
+		display: block;
+		width: 46px;
+		height: 69px;
+		object-fit: cover;
+		border: 1px solid var(--rule);
+		background: var(--card);
+	}
+
+	.tag {
+		font-family: var(--sans);
+		font-size: 0.62rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		padding: 0.1rem 0.4rem;
+		border: 1px solid var(--rule);
+		background: var(--accent-bg);
+		color: var(--accent);
+		border-radius: 2px;
+	}
+
+	.feed__more {
+		font-family: var(--sans);
+		font-size: 0.8rem;
+		margin-top: 1.25rem;
+	}
+
+	/* Sidebar */
+	.sidebar {
+		font-size: 0.9rem;
+	}
+	.widget {
+		margin-bottom: 1.8rem;
+	}
+	.widget__title {
+		font-family: var(--sans);
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--ink-soft);
+		margin: 0 0 0.5rem;
+		padding-bottom: 0.3rem;
+		border-bottom: 1px solid var(--rule);
+	}
+	.widget__list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.widget__list li {
+		padding: 0.2rem 0;
+		line-height: 1.35;
+	}
+	.rss {
+		display: inline-block;
+		font-family: var(--sans);
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		color: #fff;
+		background: var(--accent);
+		padding: 0.25rem 0.6rem;
+		border-radius: 2px;
+		text-decoration: none;
+	}
+	.rss:visited {
+		color: #fff;
+	}
+</style>

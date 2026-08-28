@@ -4,9 +4,11 @@ import SiteHeader from '../components/SiteHeader.astro';
 interface Props {
 	title: string;
 	showTmdbFooter?: boolean;
+	/** Home opts in to the full two-column width; prose pages stay at reading measure. */
+	wide?: boolean;
 }
 
-const { title, showTmdbFooter = false } = Astro.props;
+const { title, showTmdbFooter = false, wide = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -15,11 +17,12 @@ const { title, showTmdbFooter = false } = Astro.props;
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
+		<link rel="alternate" type="application/rss+xml" title="Jason Qiao" href="/rss.xml" />
 		<title>{title}</title>
 	</head>
 	<body>
 		<SiteHeader pathname={Astro.url.pathname} theme="root" />
-		<main>
+		<main class={wide ? 'wide' : ''}>
 			<slot />
 		</main>
 		{
@@ -38,35 +41,83 @@ const { title, showTmdbFooter = false } = Astro.props;
 		<style>
 			:root {
 				color-scheme: light dark;
-				--bg: #fff;
-				--fg: #111;
-				--border: #ddd;
+
+				/* Warm paper spine — the "2008 indie-web" palette. */
+				--paper: #f4f1ea;
+				--card: #fbf9f4;
+				--ink: #2b2622;
+				--ink-soft: #6b6259;
+				--rule: #d8d1c4;
+				--rule-soft: #e7e1d5;
+				--link: #2f5b8c;
+				--link-hover: #1d3f66;
+				--visited: #6b4a86;
+				--accent: #8c4a2f;
+				--accent-bg: #efe3d7;
+
+				--serif: Georgia, 'Times New Roman', serif;
+				--sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+				--measure: 720px;
+				--shell: 960px;
+
+				/* SiteHeader's `root` theme reads these, so mapping them to the warm
+				   palette makes the shared header follow the spine's look. */
+				--bg: var(--paper);
+				--fg: var(--ink);
+				--border: var(--rule);
 			}
 			@media (prefers-color-scheme: dark) {
 				:root {
-					--bg: #111;
-					--fg: #eee;
-					--border: #333;
+					--paper: #16130f;
+					--card: #1e1a15;
+					--ink: #e8e0d2;
+					--ink-soft: #a59a88;
+					--rule: #342e26;
+					--rule-soft: #26221c;
+					--link: #8fb4de;
+					--link-hover: #b3cdec;
+					--visited: #b79ad2;
+					--accent: #d08a63;
+					--accent-bg: #2a201a;
 				}
 			}
 			body {
-				font-family: system-ui, sans-serif;
-				background: var(--bg);
-				color: var(--fg);
+				font-family: var(--serif);
+				font-size: 1.0625rem;
+				line-height: 1.6;
+				background: var(--paper);
+				color: var(--ink);
 				margin: 0;
 			}
+
+			/* Content links carry the personality — underline + the 2008 visited purple.
+			   Scoped to main so the nav (in SiteHeader) keeps its own ink treatment. */
+			:global(main a) {
+				color: var(--link);
+				text-underline-offset: 2px;
+			}
+			:global(main a:visited) {
+				color: var(--visited);
+			}
+			:global(main a:hover) {
+				color: var(--link-hover);
+			}
+
 			main {
-				max-width: 800px;
+				max-width: var(--measure);
 				margin: 0 auto;
 				padding: 2rem;
 			}
+			main.wide {
+				max-width: var(--shell);
+			}
 			footer {
-				border-top: 1px solid var(--border);
-				max-width: 800px;
+				border-top: 1px solid var(--rule);
+				max-width: var(--shell);
 				margin: 2rem auto 0;
 				padding: 1rem 2rem;
 				font-size: 0.8rem;
-				opacity: 0.7;
+				color: var(--ink-soft);
 			}
 			footer a {
 				color: inherit;

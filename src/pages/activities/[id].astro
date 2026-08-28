@@ -440,9 +440,8 @@ const exWord = exertionLabel(activity.exertion);
 ---
 
 <ActivityLayout title={pageTitle}>
+	<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 	<div class="page">
-		<SiteHeader pathname={Astro.url.pathname} theme="activity" />
-
 		<a class="back" href="/activities" data-back>&larr; Activities</a>
 
 		{

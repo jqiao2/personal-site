@@ -54,10 +54,8 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			<!-- Site nav -->
 			<SiteHeader pathname={Astro.url.pathname} theme="film">
 				<Fragment slot="actions">
-					{isOwner ? (
+					{isOwner && (
 						<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
-					) : (
-						<button type="button" class="nav-btn nav-btn--login" id="open-login">Log in</button>
 					)}
 				</Fragment>
 			</SiteHeader>
@@ -208,7 +206,7 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 		</div>
 	</div>
 
-	{isOwner ? (
+	{isOwner && (
 		<EntryEditor
 			mode="select"
 			venueOptions={venueOptions}
@@ -216,28 +214,6 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			friendOptions={friendOptions}
 			redirect="/films"
 		/>
-	) : (
-		<div class="login" id="login" hidden>
-			<div class="login__backdrop" id="login-backdrop"></div>
-			<div class="login__box" role="dialog" aria-modal="true" aria-labelledby="login-title">
-				<div class="login__title" id="login-title">Admin sign in</div>
-				<div class="login__sub">Enter the admin password to log films and edit this profile.</div>
-				<form class="login__form" id="login-form">
-					<input
-						type="password"
-						id="login-pw"
-						placeholder="Password"
-						autocomplete="current-password"
-						required
-					/>
-					<div class="login__err" id="login-err" hidden>Incorrect password. Try again.</div>
-					<div class="login__actions">
-						<button type="button" class="login__cancel" id="login-cancel">Cancel</button>
-						<button type="submit" class="login__submit">Sign in</button>
-					</div>
-				</form>
-			</div>
-		</div>
 	)}
 
 	<style>
@@ -278,15 +254,6 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 		}
 		.nav-btn--log:hover {
 			background: #f0d488;
-		}
-		.nav-btn--login {
-			color: #f4e8d1;
-			background: transparent;
-			border: 1px solid #6b3a3f;
-		}
-		.nav-btn--login:hover {
-			border-color: #d9b45a;
-			color: #fff3df;
 		}
 
 		/* Sidebar */
@@ -526,107 +493,6 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			color: #d9b45a;
 		}
 
-		/* Admin sign in */
-		.login {
-			position: fixed;
-			inset: 0;
-			z-index: 200;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-			padding: 24px;
-		}
-		.login[hidden] {
-			display: none;
-		}
-		.login__backdrop {
-			position: absolute;
-			inset: 0;
-			background: rgba(15, 7, 8, 0.72);
-			backdrop-filter: blur(3px);
-		}
-		.login__box {
-			position: relative;
-			width: 100%;
-			max-width: 380px;
-			background: #2a1214;
-			border: 1px solid #6b3a3f;
-			border-radius: 14px;
-			padding: 32px 30px;
-			box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
-		}
-		.login__title {
-			font-family: 'Newsreader', serif;
-			font-size: 24px;
-			color: #f4e8d1;
-			letter-spacing: -0.3px;
-		}
-		.login__sub {
-			margin-top: 6px;
-			font-size: 13px;
-			color: #c2a99a;
-			line-height: 1.4;
-		}
-		.login__form {
-			margin-top: 22px;
-			display: flex;
-			flex-direction: column;
-			gap: 12px;
-		}
-		#login-pw {
-			width: 100%;
-			background: #20100f;
-			border: 1px solid #4a2529;
-			border-radius: 8px;
-			padding: 12px 14px;
-			font-size: 14px;
-			color: #f4e8d1;
-			font-family: 'Archivo', sans-serif;
-			outline: none;
-		}
-		#login-pw:focus {
-			border-color: #d9b45a;
-		}
-		.login__err {
-			font-size: 12.5px;
-			color: #e08a8a;
-		}
-		.login__err[hidden] {
-			display: none;
-		}
-		.login__actions {
-			display: flex;
-			gap: 10px;
-			margin-top: 6px;
-		}
-		.login__cancel,
-		.login__submit {
-			flex: 1;
-			font-size: 13px;
-			border-radius: 8px;
-			padding: 11px 0;
-			cursor: pointer;
-			font-family: 'Archivo', sans-serif;
-		}
-		.login__cancel {
-			font-weight: 600;
-			color: #ddc9b4;
-			background: transparent;
-			border: 1px solid #4a2529;
-		}
-		.login__cancel:hover {
-			border-color: #6b3a3f;
-		}
-		.login__submit {
-			font-weight: 700;
-			color: #2a1214;
-			background: #d9b45a;
-			border: none;
-		}
-		.login__submit:hover {
-			background: #f0d488;
-		}
-
 		@media (max-width: 720px) {
 			.card__body {
 				flex-direction: column;
@@ -673,57 +539,4 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			}
 		}
 	</style>
-
-	<script>
-		// Admin sign in, shown to signed-out visitors only. Astro always hoists this
-		// script; bail out when the modal isn't in the DOM (the owner sees the
-		// "+ Log film" button instead).
-		const openBtn = document.getElementById('open-login');
-		const modal = document.getElementById('login') as HTMLDivElement | null;
-
-		if (openBtn && modal) {
-			const form = document.getElementById('login-form') as HTMLFormElement;
-			const pw = document.getElementById('login-pw') as HTMLInputElement;
-			const err = document.getElementById('login-err') as HTMLDivElement;
-			const cancel = document.getElementById('login-cancel') as HTMLButtonElement;
-			const backdrop = document.getElementById('login-backdrop') as HTMLDivElement;
-
-			const close = () => {
-				modal.hidden = true;
-				form.reset();
-				err.hidden = true;
-			};
-			openBtn.addEventListener('click', () => {
-				modal.hidden = false;
-				pw.focus();
-			});
-			cancel.addEventListener('click', close);
-			backdrop.addEventListener('click', close);
-			document.addEventListener('keydown', (e) => {
-				if (e.key === 'Escape' && !modal.hidden) close();
-			});
-
-			form.addEventListener('submit', async (e) => {
-				e.preventDefault();
-				err.hidden = true;
-				try {
-					const res = await fetch('/api/auth/login', {
-						method: 'POST',
-						headers: { 'content-type': 'application/json' },
-						body: JSON.stringify({ password: pw.value }),
-					});
-					if (!res.ok) {
-						err.hidden = false;
-						pw.select();
-						return;
-					}
-					// Reload so the server re-renders with the owner's controls.
-					window.location.reload();
-				} catch {
-					err.hidden = false;
-					pw.select();
-				}
-			});
-		}
-	</script>
 </FilmLayout>
