@@ -34,7 +34,7 @@ import { homedir } from 'node:os';
 
 import { parseFitSessions } from '../src/lib/ingest/fit.ts';
 import { parseGpx, parseTcx } from '../src/lib/ingest/gpx.ts';
-import { toRows, localDate, UnknownSportError } from '../src/lib/ingest/canonical.ts';
+import { toRows, localDate, UnknownSportError, virtualizeGpslessRide } from '../src/lib/ingest/canonical.ts';
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -332,7 +332,7 @@ for (const path of files) {
 		continue;
 	}
 
-	const canonical = parsed.canonical;
+	const canonical = virtualizeGpslessRide(parsed.canonical);
 	const checksum = createHash('sha256').update(readFileSync(path)).digest('hex');
 	const date = localDate(canonical.started_at, canonical.utc_offset_minutes ?? 0);
 	const summary = `${canonical.sport} ${date} ${((canonical.distance_m ?? 0) / 1000).toFixed(1)}km`;

@@ -274,6 +274,30 @@ export function refineSport(sport: Sport, fitSport?: string, fitSubSport?: strin
 	return { sport, sub_sport: sub };
 }
 
+/**
+ * A bike ride with no GPS track is a trainer ride, whatever the provider
+ * labelled it. `refineSport` already does this for a FIT file's own sub-sport
+ * (indoorCycling/virtualActivity → virtual_ride), but a ride that arrives with
+ * only Strava's plain "Ride" label — a Zwift session synced through the API, a
+ * trainer ride exported to a routeless GPX — keeps `ride`, so it lands in the
+ * outdoor bucket the sport filter, heatmap and card all read as a road ride.
+ * Migration 0046 backfilled 168 of these; this keeps every new one correct at
+ * ingest, on the same predicate the app uses (activities.ts `hasGps`: no route).
+ *
+ * STANDALONE ACTIVITIES ONLY. A triathlon's bike leg is not a trainer ride even
+ * when its route didn't record, so the leg builders (import-strava-archive.mjs)
+ * must not call this — exactly as 0046 skipped `parent_id is not null`.
+ */
+export function virtualizeGpslessRide(a: CanonicalActivity): CanonicalActivity {
+	const roadBike = a.sport === 'ride' || a.sport === 'gravel_ride' || a.sport === 'mountain_bike';
+	if (!roadBike) return a;
+	const hasTrack = (a.streams?.latlng ?? []).some(
+		(p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && !(p[0] === 0 && p[1] === 0),
+	);
+	if (hasTrack) return a;
+	return { ...a, sport: 'virtual_ride', sub_sport: a.sub_sport ?? 'indoor' };
+}
+
 // ---------------------------------------------------------------------------
 // Local date
 // ---------------------------------------------------------------------------
