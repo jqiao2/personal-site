@@ -3,8 +3,6 @@ import FilmLayout from '../../layouts/FilmLayout.astro';
 import EntryEditor from '../../components/EntryEditor.astro';
 import {
 	getFilmLogStats,
-	listFavorites,
-	listWatchlist,
 	listLogs,
 	listTheaterNames,
 	listTags,
@@ -12,17 +10,15 @@ import {
 } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
 import SiteHeader from '../../components/SiteHeader.astro';
-import { starText } from '../../lib/format';
+import { starText, formatWatchedDate } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
 
-const [stats, favorites, watchlist, recent, isOwner] = await Promise.all([
+const [stats, recent, isOwner] = await Promise.all([
 	getFilmLogStats(),
-	listFavorites(4),
-	listWatchlist(4),
-	listLogs(4),
+	listLogs(25),
 	requireOwner(Astro.cookies),
 ]);
 
@@ -31,27 +27,20 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
 	: [[], [], []];
 
-/** "YYYY-MM-DD" (or ISO timestamp) → "Jul 8". */
-function shortDate(date: string | null): string {
-	if (!date) return '';
-	const [y, m, d] = date.slice(0, 10).split('-').map(Number);
-	if (!y || !m || !d) return '';
-	return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
-const histMax = Math.max(...stats.histogram, 1);
 const num = (n: number) => n.toLocaleString('en-US');
 
-// A ratings bar deep-links into "All films" pinned to that one half-star step —
-// the same `rmin`/`rmax` pair the grid's own rating slider writes when both ends
-// land on the same star.
-const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars}`;
+/** First line of a review, trimmed to a single feed row. */
+function excerpt(text: string | null): string | null {
+	if (!text) return null;
+	const line = text.replace(/\s+/g, ' ').trim();
+	if (!line) return null;
+	return line.length > 150 ? `${line.slice(0, 149).trimEnd()}…` : line;
+}
 ---
 
 <FilmLayout title="Jason's film log">
 	<div class="page">
 		<div class="card">
-			<!-- Site nav -->
 			<SiteHeader pathname={Astro.url.pathname} theme="film">
 				<Fragment slot="actions">
 					{isOwner && (
@@ -60,148 +49,69 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 				</Fragment>
 			</SiteHeader>
 
-			<div class="card__body">
-			<!-- Sidebar -->
-			<aside class="side">
-				<div class="brand">Jason's<br />film log</div>
-				<div class="brand__sub">{stats.thisYear} films this year</div>
+			<div class="shell">
+				<!-- Feed -->
+				<main class="feed">
+					{recent.map((f) => {
+						const note = excerpt(f.review_text);
+						const thumb = imageUrl(f.poster_path, 'w185');
+						const date = formatWatchedDate(f.watched_date) ?? formatWatchedDate(f.created_at.slice(0, 10));
+						return (
+							<article class="item">
+								<div class="item__body">
+									<p class="item__meta">
+										{date && <time>{date}</time>}
+										<span class="tag">Film</span>
+									</p>
+									<h2 class="item__title">
+										<a href={`/films/diary/${f.id}`}>
+											{f.title}
+											{f.release_year && <span class="item__year"> {f.release_year}</span>}
+										</a>
+									</h2>
+									<p class="item__marks">
+										{starText(f.rating) && <span class="stars">{starText(f.rating)}</span>}
+										{f.liked && <span class="mark mark--like">♥</span>}
+										{f.rewatched && <span class="mark mark--rewatch">↻</span>}
+									</p>
+									{note && <p class="item__note">{note}</p>}
+								</div>
+								<a class="item__thumb" href={`/films/diary/${f.id}`}>
+									{thumb && <img src={thumb} alt="" width="46" height="69" loading="lazy" />}
+								</a>
+							</article>
+						);
+					})}
 
-				<div class="side__rule"></div>
-				<nav class="side__nav">
-					<a class="navrow navrow--link" href="/films/watched">
-						<span>Films watched</span><span class="navrow__n">{num(stats.watched)}</span>
-					</a>
-					<a class="navrow navrow--link" href="/films/diary">
-						<span>Diary</span><span class="navrow__n">{num(stats.diary)}</span>
-					</a>
-					<a class="navrow navrow--link" href="/films/watchlist">
-						<span>Watchlist</span><span class="navrow__n">{num(stats.watchlist)}</span>
-					</a>
-					<a class="navrow navrow--link" href="/films/watched?liked=1">
-						<span>Liked films</span><span class="navrow__n">{num(stats.liked)}</span>
-					</a>
-					<a class="navrow navrow--link" href="/films/stats">
-						<span>Stats</span><span class="navrow__n">→</span>
-					</a>
-					{isOwner && (
-						<a class="navrow navrow--link navrow--last" href="/films/month">
-							<span>The month in film</span><span class="navrow__n">→</span>
+					<p class="feed__more"><a href="/films/diary">See more →</a></p>
+				</main>
+
+				<!-- Sidebar -->
+				<aside class="side">
+					<div class="brand">Jason's<br />film log</div>
+					<div class="brand__sub">{stats.thisYear} films this year</div>
+
+					<div class="side__rule"></div>
+					<nav class="side__nav">
+						<a class="navrow navrow--link" href="/films/watched">
+							<span>Films watched</span><span class="navrow__n">{num(stats.watched)}</span>
 						</a>
-					)}
-				</nav>
-			</aside>
-
-			<!-- Main -->
-			<main class="main">
-				{(favorites.length > 0 || isOwner) && (
-					<section>
-						<div class="sec-head">
-							<span class="sec-head__title">Favorite films</span>
-							{isOwner && (
-								<a class="sec-head__link" href="/films/favorites">Edit favorites</a>
-							)}
-						</div>
-						{favorites.length > 0 ? (
-							<div class="grid4">
-								{favorites.map((f) => (
-									<a class="tile" href={`/films/movie/${f.tmdb_id}`}>
-										{imageUrl(f.poster_path, 'w342') && (
-											<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
-										)}
-										<div class="tile__cap">
-											{f.title} <span class="tile__year">{f.release_year}</span>
-										</div>
-									</a>
-								))}
-							</div>
-						) : (
-							<p class="fav-empty">No favorites yet — <a href="/films/favorites">choose up to four</a>.</p>
+						<a class="navrow navrow--link" href="/films/diary">
+							<span>Diary</span><span class="navrow__n">{num(stats.diary)}</span>
+						</a>
+						<a class="navrow navrow--link" href="/films/watchlist">
+							<span>Watchlist</span><span class="navrow__n">{num(stats.watchlist)}</span>
+						</a>
+						<a class="navrow navrow--link" href="/films/stats">
+							<span>Stats</span><span class="navrow__n">→</span>
+						</a>
+						{isOwner && (
+							<a class="navrow navrow--link navrow--last" href="/films/month">
+								<span>The month in film</span><span class="navrow__n">→</span>
+							</a>
 						)}
-					</section>
-				)}
-
-				{recent.length > 0 && (
-					<section>
-						<div class="sec-head">
-							<span class="sec-head__title">Recent from diary</span>
-							<a class="sec-head__link" href="/films/diary">See more →</a>
-						</div>
-						<div class="grid4">
-							{recent.map((f) => (
-								<a class="tile-wrap" href={`/films/diary/${f.id}`}>
-									<div class="tile">
-										{imageUrl(f.poster_path, 'w342') && (
-											<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
-										)}
-										<div class="tile__cap">
-											{f.title} <span class="tile__year">{f.release_year}</span>
-										</div>
-									</div>
-									<div class="tile__meta">
-										<span class="tile__marks">
-											<span class="stars">{starText(f.rating) ?? ''}</span>
-											{f.liked && <span class="tile__like">♥</span>}
-											{f.rewatched && <span class="tile__rewatch">↻</span>}
-										</span>
-										<span class="tile__date">{shortDate(f.watched_date ?? f.created_at)}</span>
-									</div>
-								</a>
-							))}
-						</div>
-					</section>
-				)}
-
-				{stats.ratedTotal > 0 && (
-					<section>
-						<div class="sec-head">
-							<span class="sec-head__title">Ratings</span>
-							<span class="sec-head__meta">
-								{num(stats.ratedTotal)} rated · <span class="hl">{stats.ratedAvg}</span> avg
-							</span>
-						</div>
-						<div class="hist">
-							{stats.histogram.map((c, i) => {
-								const stars = (i + 1) * 0.5;
-								const bar = <div class="hist__bar" style={`height:${Math.round((c / histMax) * 100)}%`}></div>;
-								const title = `${starText(stars)} · ${num(c)} ${c === 1 ? 'film' : 'films'}`;
-								// An empty bucket has nothing to show, so it stays inert.
-								return c > 0 ? (
-									<a class="hist__col hist__col--link" href={ratingHref(stars)} title={title}>{bar}</a>
-								) : (
-									<div class="hist__col" title={title}>{bar}</div>
-								);
-							})}
-						</div>
-						<div class="hist__axis">
-							<span>½★</span>
-							<span>★★★★★</span>
-						</div>
-					</section>
-				)}
-
-				{watchlist.length > 0 && (
-					<section>
-						<div class="sec-head">
-							<span class="sec-head__title">Recently added to watchlist</span>
-							<a class="sec-head__link" href="/films/watchlist">See more →</a>
-						</div>
-						<div class="grid4">
-							{watchlist.map((f) => (
-								// Matches the watchlist grid: tiles lead to the film's own page,
-								// which is where the download link lives.
-								<a class="tile tile--dim" href={`/films/movie/${f.tmdb_id}`}>
-									{imageUrl(f.poster_path, 'w342') && (
-										<img data-poster={imageUrl(f.poster_path, 'w342')} alt={`${f.title} poster`} decoding="async" />
-									)}
-									<div class="tile__cap tile__cap--dim">
-										{f.title} <span class="tile__year">{f.release_year}</span>
-									</div>
-								</a>
-							))}
-						</div>
-					</section>
-				)}
-			</main>
+					</nav>
+				</aside>
 			</div>
 		</div>
 	</div>
@@ -217,8 +127,6 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 	)}
 
 	<style>
-		/* The section runs full-bleed rather than floating a card on the body
-		   background. overflow-x guards the 100vw nav against a scrollbar. */
 		.page {
 			min-height: 100vh;
 			background: #2a1214;
@@ -232,12 +140,8 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			display: flex;
 			flex-direction: column;
 		}
-		.card__body {
-			display: flex;
-		}
 
-		/* The site nav is <SiteHeader theme="film">; these are the owner/login
-		   buttons it carries in its actions slot. */
+		/* Owner/login buttons carried in SiteHeader's actions slot. */
 		.nav-btn {
 			white-space: nowrap;
 			font-size: 13px;
@@ -256,15 +160,143 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			background: #f0d488;
 		}
 
+		/* Two-column blog shell — feed then sidebar; collapses to one column
+		   (sidebar after) on narrow viewports. */
+		.shell {
+			display: grid;
+			grid-template-columns: minmax(0, 1fr) 288px;
+		}
+		@media (max-width: 720px) {
+			.shell {
+				grid-template-columns: 1fr;
+			}
+			.side {
+				order: 2;
+			}
+		}
+
+		/* Feed */
+		.feed {
+			min-width: 0;
+			padding: 38px 40px 44px;
+		}
+		.item {
+			display: flex;
+			gap: 20px;
+			align-items: flex-start;
+			padding: 16px 0 18px;
+			border-bottom: 1px solid #402226;
+		}
+		.item__body {
+			flex: 1;
+			min-width: 0;
+		}
+		.item__meta {
+			font-family: 'Archivo', sans-serif;
+			font-size: 11.5px;
+			letter-spacing: 0.06em;
+			text-transform: uppercase;
+			color: #a2857a;
+			margin: 0 0 6px;
+			display: flex;
+			flex-wrap: wrap;
+			gap: 10px;
+			align-items: baseline;
+		}
+		.tag {
+			font-family: 'Archivo', sans-serif;
+			font-size: 10px;
+			font-weight: 700;
+			letter-spacing: 0.08em;
+			padding: 2px 7px;
+			border: 1px solid #6b4a42;
+			color: #d9b45a;
+			border-radius: 2px;
+		}
+		.item__title {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 21px;
+			line-height: 1.2;
+			margin: 0;
+		}
+		.item__title a {
+			color: #f4e8d1;
+		}
+		.item__title a:hover {
+			color: #f0d488;
+		}
+		.item__year {
+			color: #b0917f;
+			font-style: italic;
+			font-weight: 400;
+		}
+		.item__marks {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			margin: 7px 0 0;
+		}
+		.stars {
+			color: #d9b45a;
+			font-size: 14px;
+			letter-spacing: 1.5px;
+		}
+		.mark {
+			font-size: 13px;
+			line-height: 1;
+		}
+		.mark--like {
+			color: #d9b45a;
+		}
+		.mark--rewatch {
+			color: #8d6a60;
+		}
+		.item__note {
+			margin: 8px 0 0;
+			color: #c2a99a;
+			font-size: 14.5px;
+			line-height: 1.55;
+		}
+		.item__thumb {
+			flex: none;
+			display: block;
+		}
+		.item__thumb img {
+			display: block;
+			width: 46px;
+			height: 69px;
+			object-fit: cover;
+			border: 1px solid #4a2529;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+			border-radius: 3px;
+		}
+		.feed__more {
+			font-family: 'Archivo', sans-serif;
+			font-size: 13px;
+			font-weight: 600;
+			margin-top: 22px;
+		}
+		.feed__more a {
+			color: #d9b45a;
+		}
+		.feed__more a:hover {
+			color: #f0d488;
+		}
+
 		/* Sidebar */
 		.side {
-			width: 288px;
-			flex: none;
 			background: #2a1214;
-			border-right: 1px solid #4a2529;
-			padding: 36px 28px;
+			border-left: 1px solid #4a2529;
+			padding: 40px 28px;
 			display: flex;
 			flex-direction: column;
+		}
+		@media (max-width: 720px) {
+			.side {
+				border-left: none;
+				border-top: 1px solid #4a2529;
+			}
 		}
 		.brand {
 			font-family: 'Newsreader', serif;
@@ -312,230 +344,9 @@ const ratingHref = (stars: number) => `/films/watched?rmin=${stars}&rmax=${stars
 			font-size: 13px;
 		}
 
-		/* Main */
-		.main {
-			flex: 1;
-			min-width: 0;
-			padding: 38px 40px 44px;
-			display: flex;
-			flex-direction: column;
-			gap: 38px;
-		}
-		.sec-head {
-			display: flex;
-			justify-content: space-between;
-			align-items: baseline;
-			border-bottom: 1px solid #4a2529;
-			padding-bottom: 9px;
-			margin-bottom: 16px;
-			gap: 12px;
-		}
-		.sec-head__title {
-			font-family: 'Newsreader', serif;
-			font-style: italic;
-			font-size: 19px;
-			color: #ecdcbd;
-		}
-		.sec-head__link {
-			font-size: 12px;
-			color: #d9b45a;
-			font-weight: 600;
-			letter-spacing: 0.3px;
-			white-space: nowrap;
-		}
-		.sec-head__link:hover {
-			color: #f0d488;
-		}
-		.fav-empty {
-			margin: 0;
-			padding: 6px 0 2px;
-			font-size: 14px;
-			color: #8a6f63;
-		}
-		.fav-empty a {
-			color: #d9b45a;
-		}
-		.sec-head__meta {
-			font-size: 12px;
-			color: #a2857a;
-			white-space: nowrap;
-		}
-		.sec-head__meta .hl {
-			color: #d9b45a;
-			font-weight: 600;
-		}
-
-		.grid4 {
-			display: grid;
-			grid-template-columns: repeat(4, 1fr);
-			gap: 16px;
-		}
-		.tile-wrap {
-			display: block;
-			color: inherit;
-		}
-		.tile {
-			position: relative;
-			aspect-ratio: 2 / 3;
-			border-radius: 5px;
-			overflow: hidden;
-			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
-			border: 1px solid #4a2529;
-			display: flex;
-			align-items: flex-end;
-			transition: border-color 0.12s;
-		}
-		.tile--dim {
-			opacity: 0.9;
-		}
-		.tile:hover {
-			border-color: #d9b45a;
-		}
-		.tile--dim:hover {
-			opacity: 1;
-		}
-		.tile img {
-			position: absolute;
-			inset: 0;
-			width: 100%;
-			height: 100%;
-			object-fit: cover;
-		}
-		.tile__cap {
-			position: relative;
-			padding: 11px;
-			font-family: 'Newsreader', serif;
-			font-size: 14px;
-			font-weight: 500;
-			color: #f2e5cd;
-			line-height: 1.2;
-		}
-		.tile__cap--dim {
-			color: #d8c6ad;
-		}
-		.tile img ~ .tile__cap {
-			display: none;
-		}
-		.tile__year {
-			color: #b0917f;
-			font-style: italic;
-		}
-		/* Stars, heart and rewatch stay together as one group; the date sits
-		   opposite and drops to its own line rather than colliding, since four
-		   tiles across leaves the row little width. */
-		.tile__meta {
-			display: flex;
-			flex-wrap: wrap;
-			justify-content: space-between;
-			align-items: center;
-			gap: 2px 7px;
-			margin-top: 9px;
-		}
-		.tile__marks {
-			display: flex;
-			align-items: center;
-			gap: 5px;
-			white-space: nowrap;
-		}
-		.stars {
-			color: #d9b45a;
-			font-size: clamp(11px, 1.15vw, 13px);
-			letter-spacing: 0.3px;
-			white-space: nowrap;
-		}
-		.tile__like {
-			color: #d9b45a;
-			font-size: clamp(11px, 1.15vw, 13px);
-			line-height: 1;
-		}
-		.tile__rewatch {
-			color: #8d6a60;
-			font-size: clamp(11px, 1.15vw, 13px);
-			line-height: 1;
-		}
-		.tile__date {
-			color: #a2857a;
-			font-size: clamp(10.5px, 1.05vw, 12px);
-			white-space: nowrap;
-		}
-
-		/* Histogram */
-		.hist {
-			display: flex;
-			align-items: flex-end;
-			gap: 6px;
-			height: 104px;
-		}
-		.hist__col {
-			flex: 1;
-			height: 100%;
-			display: flex;
-			align-items: flex-end;
-		}
-		.hist__bar {
-			width: 100%;
-			min-height: 3px;
-			background: #d9b45a;
-			border-radius: 2px 2px 0 0;
-		}
-		.hist__col--link {
-			cursor: pointer;
-		}
-		.hist__col--link:hover .hist__bar,
-		.hist__col--link:focus-visible .hist__bar {
-			background: #f4e8d1;
-		}
-		.hist__axis {
-			display: flex;
-			justify-content: space-between;
-			margin-top: 8px;
-			font-size: 13px;
-			color: #d9b45a;
-		}
-
 		@media (max-width: 720px) {
-			.card__body {
-				flex-direction: column;
-			}
-			.side {
-				width: 100%;
-				border-right: none;
-				border-bottom: 1px solid #4a2529;
-			}
-			.main {
+			.feed {
 				padding: 28px 22px 34px;
-			}
-			/* Four posters across on a phone too, tightened rather than halved: a
-			   section reads as one row you can take in at a glance instead of a
-			   two-row block that pushes the next section off screen. */
-			.grid4 {
-				grid-template-columns: repeat(4, 1fr);
-				gap: 8px;
-			}
-			.tile__cap {
-				padding: 7px;
-				font-size: 12px;
-			}
-			/* A ~80px tile has no room for stars and a date side by side, and the
-			   line the date would wrap onto costs more than the date is worth —
-			   the diary page and each entry still carry it. */
-			.tile__date {
-				display: none;
-			}
-			.tile__meta {
-				margin-top: 6px;
-			}
-			/* Marks shrink with the viewport, and the heart/rewatch drop below the
-			   stars rather than overflowing the column when both are present. */
-			.tile__marks {
-				flex-wrap: wrap;
-				gap: 0 4px;
-				min-width: 0;
-			}
-			.stars,
-			.tile__like,
-			.tile__rewatch {
-				font-size: clamp(9px, 2.4vw, 13px);
 			}
 		}
 	</style>

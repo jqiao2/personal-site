@@ -4,6 +4,8 @@ import EntryEditor from '../../../components/EntryEditor.astro';
 import { getDiaryEntry, listTheaterNames, listTags, listFriends } from '../../../lib/films';
 import { toEditorInitial } from '../../../lib/entry-editor';
 import { requireOwner } from '../../../lib/auth';
+import { isPinned } from '../../../lib/pins';
+import PinButton from '../../../components/PinButton.astro';
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, mediumLabel, starText } from '../../../lib/format';
 
@@ -53,6 +55,7 @@ const editorFilm = {
 	poster: posterThumb,
 };
 const editorInitial = toEditorInitial(entry);
+const pinned = isOwner ? await isPinned('film', entry.id) : false;
 ---
 
 <FilmLayout title={`${movie.title} — diary entry`}>
@@ -107,7 +110,10 @@ const editorInitial = toEditorInitial(entry);
 					{isOwner ? (
 						<div class="details__top">
 							{watched && <div class="watched">Watched {watched}</div>}
-							<button type="button" class="edit-btn" data-open-entry-editor>Edit entry</button>
+							<div class="details__actions">
+								<PinButton track="film" refId={entry.id} pinned={pinned} />
+								<button type="button" class="edit-btn" data-open-entry-editor>Edit entry</button>
+							</div>
 						</div>
 					) : (
 						watched && <div class="watched">Watched {watched}</div>
@@ -345,6 +351,11 @@ const editorInitial = toEditorInitial(entry);
 		}
 		.details__top .watched {
 			margin-bottom: 0;
+		}
+		.details__actions {
+			display: flex;
+			align-items: center;
+			gap: 10px;
 		}
 		.edit-btn {
 			flex: none;
