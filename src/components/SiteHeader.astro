@@ -235,6 +235,24 @@ const style = Object.entries(vars)
 	.sh-logs__link {
 		padding-right: 4px;
 	}
+	/* The active underline belongs under the whole Journal tab — the label AND
+	   its caret — not just the label, or it reads as off-centre. Drawn as a
+	   full-width bar on the group so it can't shift the row's height. */
+	.sh-logs:has(.sh__link--active) {
+		position: relative;
+	}
+	.sh-logs:has(.sh__link--active)::after {
+		content: '';
+		position: absolute;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		height: 2px;
+		background: var(--sh-accent);
+	}
+	.sh-logs:has(.sh__link--active) .sh__link--active {
+		border-bottom-color: transparent;
+	}
 	.sh-logs__toggle {
 		display: inline-flex;
 		align-items: center;
