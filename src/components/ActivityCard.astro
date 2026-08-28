@@ -189,8 +189,17 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		aspect-ratio: 4 / 3;
 		background: var(--snow);
 		border-bottom: 1px solid var(--scree);
+		/* The face is a flex item of .ac, so its automatic minimum size is its
+		   content's — and an in-flow <svg> reports an intrinsic 1:1 box, which
+		   overrides aspect-ratio and makes the face as tall as the card is wide.
+		   Pinning the route out of flow (below) plus min-height:0 leaves
+		   aspect-ratio as the only thing sizing it. */
+		flex: none;
+		min-height: 0;
 	}
 	.ac__route {
+		position: absolute;
+		inset: 0;
 		width: 100%;
 		height: 100%;
 		display: block;
