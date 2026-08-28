@@ -1,0 +1,115 @@
+---
+// The one site header. Every section renders THIS — same wordmark, same nav,
+// same active-tab behaviour — and skins it to its own palette by setting the
+// `--sh-*` custom properties on the element (see the defaults below; a consumer
+// overrides them in its own stylesheet, e.g. RestaurantLayout's `.rl-siteheader`).
+// Section-specific controls (owner buttons like "+ Log meal") go in the
+// `actions` named slot, so unifying the chrome never deletes them.
+//
+// Only the CHROME unifies; each section's body keeps its art direction. The nav
+// contents come from lib/nav.ts as before.
+import { siteNav } from '../lib/nav';
+
+interface Props {
+	pathname: string;
+	/** Shown after the wordmark on the spine; omitted elsewhere. */
+	tagline?: string;
+	/** Consumer class that carries the section's `--sh-*` overrides. */
+	class?: string;
+}
+
+const { pathname, tagline, class: cls } = Astro.props;
+const nav = siteNav(pathname);
+const hasActions = Astro.slots.has('actions');
+---
+
+<header class:list={['site-header', cls]}>
+	<div class="site-header__inner">
+		<a class="site-header__brand" href="/">Jason Qiao</a>
+		{tagline && <span class="site-header__tagline">{tagline}</span>}
+		<nav class="site-header__nav">
+			{
+				nav.map((n) => (
+					<a
+						href={n.href}
+						class:list={['site-header__link', n.active && 'is-active']}
+						aria-current={n.active ? 'page' : undefined}
+					>
+						{n.label}
+					</a>
+				))
+			}
+		</nav>
+		{
+			hasActions && (
+				<div class="site-header__actions">
+					<slot name="actions" />
+				</div>
+			)
+		}
+	</div>
+
+	<style>
+		/* Defaults = the 2008 paper spine. Sections override the vars. */
+		.site-header {
+			background: var(--sh-bg, var(--paper, #f4f1ea));
+			border-bottom: 1px solid var(--sh-border, var(--rule, #d8d1c4));
+		}
+		.site-header__inner {
+			max-width: var(--sh-maxw, 960px);
+			margin: 0 auto;
+			padding: 0.7rem var(--sh-pad, 2rem);
+			display: flex;
+			align-items: baseline;
+			flex-wrap: wrap;
+			gap: 0.4rem 1.25rem;
+		}
+		.site-header__brand {
+			font-family: var(--sh-brand-font, Georgia, 'Times New Roman', serif);
+			font-size: 1.35rem;
+			font-weight: 700;
+			line-height: 1.1;
+			color: var(--sh-brand, var(--ink, #2b2622));
+			text-decoration: none;
+		}
+		.site-header__tagline {
+			font-family: system-ui, sans-serif;
+			font-size: 0.72rem;
+			letter-spacing: 0.04em;
+			color: var(--sh-muted, var(--ink-soft, #6b6259));
+		}
+		.site-header__nav {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 1.1rem;
+			font-family: system-ui, sans-serif;
+			font-size: 0.75rem;
+			letter-spacing: 0.05em;
+			text-transform: uppercase;
+		}
+		.site-header__link {
+			color: var(--sh-muted, var(--ink-soft, #6b6259));
+			text-decoration: none;
+			padding-bottom: 2px;
+			border-bottom: 2px solid transparent;
+		}
+		.site-header__link:hover {
+			color: var(--sh-fg, var(--ink, #2b2622));
+		}
+		.site-header__link.is-active {
+			color: var(--sh-fg, var(--ink, #2b2622));
+			border-bottom-color: var(--sh-accent, var(--ink, #2b2622));
+		}
+		.site-header__actions {
+			margin-left: auto;
+			display: flex;
+			gap: 0.5rem;
+			align-self: center;
+		}
+		@media (max-width: 700px) {
+			.site-header__inner {
+				padding: 0.6rem 1rem;
+			}
+		}
+	</style>
+</header>

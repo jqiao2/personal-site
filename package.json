@@ -24,6 +24,7 @@
     "export:test": "node --import ./scripts/ts-hook.mjs scripts/export-cache-key.test.mjs"
   },
   "dependencies": {
+    "@astrojs/rss": "^4.0.19",
     "@astrojs/vercel": "^11.0.4",
     "@aws-sdk/client-s3": "^3.1115.0",
     "@garmin/fitsdk": "^21.213.0",

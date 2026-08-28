@@ -24,6 +24,8 @@ const photoHost = new URL(R2_PUBLIC_URL).hostname;
 // The Vercel adapter provides the serverless runtime for those routes.
 // https://astro.build/config
 export default defineConfig({
+	// Absolute base for anything that emits full URLs (the RSS feed, chiefly).
+	site: 'https://jqiao.vercel.app',
 	adapter: vercel({
 		// Enables `/_vercel/image` for the photo bucket. Deliberately NOT
 		// `imageService: true`: that would also swap Astro's own image service
