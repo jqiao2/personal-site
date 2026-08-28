@@ -641,34 +641,38 @@ const query = monthQuery(aspect);
 
 	/* A mark with no picture keeps its track's ink, which is the only place the
 	   four colours are load-bearing — a poster says "film" by itself, a blank
-	   square doesn't. */
+	   square doesn't.
+
+	   THE RING IS A LAID-OUT BOX, NOT AN INSET SHADOW. It was
+	   `box-shadow: inset 0 0 0 1px`, which the renderer the card gets exported
+	   through paints a few px above the padding box: the top edge ends up buried
+	   under the mark's own 3px white border and the bottom edge floats short of
+	   it, so a bare meal or activity came out with three sides of a frame. An
+	   ::after with a real border is placed by layout, so it cannot drift. */
+	.mark--bare::after,
+	.mark--move::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border: 1px solid currentColor;
+	}
 	.mark--bare {
 		background: var(--paper);
+		box-shadow: 0 1px 3px rgba(70, 55, 35, 0.32);
 	}
 	.mark--film.mark--bare {
 		color: var(--film);
-		box-shadow:
-			inset 0 0 0 1px var(--film),
-			0 1px 3px rgba(70, 55, 35, 0.32);
 	}
 	.mark--book.mark--bare {
 		color: var(--book);
-		box-shadow:
-			inset 0 0 0 1px var(--book),
-			0 1px 3px rgba(70, 55, 35, 0.32);
 	}
 	.mark--meal.mark--bare {
 		color: var(--meal);
-		box-shadow:
-			inset 0 0 0 1px var(--meal),
-			0 1px 3px rgba(70, 55, 35, 0.32);
 	}
 	.mark--move {
 		color: var(--move);
 		background: #eef4f1;
-		box-shadow:
-			inset 0 0 0 1px var(--move),
-			0 1px 3px rgba(70, 55, 35, 0.32);
+		box-shadow: 0 1px 3px rgba(70, 55, 35, 0.32);
 	}
 
 	.card__foot {
