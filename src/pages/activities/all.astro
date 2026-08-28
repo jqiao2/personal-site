@@ -214,9 +214,8 @@ const scopeDummy: ActivityCardRow = {
 ---
 
 <ActivityLayout title="All activities — Jason's activity log">
+	<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 	<div class="page">
-		<SiteHeader pathname={Astro.url.pathname} theme="activity" />
-
 		<div id="scope-source" hidden aria-hidden="true">
 			<ActivityCard activity={scopeDummy} size="row" />
 		</div>
