@@ -12,12 +12,11 @@
 // owner's "Sync now" button, and a daily Vercel cron.
 import { supabaseAdmin } from './supabase';
 import { getAccessToken, stravaGet } from './strava';
-import { toRows, localDate, UnknownSportError } from './ingest/canonical';
+import { toRows, localDate, UnknownSportError, virtualizeGpslessRide } from './ingest/canonical';
 import { activityToCanonical, type StravaActivity, type StravaStreams } from './ingest/providers/strava';
+import { FIVE_MINUTES, thresholdsFrom, insertActivity, bumpGearDistance } from './activity-ingest';
 import type { AthleteThresholds } from './activities';
-import type { Thresholds } from './exertion';
 
-const FIVE_MINUTES = 5 * 60 * 1000;
 // A synced ride is Strava's copy, not the device's — same rung as the archive
 // (strava_archive = 80). A device FIT dropped later (fidelity 90) still wins.
 const STRAVA_API_FIDELITY = 80;
@@ -31,24 +30,6 @@ export interface SyncResult {
 	duplicate: number;
 	failed: number;
 	unknownSports: string[];
-}
-
-/** The threshold row in force on a date, as `computeExertion` wants it. */
-function thresholdsFrom(rows: AthleteThresholds[], date: string): Thresholds {
-	let inForce: AthleteThresholds | null = null;
-	for (const r of rows) {
-		if (r.effective_from <= date) inForce = r;
-		else break;
-	}
-	return {
-		ftp_w: inForce?.ftp_w ?? null,
-		lthr_bpm: inForce?.lthr_bpm ?? null,
-		max_hr: inForce?.max_hr ?? null,
-		rest_hr: inForce?.rest_hr ?? null,
-		threshold_pace_s_per_km: inForce?.threshold_pace_s_per_km ?? null,
-		css_pace_s_per_100m: inForce?.css_pace_s_per_100m ?? null,
-		weight_kg: inForce?.weight_kg ?? null,
-	};
 }
 
 /** Why this Strava activity is already stored, or null. Same two rules as the
@@ -107,43 +88,6 @@ interface Gear {
 	name?: string;
 }
 
-async function bumpGearDistance(gearId: number, distanceM: number | null | undefined): Promise<void> {
-	if (!distanceM) return;
-	const { data } = await supabaseAdmin.from('activity_gear').select('distance_m').eq('id', gearId).maybeSingle();
-	if (!data) return;
-	const next = Math.max(0, (data.distance_m ?? 0) + distanceM);
-	await supabaseAdmin.from('activity_gear').update({ distance_m: next, updated_at: new Date().toISOString() }).eq('id', gearId);
-}
-
-/** Insert one activity with its provenance, streams and laps — rolled back
- *  whole if any child insert fails, as add-activities.mjs does. */
-async function insertActivity(
-	activity: Record<string, unknown>,
-	streams: Record<string, unknown> | null,
-	laps: Record<string, unknown>[],
-	source: Record<string, unknown>,
-): Promise<number> {
-	const { data, error } = await supabaseAdmin.from('activities').insert(activity).select('id').single();
-	if (error) throw new Error(`insert activities: ${error.message}`);
-	const id = data.id as number;
-	try {
-		const { error: es } = await supabaseAdmin.from('activity_sources').insert({ ...source, activity_id: id });
-		if (es) throw new Error(`insert activity_sources: ${es.message}`);
-		if (streams) {
-			const { error: e2 } = await supabaseAdmin.from('activity_streams').insert({ activity_id: id, ...streams });
-			if (e2) throw new Error(`insert activity_streams: ${e2.message}`);
-		}
-		if (laps.length) {
-			const { error: e3 } = await supabaseAdmin.from('activity_laps').insert(laps.map((l) => ({ ...l, activity_id: id })));
-			if (e3) throw new Error(`insert activity_laps: ${e3.message}`);
-		}
-	} catch (err) {
-		await supabaseAdmin.from('activities').delete().eq('id', id);
-		throw err;
-	}
-	return id;
-}
-
 /**
  * Poll Strava and store anything new. `max` caps how many activities one run
  * will pull (a page is 100), so the daily cron can't accidentally chew through
@@ -200,7 +144,7 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 					streams = null;
 				}
 
-				const canonical = activityToCanonical(detail, streams);
+				const canonical = virtualizeGpslessRide(activityToCanonical(detail, streams));
 				const date = localDate(canonical.started_at, canonical.utc_offset_minutes ?? 0);
 				const { activity, streams: streamRow, laps } = toRows(canonical, thresholdsFrom(thresholds, date));
 

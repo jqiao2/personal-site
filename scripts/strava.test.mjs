@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { activityToCanonical } from '../src/lib/ingest/providers/strava.ts';
-import { toRows } from '../src/lib/ingest/canonical.ts';
+import { toRows, virtualizeGpslessRide } from '../src/lib/ingest/canonical.ts';
 
 const NO_TH = {
 	ftp_w: null, lthr_bpm: null, max_hr: null, rest_hr: null,
@@ -81,6 +81,23 @@ assert.equal(indoor.sport, 'virtual_ride');
 assert.equal(indoor.streams?.latlng, undefined, 'no latlng stream on a trainer ride');
 const { activity: indoorRow } = toRows(indoor, NO_TH);
 assert.equal(indoorRow.route_path, null, 'no route without a track');
+
+// A ride Strava labels a plain "Ride" but that recorded no GPS is a trainer
+// ride — the bug where a Zwift session synced through the API kept `ride` and
+// sat in the outdoor bucket (migration 0046 backfilled these; virtualizeGpslessRide
+// keeps every new one correct at ingest). Standalone activities only.
+const labelledRide = activityToCanonical(
+	{ id: 3, type: 'Ride', sport_type: 'Ride', start_date: '2026-08-20T02:00:00Z', elapsed_time: 3600 },
+	{ time: { data: [0, 1] }, watts: { data: [200, 210] } },
+);
+assert.equal(labelledRide.sport, 'ride', 'Strava label alone gives ride, GPS or not');
+assert.equal(virtualizeGpslessRide(labelledRide).sport, 'virtual_ride', 'a GPS-less ride is reclassified to virtual_ride');
+assert.equal(virtualizeGpslessRide(labelledRide).sub_sport, 'indoor');
+// A ride WITH a track is left alone.
+assert.equal(virtualizeGpslessRide(c).sport, 'gravel_ride', 'a ride with a GPS track keeps its sport');
+// A non-bike sport with no GPS (a treadmill run) is never touched.
+const treadmill = activityToCanonical({ id: 4, sport_type: 'VirtualRun', start_date: '2026-08-20T02:00:00Z', elapsed_time: 600 });
+assert.equal(virtualizeGpslessRide(treadmill).sport, 'treadmill_run', 'only bike sports are virtualized');
 
 // An unmapped sport throws rather than filing as "other".
 assert.throws(

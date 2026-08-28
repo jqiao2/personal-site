@@ -21,6 +21,7 @@ Built so far, on `claude/strava-activities-feature-26rgcy` (PR #115):
 | `src/lib/strava.ts` + `strava-sync.ts` + `ingest/providers/strava.ts` | **Built.** §4 step 3's Strava OAuth sync: the self-refreshing token store, the API→canonical mapper, and the polling engine. `scripts/strava.test.mjs` covers the mapping. See "The OAuth sync" below. |
 | `0045_strava_oauth.sql` | The single-row token store. **Needs `supabase db push`** to the live project. |
 | `/activities/import` + `/api/activities/strava/**` | Owner-only connect/status page and the authorize/callback/sync endpoints; a daily Vercel cron (`vercel.json`) hits sync. |
+| `src/lib/activity-ingest.ts` + `/api/activities/upload` | **Built.** The drop folder as an endpoint: upload a `.fit`/`.gpx`/`.tcx` on `/activities/import` and it's parsed, scored and stored on the spot. Shares the write helpers with the Strava sync. See "The uploader" below. |
 
 Not built yet: Garmin, Wahoo and TrainerRoad OAuth (the rest of step 3 — see
 the friction order below). Strava's own OAuth sync IS built.
@@ -61,6 +62,37 @@ near-real-time ever matters. **Auto-gear beyond a name match** — a synced ride
 is tagged only when Strava's gear name matches a gear name/nickname here,
 otherwise it lands untagged and editable (the Strava `gear_id` is kept in
 `activity_sources.raw` for a future backfill).
+
+### The uploader (files, over HTTP)
+
+The drop folder (below) only runs on the machine that has the files. The
+uploader is the same thing on `/activities/import`: choose or drag `.fit`/
+`.gpx`/`.tcx` (`.gz` fine), and `POST /api/activities/upload` runs each through
+the identical canonical pipeline — parse → dedupe → exertion + route → store —
+recorded as `provider: 'file'`, `fidelity: 90` (above Strava's mirror, so a
+device FIT still wins a dedupe against the same ride pulled from the API).
+
+Owner only. The shared write path lives in `src/lib/activity-ingest.ts`
+(`ingestFiles`), which the Strava sync now imports its insert/threshold/gear
+helpers from rather than keeping a second copy. Same two dedupe rules as the
+drop folder: the file's sha256 against the unique `activity_sources.file_checksum`,
+then same sport starting within five minutes. Same per-sport default gear
+(`DEFAULT_GEAR`, gated on the gear being in service on the day). A file that
+states no sport (a bare GPS-track GPX) comes back in `needSport` and the page
+offers a sport picker to force one on a re-upload; a multisport FIT is refused
+(it needs the archive importer's parent/leg structure).
+
+Runs in Web APIs, not node builtins — `crypto.subtle` for the checksum,
+`DecompressionStream` for `.gz` — because `src/` avoids `node:` imports (see
+`auth.ts`). The node drop folder keeps its own `createHash`/`gunzipSync`.
+
+**GPS-less bike rides are trainer rides.** `virtualizeGpslessRide` (canonical.ts)
+reclassifies a `ride`/`gravel_ride`/`mountain_bike` with no track to
+`virtual_ride` at ingest — the rule migration 0046 backfilled, now applied to
+every new standalone activity on the upload AND the Strava-sync paths (a plain
+"Ride" Zwift session synced through the API used to keep `ride`). Standalone
+only; a triathlon's bike leg is never a trainer ride, so the leg builders don't
+call it.
 
 ### The importer
 

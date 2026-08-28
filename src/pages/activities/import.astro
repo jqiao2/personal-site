@@ -1,16 +1,18 @@
 ---
-// /activities/import — owner only. The Strava connection: authorise once, then
-// pull new rides (a daily cron does it hands-off; "Sync now" does it on demand).
+// /activities/import — owner only. Two ways in:
+//   - Files: upload a .fit/.gpx/.tcx and it's parsed, scored and stored on the
+//     spot (ACTIVITIES.md §4 step 2, over HTTP — see /api/activities/upload).
+//   - Strava: authorise once, then pull new rides (a daily cron does it
+//     hands-off; "Sync now" does it on demand — step 3).
 //
 // The whole back-catalogue is NOT this page's job — that's the offline archive
-// importer (`npm run activities:import`, ACTIVITIES.md §4 step 1). This is the
-// ongoing half: the OAuth token that keeps refreshing, and the sync that keeps
-// current. See src/lib/strava.ts and src/lib/strava-sync.ts.
+// importer (`npm run activities:import`, ACTIVITIES.md §4 step 1).
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { ALPINE } from '../../lib/activity-tokens';
 import { getConnection, type StravaConnection } from '../../lib/strava';
+import { SPORTS } from '../../lib/sports';
 
 export const prerender = false;
 
@@ -52,6 +54,29 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 
 			<header class="head">
 				<a class="back" href="/activities">← Activity log</a>
+				<h1 class="head__title">Files</h1>
+			</header>
+
+			<form id="upload" class="upload">
+				<div id="drop" class="drop">
+					<input id="files" name="files" type="file" accept=".fit,.gpx,.tcx,.gz" multiple hidden />
+					<button id="pick" class="btn" type="button">Choose files</button>
+					<span id="picked" class="muted">or drop .fit / .gpx / .tcx here</span>
+				</div>
+				<div class="upload__opts">
+					<label class="field">
+						Sport
+						<select id="sport" name="sport">
+							<option value="">from the file</option>
+							{SPORTS.map((s) => <option value={s}>{s}</option>)}
+						</select>
+					</label>
+					<button id="send" class="btn btn--primary" type="submit" disabled>Import</button>
+				</div>
+			</form>
+			<pre id="uout" class="out" hidden></pre>
+
+			<header class="head">
 				<h1 class="head__title">Strava</h1>
 			</header>
 
@@ -84,6 +109,83 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 </ActivityLayout>
 
 <script>
+	// --- File upload ---------------------------------------------------------
+	const form = document.getElementById('upload') as HTMLFormElement | null;
+	const input = document.getElementById('files') as HTMLInputElement | null;
+	const pick = document.getElementById('pick');
+	const drop = document.getElementById('drop');
+	const picked = document.getElementById('picked');
+	const send = document.getElementById('send') as HTMLButtonElement | null;
+	const uout = document.getElementById('uout') as HTMLPreElement | null;
+
+	const showPicked = () => {
+		const n = input?.files?.length ?? 0;
+		if (send) send.disabled = n === 0;
+		if (picked) picked.textContent = n === 0 ? 'or drop .fit / .gpx / .tcx here' : `${n} file${n === 1 ? '' : 's'} ready`;
+	};
+
+	pick?.addEventListener('click', () => input?.click());
+	input?.addEventListener('change', showPicked);
+
+	drop?.addEventListener('dragover', (e) => {
+		e.preventDefault();
+		drop.classList.add('drop--over');
+	});
+	drop?.addEventListener('dragleave', () => drop.classList.remove('drop--over'));
+	drop?.addEventListener('drop', (e) => {
+		e.preventDefault();
+		drop.classList.remove('drop--over');
+		if (input && e.dataTransfer?.files.length) {
+			input.files = e.dataTransfer.files;
+			showPicked();
+		}
+	});
+
+	form?.addEventListener('submit', async (e) => {
+		e.preventDefault();
+		if (!input?.files?.length || !send) return;
+		send.disabled = true;
+		const label = send.textContent;
+		send.textContent = 'Importing…';
+		try {
+			const res = await fetch('/api/activities/upload', { method: 'POST', body: new FormData(form) });
+			const body = await res.json();
+			if (uout) {
+				uout.hidden = false;
+				if (!res.ok) {
+					uout.textContent = `error: ${body.error ?? res.status}`;
+				} else {
+					const lines = (body.results ?? []).map(
+						(r: { status: string; name: string; detail: string }) => {
+							const mark = { added: '+', duplicate: '=', skipped: '-', failed: 'x' }[r.status] ?? '?';
+							return `${mark} ${r.name}: ${r.detail}`;
+						},
+					);
+					const tally =
+						`added ${body.added}` +
+						(body.duplicate ? `, ${body.duplicate} already stored` : '') +
+						(body.skipped ? `, ${body.skipped} skipped` : '') +
+						(body.failed ? `, ${body.failed} failed` : '');
+					uout.textContent = [tally, ...lines].join('\n');
+				}
+			}
+			if (res.ok && body.added > 0) {
+				input.value = '';
+				showPicked();
+			}
+		} catch (err) {
+			if (uout) {
+				uout.hidden = false;
+				uout.textContent = `error: ${err instanceof Error ? err.message : err}`;
+			}
+		} finally {
+			send.disabled = false;
+			send.textContent = label;
+			showPicked();
+		}
+	});
+
+	// --- Strava sync ---------------------------------------------------------
 	const btn = document.getElementById('sync') as HTMLButtonElement | null;
 	const out = document.getElementById('out') as HTMLPreElement | null;
 	btn?.addEventListener('click', async () => {
@@ -140,6 +242,27 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 	.status dt { color: var(--granite-soft); }
 	.status dd { margin: 0; }
 	.muted { color: var(--granite-soft); }
+	.upload { display: flex; flex-direction: column; gap: 0.75rem; }
+	.drop {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		padding: 1rem;
+		border: 1px dashed var(--scree);
+		border-radius: 0.5rem;
+	}
+	.drop--over { border-color: var(--lake); background: color-mix(in srgb, var(--lake) 8%, transparent); }
+	.upload__opts { display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; }
+	.field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; color: var(--granite-soft); }
+	.field select {
+		padding: 0.4rem 0.5rem;
+		border: 1px solid var(--scree);
+		border-radius: 0.5rem;
+		background: var(--snow);
+		color: var(--granite);
+		font: inherit;
+	}
 	.actions { display: flex; gap: 0.75rem; flex-wrap: wrap; }
 	.btn {
 		display: inline-block;
