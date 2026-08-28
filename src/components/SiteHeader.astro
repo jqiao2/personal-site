@@ -14,6 +14,7 @@
 // plain top strip, for which the bleed is a no-op. So one structure covers both
 // placements.
 import { siteNav } from '../lib/nav';
+import { requireOwner } from '../lib/auth';
 
 interface Props {
 	/** Pathname used to light the active tab. */
@@ -24,6 +25,14 @@ interface Props {
 
 const { pathname, theme = 'root' } = Astro.props;
 const nav = siteNav(pathname);
+
+// The admin sign-in lives here so every page with a header offers it. A visitor
+// gets the "Log in" button + dialog; the owner gets neither (their session is
+// already established, and each section passes its own owner controls — "+ Log
+// film", "+ Log meal" — through the `actions` slot). requireOwner is safe to
+// call on any page: no cookie → false, and it only needs SESSION_SECRET to
+// verify a token that's actually present.
+const owner = await requireOwner(Astro.cookies);
 
 // Each theme is just a bag of CSS custom properties. `--sh-max` caps the inner
 // column; `none` lets the strip run edge to edge (the subway map wants that).
@@ -154,9 +163,45 @@ const style = Object.entries(vars)
 				),
 			)
 		}
-		<div class="sh__actions"><slot name="actions" /></div>
+		<div class="sh__actions">
+			<slot name="actions" />
+			{!owner && (
+				<button type="button" class="sh-login-btn" data-login-open>Log in</button>
+			)}
+		</div>
 	</nav>
 </header>
+
+{
+	!owner && (
+		<div class="sh-login" data-login-modal hidden>
+			<div class="sh-login__backdrop" data-login-close />
+			<div
+				class="sh-login__box"
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="sh-login-title"
+			>
+				<div class="sh-login__title" id="sh-login-title">Admin sign in</div>
+				<div class="sh-login__sub">Enter the admin password to log entries and edit this profile.</div>
+				<form class="sh-login__form" data-login-form>
+					<input
+						type="password"
+						data-login-pw
+						placeholder="Password"
+						autocomplete="current-password"
+						required
+					/>
+					<div class="sh-login__err" data-login-err hidden>Incorrect password. Try again.</div>
+					<div class="sh-login__actions">
+						<button type="button" class="sh-login__cancel" data-login-close>Cancel</button>
+						<button type="submit" class="sh-login__submit">Sign in</button>
+					</div>
+				</form>
+			</div>
+		</div>
+	)
+}
 
 <script>
 	// The Journal dropdown. It opens on hover and keyboard focus by CSS alone
@@ -180,6 +225,54 @@ const style = Object.entries(vars)
 		});
 		document.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape') set(false);
+		});
+	}
+</script>
+
+<script>
+	// Admin sign in. Only wired when the dialog is in the DOM (visitors); the owner
+	// sees no modal. POSTs the password to /api/auth/login, which sets the signed
+	// session cookie, then reloads so the server re-renders with owner controls.
+	const modal = document.querySelector<HTMLElement>('[data-login-modal]');
+	const openBtn = document.querySelector<HTMLButtonElement>('[data-login-open]');
+	if (modal && openBtn) {
+		const form = modal.querySelector<HTMLFormElement>('[data-login-form]')!;
+		const pw = modal.querySelector<HTMLInputElement>('[data-login-pw]')!;
+		const err = modal.querySelector<HTMLElement>('[data-login-err]')!;
+		const close = () => {
+			modal.hidden = true;
+			form.reset();
+			err.hidden = true;
+		};
+		openBtn.addEventListener('click', () => {
+			modal.hidden = false;
+			pw.focus();
+		});
+		for (const el of modal.querySelectorAll('[data-login-close]')) {
+			el.addEventListener('click', close);
+		}
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && !modal.hidden) close();
+		});
+		form.addEventListener('submit', async (e) => {
+			e.preventDefault();
+			err.hidden = true;
+			try {
+				const res = await fetch('/api/auth/login', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ password: pw.value }),
+				});
+				if (!res.ok) {
+					err.hidden = false;
+					pw.select();
+					return;
+				}
+				window.location.reload();
+			} catch {
+				err.hidden = false;
+				pw.select();
+			}
 		});
 	}
 </script>
@@ -334,5 +427,111 @@ const style = Object.entries(vars)
 		.sh__link {
 			padding: 16px 11px 14px;
 		}
+	}
+
+	/* Admin sign-in — the button wears the section's palette; the dialog is a
+	   self-contained overlay, so it reads the same on a dark log or a light one. */
+	.sh-login-btn {
+		font-family: var(--sh-font);
+		font-size: 12.5px;
+		color: var(--sh-link);
+		background: none;
+		border: 1px solid var(--sh-border);
+		border-radius: 4px;
+		padding: 6px 12px;
+		cursor: pointer;
+		white-space: nowrap;
+	}
+	.sh-login-btn:hover {
+		color: var(--sh-hover);
+		border-color: var(--sh-accent);
+	}
+
+	.sh-login {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 20px;
+	}
+	.sh-login[hidden] {
+		display: none;
+	}
+	.sh-login__backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(0, 0, 0, 0.5);
+	}
+	.sh-login__box {
+		position: relative;
+		width: 100%;
+		max-width: 340px;
+		background: #fbf9f4;
+		color: #2b2622;
+		border-radius: 10px;
+		padding: 22px;
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+		font-family: system-ui, sans-serif;
+	}
+	.sh-login__title {
+		font-size: 1.05rem;
+		font-weight: 600;
+	}
+	.sh-login__sub {
+		font-size: 0.82rem;
+		color: #6b6259;
+		margin: 6px 0 16px;
+	}
+	.sh-login__form {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+	.sh-login__form input {
+		padding: 9px 11px;
+		border: 1px solid #cec6b8;
+		border-radius: 6px;
+		font-size: 0.95rem;
+		font-family: inherit;
+	}
+	.sh-login__form input:focus {
+		outline: 2px solid #8c4a2f;
+		outline-offset: 1px;
+	}
+	.sh-login__err {
+		color: #b3261e;
+		font-size: 0.8rem;
+	}
+	.sh-login__err[hidden] {
+		display: none;
+	}
+	.sh-login__actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 8px;
+	}
+	.sh-login__cancel,
+	.sh-login__submit {
+		padding: 8px 14px;
+		border-radius: 6px;
+		font-size: 0.85rem;
+		cursor: pointer;
+		font-family: inherit;
+		border: 1px solid #cec6b8;
+		background: #efe9de;
+		color: #2b2622;
+	}
+	.sh-login__cancel:hover {
+		background: #e5ddcf;
+	}
+	.sh-login__submit {
+		background: #2b2622;
+		color: #fbf9f4;
+		border-color: #2b2622;
+	}
+	.sh-login__submit:hover {
+		background: #45392f;
 	}
 </style>
