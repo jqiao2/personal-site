@@ -1,3 +1,17 @@
+## Agent knowledge base (WikiSkill)
+
+This repo keeps a persistent, compounding knowledge base in `wiki/`, adapted from
+WikiSkill (arXiv:2608.27454). Run this loop:
+
+- **Before non-trivial work**, read `wiki/index.md` and open any pattern whose
+  "applies when" matches the task.
+- **After finishing**, if you hit a failure/dead end or found a reusable strategy,
+  root-cause it into a `wiki/patterns/NNNN-slug.md` file, add its row to
+  `wiki/index.md`, and append one dated line to `wiki/logs.md`. Do this even if the
+  task failed — the lesson persists.
+- **Promote** a pattern's actionable core into this file once it has proven useful
+  across more than one session. The wiki is never reset; see `wiki/README.md`.
+
 ## Development
 
 When starting the dev server, use background mode:
