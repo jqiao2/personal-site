@@ -40,7 +40,6 @@ import {
 	listActivityLaps,
 	listActivityChildren,
 	thresholdsOn,
-	setFavoriteRank,
 	updateActivity,
 	deleteActivity,
 	listGear,
@@ -48,6 +47,8 @@ import {
 	type ActivityRow,
 } from '../../lib/activities';
 import { requireOwner } from '../../lib/auth';
+import { isPinned } from '../../lib/pins';
+import PinButton from '../../components/PinButton.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { sportMeta, sportIcon, formatStat, isStatRelevant, SPORTS, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
 import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
@@ -80,16 +81,7 @@ if (Astro.request.method === 'POST') {
 	}
 	const form = await Astro.request.formData();
 	const action = form.get('action');
-	if (action === 'set-favorite') {
-		// One of the five rank buttons — 1-4, or empty for "not a favourite".
-		// setFavoriteRank swaps with whoever holds the slot, so this never has
-		// to know who that was.
-		const raw = String(form.get('rank') ?? '');
-		const rank = raw === '' ? null : Number(raw);
-		if (rank == null || (Number.isInteger(rank) && rank >= 1 && rank <= 4)) {
-			await setFavoriteRank(id, rank);
-		}
-	} else if (action === 'delete') {
+	if (action === 'delete') {
 		// Soft — see deleteActivity. The redirect goes to the index rather than
 		// back here, because "here" is now a 404.
 		await deleteActivity(id);
@@ -164,6 +156,7 @@ if (!activity || (activity.private && !isOwner)) {
 
 const meta = sportMeta(activity.sport);
 const hasRoute = Boolean(activity.polyline);
+const activityPinned = isOwner ? await isPinned('move', activity.id) : false;
 
 const [streams, laps, parent, children, thresholds] = await Promise.all([
 	getActivityStreams(activity.id),
@@ -468,34 +461,7 @@ const exWord = exertionLabel(activity.exertion);
 					<path d={glyph} />
 				</svg>
 				<span class="head__sport">{meta.label}</span>
-				{activity.favorite_rank && <span class="head__fav" title={`Favourite #${activity.favorite_rank}`}>★</span>}
-				{
-					isOwner && !editing && (
-						<form method="POST" class="head__fav-form">
-							<input type="hidden" name="action" value="set-favorite" />
-							{[1, 2, 3, 4].map((r) => (
-								<button
-									type="submit"
-									name="rank"
-									value={r}
-									class:list={['head__fav-btn', activity.favorite_rank === r && 'head__fav-btn--on']}
-									title={`Favourite #${r}`}
-								>
-									★{r}
-								</button>
-							))}
-							<button
-								type="submit"
-								name="rank"
-								value=""
-								class:list={['head__fav-btn', activity.favorite_rank == null && 'head__fav-btn--on']}
-								title="Not a favourite"
-							>
-								none
-							</button>
-						</form>
-					)
-				}
+				{isOwner && !editing && <span class="head__actions"><PinButton track="move" refId={activity.id} pinned={activityPinned} /></span>}
 				{isOwner && !editing && !activity.private && <span class="head__public" title="Visible to everyone">Public</span>}
 				{isOwner && !editing && <a class="head__fav-btn" href="?edit=1">Edit</a>}
 			</div>
@@ -919,11 +885,7 @@ const exWord = exertionLabel(activity.exertion);
 		letter-spacing: 0.08em;
 		color: #6b7b88;
 	}
-	.head__fav {
-		color: #d99a3a;
-		font-size: 0.95rem;
-	}
-	.head__fav-form {
+	.head__actions {
 		margin-left: auto;
 		display: inline-flex;
 		gap: 0.25rem;
@@ -1372,7 +1334,7 @@ const exWord = exertionLabel(activity.exertion);
 	}
 
 	@media (max-width: 640px) {
-		.head__fav-form {
+		.head__actions {
 			margin-left: 0;
 		}
 	}

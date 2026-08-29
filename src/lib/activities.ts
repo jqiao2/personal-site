@@ -1,9 +1,9 @@
 // Service layer for the activity log — the fourth section, and the first
 // whose records are ingested rather than typed. Reads go through the anon
 // client (the tables are publicly readable, RLS enabled, like the film and
-// restaurant logs); the one write here (setFavoriteRank) goes through the
-// service-role client and is only ever called after requireOwner() at the
-// API-route layer, same convention as films.ts's setFavorite.
+// restaurant logs); the writes here (updateActivity/deleteActivity) go through
+// the service-role client and are only ever called after requireOwner() at the
+// API-route/page layer, same convention as films.ts's writes.
 //
 // Schema: supabase/migrations/0034_activity_log.sql. Design contract:
 // ACTIVITIES.md §5 (schema), §6 (sports.ts is imported from, not duplicated —
@@ -132,7 +132,6 @@ export interface ActivityRow {
 	bbox_n: number | null;
 	start_place: string | null;
 	gear_id: number | null;
-	favorite_rank: number | null;
 	has_streams: boolean;
 	device_name: string | null;
 	created_at: string;
@@ -192,7 +191,6 @@ export interface ActivityListRow {
 	gear_id: number | null;
 	gear_name: string | null;
 	gear_nickname: string | null;
-	favorite_rank: number | null;
 	has_streams: boolean;
 	device_name: string | null;
 	created_at: string;
@@ -369,7 +367,6 @@ export interface ActivityQuery {
 	hasHr?: boolean;
 	/** Case-insensitive substring against start_place. */
 	place?: string;
-	favoritesOnly?: boolean;
 	/**
 	 * "Personal best" has no dedicated column in the schema (ACTIVITIES.md §8
 	 * names the filter but §5's schema has no PR flag) — a real PR detector
@@ -481,8 +478,6 @@ export async function listActivities(
 	const place = query.place?.trim();
 	if (place) req = req.ilike('start_place', `%${place.replace(/[%_]/g, '\\$&')}%`);
 
-	if (query.favoritesOnly) req = req.not('favorite_rank', 'is', null);
-
 	req = req.order(SORT_COLUMN[sort], { ascending, nullsFirst: false });
 	// Tiebreak for a deterministic order (matters for paging): newest id last
 	// unless we're already sorting by date, in which case id order and date
@@ -497,22 +492,6 @@ export async function listActivities(
 		throw new Error(`listActivities failed: ${error.message}`);
 	}
 	return { rows: redactActivities((data ?? []) as ActivityListRow[], isOwner), total: count ?? 0 };
-}
-
-/** The (<=4) activities flagged favorite_rank 1-4, in rank order — the
- * landing page's top row. */
-export async function listFavoriteActivities(limit = 4, isOwner = false): Promise<ActivityListRow[]> {
-	const { data, error } = await supabasePublic
-		.from('activity_list')
-		.select('*')
-		.not('favorite_rank', 'is', null)
-		.order('favorite_rank', { ascending: true })
-		.limit(limit);
-	if (error) {
-		if (isDegraded(error)) return [];
-		throw new Error(`listFavoriteActivities failed: ${error.message}`);
-	}
-	return redactActivities((data ?? []) as ActivityListRow[], isOwner);
 }
 
 // ---------------------------------------------------------------------------
@@ -627,7 +606,6 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'bbox_n',
 	'start_place',
 	'gear_id',
-	'favorite_rank',
 	'has_streams',
 	'device_name',
 	'created_at',
@@ -968,7 +946,7 @@ export async function listActivityFacets(isOwner = false): Promise<ActivityFacet
 
 // ---------------------------------------------------------------------------
 // Writes (owner only — the caller checks requireOwner() first, same
-// convention as films.ts's setFavorite and restaurants.ts's writes).
+// convention as films.ts's and restaurants.ts's writes).
 // ---------------------------------------------------------------------------
 
 /** The fields the owner's edit state can change. Absent key = leave alone. */
@@ -1060,48 +1038,6 @@ async function moveGearDistance(from: number | null, to: number | null, distance
 		const next = Math.max(0, (data.distance_m ?? 0) + delta);
 		await supabaseAdmin.from('activity_gear').update({ distance_m: next, updated_at: new Date().toISOString() }).eq('id', gearId);
 	}
-}
-
-/**
- * Set (or clear, with `rank: null`) an activity's landing-page favourite
- * rank, 1-4. The partial unique index on activities.favorite_rank means a
- * rank already held by another activity has to be freed first — that holder
- * takes over *this* activity's old rank, so moving a favourite up the list
- * swaps the two rather than evicting one of them.
- */
-export async function setFavoriteRank(activityId: number, rank: number | null): Promise<void> {
-	if (rank != null && (rank < 1 || rank > 4)) {
-		throw new Error('favorite_rank must be between 1 and 4, or null');
-	}
-	const { data: self } = await supabaseAdmin
-		.from('activities')
-		.select('favorite_rank')
-		.eq('id', activityId)
-		.maybeSingle();
-	const mine = self?.favorite_rank ?? null;
-	if (mine === rank) return;
-
-	const set = async (id: number, value: number | null) => {
-		const { error } = await supabaseAdmin.from('activities').update({ favorite_rank: value }).eq('id', id);
-		if (error) throw new Error(`setFavoriteRank failed: ${error.message}`);
-	};
-
-	let holderId: number | null = null;
-	if (rank != null) {
-		const { data: holder } = await supabaseAdmin
-			.from('activities')
-			.select('id')
-			.eq('favorite_rank', rank)
-			.is('deleted_at', null)
-			.neq('id', activityId)
-			.maybeSingle();
-		holderId = holder?.id ?? null;
-		// The unique index rejects two rows sharing a rank even mid-swap, so the
-		// slot is emptied before it is claimed.
-		if (holderId != null) await set(holderId, null);
-	}
-	await set(activityId, rank);
-	if (holderId != null && mine != null) await set(holderId, mine);
 }
 
 // ---------------------------------------------------------------------------

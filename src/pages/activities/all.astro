@@ -112,7 +112,6 @@ const summary = hasFilters
 			hasPower: Boolean(query.hasPower),
 			hasHr: Boolean(query.hasHr),
 			place: query.place ?? null,
-			favoritesOnly: Boolean(query.favoritesOnly),
 			personalBestOnly: Boolean(query.personalBestOnly),
 			measuredOnly: Boolean(query.measuredOnly),
 			gearNames,
@@ -324,7 +323,6 @@ const scopeDummy: ActivityCardRow = {
 						<button type="button" class="chip" data-flag="measured" aria-pressed={(!!query.measuredOnly) ? 'true' : 'false'} title="Only activities whose exertion score came from a measured stream (power or heart rate), not an estimate.">
 							Measured exertion only
 						</button>
-						<button type="button" class="chip" data-flag="fav" aria-pressed={(!!query.favoritesOnly) ? 'true' : 'false'}>★ Favourites</button>
 						<button type="button" class="chip" data-flag="pr" aria-pressed={(!!query.personalBestOnly) ? 'true' : 'false'}>Personal bests</button>
 					</div>
 				</section>
@@ -451,7 +449,7 @@ const scopeDummy: ActivityCardRow = {
 		</div>
 
 		<p class="empty" id="empty-unfiltered" hidden={!(total === 0 && !hasFilters)}>
-			No activities logged yet. The <a href="/activities/import">import</a> hasn't run.
+			No activities logged yet. The <a href="/activities/settings">import</a> hasn't run.
 		</p>
 		<p class="empty" id="empty-filtered" hidden={!(total === 0 && hasFilters)}>
 			No activities match these filters.
@@ -1024,7 +1022,6 @@ const scopeDummy: ActivityCardRow = {
 			hasPower: boolean;
 			hasHr: boolean;
 			place: string | null;
-			favoritesOnly: boolean;
 			personalBestOnly: boolean;
 			measuredOnly: boolean;
 			gearNames: string[];
@@ -1052,12 +1049,8 @@ const scopeDummy: ActivityCardRow = {
 				em(sportMeta(s.sports[0]).label);
 			}
 
-			if (s.favoritesOnly) {
-				lit(' that are ');
-				em('favourites');
-			}
 			if (s.personalBestOnly) {
-				lit(s.favoritesOnly ? ' and ' : ' that are ');
+				lit(' that are ');
 				em('personal bests');
 			}
 
@@ -1205,7 +1198,6 @@ const scopeDummy: ActivityCardRow = {
 			power: false,
 			hr: false,
 			measured: false,
-			fav: false,
 			pr: false,
 		};
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-flag]')) {
@@ -1235,7 +1227,6 @@ const scopeDummy: ActivityCardRow = {
 				(flags.power ? 1 : 0) +
 				(flags.hr ? 1 : 0) +
 				(flags.measured ? 1 : 0) +
-				(flags.fav ? 1 : 0) +
 				(flags.pr ? 1 : 0) +
 				(place ? 1 : 0) +
 				(distRange && distRange.isActive() ? 1 : 0) +
@@ -1363,7 +1354,6 @@ const scopeDummy: ActivityCardRow = {
 			if (flags.power) p.set('power', '1');
 			if (flags.hr) p.set('hr', '1');
 			if (flags.measured) p.set('measured', '1');
-			if (flags.fav) p.set('fav', '1');
 			if (flags.pr) p.set('pr', '1');
 			for (const id of gear) p.append('gear', String(id));
 			if (place) p.set('place', place);
@@ -1484,11 +1474,6 @@ const scopeDummy: ActivityCardRow = {
 					nogps.appendChild(stat);
 				});
 				face.appendChild(nogps);
-			}
-			if (a.favorite_rank) {
-				const favEl = el('span', 'ac__fav', cardScope, '★');
-				favEl.title = `Favourite #${a.favorite_rank}`;
-				face.appendChild(favEl);
 			}
 			card.appendChild(face);
 
@@ -1620,7 +1605,6 @@ const scopeDummy: ActivityCardRow = {
 				hasPower: flags.power,
 				hasHr: flags.hr,
 				place: place || null,
-				favoritesOnly: flags.fav,
 				personalBestOnly: flags.pr,
 				measuredOnly: flags.measured,
 				gearNames: Array.from(gear).map((id) => {
@@ -1738,7 +1722,7 @@ const scopeDummy: ActivityCardRow = {
 			indoor = null;
 			place = '';
 			placeInput.value = '';
-			flags.power = flags.hr = flags.measured = flags.fav = flags.pr = false;
+			flags.power = flags.hr = flags.measured = flags.pr = false;
 			dateFromInput.value = '';
 			dateToInput.value = '';
 			distRange?.reset();

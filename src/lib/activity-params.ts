@@ -79,7 +79,6 @@ export function activityQueryFromParams(p: URLSearchParams): ActivityFilterQuery
 		hasPower: p.get('power') === '1',
 		hasHr: p.get('hr') === '1',
 		place: p.get('place')?.trim() || undefined,
-		favoritesOnly: p.get('fav') === '1',
 		personalBestOnly: p.get('pr') === '1',
 		measuredOnly: p.get('measured') === '1',
 	};
@@ -102,7 +101,6 @@ export function activityFilterCount(q: ActivityFilterQuery): number {
 		(q.hasPower ? 1 : 0) +
 		(q.hasHr ? 1 : 0) +
 		(q.place ? 1 : 0) +
-		(q.favoritesOnly ? 1 : 0) +
 		(q.personalBestOnly ? 1 : 0) +
 		(q.measuredOnly ? 1 : 0)
 	);
@@ -298,7 +296,6 @@ export interface ActivityFilterSummary {
 	hasPower: boolean;
 	hasHr: boolean;
 	place: string | null;
-	favoritesOnly: boolean;
 	personalBestOnly: boolean;
 	measuredOnly: boolean;
 	gearNames: string[];
@@ -381,12 +378,8 @@ export function activityFilterSentence(s: ActivityFilterSummary): SentencePart[]
 		em(sportMeta(s.sports[0]).label);
 	}
 
-	if (s.favoritesOnly) {
-		lit(' that are ');
-		em('favourites');
-	}
 	if (s.personalBestOnly) {
-		lit(s.favoritesOnly ? ' and ' : ' that are ');
+		lit(' that are ');
 		em('personal bests');
 	}
 

@@ -1,46 +1,25 @@
 ---
-// The activity log's landing page — ACTIVITIES.md §1: top-four favourites,
-// then a reverse-chronological Mon–Sun week calendar where every day is a
-// vertical list of that day's activities (never a stack that hides all but
-// one, the way the film log's month grid stacks posters — see
-// ActivityCard.astro's header comment on why "cell" size exists).
+// The activity log's landing page — a reverse-chronological blog feed of the
+// most recent activities down the left, a nav sidebar down the right. The same
+// shape as /films and /restaurants in the activity section's ALPINE palette.
 //
-// Rendered on demand — reflects the live database, which is being seeded
-// concurrently with this page's own construction. Every read below already
-// degrades to an empty result rather than throwing (activities.ts's
-// isDegraded), so an empty or not-yet-migrated database renders the real
-// empty state below, not a 500.
+// Rendered on demand — reflects the live database. Every read below already
+// degrades to an empty result rather than throwing (activities.ts's isDegraded),
+// and the one call site here also swallows a hard network failure into an
+// `unreachable` state said out loud rather than a 500 — see the catch.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
-import ActivityCard from '../../components/ActivityCard.astro';
 import { requireOwner } from '../../lib/auth';
 import SiteHeader from '../../components/SiteHeader.astro';
-import { listActivityDays, listFavoriteActivities, getActivityStats } from '../../lib/activities';
-import { groupIntoWeeks, type ActivityWeek } from '../../lib/activity-week';
-import { formatStat } from '../../lib/sports';
+import { getActivityStats, type ActivityListRow } from '../../lib/activities';
+import { fetchActivityPage, activityQueryFromParams } from '../../lib/activity-params';
+import { sportMeta, sportIcon, formatStat, type StatKey } from '../../lib/sports';
 import { ALPINE } from '../../lib/activity-tokens';
 
 export const prerender = false;
 
-// 12 weeks reads as "the last quarter" without asking the browser to paint
-// 14 months of mostly-empty grid — /activities/all is the answer to "show me
-// everything." DAYS_FETCH_LIMIT is a day-with-activity count, not a calendar-
-// day count (listActivityDays only returns days that have a row at all — see
-// its doc comment), so it's set comfortably above WEEKS_TO_SHOW * 7 = 84: even
-// if literally every day in the window had an activity, 100 rows would still
-// cover all of them, with headroom to spare.
-const WEEKS_TO_SHOW = 12;
-const DAYS_FETCH_LIMIT = 100;
+const FEED_LIMIT = 25;
 
-// activities.ts already turns a missing-table/column error into an empty
-// result (isDegraded) — but a Supabase client pointed at unreachable
-// credentials (a placeholder `.env`, a project that's paused) fails at the
-// network layer instead, which isDegraded doesn't classify as "no data" and
-// so it throws. That's a real distinction everywhere else (a network error
-// should be loud), but a landing page has no form to fail out of — the
-// worst response to "the database didn't answer" is a 500 where an empty
-// calendar would do. So this one call site swallows it too.
-let favorites: Awaited<ReturnType<typeof listFavoriteActivities>> = [];
-let days: Awaited<ReturnType<typeof listActivityDays>> = [];
+let rows: ActivityListRow[] = [];
 let stats: Awaited<ReturnType<typeof getActivityStats>> = {
 	activitiesThisYear: 0,
 	totalDistanceM: 0,
@@ -51,60 +30,61 @@ let stats: Awaited<ReturnType<typeof getActivityStats>> = {
 };
 /** Set when the query layer could not be reached at all — see the catch below. */
 let unreachable = false;
+
 // WHAT A VISITOR GETS. Activities are private by default (migration 0043), so
-// for anyone but the owner every card below comes back redacted to a sport
-// glyph, and the totals come back zeroed. The grid keeps its shape — a
-// visitor can see that there were three days on the bike last week — and
-// stops exactly there: no title, no distance, no route, no link through.
+// for anyone but the owner every row below comes back redacted to a sport
+// glyph and date — no title, no route, no link through. The stats come back
+// zeroed, so the this-year line and the nav counts simply don't draw.
 const isOwner = await requireOwner(Astro.cookies);
 try {
-	[favorites, days, stats] = await Promise.all([
-		listFavoriteActivities(4, isOwner),
-		listActivityDays({ limit: DAYS_FETCH_LIMIT, isOwner }),
+	const [page, s] = await Promise.all([
+		fetchActivityPage(activityQueryFromParams(new URLSearchParams()), { limit: FEED_LIMIT, offset: 0 }, isOwner),
 		getActivityStats(isOwner),
 	]);
+	rows = page.rows;
+	stats = s;
 } catch (err) {
 	// AN UNREACHABLE LOG IS NOT AN EMPTY LOG, and the page must not say it is.
-	// Falling through to the empty state here would print "nothing logged in the
-	// last 12 weeks" over a database we simply failed to ask — which is a
-	// sentence about the athlete rather than about the outage, and the one
-	// reading a visitor can neither verify nor discount. So the failure is
-	// carried into the markup as its own state and said out loud.
-	//
-	// This stays a caught error rather than a 500 because everything else on
-	// the page — the nav, the shell, the links into the rest of the section —
-	// is still true and still useful when the query layer is down.
+	// The failure is carried into the markup as its own state and said out loud
+	// rather than falling through to "nothing logged" over a database we simply
+	// failed to ask.
 	unreachable = true;
 	console.error('activities landing page: could not reach the activity log —', err);
 }
 
-const weeks = groupIntoWeeks(days, { weeks: WEEKS_TO_SHOW });
-const calendarIsEmpty = weeks.every((w) => w.totals.activityCount === 0);
-
 const num = (n: number) => n.toLocaleString('en-US');
 
 // bySportFamily is all-time and only counts families that have at least one
-// activity (getActivityStats' doc comment) — summing it is the one place this
-// page needs an all-time activity count, and it's cheaper than a second query.
+// activity — summing it is the cheapest all-time count for the nav.
 const totalActivities = Object.values(stats.bySportFamily).reduce((a, b) => a + (b ?? 0), 0);
 
-const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-/** 'YYYY-MM-DD' → its day-of-month, unpadded — the numeral a calendar cell
- * shows. A plain string slice; no Date needed for a value this literal. */
-function dayNum(date: string): string {
-	return String(Number(date.slice(8, 10)));
+/** 'YYYY-MM-DD' → "Aug 11, 2026" — a plain string parse, no UTC-shifting Date. */
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDate(date: string): string {
+	const [y, m, d] = date.split('-').map(Number);
+	return `${MONTH_ABBR[(m || 1) - 1]} ${d}, ${y}`;
 }
 
-/** A week's totals through sports.ts's one formatter, so this page's numbers
- * agree with every other page's rather than keeping a second mi/ft/clock. */
-function weekStatText(t: ActivityWeek['totals']) {
-	return {
-		distance: formatStat('distance', { distance_m: t.distanceM }).value,
-		elevation: formatStat('elevation_gain', { elevation_gain_m: t.elevationGainM }).value,
-		moving: formatStat('moving_time', { moving_seconds: t.movingSeconds }).value,
-		exertion: Math.round(t.exertion).toString(),
-	};
+/** The distance / moving-time / elevation line under a feed row, through
+ * sports.ts's one formatter so these numbers agree with every other page's.
+ * Drops any figure the activity doesn't have rather than printing a dash. */
+const STAT_KEYS: StatKey[] = ['distance', 'moving_time', 'elevation_gain'];
+function statLine(a: ActivityListRow): string[] {
+	return STAT_KEYS.map((k) => formatStat(k, a).value).filter((v) => v !== '—');
+}
+
+/** First line of the notes, trimmed to a single feed row. */
+function excerpt(text: string | null): string | null {
+	if (!text) return null;
+	const line = text.replace(/\s+/g, ' ').trim();
+	if (!line) return null;
+	return line.length > 150 ? `${line.slice(0, 149).trimEnd()}…` : line;
+}
+
+/** The start point of an "M x y L…" route path, for the thumb's start dot. */
+function routeStart(path: string): { x: number; y: number } | null {
+	const m = path.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+	return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
 }
 ---
 
@@ -125,7 +105,86 @@ function weekStatText(t: ActivityWeek['totals']) {
 		<div class="card">
 			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
-			<div class="card__body">
+			<div class="shell">
+				<!-- Feed -->
+				<main class="feed">
+					{unreachable ? (
+						<p class="feed__msg feed__msg--error">
+							The activity log couldn’t be reached, so this feed is showing nothing
+							rather than showing that nothing happened. The two look alike and are
+							not the same — try again in a moment.
+						</p>
+					) : rows.length === 0 ? (
+						<p class="feed__msg">Nothing logged yet.</p>
+					) : (
+						rows.map((a) => {
+							const label = sportMeta(a.sport).label;
+							if (a.redacted) {
+								// A private activity, seen by a visitor: sport + date, no title,
+								// no route, no link to a page that would 404.
+								return (
+									<article class="item item--redacted">
+										<div class="item__body">
+											<p class="item__meta">
+												<time>{fmtDate(a.local_date)}</time>
+												<span class="tag">{label}</span>
+											</p>
+										</div>
+										<div class="item__thumb item__thumb--glyph" aria-hidden="true">
+											<svg viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+												<path d={sportIcon(a.sport)} />
+											</svg>
+										</div>
+									</article>
+								);
+							}
+							const stats = statLine(a);
+							const note = excerpt(a.notes);
+							const start = a.route_path ? routeStart(a.route_path) : null;
+							return (
+								<article class="item">
+									<div class="item__body">
+										<p class="item__meta">
+											<time>{fmtDate(a.local_date)}</time>
+											<span class="tag">{label}</span>
+										</p>
+										<h2 class="item__title"><a href={`/activities/${a.id}`}>{a.title}</a></h2>
+										{stats.length > 0 && (
+											<p class="item__stats figure">
+												{stats.map((s, i) => (
+													<>
+														{i > 0 && <span class="item__sep">·</span>}
+														<span>{s}</span>
+													</>
+												))}
+											</p>
+										)}
+										{note && <p class="item__note">{note}</p>}
+									</div>
+									<a class="item__thumb" href={`/activities/${a.id}`}>
+										{a.route_path ? (
+											<svg class="item__route" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+												<path d={a.route_path} fill="none" stroke="var(--lake)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+												{start && <circle cx={start.x} cy={start.y} r="1.8" fill="var(--lake)" />}
+											</svg>
+										) : (
+											<span class="item__thumb-glyph" aria-hidden="true">
+												<svg viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+													<path d={sportIcon(a.sport)} />
+												</svg>
+											</span>
+										)}
+									</a>
+								</article>
+							);
+						})
+					)}
+
+					{!unreachable && rows.length > 0 && (
+						<p class="feed__more"><a href="/activities/all">Everything →</a></p>
+					)}
+				</main>
+
 				<!-- Sidebar -->
 				<aside class="side">
 					<div class="brand">Jason's<br />activity log</div>
@@ -133,8 +192,11 @@ function weekStatText(t: ActivityWeek['totals']) {
 
 					<div class="side__rule"></div>
 					<nav class="side__nav">
-						<a class:list={['navrow', 'navrow--link', !isOwner && 'navrow--last']} href="/activities/all">
+						<a class="navrow navrow--link" href="/activities/all">
 							<span>All activities</span>{isOwner && <span class="navrow__n">{num(totalActivities)}</span>}
+						</a>
+						<a class:list={['navrow', 'navrow--link', !isOwner && 'navrow--last']} href="/activities/training">
+							<span>Training calendar</span><span class="navrow__n">→</span>
 						</a>
 						{isOwner && (
 							<a class="navrow navrow--link" href="/activities/heatmap">
@@ -148,107 +210,16 @@ function weekStatText(t: ActivityWeek['totals']) {
 						)}
 						{isOwner && (
 							<a class="navrow navrow--link" href="/activities/month">
-								<span>The month in review</span><span class="navrow__n">→</span>
+								<span>Month in review</span><span class="navrow__n">→</span>
 							</a>
 						)}
 						{isOwner && (
-							<a class="navrow navrow--link navrow--last" href="/activities/import">
-								<span>Strava</span><span class="navrow__n">→</span>
+							<a class="navrow navrow--link navrow--last" href="/activities/settings">
+								<span>Settings</span><span class="navrow__n">→</span>
 							</a>
 						)}
 					</nav>
 				</aside>
-
-				<!-- Main -->
-				<main class="main">
-					<section>
-						<div class="sec-head">
-							<span class="sec-head__title">Favourite activities</span>
-						</div>
-						{favorites.length > 0 ? (
-							<div class="grid4">
-								{favorites.map((a) => <ActivityCard activity={a} size="tile" />)}
-							</div>
-						) : (
-							<p class="fav-empty">No favourites picked yet.</p>
-						)}
-					</section>
-
-					<section>
-						<div class="sec-head">
-							<span class="sec-head__title">The last {WEEKS_TO_SHOW} weeks</span>
-							<a class="sec-head__link" href="/activities/all">Everything →</a>
-						</div>
-
-						{unreachable ? (
-							<p class="cal-empty cal-empty--error">
-								The activity log couldn’t be reached, so this grid is showing nothing
-								rather than showing that nothing happened. The two look alike and are
-								not the same — try again in a moment.
-							</p>
-						) : calendarIsEmpty && (
-							<p class="cal-empty">
-								Nothing logged in the last {WEEKS_TO_SHOW} weeks. Once activities are imported they'll
-								show up here, newest week first.
-							</p>
-						)}
-
-						<div class="calendar">
-							<div class="dow" aria-hidden="true">
-								{DOW.map((d) => <span>{d}</span>)}
-							</div>
-
-							{weeks.map((week) => {
-								const t = weekStatText(week.totals);
-								const weekHasActivity = week.totals.activityCount > 0;
-								return (
-									<div class="week">
-										<div class="week__head">
-											<span class="week__span figure">{week.label}</span>
-											{!isOwner ? null : weekHasActivity ? (
-												<div class="week__totals figure">
-													<span>{t.distance}</span>
-													<span class="dot">·</span>
-													<span>{t.elevation}</span>
-													<span class="dot">·</span>
-													<span>{t.moving}</span>
-													<span class="dot">·</span>
-													<span>{t.exertion} exertion</span>
-												</div>
-											) : (
-												<span class="week__totals week__totals--quiet">Rest week</span>
-											)}
-										</div>
-										<div class="week__grid">
-											{week.days.map((day) => (
-												<div
-													class:list={[
-														'day',
-														day.activities.length === 0 && 'day--empty',
-														day.isToday && 'day--today',
-														day.isFuture && 'day--future',
-													]}
-												>
-													<div class="day__label">
-														<span class="day__dow">{DOW[week.days.indexOf(day)]}</span>
-														<span class="day__num figure">{dayNum(day.date)}</span>
-													</div>
-													{day.activities.length > 0 ? (
-														<div class="day__list">
-															{day.activities.map((a) => <ActivityCard activity={a} size="cell" />)}
-														</div>
-													) : (
-														<div class="day__quiet"></div>
-													)}
-												</div>
-											))}
-										</div>
-									</div>
-								);
-							})}
-						</div>
-					</section>
-				</main>
 			</div>
 		</div>
 	</div>
@@ -256,28 +227,175 @@ function weekStatText(t: ActivityWeek['totals']) {
 <style>
 	.page {
 		min-height: 100vh;
+		background: var(--sky);
 		display: flex;
 		justify-content: center;
 		overflow-x: hidden;
 	}
 	.card {
 		width: 100%;
-		max-width: 1360px;
+		max-width: 1120px;
 		display: flex;
 		flex-direction: column;
 	}
-	.card__body {
+
+	/* Two-column blog shell — feed then sidebar; collapses to one column
+	   (sidebar after) on narrow viewports. */
+	.shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 288px;
+	}
+	@media (max-width: 720px) {
+		.shell {
+			grid-template-columns: 1fr;
+		}
+		.side {
+			order: 2;
+		}
+	}
+
+	/* Feed */
+	.feed {
+		min-width: 0;
+		padding: 38px 40px 44px;
+	}
+	.item {
 		display: flex;
+		gap: 20px;
+		align-items: flex-start;
+		padding: 16px 0 18px;
+		border-bottom: 1px solid var(--scree);
+	}
+	.item__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.item__meta {
+		font-size: 11.5px;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--granite-soft);
+		margin: 0 0 6px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		align-items: baseline;
+	}
+	.tag {
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		padding: 2px 7px;
+		border: 1px solid var(--scree);
+		color: var(--lake);
+		border-radius: 2px;
+	}
+	.item__title {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-weight: 400;
+		font-size: 22px;
+		line-height: 1.2;
+		margin: 0;
+	}
+	.item__title a {
+		color: var(--granite);
+	}
+	.item__title a:hover {
+		color: var(--lake);
+	}
+	.item__stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 8px 0 0;
+		font-size: 14px;
+		color: var(--granite);
+	}
+	.item__sep {
+		color: var(--scree);
+	}
+	.item__note {
+		margin: 8px 0 0;
+		color: var(--granite-soft);
+		font-size: 14.5px;
+		line-height: 1.55;
+	}
+	.item__thumb {
+		flex: none;
+		display: block;
+		width: 84px;
+		height: 63px;
+		border: 1px solid var(--scree);
+		border-radius: 6px;
+		background: var(--snow);
+		overflow: hidden;
+	}
+	.item__thumb--glyph,
+	.item__thumb-glyph {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+	}
+	.item__thumb--glyph {
+		width: 84px;
+		height: 63px;
+		border: 1px solid var(--scree);
+		border-radius: 6px;
+		background: var(--snow);
+	}
+	.item__route {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+	.item__thumb-glyph svg,
+	.item__thumb--glyph svg {
+		width: 26px;
+		height: 26px;
+	}
+	.feed__more {
+		font-size: 13px;
+		font-weight: 600;
+		margin-top: 22px;
+	}
+	.feed__more a {
+		color: var(--lake);
+	}
+	.feed__more a:hover {
+		color: var(--lake-deep);
+	}
+	.feed__msg {
+		margin: 0;
+		font-size: 14px;
+		color: var(--granite-soft);
+		font-family: 'Instrument Serif', Georgia, serif;
+	}
+	/* An outage is the one thing on this page allowed the warm accent — it is
+	   not part of the record, and it should not read like the quiet grey of a
+	   log with nothing in it. */
+	.feed__msg--error {
+		color: var(--granite);
+		border-left: 2px solid var(--larch);
+		padding-left: 10px;
 	}
 
 	/* Sidebar */
 	.side {
-		width: 268px;
-		flex: none;
-		border-right: 1px solid var(--scree);
-		padding: 36px 26px;
+		border-left: 1px solid var(--scree);
+		padding: 40px 28px;
 		display: flex;
 		flex-direction: column;
+	}
+	@media (max-width: 720px) {
+		.side {
+			border-left: none;
+			border-top: 1px solid var(--scree);
+		}
+		.feed {
+			padding: 28px 22px 34px;
+		}
 	}
 	.brand {
 		font-family: 'Instrument Serif', Georgia, serif;
@@ -321,235 +439,6 @@ function weekStatText(t: ActivityWeek['totals']) {
 		color: var(--granite-soft);
 		font-size: 13px;
 		font-variant-numeric: tabular-nums;
-	}
-
-	/* Main */
-	.main {
-		flex: 1;
-		min-width: 0;
-		padding: 38px 40px 60px;
-		display: flex;
-		flex-direction: column;
-		gap: 40px;
-	}
-	.sec-head {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		border-bottom: 1px solid var(--scree);
-		padding-bottom: 9px;
-		margin-bottom: 16px;
-		gap: 12px;
-	}
-	.sec-head__title {
-		font-family: 'Instrument Serif', Georgia, serif;
-		font-style: italic;
-		font-size: 20px;
-		color: var(--granite);
-	}
-	.sec-head__link {
-		font-size: 12px;
-		color: var(--lake);
-		font-weight: 600;
-		letter-spacing: 0.3px;
-		white-space: nowrap;
-	}
-	.sec-head__link:hover {
-		color: var(--lake-deep);
-	}
-	.fav-empty,
-	.cal-empty {
-		margin: 0 0 8px;
-		font-size: 14px;
-		color: var(--granite-soft);
-	}
-
-	/* An outage is the one thing on this page allowed the warm accent — it is
-	   not part of the record, and it should not read like the quiet grey of a
-	   week with no riding in it. */
-	.cal-empty--error {
-		color: var(--granite);
-		border-left: 2px solid var(--larch);
-		padding-left: 10px;
-	}
-
-	.grid4 {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 16px;
-	}
-
-	/* ---- the week calendar ---- */
-	.calendar {
-		display: flex;
-		flex-direction: column;
-		gap: 26px;
-	}
-	.dow {
-		display: grid;
-		grid-template-columns: repeat(7, minmax(0, 1fr));
-		gap: 10px;
-		font-size: 11.5px;
-		letter-spacing: 1.5px;
-		text-transform: uppercase;
-		color: var(--granite-soft);
-		padding: 0 2px 2px;
-	}
-	.week {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-	.week__head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 12px;
-		flex-wrap: wrap;
-		padding-bottom: 6px;
-		border-bottom: 1px solid var(--scree);
-	}
-	.week__span {
-		font-size: 13.5px;
-		font-weight: 600;
-		color: var(--granite);
-	}
-	.week__totals {
-		font-size: 12.5px;
-		color: var(--granite-soft);
-		display: flex;
-		align-items: baseline;
-		gap: 6px;
-	}
-	.week__totals--quiet {
-		font-style: italic;
-	}
-	.dot {
-		color: var(--scree);
-	}
-
-	.week__grid {
-		display: grid;
-		grid-template-columns: repeat(7, minmax(0, 1fr));
-		gap: 10px;
-		align-items: start;
-	}
-	.day {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		min-height: 40px;
-	}
-	.day__label {
-		display: none;
-	}
-	.day__num {
-		font-size: 11px;
-		color: var(--granite-soft);
-	}
-	.day--today .day__num {
-		color: var(--lake);
-		font-weight: 700;
-	}
-	.day--future {
-		opacity: 0.4;
-	}
-	.day__list {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-	.day__quiet {
-		height: 34px;
-		border: 1px solid var(--scree);
-		border-radius: 6px;
-	}
-	.day--today .day__quiet {
-		border-color: var(--lake);
-	}
-
-	@media (max-width: 900px) {
-		.card__body {
-			flex-direction: column;
-		}
-		.side {
-			width: 100%;
-			border-right: none;
-			border-bottom: 1px solid var(--scree);
-		}
-		.main {
-			padding: 28px 22px 44px;
-		}
-		.grid4 {
-			grid-template-columns: repeat(2, 1fr);
-		}
-	}
-
-	/* Below ~720px a 7-across grid squeezes each card under ~90px, too narrow for
-	   a title and stats to read — so the week folds into a single-column agenda
-	   instead, with each day's own weekday+date label shown inline (the shared
-	   .dow header above the calendar no longer lines up with one column). */
-	@media (max-width: 720px) {
-		.dow {
-			display: none;
-		}
-		.week__grid {
-			grid-template-columns: 1fr;
-		}
-	}
-
-	/* Stacked on a phone held upright, the week reads as a list — so run it
-	   newest day first, matching the newest-week-first order around it. */
-	@media (max-width: 720px) and (orientation: portrait) {
-		.week__grid {
-			display: flex;
-			flex-direction: column-reverse;
-		}
-	}
-
-	@media (max-width: 720px) {
-		.day {
-			flex-direction: row;
-			align-items: flex-start;
-			gap: 12px;
-			min-height: 0;
-		}
-		.day__label {
-			display: flex;
-			flex-direction: column;
-			align-items: center;
-			gap: 2px;
-			flex: none;
-			width: 34px;
-			padding-top: 2px;
-		}
-		.day__dow {
-			font-size: 10px;
-			letter-spacing: 1px;
-			text-transform: uppercase;
-			color: var(--granite-soft);
-		}
-		.day__num {
-			font-size: 13px;
-			color: var(--granite);
-		}
-		.day--today .day__dow,
-		.day--today .day__num {
-			color: var(--lake);
-			font-weight: 700;
-		}
-		.day__list {
-			flex: 1;
-			min-width: 0;
-		}
-		.day__quiet {
-			flex: 1;
-			height: 32px;
-		}
-		.grid4 {
-			grid-template-columns: repeat(2, 1fr);
-			gap: 10px;
-		}
 	}
 </style>
 </ActivityLayout>

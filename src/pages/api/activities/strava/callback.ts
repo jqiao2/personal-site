@@ -1,6 +1,6 @@
 // Strava OAuth callback — owner only. Strava sends the browser here with a
 // `code` (or an `error` if the owner declined); we swap the code for the first
-// token pair, store it, and bounce back to the import page.
+// token pair, store it, and bounce back to the settings page.
 import type { APIRoute } from 'astro';
 import { requireOwner } from '../../../../lib/auth';
 import { apiError } from '../../../../lib/http';
@@ -9,7 +9,7 @@ import { exchangeCode } from '../../../../lib/strava';
 export const prerender = false;
 
 const back = (params: string) =>
-	new Response(null, { status: 302, headers: { location: `/activities/import?${params}` } });
+	new Response(null, { status: 302, headers: { location: `/activities/settings?${params}` } });
 
 export const GET: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);

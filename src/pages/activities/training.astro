@@ -1,0 +1,338 @@
+---
+// /activities/training — the reverse-chronological Mon–Sun training calendar,
+// twelve weeks server-rendered and older weeks paged in on scroll.
+//
+// TWO MODES, ONE FILE.
+//   - Full page (default): ActivityLayout + header + the first 12 weeks.
+//   - Fragment (`?partial=1&before=YYYY-MM-DD`): ONLY the bare `.week` blocks
+//     for the 12 weeks ending on `before`, no layout/header/<html> — so the
+//     client can fetch and append them. The weeks render through TrainingWeek,
+//     the same component the full page uses, so the appended markup carries the
+//     same scoped-style hash and is styled without any `:global()` patching.
+//
+// The cursor the client sends as `before` is the day before the oldest Monday
+// already shown; groupIntoWeeks anchored on `today = before` therefore produces
+// exactly the 12 weeks immediately older than what's on screen, no overlap and
+// no gap. listActivityDays needs `before` = the day AFTER that cursor so its
+// strict `local_date < before` still includes the cursor day itself.
+import ActivityLayout from '../../layouts/ActivityLayout.astro';
+import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
+import TrainingWeek from '../../components/TrainingWeek.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import { requireOwner } from '../../lib/auth';
+import { listActivityDays, type ActivityDayWithActivities } from '../../lib/activities';
+import { groupIntoWeeks, addDays, type ActivityWeek } from '../../lib/activity-week';
+import { ALPINE } from '../../lib/activity-tokens';
+
+export const prerender = false;
+
+const WEEKS_TO_SHOW = 12;
+const DAYS_FETCH_LIMIT = 100;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+const isOwner = await requireOwner(Astro.cookies);
+const isPartial = Astro.url.searchParams.get('partial') === '1';
+const beforeParam = Astro.url.searchParams.get('before');
+const before = beforeParam && DATE_RE.test(beforeParam) ? beforeParam : null;
+
+let weeks: ActivityWeek[] = [];
+let unreachable = false;
+try {
+	let days: ActivityDayWithActivities[];
+	if (isPartial) {
+		// A partial with no valid cursor has no window to draw — return nothing,
+		// which the client reads as "stop".
+		if (before) {
+			days = await listActivityDays({ before: addDays(before, 1), limit: DAYS_FETCH_LIMIT, isOwner });
+			// Empty ONLY when nothing older exists at all — the client reads a
+			// weekless fragment as "stop". A window that's empty but still has
+			// activity older than it (a training gap longer than 12 weeks) keeps
+			// its 12 blank weeks, so paging bridges the gap instead of truncating
+			// at the first rest period.
+			weeks = days.length ? groupIntoWeeks(days, { weeks: WEEKS_TO_SHOW, today: before }) : [];
+		}
+	} else {
+		days = await listActivityDays({ limit: DAYS_FETCH_LIMIT, isOwner });
+		weeks = groupIntoWeeks(days, { weeks: WEEKS_TO_SHOW });
+	}
+} catch (err) {
+	// See the activities landing page: an unreachable log is not an empty one.
+	// On a partial this just yields an empty fragment (the client stops); on the
+	// full page it draws the error state below.
+	unreachable = true;
+	console.error('activities training page: could not reach the activity log —', err);
+}
+
+const calendarIsEmpty = weeks.every((w) => w.totals.activityCount === 0);
+// The day before the oldest Monday shown — the client's first paging cursor.
+const initialCursor = weeks.length ? addDays(weeks[weeks.length - 1].mondayDate, -1) : null;
+
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// A hidden ActivityCard purely so its component's scoped <style> is always in
+// the head, even when the first 12 weeks hold no activity — otherwise the
+// cards a later scroll pages in would arrive unstyled. Same trick as
+// /activities/all's #scope-source.
+const scopeDummy: ActivityCardRow = {
+	id: 0,
+	sport: 'other',
+	title: '',
+	local_date: '2000-01-01',
+	distance_m: null,
+	moving_seconds: null,
+	elapsed_seconds: 0,
+	elevation_gain_m: null,
+	route_path: null,
+};
+---
+
+{isPartial ? (
+	weeks.map((week) => <TrainingWeek week={week} isOwner={isOwner} />)
+) : (
+	<ActivityLayout title="Training calendar — Jason's activity log">
+		<div
+			class="page"
+			style={{
+				'--sky': ALPINE.sky,
+				'--snow': ALPINE.snow,
+				'--granite': ALPINE.granite,
+				'--granite-soft': ALPINE.graniteSoft,
+				'--lake': ALPINE.lake,
+				'--lake-deep': ALPINE.lakeDeep,
+				'--larch': ALPINE.larch,
+				'--scree': ALPINE.scree,
+			}}
+		>
+			<div class="card">
+				<SiteHeader pathname={Astro.url.pathname} theme="activity" />
+
+				<main class="main">
+					<div id="scope-source" hidden aria-hidden="true">
+						<ActivityCard activity={scopeDummy} size="cell" />
+					</div>
+
+					<header class="head">
+						<a class="back" href="/activities">← Jason's activity log</a>
+						<h1 class="head__title">Training calendar</h1>
+					</header>
+
+					{unreachable ? (
+						<p class="cal-empty cal-empty--error">
+							The activity log couldn’t be reached, so this grid is showing nothing
+							rather than showing that nothing happened. The two look alike and are
+							not the same — try again in a moment.
+						</p>
+					) : calendarIsEmpty && (
+						<p class="cal-empty">Nothing logged yet.</p>
+					)}
+
+					<div class="calendar">
+						<div class="dow" aria-hidden="true">
+							{DOW.map((d) => <span>{d}</span>)}
+						</div>
+
+						<div class="weeks" id="weeks">
+							{weeks.map((week) => <TrainingWeek week={week} isOwner={isOwner} />)}
+						</div>
+
+						<div id="sentinel" data-cursor={initialCursor ?? ''} hidden={!initialCursor}>
+							<span class="sentinel__spinner" aria-hidden="true"></span>
+							<span class="sentinel__text">Loading older weeks…</span>
+						</div>
+					</div>
+				</main>
+			</div>
+		</div>
+
+		<script>
+			// Older weeks load as the sentinel nears the viewport. Each fetch pulls
+			// the next 12-week window as a bare fragment from this same page and
+			// appends its `.week` blocks; the cursor walks back to the day before
+			// the newly-oldest Monday. A window with no activity at all — or a
+			// failed fetch — stops the observer cleanly.
+			const weeksEl = document.getElementById('weeks');
+			const sentinel = document.getElementById('sentinel');
+			if (weeksEl && sentinel) {
+				let cursor = sentinel.dataset.cursor || '';
+				let loading = false;
+				let done = !cursor;
+
+				const pad = (n: number) => String(n).padStart(2, '0');
+				function addDays(date: string, n: number): string {
+					const [y, m, d] = date.split('-').map(Number);
+					const dt = new Date(y, (m || 1) - 1, d || 1);
+					dt.setDate(dt.getDate() + n);
+					return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+				}
+
+				function stop() {
+					done = true;
+					observer.disconnect();
+					sentinel!.hidden = true;
+				}
+
+				async function loadMore() {
+					if (loading || done || !cursor) return;
+					loading = true;
+					try {
+						const res = await fetch(`/activities/training?partial=1&before=${cursor}`);
+						if (!res.ok) throw new Error(`HTTP ${res.status}`);
+						const html = await res.text();
+						const tpl = document.createElement('template');
+						tpl.innerHTML = html;
+						const newWeeks = Array.from(tpl.content.querySelectorAll('.week'));
+						// No weeks means the server found nothing older at all. An
+						// empty-but-present window (a long training gap) still carries
+						// its 12 blank weeks, so we keep paging back to bridge it.
+						if (newWeeks.length === 0) {
+							stop();
+							return;
+						}
+						for (const w of newWeeks) weeksEl!.appendChild(w);
+						const lastMonday = (newWeeks[newWeeks.length - 1] as HTMLElement).dataset.monday;
+						if (!lastMonday) {
+							stop();
+							return;
+						}
+						cursor = addDays(lastMonday, -1);
+					} catch (err) {
+						console.error('training calendar: could not load older weeks —', err);
+						stop();
+					} finally {
+						loading = false;
+					}
+				}
+
+				const observer = new IntersectionObserver(
+					(entries) => {
+						if (entries.some((e) => e.isIntersecting)) loadMore();
+					},
+					{ rootMargin: '600px' },
+				);
+				if (!done) observer.observe(sentinel);
+			}
+		</script>
+
+		<style>
+			.page {
+				min-height: 100vh;
+				background: var(--sky);
+				display: flex;
+				justify-content: center;
+				overflow-x: hidden;
+			}
+			.card {
+				width: 100%;
+				max-width: 1360px;
+				display: flex;
+				flex-direction: column;
+			}
+			.main {
+				flex: 1;
+				min-width: 0;
+				padding: 38px 40px 60px;
+				display: flex;
+				flex-direction: column;
+				gap: 24px;
+			}
+			#scope-source {
+				display: none;
+			}
+			.head {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+			}
+			.back {
+				font-size: 0.8rem;
+				color: var(--lake);
+			}
+			.back:hover {
+				color: var(--lake-deep);
+			}
+			.head__title {
+				font-family: 'Instrument Serif', Georgia, serif;
+				font-size: 2rem;
+				margin: 0;
+				color: var(--granite);
+			}
+			.cal-empty {
+				margin: 0;
+				font-size: 14px;
+				color: var(--granite-soft);
+			}
+			.cal-empty--error {
+				color: var(--granite);
+				border-left: 2px solid var(--larch);
+				padding-left: 10px;
+			}
+
+			.calendar {
+				display: flex;
+				flex-direction: column;
+				gap: 26px;
+			}
+			.dow {
+				display: grid;
+				grid-template-columns: repeat(7, minmax(0, 1fr));
+				gap: 10px;
+				font-size: 11.5px;
+				letter-spacing: 1.5px;
+				text-transform: uppercase;
+				color: var(--granite-soft);
+				padding: 0 2px 2px;
+			}
+			.weeks {
+				display: flex;
+				flex-direction: column;
+				gap: 26px;
+			}
+
+			#sentinel {
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 0.6rem;
+				padding: 1rem 0 0.5rem;
+				font-size: 0.72rem;
+				text-transform: uppercase;
+				letter-spacing: 1.2px;
+				color: var(--granite-soft);
+			}
+			#sentinel[hidden] {
+				display: none;
+			}
+			.sentinel__spinner {
+				width: 12px;
+				height: 12px;
+				border: 2px solid var(--scree);
+				border-top-color: var(--lake);
+				border-radius: 50%;
+				animation: spin 0.7s linear infinite;
+			}
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+			@media (prefers-reduced-motion: reduce) {
+				.sentinel__spinner {
+					animation: none;
+				}
+			}
+
+			@media (max-width: 900px) {
+				.main {
+					padding: 28px 22px 44px;
+				}
+			}
+			/* The shared DOW header no longer lines up with a single column once the
+			   weeks fold into an agenda, so it comes off below ~720px. */
+			@media (max-width: 720px) {
+				.dow {
+					display: none;
+				}
+			}
+		</style>
+	</ActivityLayout>
+)}
