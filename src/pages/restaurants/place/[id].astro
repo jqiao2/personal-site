@@ -428,29 +428,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 							<button type="button" class="owner__link" data-open-place-editor>
 								{isPlaced ? 'Fix this location' : 'Find this place on the map'}
 							</button>
-							<div class="owner__ranks">
-								<span class="owner__ranks-label">Favourite rank</span>
-								<div class="owner__rankrow">
-									{[1, 2, 3, 4].map((r) => (
-										<button
-											type="button"
-											class:list={['owner__rank', place.favorite_rank === r && 'owner__rank--on']}
-											data-rank={r}
-											data-place={place.id}
-										>
-											{r}
-										</button>
-									))}
-									<button
-										type="button"
-										class:list={['owner__rank', place.favorite_rank == null && 'owner__rank--on']}
-										data-rank=""
-										data-place={place.id}
-									>
-										none
-									</button>
-								</div>
-							</div>
 						</div>
 					)
 				}
@@ -576,22 +553,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 				return;
 			}
 			button.classList.toggle('totry__tag--on');
-		});
-	}
-
-	for (const button of document.querySelectorAll<HTMLButtonElement>('[data-rank]')) {
-		button.addEventListener('click', async () => {
-			const rank = button.dataset.rank ? Number(button.dataset.rank) : null;
-			const res = await fetch(`/api/restaurants/places/${button.dataset.place}`, {
-				method: 'PATCH',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ favoriteRank: rank }),
-			});
-			if (!res.ok) {
-				window.alert('Could not set that rank.');
-				return;
-			}
-			location.reload();
 		});
 	}
 </script>
@@ -959,31 +920,5 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 		color: var(--terracotta-deep);
 		cursor: pointer;
 		text-align: left;
-	}
-	.owner__ranks {
-		margin-top: 12px;
-	}
-	.owner__ranks-label {
-		font-size: 11.5px;
-		color: var(--ink-3);
-	}
-	.owner__rankrow {
-		margin-top: 6px;
-		display: flex;
-		gap: 5px;
-		flex-wrap: wrap;
-	}
-	.owner__rank {
-		border: 1px solid var(--rule);
-		background: var(--card);
-		color: var(--ink-2);
-		font-size: 11.5px;
-		padding: 4px 9px;
-		cursor: pointer;
-	}
-	.owner__rank--on {
-		background: var(--ink);
-		color: var(--ground);
-		border-color: var(--ink);
 	}
 </style>
