@@ -90,7 +90,6 @@ export interface Place {
 	website_url: string | null;
 	yelp_url: string | null;
 	beli_url: string | null;
-	favorite_rank: number | null;
 	to_try_added_at: string | null;
 	to_try_reason: string | null;
 	visit_count: number;
@@ -239,16 +238,6 @@ export async function getRestaurantStats(): Promise<RestaurantStats> {
 }
 
 /** The hand-picked top four, in rank order. Fewer than four is normal. */
-export async function listFavorites(): Promise<Place[]> {
-	const { data, error } = await supabasePublic
-		.from('restaurant_places')
-		.select(PLACE_COLUMNS)
-		.not('favorite_rank', 'is', null)
-		.order('favorite_rank');
-	if (error) throw new Error(error.message);
-	return (data ?? []) as Place[];
-}
-
 /** The most recent visits, newest first, with their photographs attached. */
 export async function listRecentVisits(limit = 4): Promise<VisitDetail[]> {
 	const { data, error } = await supabasePublic
@@ -893,24 +882,6 @@ function cleanList(values: string[] | undefined): string[] {
 		if (trimmed && !seen.has(trimmed.toLowerCase())) seen.set(trimmed.toLowerCase(), trimmed);
 	}
 	return [...seen.values()];
-}
-
-/**
- * Set (or clear) a place's rank in the hand-picked top four. Ranks are unique,
- * so taking a rank another place holds moves that place out of the block rather
- * than failing on the unique index.
- */
-export async function setFavoriteRank(id: number, rank: number | null): Promise<void> {
-	if (rank != null) {
-		const { error: clearError } = await supabaseAdmin
-			.from('restaurants')
-			.update({ favorite_rank: null })
-			.eq('favorite_rank', rank)
-			.neq('id', id);
-		if (clearError) throw new Error(clearError.message);
-	}
-	const { error } = await supabaseAdmin.from('restaurants').update({ favorite_rank: rank }).eq('id', id);
-	if (error) throw new Error(error.message);
 }
 
 /**

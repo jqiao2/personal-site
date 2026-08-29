@@ -1,0 +1,208 @@
+---
+// One Mon–Sun row of the training calendar — the week grid extracted so the
+// server-rendered first page and the fragments the training page pages in on
+// scroll render through the SAME component, and therefore carry the same scoped
+// style hash. That is what lets the appended weeks pick up these rules without
+// the `:global()` dance a hand-built (createElement) node would need (see the
+// astro-scoped-styles-dynamic-nodes memory note): the fragment is real
+// server-rendered markup from this exact component, not JS-built.
+import ActivityCard from './ActivityCard.astro';
+import { formatStat } from '../lib/sports';
+import type { ActivityWeek } from '../lib/activity-week';
+
+interface Props {
+	week: ActivityWeek;
+	isOwner: boolean;
+}
+const { week, isOwner } = Astro.props;
+
+const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+/** 'YYYY-MM-DD' → its day-of-month, unpadded — the numeral a calendar cell
+ * shows. A plain string slice; no Date needed for a value this literal. */
+function dayNum(date: string): string {
+	return String(Number(date.slice(8, 10)));
+}
+
+const t = {
+	distance: formatStat('distance', { distance_m: week.totals.distanceM }).value,
+	elevation: formatStat('elevation_gain', { elevation_gain_m: week.totals.elevationGainM }).value,
+	moving: formatStat('moving_time', { moving_seconds: week.totals.movingSeconds }).value,
+	exertion: Math.round(week.totals.exertion).toString(),
+};
+const weekHasActivity = week.totals.activityCount > 0;
+---
+
+<div class="week" data-monday={week.mondayDate}>
+	<div class="week__head">
+		<span class="week__span figure">{week.label}</span>
+		{!isOwner ? null : weekHasActivity ? (
+			<div class="week__totals figure">
+				<span>{t.distance}</span>
+				<span class="dot">·</span>
+				<span>{t.elevation}</span>
+				<span class="dot">·</span>
+				<span>{t.moving}</span>
+				<span class="dot">·</span>
+				<span>{t.exertion} exertion</span>
+			</div>
+		) : (
+			<span class="week__totals week__totals--quiet">Rest week</span>
+		)}
+	</div>
+	<div class="week__grid">
+		{week.days.map((day, i) => (
+			<div
+				class:list={[
+					'day',
+					day.activities.length === 0 && 'day--empty',
+					day.isToday && 'day--today',
+					day.isFuture && 'day--future',
+				]}
+			>
+				<div class="day__label">
+					<span class="day__dow">{DOW[i]}</span>
+					<span class="day__num figure">{dayNum(day.date)}</span>
+				</div>
+				{day.activities.length > 0 ? (
+					<div class="day__list">
+						{day.activities.map((a) => <ActivityCard activity={a} size="cell" />)}
+					</div>
+				) : (
+					<div class="day__quiet"></div>
+				)}
+			</div>
+		))}
+	</div>
+</div>
+
+<style>
+	.week {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+	.week__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+		padding-bottom: 6px;
+		border-bottom: 1px solid var(--scree);
+	}
+	.week__span {
+		font-size: 13.5px;
+		font-weight: 600;
+		color: var(--granite);
+	}
+	.week__totals {
+		font-size: 12.5px;
+		color: var(--granite-soft);
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+	}
+	.week__totals--quiet {
+		font-style: italic;
+	}
+	.dot {
+		color: var(--scree);
+	}
+
+	.week__grid {
+		display: grid;
+		grid-template-columns: repeat(7, minmax(0, 1fr));
+		gap: 10px;
+		align-items: start;
+	}
+	.day {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-height: 40px;
+	}
+	.day__label {
+		display: none;
+	}
+	.day__num {
+		font-size: 11px;
+		color: var(--granite-soft);
+	}
+	.day--today .day__num {
+		color: var(--lake);
+		font-weight: 700;
+	}
+	.day--future {
+		opacity: 0.4;
+	}
+	.day__list {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.day__quiet {
+		height: 34px;
+		border: 1px solid var(--scree);
+		border-radius: 6px;
+	}
+	.day--today .day__quiet {
+		border-color: var(--lake);
+	}
+
+	/* Below ~720px a 7-across grid squeezes each card under ~90px, too narrow for
+	   a title and stats to read — so the week folds into a single-column agenda
+	   instead, with each day's own weekday+date label shown inline. */
+	@media (max-width: 720px) {
+		.week__grid {
+			grid-template-columns: 1fr;
+		}
+		.day {
+			flex-direction: row;
+			align-items: flex-start;
+			gap: 12px;
+			min-height: 0;
+		}
+		.day__label {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			gap: 2px;
+			flex: none;
+			width: 34px;
+			padding-top: 2px;
+		}
+		.day__dow {
+			font-size: 10px;
+			letter-spacing: 1px;
+			text-transform: uppercase;
+			color: var(--granite-soft);
+		}
+		.day__num {
+			font-size: 13px;
+			color: var(--granite);
+		}
+		.day--today .day__dow,
+		.day--today .day__num {
+			color: var(--lake);
+			font-weight: 700;
+		}
+		.day__list {
+			flex: 1;
+			min-width: 0;
+		}
+		.day__quiet {
+			flex: 1;
+			height: 32px;
+		}
+	}
+
+	/* Stacked on a phone held upright, the week reads as a list — so run it
+	   newest day first, matching the newest-week-first order around it. */
+	@media (max-width: 720px) and (orientation: portrait) {
+		.week__grid {
+			display: flex;
+			flex-direction: column-reverse;
+		}
+	}
+</style>

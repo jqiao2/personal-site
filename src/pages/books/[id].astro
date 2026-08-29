@@ -12,6 +12,8 @@ import {
 } from '../../lib/book-queries';
 import { buildBookPage } from '../../lib/book-view';
 import { requireOwner } from '../../lib/auth';
+import { isPinned } from '../../lib/pins';
+import PinButton from '../../components/PinButton.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects whatever the Kindle last pushed.
@@ -56,6 +58,8 @@ const [days, reviews, highlights, bookHours] = await Promise.all([
 ]);
 
 const v = buildBookPage({ book, days, reviews, highlights, isOwner });
+
+const bookPinned = isOwner ? await isPinned('book', book.id) : false;
 
 // Every day on this page comes from a session, so activity implies page turns
 // with a clock on them — but a book imported without them would otherwise draw
@@ -250,6 +254,8 @@ const spines = Array.from({ length: 18 }, () => ({
 						</div>
 					)
 				}
+
+				{isOwner && <PinButton track="book" refId={book.id} pinned={bookPinned} />}
 			</aside>
 
 			<!-- ============ RIGHT COLUMN ============ -->

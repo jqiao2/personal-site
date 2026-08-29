@@ -132,7 +132,7 @@ export async function exchangeCode(code: string): Promise<void> {
  */
 export async function getAccessToken(): Promise<string> {
 	const row = await readRow();
-	if (!row) throw new Error('Strava is not connected — visit /activities/import to connect.');
+	if (!row) throw new Error('Strava is not connected — visit /activities/settings to connect.');
 	if (Date.parse(row.expires_at) - Date.now() > 60_000) return row.access_token;
 
 	const t = await tokenExchange({ refresh_token: row.refresh_token, grant_type: 'refresh_token' });
@@ -168,7 +168,7 @@ export async function stravaGet(path: string, params?: Record<string, string | n
 }
 
 // ---------------------------------------------------------------------------
-// Connection status — for the /activities/import page. Never returns a token.
+// Connection status — for the /activities/settings page. Never returns a token.
 // ---------------------------------------------------------------------------
 
 export interface StravaConnection {

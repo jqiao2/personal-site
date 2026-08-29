@@ -4,7 +4,6 @@ import { json, apiError } from '../../../../lib/http';
 import {
 	isPriceBand,
 	removeFromToTry,
-	setFavoriteRank,
 	setPlaceHearted,
 	updatePlace,
 	type PriceBand,
@@ -14,10 +13,9 @@ export const prerender = false;
 
 // PATCH /api/restaurants/places/:id  (owner only)
 //
-// Carries the three small owner controls the place page offers — the heart, the
-// favourite rank and dropping off the to-try list — alongside ordinary edits.
-// They share a route because they share a subject; each is applied only when
-// its key is present.
+// Carries the small owner controls the place page offers — the heart and
+// dropping off the to-try list — alongside ordinary edits. They share a route
+// because they share a subject; each is applied only when its key is present.
 export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	const id = Number(params.id);
@@ -37,14 +35,6 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 
 	try {
 		if ('hearted' in body) await setPlaceHearted(id, Boolean(body.hearted));
-
-		if ('favoriteRank' in body) {
-			const rank = body.favoriteRank == null ? null : Number(body.favoriteRank);
-			if (rank != null && !(Number.isInteger(rank) && rank >= 1 && rank <= 4)) {
-				return apiError('favoriteRank must be 1-4, or null to clear it', 400);
-			}
-			await setFavoriteRank(id, rank);
-		}
 
 		if (body.toTry === false) toTry = await removeFromToTry(id);
 

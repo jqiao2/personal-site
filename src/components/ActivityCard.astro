@@ -51,7 +51,6 @@ export interface ActivityRow extends CardStatRow {
 	elapsed_seconds: number;
 	exertion_method?: string | null;
 	route_path: string | null;
-	favorite_rank?: number | null;
 	start_place?: string | null;
 	/** Set by activities.ts's `redactActivities` — this is a private activity
 	 * being shown to a visitor, and every field above it except `sport` has
@@ -144,9 +143,6 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 				</div>
 			)
 		}
-		{a.favorite_rank && (
-			<span class="ac__fav" title={`Favourite #${a.favorite_rank}`}>★</span>
-		)}
 	</div>
 	<div class="ac__meta">
 		<div class="ac__title">{a.title}</div>
@@ -204,15 +200,6 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		height: 100%;
 		display: block;
 	}
-	.ac__fav {
-		position: absolute;
-		top: 0.5rem;
-		right: 0.5rem;
-		color: var(--larch);
-		font-size: 0.9rem;
-		line-height: 1;
-	}
-
 	/* No-GPS face: the whole face goes to two figures in Instrument Serif. */
 	.ac__nogps {
 		position: relative;

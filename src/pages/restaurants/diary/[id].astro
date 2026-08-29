@@ -17,6 +17,8 @@ import { getVisit, listFriends, listTags } from '../../../lib/restaurants';
 import { layoutPhotos, longDate, placeLine } from '../../../lib/restaurant-view';
 import { verdictAt } from '../../../lib/verdict';
 import { starText } from '../../../lib/format';
+import PinButton from '../../../components/PinButton.astro';
+import { isPinned } from '../../../lib/pins';
 
 export const prerender = false;
 
@@ -28,6 +30,7 @@ if (!visit) return new Response('Not found', { status: 404 });
 
 const isOwner = await requireOwner(Astro.cookies);
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+const pinned = isOwner ? await isPinned('meal', visit.id) : false;
 
 const verdict = verdictAt(visit.verdict);
 const stars = starText(visit.rating);
@@ -128,6 +131,7 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 							<button type="button" class="owner__link" data-open-meal-editor>
 								Edit this entry
 							</button>
+							<PinButton track="meal" refId={visit.id} pinned={pinned} />
 						</div>
 					)
 				}

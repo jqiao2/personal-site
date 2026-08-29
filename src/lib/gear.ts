@@ -7,7 +7,8 @@
 // Schema: supabase/migrations/0036_gear_lifecycle.sql. Reads go through the
 // anon client (publicly readable, like the rest of the activity log); the
 // writes take the service-role client and are only called after requireOwner()
-// at the API-route layer — same convention as activities.ts's setFavoriteRank.
+// at the API-route layer — the same owner-gated write convention the rest of
+// the activity log uses.
 //
 // WHY EVERY TOTAL HERE IS DERIVED. activity_gear.distance_m is a denormalised
 // lifetime figure that 0034 keeps in sync on write. It cannot answer the only
