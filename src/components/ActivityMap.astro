@@ -206,6 +206,32 @@ const config = {
 				frame();
 			}).observe(host);
 		}
+
+		// Scrub marker — a single dot the profile graph (ActivityGraph.astro,
+		// rendered just below) moves along the route as the reader drags across
+		// it. The graph shipped the per-sample lat/lng, so this only has to place
+		// a marker; it stays off the map until the first scrub and comes off again
+		// when the pointer leaves the graph. Listens on `document` because the two
+		// components are separate scripts on the same page.
+		const scrubEl = document.createElement('div');
+		scrubEl.className = 'am-marker am-marker--scrub';
+		const scrubMarker = new maplibregl.Marker({ element: scrubEl, anchor: 'center' });
+		let scrubOn = false;
+		document.addEventListener('activity:scrub', (e) => {
+			const d = (e as CustomEvent).detail as { lat?: number; lng?: number };
+			if (typeof d?.lng !== 'number' || typeof d?.lat !== 'number') return;
+			scrubMarker.setLngLat([d.lng, d.lat]);
+			if (!scrubOn) {
+				scrubMarker.addTo(map);
+				scrubOn = true;
+			}
+		});
+		document.addEventListener('activity:scrub-end', () => {
+			if (scrubOn) {
+				scrubMarker.remove();
+				scrubOn = false;
+			}
+		});
 	}
 </script>
 
@@ -241,6 +267,15 @@ const config = {
 	.am-marker--finish {
 		background: #f8fbfd;
 		border: 3px solid #1c6e8c;
+	}
+	/* The scrub dot — larch, the one warm accent, so it reads as a live cursor
+	   distinct from the lake-blue start/finish it slides between. */
+	.am-marker--scrub {
+		width: 16px;
+		height: 16px;
+		background: #d99a3a;
+		border: 3px solid #f8fbfd;
+		box-shadow: 0 1px 3px rgba(18, 73, 94, 0.45);
 	}
 </style>
 
