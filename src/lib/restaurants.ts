@@ -132,6 +132,7 @@ export interface DiaryVisit {
 	state_region: string | null;
 	country: string;
 	photo_count: number;
+	created_at: string;
 }
 
 export interface Photo {

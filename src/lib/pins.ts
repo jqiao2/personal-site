@@ -109,13 +109,14 @@ async function filmPins(ids: number[]): Promise<JournalItem[]> {
 	// Same select/shape as films.ts listMonthWatches, by id instead of month.
 	const { data, error } = await supabaseAdmin
 		.from('logs')
-		.select('id, watched_date, movies(tmdb_id, title, release_year, poster_path, runtime)')
+		.select('id, watched_date, created_at, movies(tmdb_id, title, release_year, poster_path, runtime)')
 		.in('id', ids)
 		.is('deleted_at', null);
 	if (error) throw new Error(`filmPins failed: ${error.message}`);
 	const rows = (data ?? []) as unknown as {
 		id: number;
 		watched_date: string;
+		created_at: string;
 		movies: {
 			tmdb_id: number;
 			title: string;
@@ -130,6 +131,7 @@ async function filmPins(ids: number[]): Promise<JournalItem[]> {
 				? [{
 						id: r.id,
 						watched_date: r.watched_date,
+						created_at: r.created_at,
 						tmdb_id: r.movies.tmdb_id,
 						title: r.movies.title,
 						release_year: r.movies.release_year,
@@ -166,6 +168,7 @@ async function bookPins(ids: number[], isOwner: boolean): Promise<JournalItem[]>
 			// A pinned book is a book, not a book-day: date it by its most recent
 			// reading day, falling back to its finish date, else today.
 			day: (b.last_counted_day ?? b.finished_at ?? new Date().toISOString()).slice(0, 10),
+			logged: (b.last_counted_day ?? b.finished_at ?? new Date().toISOString()).slice(0, 10),
 			minutes: 0,
 			title: b.title ?? 'A book',
 			detail: b.authors ?? 'Book',
@@ -205,6 +208,7 @@ async function mealPins(ids: number[]): Promise<JournalItem[]> {
 	const rows = (visits.data ?? []) as {
 		id: number;
 		visited_on: string;
+		created_at: string;
 		restaurant_name: string;
 		cuisines: string[] | null;
 		tags: string[] | null;
@@ -222,6 +226,7 @@ async function movePins(ids: number[], isOwner: boolean): Promise<JournalItem[]>
 		sport: string;
 		title: string;
 		local_date: string;
+		started_at: string;
 		moving_seconds: number | null;
 		elapsed_seconds: number;
 		route_path: string | null;
