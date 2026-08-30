@@ -22,7 +22,8 @@
     "privacy:test": "node --import ./scripts/ts-hook.mjs scripts/privacy.test.mjs",
     "month:test": "node --import ./scripts/ts-hook.mjs scripts/journal-month.test.mjs",
     "pins:test": "node --import ./scripts/ts-hook.mjs scripts/pins.test.mjs",
-    "export:test": "node --import ./scripts/ts-hook.mjs scripts/export-cache-key.test.mjs"
+    "export:test": "node --import ./scripts/ts-hook.mjs scripts/export-cache-key.test.mjs",
+    "graph:test": "node --import ./scripts/ts-hook.mjs scripts/activity-graph.test.mjs"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.19",

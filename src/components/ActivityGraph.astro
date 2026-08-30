@@ -1,0 +1,437 @@
+---
+// The one interactive profile graph under the map — elevation, heart rate,
+// power and speed on a shared axis, each toggled independently, the axis
+// switchable between time and distance, and a cursor that scrubs: moving over
+// the graph tells the map (via an `activity:scrub` DOM event) where on the
+// route that sample was. See src/lib/activity-graph.ts for why the (downsampled)
+// stream values are shipped to the client at all, and ActivityMap.astro for the
+// listener that moves the marker.
+//
+// The chips and axis toggle are rendered server-side so the graph reads as a
+// labelled thing with no JavaScript; the plot itself and the scrubbing are the
+// progressive enhancement on top.
+import type { GraphData } from '../lib/activity-graph';
+
+interface Props {
+	data: GraphData;
+}
+const { data } = Astro.props;
+const bothAxes = Boolean(data.t && data.d);
+const defaultMode = data.t ? 'time' : 'dist';
+---
+
+<section class="ag" data-graph>
+	<div class="ag__head">
+		<h2 class="ag__title">Profile</h2>
+		{
+			bothAxes && (
+				<div class="ag__axis" role="group" aria-label="X axis">
+					<button type="button" class="ag__axis-btn" data-mode="time" aria-pressed={defaultMode === 'time'}>
+						Time
+					</button>
+					<button type="button" class="ag__axis-btn" data-mode="dist" aria-pressed={defaultMode === 'dist'}>
+						Distance
+					</button>
+				</div>
+			)
+		}
+	</div>
+
+	<div class="ag__series">
+		{
+			data.series.map((s) => (
+				<button type="button" class="ag__chip" data-key={s.key} style={`--c:${s.color}`} aria-pressed="true">
+					<span class="ag__swatch" />
+					<span>{s.label}</span>
+					<span class="ag__chip-val" data-val />
+				</button>
+			))
+		}
+	</div>
+
+	<div class="ag__plot" data-plot>
+		<svg class="ag__svg" viewBox="0 0 1000 100" preserveAspectRatio="none" data-svg aria-hidden="true"></svg>
+		<div class="ag__cursor" data-cursor hidden></div>
+		<div class="ag__readout" data-readout hidden></div>
+	</div>
+
+	<script type="application/json" data-graph-config set:html={JSON.stringify(data)} is:inline />
+</section>
+
+<script>
+	import type { GraphData } from '../lib/activity-graph';
+
+	type Mode = 'time' | 'dist';
+
+	for (const root of document.querySelectorAll<HTMLElement>('[data-graph]')) {
+		const tag = root.querySelector<HTMLElement>('[data-graph-config]');
+		if (!tag) continue;
+		// Non-null: all four are unconditionally in this component's template.
+		// The `!` (rather than a guard) is what lets TS keep them narrowed inside
+		// the closures below, which it otherwise won't across function bodies.
+		const svg = root.querySelector<SVGSVGElement>('[data-svg]')!;
+		const plot = root.querySelector<HTMLElement>('[data-plot]')!;
+		const cursor = root.querySelector<HTMLElement>('[data-cursor]')!;
+		const readout = root.querySelector<HTMLElement>('[data-readout]')!;
+
+		const data = JSON.parse(tag.textContent || '{}') as GraphData;
+		const SVGNS = 'http://www.w3.org/2000/svg';
+		const PAD = 6; // top/bottom breathing room, in viewBox (and %) units
+
+		// The active set of series, and the x axis in force. Both start showing
+		// everything on the axis the activity actually has.
+		const active = new Set<string>(data.series.map((s) => s.key));
+		let mode: Mode = data.t ? 'time' : 'dist';
+
+		// --- Normalised geometry, computed once ---------------------------------
+		// x for each mode: axis value scaled to 0..1. Real device time/distance is
+		// monotonic and complete; a stray null falls back to its index fraction so
+		// the curve never collapses to the left edge.
+		function xnormFor(axis: (number | null)[] | null): number[] | null {
+			if (!axis) return null;
+			let lo = Infinity;
+			let hi = -Infinity;
+			for (const v of axis) if (v != null) {
+				if (v < lo) lo = v;
+				if (v > hi) hi = v;
+			}
+			const span = hi - lo || 1;
+			return axis.map((v, i) => (v == null ? i / (data.n - 1) : (v - lo) / span));
+		}
+		const xn: Record<Mode, number[] | null> = { time: xnormFor(data.t), dist: xnormFor(data.d) };
+
+		// y for each series: scaled to its own min/max, null preserved so the line
+		// breaks across a recording gap instead of diving to a false zero.
+		const ynorm = new Map<string, (number | null)[]>();
+		for (const s of data.series) {
+			let lo = Infinity;
+			let hi = -Infinity;
+			for (const v of s.values) if (v != null) {
+				if (v < lo) lo = v;
+				if (v > hi) hi = v;
+			}
+			const span = hi - lo || 1;
+			ynorm.set(
+				s.key,
+				s.values.map((v) => (v == null ? null : (v - lo) / span)),
+			);
+		}
+
+		const xView = (f: number) => f * 1000;
+		const yView = (yn: number) => PAD + (1 - yn) * (100 - 2 * PAD);
+
+		// --- SVG paths (one line per series, plus an area under elevation) -------
+		const lineEls = new Map<string, SVGPathElement>();
+		let elevArea: SVGPathElement | null = null;
+
+		function buildPaths() {
+			const xs = xn[mode];
+			if (!xs) return;
+			for (const s of data.series) {
+				const yn = ynorm.get(s.key)!;
+				let line = '';
+				let pen = false;
+				for (let i = 0; i < data.n; i++) {
+					const y = yn[i];
+					if (y == null) {
+						pen = false;
+						continue;
+					}
+					line += `${pen ? 'L' : 'M'}${xView(xs[i]).toFixed(1)} ${yView(y).toFixed(2)} `;
+					pen = true;
+				}
+				lineEls.get(s.key)!.setAttribute('d', line.trim());
+				// Elevation gets a filled silhouette to the baseline — terrain, not a
+				// line (ACTIVITIES.md §2). Assumes elevation has no gaps, which a GPS
+				// altitude stream doesn't; a gap just closes the fill early.
+				if (s.key === 'elevation' && elevArea) {
+					const first = xs[yn.findIndex((v) => v != null)];
+					const lastIdx = (() => {
+						for (let i = data.n - 1; i >= 0; i--) if (yn[i] != null) return i;
+						return 0;
+					})();
+					elevArea.setAttribute('d', `${line.trim()} L${xView(xs[lastIdx]).toFixed(1)} 100 L${xView(first).toFixed(1)} 100 Z`);
+				}
+			}
+		}
+
+		for (const s of data.series) {
+			if (s.key === 'elevation') {
+				elevArea = document.createElementNS(SVGNS, 'path');
+				elevArea.setAttribute('fill', s.color);
+				elevArea.setAttribute('fill-opacity', '0.16');
+				elevArea.setAttribute('stroke', 'none');
+				elevArea.dataset.area = 'elevation';
+				svg.appendChild(elevArea);
+			}
+		}
+		for (const s of data.series) {
+			const p = document.createElementNS(SVGNS, 'path');
+			p.setAttribute('fill', 'none');
+			p.setAttribute('stroke', s.color);
+			p.setAttribute('stroke-width', s.key === 'elevation' ? '1.6' : '1.4');
+			p.setAttribute('vector-effect', 'non-scaling-stroke');
+			p.setAttribute('stroke-linejoin', 'round');
+			p.dataset.line = s.key;
+			svg.appendChild(p);
+			lineEls.set(s.key, p);
+		}
+		buildPaths();
+
+		// --- Cursor dots (one per series, reused) -------------------------------
+		const dots = new Map<string, HTMLElement>();
+		for (const s of data.series) {
+			const dot = document.createElement('div');
+			dot.className = 'ag__dot';
+			dot.style.setProperty('--c', s.color);
+			dot.hidden = true;
+			plot.appendChild(dot);
+			dots.set(s.key, dot);
+		}
+
+		function applyVisibility() {
+			for (const s of data.series) {
+				const on = active.has(s.key);
+				lineEls.get(s.key)!.style.display = on ? '' : 'none';
+				if (s.key === 'elevation' && elevArea) elevArea.style.display = on ? '' : 'none';
+				if (!on) dots.get(s.key)!.hidden = true;
+			}
+		}
+		applyVisibility();
+
+		// --- Formatting ---------------------------------------------------------
+		function fmtTime(s: number): string {
+			s = Math.round(s);
+			const h = Math.floor(s / 3600);
+			const m = Math.floor((s % 3600) / 60);
+			const ss = s % 60;
+			const mm = String(m).padStart(2, '0');
+			const sss = String(ss).padStart(2, '0');
+			return h ? `${h}:${mm}:${sss}` : `${m}:${sss}`;
+		}
+		const fmtDist = (m: number) => `${(m * 0.000621371).toFixed(2)} mi`;
+
+		// --- Nearest sample to a fraction of the width (monotonic x) -------------
+		function nearest(xs: number[], f: number): number {
+			let lo = 0;
+			let hi = data.n - 1;
+			while (lo < hi) {
+				const mid = (lo + hi) >> 1;
+				if (xs[mid] < f) lo = mid + 1;
+				else hi = mid;
+			}
+			if (lo > 0 && Math.abs(xs[lo - 1] - f) <= Math.abs(xs[lo] - f)) return lo - 1;
+			return lo;
+		}
+
+		// --- Scrub --------------------------------------------------------------
+		function scrubTo(clientX: number) {
+			const xs = xn[mode];
+			if (!xs) return;
+			const rect = plot.getBoundingClientRect();
+			const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+			const i = nearest(xs, f);
+			const leftPct = xs[i] * 100;
+
+			cursor.style.left = `${leftPct}%`;
+			cursor.hidden = false;
+
+			for (const s of data.series) {
+				const dot = dots.get(s.key)!;
+				const yn = ynorm.get(s.key)![i];
+				const valEl = root.querySelector<HTMLElement>(`.ag__chip[data-key="${s.key}"] [data-val]`);
+				if (!active.has(s.key) || yn == null) {
+					dot.hidden = true;
+					if (valEl) valEl.textContent = '';
+					continue;
+				}
+				dot.hidden = false;
+				dot.style.left = `${leftPct}%`;
+				dot.style.top = `${yView(yn)}%`;
+				if (valEl) valEl.textContent = `${(s.values[i] as number).toFixed(s.decimals)} ${s.unit}`;
+			}
+
+			const axisVal = mode === 'time' ? data.t![i] : data.d![i];
+			readout.textContent = axisVal == null ? '' : mode === 'time' ? fmtTime(axisVal) : fmtDist(axisVal);
+			readout.hidden = axisVal == null;
+			// Keep the readout inside the plot near the cursor.
+			readout.style.left = `${Math.min(88, Math.max(2, leftPct))}%`;
+
+			// Drive the map marker.
+			if (data.lat && data.lng && data.lat[i] != null && data.lng[i] != null) {
+				document.dispatchEvent(new CustomEvent('activity:scrub', { detail: { lat: data.lat[i], lng: data.lng[i] } }));
+			}
+		}
+
+		function endScrub() {
+			cursor.hidden = true;
+			readout.hidden = true;
+			for (const dot of dots.values()) dot.hidden = true;
+			for (const el of root.querySelectorAll<HTMLElement>('[data-val]')) el.textContent = '';
+			document.dispatchEvent(new CustomEvent('activity:scrub-end'));
+		}
+
+		plot.addEventListener('pointermove', (e) => scrubTo(e.clientX));
+		plot.addEventListener('pointerdown', (e) => scrubTo(e.clientX));
+		plot.addEventListener('pointerleave', endScrub);
+
+		// --- Controls -----------------------------------------------------------
+		for (const chip of root.querySelectorAll<HTMLButtonElement>('.ag__chip')) {
+			chip.addEventListener('click', () => {
+				const key = chip.dataset.key!;
+				// Never let the reader turn everything off — the last one stays on.
+				if (active.has(key) && active.size === 1) return;
+				if (active.has(key)) active.delete(key);
+				else active.add(key);
+				chip.setAttribute('aria-pressed', String(active.has(key)));
+				applyVisibility();
+			});
+		}
+		for (const btn of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) {
+			btn.addEventListener('click', () => {
+				const next = btn.dataset.mode as Mode;
+				if (next === mode || !xn[next]) return;
+				mode = next;
+				for (const b of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
+				buildPaths();
+				endScrub();
+			});
+		}
+	}
+</script>
+
+<style>
+	.ag {
+		margin-top: 0.75rem;
+	}
+	.ag__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.6rem;
+	}
+	.ag__title {
+		font-size: 1.05rem;
+		font-family: 'Instrument Serif', Georgia, serif;
+		color: #3d4a55;
+		margin: 0;
+	}
+	.ag__axis {
+		display: inline-flex;
+		border: 1px solid #c9d4dc;
+		border-radius: 999px;
+		overflow: hidden;
+	}
+	.ag__axis-btn {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.75rem;
+		color: #6b7b88;
+		background: #f8fbfd;
+		border: none;
+		padding: 0.28rem 0.85rem;
+		cursor: pointer;
+	}
+	.ag__axis-btn + .ag__axis-btn {
+		border-left: 1px solid #c9d4dc;
+	}
+	.ag__axis-btn[aria-pressed='true'] {
+		background: #1c6e8c;
+		color: #f8fbfd;
+	}
+
+	.ag__series {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+		margin-bottom: 0.5rem;
+	}
+	.ag__chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.78rem;
+		color: #3d4a55;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 999px;
+		padding: 0.26rem 0.7rem;
+		cursor: pointer;
+	}
+	/* Off: the whole chip fades and the swatch hollows out, so the toggle state
+	   reads without relying on colour alone. */
+	.ag__chip[aria-pressed='false'] {
+		color: #6b7b88;
+		opacity: 0.55;
+	}
+	.ag__swatch {
+		width: 10px;
+		height: 10px;
+		border-radius: 50%;
+		background: var(--c);
+		flex: none;
+	}
+	.ag__chip[aria-pressed='false'] .ag__swatch {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--c);
+	}
+	.ag__chip-val {
+		font-variant-numeric: tabular-nums;
+		color: #6b7b88;
+		min-width: 0;
+	}
+	.ag__chip-val:empty {
+		display: none;
+	}
+
+	.ag__plot {
+		position: relative;
+		height: 200px;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 8px;
+		overflow: hidden;
+		touch-action: pan-y; /* let vertical page scroll through; scrub is horizontal */
+	}
+	.ag__svg {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+	.ag__cursor {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 1px;
+		background: #6b7b88;
+		opacity: 0.55;
+		pointer-events: none;
+		transform: translateX(-0.5px);
+	}
+	.ag__dot {
+		position: absolute;
+		width: 9px;
+		height: 9px;
+		border-radius: 50%;
+		background: var(--c);
+		border: 1.5px solid #f8fbfd;
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+	}
+	.ag__readout {
+		position: absolute;
+		top: 6px;
+		transform: translateX(-50%);
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.72rem;
+		font-variant-numeric: tabular-nums;
+		color: #3d4a55;
+		background: rgba(248, 251, 253, 0.92);
+		border: 1px solid #c9d4dc;
+		border-radius: 5px;
+		padding: 0.1rem 0.4rem;
+		pointer-events: none;
+		white-space: nowrap;
+	}
+</style>

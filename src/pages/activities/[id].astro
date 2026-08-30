@@ -34,6 +34,8 @@
 // strings are.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityMap from '../../components/ActivityMap.astro';
+import ActivityGraph from '../../components/ActivityGraph.astro';
+import { buildGraphData } from '../../lib/activity-graph';
 import {
 	getActivity,
 	getActivityStreams,
@@ -331,66 +333,13 @@ const detail =
 		: null);
 
 // ---------------------------------------------------------------------------
-// Charts — §2's "elevation is drawn as terrain, not as a chart" and "keep the
-// other series restrained." Server-rendered SVG straight off the streams;
-// see the header comment for why this isn't a client chart library.
+// The interactive profile graph — elevation/HR/power/speed on one shared axis,
+// each toggled, time-or-distance x, and a cursor that scrubs the map. All the
+// arithmetic (and the downsample that keeps the payload small) lives in
+// src/lib/activity-graph.ts; this page just hands it the streams. Null when
+// there is nothing plottable, in which case the graph doesn't render at all.
 // ---------------------------------------------------------------------------
-const CHART_W = 900;
-const ELEV_H = 160;
-const MINI_H = 64;
-const M_TO_FT = 3.28084;
-const MS_TO_MPH = 2.236936;
-
-function downsample(values: number[], max: number): number[] {
-	if (values.length <= max) return values;
-	const out: number[] = [];
-	const step = values.length / max;
-	for (let i = 0; i < max; i++) out.push(values[Math.floor(i * step)]);
-	return out;
-}
-
-interface Geometry {
-	points: [number, number][];
-	min: number;
-	max: number;
-	avg: number;
-}
-
-function geometry(values: number[], w: number, h: number, topPad: number, bottomPad: number): Geometry | null {
-	const vals = downsample(values.filter((v) => Number.isFinite(v)), 400);
-	const n = vals.length;
-	if (n < 2) return null;
-	let min = Infinity;
-	let max = -Infinity;
-	let sum = 0;
-	for (const v of vals) {
-		if (v < min) min = v;
-		if (v > max) max = v;
-		sum += v;
-	}
-	const span = max - min || 1;
-	const usableH = h - topPad - bottomPad;
-	const points: [number, number][] = vals.map((v, i) => {
-		const x = (i / (n - 1)) * w;
-		const y = topPad + usableH - ((v - min) / span) * usableH;
-		return [x, y];
-	});
-	return { points, min, max, avg: sum / n };
-}
-
-function linePath(points: [number, number][]): string {
-	return points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ');
-}
-
-function areaPath(points: [number, number][], w: number, h: number): string {
-	return `${linePath(points)} L${w} ${h} L0 ${h} Z`;
-}
-
-const altitudeGeo = streams?.altitude_m ? geometry(streams.altitude_m, CHART_W, ELEV_H, 10, 4) : null;
-const hrGeo = streams?.heartrate ? geometry(streams.heartrate, CHART_W, MINI_H, 8, 8) : null;
-const powerGeo = streams?.power_w ? geometry(streams.power_w, CHART_W, MINI_H, 8, 8) : null;
-const speedGeo = streams?.speed_ms ? geometry(streams.speed_ms, CHART_W, MINI_H, 8, 8) : null;
-const hasCharts = Boolean(altitudeGeo || hrGeo || powerGeo || speedGeo);
+const graphData = buildGraphData(streams);
 
 // ---------------------------------------------------------------------------
 // Formatting helpers local to this page.
@@ -586,6 +535,7 @@ const exWord = exertionLabel(activity.exertion);
 			hasRoute ? (
 				<>
 					<ActivityMap title={activity.title} sport={activity.sport} polyline={activity.polyline!} />
+					{graphData && <ActivityGraph data={graphData} />}
 					{
 						primaryStats.length > 0 && (
 							<div class="stats stats--row">
@@ -602,25 +552,30 @@ const exWord = exertionLabel(activity.exertion);
 					}
 				</>
 			) : (
-				<div class="nogps">
-					<div class="nogps__note">
-						No GPS recorded for this {meta.label.toLowerCase()} — the numbers below are the whole story.
+				<>
+					<div class="nogps">
+						<div class="nogps__note">
+							No GPS recorded for this {meta.label.toLowerCase()} — the numbers below are the whole story.
+						</div>
+						{
+							primaryStats.length > 0 && (
+								<div class="stats stats--hero">
+									{
+										primaryStats.map((s) => (
+											<div class="stat stat--hero">
+												<div class="stat__value stat__value--hero figure">{s.value}</div>
+												<div class="stat__label">{s.label}</div>
+											</div>
+										))
+									}
+								</div>
+							)
+						}
 					</div>
-					{
-						primaryStats.length > 0 && (
-							<div class="stats stats--hero">
-								{
-									primaryStats.map((s) => (
-										<div class="stat stat--hero">
-											<div class="stat__value stat__value--hero figure">{s.value}</div>
-											<div class="stat__label">{s.label}</div>
-										</div>
-									))
-								}
-							</div>
-						)
-					}
-				</div>
+					{/* No map to scrub, but the combined profile still reads the
+					    trainer/treadmill's HR, power and speed against time. */}
+					{graphData && <ActivityGraph data={graphData} />}
+				</>
 			)
 		}
 
@@ -661,67 +616,6 @@ const exWord = exertionLabel(activity.exertion);
 							))
 						}
 					</div>
-				</section>
-			)
-		}
-
-		{
-			hasCharts && (
-				<section class="charts">
-					<h2 class="section-h">Charts</h2>
-
-					{
-						altitudeGeo && (
-							<div class="chart chart--elev">
-								<div class="chart__label">
-									Elevation <span class="chart__range">{Math.round(altitudeGeo.min * M_TO_FT).toLocaleString()}–{Math.round(altitudeGeo.max * M_TO_FT).toLocaleString()} ft</span>
-								</div>
-								<svg viewBox={`0 0 ${CHART_W} ${ELEV_H}`} preserveAspectRatio="none" class="chart__svg chart__svg--elev">
-									<path d={areaPath(altitudeGeo.points, CHART_W, ELEV_H)} fill={ALPINE.fir} fill-opacity="0.28" stroke="none" />
-									<path d={linePath(altitudeGeo.points)} fill="none" stroke={ALPINE.fir} stroke-width="1.6" vector-effect="non-scaling-stroke" />
-								</svg>
-							</div>
-						)
-					}
-
-					{
-						hrGeo && (
-							<div class="chart">
-								<div class="chart__label">
-									Heart rate <span class="chart__range">{Math.round(hrGeo.min)}–{Math.round(hrGeo.max)} bpm, avg {Math.round(hrGeo.avg)}</span>
-								</div>
-								<svg viewBox={`0 0 ${CHART_W} ${MINI_H}`} preserveAspectRatio="none" class="chart__svg">
-									<path d={linePath(hrGeo.points)} fill="none" stroke={ALPINE.granite} stroke-width="1.4" vector-effect="non-scaling-stroke" />
-								</svg>
-							</div>
-						)
-					}
-
-					{
-						powerGeo && (
-							<div class="chart">
-								<div class="chart__label">
-									Power <span class="chart__range">{Math.round(powerGeo.min)}–{Math.round(powerGeo.max)} W, avg {Math.round(powerGeo.avg)}</span>
-								</div>
-								<svg viewBox={`0 0 ${CHART_W} ${MINI_H}`} preserveAspectRatio="none" class="chart__svg">
-									<path d={linePath(powerGeo.points)} fill="none" stroke={ALPINE.granite} stroke-width="1.4" vector-effect="non-scaling-stroke" />
-								</svg>
-							</div>
-						)
-					}
-
-					{
-						speedGeo && (
-							<div class="chart">
-								<div class="chart__label">
-									Speed <span class="chart__range">{(speedGeo.min * MS_TO_MPH).toFixed(1)}–{(speedGeo.max * MS_TO_MPH).toFixed(1)} mph, avg {(speedGeo.avg * MS_TO_MPH).toFixed(1)}</span>
-								</div>
-								<svg viewBox={`0 0 ${CHART_W} ${MINI_H}`} preserveAspectRatio="none" class="chart__svg">
-									<path d={linePath(speedGeo.points)} fill="none" stroke={ALPINE.graniteSoft} stroke-width="1.4" vector-effect="non-scaling-stroke" />
-								</svg>
-							</div>
-						)
-					}
 				</section>
 			)
 		}
@@ -1220,31 +1114,6 @@ const exWord = exertionLabel(activity.exertion);
 		font-size: 0.88rem;
 		line-height: 1.55;
 		color: #3d4a55;
-	}
-
-	/* Charts */
-	.chart {
-		margin-bottom: 1.1rem;
-	}
-	.chart__label {
-		font-size: 0.75rem;
-		color: #6b7b88;
-		margin-bottom: 0.3rem;
-	}
-	.chart__range {
-		color: #6b7b88;
-		font-variant-numeric: tabular-nums;
-	}
-	.chart__svg {
-		display: block;
-		width: 100%;
-		height: 64px;
-		background: #f8fbfd;
-		border: 1px solid #c9d4dc;
-		border-radius: 6px;
-	}
-	.chart__svg--elev {
-		height: 160px;
 	}
 
 	/* Laps */
