@@ -240,6 +240,12 @@ export interface JournalItem {
 	 *  on every load rather than by fetch order. */
 	key: string;
 	day: string;
+	/** When this entered the log — the within-day sort key for the reverse-chron
+	 *  home feed, so the last thing logged on a day sits on top. Films and meals
+	 *  carry no time of day, so it's their `created_at`; an activity has a real
+	 *  `started_at`; a reading day has neither, so it falls back to the date and
+	 *  sorts to the bottom of its day. Compared as strings, newest first. */
+	logged: string;
 	minutes: number;
 	title: string;
 	/** Second line in the tooltip: author, cuisine, sport, year. */
@@ -302,6 +308,7 @@ export function toMark(item: JournalItem, scale = 1): JournalMark {
 interface WatchRow {
 	id: number;
 	watched_date: string;
+	created_at: string;
 	tmdb_id: number;
 	title: string;
 	release_year: number | null;
@@ -315,6 +322,7 @@ export function filmItems(watches: WatchRow[]): JournalItem[] {
 		track: 'film' as const,
 		key: String(w.id),
 		day: w.watched_date,
+		logged: w.created_at,
 		minutes: w.runtime ?? FILM_MINUTES,
 		title: w.title,
 		detail: w.release_year ? String(w.release_year) : 'Film',
@@ -368,6 +376,8 @@ export function bookItems(days: DayRow[], books: BookRow[]): JournalItem[] {
 			track: 'book' as const,
 			key: `${d.book_id}:${d.day}`,
 			day: d.day,
+			// A reading day has no time of day — sorts to the bottom of its day.
+			logged: d.day,
 			minutes: (d.seconds / 60) * BOOK_BOOST,
 			title: open ? book!.title : 'A book',
 			detail: open ? (book!.authors ?? 'Book') : 'Private',
@@ -383,6 +393,7 @@ export function bookItems(days: DayRow[], books: BookRow[]): JournalItem[] {
 interface VisitRow {
 	id: number;
 	visited_on: string;
+	created_at: string;
 	restaurant_name: string;
 	cuisines: string[] | null;
 	tags: string[] | null;
@@ -398,6 +409,7 @@ export function mealItems(visits: VisitRow[]): JournalItem[] {
 			track: 'meal' as const,
 			key: String(v.id),
 			day: v.visited_on,
+			logged: v.created_at,
 			minutes: snack ? SNACK_MINUTES : MEAL_MINUTES,
 			title: v.restaurant_name,
 			detail: v.cuisines?.join(' · ') || v.neighborhood || (snack ? 'Snack' : 'Meal'),
@@ -418,6 +430,7 @@ interface ActivityRow {
 	sport: string;
 	title: string;
 	local_date: string;
+	started_at: string;
 	moving_seconds: number | null;
 	elapsed_seconds: number;
 	route_path: string | null;
@@ -428,6 +441,8 @@ export function activityItems(activities: ActivityRow[]): JournalItem[] {
 		track: 'move' as const,
 		key: String(a.id),
 		day: a.local_date,
+		// An activity has a real clock time — its actual start, not when it synced.
+		logged: a.started_at,
 		// Moving over elapsed, the convention the whole activities track uses:
 		// a two-hour ride with a forty-minute coffee stop was a ride, not three hours.
 		minutes: (a.moving_seconds ?? a.elapsed_seconds) / 60,

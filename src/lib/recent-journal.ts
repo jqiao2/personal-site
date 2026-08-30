@@ -64,10 +64,13 @@ export async function recentJournal(limit = 15): Promise<JournalItem[]> {
 	const perMonth = await Promise.all(keys.map(monthItemsPublic));
 	return perMonth
 		.flat()
+		// Reverse-chronological throughout: newest day first, and within a day the
+		// last thing logged on top (`logged` — created_at for films/meals, the real
+		// started_at for activities, the date for reading days that have no time).
 		.sort(
 			(a, b) =>
 				b.day.localeCompare(a.day) ||
-				a.track.localeCompare(b.track) ||
+				b.logged.localeCompare(a.logged) ||
 				a.key.localeCompare(b.key),
 		)
 		.slice(0, limit);
