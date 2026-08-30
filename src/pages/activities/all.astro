@@ -17,7 +17,7 @@ import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
 import { requireOwner } from '../../lib/auth';
 import SiteHeader from '../../components/SiteHeader.astro';
-import { SPORTS, sportMeta, type SportFamily } from '../../lib/sports';
+import { SPORTS, sportMeta, FAMILY_LABEL, FAMILY_ORDER } from '../../lib/sports';
 import { exertionLabel } from '../../lib/activity-tokens';
 import {
 	activityQueryFromParams,
@@ -122,16 +122,6 @@ const summary = hasFilters
 // sports.ts, so (unlike films' tags/directors) these need no round trip at
 // all to draw; a family with a zero count still shows, dimmed, so the panel
 // reads as the whole taxonomy rather than only what happens to be logged.
-const FAMILY_LABEL: Record<SportFamily, string> = {
-	bike: 'Bike',
-	run: 'Run',
-	swim: 'Swim',
-	foot: 'Hike & walk',
-	snow: 'Snow',
-	other: 'Other',
-	transition: 'Transition',
-};
-const FAMILY_ORDER: SportFamily[] = ['bike', 'run', 'swim', 'foot', 'snow', 'other', 'transition'];
 const sportCounts = new Map(facets.sports.map((s) => [s.sport, s.count]));
 const sportsByFamily = FAMILY_ORDER.map((family) => ({
 	family,

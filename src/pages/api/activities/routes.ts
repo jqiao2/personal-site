@@ -5,7 +5,8 @@ import { apiError } from '../../../lib/http';
 
 export const prerender = false;
 
-// GET /api/activities/routes → { routes: [encoded polyline, …] }
+// GET /api/activities/routes → { routes: [{ family, polyline }, …] }
+// (family is src/lib/sports.ts's SportFamily — the axis the heatmap filters on.)
 //
 // Every outdoor track, all-time, for /activities/heatmap. Fetched by the page
 // rather than inlined into it: this is the largest payload the section serves,

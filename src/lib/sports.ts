@@ -93,6 +93,19 @@ export const SPORTS: readonly Sport[] = [
  *  gating that hangs off it, but each draws its own glyph. */
 export type SportFamily = 'bike' | 'run' | 'swim' | 'foot' | 'snow' | 'other' | 'transition';
 
+/** Reader-facing family names and the order any "by family" control lists them
+ *  in. Shared so /activities/all and /activities/heatmap agree on both. */
+export const FAMILY_LABEL: Record<SportFamily, string> = {
+	bike: 'Bike',
+	run: 'Run',
+	swim: 'Swim',
+	foot: 'Hike & walk',
+	snow: 'Snow',
+	other: 'Other',
+	transition: 'Transition',
+};
+export const FAMILY_ORDER: SportFamily[] = ['bike', 'run', 'swim', 'foot', 'snow', 'other', 'transition'];
+
 /** Every stat key any sport's `primaryStats` refers to (§6), plus a few every
  *  detail page needs regardless of sport (calories, exertion). `formatStat`
  *  is total over this union — add a key here and there too. */

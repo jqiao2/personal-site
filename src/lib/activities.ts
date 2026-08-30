@@ -1110,7 +1110,7 @@ function splitTrack(polyline: string): string[] {
 		.map(encodePolyline);
 }
 
-export async function listRoutePolylines(isOwner = false): Promise<string[]> {
+export async function listRoutePolylines(isOwner = false): Promise<{ family: SportFamily; polyline: string }[]> {
 	const PAGE = 1000;
 	const rows: { id: number; parent_id: number | null; sport: string; sub_sport: string | null; polyline: string }[] = [];
 
@@ -1137,5 +1137,5 @@ export async function listRoutePolylines(isOwner = false): Promise<string[]> {
 	const parents = new Set(rows.map((r) => r.parent_id).filter((id): id is number => id != null));
 	return rows
 		.filter((r) => !parents.has(r.id) && r.sub_sport !== 'indoor' && !sportMeta(r.sport).indoor)
-		.flatMap((r) => splitTrack(r.polyline));
+		.flatMap((r) => splitTrack(r.polyline).map((polyline) => ({ family: sportMeta(r.sport).family, polyline })));
 }

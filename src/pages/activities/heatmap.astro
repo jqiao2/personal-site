@@ -86,6 +86,8 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 				</div>
 			</header>
 
+			<div class="filters" data-filters role="group" aria-label="Filter by activity type" hidden></div>
+
 			<div class="map">
 				<div class="map__gl" data-heatmap role="img" aria-label="Map of every outdoor activity"></div>
 				<p class="map__status" data-status>Loading routes…</p>
@@ -109,6 +111,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	import { alpineBasemap, bareAlpineGround } from '../../lib/activity-map';
 	import { decodePolyline, bounds as trackBounds } from '../../lib/route-shape';
 	import { addTrackTiles, tilesToGeoJSON, addTrackHexes, hexesToGeoJSON } from '../../lib/heatmap';
+	import { FAMILY_LABEL, FAMILY_ORDER, type SportFamily } from '../../lib/sports';
 
 	const tag = document.getElementById('heatmap-config');
 	const host = document.querySelector<HTMLElement>('[data-heatmap]');
@@ -159,11 +162,18 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		document.querySelector('[data-locate]')?.addEventListener('click', () => goToUser(true));
 
 		// --- data -------------------------------------------------------------
-		let tracks: [number, number][][] = [];
-		/** Built on the first switch to tile view, then kept — quantising every
-		 *  track costs real time on a large collection, and the toggle should be
-		 *  free after the first flip. */
-		const cellData: Record<CellView, ReturnType<typeof tilesToGeoJSON> | null> = { tiles: null, hexes: null };
+		type Track = { family: SportFamily; points: [number, number][] };
+		let tracks: Track[] = [];
+		// Families that pass the filter. Empty until data lands; then every family
+		// present is switched on, so the default is the whole map.
+		const active = new Set<SportFamily>();
+		const activePoints = (): [number, number][][] =>
+			tracks.filter((t) => active.has(t.family)).map((t) => t.points);
+		const filterSig = () => FAMILY_ORDER.filter((f) => active.has(f)).join(',');
+		// Quantised grids, keyed by view *and* the active-family signature —
+		// quantising every track costs real time, so each filter combination is
+		// built once and kept if the reader flips back to it.
+		const cellData = new Map<string, ReturnType<typeof tilesToGeoJSON>>();
 		type CellView = 'tiles' | 'hexes';
 		type View = 'routes' | CellView;
 		let view: View = 'routes';
@@ -173,7 +183,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		function routeGeoJSON() {
 			return {
 				type: 'FeatureCollection' as const,
-				features: tracks.map((points) => ({
+				features: activePoints().map((points) => ({
 					type: 'Feature' as const,
 					geometry: { type: 'LineString' as const, coordinates: points.map(([lat, lng]) => [lng, lat]) },
 					properties: {},
@@ -182,12 +192,15 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		}
 
 		function buildCells(kind: CellView) {
-			const cached = cellData[kind];
+			const key = `${kind}|${filterSig()}`;
+			const cached = cellData.get(key);
 			if (cached) return cached;
 			const counts = new Map<string, number>();
 			const add = kind === 'tiles' ? addTrackTiles : addTrackHexes;
-			for (const points of tracks) add(points, counts);
-			return (cellData[kind] = (kind === 'tiles' ? tilesToGeoJSON : hexesToGeoJSON)(counts));
+			for (const points of activePoints()) add(points, counts);
+			const geo = (kind === 'tiles' ? tilesToGeoJSON : hexesToGeoJSON)(counts);
+			cellData.set(key, geo);
+			return geo;
 		}
 
 		function whenStyleReady(fn: () => void) {
@@ -272,10 +285,50 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			whenStyleReady(applyView);
 		});
 
+		// Push the current filter into every live source. The route source exists once
+		// data has loaded; a cell source exists only once its view has been
+		// visited, so both are optional here.
+		function refresh() {
+			(map.getSource('routes') as maplibregl.GeoJSONSource | undefined)?.setData(routeGeoJSON() as never);
+			for (const kind of ['tiles', 'hexes'] as CellView[]) {
+				(map.getSource(kind) as maplibregl.GeoJSONSource | undefined)?.setData(buildCells(kind) as never);
+			}
+		}
+
+		// One chip per activity family present, all on by default (the whole
+		// map). Built after data lands, so it lists only families actually
+		// recorded — and stays out entirely when there is only one to filter.
+		const filterHost = document.querySelector<HTMLElement>('[data-filters]');
+		function buildFilters() {
+			const present = FAMILY_ORDER.filter((f) => tracks.some((t) => t.family === f));
+			for (const fam of present) active.add(fam);
+			if (!filterHost || present.length < 2) return;
+			filterHost.hidden = false;
+			for (const fam of present) {
+				const btn = document.createElement('button');
+				btn.type = 'button';
+				btn.className = 'chip chip--on';
+				btn.textContent = FAMILY_LABEL[fam];
+				btn.setAttribute('aria-pressed', 'true');
+				btn.addEventListener('click', () => {
+					if (active.has(fam)) active.delete(fam);
+					else active.add(fam);
+					const on = active.has(fam);
+					btn.classList.toggle('chip--on', on);
+					btn.setAttribute('aria-pressed', String(on));
+					whenStyleReady(refresh);
+				});
+				filterHost.appendChild(btn);
+			}
+		}
+
 		fetch('/api/activities/routes')
 			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-			.then((data: { routes: string[] }) => {
-				tracks = data.routes.map((p) => decodePolyline(p)).filter((points) => points.length > 1);
+			.then((data: { routes: { family: SportFamily; polyline: string }[] }) => {
+				tracks = data.routes
+					.map((r) => ({ family: r.family, points: decodePolyline(r.polyline) }))
+					.filter((t) => t.points.length > 1);
+				buildFilters();
 				if (!tracks.length) {
 					status.textContent = 'No outdoor routes recorded yet.';
 					return;
@@ -286,7 +339,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 					addRouteLayer();
 					applyView();
 					if (cameraSettled) return;
-					const all = trackBounds(tracks.flat());
+					const all = trackBounds(tracks.flatMap((t) => t.points));
 					if (!all) return;
 					cameraSettled = true;
 					// RESIZE FIRST — fitBounds solves for the container's real size,
@@ -326,6 +379,42 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	}
 	.map__gl .maplibregl-ctrl-attrib a {
 		color: #6b7b88;
+	}
+
+	/* Filter chips are built in JS, so they can't match a scoped rule — style
+	   them here. They live inside .page, so its theme vars still cascade in. */
+	.filters {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 2px 28px 14px;
+	}
+	.filters[hidden] {
+		display: none;
+	}
+	.chip {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 12.5px;
+		color: var(--granite-soft);
+		background: var(--snow);
+		border: 1px solid var(--scree);
+		border-radius: 999px;
+		padding: 5px 12px;
+		cursor: pointer;
+	}
+	.chip--on {
+		background: var(--lake);
+		border-color: var(--lake);
+		color: var(--snow);
+		font-weight: 600;
+	}
+	.chip:not(.chip--on):hover {
+		color: var(--lake);
+	}
+	@media (max-width: 860px) {
+		.filters {
+			margin: 2px 18px 12px;
+		}
 	}
 </style>
 
