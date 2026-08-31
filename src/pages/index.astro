@@ -2,9 +2,11 @@
 import Layout from '../layouts/Layout.astro';
 import RecentFeed from '../components/RecentFeed.astro';
 
-// Static shell. The live cross-section feed is a server island (RecentFeed,
-// server:defer below): it renders on its own request so this page ships from
-// cache instantly and the rows stream in.
+// Server-rendered so SiteHeader's owner check runs per-request and the "Log in"
+// button hides when signed in. The data-heavy cross-section feed is still a
+// server island (RecentFeed, server:defer below): only the fast owner check
+// blocks this response and the rows stream in after.
+export const prerender = false;
 ---
 
 <Layout title="Jason Qiao" wide>

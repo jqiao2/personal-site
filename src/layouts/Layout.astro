@@ -58,7 +58,7 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 				--serif: Georgia, 'Times New Roman', serif;
 				--sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
 				--measure: 720px;
-				--shell: 960px;
+				--shell: 1120px;
 
 				/* SiteHeader's `root` theme reads these, so mapping them to the warm
 				   palette makes the shared header follow the spine's look. */
@@ -109,7 +109,14 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 				padding: 2rem;
 			}
 			main.wide {
+				/* border-box so the outer width is a true 1120px — matching the
+				   film/restaurant/activity cards, whose layouts set a global
+				   border-box — rather than 1120px + padding. */
+				box-sizing: border-box;
 				max-width: var(--shell);
+				/* Match SiteHeader's inner gutter so the header column and the
+				   home content align at the same left/right edge. */
+				padding: 2rem clamp(14px, 4vw, 32px);
 			}
 			footer {
 				border-top: 1px solid var(--rule);

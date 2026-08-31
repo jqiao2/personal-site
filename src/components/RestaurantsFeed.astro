@@ -47,7 +47,6 @@ const navRows = [
 						<div class="item__body">
 							<p class="item__meta">
 								<time>{shortDate(v.visited_on)}</time>
-								<span class="tag">Meal</span>
 							</p>
 							<h2 class="item__title">
 								<a href={`/restaurants/diary/${v.id}`}>{v.restaurant_name}</a>
@@ -137,15 +136,6 @@ const navRows = [
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 		color: var(--ink-3);
-	}
-	.tag {
-		font-size: 0.62rem;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		padding: 0.1rem 0.4rem;
-		border: 1px solid var(--rule);
-		color: var(--terracotta);
-		border-radius: 2px;
 	}
 	.item__title {
 		margin: 0;

@@ -204,7 +204,9 @@ function routeStart(path: string): { x: number; y: number } | null {
 	/* Feed */
 	.feed {
 		min-width: 0;
-		padding: 38px 40px 44px;
+		/* Left pad matches SiteHeader's gutter so the feed content lines up with
+		   the header nav; the right pad stays the internal gap to the sidebar. */
+		padding: 38px 40px 44px clamp(14px, 4vw, 32px);
 	}
 	.item {
 		display: flex;
@@ -331,7 +333,9 @@ function routeStart(path: string): { x: number; y: number } | null {
 	/* Sidebar */
 	.side {
 		border-left: 1px solid var(--scree);
-		padding: 40px 28px;
+		/* Right pad matches SiteHeader's gutter so the sidebar's right edge lines
+		   up with the header; the left pad stays the internal gap from the rule. */
+		padding: 40px clamp(14px, 4vw, 32px) 40px 28px;
 		display: flex;
 		flex-direction: column;
 	}
