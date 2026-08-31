@@ -1,4 +1,7 @@
 ---
+// Server-rendered so the header's owner check runs per-request, not at build.
+export const prerender = false;
+
 import { getCollection } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
 

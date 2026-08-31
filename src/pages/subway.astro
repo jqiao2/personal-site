@@ -8,6 +8,9 @@
 // stroke, pill and label a constant on-screen size at any zoom while positions
 // scale. Each service is its own parallel line and toggles independently.
 import SiteHeader from '../components/SiteHeader.astro';
+
+// Server-rendered so the header's owner check runs per-request, not at build.
+export const prerender = false;
 ---
 
 <html lang="en">

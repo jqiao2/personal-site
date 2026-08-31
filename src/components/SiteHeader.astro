@@ -47,7 +47,8 @@ const THEMES: Record<string, Record<string, string>> = {
 		'--sh-active': 'var(--fg, #111)',
 		'--sh-accent': 'var(--fg, #111)',
 		'--sh-font': 'system-ui, sans-serif',
-		'--sh-max': '800px',
+		'--sh-max': '1120px',
+		'--sh-pad': 'clamp(14px, 4vw, 32px)',
 		'--sh-menu-bg': 'var(--bg, #fff)',
 	},
 	film: {
@@ -59,6 +60,7 @@ const THEMES: Record<string, Record<string, string>> = {
 		'--sh-accent': '#d9b45a',
 		'--sh-font': "'Archivo', sans-serif",
 		'--sh-max': '1120px',
+		'--sh-pad': 'clamp(14px, 4vw, 32px)',
 		'--sh-menu-bg': '#20100f',
 	},
 	book: {
@@ -80,7 +82,8 @@ const THEMES: Record<string, Record<string, string>> = {
 		'--sh-active': '#2f1e12',
 		'--sh-accent': '#b34328',
 		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1264px',
+		'--sh-max': '1120px',
+		'--sh-pad': 'clamp(14px, 4vw, 32px)',
 		'--sh-menu-bg': '#fdf7e8',
 	},
 	activity: {
@@ -92,6 +95,7 @@ const THEMES: Record<string, Record<string, string>> = {
 		'--sh-accent': '#1c6e8c',
 		'--sh-font': "'Instrument Sans', sans-serif",
 		'--sh-max': '1120px',
+		'--sh-pad': 'clamp(14px, 4vw, 32px)',
 		'--sh-menu-bg': '#f8fbfd',
 	},
 	subway: {
@@ -292,7 +296,7 @@ const style = Object.entries(vars)
 	.sh__inner {
 		max-width: var(--sh-max);
 		margin: 0 auto;
-		padding: 0 clamp(14px, 4vw, 28px);
+		padding: 0 var(--sh-pad, clamp(14px, 4vw, 28px));
 		display: flex;
 		align-items: stretch;
 		gap: 2px;
