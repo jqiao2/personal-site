@@ -1,0 +1,254 @@
+---
+// Server island (server:defer on /restaurants): the recent-meals feed and the
+// log's sidebar index. Split out of restaurants/index.astro so the warm-paper
+// shell (header + "+ Log meal") ships from the fast owner check and this
+// data-heavy body — stats + recent visits — streams in on its own request.
+import VerdictMark from './VerdictMark.astro';
+import { requireOwner } from '../lib/auth';
+import { getRestaurantStats, listRecentVisits } from '../lib/restaurants';
+import { placeLine, shortDate, visitMarks } from '../lib/restaurant-view';
+import { starText, excerpt } from '../lib/format';
+
+const [stats, recent, isOwner] = await Promise.all([
+	getRestaurantStats(),
+	listRecentVisits(25),
+	requireOwner(Astro.cookies),
+]);
+
+const num = (n: number) => n.toLocaleString('en-US');
+
+const yearLine =
+	stats.places === 0
+		? 'nothing logged yet'
+		: `${num(stats.thisYear)} restaurant${stats.thisYear === 1 ? '' : 's'} this year`;
+
+const monthHref = stats.latestMonth ? `/restaurants/month/${stats.latestMonth}` : '/restaurants/month';
+
+const navRows = [
+	{ label: 'All restaurants', href: '/restaurants/places', count: num(stats.places) },
+	{ label: 'Diary', href: '/restaurants/diary', count: num(stats.visits) },
+	{ label: 'To try', href: '/restaurants/to-try', count: num(stats.toTry) },
+	{ label: 'Stats', href: '/restaurants/stats', count: '→' },
+	...(isOwner ? [{ label: 'Month in review', href: monthHref, count: '→' }] : []),
+];
+---
+
+<div class="shell">
+	<!-- Feed -->
+	<main class="feed">
+		{
+			recent.map((v) => {
+				const note = excerpt(v.review);
+				const thumb = v.photos[0]?.url ?? null;
+				const stars = starText(v.rating);
+				const marks = visitMarks(v);
+				return (
+					<article class="item">
+						<div class="item__body">
+							<p class="item__meta">
+								<time>{shortDate(v.visited_on)}</time>
+								<span class="tag">Meal</span>
+							</p>
+							<h2 class="item__title">
+								<a href={`/restaurants/diary/${v.id}`}>{v.restaurant_name}</a>
+							</h2>
+							<p class="item__where">
+								{[v.cuisines.join(', '), placeLine(v)].filter(Boolean).join(' · ')}
+							</p>
+							{(v.verdict != null || stars || marks) && (
+								<p class="item__marks">
+									{v.verdict != null && <VerdictMark verdict={v.verdict} size={18} />}
+									{stars && <span class="stars">{stars}</span>}
+									{marks && <span class="marks">{marks}</span>}
+								</p>
+							)}
+							{note && <p class="item__note">{note}</p>}
+						</div>
+						<a class="item__thumb" href={`/restaurants/diary/${v.id}`}>
+							{thumb && <img src={thumb} alt="" width="72" height="72" loading="lazy" />}
+						</a>
+					</article>
+				);
+			})
+		}
+
+		<p class="feed__more"><a href="/restaurants/diary">See more →</a></p>
+	</main>
+
+	<!-- Sidebar -->
+	<aside class="side">
+		<div class="brand">Jason&rsquo;s<br />restaurant log</div>
+		<div class="brand__sub">{yearLine}</div>
+
+		<div class="side__rule"></div>
+		<nav class="side__nav">
+			{
+				navRows.map((row) => (
+					<a class="navrow navrow--link" href={row.href}>
+						<span>{row.label}</span>
+						<span class="navrow__n">{row.count}</span>
+					</a>
+				))
+			}
+		</nav>
+	</aside>
+</div>
+
+<style>
+	.shell {
+		max-width: 1080px;
+		margin: 0 auto;
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 288px;
+		gap: 2.6rem;
+		padding: 34px 40px 48px;
+	}
+	@media (max-width: 820px) {
+		.shell {
+			grid-template-columns: 1fr;
+			gap: 1.6rem;
+			padding: 26px 22px 36px;
+		}
+		.side {
+			order: 2;
+			border-top: 1px solid var(--rule);
+			padding-top: 1.4rem;
+		}
+	}
+
+	/* Feed rows — hairline-ruled, photo thumb on the right. */
+	.item {
+		display: flex;
+		gap: 1rem;
+		align-items: flex-start;
+		padding: 0.85rem 0 1.05rem;
+		border-bottom: 1px solid var(--rule-4, var(--rule));
+	}
+	.item__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.item__meta {
+		display: flex;
+		gap: 0.6rem;
+		align-items: baseline;
+		margin: 0 0 0.25rem;
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--ink-3);
+	}
+	.tag {
+		font-size: 0.62rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		padding: 0.1rem 0.4rem;
+		border: 1px solid var(--rule);
+		color: var(--terracotta);
+		border-radius: 2px;
+	}
+	.item__title {
+		margin: 0;
+		font-family: var(--display);
+		font-size: 1.25rem;
+		font-weight: 500;
+		line-height: 1.2;
+	}
+	.item__title a {
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.item__title a:hover {
+		color: var(--terracotta);
+	}
+	.item__where {
+		margin: 0.25rem 0 0;
+		font-size: 0.8rem;
+		color: var(--ink-3);
+	}
+	.item__marks {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin: 0.4rem 0 0;
+	}
+	.stars {
+		color: var(--terracotta);
+		font-size: 0.85rem;
+		letter-spacing: 0.3px;
+	}
+	.marks {
+		color: var(--ink-3);
+		font-size: 0.85rem;
+	}
+	.item__note {
+		margin: 0.4rem 0 0;
+		color: var(--ink-2, var(--ink-3));
+		font-size: 0.92rem;
+		line-height: 1.45;
+	}
+	.item__thumb img {
+		display: block;
+		width: 72px;
+		height: 72px;
+		object-fit: cover;
+		border: 1px solid var(--rule);
+		background: var(--card);
+	}
+
+	.feed__more {
+		margin-top: 1.2rem;
+		font-size: 0.85rem;
+	}
+	.feed__more a {
+		color: var(--terracotta);
+	}
+
+	/* Sidebar — the log's index, same navrow language as the rest of the log. */
+	.side {
+		font-size: 0.9rem;
+	}
+	.brand {
+		font-family: var(--display);
+		font-size: 29px;
+		font-weight: 500;
+		line-height: 1.05;
+		color: var(--ink);
+	}
+	.brand__sub {
+		margin-top: 8px;
+		font-size: 13px;
+		color: var(--terracotta);
+		font-weight: 600;
+	}
+	.side__rule {
+		height: 1px;
+		background: var(--rule);
+		margin: 22px 0 6px;
+	}
+	.side__nav {
+		display: flex;
+		flex-direction: column;
+	}
+	.navrow {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 11px 0;
+		font-size: 14px;
+		color: var(--ink);
+		border-bottom: 1px solid var(--rule-4, var(--rule));
+		text-decoration: none;
+	}
+	.navrow:last-child {
+		border-bottom: none;
+	}
+	.navrow--link:hover {
+		color: var(--terracotta);
+	}
+	.navrow__n {
+		color: var(--ink-3);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+	}
+</style>

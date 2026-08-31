@@ -1,0 +1,390 @@
+---
+// Server island (server:defer on /activities): the recent-activity feed and the
+// log's sidebar index. Split out of activities/index.astro so the ALPINE-themed
+// shell (header + section frame) ships from the fast owner check and this
+// data-heavy body — the feed and stats — streams in on its own request.
+//
+// The ALPINE custom properties (--lake, --scree, …) are set on .page in the
+// shell, an ancestor of this content at runtime, so they cascade in here.
+//
+// A visitor gets sport-glyph-and-date rows only (activities are private by
+// default); the island re-derives owner from the request cookies, so the
+// redaction and the owner-only stats/nav below are decided here, not trusted
+// from the shell.
+import { requireOwner } from '../lib/auth';
+import { getActivityStats, type ActivityListRow } from '../lib/activities';
+import { fetchActivityPage, activityQueryFromParams } from '../lib/activity-params';
+import { sportMeta, sportIcon, formatStat, type StatKey } from '../lib/sports';
+import { excerpt } from '../lib/format';
+
+const FEED_LIMIT = 25;
+
+let rows: ActivityListRow[] = [];
+let stats: Awaited<ReturnType<typeof getActivityStats>> = {
+	activitiesThisYear: 0,
+	totalDistanceM: 0,
+	totalElevationGainM: 0,
+	totalMovingHours: 0,
+	totalExertion: 0,
+	bySportFamily: {},
+};
+/** Set when the query layer could not be reached at all — see the catch below. */
+let unreachable = false;
+
+const isOwner = await requireOwner(Astro.cookies);
+try {
+	const [page, s] = await Promise.all([
+		fetchActivityPage(activityQueryFromParams(new URLSearchParams()), { limit: FEED_LIMIT, offset: 0 }, isOwner),
+		getActivityStats(isOwner),
+	]);
+	rows = page.rows;
+	stats = s;
+} catch (err) {
+	// AN UNREACHABLE LOG IS NOT AN EMPTY LOG, and the page must not say it is.
+	unreachable = true;
+	console.error('activities landing page: could not reach the activity log —', err);
+}
+
+const num = (n: number) => n.toLocaleString('en-US');
+
+// bySportFamily is all-time and only counts families that have at least one
+// activity — summing it is the cheapest all-time count for the nav.
+const totalActivities = Object.values(stats.bySportFamily).reduce((a, b) => a + (b ?? 0), 0);
+
+/** 'YYYY-MM-DD' → "Aug 11, 2026" — a plain string parse, no UTC-shifting Date. */
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function fmtDate(date: string): string {
+	const [y, m, d] = date.split('-').map(Number);
+	return `${MONTH_ABBR[(m || 1) - 1]} ${d}, ${y}`;
+}
+
+const STAT_KEYS: StatKey[] = ['distance', 'moving_time', 'elevation_gain'];
+function statLine(a: ActivityListRow): string[] {
+	return STAT_KEYS.map((k) => formatStat(k, a).value).filter((v) => v !== '—');
+}
+
+/** The start point of an "M x y L…" route path, for the thumb's start dot. */
+function routeStart(path: string): { x: number; y: number } | null {
+	const m = path.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+	return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+}
+---
+
+<div class="shell">
+	<!-- Feed -->
+	<main class="feed">
+		{unreachable ? (
+			<p class="feed__msg feed__msg--error">
+				The activity log couldn’t be reached, so this feed is showing nothing
+				rather than showing that nothing happened. The two look alike and are
+				not the same — try again in a moment.
+			</p>
+		) : rows.length === 0 ? (
+			<p class="feed__msg">Nothing logged yet.</p>
+		) : (
+			rows.map((a) => {
+				const label = sportMeta(a.sport).label;
+				if (a.redacted) {
+					return (
+						<article class="item item--redacted">
+							<div class="item__body">
+								<p class="item__meta">
+									<time>{fmtDate(a.local_date)}</time>
+									<span class="tag">{label}</span>
+								</p>
+							</div>
+							<div class="item__thumb item__thumb--glyph" aria-hidden="true">
+								<svg viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+									<path d={sportIcon(a.sport)} />
+								</svg>
+							</div>
+						</article>
+					);
+				}
+				const stats = statLine(a);
+				const note = excerpt(a.notes);
+				const start = a.route_path ? routeStart(a.route_path) : null;
+				return (
+					<article class="item">
+						<div class="item__body">
+							<p class="item__meta">
+								<time>{fmtDate(a.local_date)}</time>
+								<span class="tag">{label}</span>
+							</p>
+							<h2 class="item__title"><a href={`/activities/${a.id}`}>{a.title}</a></h2>
+							{stats.length > 0 && (
+								<p class="item__stats figure">
+									{stats.map((s, i) => (
+										<>
+											{i > 0 && <span class="item__sep">·</span>}
+											<span>{s}</span>
+										</>
+									))}
+								</p>
+							)}
+							{note && <p class="item__note">{note}</p>}
+						</div>
+						<a class="item__thumb" href={`/activities/${a.id}`}>
+							{a.route_path ? (
+								<svg class="item__route" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+									<path d={a.route_path} fill="none" stroke="var(--lake)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+									{start && <circle cx={start.x} cy={start.y} r="1.8" fill="var(--lake)" />}
+								</svg>
+							) : (
+								<span class="item__thumb-glyph" aria-hidden="true">
+									<svg viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+										<path d={sportIcon(a.sport)} />
+									</svg>
+								</span>
+							)}
+						</a>
+					</article>
+				);
+			})
+		)}
+
+		{!unreachable && rows.length > 0 && (
+			<p class="feed__more"><a href="/activities/all">Everything →</a></p>
+		)}
+	</main>
+
+	<!-- Sidebar -->
+	<aside class="side">
+		<div class="brand">Jason's<br />activity log</div>
+		{isOwner && <div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>}
+
+		<div class="side__rule"></div>
+		<nav class="side__nav">
+			<a class="navrow navrow--link" href="/activities/all">
+				<span>All activities</span>{isOwner && <span class="navrow__n">{num(totalActivities)}</span>}
+			</a>
+			<a class:list={['navrow', 'navrow--link', !isOwner && 'navrow--last']} href="/activities/training">
+				<span>Training calendar</span><span class="navrow__n">→</span>
+			</a>
+			{isOwner && (
+				<a class="navrow navrow--link" href="/activities/heatmap">
+					<span>Heatmap</span><span class="navrow__n">→</span>
+				</a>
+			)}
+			{isOwner && (
+				<a class="navrow navrow--link" href="/activities/gear">
+					<span>Gear</span><span class="navrow__n">→</span>
+				</a>
+			)}
+			{isOwner && (
+				<a class="navrow navrow--link" href="/activities/month">
+					<span>Month in review</span><span class="navrow__n">→</span>
+				</a>
+			)}
+			{isOwner && (
+				<a class="navrow navrow--link navrow--last" href="/activities/settings">
+					<span>Settings</span><span class="navrow__n">→</span>
+				</a>
+			)}
+		</nav>
+	</aside>
+</div>
+
+<style>
+	/* Two-column blog shell — feed then sidebar; collapses to one column
+	   (sidebar after) on narrow viewports. */
+	.shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 288px;
+	}
+	@media (max-width: 720px) {
+		.shell {
+			grid-template-columns: 1fr;
+		}
+		.side {
+			order: 2;
+		}
+	}
+
+	/* Feed */
+	.feed {
+		min-width: 0;
+		padding: 38px 40px 44px;
+	}
+	.item {
+		display: flex;
+		gap: 20px;
+		align-items: flex-start;
+		padding: 16px 0 18px;
+		border-bottom: 1px solid var(--scree);
+	}
+	.item__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.item__meta {
+		font-size: 11.5px;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--granite-soft);
+		margin: 0 0 6px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		align-items: baseline;
+	}
+	.tag {
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		padding: 2px 7px;
+		border: 1px solid var(--scree);
+		color: var(--lake);
+		border-radius: 2px;
+	}
+	.item__title {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-weight: 400;
+		font-size: 22px;
+		line-height: 1.2;
+		margin: 0;
+	}
+	.item__title a {
+		color: var(--granite);
+	}
+	.item__title a:hover {
+		color: var(--lake);
+	}
+	.item__stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin: 8px 0 0;
+		font-size: 14px;
+		color: var(--granite);
+	}
+	.item__sep {
+		color: var(--scree);
+	}
+	.item__note {
+		margin: 8px 0 0;
+		color: var(--granite-soft);
+		font-size: 14.5px;
+		line-height: 1.55;
+	}
+	.item__thumb {
+		flex: none;
+		display: block;
+		width: 84px;
+		height: 63px;
+		border: 1px solid var(--scree);
+		border-radius: 6px;
+		background: var(--snow);
+		overflow: hidden;
+	}
+	.item__thumb--glyph,
+	.item__thumb-glyph {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+	}
+	.item__thumb--glyph {
+		width: 84px;
+		height: 63px;
+		border: 1px solid var(--scree);
+		border-radius: 6px;
+		background: var(--snow);
+	}
+	.item__route {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+	.item__thumb-glyph svg,
+	.item__thumb--glyph svg {
+		width: 26px;
+		height: 26px;
+	}
+	.feed__more {
+		font-size: 13px;
+		font-weight: 600;
+		margin-top: 22px;
+	}
+	.feed__more a {
+		color: var(--lake);
+	}
+	.feed__more a:hover {
+		color: var(--lake-deep);
+	}
+	.feed__msg {
+		margin: 0;
+		font-size: 14px;
+		color: var(--granite-soft);
+		font-family: 'Instrument Serif', Georgia, serif;
+	}
+	/* An outage is the one thing on this page allowed the warm accent — it is
+	   not part of the record, and it should not read like the quiet grey of a
+	   log with nothing in it. */
+	.feed__msg--error {
+		color: var(--granite);
+		border-left: 2px solid var(--larch);
+		padding-left: 10px;
+	}
+
+	/* Sidebar */
+	.side {
+		border-left: 1px solid var(--scree);
+		padding: 40px 28px;
+		display: flex;
+		flex-direction: column;
+	}
+	@media (max-width: 720px) {
+		.side {
+			border-left: none;
+			border-top: 1px solid var(--scree);
+		}
+		.feed {
+			padding: 28px 22px 34px;
+		}
+	}
+	.brand {
+		font-family: 'Instrument Serif', Georgia, serif;
+		font-size: 29px;
+		font-weight: 400;
+		color: var(--granite);
+		letter-spacing: -0.2px;
+		line-height: 1.08;
+	}
+	.brand__sub {
+		margin-top: 8px;
+		font-size: 13px;
+		color: var(--lake);
+		font-weight: 600;
+	}
+	.side__rule {
+		height: 1px;
+		background: var(--scree);
+		margin: 26px 0 8px;
+	}
+	.side__nav {
+		display: flex;
+		flex-direction: column;
+	}
+	.navrow {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 11px 0;
+		font-size: 14px;
+		color: var(--granite);
+		border-bottom: 1px solid var(--scree);
+	}
+	.navrow--last {
+		border-bottom: none;
+	}
+	.navrow--link:hover {
+		color: var(--lake);
+	}
+	.navrow__n {
+		color: var(--granite-soft);
+		font-size: 13px;
+		font-variant-numeric: tabular-nums;
+	}
+</style>

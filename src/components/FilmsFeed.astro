@@ -1,0 +1,275 @@
+---
+// Server island (server:defer on /films): the recent-watches feed and the log's
+// sidebar index. Split out of films/index.astro so the page ships its themed
+// shell (header + "+ Log film") from the fast owner check, and this data-heavy
+// body — stats + the latest logs — streams in on its own request.
+import { getFilmLogStats, listLogs } from '../lib/films';
+import { requireOwner } from '../lib/auth';
+import { starText, formatWatchedDate, excerpt } from '../lib/format';
+import { imageUrl } from '../lib/tmdb';
+
+const [stats, recent, isOwner] = await Promise.all([
+	getFilmLogStats(),
+	listLogs(25),
+	requireOwner(Astro.cookies),
+]);
+
+const num = (n: number) => n.toLocaleString('en-US');
+---
+
+<div class="shell">
+	<!-- Feed -->
+	<main class="feed">
+		{recent.map((f) => {
+			const note = excerpt(f.review_text);
+			const thumb = imageUrl(f.poster_path, 'w185');
+			const date = formatWatchedDate(f.watched_date) ?? formatWatchedDate(f.created_at.slice(0, 10));
+			return (
+				<article class="item">
+					<div class="item__body">
+						<p class="item__meta">
+							{date && <time>{date}</time>}
+							<span class="tag">Film</span>
+						</p>
+						<h2 class="item__title">
+							<a href={`/films/diary/${f.id}`}>
+								{f.title}
+								{f.release_year && <span class="item__year"> {f.release_year}</span>}
+							</a>
+						</h2>
+						<p class="item__marks">
+							{starText(f.rating) && <span class="stars">{starText(f.rating)}</span>}
+							{f.liked && <span class="mark mark--like">♥</span>}
+							{f.rewatched && <span class="mark mark--rewatch">↻</span>}
+						</p>
+						{note && <p class="item__note">{note}</p>}
+					</div>
+					<a class="item__thumb" href={`/films/diary/${f.id}`}>
+						{thumb && <img src={thumb} alt="" width="46" height="69" loading="lazy" />}
+					</a>
+				</article>
+			);
+		})}
+
+		<p class="feed__more"><a href="/films/diary">See more →</a></p>
+	</main>
+
+	<!-- Sidebar -->
+	<aside class="side">
+		<div class="brand">Jason's<br />film log</div>
+		<div class="brand__sub">{stats.thisYear} films this year</div>
+
+		<div class="side__rule"></div>
+		<nav class="side__nav">
+			<a class="navrow navrow--link" href="/films/watched">
+				<span>Films watched</span><span class="navrow__n">{num(stats.watched)}</span>
+			</a>
+			<a class="navrow navrow--link" href="/films/diary">
+				<span>Diary</span><span class="navrow__n">{num(stats.diary)}</span>
+			</a>
+			<a class="navrow navrow--link" href="/films/watchlist">
+				<span>Watchlist</span><span class="navrow__n">{num(stats.watchlist)}</span>
+			</a>
+			<a class="navrow navrow--link" href="/films/stats">
+				<span>Stats</span><span class="navrow__n">→</span>
+			</a>
+			{isOwner && (
+				<a class="navrow navrow--link navrow--last" href="/films/month">
+					<span>The month in film</span><span class="navrow__n">→</span>
+				</a>
+			)}
+		</nav>
+	</aside>
+</div>
+
+<style>
+	/* Two-column blog shell — feed then sidebar; collapses to one column
+	   (sidebar after) on narrow viewports. */
+	.shell {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 288px;
+	}
+	@media (max-width: 720px) {
+		.shell {
+			grid-template-columns: 1fr;
+		}
+		.side {
+			order: 2;
+		}
+	}
+
+	/* Feed */
+	.feed {
+		min-width: 0;
+		padding: 38px 40px 44px;
+	}
+	.item {
+		display: flex;
+		gap: 20px;
+		align-items: flex-start;
+		padding: 16px 0 18px;
+		border-bottom: 1px solid #402226;
+	}
+	.item__body {
+		flex: 1;
+		min-width: 0;
+	}
+	.item__meta {
+		font-family: 'Archivo', sans-serif;
+		font-size: 11.5px;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: #a2857a;
+		margin: 0 0 6px;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		align-items: baseline;
+	}
+	.tag {
+		font-family: 'Archivo', sans-serif;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		padding: 2px 7px;
+		border: 1px solid #6b4a42;
+		color: #d9b45a;
+		border-radius: 2px;
+	}
+	.item__title {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: 21px;
+		line-height: 1.2;
+		margin: 0;
+	}
+	.item__title a {
+		color: #f4e8d1;
+	}
+	.item__title a:hover {
+		color: #f0d488;
+	}
+	.item__year {
+		color: #b0917f;
+		font-style: italic;
+		font-weight: 400;
+	}
+	.item__marks {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		margin: 7px 0 0;
+	}
+	.stars {
+		color: #d9b45a;
+		font-size: 14px;
+		letter-spacing: 1.5px;
+	}
+	.mark {
+		font-size: 13px;
+		line-height: 1;
+	}
+	.mark--like {
+		color: #d9b45a;
+	}
+	.mark--rewatch {
+		color: #8d6a60;
+	}
+	.item__note {
+		margin: 8px 0 0;
+		color: #c2a99a;
+		font-size: 14.5px;
+		line-height: 1.55;
+	}
+	.item__thumb {
+		flex: none;
+		display: block;
+	}
+	.item__thumb img {
+		display: block;
+		width: 46px;
+		height: 69px;
+		object-fit: cover;
+		border: 1px solid #4a2529;
+		background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+		border-radius: 3px;
+	}
+	.feed__more {
+		font-family: 'Archivo', sans-serif;
+		font-size: 13px;
+		font-weight: 600;
+		margin-top: 22px;
+	}
+	.feed__more a {
+		color: #d9b45a;
+	}
+	.feed__more a:hover {
+		color: #f0d488;
+	}
+
+	/* Sidebar */
+	.side {
+		background: #2a1214;
+		border-left: 1px solid #4a2529;
+		padding: 40px 28px;
+		display: flex;
+		flex-direction: column;
+	}
+	@media (max-width: 720px) {
+		.side {
+			border-left: none;
+			border-top: 1px solid #4a2529;
+		}
+	}
+	.brand {
+		font-family: 'Newsreader', serif;
+		font-size: 29px;
+		font-weight: 500;
+		color: #f4e8d1;
+		letter-spacing: -0.3px;
+		line-height: 1.05;
+	}
+	.brand__sub {
+		margin-top: 8px;
+		font-size: 13px;
+		color: #d9b45a;
+		font-weight: 600;
+	}
+	.side__rule {
+		height: 1px;
+		background: #4a2529;
+		margin: 26px 0 8px;
+	}
+	.side__nav {
+		display: flex;
+		flex-direction: column;
+	}
+	.navrow {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		padding: 11px 0;
+		font-size: 14px;
+		color: #ddc9b4;
+		border-bottom: 1px solid #402226;
+	}
+	.navrow--last {
+		border-bottom: none;
+	}
+	.navrow--link {
+		cursor: pointer;
+	}
+	.navrow--link:hover {
+		color: #fff3df;
+	}
+	.navrow__n {
+		color: #a2857a;
+		font-size: 13px;
+	}
+
+	@media (max-width: 720px) {
+		.feed {
+			padding: 28px 22px 34px;
+		}
+	}
+</style>

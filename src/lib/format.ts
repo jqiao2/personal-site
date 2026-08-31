@@ -11,6 +11,15 @@ export function formatWatchedDate(date: string | null): string | null {
 	});
 }
 
+/** First line of a review, trimmed to a single feed row (≤150 chars, ellipsised).
+ *  Shared by the film and restaurant feeds. */
+export function excerpt(text: string | null): string | null {
+	if (!text) return null;
+	const line = text.replace(/\s+/g, ' ').trim();
+	if (!line) return null;
+	return line.length > 150 ? `${line.slice(0, 149).trimEnd()}…` : line;
+}
+
 // Known viewing mediums → display label. Free-text mediums (the composer's
 // "Other…") fall through to a capitalized version of whatever was stored.
 const MEDIUM_LABELS: Record<string, string> = {
