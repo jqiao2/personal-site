@@ -1,107 +1,12 @@
 ---
-import BookCover from '../../components/BookCover.astro';
-import BookShelf from '../../components/BookShelf.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
-import { requireOwner } from '../../lib/auth';
-import {
-	getCurrentlyReading,
-	getFinished,
-	getHeatmap,
-	getManualReads,
-	getOfflineReads,
-	getSetAside,
-	getStats,
-	getToRead,
-} from '../../lib/books-queries';
-import { finishedShelf, shelfSpan, toReadShelf } from '../../lib/shelf-view';
-import { buildPile } from '../../lib/to-read-view';
-import {
-	buildHeatmap,
-	buildShelf,
-	buildSpells,
-	DOW_LABELS,
-	HEAT_LEVELS,
-	prefersHeatmap,
-	readDays,
-	today,
-	type BookView,
-} from '../../lib/books-view';
+import BooksBody from '../../components/BooksBody.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 
-// Rendered on demand — reflects whatever the Kindle last pushed.
+// Rendered on demand so the header reflects the live session. The reading record
+// is a server island (BooksBody, server:defer) so the shell paints immediately
+// and the data-heavy body streams in on its own request.
 export const prerender = false;
-
-const todayDay = today();
-
-const isOwner = await requireOwner(Astro.cookies);
-
-const [stats, currentRaw, asideRaw, finishedRaw, offlineRaw, manualRaw, pileRaw] = await Promise.all([
-	getStats(),
-	getCurrentlyReading(),
-	getSetAside(),
-	getFinished(),
-	getOfflineReads(),
-	getManualReads(),
-	getToRead(isOwner),
-]);
-
-// One heatmap query covers both activity views: the spells need the days with
-// reading on them, the calendar needs the same set plus a date spine it can
-// derive itself. Empty history means nothing to ask for.
-const heatmapDays = stats.first_day ? await getHeatmap(stats.first_day, todayDay) : [];
-
-const days = readDays(heatmapDays);
-const maxPages = Math.max(1, ...days.map((d) => d.pages));
-
-const { current, setAside, finished } = buildShelf(
-	currentRaw,
-	asideRaw,
-	finishedRaw,
-	offlineRaw,
-	manualRaw,
-	todayDay,
-);
-
-// The pile as a shelf, newest addition at the left. Its own page holds the
-// sortable, filterable version; this is the whole pile as an object, and running
-// out of board is the honest way to show how far behind it is.
-//
-// An empty pile says so to me and says nothing at all to a visitor — a zero
-// there would report a fact about my intentions rather than my reading.
-const toRead = toReadShelf(buildPile(pileRaw, todayDay));
-const pileLabel = `${pileRaw.length} book${pileRaw.length === 1 ? '' : 's'} →`;
-
-// Which books a spell covers is answered from every public book, not just the
-// ones in flight — a spell three years ago was spent on something long finished.
-//
-// Books with recorded sessions only: a spell is a run of days that were actually
-// logged, and a book with no sessions behind it that merely overlaps those dates
-// was not what those page turns were spent on.
-const shelf = [...current, ...setAside, ...finished].filter((b) => b.tracked);
-const spells = buildSpells(days, shelf, maxPages);
-const heatmap = buildHeatmap(days, maxPages, todayDay);
-
-// The data picks the instrument. A year of near-daily reading is what a calendar
-// is for; a fortnight in April surrounded by nothing is not. The choice used to
-// announce itself in a line above the pills; the pills already show which view
-// is on, so it was narrating what the reader could see.
-const defaultView = days.length && prefersHeatmap(days, todayDay) ? 'heatmap' : 'spells';
-
-// Everything read, newest finish at the left. There is no year filter: scrolling
-// back along the shelf is the time axis, and a row of year pills would only let
-// you cut the one continuous thing into pieces.
-const done = finishedShelf(finished);
-const doneSpan = shelfSpan(finished);
-
-// Every book here is a page of its own. The picture of it is the strongest tie
-// between the two views, so it links as well as the title does — see BookCover
-// for why that link is hidden from the keyboard and the screen reader.
-const bookHref = (b: BookView) => `/books/${b.id}`;
-
-// A heatmap with no reading in it has no scale to place the legend against, so
-// both the view toggle and the grid stay out of the way until there is something
-// to show.
-const hasActivity = days.length > 0;
 ---
 
 <BookLayout title="Books">
@@ -115,874 +20,97 @@ const hasActivity = days.length > 0;
 					<p class="head__note">Logged automatically via Kindle</p>
 				</header>
 
-				<section class="section">
-					<div class="sec-head">
-						<h2 class="sec-head__title">Currently reading</h2>
+				<BooksBody server:defer>
+					<div slot="fallback" class="body-skel" aria-hidden="true">
+						{Array.from({ length: 3 }).map(() => (
+							<div class="skel-block">
+								<div class="skel-line skel-line--head"></div>
+								<div class="skel-card"></div>
+							</div>
+						))}
 					</div>
-
-					{
-						current.length > 0 ? (
-							<div class="stack">
-								{current.map((b) => (
-									<article class="book">
-										<BookCover
-											id={b.id}
-											title={b.main}
-											author={b.author}
-											coverUrl={b.coverUrl}
-											href={bookHref(b)}
-										/>
-										<div class="book__main">
-											<h3 class="book__title">
-												<a class="book__link" href={bookHref(b)}>{b.main}</a>
-											</h3>
-											{b.sub && <div class="book__sub">{b.sub}</div>}
-											{b.author && <div class="book__author">{b.author}</div>}
-
-											{/*
-												A book nobody is counting gets the sentence instead of the
-												bar. An empty track would read as a stalled book,
-												which is the opposite of what is true.
-											*/}
-											{
-												b.untrackedNote ? (
-													<div class="untracked-note">{b.untrackedNote}</div>
-												) : (
-													<div class="progress">
-														{b.progress !== null && (
-															<div class="bar">
-																<div
-																	class="bar__fill"
-																	style={`width:${Math.max(1.5, b.progress * 100)}%`}
-																/>
-															</div>
-														)}
-														<div class="progress__row">
-															<span class="progress__pages">
-																{b.pagesLabel}
-																{b.progress !== null && <span class="dim"> pages</span>}
-															</span>
-															<span class="progress__pct">{b.percent ?? 'length unknown'}</span>
-														</div>
-													</div>
-												)
-											}
-										</div>
-										<dl class="facts">
-											{b.facts.map((f) => (
-												<div class="fact">
-													<dt class="fact__k">{f.k}</dt>
-													<dd class="fact__v">{f.v}</dd>
-												</div>
-											))}
-										</dl>
-									</article>
-								))}
-							</div>
-						) : (
-							<div class="empty">
-								<div class="empty__line">
-									{days.length ? 'Between books right now.' : 'No reading logged yet.'}
-								</div>
-								<div class="empty__sub">
-									The next page turn on the Kindle starts a new entry here.
-								</div>
-							</div>
-						)
-					}
-
-				</section>
-
-				{
-					setAside.length > 0 && (
-						<section class="section">
-							<div class="sec-head sec-head--tight">
-								<h2 class="sec-head__title">Set aside</h2>
-							</div>
-							{setAside.map((b) => (
-								<div class="row">
-									<BookCover
-										id={b.id}
-										title={b.main}
-										author={b.author}
-										coverUrl={b.coverUrl}
-										href={bookHref(b)}
-									/>
-									<div class="row__main">
-										<div class="row__title">
-											<a class="book__link" href={bookHref(b)}>{b.main}</a>
-										</div>
-										<div class="row__meta">{b.asideMeta}</div>
-									</div>
-									<div class="row__bar">
-										<div class="bar bar--slim">
-											{b.progress !== null && (
-												<div
-													class="bar__fill"
-													style={`width:${Math.max(1.5, b.progress * 100)}%`}
-												/>
-											)}
-										</div>
-									</div>
-									<span class="row__pct">{b.percent ?? '—'}</span>
-								</div>
-							))}
-						</section>
-					)
-				}
-
-				<section class="section">
-					<div class="sec-head">
-						<h2 class="sec-head__title">Reading activity</h2>
-						{
-							hasActivity && (
-								<div class="sec-head__tools">
-									{isOwner && (
-										<a class="month-link" href="/books/month">
-											Month in reading →
-										</a>
-									)}
-									<div class="pills">
-										<button
-											type="button"
-											class:list={['pill', 'pill--sm', defaultView === 'spells' && 'pill--on']}
-											data-view="spells"
-											title="Only the stretches with reading in them"
-										>
-											Spells
-										</button>
-										<button
-											type="button"
-											class:list={['pill', 'pill--sm', defaultView === 'heatmap' && 'pill--on']}
-											data-view="heatmap"
-											title="Calendar heatmap of the last 12 months"
-										>
-											Year
-										</button>
-									</div>
-								</div>
-							)
-						}
-					</div>
-
-					{
-						hasActivity ? (
-							<Fragment>
-								<div class="view" data-panel="spells" hidden={defaultView !== 'spells'}>
-									{spells.map((row) =>
-										row.kind === 'break' ? (
-											<div class="gap">
-												<span class="gap__rule" />
-												<span class="gap__label">{row.label}</span>
-												<span class="gap__rule" />
-											</div>
-										) : (
-											<div class="spell">
-												<div class="spell__head">
-													<div class="spell__label">{row.label}</div>
-													<div class="spell__meta">{row.meta}</div>
-												</div>
-												<div class="spell__cells">
-													{row.cells.map((c) => (
-														<div
-															class:list={[
-																'cell',
-																'cell--lg',
-																`cell--l${c.level}`,
-																!c.read && 'cell--off',
-															]}
-															title={c.title}
-														/>
-													))}
-												</div>
-												<div class="spell__books">{row.books}</div>
-											</div>
-										),
-									)}
-								</div>
-
-								<div class="view" data-panel="heatmap" hidden={defaultView !== 'heatmap'}>
-									<div class="heat-scroll" data-heat-scroll>
-										<div class="heat" data-heat>
-											<div class="heat__months">
-												{heatmap.columns.map((col) => (
-													<div class="heat__month" data-heat-label>{col.month}</div>
-												))}
-											</div>
-											<div class="heat__body">
-												<div class="heat__dows">
-													{DOW_LABELS.map((d) => (
-														<div class="heat__dow">{d}</div>
-													))}
-												</div>
-												<div class="heat__grid">
-													{heatmap.columns.map((col) => (
-														<div class="heat__col" data-heat-col>
-															{col.cells.map((c) => (
-																<div
-																	class:list={[
-																		'cell',
-																		`cell--l${c.level}`,
-																		!c.inRange && 'cell--void',
-																		c.inRange && !c.read && 'cell--off',
-																	]}
-																	title={c.title}
-																/>
-															))}
-														</div>
-													))}
-												</div>
-											</div>
-										</div>
-									</div>
-									<div class="legend">
-										<span class="legend__label">Fewer pages</span>
-										<div class="legend__steps">
-											{HEAT_LEVELS.map((l) => (
-												<div class:list={['cell', `cell--l${l}`, l === 0 && 'cell--off']} />
-											))}
-										</div>
-										<span class="legend__label">More</span>
-										<span class="legend__span">{heatmap.span}</span>
-									</div>
-								</div>
-							</Fragment>
-						) : (
-							<p class="none">Nothing logged yet — the first sync fills this in.</p>
-						)
-					}
-				</section>
-
-				{/*
-					The two shelves. They sit at the foot of the page because they are the
-					long views: what is waiting and what is done, both of them whole rather
-					than sampled, and both of them a picture of the library before they are
-					a list of it. Everything a row used to spell out — the read time, the
-					exact finish date — is on the book's own page, one click away, and in
-					the spine's tooltip meanwhile.
-				*/}
-				{
-					(toRead.length > 0 || isOwner) && (
-						<section class="section">
-							<div class="sec-head sec-head--shelf">
-								<h2 class="sec-head__title">To read</h2>
-								<a class="sec-head__link" href="/books/to-read">
-									{toRead.length > 0 ? pileLabel : 'Nothing on the pile'}
-								</a>
-							</div>
-							<BookShelf spines={toRead} emptyLine="Nothing on the pile." />
-						</section>
-					)
-				}
-
-				<section class="section">
-					<div class="sec-head sec-head--shelf">
-						<h2 class="sec-head__title">Finished</h2>
-						{doneSpan && <span class="sec-head__meta">{doneSpan}</span>}
-					</div>
-					<BookShelf spines={done} emptyLine="Nothing finished yet." />
-				</section>
-
+				</BooksBody>
 			</div>
 		</div>
 	</div>
-
-	<script>
-		// The toggle switches between markup that is already on the page: the server
-		// sends both activity views, so switching is instant and the page still
-		// reads correctly with JavaScript off, showing whichever view fits the data.
-		const panels = document.querySelectorAll<HTMLElement>('[data-panel]');
-		const viewButtons = document.querySelectorAll<HTMLButtonElement>('[data-view]');
-
-		for (const button of viewButtons) {
-			button.addEventListener('click', () => {
-				const wanted = button.dataset.view;
-				for (const panel of panels) panel.hidden = panel.dataset.panel !== wanted;
-				for (const other of viewButtons) other.classList.toggle('pill--on', other === button);
-			});
-		}
-
-		// Fitting the year calendar to its column.
-		//
-		// The squares are sized by CSS — they take whatever width the column
-		// gives them. That alone would shrink them to a few pixels on a phone,
-		// so below the width a full year needs, this crops weeks off the left
-		// until the rest are legible again. Cropping rather than scrolling: the
-		// recent weeks are the ones being read, and a January parked off the
-		// side of a scroll container is a January nobody ever sees.
-		//
-		// Both numbers are also in the stylesheet, in .heat's min-width.
-		const CELL_MIN = 11;
-		const CELL_GAP = 3;
-		/** The day-label column plus the gap after it. */
-		const GUTTER = 26;
-
-		const heatScroll = document.querySelector<HTMLElement>('[data-heat-scroll]');
-		const heat = document.querySelector<HTMLElement>('[data-heat]');
-		const heatCols = document.querySelectorAll<HTMLElement>('[data-heat-col]');
-		const heatLabels = document.querySelectorAll<HTMLElement>('[data-heat-label]');
-
-		if (heatScroll && heat && heatCols.length) {
-			const fit = () => {
-				// Zero while the panel is hidden, which it is whenever the page
-				// opened on the spells view. Measuring then would crop the grid to
-				// its floor of eight weeks and leave it there.
-				const available = heatScroll.clientWidth - GUTTER;
-				if (available <= 0) return;
-
-				const fits = Math.floor((available + CELL_GAP) / (CELL_MIN + CELL_GAP));
-				// Eight weeks even if they have to go under 11px. Narrower than a
-				// phone there is no width at which this reads well, and two months
-				// is the least that still looks like a calendar.
-				const weeks = Math.max(8, Math.min(heatCols.length, fits));
-				const dropped = heatCols.length - weeks;
-
-				heatCols.forEach((col, i) => (col.hidden = i < dropped));
-				heatLabels.forEach((label, i) => (label.hidden = i < dropped));
-				// Hands the width over to the flex fill. Dropping the min-width can
-				// remove the scrollbar and so change clientWidth — the observer
-				// picks that up and settles on the next pass.
-				heat.classList.add('heat--fit');
-			};
-
-			new ResizeObserver(fit).observe(heatScroll);
-		}
-	</script>
-
-	<style>
-		.page {
-			min-height: 100vh;
-			background: #1a120a;
-		}
-
-
-		.wrap {
-			display: flex;
-			justify-content: center;
-			padding: 34px clamp(14px, 4vw, 24px) 90px;
-		}
-		.col {
-			width: 100%;
-			max-width: 960px;
-		}
-
-		/* Header */
-		.head {
-			display: flex;
-			align-items: flex-end;
-			justify-content: space-between;
-			gap: 14px;
-			flex-wrap: wrap;
-			margin-bottom: 40px;
-		}
-		.head__title {
-			font-family: 'Newsreader', serif;
-			font-weight: 500;
-			font-size: clamp(38px, 9vw, 52px);
-			color: #f2e6cd;
-			letter-spacing: -0.5px;
-			line-height: 1;
-			margin: 0;
-		}
-		.head__note {
-			margin: 0;
-			font-size: 12.5px;
-			color: #8a745a;
-			line-height: 1.5;
-			max-width: 280px;
-		}
-
-		/* Sections */
-		.section {
-			margin-bottom: 46px;
-		}
-		.sec-head {
-			display: flex;
-			align-items: baseline;
-			justify-content: space-between;
-			gap: 12px;
-			flex-wrap: wrap;
-			padding-bottom: 10px;
-			border-bottom: 1px solid #392a19;
-			margin-bottom: 20px;
-		}
-		.sec-head--tight {
-			margin-bottom: 14px;
-		}
-		/* A shelf carries its own headroom for a pulled book, so the heading sits
-		   nearly on top of it rather than opening a second gap. */
-		.sec-head--shelf {
-			margin-bottom: 6px;
-		}
-		.sec-head__link {
-			font-size: 12.5px;
-			flex: none;
-		}
-		.sec-head__title {
-			font-family: 'Newsreader', serif;
-			font-style: italic;
-			font-weight: 400;
-			font-size: 20px;
-			color: #ead9b6;
-			margin: 0;
-		}
-		.sec-head__tools {
-			display: flex;
-			align-items: center;
-			gap: 8px;
-			flex-wrap: wrap;
-		}
-		.sec-head__meta {
-			font-size: 12px;
-			color: #a68f6e;
-		}
-		.month-link {
-			font-size: 12px;
-			color: #cfa452;
-			border-bottom: 1px solid #45341f;
-			padding-bottom: 1px;
-		}
-		.month-link:hover {
-			color: #ecc87c;
-			border-bottom-color: #ecc87c;
-		}
-
-		/* Pills */
-		.pills {
-			display: flex;
-			gap: 7px;
-			flex-wrap: wrap;
-		}
-		.pill {
-			font-family: 'Archivo', sans-serif;
-			font-size: 12.5px;
-			line-height: 1.2;
-			padding: 7px 13px;
-			border-radius: 20px;
-			border: 1px solid #45341f;
-			background: transparent;
-			color: #dcc9a6;
-			cursor: pointer;
-		}
-		.pill--sm {
-			font-size: 12px;
-			padding: 6px 12px;
-		}
-		.pill:hover {
-			border-color: #6b5231;
-			color: #f2e6cd;
-		}
-		.pill--on,
-		.pill--on:hover {
-			background: #cfa452;
-			border-color: #cfa452;
-			color: #241a10;
-			font-weight: 600;
-		}
-
-		.book__link {
-			color: inherit;
-		}
-		.book__link:hover {
-			color: #ecc87c;
-		}
-		/* A book in flight that nothing is counting. */
-		.untracked-note {
-			margin-top: 18px;
-			font-size: 12.5px;
-			color: #8a745a;
-			line-height: 1.5;
-		}
-
-		/* Currently reading */
-		.stack {
-			display: flex;
-			flex-direction: column;
-			gap: 14px;
-		}
-		.book {
-			background: #241a10;
-			border: 1px solid #45341f;
-			border-radius: 10px;
-			padding: 22px 20px;
-			display: flex;
-			gap: 22px;
-			align-items: stretch;
-			flex-wrap: wrap;
-		}
-		.book__main {
-			flex: 1 1 260px;
-			min-width: 0;
-			display: flex;
-			flex-direction: column;
-		}
-		.book__title {
-			font-family: 'Newsreader', serif;
-			font-size: 26px;
-			font-weight: 500;
-			color: #f2e6cd;
-			line-height: 1.15;
-			letter-spacing: -0.2px;
-			margin: 0;
-		}
-		.book__sub {
-			font-family: 'Newsreader', serif;
-			font-style: italic;
-			font-size: 15px;
-			color: #a68f6e;
-			margin-top: 4px;
-			line-height: 1.3;
-		}
-		.book__author {
-			font-size: 13px;
-			color: #a68f6e;
-			margin-top: 9px;
-		}
-
-		.progress {
-			margin-top: 18px;
-		}
-		.bar {
-			height: 8px;
-			background: #33261a;
-			border-radius: 4px;
-			overflow: hidden;
-		}
-		.bar--slim {
-			height: 6px;
-			border-radius: 3px;
-		}
-		.bar__fill {
-			height: 100%;
-			background: #cfa452;
-			border-radius: 4px;
-		}
-		.progress__row {
-			display: flex;
-			justify-content: space-between;
-			align-items: baseline;
-			gap: 12px;
-			margin-top: 9px;
-			flex-wrap: wrap;
-		}
-		.progress__pages {
-			font-size: 12.5px;
-			color: #dcc9a6;
-		}
-		.dim {
-			color: #8a745a;
-		}
-		.progress__pct {
-			font-family: 'Newsreader', serif;
-			font-size: 19px;
-			color: #cfa452;
-			line-height: 1;
-		}
-
-		.facts {
-			flex: 0 1 190px;
-			min-width: 170px;
-			display: flex;
-			flex-direction: column;
-			gap: 9px;
-			border-left: 1px solid #392a19;
-			padding-left: 20px;
-			margin: 0;
-		}
-		.fact {
-			display: flex;
-			justify-content: space-between;
-			gap: 10px;
-			font-size: 12.5px;
-		}
-		.fact__k {
-			color: #8a745a;
-		}
-		.fact__v {
-			color: #efe0c2;
-			text-align: right;
-			margin: 0;
-		}
-
-		.empty {
-			border: 1px dashed #392a19;
-			border-radius: 10px;
-			padding: 30px 22px;
-			text-align: center;
-		}
-		.empty__line {
-			font-family: 'Newsreader', serif;
-			font-style: italic;
-			font-size: 18px;
-			color: #a68f6e;
-		}
-		.empty__sub {
-			font-size: 12.5px;
-			color: #8a745a;
-			margin-top: 7px;
-		}
-
-		/* Set aside / finished rows */
-		.row {
-			display: flex;
-			align-items: center;
-			gap: 16px;
-			padding: 14px 2px;
-			border-bottom: 1px solid #33261a;
-			flex-wrap: wrap;
-		}
-		.row__main {
-			flex: 1 1 220px;
-			min-width: 0;
-		}
-		.row__title {
-			font-family: 'Newsreader', serif;
-			font-size: 19px;
-			color: #e4d3b0;
-			line-height: 1.2;
-		}
-		.row__meta {
-			font-size: 12px;
-			color: #8a745a;
-			margin-top: 4px;
-			line-height: 1.4;
-		}
-		.row__bar {
-			width: 110px;
-			flex: none;
-		}
-		.row__pct {
-			font-size: 12.5px;
-			color: #a68f6e;
-			width: 46px;
-			text-align: right;
-			flex: none;
-		}
-		/* Activity cells, shared by both views */
-		.cell {
-			width: 11px;
-			height: 11px;
-			border-radius: 2px;
-			border: 1px solid transparent;
-			flex: none;
-		}
-		.cell--lg {
-			width: 17px;
-			height: 17px;
-			border-radius: 3px;
-		}
-		.cell--l0 {
-			background: #241a10;
-		}
-		.cell--l1 {
-			background: rgba(207, 164, 82, 0.26);
-		}
-		.cell--l2 {
-			background: rgba(207, 164, 82, 0.48);
-		}
-		.cell--l3 {
-			background: rgba(207, 164, 82, 0.72);
-		}
-		.cell--l4 {
-			background: #cfa452;
-		}
-		.cell--off {
-			border-color: #2f2415;
-		}
-		.cell--lg.cell--off {
-			border-color: #33261a;
-		}
-		.cell--void {
-			background: transparent;
-			border-color: transparent;
-		}
-
-		.view[hidden] {
-			display: none;
-		}
-
-		/* Spells */
-		.spell {
-			background: #201709;
-			border: 1px solid #392a19;
-			border-radius: 10px;
-			padding: 16px 18px;
-		}
-		.spell__head {
-			display: flex;
-			align-items: baseline;
-			justify-content: space-between;
-			gap: 12px;
-			flex-wrap: wrap;
-		}
-		.spell__label {
-			font-size: 13.5px;
-			color: #efe0c2;
-			font-weight: 500;
-			letter-spacing: 0.2px;
-		}
-		.spell__meta {
-			font-size: 12px;
-			color: #a68f6e;
-		}
-		.spell__cells {
-			display: flex;
-			gap: 3px;
-			margin-top: 13px;
-			flex-wrap: wrap;
-		}
-		.spell__books {
-			font-size: 12px;
-			color: #8a745a;
-			margin-top: 12px;
-			line-height: 1.45;
-		}
-		.gap {
-			display: flex;
-			align-items: center;
-			gap: 14px;
-			padding: 16px 0;
-		}
-		.gap__rule {
-			flex: 1;
-			height: 1px;
-			background: repeating-linear-gradient(90deg, #392a19 0 5px, transparent 5px 11px);
-		}
-		.gap__label {
-			font-size: 10.5px;
-			text-transform: uppercase;
-			letter-spacing: 1.6px;
-			color: #8a745a;
-			white-space: nowrap;
-		}
-
-		/* Year heatmap.
-
-		   The grid fills the column rather than standing at a fixed square size,
-		   so a wide screen gets a bigger, more readable calendar instead of a
-		   band of 11px squares with empty space beside it. Everything below is
-		   proportional for that reason — the only fixed sizes are the gaps and
-		   the day-label gutter.
-
-		   Where the column is too narrow for a full year of 11px squares, the
-		   fit script drops the oldest weeks; the min-width and the scrollbar
-		   here are what stands in for it before that script runs, and with
-		   JavaScript off. */
-		.heat-scroll {
-			overflow-x: auto;
-			padding-bottom: 6px;
-		}
-		/* 53 columns and their gaps at the smallest legible square, plus the
-		   gutter. Kept in step with CELL_MIN and CELL_GAP in the fit script. */
-		.heat {
-			min-width: 765px;
-		}
-		.heat--fit {
-			min-width: 0;
-		}
-		.heat__months {
-			display: flex;
-			gap: 3px;
-			margin-left: 26px;
-			margin-bottom: 6px;
-		}
-		/* One week wide, which the name overruns — deliberately. It leans over
-		   the columns after it, which are unlabelled until the month is out.
-		   buildHeatmap drops the last couple, where there is nothing to lean
-		   into. min-width lets the box shrink under its text so the leaning
-		   never pushes the row wider than the grid it labels. */
-		.heat__month {
-			flex: 1 1 0;
-			min-width: 0;
-			font-size: 9.5px;
-			color: #8a745a;
-			white-space: nowrap;
-		}
-		.heat__body {
-			display: flex;
-			gap: 6px;
-		}
-		.heat__dows {
-			display: flex;
-			flex-direction: column;
-			gap: 3px;
-			width: 20px;
-			flex: none;
-		}
-		.heat__dow {
-			/* Takes a seventh of the grid's height rather than a square's worth
-			   of pixels, so a label stays on its row at whatever size the
-			   squares come out. */
-			flex: 1 1 0;
-			display: flex;
-			align-items: center;
-			font-size: 9px;
-			color: #8a745a;
-		}
-		.heat__grid {
-			display: flex;
-			gap: 3px;
-			flex: 1;
-			min-width: 0;
-		}
-		.heat__col {
-			display: flex;
-			flex-direction: column;
-			gap: 3px;
-			flex: 1 1 0;
-			min-width: 0;
-		}
-		/* A week cropped off the left by the fit script. The rule is needed
-		   because the display above would otherwise beat the [hidden] default. */
-		.heat__col[hidden] {
-			display: none;
-		}
-		/* Calendar squares are sized by their column, not by .cell's fixed 11px:
-		   the width comes from the flex stretch and the height follows it. */
-		.heat__col .cell {
-			width: auto;
-			height: auto;
-			aspect-ratio: 1;
-		}
-		.legend {
-			display: flex;
-			align-items: center;
-			gap: 9px;
-			margin-top: 14px;
-			flex-wrap: wrap;
-		}
-		.legend__steps {
-			display: flex;
-			gap: 3px;
-		}
-		.legend__label,
-		.legend__span {
-			font-size: 11.5px;
-			color: #8a745a;
-		}
-		.legend__span {
-			margin-left: auto;
-		}
-
-		.none {
-			font-size: 13px;
-			color: #8a745a;
-			padding: 18px 2px;
-			margin: 0;
-		}
-		.none[hidden] {
-			display: none;
-		}
-
-		@media (max-width: 640px) {
-			/*
-				The facts are a desktop aside. Wrapped below the progress bar they
-				push the next book off the screen for four lines nobody came for,
-				and the bar above them already tells the story.
-			*/
-			.facts {
-				display: none;
-			}
-		}
-	</style>
 </BookLayout>
+
+<style>
+	.page {
+		min-height: 100vh;
+		background: #1a120a;
+	}
+
+	.wrap {
+		display: flex;
+		justify-content: center;
+		padding: 34px clamp(14px, 4vw, 24px) 90px;
+	}
+	.col {
+		width: 100%;
+		max-width: 960px;
+	}
+
+	/* Header */
+	.head {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 14px;
+		flex-wrap: wrap;
+		margin-bottom: 40px;
+	}
+	.head__title {
+		font-family: 'Newsreader', serif;
+		font-weight: 500;
+		font-size: clamp(38px, 9vw, 52px);
+		color: #f2e6cd;
+		letter-spacing: -0.5px;
+		line-height: 1;
+		margin: 0;
+	}
+	.head__note {
+		margin: 0;
+		font-size: 12.5px;
+		color: #8a745a;
+		line-height: 1.5;
+		max-width: 280px;
+	}
+
+	/* Skeleton shown while the BooksBody island streams in. */
+	.body-skel {
+		display: flex;
+		flex-direction: column;
+		gap: 46px;
+	}
+	.skel-line--head {
+		height: 20px;
+		width: 40%;
+		border-radius: 3px;
+		background: #392a19;
+		margin-bottom: 20px;
+		animation: skel-pulse 1.4s ease-in-out infinite;
+	}
+	.skel-card {
+		height: 120px;
+		border-radius: 10px;
+		border: 1px solid #392a19;
+		background: #241a10;
+		animation: skel-pulse 1.4s ease-in-out infinite;
+	}
+	@keyframes skel-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel-line--head,
+		.skel-card {
+			animation: none;
+		}
+	}
+</style>
