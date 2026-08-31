@@ -1,13 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { recentJournal, TRACK_TAG } from '../lib/recent-journal';
-import { formatWatchedDate } from '../lib/format';
+import RecentFeed from '../components/RecentFeed.astro';
 
-// Reflects the live logs. recentJournal already reduces the four tracks to what
-// a visitor may see (see its header), so nothing here can leak a private row.
-export const prerender = false;
-
-const recent = await recentJournal(15);
+// Static shell. The live cross-section feed is a server island (RecentFeed,
+// server:defer below): it renders on its own request so this page ships from
+// cache instantly and the rows stream in.
 ---
 
 <Layout title="Jason Qiao" wide>
@@ -19,32 +16,20 @@ const recent = await recentJournal(15);
 				<a href="/projects">coding projects</a>.
 			</p>
 
-			{
-				recent.map((it) => (
-					<article class:list={['item', `item--${it.track}`]}>
-						<div class="item__body">
-							<p class="item__meta">
-								<time datetime={it.day}>{formatWatchedDate(it.day) ?? it.day}</time>
-								<span class="tag">{TRACK_TAG[it.track]}</span>
-							</p>
-							<h2 class="item__title">
-								{it.href ? <a href={it.href}>{it.title}</a> : <span>{it.title}</span>}
-							</h2>
-							{it.detail && <p class="item__note">{it.detail}</p>}
+			<RecentFeed server:defer>
+				<div slot="fallback" class="feed__skeleton" aria-hidden="true">
+					{Array.from({ length: 6 }).map(() => (
+						<div class="skel-item">
+							<div class="skel-body">
+								<div class="skel-line skel-line--meta"></div>
+								<div class="skel-line skel-line--title"></div>
+								<div class="skel-line skel-line--note"></div>
+							</div>
+							<div class="skel-thumb"></div>
 						</div>
-						{it.image &&
-							(it.href ? (
-								<a class="item__thumb" href={it.href}>
-									<img src={it.image} alt="" width="46" height="69" loading="lazy" />
-								</a>
-							) : (
-								<span class="item__thumb">
-									<img src={it.image} alt="" width="46" height="69" loading="lazy" />
-								</span>
-							))}
-					</article>
-				))
-			}
+					))}
+				</div>
+			</RecentFeed>
 
 			<p class="feed__more"><a href="/month">The month in review →</a></p>
 		</div>
@@ -99,71 +84,57 @@ const recent = await recentJournal(15);
 		color: var(--ink-soft);
 	}
 
-	/* Feed items — hairline-ruled rows, poster thumb on the right. */
-	.item {
+	/* Skeleton rows shown while the RecentFeed island streams in. Mirrors the
+	   real row geometry so the shell doesn't reflow when the feed arrives. */
+	.skel-item {
 		display: flex;
 		gap: 1rem;
 		align-items: flex-start;
 		padding: 0.75rem 0 1.05rem;
 		border-bottom: 1px solid var(--rule-soft);
 	}
-	.item__body {
+	.skel-body {
 		flex: 1;
 		min-width: 0;
 	}
-	.item__meta {
-		font-family: var(--sans);
-		font-size: 0.72rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--ink-soft);
-		margin: 0 0 0.2rem;
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.55rem;
-		align-items: baseline;
-	}
-	.item__title {
-		font-size: 1.15rem;
-		font-weight: 600;
-		margin: 0;
-		line-height: 1.25;
-	}
-	.item__title a {
-		color: var(--ink);
-		text-decoration: none;
-	}
-	.item__title a:hover {
-		text-decoration: underline;
-	}
-	.item__year {
-		color: var(--ink-soft);
-		font-weight: 400;
-	}
-	.item__note {
-		margin: 0.35rem 0 0;
-		color: var(--ink-soft);
-		font-size: 0.95rem;
-	}
-	.item__thumb img {
-		display: block;
+	.skel-thumb {
+		flex: none;
 		width: 46px;
 		height: 69px;
-		object-fit: cover;
 		border: 1px solid var(--rule);
 		background: var(--card);
 	}
-
-	.tag {
-		font-family: var(--sans);
-		font-size: 0.62rem;
-		font-weight: 700;
-		letter-spacing: 0.06em;
-		padding: 0.1rem 0.4rem;
-		border: 1px solid var(--rule);
-		background: var(--accent-bg);
-		color: var(--accent);
+	.skel-line {
+		height: 0.72rem;
 		border-radius: 2px;
+		background: var(--rule-soft);
+		animation: skel-pulse 1.4s ease-in-out infinite;
+	}
+	.skel-line--meta {
+		width: 40%;
+		margin-bottom: 0.5rem;
+	}
+	.skel-line--title {
+		width: 75%;
+		height: 1.15rem;
+		margin-bottom: 0.5rem;
+	}
+	.skel-line--note {
+		width: 90%;
+	}
+	@keyframes skel-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.45;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel-line {
+			animation: none;
+		}
 	}
 
 	.feed__more {
