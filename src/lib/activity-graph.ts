@@ -104,8 +104,12 @@ export function buildGraphData(streams: GraphStreams | null | undefined, n = GRA
 	if (!t && !d) return null;
 
 	const latlng = streams.latlng ?? null;
-	const lat = latlng ? idx.map((i) => (latlng[i] ? Number(latlng[i][0].toFixed(5)) : null)) : null;
-	const lng = latlng ? idx.map((i) => (latlng[i] ? Number(latlng[i][1].toFixed(5)) : null)) : null;
+	// A recorded pair can be present but carry a null coordinate (a GPS gap at
+	// the very first sample, say — and index 0 is always picked). Guard each
+	// coordinate, not just the pair, or `.toFixed` throws and takes the page down.
+	const coord = (i: number, j: 0 | 1): number | null => (finite(latlng?.[i]?.[j]) ? Number((latlng![i][j] as number).toFixed(5)) : null);
+	const lat = latlng ? idx.map((i) => coord(i, 0)) : null;
+	const lng = latlng ? idx.map((i) => coord(i, 1)) : null;
 
 	const candidates: GraphSeries[] = [
 		{ key: 'elevation', label: 'Elevation', color: ALPINE.fir, unit: 'ft', decimals: 0, values: sample(streams.altitude_m, idx, (v) => Math.round(v * M_TO_FT)) ?? [] },

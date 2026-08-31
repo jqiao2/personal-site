@@ -62,6 +62,21 @@ const gappy = buildGraphData({
 assert.deepEqual(gappy.series[0].values, [120, null, null, 150]);
 assert.equal(gappy.lat, null, 'no latlng → no marker coordinates');
 
+// A null coordinate in an otherwise-present pair (a GPS gap — and index 0, the
+// endpoint, is always picked) yields null for that coord, not a thrown toFixed.
+const gpsGap = buildGraphData({
+	time_s: [0, 1, 2, 3],
+	altitude_m: [100, 101, 102, 103],
+	latlng: [
+		[null, null],
+		[40.2, -74.2],
+		[40.3, null],
+		[40.4, -74.4],
+	],
+});
+assert.deepEqual(gpsGap.lat, [null, 40.2, 40.3, 40.4]);
+assert.deepEqual(gpsGap.lng, [null, -74.2, null, -74.4]);
+
 // Rejections: nothing plottable, or no axis at all.
 assert.equal(buildGraphData(null), null);
 assert.equal(buildGraphData({ time_s: [1, 2, 3] }), null, 'axis but no series → null');
