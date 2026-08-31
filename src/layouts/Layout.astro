@@ -109,6 +109,10 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 				padding: 2rem;
 			}
 			main.wide {
+				/* border-box so the outer width is a true 1120px — matching the
+				   film/restaurant/activity cards, whose layouts set a global
+				   border-box — rather than 1120px + padding. */
+				box-sizing: border-box;
 				max-width: var(--shell);
 				/* Match SiteHeader's inner gutter so the header column and the
 				   home content align at the same left/right edge. */

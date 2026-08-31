@@ -294,6 +294,11 @@ const style = Object.entries(vars)
 		font-family: var(--sh-font);
 	}
 	.sh__inner {
+		/* border-box so the column's outer width is exactly --sh-max on every
+		   host layout — the section layouts set a global border-box, but Layout
+		   (home/about/projects) doesn't, which otherwise made this strip 64px
+		   wider there than the 1120px cards elsewhere. */
+		box-sizing: border-box;
 		max-width: var(--sh-max);
 		margin: 0 auto;
 		padding: 0 var(--sh-pad, clamp(14px, 4vw, 28px));
