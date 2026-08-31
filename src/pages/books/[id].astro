@@ -54,7 +54,10 @@ const [days, reviews, highlights, bookHours] = await Promise.all([
 	getBookDays(book.id),
 	getBookReviews(book.id),
 	getBookHighlights(book.id),
-	getBookHours(book.id),
+	// Time-of-day is owner-only: the per-hour histogram is a log of when the
+	// owner is awake and reading, so a visitor never gets it (and `hasHours`
+	// below stays false, which drops the whole "When you read it" chart).
+	isOwner ? getBookHours(book.id) : Promise.resolve({ hours: [] as number[] }),
 ]);
 
 const v = buildBookPage({ book, days, reviews, highlights, isOwner });

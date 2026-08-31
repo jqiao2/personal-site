@@ -5,6 +5,7 @@ import { starText } from '../../lib/format';
 import { filterSentence } from '../../lib/watched-filters';
 import { watchedFilterCount, watchedQueryFromParams } from '../../lib/watched-params';
 import { imageUrl } from '../../lib/tmdb';
+import { requireOwner } from '../../lib/auth';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -24,7 +25,12 @@ const BATCH = 100;
 // cost of the 100 tiles below, for a panel that starts collapsed. They come from
 // /api/films/watched/facets once the page has painted (see applyFacets in the
 // script), which is what lets the grid show up as soon as its own query returns.
-const query = watchedQueryFromParams(Astro.url.searchParams);
+const isOwner = await requireOwner(Astro.cookies);
+const parsed = watchedQueryFromParams(Astro.url.searchParams);
+// Friends are owner-only everywhere on the site. Dropping them from the query
+// before anything reads it keeps a hand-typed `?friend=…` out of the filter
+// sentence, the Filters count and the grid alike (listWatchedPage guards too).
+const query = isOwner ? parsed : { ...parsed, friends: [], friendMode: 'any' as const };
 // Search is a filter for counting purposes but not for describing: the filter
 // sentence and the Filters badge belong to the panel's filters proper, while the
 // term has its own box beside them.
@@ -32,7 +38,7 @@ const filterCount = watchedFilterCount(query);
 const hasFilters = filterCount > 0;
 const filtered = hasFilters || query.q !== '';
 const [{ films, total }, watchedCount] = await Promise.all([
-	listWatchedPage({ ...query, limit: BATCH }),
+	listWatchedPage({ ...query, limit: BATCH }, isOwner),
 	// "N films watched" counts the whole collection, so a filtered page needs its
 	// own count; unfiltered, the query's own total already is that number.
 	filtered ? countWatchedFilms() : Promise.resolve(null),
@@ -183,17 +189,19 @@ const summary = hasFilters
 						<div class="chips" data-chips="tag"></div>
 					</section>
 
-					<section data-group="friend">
-						<div class="grp__row">
-							<h2 class="grp">Watched with</h2>
-							<div class="modes" data-mode="friendmode">
-								<button type="button" class="mode mode--on" data-value="any">Any</button>
-								<button type="button" class="mode" data-value="all">All</button>
+					{isOwner && (
+						<section data-group="friend">
+							<div class="grp__row">
+								<h2 class="grp">Watched with</h2>
+								<div class="modes" data-mode="friendmode">
+									<button type="button" class="mode mode--on" data-value="any">Any</button>
+									<button type="button" class="mode" data-value="all">All</button>
+								</div>
 							</div>
-						</div>
-						<p class="grp__none" data-none hidden>No one tagged yet</p>
-						<div class="chips" data-chips="friend"></div>
-					</section>
+							<p class="grp__none" data-none hidden>No one tagged yet</p>
+							<div class="chips" data-chips="friend"></div>
+						</section>
+					)}
 
 					<section class="panel__wide">
 						<div class="grp__row">

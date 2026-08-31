@@ -64,7 +64,7 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 						{visit.cuisines.length > 0 && <span class="dot">·</span>}
 						<span>{placeLine(visit)}</span>
 						{
-							visit.friends.length > 0 && (
+							isOwner && visit.friends.length > 0 && (
 								<span class="entry__with">with {visit.friends.join(', ')}</span>
 							)
 						}
