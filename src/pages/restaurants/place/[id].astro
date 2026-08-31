@@ -282,7 +282,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 										<div class="visit__line">
 											{starText(v.rating) && <span class="rl-stars">{starText(v.rating)}</span>}
 											{visitMarks(v) && <span class="rl-marks">{visitMarks(v)}</span>}
-											{v.friends.length > 0 && (
+											{isOwner && v.friends.length > 0 && (
 												<span class="visit__friends">with {v.friends.join(', ')}</span>
 											)}
 										</div>

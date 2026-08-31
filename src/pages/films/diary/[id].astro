@@ -161,7 +161,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 						</div>
 					)}
 
-					{entry.friends.length > 0 && (
+					{isOwner && entry.friends.length > 0 && (
 						<div class="friends">
 							Watched with{' '}
 							{entry.friends.map((f, i) => (

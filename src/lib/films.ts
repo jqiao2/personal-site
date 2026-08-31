@@ -1742,7 +1742,7 @@ export interface WatchedFacets {
  * diary entries rather than the lookup tables, which also hold values stranded on
  * soft-deleted logs.
  */
-export async function listWatchedFacets(): Promise<WatchedFacets> {
+export async function listWatchedFacets(isOwner = false): Promise<WatchedFacets> {
 	const [dimsByMovie, years, theaterNames, credits, diaryYearsByMovie] = await Promise.all([
 		loadFilmLogDims(),
 		listWatchedReleaseYears(),
@@ -1798,7 +1798,9 @@ export async function listWatchedFacets(): Promise<WatchedFacets> {
 		diaryYearLo,
 		diaryYearHi,
 		tags: byFrequency((d) => d.tags),
-		friends: byFrequency((d) => d.friends),
+		// Friends are owner-only across the site; a visitor gets no chips (and the
+		// panel hides the whole "Watched with" section).
+		friends: isOwner ? byFrequency((d) => d.friends) : [],
 		mediums: byFrequency((d) => d.mediums),
 		venues,
 		formats: byFrequency((d) => d.formats),
@@ -2092,7 +2094,10 @@ export async function countWatchedFilms(): Promise<number> {
  * Postgres may order tied rows differently between two paged queries, which shows
  * up as a film appearing twice while another never loads.
  */
-export async function listWatchedPage(query: WatchedQuery = {}): Promise<WatchedPage> {
+export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false): Promise<WatchedPage> {
+	// Friends are owner-only, so a visitor's `?friend=…` can't be used to probe
+	// which films were watched with whom — drop the filter before it's applied.
+	if (!isOwner && query.friends?.length) query = { ...query, friends: [] };
 	const { q = '', sort = 'recent', limit = 100, offset = 0 } = query;
 
 	// Resolve the diary-side filters first: they each narrow to a set of movie ids the
