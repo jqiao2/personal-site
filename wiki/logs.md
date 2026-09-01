@@ -13,3 +13,9 @@ wiki across every iteration, even reverted ones).
   day's prints. Added `npm run shot` (Playwright devDependency + scripts/shot.mjs) so
   any agent can look at a page, and wrote pattern 0002.
 
+- 2026-09-01 — Extracted the watchlist add-composer into a shared
+  `WatchlistComposer.astro` (reused on `/films` header + watchlist page). Truncating
+  watchlist.astro with a PowerShell `Get-Content|Set-Content` round-trip mojibake'd
+  every non-ASCII glyph in the file; recovered with `git checkout` + Edit-tool re-apply.
+  Wrote pattern 0003.
+
