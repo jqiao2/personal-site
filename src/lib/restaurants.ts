@@ -625,16 +625,15 @@ export async function searchPlaces(query: string, limit = 6): Promise<Place[]> {
 
 /**
  * What logging another meal somewhere inherits from the last one there. Only
- * the answers that tend to hold from one visit to the next: when it was is a
- * better guess than today when you are catching up on a week of them, and the
- * verdict and the heart are what you already decided about the place.
+ * the answers that tend to hold from one visit to the next: the verdict and the
+ * heart are what you already decided about the place. The DATE is not among
+ * them — logging another meal means one you ate today.
  *
  * The rating carries too. Somewhere you go back to is usually as good as it
  * was, so the last number is a better starting point than a blank row — and
  * the composer shows what it carried, so disagreeing with it is one click.
  */
 export interface PreviousVisit {
-	visitedOn: string;
 	rating: number | null;
 	verdict: number | null;
 	hearted: boolean;
@@ -670,7 +669,6 @@ export async function previousVisits(placeIds: number[]): Promise<Map<number, Pr
 	}[]) {
 		if (latest.has(row.restaurant_id)) continue;
 		latest.set(row.restaurant_id, {
-			visitedOn: row.visited_on,
 			rating: row.rating,
 			verdict: row.verdict,
 			hearted: row.hearted,
