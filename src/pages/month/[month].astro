@@ -12,9 +12,13 @@
 // WHY IT LOOKS LIKE PAPER. The four section cards are each art-directed to
 // their own section, and none of those directions can host the other three
 // without annexing them. What all four have in common is upstream of all of
-// them: I kept a paper journal first. Cream stock, a printed rule, a red margin
-// line, ink. It is the one reference that belongs to no section, so it's the
-// one that can hold all four.
+// them: I kept a paper journal first. Cream stock, a printed rule, ink. It is
+// the one reference that belongs to no section, so it's the one that can hold
+// all four.
+//
+// THE MARGIN AND THE PUNCH HOLES ARE GONE. They cost 42px of the artboard's
+// width — a third of a day's square — and the calendar is what the card is
+// for. The stock and the ruling carry the reference on their own.
 //
 // The calendar arithmetic and the artboard are the family's shared ones
 // (share-card.ts), and the export is the same one the other four use.
@@ -148,11 +152,6 @@ const query = monthQuery(aspect);
 			<div class="viewport" data-viewport style={`--h:${aspect.height}px`}>
 				<div class="scaler">
 					<div class="card" data-card style={`--h:${aspect.height}px; --rows:${rows}`}>
-						{/* The margin line and the punch holes are the whole paper
-						    illusion; everything else is just warm and ruled. */}
-						<span class="card__margin"></span>
-						<span class="card__holes"></span>
-
 						<div class="card__head">
 							<div class="card__kicker">The month in review</div>
 							<div class="card__month">{monthLabel(key)}</div>
@@ -439,36 +438,11 @@ const query = monthQuery(aspect);
 			repeating-linear-gradient(0deg, rgba(120, 96, 60, 0.028) 0 1px, transparent 1px 5px),
 			#fbf5e6;
 		border: 1px solid var(--rule);
-		/* Left padding is wider: that column belongs to the margin rule. */
-		padding: 52px 54px 44px 96px;
+		padding: 52px 54px 44px;
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
 	}
-	/* The red margin line, and the one thing on the card allowed to be red. */
-	.card__margin {
-		position: absolute;
-		left: 74px;
-		top: 0;
-		bottom: 0;
-		width: 2px;
-		background: var(--margin-red);
-		opacity: 0.5;
-	}
-	/* Two punch holes in the margin, drawn as one element so neither of them
-	   needs the card's height in its arithmetic — they sit at 30% and 70% of
-	   whichever aspect is on screen. */
-	.card__holes {
-		position: absolute;
-		left: 26px;
-		top: 0;
-		bottom: 0;
-		width: 22px;
-		background:
-			radial-gradient(circle 11px at 50% 30%, var(--ground) 98%, transparent 100%),
-			radial-gradient(circle 11px at 50% 70%, var(--ground) 98%, transparent 100%);
-	}
-
 	.card__head {
 		border-bottom: 2px solid var(--ink);
 		padding-bottom: 16px;

@@ -163,8 +163,8 @@ export function isSnack(fields: {
 /**
  * The mark geometry, in px on the 1080 artboard.
  *
- * `MARK_K` is set so a typical feature film (105 min) draws at ~66px on its
- * long side, which is half again the width of the ~128px cell it sits in. That
+ * `MARK_K` is set so a typical feature film (105 min) draws at ~86px on its
+ * long side, which is most of the width of the ~134px cell it sits in. That
  * is deliberate: a mark is allowed to spill onto its neighbours (see
  * `dayLayer`), so the size that reads best is the one a Polaroid actually is
  * relative to a page's daily square, not the largest one that would fit inside
@@ -175,12 +175,12 @@ export function isSnack(fields: {
  * mark has already said "this was the day", and a bigger one just buries the
  * week around it.
  *
- *   20 min → 29px    60 min → 50px    105 min → 66px
- *   180 min → 86px   270+ min → 104px (capped)
+ *   20 min → 38px    60 min → 65px    105 min → 86px
+ *   180 min → 113px  260+ min → 136px (capped)
  */
-export const MARK_K = 6.4;
-export const MARK_MIN = 26;
-export const MARK_MAX = 104;
+export const MARK_K = 8.4;
+export const MARK_MIN = 34;
+export const MARK_MAX = 136;
 
 /** A mark's nominal side, in artboard px, for `minutes` spent on it. This is
  *  the side of the SQUARE the mark's area has to fill; `markBox` spends that
@@ -486,7 +486,7 @@ export const CELL_GAP = 6;
  *  pile into a column of air. Mirrors `.strip__grid`'s max-height. */
 export const CELL_MAX_H = 230;
 /** Constant at every aspect: only the height of a cell changes. */
-export const CELL_W = (1080 - 96 - 54 - 6 * CELL_GAP) / 7;
+export const CELL_W = (1080 - 54 - 54 - 6 * CELL_GAP) / 7;
 
 export interface CellBox {
 	w: number;
@@ -552,10 +552,16 @@ export function cellScale(cell: CellBox): number {
  * density even as the pile gets bigger rather than leaving a hole in the
  * middle or a ring around the outside.
  *
- * THE BIGGEST PRINT IS AT THE CENTRE, because the marks arrive sorted biggest
- * first and the first one gets distance zero. That is also the right editorial
- * answer: the thing that took the most of the day anchors it and the rest are
- * scattered over it.
+ * THE BIGGEST PRINT ANCHORS THE PILE, BUT THE PILE IS WHAT'S CENTRED. The
+ * marks arrive sorted biggest first and the first one is laid at distance
+ * zero, so the thing that took the most of the day is what the rest are
+ * scattered over. Leaving it there, though, put the day's main event dead in
+ * the middle of every square and pushed the pile off the bottom-right of the
+ * ones with several prints — the square was being spent on one mark and the
+ * others were spilling out of it. So once the day is placed, the WHOLE pile is
+ * shifted so that its bounding box is centred on the day. A day with one print
+ * is unchanged (its box is the pile), and a day with five gets its five spread
+ * across the square with the big one wherever it landed.
  *
  * AND THEN IT'S KNOCKED OFF THE PATTERN. A perfect phyllotaxis is legible as a
  * pattern, which is its own kind of wrong — so each mark's angle and distance
@@ -606,7 +612,7 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  * marooned two cells from its own date.
  */
 export const MAX_COVER = 0.3;
-export const MAX_RADIUS = 130;
+export const MAX_RADIUS = 160;
 
 /** The ellipse's two axes, normalised so their mean is 1 — the pile stretches
  *  to the shape of the day it sits in without getting larger overall. */
@@ -650,7 +656,7 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 	if (marks.length <= 1) return marks;
 	const spread = spreadOf(cell);
 	const placed: Placed[] = [];
-	return marks.map((mark, i) => {
+	const laid = marks.map((mark, i) => {
 		const { w, h } = mark.box;
 		if (i === 0) {
 			placed.push({ dx: 0, dy: 0, w, h, hidden: 0 });
@@ -682,6 +688,17 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 		placed.push({ dx, dy, w, h, hidden: 0 });
 		return { ...mark, dx: Math.round(dx), dy: Math.round(dy) };
 	});
+
+	// Recentre on the pile's bounding box — see the note above. The anchor keeps
+	// whatever position the spiral gave it relative to its neighbours; only the
+	// pile as a whole moves.
+	const left = Math.min(...placed.map((b) => b.dx - b.w / 2));
+	const right = Math.max(...placed.map((b) => b.dx + b.w / 2));
+	const top = Math.min(...placed.map((b) => b.dy - b.h / 2));
+	const bottom = Math.max(...placed.map((b) => b.dy + b.h / 2));
+	const ox = Math.round((left + right) / 2);
+	const oy = Math.round((top + bottom) / 2);
+	return laid.map((mark) => ({ ...mark, dx: mark.dx - ox, dy: mark.dy - oy }));
 }
 
 // ---------------------------------------------------------------------------
