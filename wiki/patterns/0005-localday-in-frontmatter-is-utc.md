@@ -1,4 +1,4 @@
-# 0004 — `localDay()` in Astro frontmatter is UTC, not the user's day
+# 0005 — `localDay()` in Astro frontmatter is UTC, not the user's day
 
 **Type:** failure-mode
 **Applies when:** defaulting a date field (composer, form, filter) to "today".
