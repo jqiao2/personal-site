@@ -1,4 +1,4 @@
-# 0002 — `create or replace view` cannot change a column list
+# 0003 — `create or replace view` cannot change a column list
 
 **Type:** failure-mode
 **Applies when:** a migration adds a column to `restaurants` / `restaurant_visits`,
