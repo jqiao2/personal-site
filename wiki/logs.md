@@ -8,7 +8,12 @@ wiki across every iteration, even reverted ones).
   seeded pattern 0001 (Supabase CLI in worktrees). Wired the read/consolidate loop
   into CLAUDE.md / AGENTS.md.
 
+- 2026-08-31 — Two rounds of month-in-review layout fixes went out verified only
+  by numbers, and the rendered page still had cell boxes painting over the previous
+  day's prints. Added `npm run shot` (Playwright devDependency + scripts/shot.mjs) so
+  any agent can look at a page, and wrote pattern 0002.
+
 - 2026-09-01 — Restaurant composer opened on the wrong day: `localDay()` was called
   in Astro frontmatter (server, UTC) and a repeat visit inherited the last visit's
   date. Moved the default into the client script and stopped carrying `visitedOn`.
-  Pattern 0002.
+  Pattern 0003 (renumbered from 0002, which main had taken).

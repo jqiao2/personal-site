@@ -39,3 +39,6 @@ scripts/.cache/
 
 # enrichment source cache — re-downloadable, never committed
 .cache/
+
+# scratch: screenshots from `npm run shot`, and anything else throwaway
+tmp/

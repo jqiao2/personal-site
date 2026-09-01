@@ -12,6 +12,24 @@ WikiSkill (arXiv:2608.27454). Run this loop:
 - **Promote** a pattern's actionable core into this file once it has proven useful
   across more than one session. The wiki is never reset; see `wiki/README.md`.
 
+## Visual checks
+
+Anything whose correctness is visual — layout, overlap, a share card, a chart —
+gets looked at, not reasoned about:
+
+```
+npm run shot -- month/2026-08                                  # → tmp/shot.png
+npm run shot -- month/2026-08 tmp/card.png --el "[data-card]"  # one element
+npm run shot -- films tmp/films.png --width 1400 --full
+```
+
+`scripts/shot.mjs` starts its own dev server, shoots with Playwright at 2x and
+stops again — open the PNG with the Read tool. It needs `.env` in the worktree
+(`cp ../../../.env .env`; worktrees don't inherit untracked files). Owner-only
+pages need no login: `requireOwner()` is true in dev. Pass the route WITHOUT a
+leading slash — Git Bash rewrites `/month` into a Windows path. See
+`wiki/patterns/0002-screenshot-the-page-yourself.md`.
+
 ## Development
 
 When starting the dev server, use background mode:
