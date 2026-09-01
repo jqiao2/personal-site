@@ -77,6 +77,34 @@ const gpsGap = buildGraphData({
 assert.deepEqual(gpsGap.lat, [null, 40.2, 40.3, 40.4]);
 assert.deepEqual(gpsGap.lng, [null, -74.2, null, -74.4]);
 
+// Lap boundaries: cumulative offsets at the end of each lap except the last
+// (the activity's own end isn't a divider). Three laps → two boundaries.
+const withLaps = buildGraphData(
+	{ time_s: [0, 1, 2, 3], distance_m: [0, 10, 20, 30], altitude_m: [100, 101, 102, 103] },
+	[
+		{ elapsed_seconds: 60, distance_m: 400 },
+		{ elapsed_seconds: 90, distance_m: 500 },
+		{ elapsed_seconds: 30, distance_m: 200 },
+	],
+);
+assert.deepEqual(withLaps.laps, [
+	{ t: 60, d: 400 },
+	{ t: 150, d: 900 },
+]);
+// A null on one axis stops that axis at the gap but keeps the other going.
+const gapLap = buildGraphData({ time_s: [0, 1, 2], altitude_m: [1, 2, 3] }, [
+	{ elapsed_seconds: 60, distance_m: null },
+	{ elapsed_seconds: 90, distance_m: 500 },
+	{ elapsed_seconds: 30, distance_m: 200 },
+]);
+assert.deepEqual(gapLap.laps, [
+	{ t: 60, d: null },
+	{ t: 150, d: null },
+]);
+// Fewer than two laps has no internal divider.
+assert.equal(buildGraphData({ time_s: [0, 1], altitude_m: [1, 2] }, [{ elapsed_seconds: 60, distance_m: 400 }]).laps, undefined);
+assert.equal(small.laps, undefined, 'no laps passed → no boundaries');
+
 // Rejections: nothing plottable, or no axis at all.
 assert.equal(buildGraphData(null), null);
 assert.equal(buildGraphData({ time_s: [1, 2, 3] }), null, 'axis but no series → null');
