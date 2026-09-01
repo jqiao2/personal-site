@@ -8,3 +8,4 @@ add or update a pattern.
 |---|-------|------|--------------|
 | [0001](patterns/0001-supabase-cli-in-worktrees.md) | Supabase CLI in git worktrees | failure-mode | running `supabase db push`/`link` from a worktree |
 | [0002](patterns/0002-screenshot-the-page-yourself.md) | Screenshot the page yourself | strategy | changing anything visual — layout, a share card, a chart, a map |
+| [0003](patterns/0003-view-columns-need-a-drop.md) | `create or replace view` cannot change a column list | failure-mode | a migration adds a table column behind a view, or removes a view column |

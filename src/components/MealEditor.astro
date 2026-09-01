@@ -34,9 +34,11 @@ interface Props {
 	/**
 	 * Pre-selected place, when the composer is opened from a place page.
 	 *
-	 * `priceBand` and `previous` are what a second meal here inherits: what the
-	 * place costs and whether it's worth the trip are facts about the place, and
-	 * the date, verdict and heart are what the last visit said. See carryFrom.
+	 * `trip` and `previous` are what a second meal here inherits: whether it's
+	 * worth the trip is a fact about the place, and the date, verdict and heart
+	 * are what the last visit said. See carryFrom. What the place COSTS is a
+	 * fact about it too, but not one a meal is the place to change — it is
+	 * edited on the restaurant, in PlaceDetailsEditor.
 	 */
 	place?: {
 		id: number;
@@ -44,7 +46,6 @@ interface Props {
 		meta: string;
 		visits: number;
 		trip?: boolean;
-		priceBand?: string | null;
 		previous?: { visitedOn: string; verdict: number | null; hearted: boolean } | null;
 	} | null;
 	/** Editing an existing visit rather than logging a new one. */
@@ -213,26 +214,6 @@ const config = {
 			</div>
 
 			{/*
-				A property of the PLACE, like the one below it — asked here because
-				a meal is when you find out, saved onto the restaurant rather than
-				the visit, and shown on the restaurant's own pages. No diary row or
-				entry prints it, so answering it twice for the same place is not
-				two prices, it is a correction.
-			*/}
-			<div class="me__field">
-				<span class="rl-label">Price</span>
-				<div class="me__prices" data-me-prices>
-					{
-						PRICE_BANDS.map((p) => (
-							<button type="button" class="me__price" data-me-price={p}>
-								{p}
-							</button>
-						))
-					}
-				</div>
-			</div>
-
-			{/*
 				A property of the PLACE, asked here because a meal is when you find
 				out. It is not a sixth rung of the verdict: the verdict is "would I
 				come back", this is "would I cross town to", and a place can easily
@@ -389,7 +370,6 @@ const config = {
 		meta: string;
 		visits: number;
 		trip?: boolean;
-		priceBand?: string | null;
 		previous?: PreviousVisit | null;
 	}
 	/** A place already in the log, as the autocomplete route returns it. */
@@ -400,7 +380,6 @@ const config = {
 		visit_count: number;
 		neighborhood: string | null;
 		city: string;
-		price_band: string | null;
 		trip: boolean;
 		previous: PreviousVisit | null;
 	}
@@ -434,10 +413,10 @@ const config = {
 		const $ = <T extends Element = HTMLElement>(sel: string) => root.querySelector<T>(sel);
 		const $$ = (sel: string) => Array.from(root.querySelectorAll<HTMLElement>(sel));
 
-		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Six answers
+		// LOGGING ANOTHER MEAL SOMEWHERE STARTS FROM THE LAST ONE. Five answers
 		// carry forward when a place with a history is picked: the date, the
-		// rating, the verdict, the heart, the price and whether it's worth the
-		// trip. Five of them barely move between visits — you don't stop loving a
+		// rating, the verdict, the heart and whether it's worth the trip. Four of
+		// them barely move between visits — you don't stop loving a
 		// place between Tuesday and a fortnight later, and somewhere you go back
 		// to is usually about as good as it was — and the sixth, the date, is a
 		// better guess than today when the reason you're logging a second visit
@@ -469,10 +448,9 @@ const config = {
 			verdictSet: cfg.initial?.verdict != null || inherited?.verdict != null,
 			hearted: cfg.initial?.hearted ?? inherited?.hearted ?? false,
 			revisit: cfg.initial?.revisit ?? (cfg.place ? cfg.place.visits > 0 : false),
-			price: (cfg.place?.priceBand ?? null) as string | null,
 			// Whether those answers were carried over rather than given. Changing
 			// the place clears carried answers and leaves typed ones alone.
-			borrowed: Boolean(!cfg.initial && cfg.place && (inherited || cfg.place.priceBand || cfg.place.trip)),
+			borrowed: Boolean(!cfg.initial && cfg.place && (inherited || cfg.place.trip)),
 			tags: [...(cfg.initial?.tags ?? [])],
 			photos: (cfg.photos ?? []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
 			// Taking a stored photograph out of the list is a decision, not yet a
@@ -590,9 +568,6 @@ const config = {
 
 			$('[data-me-heart]')!.classList.toggle('me__toggle--on', state.hearted);
 			$('[data-me-revisit]')!.classList.toggle('me__toggle--on', state.revisit);
-			$$('[data-me-price]').forEach((el) =>
-				el.classList.toggle('me__price--on', el.dataset.mePrice === state.price),
-			);
 			$$('[data-me-try-price]').forEach((el) =>
 				el.classList.toggle('me__price--on', el.dataset.meTryPrice === state.tryPrice),
 			);
@@ -714,15 +689,14 @@ const config = {
 		 * two the place itself answers. Called on every pick, so picking a second
 		 * place replaces the first one's answers rather than leaving them.
 		 */
-		function carryFrom(from: { priceBand: string | null; trip: boolean; previous: PreviousVisit | null }) {
-			state.price = from.priceBand;
+		function carryFrom(from: { trip: boolean; previous: PreviousVisit | null }) {
 			state.trip = from.trip;
 			state.rating = from.previous?.rating ?? 0;
 			state.verdict = from.previous?.verdict ?? 0;
 			state.verdictSet = from.previous?.verdict != null;
 			state.hearted = from.previous?.hearted ?? false;
 			dateField().value = from.previous?.visitedOn ?? cfg.fallbackDate;
-			state.borrowed = Boolean(from.previous || from.priceBand || from.trip);
+			state.borrowed = Boolean(from.previous || from.trip);
 		}
 
 		/**
@@ -733,7 +707,7 @@ const config = {
 		function dropCarried() {
 			if (!state.borrowed) return;
 			// Blank on every side, which leaves borrowed false in its turn.
-			carryFrom({ priceBand: null, trip: false, previous: null });
+			carryFrom({ trip: false, previous: null });
 		}
 
 		function canSave(): boolean {
@@ -852,7 +826,7 @@ const config = {
 				state.revisit = p.visit_count > 0;
 				// Somewhere with a history hands over the answers it already has;
 				// somewhere only marked to try has none, and hands over a blank.
-				carryFrom({ priceBand: p.price_band, trip: Boolean(p.trip), previous: p.previous });
+				carryFrom({ trip: Boolean(p.trip), previous: p.previous });
 				// A place on record has whatever location it has, and a visit must
 				// never rewrite it — so a candidate picked before changing your
 				// mind does not follow you here.
@@ -1055,10 +1029,9 @@ const config = {
 			const payload = {
 				restaurantId: state.placeId ?? undefined,
 				place: state.placeId
-					? { name: state.locked?.name ?? '', priceBand: state.price, trip: state.trip }
+					? { name: state.locked?.name ?? '', trip: state.trip }
 					: {
 							name: state.locked?.name || value('[data-me-place]'),
-							priceBand: state.price,
 							trip: state.trip,
 							// A picked candidate's cuisines come along with its names.
 							// This pane has no cuisine field, so nothing is overwritten
@@ -1257,13 +1230,6 @@ const config = {
 			state.revisit = !state.revisit;
 			render();
 		});
-		$$('[data-me-price]').forEach((el) =>
-			el.addEventListener('click', () => {
-				const p = el.dataset.mePrice ?? null;
-				state.price = state.price === p ? null : p;
-				render();
-			}),
-		);
 		$$('[data-me-try-price]').forEach((el) =>
 			el.addEventListener('click', () => {
 				const p = el.dataset.meTryPrice ?? null;
