@@ -511,13 +511,15 @@ const query = monthQuery(aspect);
 		border-color: transparent;
 		background: none;
 	}
-	/* THE SPILL. A day's marks are bigger than its square on purpose, so they
-	   overlap the days around them, and the overlap needs a paint order: later
-	   days on top, because that is the order things got stuck in. --layer is the
-	   date, so the 31st covers the 30th covers the 29th. */
+	/* THE SPILL. A day's marks reach past its square on purpose, so they overlap
+	   the days around them, and the overlap needs a paint order: later days on
+	   top, because that is the order things got stuck in. That order lives on
+	   the MARKS (see .mark), not on the cell — a cell with a z-index is a
+	   stacking context, which sank every print on it under the ruled box of any
+	   later day, so Sunday's page slid over Saturday's photographs. The ruled
+	   boxes are scaffolding and belong under all of it. */
 	.cell--used {
 		border-color: var(--rule-2);
-		z-index: var(--layer, 1);
 	}
 	.cell__n {
 		position: absolute;
@@ -548,6 +550,12 @@ const query = monthQuery(aspect);
 	.mark {
 		display: block;
 		position: absolute;
+		/* The whole card's paint order, in one line: every print sits above every
+		   ruled box and every date numeral, and among the prints a later day
+		   covers an earlier one. --layer is the date, so the 31st covers the 30th
+		   covers the 29th; within a day, source order (biggest first) does the
+		   rest. */
+		z-index: calc(var(--layer, 1) + 10);
 		left: 50%;
 		top: 50%;
 		width: var(--w);
@@ -567,7 +575,7 @@ const query = monthQuery(aspect);
 	/* A print sits above the ruled paper of whatever day it lands on, including
 	   the date numeral — the grid is a scaffold, the pictures are the page. */
 	.mark:hover {
-		z-index: 40;
+		z-index: 100;
 	}
 	.mark img {
 		width: 100%;

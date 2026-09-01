@@ -27,6 +27,8 @@ import {
 	markBox,
 	CELL_MAX_H,
 	MAX_COVER,
+	MIN_INSIDE,
+	AREA_BUDGET,
 	cellBox,
 	cellScale,
 	markSize,
@@ -174,13 +176,36 @@ assert.ok(dayLayer(31) > dayLayer(30));
 assert.ok(dayLayer(2) > dayLayer(1));
 
 // 14. The pile is a cluster, not a row. The day's biggest print anchors the
-//     middle and the rest scatter around it in two dimensions — the thing a
+//     pile and the rest scatter around it in two dimensions — the thing a
 //     wrapping flex line structurally cannot do.
 const CELL = cellBox(6, 1350);
 const pile = placeCluster(march4.marks, CELL);
 assert.equal(pile.length, march4.marks.length);
-assert.equal(pile[0].dx, 0, 'the main event anchors the centre');
-assert.equal(pile[0].dy, 0);
+// THE PILE IS CENTRED, NOT THE ANCHOR. The biggest print used to be pinned to
+// the middle of every day, which put the day's main event dead centre and hung
+// the rest of the pile off one corner of the square. Now the whole pile is
+// shifted so its bounding box is centred, so the anchor is free to sit
+// wherever the scatter put it.
+const boundsOf = (marks) => ({
+	x: [
+		Math.min(...marks.map((m) => m.dx - m.box.w / 2)),
+		Math.max(...marks.map((m) => m.dx + m.box.w / 2)),
+	],
+	y: [
+		Math.min(...marks.map((m) => m.dy - m.box.h / 2)),
+		Math.max(...marks.map((m) => m.dy + m.box.h / 2)),
+	],
+});
+// Only as far as it can go, mind: the shift is clamped so that recentring
+// never pushes a print off its own day (see MIN_INSIDE below), so on a tight
+// pile the middle lands near the day's, not exactly on it.
+const bounds = boundsOf(pile);
+assert.ok(Math.abs(bounds.x[0] + bounds.x[1]) / 2 < CELL.w * 0.15, 'the pile is centred across');
+assert.ok(Math.abs(bounds.y[0] + bounds.y[1]) / 2 < CELL.h * 0.15, 'and down');
+// A day with one thing in it still has that thing in the middle: its own box
+// is the pile's box.
+const alone = placeCluster([{ ...pile[0], dx: 0, dy: 0 }], CELL)[0];
+assert.deepEqual([alone.dx, alone.dy], [0, 0], 'one print sits in the middle of its day');
 // Nothing sits on top of anything else at the same spot.
 const spots = new Set(pile.map((m) => `${m.dx},${m.dy}`));
 assert.equal(spots.size, pile.length, 'every print gets its own place');
@@ -230,25 +255,93 @@ assert.ok(hiddenOf(lopsided, 0) / area(lopsided[0]) <= MAX_COVER + 0.01);
 // The coverage budget alone would have allowed this one: a 30px print laid dead
 // centre on a 72x108 poster hides only 11% of it. Its centre still has to clear
 // the poster's box, or it reads as stuck to it rather than beside it.
+// Measured against the big print, not the day: the pile gets recentred
+// afterwards, so the anchor is no longer guaranteed to be at 0,0.
 assert.ok(
-	Math.abs(lopsided[1].dx) > 36 || Math.abs(lopsided[1].dy) > 54,
+	Math.abs(lopsided[1].dx - lopsided[0].dx) > 36 ||
+		Math.abs(lopsided[1].dy - lopsided[0].dy) > 54,
 	'a small print must not sit dead centre on a big one',
 );
 
 // Two tall posters, the 16th's actual case: circles said they cleared, the
 // rectangles they really are did not.
+//
+// COVERAGE IS BEST-EFFORT NOW, NOT A GUARANTEE. Three near-full-size posters
+// cannot all keep half their body on one Feed cell AND all stay 70% visible —
+// the room isn't there. Containment wins that argument (a print you have to
+// trace back to its own date is worse than a partly covered one), so what the
+// search promises is the least burial available inside the day, and the number
+// to fail over is the one that stops a print being recognisable.
+const CROWDED_COVER = 0.4;
 const posters = placeCluster([
 	{ ...pile[0], key: 'a', box: { w: 72, h: 108 }, dx: 0, dy: 0 },
 	{ ...pile[0], key: 'b', box: { w: 69, h: 103 }, dx: 0, dy: 0 },
 	{ ...pile[0], key: 'c', box: { w: 60, h: 89 }, dx: 0, dy: 0 },
 ], CELL);
 for (let i = 0; i < posters.length; i++) {
-	assert.ok(hiddenOf(posters, i) / area(posters[i]) <= MAX_COVER + 0.01);
+	const frac = hiddenOf(posters, i) / area(posters[i]);
+	assert.ok(frac <= CROWDED_COVER, `poster ${i} is ${(frac * 100).toFixed(0)}% buried`);
 }
 
 // Degenerate days don't throw.
 assert.deepEqual(placeCluster([], CELL), []);
-assert.equal(placeCluster([pile[0]], CELL)[0].dx, 0);
+
+// A PRINT STAYS ON ITS OWN DAY. It may spill — that is the look — but never so
+// far that most of it belongs to the following week, which is what the old
+// unbounded outward walk did to a crowded day: the 16th's last poster ended up
+// a full cell below its own date, unreadable as the 16th's.
+const insideOf = (mark, cell) => {
+	const x = Math.max(0, Math.min(mark.box.w, cell.w, (mark.box.w + cell.w) / 2 - Math.abs(mark.dx)));
+	const y = Math.max(0, Math.min(mark.box.h, cell.h, (mark.box.h + cell.h) / 2 - Math.abs(mark.dy)));
+	return (x * y) / (mark.box.w * mark.box.h);
+};
+for (const mark of pile) {
+	assert.ok(
+		insideOf(mark, CELL) >= MIN_INSIDE - 0.01,
+		`"${mark.title}" is only ${(insideOf(mark, CELL) * 100).toFixed(0)}% on its own day`,
+	);
+}
+
+// The crowded case, which is the one that breaks: nine things on one Sunday.
+// Every print still keeps its half on the day, and the day's total print area
+// is held to AREA_BUDGET — the shrink that makes containment possible at all.
+const busy = buildCells(
+	'2026-08',
+	Array.from({ length: 9 }, (_, i) => ({
+		...march4.marks[i % march4.marks.length],
+		key: `busy-${i}`,
+		day: '2026-08-16',
+		minutes: 240 - i * 25,
+	})),
+	CELL,
+);
+const sixteenth = busy.find((c) => c.date === 16);
+assert.equal(sixteenth.marks.length, 9);
+for (const mark of sixteenth.marks) {
+	assert.ok(
+		insideOf(mark, CELL) >= MIN_INSIDE - 0.01,
+		`a print on a nine-print day is only ${(insideOf(mark, CELL) * 100).toFixed(0)}% on its day`,
+	);
+}
+// And no print on it disappears under the others, which is the failure the
+// px²-denominated cost used to produce: the cheapest place to dump overlap was
+// always on top of the day's biggest print, and it came out 89% buried.
+for (let i = 0; i < sixteenth.marks.length; i++) {
+	const frac = hiddenOf(sixteenth.marks, i) / area(sixteenth.marks[i]);
+	assert.ok(frac <= CROWDED_COVER, `a print on a nine-print day is ${(frac * 100).toFixed(0)}% buried`);
+}
+const spent = sixteenth.marks.reduce((total, m) => total + m.box.w * m.box.h, 0);
+assert.ok(
+	spent <= AREA_BUDGET * CELL.w * CELL.h * 1.02,
+	`a crowded day spends ${(spent / (CELL.w * CELL.h)).toFixed(2)} cells of print, over the ${AREA_BUDGET} budget`,
+);
+// Shrinking is UNIFORM, so within the day the areas still stand in the ratio
+// of the minutes they mean.
+const [biggest, next] = sixteenth.marks;
+assert.ok(
+	(biggest.box.w * biggest.box.h) / (next.box.w * next.box.h) > 1,
+	'the longest thing on a crowded day is still the biggest print on it',
+);
 
 // 15. THE SCATTER IS A QUESTION ABOUT THE DAY'S SQUARE, and that square is a
 //     different shape at every aspect: a Feed cell is ~167px tall, a Story one
