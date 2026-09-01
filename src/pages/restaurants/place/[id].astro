@@ -447,11 +447,11 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 					trip: place.trip,
 					priceBand: place.price_band,
 					// Logging from here is nearly always logging ANOTHER visit, so
-					// the composer opens on the last one's answers. Already loaded
-					// and already sorted newest first — see getPlace.
+					// the composer opens on the last one's answers — its date
+					// excepted. Already loaded and already sorted newest first —
+					// see getPlace.
 					previous: visits[0]
 						? {
-								visitedOn: visits[0].visited_on,
 								rating: visits[0].rating,
 								verdict: visits[0].verdict,
 								hearted: visits[0].hearted,

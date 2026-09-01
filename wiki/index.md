@@ -7,3 +7,4 @@ add or update a pattern.
 | # | Title | Type | Applies when |
 |---|-------|------|--------------|
 | [0001](patterns/0001-supabase-cli-in-worktrees.md) | Supabase CLI in git worktrees | failure-mode | running `supabase db push`/`link` from a worktree |
+| [0002](patterns/0002-localday-in-frontmatter-is-utc.md) | `localDay()` in Astro frontmatter is UTC | failure-mode | defaulting a date field to "today" |

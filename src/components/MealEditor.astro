@@ -25,7 +25,6 @@
 import { VERDICTS } from '../lib/verdict';
 import { PRICE_BANDS, WHY_TAGS } from '../lib/restaurants';
 import { verdictRotation } from '../lib/verdict';
-import { localDay } from '../lib/day';
 import StarPicker from './StarPicker.astro';
 
 interface Props {
@@ -36,7 +35,8 @@ interface Props {
 	 *
 	 * `priceBand` and `previous` are what a second meal here inherits: what the
 	 * place costs and whether it's worth the trip are facts about the place, and
-	 * the date, verdict and heart are what the last visit said. See carryFrom.
+	 * the rating, verdict and heart are what the last visit said. The date is
+	 * never inherited — see carryFrom.
 	 */
 	place?: {
 		id: number;
@@ -45,7 +45,7 @@ interface Props {
 		visits: number;
 		trip?: boolean;
 		priceBand?: string | null;
-		previous?: { visitedOn: string; verdict: number | null; hearted: boolean } | null;
+		previous?: { rating: number | null; verdict: number | null; hearted: boolean } | null;
 	} | null;
 	/** Editing an existing visit rather than logging a new one. */
 	visitId?: number | null;
@@ -91,9 +91,6 @@ const config = {
 	tagOptions,
 	friendOptions,
 	verdicts: VERDICTS.map((v) => ({ label: v.label, gloss: v.gloss, ink: v.ink })),
-	// The composer opens on today, and today is the browser's day rather than
-	// the server's: a Vercel function in UTC calls it tomorrow all evening.
-	fallbackDate: localDay(),
 };
 ---
 
@@ -369,6 +366,7 @@ const config = {
 
 <script>
 	import { hitWhere, lookupPlaces, type GeoHit } from '../lib/place-lookup';
+	import { localDay } from '../lib/day';
 	import { wireStarPicker } from '../lib/star-picker';
 
 	interface VerdictSpec {
@@ -378,7 +376,6 @@ const config = {
 	}
 	/** The last visit somewhere, as the composer inherits it. */
 	interface PreviousVisit {
-		visitedOn: string;
 		rating: number | null;
 		verdict: number | null;
 		hearted: boolean;
@@ -422,7 +419,6 @@ const config = {
 		tagOptions: string[];
 		friendOptions: string[];
 		verdicts: VerdictSpec[];
-		fallbackDate: string;
 	}
 
 	const configTag = document.getElementById('meal-editor-config');
@@ -721,7 +717,9 @@ const config = {
 			state.verdict = from.previous?.verdict ?? 0;
 			state.verdictSet = from.previous?.verdict != null;
 			state.hearted = from.previous?.hearted ?? false;
-			dateField().value = from.previous?.visitedOn ?? cfg.fallbackDate;
+			// The date is not inherited: another meal somewhere is one you are
+			// logging today, not a repeat of the last one's date.
+			dateField().value = localDay();
 			state.borrowed = Boolean(from.previous || from.priceBand || from.trip);
 		}
 
@@ -1074,7 +1072,7 @@ const config = {
 							lat: state.geo?.precise ? state.geo.lat : null,
 							lng: state.geo?.precise ? state.geo.lng : null,
 						},
-				visitedOn: value('[data-me-date]') || cfg.fallbackDate,
+				visitedOn: value('[data-me-date]') || localDay(),
 				rating: state.rating || null,
 				verdict: state.verdictSet ? state.verdict : null,
 				hearted: state.hearted,
@@ -1452,10 +1450,10 @@ const config = {
 			return { kind: 'new', file: shrunk, url: URL.createObjectURL(shrunk), width: w, height: h };
 		}
 
-		// Seed from the server: an edit opens on the stored visit, another meal
-		// somewhere on the date of the last one there, and everything else on
-		// today.
-		dateField().value = cfg.initial?.visitedOn ?? inherited?.visitedOn ?? cfg.fallbackDate;
+		// An edit opens on the stored visit; everything else opens on today —
+		// the BROWSER's today, so the user's own midnight, not the UTC one a
+		// Vercel function would name from 8pm Eastern onwards.
+		dateField().value = cfg.initial?.visitedOn ?? localDay();
 		if (cfg.initial) {
 			($('[data-me-notes]') as HTMLTextAreaElement).value = cfg.initial.review;
 			($('[data-me-friends]') as HTMLInputElement).value = cfg.initial.friends.join(', ');
