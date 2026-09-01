@@ -1,6 +1,7 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import EntryEditor from '../../components/EntryEditor.astro';
+import WatchlistComposer from '../../components/WatchlistComposer.astro';
 import FilmsFeed from '../../components/FilmsFeed.astro';
 import { listTheaterNames, listTags, listFriends } from '../../lib/films';
 import { requireOwner } from '../../lib/auth';
@@ -25,7 +26,10 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 			<SiteHeader pathname={Astro.url.pathname} theme="film">
 				<Fragment slot="actions">
 					{isOwner && (
-						<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
+						<>
+							<button type="button" class="nav-btn nav-btn--watch" data-open-watchlist>+ To watch</button>
+							<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
+						</>
 					)}
 				</Fragment>
 			</SiteHeader>
@@ -60,6 +64,8 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 		/>
 	)}
 
+	{isOwner && <WatchlistComposer />}
+
 	<style>
 		.page {
 			min-height: 100vh;
@@ -92,6 +98,16 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 		}
 		.nav-btn--log:hover {
 			background: #f0d488;
+		}
+		/* Secondary action: outlined, so "+ Log film" stays the primary one. */
+		.nav-btn--watch {
+			color: #f0d488;
+			background: transparent;
+			border: 1px solid #6b4a42;
+		}
+		.nav-btn--watch:hover {
+			border-color: #d9b45a;
+			background: #241012;
 		}
 
 		/* Skeleton shown while the FilmsFeed island streams in. Mirrors the feed's
