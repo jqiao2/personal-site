@@ -43,6 +43,7 @@ const out = positional[1] ?? 'tmp/shot.png';
 const width = Number(flag('width', 1280));
 const height = Number(flag('height', 900));
 const el = flag('el', null);
+const click = flag('click', null); // selector to click before shooting, for interactive state
 const full = args.includes('--full');
 
 await mkdir(dirname(out), { recursive: true });
@@ -64,6 +65,7 @@ try {
 	// Fonts and images decide the layout of everything here, so wait for them
 	// rather than for a timer.
 	await page.evaluate(() => document.fonts.ready);
+	if (click) await page.locator(click).first().click();
 	const target = el ? page.locator(el).first() : page;
 	await target.screenshot({ path: out, fullPage: el ? undefined : full });
 	console.log(`wrote ${out}`);

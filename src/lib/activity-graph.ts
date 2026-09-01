@@ -50,6 +50,18 @@ export interface GraphData {
 	lat: (number | null)[] | null;
 	lng: (number | null)[] | null;
 	series: GraphSeries[];
+	/** Internal lap boundaries as offsets from the start, in the same units as
+	 *  the two axes (seconds and metres). One per boundary BETWEEN laps — the
+	 *  activity's own start and end are not dividers, so an N-lap activity has
+	 *  N-1 entries. `t`/`d` is null on an axis a lap didn't record. Absent when
+	 *  the activity has fewer than two laps. */
+	laps?: { t: number | null; d: number | null }[];
+}
+
+/** The lap fields the boundary markers need — `ActivityLap` satisfies it. */
+export interface GraphLap {
+	elapsed_seconds: number | null;
+	distance_m: number | null;
 }
 
 /** The evenly-spaced sample indices to read every array at. Endpoints always
@@ -82,7 +94,7 @@ export interface GraphStreams {
 /** Build the client graph payload, or null when there is nothing plottable — no
  *  series with two real points, or neither a time nor a distance axis to lay
  *  them on. */
-export function buildGraphData(streams: GraphStreams | null | undefined, n = GRAPH_N): GraphData | null {
+export function buildGraphData(streams: GraphStreams | null | undefined, laps?: GraphLap[] | null, n = GRAPH_N): GraphData | null {
 	if (!streams) return null;
 
 	const lens = [streams.time_s, streams.distance_m, streams.altitude_m, streams.heartrate, streams.power_w, streams.speed_ms].map(
@@ -121,5 +133,26 @@ export function buildGraphData(streams: GraphStreams | null | undefined, n = GRA
 	const series = candidates.filter((s) => s.values.filter(finite).length >= 2);
 	if (series.length === 0) return null;
 
-	return { n: idx.length, t, d, lat, lng, series };
+	return { n: idx.length, t, d, lat, lng, series, laps: lapBoundaries(laps) };
+}
+
+/** Cumulative offsets at the end of each lap except the last — the internal
+ *  dividers to draw on the profile. Time and distance accumulate independently;
+ *  the first null on an axis stops that axis (a running total past an unknown
+ *  segment is itself unknown), while the other axis keeps going. */
+function lapBoundaries(laps: GraphLap[] | null | undefined): GraphData['laps'] {
+	if (!laps || laps.length < 2) return undefined;
+	const out: { t: number | null; d: number | null }[] = [];
+	let tAcc = 0;
+	let dAcc = 0;
+	let tOk = true;
+	let dOk = true;
+	for (let i = 0; i < laps.length - 1; i++) {
+		if (finite(laps[i].elapsed_seconds)) tAcc += laps[i].elapsed_seconds as number;
+		else tOk = false;
+		if (finite(laps[i].distance_m)) dAcc += laps[i].distance_m as number;
+		else dOk = false;
+		out.push({ t: tOk ? Math.round(tAcc) : null, d: dOk ? Math.round(dAcc) : null });
+	}
+	return out.some((b) => b.t != null || b.d != null) ? out : undefined;
 }

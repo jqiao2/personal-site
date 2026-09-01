@@ -18,6 +18,11 @@ interface Props {
 const { data } = Astro.props;
 const bothAxes = Boolean(data.t && data.d);
 const defaultMode = data.t ? 'time' : 'dist';
+// Only elevation shows on load — HR/power/speed are there to be switched on,
+// not read all at once (they crowd the same axis). Falls back to the first
+// available series when the activity has no elevation (a treadmill, say).
+const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
+const hasLaps = Boolean(data.laps && data.laps.length > 0);
 ---
 
 <section class="ag" data-graph>
@@ -40,12 +45,20 @@ const defaultMode = data.t ? 'time' : 'dist';
 	<div class="ag__series">
 		{
 			data.series.map((s) => (
-				<button type="button" class="ag__chip" data-key={s.key} style={`--c:${s.color}`} aria-pressed="true">
+				<button type="button" class="ag__chip" data-key={s.key} style={`--c:${s.color}`} aria-pressed={String(s.key === defaultKey)}>
 					<span class="ag__swatch" />
 					<span>{s.label}</span>
 					<span class="ag__chip-val" data-val />
 				</button>
 			))
+		}
+		{
+			hasLaps && (
+				<button type="button" class="ag__chip ag__chip--laps" data-laps aria-pressed="false">
+					<span class="ag__swatch ag__swatch--laps" />
+					<span>Laps</span>
+				</button>
+			)
 		}
 	</div>
 
@@ -78,16 +91,22 @@ const defaultMode = data.t ? 'time' : 'dist';
 		const SVGNS = 'http://www.w3.org/2000/svg';
 		const PAD = 6; // top/bottom breathing room, in viewBox (and %) units
 
-		// The active set of series, and the x axis in force. Both start showing
-		// everything on the axis the activity actually has.
-		const active = new Set<string>(data.series.map((s) => s.key));
+		// The active set of series, and the x axis in force. Only elevation (or,
+		// lacking it, the first series) starts on — the rest are switched in as
+		// wanted. Lap dividers likewise start hidden.
+		const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
+		const active = new Set<string>(defaultKey ? [defaultKey] : []);
 		let mode: Mode = data.t ? 'time' : 'dist';
+		let lapsOn = false;
 
 		// --- Normalised geometry, computed once ---------------------------------
 		// x for each mode: axis value scaled to 0..1. Real device time/distance is
 		// monotonic and complete; a stray null falls back to its index fraction so
 		// the curve never collapses to the left edge.
-		function xnormFor(axis: (number | null)[] | null): number[] | null {
+		// Axis bounds per mode, captured so lap boundaries (raw axis values, not
+		// per-index) can be placed on the same 0..1 scale as the samples.
+		const xbounds: Record<Mode, { lo: number; hi: number } | null> = { time: null, dist: null };
+		function xnormFor(axis: (number | null)[] | null, m: Mode): number[] | null {
 			if (!axis) return null;
 			let lo = Infinity;
 			let hi = -Infinity;
@@ -95,10 +114,11 @@ const defaultMode = data.t ? 'time' : 'dist';
 				if (v < lo) lo = v;
 				if (v > hi) hi = v;
 			}
+			xbounds[m] = { lo, hi };
 			const span = hi - lo || 1;
 			return axis.map((v, i) => (v == null ? i / (data.n - 1) : (v - lo) / span));
 		}
-		const xn: Record<Mode, number[] | null> = { time: xnormFor(data.t), dist: xnormFor(data.d) };
+		const xn: Record<Mode, number[] | null> = { time: xnormFor(data.t, 'time'), dist: xnormFor(data.d, 'dist') };
 
 		// y for each series: scaled to its own min/max, null preserved so the line
 		// breaks across a recording gap instead of diving to a false zero.
@@ -155,6 +175,41 @@ const defaultMode = data.t ? 'time' : 'dist';
 			}
 		}
 
+		// --- Lap dividers (vertical rules, appended first so they sit behind the
+		//     traces) -----------------------------------------------------------
+		const lapLines: SVGLineElement[] = [];
+		for (const _ of data.laps ?? []) {
+			const ln = document.createElementNS(SVGNS, 'line');
+			ln.setAttribute('stroke', '#6b7b88');
+			ln.setAttribute('stroke-width', '1');
+			ln.setAttribute('stroke-dasharray', '3 4');
+			ln.setAttribute('stroke-opacity', '0.5');
+			ln.setAttribute('vector-effect', 'non-scaling-stroke');
+			ln.setAttribute('y1', '0');
+			ln.setAttribute('y2', '100');
+			ln.style.display = 'none';
+			svg.appendChild(ln);
+			lapLines.push(ln);
+		}
+		// Place each divider at its axis offset scaled the same way the samples
+		// are; a boundary the current axis didn't record (or when laps are off)
+		// simply isn't drawn.
+		function positionLaps() {
+			const b = xbounds[mode];
+			(data.laps ?? []).forEach((lp, i) => {
+				const ln = lapLines[i];
+				const v = mode === 'time' ? lp.t : lp.d;
+				if (!b || v == null || !lapsOn) {
+					ln.style.display = 'none';
+					return;
+				}
+				const x = (((v - b.lo) / (b.hi - b.lo || 1)) * 1000).toFixed(1);
+				ln.setAttribute('x1', x);
+				ln.setAttribute('x2', x);
+				ln.style.display = '';
+			});
+		}
+
 		for (const s of data.series) {
 			if (s.key === 'elevation') {
 				elevArea = document.createElementNS(SVGNS, 'path');
@@ -177,6 +232,7 @@ const defaultMode = data.t ? 'time' : 'dist';
 			lineEls.set(s.key, p);
 		}
 		buildPaths();
+		positionLaps();
 
 		// --- Cursor dots (one per series, reused) -------------------------------
 		const dots = new Map<string, HTMLElement>();
@@ -276,7 +332,7 @@ const defaultMode = data.t ? 'time' : 'dist';
 		plot.addEventListener('pointerleave', endScrub);
 
 		// --- Controls -----------------------------------------------------------
-		for (const chip of root.querySelectorAll<HTMLButtonElement>('.ag__chip')) {
+		for (const chip of root.querySelectorAll<HTMLButtonElement>('.ag__chip[data-key]')) {
 			chip.addEventListener('click', () => {
 				const key = chip.dataset.key!;
 				// Never let the reader turn everything off — the last one stays on.
@@ -287,6 +343,12 @@ const defaultMode = data.t ? 'time' : 'dist';
 				applyVisibility();
 			});
 		}
+		const lapsChip = root.querySelector<HTMLButtonElement>('[data-laps]');
+		lapsChip?.addEventListener('click', () => {
+			lapsOn = !lapsOn;
+			lapsChip.setAttribute('aria-pressed', String(lapsOn));
+			positionLaps();
+		});
 		for (const btn of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) {
 			btn.addEventListener('click', () => {
 				const next = btn.dataset.mode as Mode;
@@ -294,6 +356,7 @@ const defaultMode = data.t ? 'time' : 'dist';
 				mode = next;
 				for (const b of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
 				buildPaths();
+				positionLaps();
 				endScrub();
 			});
 		}
@@ -375,6 +438,17 @@ const defaultMode = data.t ? 'time' : 'dist';
 	.ag__chip[aria-pressed='false'] .ag__swatch {
 		background: transparent;
 		box-shadow: inset 0 0 0 1.5px var(--c);
+	}
+	/* The laps swatch is the divider it toggles: a short dashed vertical rule,
+	   not a colour dot. */
+	.ag__swatch--laps,
+	.ag__chip[aria-pressed='false'] .ag__swatch--laps {
+		background: transparent;
+		box-shadow: none;
+		border-left: 2px dashed #6b7b88;
+		border-radius: 0;
+		width: 0;
+		height: 12px;
 	}
 	.ag__chip-val {
 		font-variant-numeric: tabular-nums;
