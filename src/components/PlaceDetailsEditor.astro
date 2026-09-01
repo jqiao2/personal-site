@@ -1,0 +1,319 @@
+---
+// "Edit this restaurant" — everything about a place that is not where it is.
+//
+// WHY THIS EXISTS. Every field here has been writable through
+// PATCH /api/restaurants/places/:id since the route was written, and none of
+// them had a control. The name, the cuisines and the price were whatever the
+// composer guessed the night the place was first logged; the three links were
+// only ever settable by a script. So a typo in a name was permanent, a place
+// imported as "Laser Wolf Brooklyn" stayed that, and the four link slots the
+// place page draws were greyed out on nearly every page with no way to fill
+// them in.
+//
+// WHY IT IS NOT THE LOCATION DIALOG. PlaceEditor answers one question — where
+// is this — and answers it with a search, four states and a confirming step.
+// These are eight text fields with no lookup behind them, and folding them into
+// a wizard would put a form under a search box that has nothing to do with it.
+// Two dialogs, one subject each: "place this restaurant" and "correct what it
+// says".
+//
+// IT WEARS PlaceEditor'S CLOTHES, deliberately and by literal reuse: the `pe__`
+// block is declared `is:global` there, and both dialogs are rendered together
+// for an owner on the place page, so this one needs no stylesheet of its own
+// beyond the price row. Rendering this component without PlaceEditor on the
+// same page would leave it unstyled.
+import { PRICE_BANDS } from '../lib/restaurants';
+
+interface Props {
+	place: {
+		id: number;
+		name: string;
+		cuisines: string[];
+		priceBand: string | null;
+		websiteUrl: string | null;
+		yelpUrl: string | null;
+		beliUrl: string | null;
+		googlePlaceId: string | null;
+		toTryReason: string | null;
+		/** Drives whether the "why I want to go" field is drawn at all. */
+		onToTry: boolean;
+	};
+}
+
+const { place } = Astro.props;
+---
+
+<script type="application/json" id="place-details-config" set:html={JSON.stringify(place)} />
+
+<div class="pe" id="place-details" hidden>
+	<div class="pe__backdrop" data-pd-close></div>
+	<div class="pe__sheet" role="dialog" aria-modal="true" aria-labelledby="pd-title">
+		<div class="pe__head">
+			<div class="pe__heading">
+				<div class="pe__title" id="pd-title">Edit this restaurant</div>
+				<div class="pe__evidence">{place.name}</div>
+			</div>
+			<button type="button" class="pe__x" data-pd-close aria-label="Close">&times;</button>
+		</div>
+
+		<div class="pe__body">
+			<div class="pe__grid">
+				<div class="pe__field">
+					<label class="rl-label" for="pd-name">Shown as</label>
+					<input class="pe__input" id="pd-name" data-pd="name" type="text" autocomplete="off" />
+				</div>
+				<div class="pe__field">
+					<label class="rl-label" for="pd-cuisines">Cuisine</label>
+					<input
+						class="pe__input"
+						id="pd-cuisines"
+						data-pd="cuisines"
+						type="text"
+						autocomplete="off"
+						placeholder="Sichuan, Hot pot"
+					/>
+				</div>
+			</div>
+
+			{/* One of four, and clicking the one that is on turns it off — an
+			    unpriced place is a normal reading, not a missing answer. */}
+			<div class="pe__field">
+				<span class="rl-label">Price</span>
+				<div class="pd__prices">
+					{PRICE_BANDS.map((p) => (
+						<button type="button" class="pd__price" data-pd-price={p}>{p}</button>
+					))}
+				</div>
+			</div>
+
+			{/* The four slots the place page draws, greyed when empty. Google's is
+			    an id rather than a URL: the page builds the maps link from it, and
+			    a pasted link is not what that link needs. */}
+			<div class="pe__field">
+				<label class="rl-label" for="pd-website">Website</label>
+				<input class="pe__input" id="pd-website" data-pd="websiteUrl" type="url" autocomplete="off" placeholder="https://" />
+			</div>
+			<div class="pe__grid">
+				<div class="pe__field">
+					<label class="rl-label" for="pd-yelp">Yelp</label>
+					<input class="pe__input" id="pd-yelp" data-pd="yelpUrl" type="url" autocomplete="off" placeholder="https://yelp.com/biz/…" />
+				</div>
+				<div class="pe__field">
+					<label class="rl-label" for="pd-beli">Beli</label>
+					<input class="pe__input" id="pd-beli" data-pd="beliUrl" type="url" autocomplete="off" placeholder="https://beliapp.com/…" />
+				</div>
+			</div>
+			<div class="pe__field">
+				<label class="rl-label" for="pd-gplace">Google place ID</label>
+				<input
+					class="pe__input pe__input--mono"
+					id="pd-gplace"
+					data-pd="googlePlaceId"
+					type="text"
+					autocomplete="off"
+					placeholder="ChIJ…"
+				/>
+				<div class="pe__note">Never shown. It is what makes the Google Maps link point at this door rather than a search.</div>
+			</div>
+
+			{place.onToTry && (
+				<div class="pe__field">
+					<label class="rl-label" for="pd-why">Why I want to go</label>
+					<input class="pe__input" id="pd-why" data-pd="toTryReason" type="text" autocomplete="off" placeholder="Peking duck, BYOB, a big table" />
+				</div>
+			)}
+
+			<div class="pe__underneath">
+				Where it is has its own dialog — <button type="button" class="pe__linkish" data-open-place-editor>fix the location</button>.
+			</div>
+		</div>
+
+		<div class="pe__foot">
+			<span class="pe__summary" data-pd-summary></span>
+			<button type="button" class="rl-btn pe__cancel" data-pd-close>Cancel</button>
+			<button type="button" class="pe__save" data-pd-save disabled>Save</button>
+		</div>
+
+		<div class="pe__discard" data-pd-discard hidden>
+			<div class="pe__discard-card">
+				<div class="pe__discard-title">Discard?</div>
+				<div class="pe__discard-actions">
+					<button type="button" class="rl-btn" data-pd-keep>Keep</button>
+					<button type="button" class="pe__discard-go" data-pd-discard-go>Discard</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<script>
+	interface Config {
+		id: number;
+		name: string;
+		cuisines: string[];
+		priceBand: string | null;
+		websiteUrl: string | null;
+		yelpUrl: string | null;
+		beliUrl: string | null;
+		googlePlaceId: string | null;
+		toTryReason: string | null;
+		onToTry: boolean;
+	}
+
+	const node = document.getElementById('place-details');
+	const configNode = document.getElementById('place-details-config');
+	if (node && configNode) {
+		const cfg = JSON.parse(configNode.textContent ?? '{}') as Config;
+
+		// The text fields are read straight off the DOM; only the price has no
+		// input to hold it. `saved` is what was loaded, which is what "changed"
+		// and "discard?" are both measured against.
+		const TEXT = ['name', 'cuisines', 'websiteUrl', 'yelpUrl', 'beliUrl', 'googlePlaceId', 'toTryReason'] as const;
+		type TextKey = (typeof TEXT)[number];
+
+		const saved: Record<TextKey, string> = {
+			name: cfg.name,
+			cuisines: cfg.cuisines.join(', '),
+			websiteUrl: cfg.websiteUrl ?? '',
+			yelpUrl: cfg.yelpUrl ?? '',
+			beliUrl: cfg.beliUrl ?? '',
+			googlePlaceId: cfg.googlePlaceId ?? '',
+			toTryReason: cfg.toTryReason ?? '',
+		};
+		let price = cfg.priceBand;
+		let saving = false;
+
+		const field = (key: TextKey) => node.querySelector<HTMLInputElement>(`[data-pd="${key}"]`);
+		const val = (key: TextKey) => field(key)?.value.trim() ?? saved[key];
+
+		function changed(): TextKey[] {
+			return TEXT.filter((k) => field(k) && val(k) !== saved[k]);
+		}
+
+		function dirty(): boolean {
+			return changed().length > 0 || price !== cfg.priceBand;
+		}
+
+		function render() {
+			for (const el of node!.querySelectorAll<HTMLElement>('[data-pd-price]')) {
+				el.classList.toggle('pd__price--on', el.dataset.pdPrice === price);
+			}
+			const save = node!.querySelector<HTMLButtonElement>('[data-pd-save]')!;
+			save.disabled = saving || !dirty() || !val('name');
+			const n = changed().length + (price !== cfg.priceBand ? 1 : 0);
+			node!.querySelector('[data-pd-summary]')!.textContent =
+				!val('name') ? 'a restaurant needs a name' : n === 0 ? '' : `${n} change${n === 1 ? '' : 's'}`;
+		}
+
+		function open() {
+			for (const k of TEXT) {
+				const el = field(k);
+				if (el) el.value = saved[k];
+			}
+			price = cfg.priceBand;
+			node!.hidden = false;
+			document.body.style.overflow = 'hidden';
+			render();
+			window.setTimeout(() => field('name')?.focus(), 0);
+		}
+
+		function close() {
+			node!.hidden = true;
+			node!.querySelector<HTMLElement>('[data-pd-discard]')!.hidden = true;
+			document.body.style.overflow = '';
+		}
+
+		function askClose() {
+			if (dirty()) node!.querySelector<HTMLElement>('[data-pd-discard]')!.hidden = false;
+			else close();
+		}
+
+		async function save() {
+			if (saving || !dirty() || !val('name')) return;
+			// Only what moved goes up. The route applies a key when it is present,
+			// so sending the untouched ones would be eight writes to say one thing
+			// — and would overwrite anything changed elsewhere since the page
+			// loaded with what this dialog happened to have on screen.
+			const body: Record<string, unknown> = {};
+			for (const k of changed()) {
+				body[k] = k === 'cuisines' ? val(k).split(',').map((c) => c.trim()).filter(Boolean) : val(k);
+			}
+			if (price !== cfg.priceBand) body.priceBand = price;
+
+			saving = true;
+			render();
+			const res = await fetch(`/api/restaurants/places/${cfg.id}`, {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			saving = false;
+			if (!res.ok) {
+				render();
+				window.alert('Could not save that.');
+				return;
+			}
+			// Re-read: the name is in the header, the title and the breadcrumb, and
+			// the price and cuisines are in the facts line — all server-rendered.
+			sessionStorage.setItem('rl-toast', `Saved ${val('name')}`);
+			location.reload();
+		}
+
+		for (const b of document.querySelectorAll('[data-open-place-details]')) {
+			b.addEventListener('click', (e) => {
+				e.preventDefault();
+				open();
+			});
+		}
+		node.querySelectorAll('[data-pd-close]').forEach((b) => b.addEventListener('click', askClose));
+		node.querySelector('[data-pd-keep]')!.addEventListener('click', () => {
+			node.querySelector<HTMLElement>('[data-pd-discard]')!.hidden = true;
+		});
+		node.querySelector('[data-pd-discard-go]')!.addEventListener('click', close);
+		node.querySelector('[data-pd-save]')!.addEventListener('click', save);
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && !node.hidden) askClose();
+		});
+		for (const el of node.querySelectorAll<HTMLElement>('[data-pd-price]')) {
+			el.addEventListener('click', () => {
+				price = price === el.dataset.pdPrice ? null : (el.dataset.pdPrice ?? null);
+				render();
+			});
+		}
+		for (const k of TEXT) field(k)?.addEventListener('input', render);
+		// The location dialog is the other component's; opening it from here has
+		// to put this one away first, or two sheets stack on one backdrop.
+		node.querySelector('[data-open-place-editor]')?.addEventListener('click', close);
+	}
+</script>
+
+<style is:global>
+	/* Global for the same reason the rest of `pe__` is: it sits inside a dialog
+	   whose `[hidden]` rule is declared there, and matching its specificity from
+	   a scoped block would need the class doubled. */
+	.pd__prices {
+		display: flex;
+		gap: 6px;
+		margin-top: 6px;
+	}
+
+	.pd__price {
+		background: var(--card);
+		border: 1px solid var(--rule);
+		color: var(--ink-2);
+		font-family: var(--mono);
+		font-size: 13px;
+		padding: 7px 14px;
+		cursor: pointer;
+	}
+
+	.pd__price:hover {
+		border-color: var(--terracotta);
+	}
+
+	.pd__price--on {
+		background: var(--ink);
+		border-color: var(--ink);
+		color: var(--ground);
+	}
+</style>
