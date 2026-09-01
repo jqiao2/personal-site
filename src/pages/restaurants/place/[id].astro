@@ -20,6 +20,7 @@
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../../components/MealEditor.astro';
 import PlaceEditor from '../../../components/PlaceEditor.astro';
+import PlaceDetailsEditor from '../../../components/PlaceDetailsEditor.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import PhotoStrip from '../../../components/PhotoStrip.astro';
 import { requireOwner } from '../../../lib/auth';
@@ -425,6 +426,9 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 							<button type="button" class="owner__link" data-open-meal-editor>
 								+ Log another visit
 							</button>
+							<button type="button" class="owner__link" data-open-place-details>
+								Edit name, cuisine, price, links
+							</button>
 							<button type="button" class="owner__link" data-open-place-editor>
 								{isPlaced ? 'Fix this location' : 'Find this place on the map'}
 							</button>
@@ -445,7 +449,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 					meta: `${place.cuisines[0] ?? ''}${place.cuisines[0] ? ' · ' : ''}${placeLine(place)}`,
 					visits: place.visit_count,
 					trip: place.trip,
-					priceBand: place.price_band,
 					// Logging from here is nearly always logging ANOTHER visit, so
 					// the composer opens on the last one's answers — its date
 					// excepted. Already loaded and already sorted newest first —
@@ -470,6 +473,25 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 				place={{ id: place.id, name: place.name, where: placeLine(place), cuisines: place.cuisines }}
 				state={where}
 				evidence={evidence}
+			/>
+		)
+	}
+
+	{
+		isOwner && (
+			<PlaceDetailsEditor
+				place={{
+					id: place.id,
+					name: place.name,
+					cuisines: place.cuisines,
+					priceBand: place.price_band,
+					websiteUrl: place.website_url,
+					yelpUrl: place.yelp_url,
+					beliUrl: place.beli_url,
+					googlePlaceId: place.google_place_id,
+					toTryReason: place.to_try_reason,
+					onToTry: place.on_to_try,
+				}}
 			/>
 		)
 	}

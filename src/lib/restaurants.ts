@@ -126,7 +126,6 @@ export interface DiaryVisit {
 	tags: string[];
 	restaurant_name: string;
 	cuisines: string[];
-	price_band: PriceBand | null;
 	neighborhood: string | null;
 	city: string;
 	state_region: string | null;
