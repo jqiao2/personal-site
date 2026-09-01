@@ -163,8 +163,8 @@ export function isSnack(fields: {
 /**
  * The mark geometry, in px on the 1080 artboard.
  *
- * `MARK_K` is set so a typical feature film (105 min) draws at ~66px on its
- * long side, which is half again the width of the ~128px cell it sits in. That
+ * `MARK_K` is set so a typical feature film (105 min) draws at ~86px on its
+ * long side, which is most of the width of the ~134px cell it sits in. That
  * is deliberate: a mark is allowed to spill onto its neighbours (see
  * `dayLayer`), so the size that reads best is the one a Polaroid actually is
  * relative to a page's daily square, not the largest one that would fit inside
@@ -175,12 +175,12 @@ export function isSnack(fields: {
  * mark has already said "this was the day", and a bigger one just buries the
  * week around it.
  *
- *   20 min → 29px    60 min → 50px    105 min → 66px
- *   180 min → 86px   270+ min → 104px (capped)
+ *   20 min → 38px    60 min → 65px    105 min → 86px
+ *   180 min → 113px  260+ min → 136px (capped)
  */
-export const MARK_K = 6.4;
-export const MARK_MIN = 26;
-export const MARK_MAX = 104;
+export const MARK_K = 8.4;
+export const MARK_MIN = 34;
+export const MARK_MAX = 136;
 
 /** A mark's nominal side, in artboard px, for `minutes` spent on it. This is
  *  the side of the SQUARE the mark's area has to fill; `markBox` spends that
@@ -486,7 +486,7 @@ export const CELL_GAP = 6;
  *  pile into a column of air. Mirrors `.strip__grid`'s max-height. */
 export const CELL_MAX_H = 230;
 /** Constant at every aspect: only the height of a cell changes. */
-export const CELL_W = (1080 - 96 - 54 - 6 * CELL_GAP) / 7;
+export const CELL_W = (1080 - 54 - 54 - 6 * CELL_GAP) / 7;
 
 export interface CellBox {
 	w: number;
@@ -552,10 +552,16 @@ export function cellScale(cell: CellBox): number {
  * density even as the pile gets bigger rather than leaving a hole in the
  * middle or a ring around the outside.
  *
- * THE BIGGEST PRINT IS AT THE CENTRE, because the marks arrive sorted biggest
- * first and the first one gets distance zero. That is also the right editorial
- * answer: the thing that took the most of the day anchors it and the rest are
- * scattered over it.
+ * THE BIGGEST PRINT ANCHORS THE PILE, BUT THE PILE IS WHAT'S CENTRED. The
+ * marks arrive sorted biggest first and the first one is laid at distance
+ * zero, so the thing that took the most of the day is what the rest are
+ * scattered over. Leaving it there, though, put the day's main event dead in
+ * the middle of every square and pushed the pile off the bottom-right of the
+ * ones with several prints — the square was being spent on one mark and the
+ * others were spilling out of it. So once the day is placed, the WHOLE pile is
+ * shifted so that its bounding box is centred on the day. A day with one print
+ * is unchanged (its box is the pile), and a day with five gets its five spread
+ * across the square with the big one wherever it landed.
  *
  * AND THEN IT'S KNOCKED OFF THE PATTERN. A perfect phyllotaxis is legible as a
  * pattern, which is its own kind of wrong — so each mark's angle and distance
@@ -581,10 +587,15 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  *
  * So the constraint is the honest one, stated as what you actually want:
  * measure the real rectangles, add up how much of each print its neighbours
- * hide, and keep that under `MAX_COVER`. At 0.3 every print on the card is at
- * least 70% visible — enough to recognise a poster by, which is the whole test
- * (a route outline you can't trace and a film you can't name are both
- * failures).
+ * hide, and keep that under `MAX_COVER`. At 0.3 a print is at least 70%
+ * visible — enough to recognise a poster by, which is the whole test (a route
+ * outline you can't trace and a film you can't name are both failures).
+ *
+ * It is a TARGET now rather than a promise. Since a print may no longer leave
+ * its own day, a Sunday with nine things on it has nowhere left to put the
+ * ninth, and something has to give: the search minimises burial inside the
+ * day instead of escaping the day to avoid it. `AREA_BUDGET` is what keeps
+ * that from getting out of hand.
  *
  * A budget on its own isn't quite enough, though: a 26px snack laid dead in
  * the middle of a 104px route hides only 6% of it, which is well inside the
@@ -600,13 +611,22 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  * on the days most easily confused with the one they belong to, so the taller
  * the cell the more of the travel is given to the vertical.
  *
- * `MAX_RADIUS` — where a print stops being pushed outward and is allowed to
- * cover more than its share after all. Only a day with more prints than will
- * fit reaches it, and a crowded pile is a better failure than one print
- * marooned two cells from its own date.
+ * `MIN_INSIDE` — the least of a print that must stay inside the day it belongs
+ * to. A print is allowed to spill (that is the whole look), but a print whose
+ * body is mostly in the following week belongs to that week as far as the eye
+ * is concerned, and no paint order fixes a mark you have to trace back to its
+ * own date. At 0.5 the majority of every print is always on its own day.
+ *
+ * `AREA_BUDGET` — the total print area a day may spend, as a multiple of its
+ * own square. Containment and honest sizes pull against each other on a day
+ * with ten things in it: eleven prints that each keep half their body on the
+ * day cannot all be full size. So a day over budget scales ALL its prints down
+ * together — uniformly, so within the day the areas still read as the minutes
+ * they are.
  */
 export const MAX_COVER = 0.3;
-export const MAX_RADIUS = 130;
+export const MIN_INSIDE = 0.5;
+export const AREA_BUDGET = 1.15;
 
 /** The ellipse's two axes, normalised so their mean is 1 — the pile stretches
  *  to the shape of the day it sits in without getting larger overall. */
@@ -633,55 +653,135 @@ function overlapArea(a: Placed, b: { dx: number; dy: number; w: number; h: numbe
 }
 
 /**
- * The day's marks with their offsets filled in. Pure, and stable: the jitter
- * comes from each mark's own key, so a reload doesn't reshuffle the pile.
+ * The furthest a print of side `size` may sit from the middle of a cell side
+ * `cellSide` long and still keep `MIN_INSIDE` of itself inside the day.
  *
- * Each print after the first walks OUT along its own angle until it no longer
- * buries anything already placed — a greedy solve rather than a formula,
- * because the sizes in a day are wildly uneven (a five-hour ride and a
- * croissant) and no single radius is right for both. Coverage is CUMULATIVE:
- * three prints each hiding a fifth of the centre one is the same problem as
- * one hiding three fifths, so what's already hidden is carried forward.
+ * Per axis, and deliberately: the overlap of two rectangles is the product of
+ * its two sides, so holding each axis to √MIN_INSIDE of the print's side holds
+ * the AREA to MIN_INSIDE at the corner and to more than it everywhere else. A
+ * print bigger than the cell can't satisfy that at any offset, so it gets no
+ * travel on that axis and sits on the day's midline.
+ */
+export function slack(size: number, cellSide: number): number {
+	const need = size * Math.SQRT1_2;
+	if (Math.min(size, cellSide) < need) return 0;
+	return Math.max(0, (size + cellSide) / 2 - need);
+}
+
+/** A deterministic 0..1 stream from one seed — the jitter's only randomness,
+ *  so a reload draws the same pile it drew last time. */
+function rng(seed: number): () => number {
+	let state = (seed || 1) >>> 0;
+	return () => {
+		state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+		return state / 4294967296;
+	};
+}
+
+/**
+ * The day's marks with their offsets filled in. Pure, and stable: every random
+ * number comes from the mark's own key, so a reload doesn't reshuffle the pile.
  *
- * A day holds at most a handful of prints, so walking out in 3px steps costs
- * nothing worth measuring.
+ * IT IS A SEARCH NOW, NOT A WALK. The old version sent each print outward along
+ * its own angle until it stopped burying the ones already down — which always
+ * found somewhere, because it was allowed to keep going, and what it found was
+ * sometimes two cells away in the following week. A print may no longer leave
+ * its own day (`slack`), so "keep going" isn't available and one fixed ray is a
+ * poor way to spend the little room there is. So each print gets a shortlist of
+ * candidate positions inside its legal box — the golden-angle ray it would have
+ * walked, sampled, plus a spray of jittered ones — and takes the best of them.
+ * The ray keeps the phyllotaxis character on the easy days; the jitter is what
+ * fits the crowded ones.
+ *
+ * The score is the complaint list, in px² of paint: how far each print already
+ * down would be buried past `MAX_COVER`, plus a flat charge for landing a
+ * print's middle on another one (or another's middle under it), which is the
+ * "stuck on top of" failure a coverage budget can't see. Ties — and every clear
+ * candidate ties at zero — go to the position nearest the middle of the day, so
+ * nothing wanders outward for no reason.
  */
 export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[] {
 	if (marks.length <= 1) return marks;
 	const spread = spreadOf(cell);
 	const placed: Placed[] = [];
-	return marks.map((mark, i) => {
+
+	const laid = marks.map((mark, i) => {
 		const { w, h } = mark.box;
 		if (i === 0) {
 			placed.push({ dx: 0, dy: 0, w, h, hidden: 0 });
 			return mark;
 		}
-		const key = hash(`${mark.track}:${mark.key}:place`);
+		const mx = slack(w, cell.w);
+		const my = slack(h, cell.h);
+		const seed = hash(`${mark.track}:${mark.key}:place`);
+		const random = rng(seed);
 		// ±0.5 rad off the golden step, so the pile never reads as the spiral it
 		// is underneath.
-		const angle = i * GOLDEN_ANGLE + ((key % 100) / 100 - 0.5);
+		const angle = i * GOLDEN_ANGLE + ((seed % 100) / 100 - 0.5);
 		const cos = Math.cos(angle) * spread.x;
 		const sin = Math.sin(angle) * spread.y;
 
-		let radius = 0;
-		let added: number[] = [];
-		for (; radius < MAX_RADIUS; radius += 3) {
-			const box = { dx: radius * cos, dy: radius * sin, w, h };
-			added = placed.map((other) => overlapArea(other, box));
-			const clear = placed.every(
-				(other, j) =>
-					other.hidden + added[j] <= MAX_COVER * other.w * other.h &&
-					// ...and this print's own middle is not sitting on that one.
-					(Math.abs(box.dx - other.dx) > other.w / 2 || Math.abs(box.dy - other.dy) > other.h / 2),
-			);
-			if (clear) break;
+		const candidates: { dx: number; dy: number }[] = [];
+		for (let r = 0; r <= Math.max(mx, my); r += 6) candidates.push({ dx: r * cos, dy: r * sin });
+		for (let n = 0; n < 48; n++)
+			candidates.push({ dx: (random() * 2 - 1) * mx, dy: (random() * 2 - 1) * my });
+
+		let best = { dx: 0, dy: 0, score: Infinity, added: [] as number[] };
+		for (const candidate of candidates) {
+			const box = {
+				dx: Math.max(-mx, Math.min(mx, candidate.dx)),
+				dy: Math.max(-my, Math.min(my, candidate.dy)),
+				w,
+				h,
+			};
+			const added = placed.map((other) => overlapArea(other, box));
+			let cost = 0;
+			for (const [j, other] of placed.entries()) {
+				// FRACTIONS, NOT PIXELS. Charging the excess in px² protects a snack
+				// and a poster equally per square pixel, which is not the same thing
+				// as protecting them equally: the poster has the bigger budget, so
+				// the cheapest place to dump overlap was always on top of the day's
+				// biggest print, and a nine-print day buried its anchor 89%. What is
+				// actually wanted is that EVERY print stays mostly visible, so the
+				// cost is the fraction of it hidden past MAX_COVER.
+				cost += Math.max(0, (other.hidden + added[j]) / (other.w * other.h) - MAX_COVER);
+				const onIt =
+					Math.abs(box.dx - other.dx) <= other.w / 2 && Math.abs(box.dy - other.dy) <= other.h / 2;
+				const underIt = Math.abs(box.dx - other.dx) <= w / 2 && Math.abs(box.dy - other.dy) <= h / 2;
+				if (onIt || underIt) cost += 0.25;
+			}
+			const score = cost * 10_000 + Math.hypot(box.dx, box.dy);
+			if (score < best.score) best = { dx: box.dx, dy: box.dy, score, added };
+			if (cost === 0) break;
 		}
-		const dx = radius * cos;
-		const dy = radius * sin;
-		for (const [j, other] of placed.entries()) other.hidden += added[j] ?? 0;
-		placed.push({ dx, dy, w, h, hidden: 0 });
-		return { ...mark, dx: Math.round(dx), dy: Math.round(dy) };
+
+		for (const [j, other] of placed.entries()) other.hidden += best.added[j] ?? 0;
+		placed.push({ dx: best.dx, dy: best.dy, w, h, hidden: 0 });
+		return { ...mark, dx: Math.round(best.dx), dy: Math.round(best.dy) };
 	});
+
+	// Recentre on the pile's bounding box, so the day's main event isn't pinned
+	// to the middle of every square — but only as far as every print in the pile
+	// can move and still stay on its own day, which is what `room` collects.
+	const left = Math.min(...placed.map((b) => b.dx - b.w / 2));
+	const right = Math.max(...placed.map((b) => b.dx + b.w / 2));
+	const top = Math.min(...placed.map((b) => b.dy - b.h / 2));
+	const bottom = Math.max(...placed.map((b) => b.dy + b.h / 2));
+	const room = (axis: 'dx' | 'dy', side: 'w' | 'h', cellSide: number) => {
+		let lo = -Infinity;
+		let hi = Infinity;
+		for (const box of placed) {
+			const limit = slack(box[side], cellSide);
+			lo = Math.max(lo, -limit - box[axis]);
+			hi = Math.min(hi, limit - box[axis]);
+		}
+		return { lo: Math.min(0, lo), hi: Math.max(0, hi) };
+	};
+	const x = room('dx', 'w', cell.w);
+	const y = room('dy', 'h', cell.h);
+	const ox = Math.round(Math.max(x.lo, Math.min(x.hi, (left + right) / 2)));
+	const oy = Math.round(Math.max(y.lo, Math.min(y.hi, (top + bottom) / 2)));
+	return laid.map((mark) => ({ ...mark, dx: mark.dx - ox, dy: mark.dy - oy }));
 }
 
 // ---------------------------------------------------------------------------
@@ -727,6 +827,26 @@ export function dayLayer(date: number): number {
  * rather than one section's stack — the whole point of this card is that a
  * Tuesday with a ride, a chapter and a taco is one picture.
  */
+/**
+ * How much further one day's prints have to shrink to fit the day.
+ *
+ * A print may only spill half its body off its own date (`MIN_INSIDE`), which
+ * a day with a film, a book, two meals and a ride cannot honour at full size —
+ * there is only so much square. So a day over `AREA_BUDGET` scales every print
+ * in it by the same factor: the pile shrinks, and inside the day the areas
+ * still stand in the same ratio as the minutes, which is the only comparison
+ * this card ever asks the eye to make.
+ */
+export function fitScale(day: JournalItem[], cell: CellBox, scale: number): number {
+	if (day.length < 2) return 1;
+	const area = day.reduce((total, item) => {
+		const box = markBox(Math.round(markSize(item.minutes) * scale), item.aspect);
+		return total + box.w * box.h;
+	}, 0);
+	const budget = AREA_BUDGET * cell.w * cell.h;
+	return area > budget ? Math.sqrt(budget / area) : 1;
+}
+
 export function buildCells(key: string, items: JournalItem[], cell?: CellBox): JournalCell[] {
 	const parsed = parseMonthKey(key);
 	if (!parsed) return [];
@@ -758,10 +878,7 @@ export function buildCells(key: string, items: JournalItem[], cell?: CellBox): J
 			// doesn't depend on which query came back first.
 			.sort((a, b) => b.minutes - a.minutes || a.track.localeCompare(b.track) || a.key.localeCompare(b.key));
 		const present = new Set(day.map((d) => d.track));
-		const marks = placeCluster(
-			day.map((d) => toMark(d, scale)),
-			square,
-		);
+		const marks = placeCluster(day.map((d) => toMark(d, scale * fitScale(day, square, scale))), square);
 		cells.push({
 			outside: false,
 			date,
