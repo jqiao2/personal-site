@@ -4,10 +4,8 @@ import { json, apiError } from '../../../lib/http';
 import {
 	createPlace,
 	createVisit,
-	isPriceBand,
 	listRecentVisits,
 	updatePlace,
-	type PriceBand,
 } from '../../../lib/restaurants';
 
 export const prerender = false;
@@ -30,7 +28,7 @@ export const GET: APIRoute = async ({ url }) => {
 // you haven't — are one request rather than two round trips with a half-created
 // restaurant in between if the second fails.
 //
-// Body: { restaurantId? , place?: { name, cuisines?, priceBand?, neighborhood?,
+// Body: { restaurantId? , place?: { name, cuisines?, neighborhood?,
 //         city?, stateRegion?, country?, lat?, lng? },
 //         visitedOn?, rating?, verdict?, hearted?, revisit?, friends?, review?, tags? }
 export const POST: APIRoute = async ({ request, cookies }) => {
@@ -80,22 +78,19 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 /**
  * The place this visit is at: an existing id, or a new row built from `place`.
  *
- * A price band typed into the composer belongs to the PLACE, not the meal —
- * what a restaurant costs is a fact about the restaurant — so it is written
- * through to the existing row rather than dropped when a known place is picked.
+ * The only thing a visit writes onto a place it did not create is the trip
+ * answer, which the composer asks because a meal is when you find out. Price
+ * used to come through here too; it is edited on the restaurant now, since one
+ * column shared by every meal cannot be a per-meal answer.
  */
 async function resolveRestaurant(body: Record<string, unknown>): Promise<number | null> {
 	const place = (body.place ?? null) as Record<string, unknown> | null;
 	const existing = body.restaurantId == null ? null : Number(body.restaurantId);
 
 	if (existing != null && Number.isInteger(existing) && existing > 0) {
-		const priceBand = place?.priceBand;
-		// The price band and the trip answer only. The composer is logging a meal
-		// at a place that already exists, and is not renaming it.
-		const edit = {
-			...(isPriceBand(priceBand) ? { priceBand } : {}),
-			...(typeof place?.trip === 'boolean' ? { trip: place.trip } : {}),
-		};
+		// The trip answer only. The composer is logging a meal at a place that
+		// already exists, and is not renaming or repricing it.
+		const edit = typeof place?.trip === 'boolean' ? { trip: place.trip } : {};
 		if (Object.keys(edit).length > 0) await updatePlace(existing, edit);
 		return existing;
 	}
@@ -105,7 +100,6 @@ async function resolveRestaurant(body: Record<string, unknown>): Promise<number 
 	const created = await createPlace({
 		name,
 		cuisines: asList(place?.cuisines),
-		priceBand: isPriceBand(place?.priceBand) ? (place?.priceBand as PriceBand) : null,
 		neighborhood: asText(place?.neighborhood),
 		city: asText(place?.city) ?? undefined,
 		stateRegion: asText(place?.stateRegion),
