@@ -1153,6 +1153,19 @@ const spines = Array.from({ length: 18 }, () => ({
 		font-weight: 600;
 		color: #ecc87c;
 	}
+	/* The pin sits in the rail; keep it its own width (not stretched by the
+	   column) and dressed in the same amber as the rest of the rail. */
+	.rail :global(.pin) {
+		align-self: flex-start;
+		--pin-font-family: 'Archivo', sans-serif;
+		--pin-font-size: 12px;
+		--pin-pad: 7px 13px;
+		--pin-radius: 9px;
+		--pin-fg: #a68f6e;
+		--pin-border: #6b5228;
+		--pin-accent: #ecc87c;
+		--pin-accent-bg: #2a1f0f;
+	}
 
 	/* Identity */
 	.title {
