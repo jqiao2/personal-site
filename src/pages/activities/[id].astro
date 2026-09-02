@@ -36,8 +36,10 @@ import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityMap from '../../components/ActivityMap.astro';
 import ActivityGraph from '../../components/ActivityGraph.astro';
 import SkiRuns from '../../components/SkiRuns.astro';
+import SkiRunsEditor from '../../components/SkiRunsEditor.astro';
 import { buildGraphData } from '../../lib/activity-graph';
-import { buildSkiView } from '../../lib/ski-view';
+import { buildSkiView, buildSkiEditRows } from '../../lib/ski-view';
+import { resolveSkiSegments, type SkiSegmentType, type SkiStreams } from '../../lib/ski';
 import {
 	getActivity,
 	getActivityStreams,
@@ -45,6 +47,7 @@ import {
 	listActivityChildren,
 	thresholdsOn,
 	updateActivity,
+	saveSkiSegments,
 	deleteActivity,
 	listGear,
 	type ActivityLap,
@@ -123,6 +126,24 @@ if (Astro.request.method === 'POST') {
 				),
 			],
 		});
+	} else if (action === 'reset-runs') {
+		// Drop the override, reverting display and exertion to auto-detection.
+		await saveSkiSegments(id, null);
+		return Astro.redirect(Astro.url.pathname, 303);
+	} else if (action === 'save-runs') {
+		// The editor posts three parallel arrays in row order — start, end and the
+		// (possibly reclassified) type of every segment. Zip them back into the
+		// override partition; saveSkiSegments re-scores exertion on it.
+		const t0s = form.getAll('seg_t0');
+		const t1s = form.getAll('seg_t1');
+		const types = form.getAll('seg_type');
+		const valid = new Set(['run', 'lift', 'idle']);
+		const override = t0s
+			.map((t0, i) => ({ t0: Number(t0), t1: Number(t1s[i]), type: String(types[i]) }))
+			.filter((s) => Number.isFinite(s.t0) && Number.isFinite(s.t1) && s.t1 > s.t0 && valid.has(s.type))
+			.map((s) => ({ t0: s.t0, t1: s.t1, type: s.type as SkiSegmentType }));
+		if (override.length > 0) await saveSkiSegments(id, override);
+		return Astro.redirect(Astro.url.pathname, 303);
 	}
 	return Astro.redirect(Astro.url.pathname, 303);
 }
@@ -210,18 +231,21 @@ const ALL_STAT_KEYS: StatKey[] = [
 // so they are useless as runs. The detected run count is the honest "Runs"
 // stat; every other sport still counts its laps.
 const isLiftServed = activity.sport === 'alpine_ski' || activity.sport === 'snowboard';
-const skiView = isLiftServed
-	? buildSkiView(
-			{
-				time_s: streams?.time_s ?? undefined,
-				altitude_m: streams?.altitude_m ?? undefined,
-				distance_m: streams?.distance_m ?? undefined,
-				latlng: streams?.latlng ?? undefined,
-				moving: streams?.moving ?? undefined,
-			},
-			activity.max_speed_ms,
-		)
-	: null;
+const skiStreams: SkiStreams = {
+	time_s: streams?.time_s ?? undefined,
+	altitude_m: streams?.altitude_m ?? undefined,
+	distance_m: streams?.distance_m ?? undefined,
+	latlng: streams?.latlng ?? undefined,
+	moving: streams?.moving ?? undefined,
+};
+// The resolved segments honour a saved edit (activity.ski_segments), else
+// auto-detect. One computation drives the breakdown, the profile bands and the
+// editor, so they never disagree.
+const skiSegments = isLiftServed ? resolveSkiSegments(skiStreams, activity.ski_segments) : [];
+const skiView = skiSegments.length > 0 ? buildSkiView(skiSegments, skiStreams, activity.max_speed_ms) : null;
+const editingRuns = isOwner && isLiftServed && Astro.url.searchParams.has('editruns');
+const skiEditRows = editingRuns ? buildSkiEditRows(skiSegments) : [];
+const skiEdited = isLiftServed && activity.ski_segments != null;
 const runsCount = skiView
 	? skiView.summary.runs
 	: laps.length > 0
@@ -368,7 +392,9 @@ const detail =
 // src/lib/activity-graph.ts; this page just hands it the streams. Null when
 // there is nothing plottable, in which case the graph doesn't render at all.
 // ---------------------------------------------------------------------------
-const graphData = buildGraphData(streams, laps);
+// Ski days pass their resolved segments so the profile can band the sawtooth
+// into runs and lifts; every other sport passes none and the graph omits them.
+const graphData = buildGraphData(streams, laps, undefined, skiSegments.length ? skiSegments : null);
 
 // ---------------------------------------------------------------------------
 // Formatting helpers local to this page.
@@ -649,7 +675,17 @@ const exWord = exertionLabel(activity.exertion);
 			)
 		}
 
-		<SkiRuns view={skiView} />
+		{
+			editingRuns ? (
+				<SkiRunsEditor rows={skiEditRows} pathname={Astro.url.pathname} edited={skiEdited} />
+			) : (
+				<SkiRuns
+					view={skiView}
+					editHref={isOwner && isLiftServed && skiView ? `${Astro.url.pathname}?editruns=1` : null}
+					edited={skiEdited}
+				/>
+			)
+		}
 
 		{
 			laps.length > 0 && !skiView && (

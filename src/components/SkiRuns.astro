@@ -8,9 +8,14 @@ import type { SkiView } from '../lib/ski-view';
 
 interface Props {
 	view: SkiView | null;
+	/** When set (owner on a ski day), a link into the run/lift editor. */
+	editHref?: string | null;
+	/** True when this day's partition has been hand-corrected — shown as a badge
+	 *  so an edited day is legible as such. */
+	edited?: boolean;
 }
 
-const { view } = Astro.props;
+const { view, editHref = null, edited = false } = Astro.props;
 
 const W = 64;
 const H = 24;
@@ -26,7 +31,13 @@ function sparkPath(spark: number[]): string {
 {
 	view && (
 		<section class="ski">
-			<h2 class="section-h">Runs &amp; lifts <span class="section-h__meta">{view.summary.runs} runs</span></h2>
+			<div class="ski__head">
+				<h2 class="section-h">
+					Runs &amp; lifts <span class="section-h__meta">{view.summary.runs} runs</span>
+					{edited && <span class="ski__edited">edited</span>}
+				</h2>
+				{editHref && <a class="ski__edit" href={editHref}>Edit</a>}
+			</div>
 
 			<div class="ski-sum">
 				<div class="ski-sum__cell">
@@ -96,6 +107,37 @@ function sparkPath(spark: number[]): string {
 <style>
 	.ski {
 		margin-top: 0.5rem;
+	}
+	.ski__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.ski__edited {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.62rem;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: #6b7b88;
+		border: 1px solid #c9d4dc;
+		border-radius: 999px;
+		padding: 0.05rem 0.45rem;
+		margin-left: 0.35rem;
+		vertical-align: middle;
+	}
+	.ski__edit {
+		flex: none;
+		font-size: 0.8rem;
+		color: #6b7b88;
+		text-decoration: none;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+		padding: 0.25rem 0.7rem;
+	}
+	.ski__edit:hover {
+		border-color: #1c6e8c;
+		color: #1c6e8c;
 	}
 	.section-h {
 		font-size: 1.05rem;

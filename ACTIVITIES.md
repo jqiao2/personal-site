@@ -403,8 +403,14 @@ board 6), marked `estimated` because that time was measured off the stream. Only
 self-powered, so their whole moving time is the effort. A ski day *with* a strap
 uses the same run mask to trim its HR rung to descending samples. The same
 segments drive the Slopes-style "Runs & lifts" breakdown on the detail page
-(`src/components/SkiRuns.astro`); the `activity_laps` rows on these days are
-Strava's arbitrary auto-laps and are useless as runs.
+(`src/components/SkiRuns.astro`) and coloured run/lift bands on the elevation
+profile; the `activity_laps` rows on these days are Strava's arbitrary auto-laps
+and are useless as runs. Detection can be hand-corrected: an owner-only editor
+reclassifies any segment, and the correction is stored on `activities.ski_segments`
+(migration 0051) and re-scored through this same rung — a lift you actually hiked
+becomes active descent. When that column is set it replaces detection everywhere,
+via `resolveSkiSegments`; `recompute-exertion.mjs` passes it too, so a bulk
+re-score never reverts an edit.
 
 Every branch writes `exertion` (a real number, ~0–500) **and**
 `exertion_method` (the enum above) **and** `exertion_confidence`

@@ -1,0 +1,188 @@
+---
+// The owner-only editor for a ski day's run/lift partition. Auto-detection is
+// right almost always; this is for the "almost" — a lift you actually hiked, a
+// cat-track the detector called a run. Reclassifying a row and saving rewrites
+// the stored partition AND re-scores exertion on it (a lift turned run becomes
+// active descent). Merging is implicit: relabel the idle between two runs and
+// ski.ts coalesces the three into one.
+//
+// Plain form POST back to the same page (no client JS), matching the page's
+// other editor. The two submit buttons carry the action in their name/value —
+// no hidden action field — so whichever is clicked decides save vs reset.
+import type { SkiEditRow } from '../lib/ski-view';
+
+interface Props {
+	rows: SkiEditRow[];
+	pathname: string;
+	edited: boolean;
+}
+const { rows, pathname, edited } = Astro.props;
+
+const TYPES: { value: SkiEditRow['type']; label: string }[] = [
+	{ value: 'run', label: 'Run' },
+	{ value: 'lift', label: 'Lift' },
+	{ value: 'idle', label: 'Skip' },
+];
+---
+
+<section class="sre">
+	<div class="sre__head">
+		<h2 class="section-h">Edit runs &amp; lifts</h2>
+		<a class="sre__cancel" href={pathname}>Cancel</a>
+	</div>
+
+	<form method="POST" class="sre__form">
+		<ol class="sre__list">
+			{
+				rows.map((row) => (
+					<li class:list={['sre__row', `sre__row--${row.type}`]}>
+						<input type="hidden" name="seg_t0" value={row.t0} />
+						<input type="hidden" name="seg_t1" value={row.t1} />
+						<span class="sre__tag figure">{row.runIndex != null ? `#${row.runIndex}` : '·'}</span>
+						<select class="sre__select" name="seg_type" aria-label="Segment type">
+							{TYPES.map((t) => (
+								<option value={t.value} selected={t.value === row.type}>
+									{t.label}
+								</option>
+							))}
+						</select>
+						<span class="sre__meta figure">
+							{row.verticalFt.toLocaleString()} ft · {row.duration}
+							{row.avgMph != null && <> · {row.avgMph.toFixed(0)} mph</>}
+							{row.distanceMi != null && <> · {row.distanceMi.toFixed(2)} mi</>}
+						</span>
+					</li>
+				))
+			}
+		</ol>
+
+		<div class="sre__actions">
+			<button type="submit" name="action" value="save-runs" class="sre__save">Save</button>
+			<a class="sre__cancel" href={pathname}>Cancel</a>
+			{
+				edited && (
+					<button type="submit" name="action" value="reset-runs" class="sre__reset" formnovalidate>
+						Reset to auto-detected
+					</button>
+				)
+			}
+		</div>
+	</form>
+</section>
+
+<style>
+	.sre {
+		margin-top: 0.5rem;
+	}
+	.sre__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+	.section-h {
+		font-size: 1.05rem;
+		font-family: 'Instrument Serif', Georgia, serif;
+		color: #3d4a55;
+		margin: 2.5rem 0 0.5rem;
+	}
+	.sre__list {
+		list-style: none;
+		margin: 0.5rem 0 1.1rem;
+		padding: 0;
+		border: 1px solid #c9d4dc;
+		border-radius: 10px;
+		overflow: hidden;
+	}
+	.sre__row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.45rem 1rem;
+		background: #fff;
+	}
+	.sre__row + .sre__row {
+		border-top: 1px solid #eef4f8;
+	}
+	/* A left edge tinted by current type, so the list reads as its runs and lifts
+	   at a glance the way the profile bands do. */
+	.sre__row--run {
+		box-shadow: inset 3px 0 0 #1c6e8c;
+	}
+	.sre__row--lift {
+		box-shadow: inset 3px 0 0 #9fb2bd;
+		background: #f8fbfd;
+	}
+	.sre__row--idle {
+		box-shadow: inset 3px 0 0 transparent;
+		background: #f8fbfd;
+		color: #6b7b88;
+	}
+	.sre__tag {
+		flex: none;
+		width: 2rem;
+		font-size: 0.85rem;
+		color: #12495e;
+	}
+	.sre__select {
+		flex: none;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.85rem;
+		color: #3d4a55;
+		background: #fff;
+		border: 1px solid #c9d4dc;
+		border-radius: 6px;
+		padding: 0.25rem 0.5rem;
+	}
+	.sre__meta {
+		flex: 1;
+		text-align: right;
+		font-size: 0.82rem;
+		color: #6b7b88;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.sre__actions {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+	.sre__save {
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.85rem;
+		color: #fff;
+		background: #1c6e8c;
+		border: 1px solid #1c6e8c;
+		border-radius: 6px;
+		padding: 0.4rem 1.1rem;
+		cursor: pointer;
+	}
+	.sre__save:hover {
+		background: #17596f;
+	}
+	.sre__cancel {
+		font-size: 0.85rem;
+		color: #6b7b88;
+		text-decoration: none;
+	}
+	.sre__cancel:hover {
+		color: #3d4a55;
+	}
+	.sre__reset {
+		margin-left: auto;
+		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-size: 0.85rem;
+		color: #a8323a;
+		background: none;
+		border: 1px solid #e0c3c5;
+		border-radius: 6px;
+		padding: 0.4rem 1.1rem;
+		cursor: pointer;
+	}
+	.sre__reset:hover {
+		background: #a8323a;
+		border-color: #a8323a;
+		color: #fff;
+	}
+</style>

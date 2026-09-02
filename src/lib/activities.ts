@@ -54,9 +54,27 @@ function isDegraded(err: { code?: string; message?: string } | null): boolean {
 // ---------------------------------------------------------------------------
 
 import { redactActivities } from './activity-privacy';
+import type { SkiSegmentOverride } from './ski';
+import { computeExertion, type Thresholds } from './exertion';
+
+/** All-null thresholds — the score for a ski day with no strap doesn't need
+ *  any, and `saveSkiSegments` must still work before the athlete has recorded
+ *  one for the date. */
+const EMPTY_THRESHOLDS: Thresholds = {
+	ftp_w: null,
+	lthr_bpm: null,
+	max_hr: null,
+	rest_hr: null,
+	threshold_pace_s_per_km: null,
+	css_pace_s_per_100m: null,
+	weight_kg: null,
+};
 export { redactActivities };
 
-export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met';
+// Mirrors exertion.ts's ExertionMethod — 'ski' is the lift-served ski rung
+// (migration 0050). Kept as a local copy so this file's row types don't depend
+// on importing the calculator, but it must stay in step with it.
+export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met' | 'ski';
 export type ExertionConfidence = 'measured' | 'estimated' | 'assumed';
 export type LapType = 'lap' | 'interval' | 'rest' | 'transition' | 'length';
 export type GearKind = 'bike' | 'shoes' | 'skis' | 'board' | 'other';
@@ -136,6 +154,9 @@ export interface ActivityRow {
 	device_name: string | null;
 	created_at: string;
 	updated_at: string;
+	/** Owner-corrected run/lift partition for a ski day (migration 0051), or null
+	 * to use auto-detection. Detail page only — the list view doesn't carry it. */
+	ski_segments: SkiSegmentOverride[] | null;
 }
 
 /** A row of the `activity_list` view — everything the list/landing pages need
@@ -612,6 +633,7 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'updated_at',
 	'private',
 	'hide_from_review',
+	'ski_segments',
 ].join(', ');
 
 /** One activity by id, in full (bar `private_notes` — always null; see
@@ -621,11 +643,13 @@ export async function getActivity(id: number): Promise<ActivityRow | null> {
 	// later migrations than the rest of the schema, so an environment behind on
 	// any of them gets the activity without them rather than a 404 for every
 	// activity on the site. Each step drops one more, newest first.
+	const noSki = PUBLIC_ACTIVITY_COLUMNS.replace(', ski_segments', '');
 	const attempts = [
 		PUBLIC_ACTIVITY_COLUMNS,
-		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', ''),
-		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', '').replace(', private', ''),
-		PUBLIC_ACTIVITY_COLUMNS.replace(', hide_from_review', '').replace(', private', '').replace(', tags', ''),
+		noSki,
+		noSki.replace(', hide_from_review', ''),
+		noSki.replace(', hide_from_review', '').replace(', private', ''),
+		noSki.replace(', hide_from_review', '').replace(', private', '').replace(', tags', ''),
 	];
 	for (const [i, columns] of attempts.entries()) {
 		const { data, error } = await supabasePublic
@@ -649,17 +673,19 @@ export async function getActivity(id: number): Promise<ActivityRow | null> {
 		// `hide_from_review` defaults to showing, since it guards nothing.
 		const row = data as unknown as Omit<
 			ActivityRow,
-			'private_notes' | 'tags' | 'private' | 'hide_from_review'
+			'private_notes' | 'tags' | 'private' | 'hide_from_review' | 'ski_segments'
 		> & {
 			tags?: string[];
 			private?: boolean;
 			hide_from_review?: boolean;
+			ski_segments?: SkiSegmentOverride[] | null;
 		};
 		return {
 			...row,
 			tags: row.tags ?? [],
 			private: row.private !== false,
 			hide_from_review: row.hide_from_review === true,
+			ski_segments: row.ski_segments ?? null,
 			private_notes: null,
 		};
 	}
@@ -998,6 +1024,62 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 	if (input.gearId !== undefined && input.gearId !== current.gear_id) {
 		await moveGearDistance(current.gear_id, input.gearId, current.distance_m ?? 0);
 	}
+	return true;
+}
+
+/**
+ * Save a hand-corrected run/lift partition for a ski day, and re-score the
+ * activity on it. Unlike `updateActivity`'s authored fields, this DOES change a
+ * measured number — exertion — because the correction is exactly what the score
+ * should have been measuring: a lift the owner actually hiked is real descent.
+ * The recompute goes through the same `computeExertion` cascade as ingest, just
+ * handed the override, so the stored score, method and confidence stay the ones
+ * every list and card reads. Pass `null` to clear the override and fall back to
+ * auto-detection (the score reverts with it).
+ */
+export async function saveSkiSegments(id: number, override: SkiSegmentOverride[] | null): Promise<boolean> {
+	const activity = await getActivity(id);
+	if (!activity) return false;
+
+	const [streams, thresholds] = await Promise.all([getActivityStreams(id), thresholdsOn(activity.local_date)]);
+	const ex = computeExertion(
+		{
+			sport: activity.sport,
+			moving_seconds: activity.moving_seconds,
+			elapsed_seconds: activity.elapsed_seconds,
+			distance_m: activity.distance_m,
+			elevation_gain_m: activity.elevation_gain_m,
+			avg_hr: activity.avg_hr,
+			avg_power_w: activity.avg_power_w,
+			streams: streams
+				? {
+						time_s: streams.time_s ?? undefined,
+						power_w: streams.power_w ?? undefined,
+						heartrate: streams.heartrate ?? undefined,
+						altitude_m: streams.altitude_m ?? undefined,
+						distance_m: streams.distance_m ?? undefined,
+						moving: streams.moving ?? undefined,
+					}
+				: undefined,
+			ski_segments: override,
+		},
+		thresholds ?? EMPTY_THRESHOLDS,
+	);
+
+	const round = (v: number | null, dp = 2) => (v == null || !Number.isFinite(v) ? null : Number(v.toFixed(dp)));
+	const { error } = await supabaseAdmin
+		.from('activities')
+		.update({
+			ski_segments: override,
+			exertion: round(ex.score),
+			exertion_method: ex.method,
+			exertion_confidence: ex.confidence,
+			intensity_factor: round(ex.intensityFactor, 3),
+			updated_at: new Date().toISOString(),
+		})
+		.eq('id', id)
+		.is('deleted_at', null);
+	if (error) throw new Error(`saveSkiSegments failed: ${error.message}`);
 	return true;
 }
 

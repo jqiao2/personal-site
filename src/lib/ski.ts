@@ -111,13 +111,32 @@ function smoothOverTime(values: number[], time: number[], windowS: number): numb
 	return out;
 }
 
+/** A saved, hand-corrected partition (one entry per segment, in order), stored
+ *  on the activity as `ski_segments`. Times are seconds-from-start so the edit
+ *  survives a re-import at a different sample resolution; `resolveSkiSegments`
+ *  maps them back to the nearest samples. When this is present it REPLACES
+ *  detection for that activity — both on screen and in the exertion score. */
+export interface SkiSegmentOverride {
+	t0: number;
+	t1: number;
+	type: SkiSegmentType;
+}
+
+/** A segment as index bounds + a type, before it's enriched with distance and
+ *  speed — the shared shape detection and a saved override both reduce to. */
+interface RawSegment {
+	startIdx: number;
+	endIdx: number;
+	type: SkiSegmentType;
+}
+
 /**
- * Split a ski track into alternating climb/descent/flat segments at the
- * altitude turning points. A turning point is confirmed only once the smoothed
- * altitude has reversed by NOISE_M from a running extreme, so small wiggles
- * inside a long lift or a long run don't shatter it into fragments.
+ * Auto-detect the raw run/lift/idle partition from the altitude sawtooth. Splits
+ * the track at its turning points: a turning point is confirmed only once the
+ * smoothed altitude has reversed by NOISE_M from a running extreme, so small
+ * wiggles inside a long lift or run don't shatter it into fragments.
  */
-export function detectSkiSegments(streams: SkiStreams): SkiSegment[] {
+function autoRawSegments(streams: SkiStreams): RawSegment[] {
 	const t = streams.time_s;
 	const alt = streams.altitude_m;
 	if (!t || !alt || t.length < 10 || alt.length !== t.length) return [];
@@ -151,17 +170,69 @@ export function detectSkiSegments(streams: SkiStreams): SkiSegment[] {
 	}
 	if (pivots[pivots.length - 1] !== n - 1) pivots.push(n - 1);
 
-	const segments: SkiSegment[] = [];
+	const raw: RawSegment[] = [];
 	for (let p = 0; p < pivots.length - 1; p++) {
 		const startIdx = pivots[p];
 		const endIdx = pivots[p + 1];
 		if (endIdx <= startIdx) continue;
 		const delta = salt[endIdx] - salt[startIdx];
-		const type: SkiSegmentType =
-			delta <= -MIN_RUN_M ? 'run' : delta >= MIN_LIFT_M ? 'lift' : 'idle';
+		raw.push({
+			startIdx,
+			endIdx,
+			type: delta <= -MIN_RUN_M ? 'run' : delta >= MIN_LIFT_M ? 'lift' : 'idle',
+		});
+	}
+	return raw;
+}
+
+/** Map a saved override's second-offsets back to sample index bounds. */
+function overrideRawSegments(streams: SkiStreams, override: SkiSegmentOverride[]): RawSegment[] {
+	const t = streams.time_s;
+	if (!t || t.length < 2) return [];
+	const nearest = (target: number): number => {
+		// Binary search on the monotonic time axis.
+		let lo = 0;
+		let hi = t.length - 1;
+		while (lo < hi) {
+			const mid = (lo + hi) >> 1;
+			if (t[mid] < target) lo = mid + 1;
+			else hi = mid;
+		}
+		if (lo > 0 && Math.abs(t[lo - 1] - target) <= Math.abs(t[lo] - target)) return lo - 1;
+		return lo;
+	};
+	const raw: RawSegment[] = [];
+	for (const seg of override) {
+		const startIdx = nearest(seg.t0);
+		const endIdx = nearest(seg.t1);
+		if (endIdx > startIdx) raw.push({ startIdx, endIdx, type: seg.type });
+	}
+	return raw;
+}
+
+/** Merge neighbouring segments of the same type into one. This is what turns a
+ *  reclassification into a merge: relabel the idle sitting between two runs and
+ *  the three collapse into a single run, on screen and in the score. */
+function coalesce(raw: RawSegment[]): RawSegment[] {
+	const out: RawSegment[] = [];
+	for (const seg of raw) {
+		const last = out[out.length - 1];
+		if (last && last.type === seg.type && seg.startIdx <= last.endIdx + 1) last.endIdx = seg.endIdx;
+		else out.push({ ...seg });
+	}
+	return out;
+}
+
+/** Turn index bounds + a type into a full `SkiSegment` (distance, speed, times).
+ *  `type` is taken as given — for an override it is the human's call, not the
+ *  altitude's, so a lift hiked as a run stays a run even though it climbed. */
+function enrich(streams: SkiStreams, raw: RawSegment[]): SkiSegment[] {
+	const t = streams.time_s!;
+	const alt = streams.altitude_m!;
+	return raw.map(({ startIdx, endIdx, type }) => {
 		const seconds = Math.max(0, t[endIdx] - t[startIdx]);
 		const distanceM = segmentDistance(streams, startIdx, endIdx);
-		segments.push({
+		return {
 			type,
 			startIdx,
 			endIdx,
@@ -170,12 +241,35 @@ export function detectSkiSegments(streams: SkiStreams): SkiSegment[] {
 			seconds,
 			startAlt: alt[startIdx],
 			endAlt: alt[endIdx],
-			vertical: Math.abs(delta),
+			vertical: Math.abs(alt[endIdx] - alt[startIdx]),
 			distanceM,
 			avgSpeedMs: distanceM != null && seconds > 0 ? distanceM / seconds : null,
-		});
-	}
-	return segments;
+		};
+	});
+}
+
+/**
+ * The run/lift/idle segments for a ski day: the saved override when the owner
+ * has hand-corrected this activity, otherwise auto-detection. This is the single
+ * entry point everything downstream uses (display, exertion), so a correction
+ * lands everywhere at once.
+ */
+export function resolveSkiSegments(streams: SkiStreams, override?: SkiSegmentOverride[] | null): SkiSegment[] {
+	if (!streams.time_s || !streams.altitude_m) return [];
+	const raw = override && override.length ? overrideRawSegments(streams, override) : autoRawSegments(streams);
+	return enrich(streams, coalesce(raw));
+}
+
+/** Auto-detection only — kept as the name the tests and any auto-only caller
+ *  use. Equivalent to `resolveSkiSegments` with no override. */
+export function detectSkiSegments(streams: SkiStreams): SkiSegment[] {
+	return resolveSkiSegments(streams, null);
+}
+
+/** A `SkiSegment[]` reduced to the storable override shape — what the editor
+ *  saves after the owner reclassifies rows. */
+export function toOverride(segments: SkiSegment[]): SkiSegmentOverride[] {
+	return segments.map((s) => ({ t0: Math.round(s.startTime), t1: Math.round(s.endTime), type: s.type }));
 }
 
 function segmentDistance(streams: SkiStreams, a: number, b: number): number | null {
@@ -231,10 +325,11 @@ export function summarizeSki(segments: SkiSegment[]): SkiSummary {
  */
 export function skiActive(
 	streams: SkiStreams,
+	override?: SkiSegmentOverride[] | null,
 ): { activeSeconds: number; activeMask: boolean[]; runCount: number } | null {
 	const t = streams.time_s;
 	if (!t) return null;
-	const segments = detectSkiSegments(streams);
+	const segments = resolveSkiSegments(streams, override);
 	if (segments.length === 0) return null;
 	const n = streams.altitude_m?.length ?? 0;
 	const moving = streams.moving;

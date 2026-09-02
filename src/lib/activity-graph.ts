@@ -17,6 +17,7 @@
 // array at exactly those — never per-series filtering, which would desync the
 // value readout from the map marker.
 import { ALPINE } from './activity-tokens';
+import type { SkiSegment, SkiSegmentType } from './ski';
 
 const M_TO_FT = 3.28084;
 const MS_TO_MPH = 2.236936;
@@ -56,6 +57,12 @@ export interface GraphData {
 	 *  N-1 entries. `t`/`d` is null on an axis a lap didn't record. Absent when
 	 *  the activity has fewer than two laps. */
 	laps?: { t: number | null; d: number | null }[];
+	/** Run/lift/idle bands for a ski day, as [start, end] offsets on each axis
+	 *  (seconds and metres from the start, matching `t`/`d`). Drawn as coloured
+	 *  spans behind the elevation trace so the sawtooth reads as its runs and
+	 *  lifts. An axis a segment couldn't place (no distance stream) is null.
+	 *  Absent for non-ski activities. */
+	skiSegments?: { t0: number | null; t1: number | null; d0: number | null; d1: number | null; type: SkiSegmentType }[];
 }
 
 /** The lap fields the boundary markers need — `ActivityLap` satisfies it. */
@@ -94,7 +101,12 @@ export interface GraphStreams {
 /** Build the client graph payload, or null when there is nothing plottable — no
  *  series with two real points, or neither a time nor a distance axis to lay
  *  them on. */
-export function buildGraphData(streams: GraphStreams | null | undefined, laps?: GraphLap[] | null, n = GRAPH_N): GraphData | null {
+export function buildGraphData(
+	streams: GraphStreams | null | undefined,
+	laps?: GraphLap[] | null,
+	n = GRAPH_N,
+	skiSegments?: SkiSegment[] | null,
+): GraphData | null {
 	if (!streams) return null;
 
 	const lens = [streams.time_s, streams.distance_m, streams.altitude_m, streams.heartrate, streams.power_w, streams.speed_ms].map(
@@ -133,7 +145,28 @@ export function buildGraphData(streams: GraphStreams | null | undefined, laps?: 
 	const series = candidates.filter((s) => s.values.filter(finite).length >= 2);
 	if (series.length === 0) return null;
 
-	return { n: idx.length, t, d, lat, lng, series, laps: lapBoundaries(laps) };
+	return { n: idx.length, t, d, lat, lng, series, laps: lapBoundaries(laps), skiSegments: skiBands(streams, skiSegments) };
+}
+
+/** Ski segments → axis-offset bands. Reads the raw (full-resolution) streams at
+ *  each segment's own index bounds, not the downsampled graph indices, so a
+ *  band lines up exactly with the elevation turn that defined it. Offsets from
+ *  the first sample, like the axes. */
+function skiBands(streams: GraphStreams, segments: SkiSegment[] | null | undefined): GraphData['skiSegments'] {
+	if (!segments || segments.length === 0) return undefined;
+	const time = streams.time_s ?? null;
+	const dist = streams.distance_m ?? null;
+	const tBase = time && finite(time[0]) ? (time[0] as number) : null;
+	const dBase = dist && finite(dist[0]) ? (dist[0] as number) : null;
+	const at = (arr: (number | null)[] | null, base: number | null, i: number): number | null =>
+		arr && base != null && finite(arr[i]) ? Math.round((arr[i] as number) - base) : null;
+	return segments.map((s) => ({
+		t0: at(time, tBase, s.startIdx),
+		t1: at(time, tBase, s.endIdx),
+		d0: at(dist, dBase, s.startIdx),
+		d1: at(dist, dBase, s.endIdx),
+		type: s.type,
+	}));
 }
 
 /** Cumulative offsets at the end of each lap except the last — the internal
