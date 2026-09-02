@@ -132,7 +132,7 @@ function thresholdsOn(date) {
 
 let query = db
 	.from('activities')
-	.select('id, sport, local_date, moving_seconds, elapsed_seconds, distance_m, elevation_gain_m, avg_hr, avg_power_w, exertion, exertion_method, exertion_confidence')
+	.select('id, sport, local_date, moving_seconds, elapsed_seconds, distance_m, elevation_gain_m, avg_hr, avg_power_w, exertion, exertion_method, exertion_confidence, ski_segments')
 	.order('id');
 if (SPORT) query = query.eq('sport', SPORT);
 if (SINCE) query = query.gte('local_date', SINCE);
@@ -177,6 +177,9 @@ for (const a of activities) {
 				elevation_gain_m: a.elevation_gain_m,
 				avg_hr: a.avg_hr,
 				avg_power_w: a.avg_power_w,
+				// Honour a hand-corrected ski partition, so a re-score never clobbers
+				// an edit with auto-detection (migration 0051).
+				ski_segments: a.ski_segments ?? null,
 				streams: s
 					? {
 							time_s: s.time_s ?? undefined,

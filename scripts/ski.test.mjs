@@ -4,7 +4,7 @@
 //
 //   node --import ./scripts/ts-hook.mjs scripts/ski.test.mjs
 import assert from 'node:assert/strict';
-import { detectSkiSegments, summarizeSki, skiActive } from '../src/lib/ski.ts';
+import { detectSkiSegments, summarizeSki, skiActive, resolveSkiSegments, toOverride } from '../src/lib/ski.ts';
 import { computeExertion } from '../src/lib/exertion.ts';
 
 // Build a synthetic day: three identical laps of a 300m lift (slow climb) then a
@@ -95,5 +95,39 @@ assert.equal(hike.method, 'met', 'a hike still hits the MET floor, not the ski r
 // No altitude → no segments, and the caller keeps its own moving time.
 assert.deepEqual(detectSkiSegments({ time_s: [0, 1, 2] }), []);
 assert.equal(skiActive({ time_s: [0, 1, 2] }), null);
+
+// --- Edit / override path -------------------------------------------------
+const thresholds = { ftp_w: null, lthr_bpm: null, max_hr: null, rest_hr: null, threshold_pace_s_per_km: null, css_pace_s_per_100m: null, weight_kg: null };
+const auto = detectSkiSegments(day);
+const override = toOverride(auto);
+// Round-trips: feeding the auto partition straight back reproduces it.
+const roundTrip = resolveSkiSegments(day, override);
+assert.equal(roundTrip.length, auto.length, 'override round-trips to the same segment count');
+assert.deepEqual(roundTrip.map((s) => s.type), auto.map((s) => s.type), 'types survive the round-trip');
+
+// Reclassify the first LIFT as a run: skiActive should now count it, so active
+// time and the exertion score both rise. This is the "I hiked that lift" edit.
+const firstLift = override.findIndex((s) => s.type === 'lift');
+assert.ok(firstLift >= 0, 'there is a lift to reclassify');
+const edited = override.map((s, i) => (i === firstLift ? { ...s, type: 'run' } : s));
+const activeBefore = skiActive(day).activeSeconds;
+const activeAfter = skiActive(day, edited).activeSeconds;
+assert.ok(activeAfter > activeBefore, 'reclassifying a lift as a run adds active descent time');
+
+const exBefore = computeExertion({ sport: 'alpine_ski', moving_seconds: 1200, elapsed_seconds: 1200, distance_m: null, elevation_gain_m: null, avg_hr: null, avg_power_w: null, streams: day }, thresholds);
+const exAfter = computeExertion({ sport: 'alpine_ski', moving_seconds: 1200, elapsed_seconds: 1200, distance_m: null, elevation_gain_m: null, avg_hr: null, avg_power_w: null, streams: day, ski_segments: edited }, thresholds);
+assert.ok(exAfter.score > exBefore.score, 'the edit raises the exertion score');
+assert.equal(exAfter.method, 'ski');
+
+// Coalescing: after relabelling the idle between two runs AS a run, the three
+// adjacent runs collapse into one — how reclassify does the work of a merge.
+const three = [
+	{ t0: 0, t1: 100, type: 'run' },
+	{ t0: 100, t1: 130, type: 'run' },
+	{ t0: 130, t1: 230, type: 'run' },
+];
+const merged = resolveSkiSegments(day, three);
+assert.equal(merged.length, 1, 'adjacent same-type segments coalesce into one');
+assert.equal(merged[0].type, 'run');
 
 console.log('ski.test.mjs OK');

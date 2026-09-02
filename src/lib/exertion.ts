@@ -73,7 +73,7 @@
 // ---------------------------------------------------------------------------
 
 import { SPORTS, sportMeta } from './sports';
-import { skiActive } from './ski';
+import { skiActive, type SkiSegmentOverride } from './ski';
 
 // Lift-served snow sports: a resort day is mostly lift and lodge, and the file's
 // duration (elapsed, or a Slopes-exported moving_seconds that is simply broken
@@ -131,6 +131,10 @@ export interface ExertionInput {
 	avg_hr: number | null;
 	avg_power_w: number | null;
 	streams?: ExertionStreams;
+	/** A hand-corrected run/lift partition for a ski day (the `ski_segments`
+	 *  column). When present it replaces auto-detection, so the score reflects
+	 *  the owner's correction — a lift they actually hiked now counts as descent. */
+	ski_segments?: SkiSegmentOverride[] | null;
 }
 
 export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met' | 'ski';
@@ -491,7 +495,7 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	// strap reaches, and the ski MET rung the rest fall to — scores the skiing
 	// and not the chairlift. Null (no altitude, or no run detected) falls back to
 	// the file's own moving time, exactly as every other sport uses it.
-	let ski = LIFT_SERVED.has(input.sport) && streams ? skiActive(streams) : null;
+	let ski = LIFT_SERVED.has(input.sport) && streams ? skiActive(streams, input.ski_segments) : null;
 	if (ski && ski.activeSeconds <= 0) ski = null;
 	const movingSeconds = ski ? ski.activeSeconds : input.moving_seconds ?? input.elapsed_seconds ?? 0;
 	const movingMask = ski ? ski.activeMask : streams?.moving;

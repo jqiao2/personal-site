@@ -23,6 +23,9 @@ const defaultMode = data.t ? 'time' : 'dist';
 // available series when the activity has no elevation (a treadmill, say).
 const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
 const hasLaps = Boolean(data.laps && data.laps.length > 0);
+// A ski day ships run/lift bands; they start ON, since seeing the sawtooth AS
+// runs and lifts is the whole point on these activities.
+const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 ---
 
 <section class="ag" data-graph>
@@ -57,6 +60,14 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 				<button type="button" class="ag__chip ag__chip--laps" data-laps aria-pressed="false">
 					<span class="ag__swatch ag__swatch--laps" />
 					<span>Laps</span>
+				</button>
+			)
+		}
+		{
+			hasSki && (
+				<button type="button" class="ag__chip ag__chip--ski" data-ski aria-pressed="true">
+					<span class="ag__swatch ag__swatch--ski" />
+					<span>Runs &amp; lifts</span>
 				</button>
 			)
 		}
@@ -98,6 +109,7 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 		const active = new Set<string>(defaultKey ? [defaultKey] : []);
 		let mode: Mode = data.t ? 'time' : 'dist';
 		let lapsOn = false;
+		let skiOn = Boolean(data.skiSegments && data.skiSegments.length);
 
 		// --- Normalised geometry, computed once ---------------------------------
 		// x for each mode: axis value scaled to 0..1. Real device time/distance is
@@ -175,6 +187,49 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 			}
 		}
 
+		// --- Ski run/lift bands (coloured spans, appended first of all so they
+		//     sit behind the lap rules and the traces) --------------------------
+		const RUN_FILL = '#1c6e8c'; // lake — the run
+		const LIFT_FILL = '#6b7b88'; // graniteSoft — the lift ride
+		const skiRects: SVGRectElement[] = [];
+		for (const seg of data.skiSegments ?? []) {
+			const r = document.createElementNS(SVGNS, 'rect');
+			r.setAttribute('y', '0');
+			r.setAttribute('height', '100');
+			if (seg.type === 'run') {
+				r.setAttribute('fill', RUN_FILL);
+				r.setAttribute('fill-opacity', '0.14');
+			} else if (seg.type === 'lift') {
+				r.setAttribute('fill', LIFT_FILL);
+				r.setAttribute('fill-opacity', '0.09');
+			} else {
+				r.setAttribute('fill', 'none');
+			}
+			r.style.display = 'none';
+			svg.appendChild(r);
+			skiRects.push(r);
+		}
+		// Bands span [start,end] on whichever axis is in force, scaled the same way
+		// the samples and lap rules are. Idle segments draw nothing.
+		function positionSki() {
+			const b = xbounds[mode];
+			(data.skiSegments ?? []).forEach((seg, i) => {
+				const r = skiRects[i];
+				const a = mode === 'time' ? seg.t0 : seg.d0;
+				const z = mode === 'time' ? seg.t1 : seg.d1;
+				if (!b || a == null || z == null || !skiOn || seg.type === 'idle') {
+					r.style.display = 'none';
+					return;
+				}
+				const span = b.hi - b.lo || 1;
+				const x0 = ((a - b.lo) / span) * 1000;
+				const x1 = ((z - b.lo) / span) * 1000;
+				r.setAttribute('x', Math.min(x0, x1).toFixed(1));
+				r.setAttribute('width', Math.max(0.4, Math.abs(x1 - x0)).toFixed(1));
+				r.style.display = '';
+			});
+		}
+
 		// --- Lap dividers (vertical rules, appended first so they sit behind the
 		//     traces) -----------------------------------------------------------
 		const lapLines: SVGLineElement[] = [];
@@ -233,6 +288,7 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 		}
 		buildPaths();
 		positionLaps();
+		positionSki();
 
 		// --- Cursor dots (one per series, reused) -------------------------------
 		const dots = new Map<string, HTMLElement>();
@@ -349,6 +405,12 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 			lapsChip.setAttribute('aria-pressed', String(lapsOn));
 			positionLaps();
 		});
+		const skiChip = root.querySelector<HTMLButtonElement>('[data-ski]');
+		skiChip?.addEventListener('click', () => {
+			skiOn = !skiOn;
+			skiChip.setAttribute('aria-pressed', String(skiOn));
+			positionSki();
+		});
 		for (const btn of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) {
 			btn.addEventListener('click', () => {
 				const next = btn.dataset.mode as Mode;
@@ -357,6 +419,7 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 				for (const b of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
 				buildPaths();
 				positionLaps();
+				positionSki();
 				endScrub();
 			});
 		}
@@ -449,6 +512,15 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 		border-radius: 0;
 		width: 0;
 		height: 12px;
+	}
+	/* The ski swatch is the two bands it toggles: a run tint and a lift tint. */
+	.ag__swatch--ski {
+		background: linear-gradient(90deg, rgba(28, 110, 140, 0.55) 50%, rgba(107, 123, 136, 0.4) 50%);
+		border-radius: 2px;
+	}
+	.ag__chip[aria-pressed='false'] .ag__swatch--ski {
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px #9fb2bd;
 	}
 	.ag__chip-val {
 		font-variant-numeric: tabular-nums;

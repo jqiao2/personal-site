@@ -32,3 +32,10 @@ wiki across every iteration, even reverted ones).
   Strava auto-laps. Migration 0050 widened the exertion_method constraint. Wrote
   pattern 0006. `db push` to this project needs the `aws-1-us-west-2` pooler host
   (not `aws-0`), which returns "tenant not found".
+- 2026-09-02 — Made ski runs/lifts editable and drew them on the profile.
+  `activities.ski_segments` (0051) stores a hand-corrected partition that
+  `resolveSkiSegments` uses in place of detection everywhere (display, profile,
+  exertion); the editor is reclassify-only, with merge falling out of coalescing.
+  Profile gained coloured run/lift bands (ActivityGraph). Extended pattern 0006
+  with the override + testing notes (saveSkiSegments needs Astro's import.meta.env,
+  and a form POST to astro dev needs a matching Origin header or it 403s).

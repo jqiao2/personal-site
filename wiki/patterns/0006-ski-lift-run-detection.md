@@ -51,8 +51,33 @@ MET (alpine 7, board 6), not sports.ts's deliberately-low whole-day MET. Only
 `alpine_ski`/`snowboard` — backcountry/nordic are self-powered. Adding a method
 value needed widening the `activities_exertion_method_check` constraint (0050).
 
+## Editing the partition, and showing it
+
+Detection is right almost always; the "almost" (a lift you hiked, a cat-track
+called a run) is why `activities.ski_segments` exists (migration 0051): a stored
+`[{t0,t1,type}]` partition in seconds-from-start that, when present, REPLACES
+detection everywhere via `resolveSkiSegments(streams, override)` — display,
+profile, and the exertion score. Key moves:
+
+- **Reclassify is the whole editor** — no split/merge/drag. Merge falls out for
+  free: `coalesce()` joins adjacent same-type segments, so relabelling the idle
+  between two runs collapses the three. Split (rare) is deferred.
+- **Exertion must honour the override**, so `computeExertion` takes an optional
+  `ski_segments`, and BOTH `saveSkiSegments` (the editor) and
+  `recompute-exertion.mjs` pass it — otherwise a bulk re-score silently reverts
+  every edit to auto-detection.
+- **Profile bands**: `buildGraphData` takes the resolved segments and emits
+  axis-offset bands (`skiSegments`), drawn as coloured `<rect>`s behind the
+  elevation trace in ActivityGraph, toggled by a chip, ON by default for ski.
+  Read the bands off the RAW stream indices, not the downsampled graph indices,
+  or they drift from the turn that defined them.
+- **Testing the save path**: `saveSkiSegments` pulls in `supabase.ts`, which
+  reads `import.meta.env` — so it only runs inside Astro (dev server), NOT bare
+  node. Verify by `curl -X POST` to a running `astro dev`, and you MUST send an
+  `Origin:` header matching the host or Astro's origin check 403s the form post.
+
 ## Cheapest check
 
-`npm run ski:test` (synthetic sawtooth). For real data, the run-drop sum should
-track `elevation_loss_m`. See [[0002-screenshot-the-page-yourself]] for the
-detail-page render.
+`npm run ski:test` (synthetic sawtooth + the override/coalesce/exertion path).
+For real data, the run-drop sum should track `elevation_loss_m`. See
+[[0002-screenshot-the-page-yourself]] for the detail-page render.
