@@ -2,6 +2,7 @@
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import { getFilmStats } from '../../lib/films';
 import { starText } from '../../lib/format';
+import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -52,6 +53,8 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 <FilmLayout title="Stats — Jason's film log">
 	<div class="page">
 		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="1024px" />
+
 			<!-- Top bar -->
 			<header class="topbar">
 				<a class="back" href="/films">
@@ -212,6 +215,7 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 
 	<style>
 		.page {
+			overflow-x: hidden;
 			display: flex;
 			justify-content: center;
 			padding: 0 24px 80px;

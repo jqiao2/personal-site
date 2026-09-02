@@ -16,6 +16,7 @@ import { extractCrew, getMovieDetails, imageUrl, releaseYear } from '../../../li
 import { formatWatchedDate, starText, ytsUrl } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 import { jellyfinConfig } from '../../../lib/jellyfin';
+import SiteHeader from '../../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -190,6 +191,8 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 	</head>
 	<body>
 		<div class="page">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="976px" />
+
 			<!-- Backdrop -->
 			<div class="backdrop" style={backdrop ? `background-image:url(${backdrop})` : undefined}>
 				<div class="backdrop__scrim"></div>

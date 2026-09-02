@@ -21,9 +21,13 @@ interface Props {
 	pathname: string;
 	/** Which section's palette to wear. */
 	theme?: 'root' | 'film' | 'book' | 'restaurant' | 'activity' | 'subway';
+	/** Width of the inner column, when the page's own column isn't the theme's
+	    default — the film subpages run narrower than the film log's 1120px card,
+	    and the nav has to line up with whatever is under it. */
+	max?: string;
 }
 
-const { pathname, theme = 'root' } = Astro.props;
+const { pathname, theme = 'root', max } = Astro.props;
 const nav = siteNav(pathname);
 
 // The admin sign-in lives here so every page with a header offers it. A visitor
@@ -111,7 +115,7 @@ const THEMES: Record<string, Record<string, string>> = {
 	},
 };
 
-const vars = THEMES[theme] ?? THEMES.root;
+const vars = { ...(THEMES[theme] ?? THEMES.root), ...(max ? { '--sh-max': max } : {}) };
 const style = Object.entries(vars)
 	.map(([k, v]) => `${k}:${v}`)
 	.join(';');

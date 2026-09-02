@@ -6,6 +6,7 @@ import { filterSentence } from '../../lib/watched-filters';
 import { watchedFilterCount, watchedQueryFromParams } from '../../lib/watched-params';
 import { imageUrl } from '../../lib/tmdb';
 import { requireOwner } from '../../lib/auth';
+import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -88,6 +89,8 @@ const summary = hasFilters
 <FilmLayout title="Films watched — Jason's film log">
 	<div class="page">
 		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
+
 			<header class="topbar">
 				<a class="back" href="/films">
 					<span class="back__arrow">←</span><span>Jason's film log</span>
@@ -358,6 +361,7 @@ const summary = hasFilters
 
 	<style>
 		.page {
+			overflow-x: hidden;
 			display: flex;
 			justify-content: center;
 			padding: 0 24px 80px;
