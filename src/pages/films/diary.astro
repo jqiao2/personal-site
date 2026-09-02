@@ -5,6 +5,7 @@ import { listLogs, getFilmLogStats, listTheaterNames, listTags, listFriends } fr
 import { requireOwner } from '../../lib/auth';
 import { starText } from '../../lib/format';
 import { imageUrl } from '../../lib/tmdb';
+import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -80,6 +81,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 <FilmLayout title="Film diary — Jason's film log">
 	<div class="page">
 		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="964px" />
+
 			<header class="topbar">
 				<a class="back" href="/films">
 					<span class="back__arrow">←</span><span>Jason's film log</span>
@@ -163,6 +166,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 	<style>
 		.page {
+			overflow-x: hidden;
 			display: flex;
 			justify-content: center;
 			padding: 0 24px 80px;

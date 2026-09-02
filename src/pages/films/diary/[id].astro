@@ -8,6 +8,7 @@ import { isPinned } from '../../../lib/pins';
 import PinButton from '../../../components/PinButton.astro';
 import { imageUrl } from '../../../lib/tmdb';
 import { formatWatchedDate, mediumLabel, starText } from '../../../lib/format';
+import SiteHeader from '../../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -61,6 +62,8 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 <FilmLayout title={`${movie.title} — diary entry`}>
 	<div class="page">
 		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="824px" />
+
 			<header class="topbar">
 				<a class="back" href="/films/diary">
 					<span class="back__arrow">←</span><span>Film diary</span>
@@ -192,6 +195,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 
 	<style>
 		.page {
+			overflow-x: hidden;
 			display: flex;
 			justify-content: center;
 			padding: 0 24px 90px;

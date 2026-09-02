@@ -39,6 +39,7 @@ import {
 
 // Rendered on demand — reflects the live database.
 import { requireOwner } from '../../../lib/auth';
+import SiteHeader from '../../../components/SiteHeader.astro';
 
 export const prerender = false;
 
@@ -122,6 +123,8 @@ const clientData = JSON.stringify({
 <BookLayout title={`${label} in reading — Jason's book log`}>
 	<div class="page">
 		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="book" max="956px" />
+
 			<header class="topbar">
 				<a class="back" href="/books" data-back>
 					<span class="back__arrow">←</span><span>Books</span>
@@ -333,6 +336,7 @@ const clientData = JSON.stringify({
 
 <style>
 	.page {
+		overflow-x: hidden;
 		min-height: 100vh;
 		display: flex;
 		justify-content: center;
