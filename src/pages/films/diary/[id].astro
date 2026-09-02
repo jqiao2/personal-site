@@ -356,6 +356,15 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			display: flex;
 			align-items: center;
 			gap: 10px;
+			/* Match the pin to the Edit-entry button beside it. */
+			--pin-font-family: 'Archivo', sans-serif;
+			--pin-font-size: 12px;
+			--pin-pad: 7px 14px;
+			--pin-radius: 7px;
+			--pin-fg: #ddc9b4;
+			--pin-border: #4a2529;
+			--pin-accent: #d9b45a;
+			--pin-accent-bg: #2a1518;
 		}
 		.edit-btn {
 			flex: none;

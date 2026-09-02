@@ -318,6 +318,19 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 	.owner {
 		margin-top: 14px;
 	}
+	/* Pin dressed like the paper .rl-btn outline, set off from the Edit link. */
+	.owner :global(.pin) {
+		display: block;
+		margin-top: 11px;
+		--pin-font-family: var(--ui);
+		--pin-font-size: 12.5px;
+		--pin-pad: 7px 13px;
+		--pin-radius: 0;
+		--pin-fg: var(--ink-2);
+		--pin-border: var(--rule);
+		--pin-accent: var(--terracotta);
+		--pin-accent-bg: #f6e7d4;
+	}
 	.owner__link {
 		display: block;
 		margin-top: 9px;

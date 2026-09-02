@@ -24,7 +24,19 @@ const { track, refId, pinned } = Astro.props;
 		data-ref-id={refId}
 		aria-pressed={pinned}
 	>
-		<span class="pin__mark" aria-hidden="true">📌</span>
+		<svg
+			class="pin__mark"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="1.6"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			aria-hidden="true"
+		>
+			<path d="M12 17v5" />
+			<path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" />
+		</svg>
 		<span class="pin__label">{pinned ? 'Pinned' : 'Pin'}</span>
 	</button>
 	<span class="pin__msg" data-pin-msg hidden></span>
@@ -42,29 +54,46 @@ const { track, refId, pinned } = Astro.props;
 		flex-direction: column;
 		gap: 0.25rem;
 	}
+	/* The look is fully driven by these custom properties so each page can
+	   match the pin to its own Edit control (see the --pin-* vars the film,
+	   book, restaurant and activity pages set on the wrapper). The defaults
+	   are a quiet outline that works on any theme. */
 	.pin__btn {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.4rem;
-		font: inherit;
-		font-size: 0.85rem;
-		padding: 0.3rem 0.65rem;
-		border: 1px solid currentColor;
-		border-radius: 3px;
-		background: transparent;
-		color: inherit;
+		font-family: var(--pin-font-family, inherit);
+		font-size: var(--pin-font-size, 0.78rem);
+		font-weight: 500;
+		line-height: 1.2;
+		padding: var(--pin-pad, 0.35rem 0.7rem);
+		border: 1px solid var(--pin-border, currentColor);
+		border-radius: var(--pin-radius, 6px);
+		background: var(--pin-bg, transparent);
+		color: var(--pin-fg, inherit);
 		cursor: pointer;
-		opacity: 0.75;
+		transition:
+			color 0.15s ease,
+			border-color 0.15s ease,
+			background 0.15s ease;
+	}
+	.pin__btn:hover {
+		color: var(--pin-accent, currentColor);
+		border-color: var(--pin-accent, currentColor);
 	}
 	.pin__btn[aria-pressed='true'] {
-		opacity: 1;
-		font-weight: 600;
+		color: var(--pin-accent, currentColor);
+		border-color: var(--pin-accent, currentColor);
+		background: var(--pin-accent-bg, transparent);
 	}
 	.pin__mark {
-		filter: grayscale(1);
+		width: 0.95em;
+		height: 0.95em;
+		flex: none;
 	}
+	/* Filled pin once it's pinned — reads as "stuck in". */
 	.pin__btn[aria-pressed='true'] .pin__mark {
-		filter: none;
+		fill: currentColor;
 	}
 	.pin__msg {
 		font-size: 0.75rem;
