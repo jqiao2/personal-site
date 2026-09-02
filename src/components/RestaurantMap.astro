@@ -217,9 +217,41 @@ const hasKey = Boolean(config.key);
 		// slightly twisted still zooms instead of doing nothing.
 		map.touchZoomRotate.disableRotation();
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+		map.addControl(new maplibregl.GeolocateControl({ trackUserLocation: false, showAccuracyCircle: false }), 'top-right');
 
-		/** Open on the densest city; everything else is a drag away. */
+		// THE CAMERA STARTS WHERE THE READER IS — same as the activity heatmap.
+		// Ask for geolocation on load and open there; the densest-city frame is
+		// the provisional view geolocation replaces when its fix arrives, and the
+		// fallback that stands on a denial, a timeout, or a browser without the
+		// API. A reader who starts panning first overrules both — but only a real
+		// gesture, not the programmatic jump/fit below, does: those fire zoomstart
+		// with no originalEvent.
+		let userTookOver = false;
+		let located = false;
+		map.on('dragstart', () => (userTookOver = true));
+		map.on('zoomstart', (e) => {
+			if ((e as { originalEvent?: unknown }).originalEvent) userTookOver = true;
+		});
+
+		function goToUser() {
+			if (!navigator.geolocation) return;
+			navigator.geolocation.getCurrentPosition(
+				(pos) => {
+					if (userTookOver) return;
+					located = true;
+					map.jumpTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 13 });
+				},
+				() => {
+					/* denied, timed out, or no fix — the city frame stands */
+				},
+				{ enableHighAccuracy: false, timeout: 8000, maximumAge: 300_000 },
+			);
+		}
+		goToUser();
+
+		/** Open on the densest city; the provisional view until geolocation answers. */
 		function frame() {
+			if (located || userTookOver) return;
 			const inCity = cfg.framedCity
 				? cfg.points.filter((p) => p.city === cfg.framedCity)
 				: cfg.points;
