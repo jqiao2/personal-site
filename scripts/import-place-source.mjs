@@ -61,6 +61,27 @@ function box(name) {
 	throw new Error(`unknown --bbox "${name}" — use a name (${Object.keys(BOXES).join(', ')}) or w,s,e,n`);
 }
 
+/**
+ * `fetch` that rides out a flaky connection.
+ *
+ * The Overture bucket is read over a long run of large requests, and a single
+ * connect timeout among them used to throw the whole import away — the earlier
+ * files already read, gone. S3 is reachable; it just refuses a connection now
+ * and then. So each fetch is retried a few times with a growing pause before
+ * the failure is allowed to propagate.
+ */
+async function fetchRetry(url, opts, tries = 5) {
+	for (let i = 0; ; i++) {
+		try {
+			return await fetch(url, opts);
+		} catch (err) {
+			if (i >= tries - 1) throw err;
+			process.stderr.write(`  retry ${i + 1}/${tries - 1} after ${String(err.cause?.code ?? err.message)}\n`);
+			await new Promise((r) => setTimeout(r, 1000 * 2 ** i));
+		}
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Shared shaping
 // ---------------------------------------------------------------------------
@@ -145,7 +166,7 @@ async function fromDohmh() {
  * data, and asking for "latest" is one HTTP request.
  */
 async function overtureRelease() {
-	const res = await fetch(
+	const res = await fetchRetry(
 		'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=release/&delimiter=/',
 	);
 	const xml = await res.text();
@@ -161,7 +182,7 @@ async function listKeys(prefix) {
 		const url =
 			`https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=${encodeURIComponent(prefix)}` +
 			(token ? `&continuation-token=${encodeURIComponent(token)}` : '');
-		const xml = await (await fetch(url)).text();
+		const xml = await (await fetchRetry(url)).text();
 		keys.push(...[...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]));
 		token = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)?.[1] ?? '';
 	} while (token);
@@ -215,13 +236,19 @@ async function fromOverture() {
 			       or categories.primary in ('cafe','bakery','bar','coffee_shop','deli',
 			                                 'ice_cream_shop','pizzeria','diner','juice_bar','tea_room','pub'))
 		`;
-		try {
-			const r = await c.runAndReadAll(q);
-			const found = r.getRowObjects();
+		// One retry: httpfs times out on these gigabyte files often enough that
+		// dropping a NYC-overlapping one on a single flake would lose real places.
+		let found = null;
+		for (let attempt = 0; attempt < 2 && found === null; attempt++) {
+			try {
+				found = (await c.runAndReadAll(q)).getRowObjects();
+			} catch (err) {
+				if (attempt === 1) process.stderr.write(` failed: ${String(err).slice(0, 80)}\n`);
+			}
+		}
+		if (found) {
 			rows.push(...found);
 			process.stderr.write(` ${found.length} (${((Date.now() - started) / 1000).toFixed(1)}s)\n`);
-		} catch (err) {
-			process.stderr.write(` failed: ${String(err).slice(0, 80)}\n`);
 		}
 		if (limit && rows.length >= limit) break;
 	}
@@ -251,11 +278,16 @@ async function fromOverture() {
  *
  * Their S3 bucket refuses anonymous listing — it answers with LICENSE.txt and
  * nothing else — so the release is enumerated through HuggingFace's tree API,
- * which is where the dataset is actually published. NOTE: their file URLs
- * redirect to a CDN, and DuckDB's httpfs could not follow that redirect from
- * the sandbox this was written in. The query below is right; if it fails with
- * an HTTP 0, that redirect is why, and a plain `wget` of the parquet files
- * followed by a local read_parquet is the way round it.
+ * which is where the dataset is actually published.
+ *
+ * BLOCKED, as of 2026-09: the parquet files now require a HuggingFace token.
+ * `resolve/main/...parquet` answers 401 to an anonymous request, which reaches
+ * DuckDB's httpfs as the opaque "HTTP 0" it reports on a failed fetch. To run
+ * this, set a token: DuckDB wants `create secret (type huggingface, token
+ * '...')`, or fetch the files with an `Authorization: Bearer` header and read
+ * them locally. Until then Overture is the storable global source that works
+ * without credentials, and it already carries the NYC places this was added
+ * for. The query below is otherwise correct.
  */
 async function fromFoursquare() {
 	const [w, s, e, n] = box(bboxName);
@@ -334,9 +366,16 @@ const CHUNK = 500;
 let written = 0;
 for (let i = 0; i < rows.length; i += CHUNK) {
 	const slice = rows.slice(i, i + CHUNK).map(({ on, ...r }) => ({ ...r, imported_at: new Date().toISOString() }));
-	const { error } = await db.from('place_sources').upsert(slice, { onConflict: 'source,source_id' });
+	// Retry the write too: a single dropped connection here used to lose 500
+	// places silently, since the loop moved on rather than trying again.
+	let error = null;
+	for (let attempt = 0; attempt < 4; attempt++) {
+		({ error } = await db.from('place_sources').upsert(slice, { onConflict: 'source,source_id' }));
+		if (!error) break;
+		if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
+	}
 	if (error) {
-		console.error(`  chunk ${i} failed: ${error.message}`);
+		console.error(`  chunk ${i} failed after retries: ${error.message}`);
 		continue;
 	}
 	written += slice.length;

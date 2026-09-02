@@ -13,3 +13,4 @@ add or update a pattern.
 | [0005](patterns/0005-localday-in-frontmatter-is-utc.md) | `localDay()` in Astro frontmatter is UTC | failure-mode | defaulting a date field to "today" |
 | [0006](patterns/0006-ski-lift-run-detection.md) | Segment a ski day into runs and lifts | strategy | ski/board exertion, run counts, or any climb/descent GPS track |
 | [0007](patterns/0007-siteheader-full-bleed-and-column.md) | Placing SiteHeader on a page that centres its own column | strategy | adding the site header to a page, or auditing which pages have one |
+| [0008](patterns/0008-gazetteer-only-had-dohmh.md) | The place gazetteer only ever had one of its four sources | failure-mode | a known restaurant is missing from suggestions, a suggestion is ALL CAPS, or co-located venues collapse into one |
