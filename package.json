@@ -24,6 +24,7 @@
     "pins:test": "node --import ./scripts/ts-hook.mjs scripts/pins.test.mjs",
     "export:test": "node --import ./scripts/ts-hook.mjs scripts/export-cache-key.test.mjs",
     "graph:test": "node --import ./scripts/ts-hook.mjs scripts/activity-graph.test.mjs",
+    "ski:test": "node --import ./scripts/ts-hook.mjs scripts/ski.test.mjs",
     "shot": "node --env-file=.env scripts/shot.mjs"
   },
   "dependencies": {

@@ -388,8 +388,23 @@ recorded alongside the number.
 2. HR stream + HRrest/HRmax/LTHR for date    → hrtss      (Banister TRIMP, rescaled)
 3. no streams, but avg HR + duration         → avghr      (flat-HR TRIMP)
 4. running/swimming with pace + threshold    → ptss       (rTSS / sTSS)
+4.5 lift-served ski/board, active descent     → ski        (MET on run time only)
 5. sport + duration (+ distance, elevation)  → met        (floor)
 ```
+
+**The ski rung (4.5)** is the MET floor with an honest duration. A resort day's
+file is mostly chairlift and lodge, and this archive's Slopes exports carry a
+broken `moving_seconds` (465s for a full day with 10,000m of vertical), so
+neither elapsed nor moving time is "how long was spent skiing". `src/lib/ski.ts`
+segments the altitude sawtooth into runs and lifts; exertion scores the summed
+run time (lifts and mid-run stops removed) on an active-descent MET (alpine 7,
+board 6), marked `estimated` because that time was measured off the stream. Only
+`alpine_ski` and `snowboard` take this rung — backcountry and nordic skiing are
+self-powered, so their whole moving time is the effort. A ski day *with* a strap
+uses the same run mask to trim its HR rung to descending samples. The same
+segments drive the Slopes-style "Runs & lifts" breakdown on the detail page
+(`src/components/SkiRuns.astro`); the `activity_laps` rows on these days are
+Strava's arbitrary auto-laps and are useless as runs.
 
 Every branch writes `exertion` (a real number, ~0–500) **and**
 `exertion_method` (the enum above) **and** `exertion_confidence`
@@ -416,7 +431,9 @@ Key details:
 - **MET values** come from the Compendium of Physical Activities, per sport, and
   are adjusted by speed/grade where a stream allows.
 - **Elapsed vs moving.** Exertion always uses *moving* time. A two-hour café
-  stop is not training stress.
+  stop is not training stress — and for a lift-served ski day, neither is the
+  chairlift, so the ski rung goes further and uses only the active-descent time
+  (see rung 4.5).
 
 ---
 
@@ -745,7 +762,9 @@ sport-aware** — the ordered list of stat keys that sport leads with:
 - open_water_swim: distance, moving time, avg pace /100m, water temp, exertion
 - transition: elapsed time. That is the whole story of a transition.
 - hike: distance, elevation gain, moving time, elev high, exertion
-- alpine_ski: vertical descent, runs, max speed, moving time
+- alpine_ski / snowboard: vertical descent, runs, max speed — then a Slopes-style
+  "Runs & lifts" breakdown (time skiing vs on lifts, per-run vertical/speed). No
+  moving-time stat: the file's is broken (see §3's ski rung).
 - default: distance, moving time, elevation gain, avg HR, exertion
 
 ---

@@ -16,6 +16,14 @@ wiki across every iteration, even reverted ones).
   list) while moving price out of the diary view. Root-causes the same trap 0031
   hit from the other direction.
 
+- 2026-09-01 — Lift/run detection for ski days. `src/lib/ski.ts` segments the
+  altitude sawtooth (hysteresis over smoothed altitude); exertion gained a rung
+  4.5 (`ski`) that scores only active-descent time, so a resort day no longer
+  reads ~5 off the broken Slopes `moving_seconds` — big days now score ~90–130.
+  A Slopes-style "Runs & lifts" breakdown (`SkiRuns.astro`) replaces the useless
+  Strava auto-laps. Migration 0050 widened the exertion_method constraint. Wrote
+  pattern 0005. `db push` to this project needs the `aws-1-us-west-2` pooler host
+  (not `aws-0`), which returns "tenant not found".
 - 2026-09-01 — Extracted the watchlist add-composer into a shared
   `WatchlistComposer.astro` (reused on `/films` header + watchlist page). Truncating
   watchlist.astro with a PowerShell `Get-Content|Set-Content` round-trip mojibake'd
