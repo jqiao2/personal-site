@@ -29,7 +29,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 					<div class="item__body">
 						<p class="item__meta">
 							{date && <time>{date}</time>}
-							<span class="tag">Film</span>
 						</p>
 						<h2 class="item__title">
 							<a href={`/films/diary/${f.id}`}>
@@ -127,16 +126,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 		flex-wrap: wrap;
 		gap: 10px;
 		align-items: baseline;
-	}
-	.tag {
-		font-family: 'Archivo', sans-serif;
-		font-size: 10px;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		padding: 2px 7px;
-		border: 1px solid #6b4a42;
-		color: #d9b45a;
-		border-radius: 2px;
 	}
 	.item__title {
 		font-family: 'Newsreader', serif;
