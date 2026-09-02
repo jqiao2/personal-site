@@ -61,6 +61,35 @@ export function normalise(raw: string): string {
 		.trim();
 }
 
+/**
+ * "SABOR LATINO SPANISH AMERICAN" → "Sabor Latino Spanish American".
+ *
+ * The health department stores every DBA in block capitals, which is how the
+ * awning is spelled by nobody. The awning case cannot be recovered from all
+ * caps — "IHOP" and "JG Melon" are lost the moment they are shouted — so this
+ * is a title-case, the closest guess that is right far more often than it is
+ * wrong: first letter of each word up, interior small words down. It runs only
+ * on names that are actually all caps (see the guard in `searchGazetteer`), so
+ * a source that already cases its names is never touched.
+ */
+const MINOR = new Set(['a', 'an', 'and', 'at', 'de', 'del', 'el', 'for', 'in', 'la', 'las', 'le', 'los', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'y']);
+/** Words a restaurant name keeps in capitals — an acronym is not a word. */
+const KEEP = new Set(['ABC', 'BBQ', 'KBBQ', 'BYOB', 'NYC', 'DJ', 'II', 'III', 'IV']);
+export function titleCaseName(raw: string): string {
+	const words = raw.trim().split(/\s+/);
+	return words
+		.map((w, i) => {
+			const upper = w.toUpperCase();
+			if (KEEP.has(upper)) return upper;
+			const lower = w.toLowerCase();
+			// Small words stay down, except as the first or last word of the name.
+			if (i > 0 && i < words.length - 1 && MINOR.has(lower)) return lower;
+			// Only the first letter is raised: "WU'S" → "Wu's", not "Wu'S".
+			return lower.replace(/[a-z]/, (c) => c.toUpperCase());
+		})
+		.join(' ');
+}
+
 const EARTH_M = 6371000;
 
 function metres(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -107,6 +136,10 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 	return rows
 		.map((r) => ({
 			...r,
+			// The health department SHOUTS; nobody else does. Title-case its names,
+			// and only its names, and only when they really are all caps — so this
+			// leaves a source that already cases its names alone.
+			name: r.source === 'dohmh' && !/[a-z]/.test(r.name) ? titleCaseName(r.name) : r.name,
 			sourceLabel: SOURCE_LABELS[r.source] ?? r.source,
 			distance: near ? metres(near.lat, near.lng, r.lat, r.lng) : null,
 		}))

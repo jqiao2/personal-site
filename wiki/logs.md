@@ -39,7 +39,6 @@ wiki across every iteration, even reverted ones).
   Profile gained coloured run/lift bands (ActivityGraph). Extended pattern 0006
   with the override + testing notes (saveSkiSegments needs Astro's import.meta.env,
   and a form POST to astro dev needs a matching Origin header or it 403s).
-
 - 2026-09-02 — Audited /films and /books for the unified header. Eight rendered
   pages had none (the film section had it only on its index). Added it, matching
   the restaurant log's strip-over-topbar arrangement. Two things were worth
@@ -48,3 +47,13 @@ wiki across every iteration, even reverted ones).
   strip sit inside a narrower centred `.wrap` without touching that page's CSS —
   but the nav only lines up if `--sh-max` is the column plus twice the header
   gutter, which is what the new `max` prop is for. Wrote pattern 0007.
+- 2026-09-02 — The place gazetteer only ever had `dohmh` imported (30k rows), so
+  known restaurants (Don Poke) were missing, every suggestion shouted, and
+  co-located venues (Gulp / 929) collapsed. Title-cased dohmh names on read in
+  `searchGazetteer` (+ one-off backfill of visited `restaurants`), installed
+  `@duckdb/node-api` and ran the built-but-never-run Overture importer (now 61k
+  NYC POIs; Don Poke and both Gulps present). Made the importer's S3 reads and
+  Supabase writes retry (a single flake used to drop the run or a 500-row chunk).
+  Foursquare is now HF-token-gated (401 → DuckDB "HTTP 0"), left documented.
+  `supabase.ts` now falls back to `process.env` so scripts can import src/lib.
+  Wrote pattern 0008.

@@ -22,6 +22,7 @@
     "privacy:test": "node --import ./scripts/ts-hook.mjs scripts/privacy.test.mjs",
     "month:test": "node --import ./scripts/ts-hook.mjs scripts/journal-month.test.mjs",
     "pins:test": "node --import ./scripts/ts-hook.mjs scripts/pins.test.mjs",
+    "gazetteer:test": "node --import ./scripts/ts-hook.mjs scripts/gazetteer.test.mjs",
     "export:test": "node --import ./scripts/ts-hook.mjs scripts/export-cache-key.test.mjs",
     "graph:test": "node --import ./scripts/ts-hook.mjs scripts/activity-graph.test.mjs",
     "ski:test": "node --import ./scripts/ts-hook.mjs scripts/ski.test.mjs",
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@duckdb/node-api": "^1.5.5-r.4",
     "playwright": "^1.62.1",
     "typescript": "^6.0.3"
   }
