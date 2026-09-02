@@ -12,3 +12,4 @@ add or update a pattern.
 | [0004](patterns/0004-powershell-corrupts-utf8-files.md) | PowerShell corrupts UTF-8 files | failure-mode | rewriting/truncating a source file via PowerShell or shell text tools |
 | [0005](patterns/0005-localday-in-frontmatter-is-utc.md) | `localDay()` in Astro frontmatter is UTC | failure-mode | defaulting a date field to "today" |
 | [0006](patterns/0006-ski-lift-run-detection.md) | Segment a ski day into runs and lifts | strategy | ski/board exertion, run counts, or any climb/descent GPS track |
+| [0007](patterns/0007-siteheader-full-bleed-and-column.md) | Placing SiteHeader on a page that centres its own column | strategy | adding the site header to a page, or auditing which pages have one |

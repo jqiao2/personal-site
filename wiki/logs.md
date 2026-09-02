@@ -39,3 +39,12 @@ wiki across every iteration, even reverted ones).
   Profile gained coloured run/lift bands (ActivityGraph). Extended pattern 0006
   with the override + testing notes (saveSkiSegments needs Astro's import.meta.env,
   and a form POST to astro dev needs a matching Origin header or it 403s).
+
+- 2026-09-02 — Audited /films and /books for the unified header. Eight rendered
+  pages had none (the film section had it only on its index). Added it, matching
+  the restaurant log's strip-over-topbar arrangement. Two things were worth
+  keeping: the audit has to read `src/layouts` too (restaurants inherit the
+  header from their layout and never name it), and the 100vw bleed lets the
+  strip sit inside a narrower centred `.wrap` without touching that page's CSS —
+  but the nav only lines up if `--sh-max` is the column plus twice the header
+  gutter, which is what the new `max` prop is for. Wrote pattern 0007.
