@@ -14,10 +14,11 @@ import SiteHeader from '../../../components/SiteHeader.astro';
 export const prerender = false;
 
 const id = Number(Astro.params.id);
-const [entry, isOwner] = await Promise.all([
-	Number.isInteger(id) ? getDiaryEntry(id) : Promise.resolve(null),
-	requireOwner(Astro.cookies),
-]);
+// Owner first, and not in parallel with the entry: it is the argument that
+// decides whether the private note is selected at all. A visitor's `entry`
+// never holds the text, so no template below can leak it by forgetting.
+const isOwner = await requireOwner(Astro.cookies);
+const entry = Number.isInteger(id) ? await getDiaryEntry(id, isOwner) : null;
 
 if (!entry) {
 	return new Response('Diary entry not found', { status: 404 });
@@ -153,6 +154,15 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 						<div class="review">
 							<div class="review__label">Review</div>
 							<p class="review__body">{entry.review_text}</p>
+						</div>
+					)}
+
+					{entry.private_note && (
+						<div class="review review--private">
+							<div class="review__label">
+								<span class="review__lock" aria-hidden="true">🔒</span>Private note
+							</div>
+							<p class="review__body">{entry.private_note}</p>
 						</div>
 					)}
 
@@ -472,6 +482,22 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			line-height: 1.7;
 			margin: 0;
 			white-space: pre-wrap;
+		}
+
+		/* The private note wears the same dashed edge the editor's box does — the
+		   one mark on this page that means "this is not part of the page". */
+		.review--private .review__label {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			color: #c9ab97;
+			border-bottom-style: dashed;
+		}
+		.review--private .review__body {
+			color: #cbbba6;
+		}
+		.review__lock {
+			font-size: 13px;
 		}
 
 		.tags {

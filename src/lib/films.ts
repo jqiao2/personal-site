@@ -130,6 +130,8 @@ export interface CreateLogInput {
 	loggedDate?: string | null;
 	rating?: number | null; // 0.5–5.0 in half-steps
 	reviewText?: string | null;
+	/** Owner-only note. Never rendered to a visitor — see migration 0052. */
+	privateNote?: string | null;
 	rewatched?: boolean;
 	liked?: boolean;
 	tags?: string[];
@@ -148,6 +150,8 @@ export interface CreateLogInput {
 export interface UpdateLogInput {
 	rating?: number | null;
 	reviewText?: string | null;
+	/** Owner-only note; null clears it. */
+	privateNote?: string | null;
 	watchedDate?: string | null;
 	rewatched?: boolean;
 	liked?: boolean;
@@ -238,6 +242,8 @@ function hasDiaryContent(input: CreateLogInput): boolean {
 		input.liked === true ||
 		input.rewatched === true ||
 		(typeof input.reviewText === 'string' && input.reviewText.trim().length > 0) ||
+		// A note nobody else will read is still a reason for the entry to exist.
+		(typeof input.privateNote === 'string' && input.privateNote.trim().length > 0) ||
 		(typeof input.medium === 'string' && input.medium.trim().length > 0) ||
 		(Array.isArray(input.tags) && input.tags.some((t) => t.trim().length > 0)) ||
 		(Array.isArray(input.friends) && input.friends.some((f) => f.trim().length > 0))
@@ -320,6 +326,7 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 			log: today, // diary date — when the entry was made
 			rating: input.rating ?? null,
 			review_text: input.reviewText ?? null,
+			private_note: input.privateNote ?? null,
 			rewatched: input.rewatched ?? false,
 			liked: input.liked ?? false,
 			medium,
@@ -453,6 +460,7 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 	const patch: Record<string, unknown> = {};
 	if ('rating' in input) patch.rating = input.rating ?? null;
 	if ('reviewText' in input) patch.review_text = input.reviewText ?? null;
+	if ('privateNote' in input) patch.private_note = input.privateNote ?? null;
 	if ('watchedDate' in input) patch.watched_date = input.watchedDate ?? null;
 	if ('rewatched' in input) patch.rewatched = input.rewatched ?? false;
 	if ('liked' in input) patch.liked = input.liked ?? false;
@@ -825,6 +833,12 @@ export interface DiaryEntry {
 	watched_date: string | null;
 	rating: number | null;
 	review_text: string | null;
+	/**
+	 * The owner's private note, or null. Null for BOTH "there is no note" and
+	 * "you are not the owner" — getDiaryEntry doesn't select the column unless
+	 * asked to, so a visitor's copy of this entry never held the text at all.
+	 */
+	private_note: string | null;
 	rewatched: boolean;
 	liked: boolean;
 	created_at: string;
@@ -852,10 +866,19 @@ export interface DiaryEntry {
  * — the read model for /films/diary/[id]. Steps down gracefully if migration 0010
  * (medium/theater/format) or 0008 (directors) isn't applied yet, so the page keeps
  * rendering with whatever columns exist. Null if the log doesn't exist / is deleted.
+ *
+ * `includePrivate` is the owner check, and it defaults to false so a caller that
+ * forgets it gets the safe answer: the private note is not merely hidden by the
+ * template, it is never selected, so it never reaches the process rendering the
+ * page. Pass `await requireOwner(cookies)` and nothing else.
  */
-export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
+export async function getDiaryEntry(
+	id: number,
+	includePrivate = false,
+): Promise<DiaryEntry | null> {
 	const BASE =
 		'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
+		(includePrivate ? 'private_note, ' : '') +
 		'log_tags(tags(name))';
 	const MOVIE_FULL = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path, directors)';
 	const MOVIE_BASE = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path)';
@@ -883,6 +906,10 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 		lastError = res.error;
 		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
 	}
+	// Same graceful step-down as the tiers above, for the newest column: a
+	// database that predates 0052 renders the page without the note rather than
+	// 500ing on it.
+	if (lastError && includePrivate && isMissingCreditColumn(lastError)) return getDiaryEntry(id, false);
 	if (lastError) throw new Error(`getDiaryEntry failed: ${lastError.message}`);
 	if (!data) return null;
 
@@ -891,6 +918,7 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 		watched_date: string | null;
 		rating: number | null;
 		review_text: string | null;
+		private_note?: string | null;
 		rewatched: boolean;
 		liked: boolean;
 		created_at: string;
@@ -915,6 +943,7 @@ export async function getDiaryEntry(id: number): Promise<DiaryEntry | null> {
 		watched_date: row.watched_date,
 		rating: row.rating,
 		review_text: row.review_text,
+		private_note: row.private_note ?? null,
 		rewatched: row.rewatched,
 		liked: row.liked,
 		created_at: row.created_at,
