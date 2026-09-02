@@ -11,3 +11,4 @@ add or update a pattern.
 | [0003](patterns/0003-view-columns-need-a-drop.md) | `create or replace view` cannot change a column list | failure-mode | a migration adds a table column behind a view, or removes a view column |
 | [0004](patterns/0004-powershell-corrupts-utf8-files.md) | PowerShell corrupts UTF-8 files | failure-mode | rewriting/truncating a source file via PowerShell or shell text tools |
 | [0005](patterns/0005-localday-in-frontmatter-is-utc.md) | `localDay()` in Astro frontmatter is UTC | failure-mode | defaulting a date field to "today" |
+| [0006](patterns/0006-ski-lift-run-detection.md) | Segment a ski day into runs and lifts | strategy | ski/board exertion, run counts, or any climb/descent GPS track |

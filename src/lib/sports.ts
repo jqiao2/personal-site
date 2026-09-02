@@ -170,7 +170,10 @@ const RUN_PRIMARY: StatKey[] = ['distance', 'moving_time', 'avg_pace', 'avg_hr',
 
 const SWIM_PRIMARY: StatKey[] = ['distance', 'moving_time', 'pace_100m', 'swolf', 'pool_length', 'exertion'];
 
-const SNOW_PRIMARY: StatKey[] = ['vertical_descent', 'runs', 'max_speed', 'moving_time'];
+// No moving_time: a lift-served day's file moving time is meaningless (these
+// Slopes exports report a few minutes for a six-hour day), and the "Runs & lifts"
+// breakdown below the stats owns the real time — time skiing vs time on lifts.
+const SNOW_PRIMARY: StatKey[] = ['vertical_descent', 'runs', 'max_speed'];
 
 const DEFAULT_PRIMARY: StatKey[] = ['distance', 'moving_time', 'elevation_gain', 'avg_hr', 'exertion'];
 

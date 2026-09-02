@@ -35,7 +35,9 @@
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityMap from '../../components/ActivityMap.astro';
 import ActivityGraph from '../../components/ActivityGraph.astro';
+import SkiRuns from '../../components/SkiRuns.astro';
 import { buildGraphData } from '../../lib/activity-graph';
+import { buildSkiView } from '../../lib/ski-view';
 import {
 	getActivity,
 	getActivityStreams,
@@ -202,7 +204,29 @@ const ALL_STAT_KEYS: StatKey[] = [
 	'calories',
 ];
 
-const runsCount = laps.length > 0 ? laps.filter((l) => l.lap_type === 'lap').length : null;
+// Lift-served snow days get a real run/lift breakdown recovered from the
+// altitude stream (src/lib/ski-view.ts) — the `activity_laps` rows on these are
+// Strava's arbitrary auto-laps, each spanning part of a lift and part of a run,
+// so they are useless as runs. The detected run count is the honest "Runs"
+// stat; every other sport still counts its laps.
+const isLiftServed = activity.sport === 'alpine_ski' || activity.sport === 'snowboard';
+const skiView = isLiftServed
+	? buildSkiView(
+			{
+				time_s: streams?.time_s ?? undefined,
+				altitude_m: streams?.altitude_m ?? undefined,
+				distance_m: streams?.distance_m ?? undefined,
+				latlng: streams?.latlng ?? undefined,
+				moving: streams?.moving ?? undefined,
+			},
+			activity.max_speed_ms,
+		)
+	: null;
+const runsCount = skiView
+	? skiView.summary.runs
+	: laps.length > 0
+		? laps.filter((l) => l.lap_type === 'lap').length
+		: null;
 
 const statRow: StatRow = {
 	distance_m: activity.distance_m,
@@ -250,6 +274,10 @@ const secondaryKeys = ALL_STAT_KEYS.filter(
 	(k) =>
 		!primaryKeys.includes(k) &&
 		(!PACE_KEYS.includes(k) || k === paceKeyForSport) &&
+		// On a lift-served day the file's moving time is broken (see SNOW_PRIMARY);
+		// the "Runs & lifts" breakdown reports time skiing and time on lifts, so
+		// this stat stays out of the Details grid rather than resurfacing there.
+		!(skiView && k === 'moving_time') &&
 		isStatRelevant(activity.sport, k),
 );
 const secondaryStats = statsFor(secondaryKeys);
@@ -274,6 +302,7 @@ const METHOD_LABEL: Record<string, string> = {
 	avghr: 'flat average-HR TRIMP',
 	ptss: 'pace-based TSS',
 	met: 'MET-minutes',
+	ski: 'active-descent MET',
 };
 const CONFIDENCE_LABEL: Record<string, string> = {
 	measured: 'Measured',
@@ -620,8 +649,10 @@ const exWord = exertionLabel(activity.exertion);
 			)
 		}
 
+		<SkiRuns view={skiView} />
+
 		{
-			laps.length > 0 && (
+			laps.length > 0 && !skiView && (
 				<section class="laps">
 					<h2 class="section-h">Laps <span class="section-h__meta">{laps.length}</span></h2>
 					<div class="laps__scroll">

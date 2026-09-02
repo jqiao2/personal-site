@@ -49,10 +49,17 @@
 //   2. HR stream + rest/max/LTHR for that date  → hrtss   (measured)
 //   3. no streams, but avg HR + duration        → avghr   (estimated)
 //   4. running/swimming with pace + threshold   → ptss    (estimated)
+//  4.5 lift-served ski/board, active descent    → ski     (estimated)
 //   5. sport + duration (+ distance, elevation) → met     (assumed)
 // Each rung is tried only if the rung above it couldn't be computed from what
 // the activity actually has — see `computeExertion`'s branches for exactly
 // what "couldn't be computed" means at each step.
+//
+// THE SKI RUNG (4.5) is not a fourth intensity model — it is the MET floor with
+// an honest duration. A resort day's file time is mostly chairlift, so scoring
+// it needs the active-descent time first; `skiActive` (src/lib/ski.ts) recovers
+// it from the altitude sawtooth, and for a ski day WITH heart rate the same
+// active mask trims the HR rung above. See LIFT_SERVED below.
 //
 // WHY MOVING TIME, NEVER ELAPSED. A stopped watch at a café or a chairlift
 // queue is not training stress; every formula below is handed
@@ -66,6 +73,21 @@
 // ---------------------------------------------------------------------------
 
 import { SPORTS, sportMeta } from './sports';
+import { skiActive } from './ski';
+
+// Lift-served snow sports: a resort day is mostly lift and lodge, and the file's
+// duration (elapsed, or a Slopes-exported moving_seconds that is simply broken
+// for this archive) reflects that, not the skiing. For these two, exertion is
+// scored on the active-descent time recovered from the altitude stream — see
+// the ski rung in computeExertion. Backcountry and nordic skiing are NOT here:
+// their climbing is the effort, not a lift, so their whole moving time counts.
+const LIFT_SERVED = new Set(['alpine_ski', 'snowboard']);
+
+/** MET for time spent actually descending (lifts and stops already removed),
+ *  distinct from sports.ts's whole-day ski MET which is deliberately low to
+ *  average the lift in. Compendium downhill skiing runs 5.3 (moderate) to 8.0
+ *  (vigorous); a resort lap of continuous turning sits in between. */
+const ACTIVE_SKI_MET: Record<string, number> = { alpine_ski: 7, snowboard: 6 };
 
 /** The threshold row "in force" on an activity's date — one row from
  *  `athlete_thresholds`, already resolved by `effective_from` before this is
@@ -111,7 +133,7 @@ export interface ExertionInput {
 	streams?: ExertionStreams;
 }
 
-export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met';
+export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met' | 'ski';
 export type ExertionConfidence = 'measured' | 'estimated' | 'assumed';
 
 export interface ExertionResult {
@@ -459,8 +481,20 @@ function formatDurationShort(seconds: number): string {
  * guess about what the original author meant.
  */
 export function computeExertion(input: ExertionInput, thresholds: Thresholds): ExertionResult {
-	const movingSeconds = input.moving_seconds ?? input.elapsed_seconds ?? 0;
 	const streams = input.streams;
+
+	// A lift-served ski/snowboard day is re-timed to its active descent before
+	// anything below runs: `skiActive` segments the altitude sawtooth into runs
+	// and lifts and returns the summed run time and a per-sample mask of it.
+	// From here on `movingSeconds` IS that active-descent time and `movingMask`
+	// marks the descending samples, so every rung — the HR rung a ski day with a
+	// strap reaches, and the ski MET rung the rest fall to — scores the skiing
+	// and not the chairlift. Null (no altitude, or no run detected) falls back to
+	// the file's own moving time, exactly as every other sport uses it.
+	let ski = LIFT_SERVED.has(input.sport) && streams ? skiActive(streams) : null;
+	if (ski && ski.activeSeconds <= 0) ski = null;
+	const movingSeconds = ski ? ski.activeSeconds : input.moving_seconds ?? input.elapsed_seconds ?? 0;
+	const movingMask = ski ? ski.activeMask : streams?.moving;
 
 	// --- Rung 1: power stream + FTP -----------------------------------------
 	// "Power stream" means an actual 1Hz-ish power_w array with a matching
@@ -476,8 +510,8 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	// against a definition where an hour at threshold is 100. Runs with power
 	// fall through to the HR rungs, which are true for them.
 	if (sportMeta(input.sport).family === 'bike' && streams?.power_w && streams.time_s && thresholds.ftp_w) {
-		const power = filterMoving(streams.power_w, streams.moving) ?? streams.power_w;
-		const time = filterMoving(streams.time_s, streams.moving) ?? streams.time_s;
+		const power = filterMoving(streams.power_w, movingMask) ?? streams.power_w;
+		const time = filterMoving(streams.time_s, movingMask) ?? streams.time_s;
 		if (power.length >= 20 && power.length === time.length) {
 			const np = normalizedPower(power, time);
 			if (np != null) {
@@ -510,7 +544,7 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 		thresholds.max_hr != null &&
 		thresholds.lthr_bpm != null
 	) {
-		const hr = filterMoving(streams.heartrate, streams.moving) ?? streams.heartrate;
+		const hr = filterMoving(streams.heartrate, movingMask) ?? streams.heartrate;
 		const trimp = banisterTrimp({
 			hrStream: hr,
 			seconds: movingSeconds,
@@ -613,6 +647,29 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 				};
 			}
 		}
+	}
+
+	// --- Rung 4.5: lift-served snow, on active-descent time ------------------
+	// Reached only when a ski/snowboard day has no HR strap (almost all of
+	// them) — the HR rungs above already used the active mask when a strap was
+	// present. `movingSeconds` is the run time, lifts and stops removed, so this
+	// is the honest MET-minutes of the skiing itself, marked 'estimated' rather
+	// than 'assumed' because the duration was measured off the altitude stream,
+	// not taken from a sport-average. Uses the active-descent MET, not sports.ts's
+	// deliberately-low whole-day ski MET.
+	if (ski) {
+		const skiMinutes = ski.activeSeconds / 60;
+		const met = ACTIVE_SKI_MET[input.sport] ?? 7;
+		const runs = ski.runCount;
+		return {
+			score: metToTss(met * skiMinutes, skiMinutes),
+			method: 'ski',
+			confidence: 'estimated',
+			intensityFactor: null,
+			detail: `${formatDurationShort(ski.activeSeconds)} of active descent across ${runs} run${
+				runs === 1 ? '' : 's'
+			} at ${met} MET — lift rides and stops excluded`,
+		};
 	}
 
 	// --- Rung 5: MET floor ---------------------------------------------------

@@ -24,3 +24,11 @@ wiki across every iteration, even reverted ones).
   in Astro frontmatter (server, UTC) and a repeat visit inherited the last visit's
   date. Moved the default into the client script and stopped carrying `visitedOn`.
   Pattern 0005 (renumbered from 0003, which main had taken twice).
+- 2026-09-01 — Lift/run detection for ski days. `src/lib/ski.ts` segments the
+  altitude sawtooth (hysteresis over smoothed altitude); exertion gained a rung
+  4.5 (`ski`) that scores only active-descent time, so a resort day no longer
+  reads ~5 off the broken Slopes `moving_seconds` — big days now score ~90–130.
+  A Slopes-style "Runs & lifts" breakdown (`SkiRuns.astro`) replaces the useless
+  Strava auto-laps. Migration 0050 widened the exertion_method constraint. Wrote
+  pattern 0006. `db push` to this project needs the `aws-1-us-west-2` pooler host
+  (not `aws-0`), which returns "tenant not found".
