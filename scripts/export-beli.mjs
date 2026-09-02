@@ -3,55 +3,42 @@
 // Beli has no export button and no official API. It does have a backend the
 // app talks to, and your own account can read your own lists from it. This
 // signs in as you, reads your ranked ("been") list and your bookmarked
-// ("want to try") list, and writes them to a file. Nothing here is Beli's to
-// give or withhold — it is your data, fetched with your credentials — but it
-// is reverse-engineered and unofficial, so it may break the day Beli changes
-// something. Endpoints and shapes come from the community spec at
-// github.com/ProjectBarks/beli-api.
+// ("want to try") list, hydrates each place to a full business record, and
+// writes them to tmp/beli.json. It is your data, fetched with your
+// credentials — but the endpoints are reverse-engineered and unofficial
+// (community spec: github.com/ProjectBarks/beli-api), so this may break the
+// day Beli changes something.
 //
-// Usage:
-//   BELI_EMAIL / BELI_PASSWORD in .env (NOT on the command line), then:
-//   node --env-file=.env scripts/export-beli.mjs              # both lists → tmp/beli.json
-//   node --env-file=.env scripts/export-beli.mjs been         # just the ranked list
-//   node --env-file=.env scripts/export-beli.mjs --raw        # also dump the first
-//                                                             # response, to read the shape
+// How the two lists are read, both verified live against this account:
+//   been  GET  /api/user-scores/{uuid}/            -> [{business_id, value, category}]
+//   want  GET  /api/get-bookmark/?user={uuid}&category={CODE}  -> { <name>: [rows] }
+// Neither carries the place itself, only its integer id and your score, so the
+// ids are hydrated in batches through /api/filter-list/ ({ids, load_businesses}),
+// which is the same call the app uses to turn an id into a business.
 //
-// The output is raw on purpose: every field Beli returns is kept, so the
-// mapping into `restaurants` (which carries a rank and a score Beli has and
-// this log does not yet) can be decided once by looking at real data rather
-// than guessed at here. See the summary it prints for what came back.
+// Usage (credentials in .env, never on the command line):
+//   node --env-file=.env scripts/export-beli.mjs            # -> tmp/beli.json
+//   node --env-file=.env scripts/export-beli.mjs --raw      # also dump raw responses
 import { writeFileSync, mkdirSync } from 'node:fs';
 
-// The four hosts the app split its backend across; login and profile live on
-// ONBOARD, the list query on API. Taken from the community spec's `servers`.
 const ONBOARD = 'https://backoffice-service-onboarding-t57o3dxfca-nn.a.run.app';
 const API = 'https://backoffice-service-t57o3dxfca-nn.a.run.app';
-// The backend answers 403 to anything that does not look like the web app:
+// The backend answers 403 to anything that does not look like the web app —
 // it wants a browser User-Agent and an Origin. These satisfy that.
 const ORIGIN = 'https://app.beliapp.com';
 const UA =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
-// The API throttles bursts; the spec spaces calls ~350 ms apart.
-const SPACING_MS = 400;
+const SPACING_MS = 400; // the API throttles bursts; space calls out
+const HYDRATE_CHUNK = 50;
 
-const args = process.argv.slice(2);
-const raw = args.includes('--raw');
-// Which lists to pull. Beli's own field names are the risk here — if a list
-// comes back empty, try the other spelling and tell me which worked.
-const only = args.find((a) => !a.startsWith('--'));
-const lists = only
-	? [{ field: only, label: only }]
-	: [
-			{ field: 'been', label: 'ranked (been)' },
-			{ field: 'want_to_try', label: 'bookmarked (want to try)' },
-		];
-
+const raw = process.argv.includes('--raw');
 const email = process.env.BELI_EMAIL;
 const password = process.env.BELI_PASSWORD;
 if (!email || !password) {
 	console.error('Set BELI_EMAIL and BELI_PASSWORD in .env, then run with --env-file=.env.');
 	process.exit(1);
 }
+mkdirSync('tmp', { recursive: true });
 
 const headers = (token) => ({
 	'content-type': 'application/json',
@@ -60,26 +47,50 @@ const headers = (token) => ({
 	'user-agent': UA,
 	...(token ? { authorization: `Bearer ${token}` } : {}),
 });
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function call(method, url, token, body) {
-	const res = await fetch(url, {
-		method,
-		headers: headers(token),
-		body: body ? JSON.stringify(body) : undefined,
-	});
-	const text = await res.text();
-	let json;
-	try {
-		json = text ? JSON.parse(text) : null;
-	} catch {
-		json = null;
+/** fetch that rides out this network's occasional connect timeouts. */
+async function call(method, url, token, body, tries = 4) {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			const res = await fetch(url, {
+				method,
+				headers: headers(token),
+				body: body ? JSON.stringify(body) : undefined,
+			});
+			const text = await res.text();
+			let json = null;
+			try {
+				json = text ? JSON.parse(text) : null;
+			} catch {
+				/* leave null */
+			}
+			if (!res.ok) throw new Error(`${method} ${url} -> ${res.status} ${text.slice(0, 160)}`);
+			return json;
+		} catch (err) {
+			if (attempt >= tries - 1) throw err;
+			await sleep(800 * 2 ** attempt);
+		}
 	}
-	if (!res.ok) {
-		throw new Error(`${method} ${url} → ${res.status} ${text.slice(0, 200)}`);
-	}
-	return json;
+}
+
+/** The fields worth keeping off a hydrated business — the shape `restaurants` wants. */
+function pick(b) {
+	if (!b) return null;
+	return {
+		beli_id: b.id,
+		google_place_id: b.place_id ?? null,
+		name: b.name,
+		city: b.city ?? null,
+		neighborhood: b.neighborhood ?? b.borough ?? null,
+		lat: b.lat ?? null,
+		lng: b.lng ?? null,
+		cuisines: b.cuisines ?? [],
+		price: b.price ?? null,
+		country: b.country ?? null,
+		website: b.website ?? null,
+		phone: b.phone_number ?? null,
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -89,64 +100,85 @@ const { access } = await call('POST', `${ONBOARD}/api/token/`, null, { email, pa
 if (!access) throw new Error('no access token came back — check the credentials');
 
 const me = await call('GET', `${ONBOARD}/api/user/logged-in/`, access);
-// The profile is wrapped in { results: {...} }; the uuid is the id on it. The
-// exact key is not certain across versions, so take the first that looks right.
-const profile = me?.results ?? me ?? {};
+if (raw) writeFileSync('tmp/beli-me.json', JSON.stringify(me, null, 2));
+const wrapped = me?.results ?? me ?? {};
+const profile = Array.isArray(wrapped) ? (wrapped[0] ?? {}) : wrapped;
 const uuid = profile.id ?? profile.uuid ?? profile.user_id ?? profile.user?.id;
-if (!uuid) {
-	console.error('could not find your user id in the profile. Its keys were:');
-	console.error(' ', Object.keys(profile).join(', '));
-	console.error('Re-run with --raw and send me tmp/beli-me.json.');
-	writeFileSync('tmp/beli-me.json', JSON.stringify(me, null, 2));
-	process.exit(1);
-}
-console.error(`  you are ${profile.username ?? profile.name ?? uuid}`);
+if (!uuid) throw new Error(`could not find your user id; profile keys were ${Object.keys(profile)}`);
+console.error(`  you are ${profile.username ?? uuid}`);
 
-/** One list, following pagination until it runs out. */
-async function fetchList(field) {
-	const out = [];
-	let first = null;
-	// Beli paginates DRF-style: the response carries a `next` URL, or nothing.
-	// The first page is a POST; `next`, when present, is a GET on a full URL.
-	let page = await call('POST', `${API}/api/filter-list/`, access, {
+// --- ranked ("been") ------------------------------------------------------
+console.error('fetching ranked list (user-scores)…');
+const scores = await call('GET', `${API}/api/user-scores/${uuid}/`, access);
+const scoreList = Array.isArray(scores) ? scores : (scores?.results ?? []);
+console.error(`  ${scoreList.length} ranked`);
+// The categories this account actually uses — what to ask the bookmark
+// endpoint about, since it is queried one category code at a time.
+const categories = [...new Set(scoreList.map((s) => s.category).filter(Boolean))];
+
+// --- bookmarked ("want to try") ------------------------------------------
+console.error(`fetching bookmarks across ${categories.length} categories…`);
+const bookmarkRows = [];
+for (const cat of categories) {
+	await sleep(SPACING_MS);
+	try {
+		const resp = await call('GET', `${API}/api/get-bookmark/?user=${uuid}&category=${cat}`, access);
+		// Response is { "<display name>": [ rows ] }; each row already carries the
+		// full business inline (r.business), so unlike the ranked list there is
+		// nothing to hydrate.
+		const rows = Object.values(resp ?? {}).flat();
+		for (const r of rows) {
+			if (r.business) bookmarkRows.push({ business: r.business, category: cat });
+		}
+		if (raw) writeFileSync(`tmp/beli-bookmark-${cat}.json`, JSON.stringify(resp, null, 2));
+	} catch (err) {
+		console.error(`  ${cat}: ${err.message}`);
+	}
+}
+console.error(`  ${bookmarkRows.length} bookmarked`);
+
+// --- hydrate the ranked ids to businesses (bookmarks came hydrated) -------
+const allIds = [...new Set(scoreList.map((s) => s.business_id))].filter((id) => id != null);
+console.error(`hydrating ${allIds.length} businesses…`);
+const byId = new Map();
+async function hydrate(ids) {
+	const page = await call('POST', `${API}/api/filter-list/`, access, {
 		user: String(uuid),
-		list_field: field,
+		ids,
 		load_businesses: true,
 	});
-	for (;;) {
-		if (!first) first = page;
-		const rows = Array.isArray(page) ? page : (page?.results ?? []);
-		out.push(...rows);
-		const next = page?.next;
-		if (!next || rows.length === 0) break;
-		await sleep(SPACING_MS);
-		page = await call('GET', next, access);
-	}
-	return { rows: out, first };
+	for (const [id, b] of Object.entries(page?.business_hash ?? {})) byId.set(Number(id), b);
+	for (const b of page?.businesses ?? []) if (b?.id != null) byId.set(Number(b.id), b);
 }
-
-mkdirSync('tmp', { recursive: true });
-const result = {};
-for (const { field, label } of lists) {
-	console.error(`fetching ${label}…`);
+let skipped = 0;
+for (let i = 0; i < allIds.length; i += HYDRATE_CHUNK) {
+	const chunk = allIds.slice(i, i + HYDRATE_CHUNK);
 	try {
-		const { rows, first } = await fetchList(field);
-		result[field] = rows;
-		console.error(`  ${rows.length} places`);
-		if (raw) writeFileSync(`tmp/beli-${field}-first.json`, JSON.stringify(first, null, 2));
-		// A tiny peek so a wrong field name is obvious immediately.
-		const sample = rows[0];
-		if (sample) {
-			const biz = sample.business ?? sample;
-			console.error(`  e.g. ${biz.name ?? biz.business_name ?? JSON.stringify(sample).slice(0, 80)}`);
+		await hydrate(chunk);
+	} catch {
+		// One id in the batch server-errors the whole call (a deleted place, say).
+		// Drop to single ids so the rest of the chunk still lands, and skip the bad.
+		for (const id of chunk) {
+			try {
+				await hydrate([id]);
+			} catch {
+				skipped++;
+			}
+			await sleep(SPACING_MS);
 		}
-	} catch (err) {
-		console.error(`  failed: ${err.message}`);
-		result[field] = { error: err.message };
 	}
+	process.stderr.write(`  ${Math.min(i + HYDRATE_CHUNK, allIds.length)}/${allIds.length}\r`);
 	await sleep(SPACING_MS);
 }
+if (skipped) console.error(`\n  ${skipped} id(s) could not be hydrated (likely removed from Beli), skipped`);
 
-writeFileSync('tmp/beli.json', JSON.stringify(result, null, 2));
-console.error('\nwrote tmp/beli.json');
-console.error('If a list is empty or the names look wrong, re-run with --raw and send me the tmp/beli-*-first.json — the field name or response shape needs one tweak.');
+const been = scoreList
+	.map((s) => ({ ...pick(byId.get(s.business_id)), score: s.value, category: s.category }))
+	.filter((r) => r.name);
+const want = bookmarkRows
+	.map((b) => ({ ...pick(b.business), category: b.category }))
+	.filter((r) => r.name);
+
+writeFileSync('tmp/beli.json', JSON.stringify({ been, want }, null, 2));
+console.error(`\nwrote tmp/beli.json — ${been.length} been, ${want.length} want to try`);
+if (been[0]) console.error(`  e.g. ${been[0].name} (${been[0].city}) score ${been[0].score}`);
