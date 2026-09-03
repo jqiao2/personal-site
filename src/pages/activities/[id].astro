@@ -104,6 +104,7 @@ if (Astro.request.method === 'POST') {
 		await updateActivity(id, {
 			title,
 			notes: String(form.get('notes') ?? ''),
+			privateNotes: String(form.get('private_notes') ?? ''),
 			// A sport off the canonical list would break every icon, stat set and
 			// filter that reads it, so an unknown one leaves the sport alone.
 			...(SPORTS.includes(sport as (typeof SPORTS)[number]) ? { sport } : {}),
@@ -149,7 +150,7 @@ if (Astro.request.method === 'POST') {
 }
 
 const isOwner = await requireOwner(Astro.cookies);
-const activity = validId ? await getActivity(id) : null;
+const activity = validId ? await getActivity(id, isOwner) : null;
 
 // A private activity does not exist for anyone but the owner — not as a stub,
 // not as a "log in to see this", which would itself confirm there was
@@ -495,6 +496,22 @@ const exWord = exertionLabel(activity.exertion);
 							<textarea class="edit__input edit__notes" name="notes" rows="4" placeholder="How it went.">{activity.notes ?? ''}</textarea>
 						</label>
 
+						{/* A disclosure, not a field: the box is folded away until opened,
+						    and pre-opened only when a note already exists. `<details>` is
+						    the native toggle — no script on this server-rendered form. The
+						    note stays private even when the activity above is public. */}
+						<details class="edit__private" open={Boolean(activity.private_notes)}>
+							<summary class="edit__private-summary">
+								<span aria-hidden="true">🔒</span> Private note
+							</summary>
+							<textarea
+								class="edit__input edit__notes"
+								name="private_notes"
+								rows="3"
+								placeholder="Just for you — never shown to anyone else."
+							>{activity.private_notes ?? ''}</textarea>
+						</details>
+
 						<div class="edit__row">
 							<label class="edit__field">
 								<span class="edit__label">Sport</span>
@@ -574,6 +591,12 @@ const exWord = exertionLabel(activity.exertion);
 							{activity.device_name && <span class="head__device">{activity.device_name}</span>}
 						</div>
 						{activity.notes && <p class="head__notes">{activity.notes}</p>}
+						{activity.private_notes && (
+							<div class="head__private">
+								<div class="head__private-label"><span aria-hidden="true">🔒</span> Private note</div>
+								<p class="head__private-text">{activity.private_notes}</p>
+							</div>
+						)}
 						{activity.tags.length > 0 && (
 							<div class="head__tags">
 								{activity.tags.map((t) => (
@@ -982,6 +1005,61 @@ const exWord = exertionLabel(activity.exertion);
 	.edit__notes {
 		resize: vertical;
 		line-height: 1.6;
+	}
+	/* Private-note disclosure. Dashed is the shared word for "not part of the
+	   page"; the box gets it too (edit__notes above is the same textarea). */
+	.edit__private {
+		border: 1px dashed #b8c4cd;
+		border-radius: 8px;
+		padding: 0.5rem 0.7rem;
+	}
+	.edit__private[open] {
+		padding-bottom: 0.7rem;
+	}
+	.edit__private-summary {
+		cursor: pointer;
+		font-size: 0.7rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #6b7b88;
+		list-style: none;
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+	.edit__private-summary::-webkit-details-marker {
+		display: none;
+	}
+	.edit__private[open] .edit__private-summary {
+		margin-bottom: 0.5rem;
+	}
+	.edit__private .edit__notes {
+		border-style: dashed;
+	}
+	/* Read-side note, owner only. */
+	.head__private {
+		margin: 0.85rem 0 0;
+		max-width: 640px;
+		padding: 0.65rem 0.85rem;
+		border: 1px dashed #b8c4cd;
+		border-radius: 8px;
+	}
+	.head__private-label {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.65rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: #6b7b88;
+		margin-bottom: 0.4rem;
+	}
+	.head__private-text {
+		margin: 0;
+		font-size: 0.95rem;
+		line-height: 1.6;
+		color: #3d4a55;
+		white-space: pre-wrap;
 	}
 	.edit__input:focus,
 	.edit__title:focus {

@@ -12,7 +12,11 @@
 //   meals   — the restaurant diary has no private concept; all are public.
 //   moves   — redactActivities strips private rows; we then keep only the ones
 //             that came back published (private === false), minus any the owner
-//             ticked out of the month review.
+//             ticked out of the month review. Signed in, the owner sees their
+//             private moves here unredacted, exactly as /month shows them —
+//             `isOwner` is threaded through from the RecentFeed island's own
+//             cookie check. RSS never passes it and so is always the visitor's
+//             feed.
 
 import type { JournalItem } from './journal-month';
 import { filmItems, bookItems, mealItems, activityItems } from './journal-month';
@@ -24,13 +28,13 @@ import { listJournalMonths } from './journal-months';
 
 /** One month's items across all four tracks, already reduced to what a visitor
  *  may see. */
-async function monthItemsPublic(key: string): Promise<JournalItem[]> {
+async function monthItemsPublic(key: string, isOwner: boolean): Promise<JournalItem[]> {
 	const [watches, reading, visits, activities] = await Promise.all([
 		listMonthWatches(key),
 		getReadingMonth(key),
 		listMonthVisits(key),
 		// isOwner=false → redactActivities strips every private row to sport+date.
-		listActivitiesForMonth(key, false),
+		listActivitiesForMonth(key, isOwner),
 	]);
 
 	const publicBooks = reading.books.filter((b) => b.is_public);
@@ -46,7 +50,9 @@ async function monthItemsPublic(key: string): Promise<JournalItem[]> {
 		// Only rows that redaction let through published, and not the ones held
 		// back from the review. A redacted row has private === true, so this drops
 		// it; a genuinely public row has private === false.
-		...activityItems(activities.filter((a) => a.private === false && !a.hide_from_review)),
+		...activityItems(
+			activities.filter((a) => (isOwner || a.private === false) && !a.hide_from_review),
+		),
 	];
 }
 
@@ -58,10 +64,10 @@ async function monthItemsPublic(key: string): Promise<JournalItem[]> {
  * of four logs is comfortably more than any home page shows, and the second is
  * only there to cover the turn of the month.
  */
-export async function recentJournal(limit = 15): Promise<JournalItem[]> {
+export async function recentJournal(limit = 15, isOwner = false): Promise<JournalItem[]> {
 	const months = await listJournalMonths();
 	const keys = months.slice(0, 2).map((m) => m.key);
-	const perMonth = await Promise.all(keys.map(monthItemsPublic));
+	const perMonth = await Promise.all(keys.map((k) => monthItemsPublic(k, isOwner)));
 	return perMonth
 		.flat()
 		// Reverse-chronological throughout: newest day first, and within a day the

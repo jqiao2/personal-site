@@ -21,6 +21,9 @@ export interface EntryEditorInitial {
 	venue: string;
 	format: string;
 	review: string;
+	/** The owner's private note. '' when there is none — and '' is also what a
+	 *  non-owner would get, because the page never loads the column for them. */
+	privateNote: string;
 	tags: string[];
 	friends: string[];
 }
@@ -33,6 +36,7 @@ export interface StoredEntry {
 	watched_date: string | null;
 	rating: number | null;
 	review_text: string | null;
+	private_note: string | null;
 	rewatched: boolean;
 	liked: boolean;
 	medium: string | null;
@@ -59,6 +63,7 @@ export function toEditorInitial(entry: StoredEntry): EntryEditorInitial {
 		venue: entry.theater ? [entry.theater.name, entry.theater.city].filter(Boolean).join(', ') : '',
 		format: entry.format ?? '',
 		review: entry.review_text ?? '',
+		privateNote: entry.private_note ?? '',
 		tags: entry.tags,
 		friends: entry.friends,
 	};

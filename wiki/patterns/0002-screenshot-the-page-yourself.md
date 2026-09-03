@@ -40,6 +40,19 @@ on port 4380, screenshots with Playwright at 2x, and stops the server again.
 - Photo 404s are normal locally (no production R2 bucket); the script prints them
   rather than failing.
 
+## Shooting a state that takes more than one click
+
+`--click` may be repeated, and the clicks run in order before the shot:
+
+```
+npm run shot -- films/diary/547 tmp/open.png   --click "[data-open-entry-editor]" --click "#ee-private-toggle"
+```
+
+That is how a modal's *inner* state gets looked at — the dialog is hidden in the
+served HTML, so a single click only ever reaches its first screen. Sequenced
+clicks were added for the private-note disclosure in EntryEditor; anything with a
+toggle inside a dialog needs them.
+
 ## Why not the alternatives
 
 The browser pane refuses `file://` and denies navigation to ports it wasn't given,

@@ -67,6 +67,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			revisit: Boolean(body.revisit),
 			friends: asList(body.friends),
 			review: asText(body.review),
+			privateNote: asText(body.privateNote),
 			tags: asList(body.tags),
 		});
 		return json({ id, restaurantId }, 201);

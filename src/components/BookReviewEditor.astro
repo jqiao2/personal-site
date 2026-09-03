@@ -87,6 +87,16 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			<div class="field">
 				<label class="lbl" for="br-text">Review</label>
 				<textarea id="br-text" rows="5" placeholder="What stayed with you…"></textarea>
+				<button
+					type="button"
+					class="privnote__toggle"
+					id="br-private-toggle"
+					aria-expanded="false"
+					aria-controls="br-private"
+				>
+					<span class="privnote__lock" aria-hidden="true">🔒</span>Private note
+				</button>
+				<textarea id="br-private" class="privnote__box" rows="3" hidden></textarea>
 			</div>
 
 			<div class="scales">
@@ -382,6 +392,49 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		border-color: #cfa452;
 	}
 
+	/* The private note: a disclosure, not a field. Dashed is the whole
+	   vocabulary for "not part of the page" — the pill, the box, and the block
+	   the book page draws the saved note in all wear it, and the loud gold
+	   fill this modal gives its published controls stays off it. */
+	.privnote__toggle {
+		margin-top: 10px;
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 12px;
+		font-weight: 600;
+		letter-spacing: 0.3px;
+		border-radius: 20px;
+		padding: 6px 13px;
+		cursor: pointer;
+		background: transparent;
+		color: #8a745a;
+		border: 1px dashed #45341f;
+	}
+	.privnote__toggle:hover,
+	.privnote__toggle:focus-visible,
+	.privnote__toggle[aria-expanded='true'] {
+		color: #cdbb98;
+		border-color: #6d5836;
+		outline: none;
+	}
+	.privnote__lock {
+		font-size: 11px;
+		filter: grayscale(1);
+		opacity: 0.75;
+	}
+	.privnote__toggle[aria-expanded='true'] .privnote__lock {
+		filter: none;
+		opacity: 1;
+	}
+	.privnote__box {
+		margin-top: 8px;
+		border-style: dashed;
+	}
+	.privnote__box[hidden] {
+		display: none;
+	}
+
 	/* Scales */
 	.scales {
 		display: grid;
@@ -602,6 +655,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			loved: boolean;
 			gaveUp?: boolean;
 			text: string;
+			privateNote: string;
 			pacing: string;
 			focus: string;
 			moods: string[];
@@ -631,6 +685,8 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		const attachBody = $('br-attach-body');
 		const attachAction = $<HTMLButtonElement>('br-attach-action');
 		const textArea = $<HTMLTextAreaElement>('br-text');
+		const privateArea = $<HTMLTextAreaElement>('br-private');
+		const privateToggle = $<HTMLButtonElement>('br-private-toggle');
 		const moodCount = $('br-mood-count');
 		const toneCount = $('br-tone-count');
 		const clearMoods = $<HTMLButtonElement>('br-clear-moods');
@@ -649,6 +705,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			loved: false,
 			gaveUp: config.gaveUp,
 			text: '',
+			privateNote: '',
 			pacing: '',
 			focus: '',
 			moods: [],
@@ -677,6 +734,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		const dirty = () =>
 			state.rating !== seed.rating ||
 			state.text !== seed.text ||
+			state.privateNote !== seed.privateNote ||
 			state.pacing !== seed.pacing ||
 			state.focus !== seed.focus ||
 			state.loved !== seed.loved ||
@@ -754,6 +812,9 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 				button.dataset.readLabel ||
 				(config.priorReads && config.latestRead ? config.latestRead.label : config.newRead.label);
 			textArea.value = state.text;
+			privateArea.value = state.privateNote;
+			// Open iff there's a note — never a state where a note is held unseen.
+			showPrivate(state.privateNote.length > 0);
 			modal!.hidden = false;
 			document.body.style.overflow = 'hidden';
 			render();
@@ -803,6 +864,30 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 
 		textArea.addEventListener('input', () => {
 			state.text = textArea.value;
+			saved = false;
+			render();
+		});
+
+		// Open/closed is derived from the text, never stored; closing discards.
+		function showPrivate(on: boolean) {
+			privateArea.hidden = !on;
+			privateToggle.setAttribute('aria-expanded', String(on));
+		}
+		privateToggle.addEventListener('click', () => {
+			if (privateArea.hidden) {
+				showPrivate(true);
+				privateArea.focus();
+				return;
+			}
+			if (privateArea.value.trim() && !window.confirm('Discard the private note?')) return;
+			privateArea.value = '';
+			state.privateNote = '';
+			showPrivate(false);
+			saved = false;
+			render();
+		});
+		privateArea.addEventListener('input', () => {
+			state.privateNote = privateArea.value;
 			saved = false;
 			render();
 		});
@@ -879,6 +964,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 					loved: state.loved,
 					gaveUp: state.gaveUp ?? false,
 					text: state.text,
+					privateNote: state.privateNote,
 					pacing: state.pacing,
 					focus: state.focus,
 					moods: state.moods,

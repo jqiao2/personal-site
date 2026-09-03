@@ -57,6 +57,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	if ('friends' in body) patch.friends = Array.isArray(body.friends) ? body.friends.map(String) : [];
 	if ('tags' in body) patch.tags = Array.isArray(body.tags) ? body.tags.map(String) : [];
 	if ('review' in body) patch.review = typeof body.review === 'string' ? body.review : null;
+	if ('privateNote' in body) patch.privateNote = typeof body.privateNote === 'string' ? body.privateNote : null;
 
 	try {
 		await updateVisit(id, patch);

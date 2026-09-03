@@ -91,13 +91,11 @@ export interface ActivityRow {
 	/** Free-text tags, applied by hand after ingest. `[]` when none. */
 	tags: string[];
 	/**
-	 * Always null here. `private_notes` is "never rendered publicly" per the
-	 * schema comment, and the strongest place to hold that line is the data
-	 * layer rather than trusting every future template to remember to omit
-	 * it — getActivity() never selects the column over the public (anon-key)
-	 * client. There's no owner-side editor built in this track to need the
-	 * real value; when one exists, it should read the column directly via
-	 * supabaseAdmin rather than through this function.
+	 * The owner-only note, or null. `private_notes` is "never rendered publicly"
+	 * per the schema comment, and the data layer is where that line is held:
+	 * getActivity() selects the column only when passed `includePrivate` (the
+	 * owner check), over the service-role client. For every visitor read it is
+	 * left null and never fetched, so the text never reaches the process.
 	 */
 	private_notes: string | null;
 	/** Owner-only when true — the default for every activity (migration 0043).
@@ -636,9 +634,14 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'ski_segments',
 ].join(', ');
 
-/** One activity by id, in full (bar `private_notes` — always null; see
- * ActivityRow). Null if it doesn't exist or is soft-deleted. */
-export async function getActivity(id: number): Promise<ActivityRow | null> {
+/**
+ * One activity by id, in full. `private_notes` is null unless `includePrivate`
+ * (the owner check, defaulting to false) is set — the note is fetched off the
+ * base table with the service role only when the caller has proved it is the
+ * owner, so a visitor's row never carries it. Null if it doesn't exist or is
+ * soft-deleted.
+ */
+export async function getActivity(id: number, includePrivate = false): Promise<ActivityRow | null> {
 	// `tags` (0035), `private` (0043) and `hide_from_review` (0044) arrive in
 	// later migrations than the rest of the schema, so an environment behind on
 	// any of them gets the activity without them rather than a 404 for every
@@ -686,10 +689,22 @@ export async function getActivity(id: number): Promise<ActivityRow | null> {
 			private: row.private !== false,
 			hide_from_review: row.hide_from_review === true,
 			ski_segments: row.ski_segments ?? null,
-			private_notes: null,
+			private_notes: includePrivate ? await getActivityPrivateNotes(id) : null,
 		};
 	}
 	return null;
+}
+
+/** The owner-only note for one activity, off the base table. Null if the column
+ *  or row is missing rather than throwing. */
+async function getActivityPrivateNotes(id: number): Promise<string | null> {
+	const { data, error } = await supabaseAdmin
+		.from('activities')
+		.select('private_notes')
+		.eq('id', id)
+		.maybeSingle();
+	if (error) return null;
+	return (data as { private_notes?: string | null } | null)?.private_notes ?? null;
 }
 
 /** The 1Hz-ish sample streams for one activity. Null when the activity has
@@ -979,6 +994,8 @@ export async function listActivityFacets(isOwner = false): Promise<ActivityFacet
 export interface UpdateActivityInput {
 	title?: string;
 	notes?: string | null;
+	/** Owner-only note; null clears it. Never rendered publicly (migration 0034). */
+	privateNotes?: string | null;
 	sport?: string;
 	gearId?: number | null;
 	tags?: string[];
@@ -1009,6 +1026,7 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 		patch.title = title;
 	}
 	if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+	if (input.privateNotes !== undefined) patch.private_notes = input.privateNotes?.trim() || null;
 	if (input.sport !== undefined) patch.sport = input.sport;
 	if (input.gearId !== undefined) patch.gear_id = input.gearId;
 	if (input.tags !== undefined) patch.tags = input.tags;
