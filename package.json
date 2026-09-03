@@ -19,6 +19,7 @@
     "activities:import": "node --import ./scripts/ts-hook.mjs --env-file=.env scripts/import-strava-archive.mjs",
     "activities:add": "node --import ./scripts/ts-hook.mjs --env-file=.env scripts/add-activities.mjs",
     "activities:test": "node --import ./scripts/ts-hook.mjs scripts/ingest.test.mjs",
+    "activities:ride-movies": "node --env-file=.env scripts/backfill-ride-movies.mjs",
     "strava:test": "node --import ./scripts/ts-hook.mjs scripts/strava.test.mjs",
     "gear:test": "node --import ./scripts/ts-hook.mjs scripts/gear.test.mjs",
     "privacy:test": "node --import ./scripts/ts-hook.mjs scripts/privacy.test.mjs",

@@ -15,3 +15,4 @@ add or update a pattern.
 | [0007](patterns/0007-siteheader-full-bleed-and-column.md) | Placing SiteHeader on a page that centres its own column | strategy | adding the site header to a page, or auditing which pages have one |
 | [0008](patterns/0008-gazetteer-only-had-dohmh.md) | The place gazetteer only ever had one of its four sources | failure-mode | a known restaurant is missing from suggestions, a suggestion is ALL CAPS, or co-located venues collapse into one |
 | [0009](patterns/0009-beli-export-import.md) | Getting a Beli account's lists out, and into the log | strategy | exporting Beli data, or talking to a reverse-engineered app backend behind a bot gate |
+| [0010](patterns/0010-astro-check-fails-in-worktrees.md) | Dev server/`astro check` fail in a worktree when MAIN has no `node_modules` | failure-mode | dev server or `astro sync` dies with "Tsconfig not found astro/tsconfigs/strict" in a `.claude/worktrees/*` checkout |
