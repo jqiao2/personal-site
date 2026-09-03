@@ -9,6 +9,8 @@ interface ImportMetaEnv {
 	readonly SESSION_SECRET: string;
 	/** Bearer token for /api/books/sync — the KOReader plugin's only credential. */
 	readonly READING_SYNC_TOKEN: string;
+	/** Bearer token for /api/activities/weight — the iOS scale-sync Shortcut's only credential. */
+	readonly WEIGHT_SYNC_TOKEN?: string;
 	/** Optional — see src/lib/jellyfin.ts. Absent means "no play button". */
 	readonly JELLYFIN_URL?: string;
 	readonly JELLYFIN_LOCAL_URL?: string;
