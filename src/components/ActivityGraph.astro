@@ -14,12 +14,16 @@ import type { GraphData } from '../lib/activity-graph';
 
 interface Props {
 	data: GraphData;
+	/** Indoor sports (trainer, treadmill, erg) whose distance is machine-simulated
+	 *  rather than travelled — for these, time is the honest default axis. */
+	preferTime?: boolean;
 }
-const { data } = Astro.props;
+const { data, preferTime = false } = Astro.props;
 const bothAxes = Boolean(data.t && data.d);
-// Default to distance whenever there's a distance axis — the route reads more
-// naturally against how far than how long. Time only when there's no distance.
-const defaultMode = data.d ? 'dist' : 'time';
+// Default to distance — the route reads more naturally against how far than how
+// long — except where distance is fabricated (a virtual ride's simulated km),
+// where time leads. Falls back to whichever axis actually exists.
+const defaultMode = preferTime && data.t ? 'time' : data.d ? 'dist' : 'time';
 // Only elevation shows on load — HR/power/speed are there to be switched on,
 // not read all at once (they crowd the same axis). Falls back to the first
 // available series when the activity has no elevation (a treadmill, say).
@@ -30,7 +34,7 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 ---
 
-<section class="ag" data-graph>
+<section class="ag" data-graph data-prefer-time={preferTime ? '1' : undefined}>
 	<div class="ag__series">
 		{
 			data.series.map((s) => (
@@ -105,7 +109,8 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		// wanted. Lap dividers likewise start hidden.
 		const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
 		const active = new Set<string>(defaultKey ? [defaultKey] : []);
-		let mode: Mode = data.d ? 'dist' : 'time';
+		const preferTime = root.dataset.preferTime === '1';
+		let mode: Mode = preferTime && data.t ? 'time' : data.d ? 'dist' : 'time';
 		let lapsOn = false;
 		let skiOn = Boolean(data.skiSegments && data.skiSegments.length);
 

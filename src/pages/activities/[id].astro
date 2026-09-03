@@ -673,7 +673,7 @@ const exWord = exertionLabel(activity.exertion);
 			hasRoute ? (
 				<>
 					<ActivityMap title={activity.title} sport={activity.sport} polyline={activity.polyline!} />
-					{graphData && <ActivityGraph data={graphData} />}
+					{graphData && <ActivityGraph data={graphData} preferTime={meta.indoor} />}
 					{
 						primaryStats.length > 0 && (
 							<div class="stats stats--row">
@@ -709,7 +709,7 @@ const exWord = exertionLabel(activity.exertion);
 					</div>
 					{/* No map to scrub, but the combined profile still reads the
 					    trainer/treadmill's HR, power and speed against time. */}
-					{graphData && <ActivityGraph data={graphData} />}
+					{graphData && <ActivityGraph data={graphData} preferTime={meta.indoor} />}
 				</>
 			)
 		}
