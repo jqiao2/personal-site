@@ -47,16 +47,18 @@ function isMissingCreditColumn(err: { code?: string; message?: string } | null):
 async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const d = await getMovieDetails(tmdbId);
 	const facts = extractCreditFacts(d);
-	// The film's first US opening rather than TMDB's top-level release_date (which
-	// follows re-releases), with the year derived from that same date so the year and
-	// the full date can't disagree (a foreign premiere and the US run can straddle a
-	// New Year).
+	// Two dates, two jobs. `release_date` is the first US opening (preferredReleaseDate,
+	// which ignores re-releases) — the availability date the Watchlist's upcoming badge
+	// needs. `release_year` is the widely-accepted release year, taken from the premiere
+	// (earliest release anywhere) — the year the site sorts and displays by, and the same
+	// year YTS files a film under. The two can straddle a New Year; that's intended.
 	const releasedOn = preferredReleaseDate(d);
+	const premieredOn = premiereDate(d);
 	const now = new Date().toISOString();
 	const base = {
 		tmdb_id: d.id,
 		title: d.title,
-		release_year: releaseYear(releasedOn),
+		release_year: releaseYear(premieredOn),
 		poster_path: d.poster_path,
 		backdrop_path: d.backdrop_path,
 		overview: d.overview,
@@ -72,7 +74,7 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const withFacts = {
 		...base,
 		release_date: releasedOn,
-		premiere_date: premiereDate(d),
+		premiere_date: premieredOn,
 		genres: facts.genres,
 		languages: facts.languages,
 		countries: facts.countries,
@@ -1407,9 +1409,14 @@ export async function listWatchlist(limit = 4): Promise<WatchlistTile[]> {
  * listWatchlistFacets. */
 export interface WatchlistEntry extends WatchlistTile {
 	added_at: string;
-	/** Full release date, "YYYY-MM-DD" (0014). Null when TMDB has no date — which
-	 * for a watchlist is usually an announced film with nothing but a title. */
+	/** Full US opening date, "YYYY-MM-DD" (0014). Drives only the upcoming badge and
+	 * "Out …" copy. Null when TMDB has no date — for a watchlist usually an announced
+	 * film with nothing but a title. */
 	release_date: string | null;
+	/** Full premiere date, "YYYY-MM-DD" (0019) — earliest release anywhere. The full
+	 * date the release sort orders by, so two films from the same year keep their real
+	 * order rather than tying on the year. Null when unknown. */
+	premiere_date: string | null;
 }
 
 /** The entire watchlist, most recently added first — powers /films/watchlist.
@@ -1423,7 +1430,7 @@ export interface WatchlistEntry extends WatchlistTile {
 export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 	const { data, error } = await supabasePublic
 		.from('watchlist')
-		.select('added_at, movies(tmdb_id, title, release_year, release_date, poster_path)')
+		.select('added_at, movies(tmdb_id, title, release_year, release_date, premiere_date, poster_path)')
 		.order('added_at', { ascending: false });
 	if (error) throw new Error(`listAllWatchlist failed: ${error.message}`);
 
@@ -1434,6 +1441,7 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 			title: string;
 			release_year: number | null;
 			release_date: string | null;
+			premiere_date: string | null;
 			poster_path: string | null;
 		};
 	};
@@ -1442,6 +1450,7 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 		title: r.movies.title,
 		release_year: r.movies.release_year,
 		release_date: r.movies.release_date,
+		premiere_date: r.movies.premiere_date,
 		poster_path: r.movies.poster_path,
 		added_at: r.added_at,
 	}));
@@ -2150,7 +2159,7 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 
 	let req = supabasePublic
 		.from('watched')
-		.select('id, first_watched, rating, movies!inner(tmdb_id, title, release_year, poster_path)', {
+		.select('id, first_watched, rating, movies!inner(tmdb_id, title, release_year, premiere_date, poster_path)', {
 			count: 'exact',
 		});
 
@@ -2209,13 +2218,14 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 		req = req.in('movies.original_language', query.languages);
 	}
 
-	// "Year" is year-descending with the recent order inside each year; "Recent" is
-	// newest-watched first. Undated/yearless films sort last either way.
-	// Note the movies(release_year) spelling: it orders the watched rows by the
+	// "Year" is newest-release first, by the full premiere date so two films from the
+	// same year keep their real order; ties fall to the recent order below. "Recent" is
+	// newest-watched first. Undated films sort last either way.
+	// Note the movies(premiere_date) spelling: it orders the watched rows by the
 	// joined column. The `referencedTable` option instead sorts rows *within* each
 	// embed, which for a to-one join is a silent no-op that leaves the order as-is.
 	if (sort === 'year') {
-		req = req.order('movies(release_year)', { ascending: false, nullsFirst: false });
+		req = req.order('movies(premiere_date)', { ascending: false, nullsFirst: false });
 	}
 	req = req
 		.order('first_watched', { ascending: false, nullsFirst: false })
