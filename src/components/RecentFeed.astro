@@ -26,16 +26,36 @@ const recent = await recentJournal(15, await requireOwner(Astro.cookies));
 				</h2>
 				{it.detail && <p class="item__note">{it.detail}</p>}
 			</div>
-			{it.image &&
-				(it.href ? (
-					<a class="item__thumb" href={it.href}>
-						<img src={it.image} alt="" width="46" height="69" loading="lazy" />
-					</a>
+			{(() => {
+				// The thumb is a photo for the poster tracks; for an activity it's
+				// the route outline where those have a cover, and the sport glyph
+				// when the activity has no GPS (a trainer ride, a pool swim).
+				const thumb = it.image ? (
+					<img src={it.image} alt="" width="46" height="69" loading="lazy" />
+				) : it.route ? (
+					<svg class="item__route" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+						<path
+							d={it.route}
+							fill="none"
+							stroke="var(--accent)"
+							stroke-width="2.4"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							vector-effect="non-scaling-stroke"
+						/>
+					</svg>
+				) : it.icon ? (
+					<svg class="item__glyph" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" aria-hidden="true">
+						<path d={it.icon} />
+					</svg>
+				) : null;
+				if (!thumb) return null;
+				return it.href ? (
+					<a class="item__thumb" href={it.href}>{thumb}</a>
 				) : (
-					<span class="item__thumb">
-						<img src={it.image} alt="" width="46" height="69" loading="lazy" />
-					</span>
-				))}
+					<span class="item__thumb">{thumb}</span>
+				);
+			})()}
 		</article>
 	))
 }
@@ -83,13 +103,27 @@ const recent = await recentJournal(15, await requireOwner(Astro.cookies));
 		color: var(--ink-soft);
 		font-size: 0.95rem;
 	}
-	.item__thumb img {
+	.item__thumb img,
+	.item__route,
+	.item__glyph {
 		display: block;
 		width: 46px;
 		height: 69px;
 		object-fit: cover;
 		border: 1px solid var(--rule);
 		background: var(--card);
+	}
+	/* Route and glyph aren't cropped like a photo — they sit centred in the
+	   same framed box with a little breathing room. */
+	.item__route,
+	.item__glyph {
+		object-fit: contain;
+		padding: 8px;
+		box-sizing: border-box;
+	}
+	.item__glyph {
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
 	.tag {
 		font-family: var(--sans);
