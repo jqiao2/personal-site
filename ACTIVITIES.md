@@ -250,6 +250,7 @@ That difference decides most of the design:
 | `/activities/heatmap` | Owner-only. Every outdoor track on one map. |
 | `/activities/month` | Owner-only. Index of months. |
 | `/activities/month/[month]` | Owner-only. The month in activities — a share card, same family as `/films/month/[month]`. |
+| `/activities/athlete` | Owner-only. FTP/LTHR/HR/threshold pace/CSS/weight/height over time — the inputs every exertion score is measured against — as a versioned table, a per-metric progress graph, and the form that amends them. |
 | `/activities/import` | Owner-only. Strava archive import + file drop. |
 | `/api/activities/list` | Reads, redacted for a visitor exactly as the pages are. |
 | `/api/activities/facets`, `/api/activities/routes` | Owner-only — both describe the private collection outright. |
@@ -430,7 +431,10 @@ Key details:
   power when the stream is missing, and mark it `estimated`.
 - **Thresholds change over time.** FTP in March is not FTP in September. They
   live in `athlete_thresholds` with an `effective_from` date; the calculator is
-  handed the row in force on the activity's date.
+  handed the row in force on the activity's date. `/activities/athlete` is where
+  they are entered and where their history is read; changing one there does
+  **not** re-score activities already imported — `scripts/recompute-exertion.mjs`
+  is what does that.
 - **Grade-adjusted pace** for running/hiking: use a polynomial on gradient
   (Minetti's cost-of-running curve is the defensible one) to convert climbing
   into flat-equivalent pace.
@@ -723,7 +727,8 @@ id, effective_from date not null,
 ftp_w smallint, lthr_bpm smallint, max_hr smallint, rest_hr smallint,
 threshold_pace_s_per_km double precision,      -- running
 css_pace_s_per_100m double precision,          -- swimming
-weight_kg double precision
+weight_kg double precision,
+height_cm double precision                     -- recorded, not computed with (0058)
 ```
 
 Exactly one row is "in force" on a given date: the latest `effective_from <=`
@@ -829,4 +834,5 @@ Files are assigned so two agents never write the same file.
 | **List** | `src/pages/activities/all.astro`, `src/lib/activity-params.ts`, `src/pages/api/activities/list.ts`, `.../facets.ts` |
 | **Detail** | `src/pages/activities/[id].astro`, `src/components/ActivityMap.astro`, `src/lib/activity-map.ts` |
 | **Month** | `src/pages/activities/month/*.astro`, `src/lib/activity-month.ts` |
+| **Athlete** | `src/pages/activities/athlete.astro`, `src/lib/athlete.ts`, `src/pages/api/activities/thresholds.ts`, `scripts/athlete.test.mjs` |
 | **Ingest** | `src/lib/ingest/**`, `src/pages/api/activities/import.ts`, `src/pages/activities/import.astro`, `scripts/import-strava-archive.mjs` |

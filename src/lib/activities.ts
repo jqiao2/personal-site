@@ -293,6 +293,7 @@ export interface AthleteThresholds {
 	threshold_pace_s_per_km: number | null;
 	css_pace_s_per_100m: number | null;
 	weight_kg: number | null;
+	height_cm: number | null;
 	created_at: string;
 }
 
@@ -920,6 +921,21 @@ export async function thresholdsOn(date: string): Promise<AthleteThresholds | nu
 		throw new Error(`thresholdsOn failed: ${error.message}`);
 	}
 	return (data as AthleteThresholds | null) ?? null;
+}
+
+/** Every threshold row, newest first — the table and graph on
+ *  /activities/athlete. There are a couple of dozen of these at most, so
+ *  there is nothing to page. */
+export async function listThresholds(): Promise<AthleteThresholds[]> {
+	const { data, error } = await supabasePublic
+		.from('athlete_thresholds')
+		.select('*')
+		.order('effective_from', { ascending: false });
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listThresholds failed: ${error.message}`);
+	}
+	return (data ?? []) as AthleteThresholds[];
 }
 
 // ---------------------------------------------------------------------------
