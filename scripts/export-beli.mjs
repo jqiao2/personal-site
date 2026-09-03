@@ -29,7 +29,6 @@ const ORIGIN = 'https://app.beliapp.com';
 const UA =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 const SPACING_MS = 400; // the API throttles bursts; space calls out
-const HYDRATE_CHUNK = 50;
 
 const raw = process.argv.includes('--raw');
 const email = process.env.BELI_EMAIL;
@@ -107,78 +106,64 @@ const uuid = profile.id ?? profile.uuid ?? profile.user_id ?? profile.user?.id;
 if (!uuid) throw new Error(`could not find your user id; profile keys were ${Object.keys(profile)}`);
 console.error(`  you are ${profile.username ?? uuid}`);
 
-// --- ranked ("been") ------------------------------------------------------
-console.error('fetching ranked list (user-scores)…');
+// Which categories this account uses. Both lists are queried one category
+// code at a time, and user-scores is the cheap way to learn the full set —
+// one row per ranked place, each carrying its category.
+console.error('discovering categories…');
 const scores = await call('GET', `${API}/api/user-scores/${uuid}/`, access);
 const scoreList = Array.isArray(scores) ? scores : (scores?.results ?? []);
-console.error(`  ${scoreList.length} ranked`);
-// The categories this account actually uses — what to ask the bookmark
-// endpoint about, since it is queried one category code at a time.
 const categories = [...new Set(scoreList.map((s) => s.category).filter(Boolean))];
+console.error(`  ${scoreList.length} ranked across ${categories.length} categories: ${categories.join(', ')}`);
+
+/** Every row from a per-category endpoint whose response is { "<name>": [rows] } or [rows]. */
+async function perCategory(pathFor, onRow) {
+	const out = [];
+	for (const cat of categories) {
+		await sleep(SPACING_MS);
+		try {
+			const resp = await call('GET', pathFor(cat), access);
+			const rows = Array.isArray(resp) ? resp : Object.values(resp ?? {}).flat();
+			for (const r of rows) {
+				const row = onRow(r, cat);
+				if (row) out.push(row);
+			}
+			if (raw) writeFileSync(`tmp/beli-${pathFor(cat).match(/\/api\/([^/?]+)/)[1]}-${cat}.json`, JSON.stringify(resp, null, 2));
+		} catch (err) {
+			console.error(`  ${cat}: ${err.message}`);
+		}
+	}
+	return out;
+}
+
+// --- ranked ("been") ------------------------------------------------------
+// get-ranking carries the business inline AND the visit dates and Beli's
+// computed score, so it needs no hydration and gives a real visited-on date.
+console.error('fetching ranked list (get-ranking)…');
+const been = (
+	await perCategory(
+		(cat) => `${API}/api/get-ranking/?user=${uuid}&category=${cat}`,
+		(r, cat) =>
+			r.business && {
+				...pick(r.business),
+				category: cat,
+				score: r.score ?? r.value ?? null,
+				visit_dates: r.visit_dates ?? [],
+				ranked_on: r.created_dt ?? null,
+			},
+	)
+).filter((r) => r.name);
+console.error(`  ${been.length} been`);
 
 // --- bookmarked ("want to try") ------------------------------------------
-console.error(`fetching bookmarks across ${categories.length} categories…`);
-const bookmarkRows = [];
-for (const cat of categories) {
-	await sleep(SPACING_MS);
-	try {
-		const resp = await call('GET', `${API}/api/get-bookmark/?user=${uuid}&category=${cat}`, access);
-		// Response is { "<display name>": [ rows ] }; each row already carries the
-		// full business inline (r.business), so unlike the ranked list there is
-		// nothing to hydrate.
-		const rows = Object.values(resp ?? {}).flat();
-		for (const r of rows) {
-			if (r.business) bookmarkRows.push({ business: r.business, category: cat });
-		}
-		if (raw) writeFileSync(`tmp/beli-bookmark-${cat}.json`, JSON.stringify(resp, null, 2));
-	} catch (err) {
-		console.error(`  ${cat}: ${err.message}`);
-	}
-}
-console.error(`  ${bookmarkRows.length} bookmarked`);
-
-// --- hydrate the ranked ids to businesses (bookmarks came hydrated) -------
-const allIds = [...new Set(scoreList.map((s) => s.business_id))].filter((id) => id != null);
-console.error(`hydrating ${allIds.length} businesses…`);
-const byId = new Map();
-async function hydrate(ids) {
-	const page = await call('POST', `${API}/api/filter-list/`, access, {
-		user: String(uuid),
-		ids,
-		load_businesses: true,
-	});
-	for (const [id, b] of Object.entries(page?.business_hash ?? {})) byId.set(Number(id), b);
-	for (const b of page?.businesses ?? []) if (b?.id != null) byId.set(Number(b.id), b);
-}
-let skipped = 0;
-for (let i = 0; i < allIds.length; i += HYDRATE_CHUNK) {
-	const chunk = allIds.slice(i, i + HYDRATE_CHUNK);
-	try {
-		await hydrate(chunk);
-	} catch {
-		// One id in the batch server-errors the whole call (a deleted place, say).
-		// Drop to single ids so the rest of the chunk still lands, and skip the bad.
-		for (const id of chunk) {
-			try {
-				await hydrate([id]);
-			} catch {
-				skipped++;
-			}
-			await sleep(SPACING_MS);
-		}
-	}
-	process.stderr.write(`  ${Math.min(i + HYDRATE_CHUNK, allIds.length)}/${allIds.length}\r`);
-	await sleep(SPACING_MS);
-}
-if (skipped) console.error(`\n  ${skipped} id(s) could not be hydrated (likely removed from Beli), skipped`);
-
-const been = scoreList
-	.map((s) => ({ ...pick(byId.get(s.business_id)), score: s.value, category: s.category }))
-	.filter((r) => r.name);
-const want = bookmarkRows
-	.map((b) => ({ ...pick(b.business), category: b.category }))
-	.filter((r) => r.name);
+console.error('fetching bookmarks (get-bookmark)…');
+const want = (
+	await perCategory(
+		(cat) => `${API}/api/get-bookmark/?user=${uuid}&category=${cat}`,
+		(r, cat) => r.business && { ...pick(r.business), category: cat, bookmarked_on: r.start_dt ?? null },
+	)
+).filter((r) => r.name);
+console.error(`  ${want.length} bookmarked`);
 
 writeFileSync('tmp/beli.json', JSON.stringify({ been, want }, null, 2));
 console.error(`\nwrote tmp/beli.json — ${been.length} been, ${want.length} want to try`);
-if (been[0]) console.error(`  e.g. ${been[0].name} (${been[0].city}) score ${been[0].score}`);
+if (been[0]) console.error(`  e.g. ${been[0].name} (${been[0].city}) score ${been[0].score} on ${been[0].visit_dates?.[0] ?? '—'}`);

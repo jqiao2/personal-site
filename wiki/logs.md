@@ -57,3 +57,12 @@ wiki across every iteration, even reverted ones).
   Foursquare is now HF-token-gated (401 → DuckDB "HTTP 0"), left documented.
   `supabase.ts` now falls back to `process.env` so scripts can import src/lib.
   Wrote pattern 0008.
+- 2026-09-02 — Backfilled the log from Beli, which has no export. Reverse-
+  engineered its backend (community spec ProjectBarks/beli-api, verified live):
+  export-beli.mjs pulls the ranked list (get-ranking, business inline + score +
+  visit_dates) and bookmarks (get-bookmark per category); import-beli.mjs maps
+  them into restaurants + restaurant_visits, deduped on place_id/name+city,
+  skip-not-overwrite. Beli's 0–10 score kept in a new restaurants.beli_score
+  (0052); star rating derived lossily. Added 439 visited + 165 to-try places.
+  The bot gate wants a browser UA + Origin (401 not 403 = headers pass); the
+  filter-list `list_field:"been"` is trending, not the personal list. Pattern 0009.
