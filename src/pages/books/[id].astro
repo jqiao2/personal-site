@@ -52,7 +52,7 @@ if (!book) {
 
 const [days, reviews, highlights, bookHours] = await Promise.all([
 	getBookDays(book.id),
-	getBookReviews(book.id),
+	getBookReviews(book.id, isOwner),
 	getBookHighlights(book.id),
 	// Time-of-day is owner-only: the per-hour histogram is a log of when the
 	// owner is awake and reading, so a visitor never gets it (and `hasHours`
@@ -574,6 +574,15 @@ const spines = Array.from({ length: 18 }, () => ({
 													<div class="review__empty">{r.emptyLine}</div>
 												)
 											}
+
+											{r.privateNote && (
+												<div class="review__private">
+													<div class="review__private-label">
+														<span aria-hidden="true">🔒</span>Private note
+													</div>
+													<p class="review__private-text">{r.privateNote}</p>
+												</div>
+											)}
 
 											{
 												(r.chips.length > 0 || r.hiddenChips.length > 0) && (
@@ -1770,6 +1779,33 @@ const spines = Array.from({ length: 18 }, () => ({
 		font-size: 16px;
 		color: #75603f;
 		margin-top: 12px;
+	}
+	/* The dashed edge is the whole vocabulary for "not part of the page" — it is
+	   how the private note reads in every editor, so it reads the same here. */
+	.review__private {
+		margin-top: 14px;
+		padding: 11px 14px;
+		border: 1px dashed #6d5836;
+		border-radius: 8px;
+		max-width: 580px;
+	}
+	.review__private-label {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.2px;
+		color: #9a7f4f;
+		margin-bottom: 7px;
+	}
+	.review__private-text {
+		font-family: 'Newsreader', serif;
+		font-size: 16px;
+		color: #cdbb98;
+		line-height: 1.6;
+		margin: 0;
+		white-space: pre-wrap;
 	}
 	.reviews__empty {
 		font-family: 'Newsreader', serif;

@@ -123,6 +123,9 @@ export interface DiaryVisit {
 	revisit: boolean;
 	friends: string[];
 	review: string | null;
+	/** Owner-only note, or null. Null for a visitor and when there is none —
+	 *  getVisit only fetches it off the base table when includePrivate. */
+	private_note: string | null;
 	tags: string[];
 	restaurant_name: string;
 	cuisines: string[];
@@ -481,7 +484,7 @@ export async function getPlace(id: number): Promise<PlaceDetail | null> {
 	};
 }
 
-export async function getVisit(id: number): Promise<VisitDetail | null> {
+export async function getVisit(id: number, includePrivate = false): Promise<VisitDetail | null> {
 	const { data, error } = await supabasePublic
 		.from('restaurant_diary')
 		.select('*')
@@ -489,8 +492,24 @@ export async function getVisit(id: number): Promise<VisitDetail | null> {
 		.maybeSingle();
 	if (error) throw new Error(error.message);
 	if (!data) return null;
+	// The private note lives on the base table, never in the anon-readable
+	// restaurant_diary view — so a visitor's DiaryVisit can't carry it. Fetch it
+	// with the service role only once the caller has proved it is the owner.
+	const privateNote = includePrivate ? await getVisitPrivateNote(id) : null;
 	const photos = await photosForVisits([id]);
-	return { ...(data as DiaryVisit), photos: photos.get(id) ?? [] };
+	return { ...(data as DiaryVisit), private_note: privateNote, photos: photos.get(id) ?? [] };
+}
+
+/** The owner-only note for one visit, off the base table. Null if the column
+ *  isn't there yet (an environment behind on 0054) rather than throwing. */
+async function getVisitPrivateNote(id: number): Promise<string | null> {
+	const { data, error } = await supabaseAdmin
+		.from('restaurant_visits')
+		.select('private_note')
+		.eq('id', id)
+		.maybeSingle();
+	if (error) return null;
+	return (data as { private_note?: string | null } | null)?.private_note ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -826,6 +845,7 @@ export interface VisitInput {
 	revisit?: boolean;
 	friends?: string[];
 	review?: string | null;
+	privateNote?: string | null;
 	tags?: string[];
 }
 
@@ -841,6 +861,7 @@ export async function createVisit(input: VisitInput): Promise<number> {
 			revisit: input.revisit ?? false,
 			friends: cleanList(input.friends),
 			review: emptyToNull(input.review),
+			private_note: emptyToNull(input.privateNote),
 			tags: cleanList(input.tags),
 		})
 		.select('id')
@@ -858,6 +879,7 @@ export async function updateVisit(id: number, input: Omit<VisitInput, 'restauran
 	if (input.revisit !== undefined) payload.revisit = input.revisit;
 	if (input.friends !== undefined) payload.friends = cleanList(input.friends);
 	if (input.review !== undefined) payload.review = emptyToNull(input.review);
+	if (input.privateNote !== undefined) payload.private_note = emptyToNull(input.privateNote);
 	if (input.tags !== undefined) payload.tags = cleanList(input.tags);
 	const { error } = await supabaseAdmin.from('restaurant_visits').update(payload).eq('id', id);
 	if (error) throw new Error(error.message);

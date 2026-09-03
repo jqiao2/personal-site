@@ -174,6 +174,8 @@ export interface ReviewView {
 	ending: string | null;
 	readStats: string;
 	text: string | null;
+	/** Owner-only note on the read; null for a visitor and when there is none. */
+	privateNote: string | null;
 	/** What to print instead of a review that was never written. */
 	emptyLine: string;
 	chips: Chip[];
@@ -190,6 +192,7 @@ export interface ReviewSeed {
 	rating: number;
 	loved: boolean;
 	text: string;
+	privateNote: string;
 	pacing: string;
 	focus: string;
 	moods: string[];
@@ -621,6 +624,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 				? `${plural(inRead.length, 'day')} · ${formatDuration(readSeconds)}${pph ? ` · ${pph} pages/hr` : ''}`
 				: '',
 			text: r.review_text || null,
+			privateNote: r.private_note || null,
 			emptyLine: r.rating ? 'Rated, never written up.' : 'Marked as read. No rating, no review.',
 			chips: attributes.slice(0, CHIP_PREVIEW),
 			hiddenChips: attributes.slice(CHIP_PREVIEW),
@@ -632,6 +636,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 				rating: r.rating ?? 0,
 				loved: r.loved,
 				text: r.review_text ?? '',
+				privateNote: r.private_note ?? '',
 				pacing: r.pacing ?? '',
 				focus: r.focus ?? '',
 				moods: r.moods,

@@ -74,6 +74,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!book) return apiError('book not found', 404);
 
 	const text = typeof body.text === 'string' ? body.text.trim() : '';
+	const privateNote = typeof body.privateNote === 'string' ? body.privateNote.trim() : '';
 
 	try {
 		await saveReview(bookId, {
@@ -83,6 +84,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			loved: body.loved === true,
 			gave_up: body.gaveUp === true,
 			review_text: text || null,
+			private_note: privateNote || null,
 			pacing: parseOption(body.pacing, PACING),
 			focus: parseOption(body.focus, FOCUS),
 			moods: parseList(body.moods, MOODS),

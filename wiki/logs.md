@@ -65,3 +65,17 @@ wiki across every iteration, even reverted ones).
   text, never stored — so "hidden" can never mean "saved but invisible". Gave
   `scripts/shot.mjs` repeatable `--click` to photograph the open dialog;
   folded that into pattern 0002.
+
+- 2026-09-02 — Extended private notes to the other three logs. Books:
+  `book_reviews.private_note` (0053), read via getBookReviews(bookId,
+  includePrivate) — no public view to hide it from (reviews are admin-only
+  reads), so the boundary is that flag. Meals: `restaurant_visits.private_note`
+  (0054), kept out of the anon-granted `restaurant_diary` view exactly like the
+  film column; getVisit(id, includePrivate) fetches it off the base table with
+  the service role. Activities: the `private_notes` column already existed
+  (0034, "never rendered publicly") but nothing read or wrote it — getActivity
+  now takes includePrivate, updateActivity takes privateNotes. Same disclosure
+  UI everywhere; the activity editor is a server-rendered form, so its toggle is
+  a native `<details>` (no JS) rather than the modal button the other three use.
+  Each includePrivate read degrades gracefully when its column is missing, so
+  the pages render before the migrations are applied.
