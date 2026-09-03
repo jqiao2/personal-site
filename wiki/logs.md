@@ -86,3 +86,5 @@ wiki across every iteration, even reverted ones).
   a native `<details>` (no JS) rather than the modal button the other three use.
   Each includePrivate read degrades gracefully when its column is missing, so
   the pages render before the migrations are applied.
+- 2026-09-03: Added ride↔movie linking for virtual rides (migration 0056: activities.movie_tmdb_id/movie_title; edit-dialog TMDB search picker; read-mode 🎬 link to /films/movie/{id}; scripts/backfill-ride-movies.mjs parses "Ride movie: {name}" notes). Hit wiki/0010: astro check/sync are broken in worktrees, typechecked src/lib/activities.ts with tsc --ignoreConfig instead.
+- 2026-09-03: Debugged the worktree dev-server crash ("Tsconfig not found astro/tsconfigs/strict"). Real cause (wiki/0010, rewritten): Vite 8's native resolver walks up out of the nested worktree to the MAIN repo tsconfig, which couldn't resolve the package because main had no node_modules. Fix: npm install --prefix <main>. Then verified the ride-movie picker live against real data + TMDB; caught a CSS bug (.movie-chosen display:flex overrode [hidden]) and fixed with :not([hidden]).

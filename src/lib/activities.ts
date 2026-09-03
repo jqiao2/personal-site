@@ -155,6 +155,12 @@ export interface ActivityRow {
 	/** Owner-corrected run/lift partition for a ski day (migration 0051), or null
 	 * to use auto-detection. Detail page only — the list view doesn't carry it. */
 	ski_segments: SkiSegmentOverride[] | null;
+	/** TMDB id of the film watched during a (virtual) ride (migration 0056), or
+	 * null. Links to /films/movie/{id}. */
+	movie_tmdb_id: number | null;
+	/** Denormalised title of the linked film, captured at link time. Travels with
+	 * movie_tmdb_id. */
+	movie_title: string | null;
 }
 
 /** A row of the `activity_list` view — everything the list/landing pages need
@@ -632,6 +638,8 @@ const PUBLIC_ACTIVITY_COLUMNS = [
 	'private',
 	'hide_from_review',
 	'ski_segments',
+	'movie_tmdb_id',
+	'movie_title',
 ].join(', ');
 
 /**
@@ -646,9 +654,11 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 	// later migrations than the rest of the schema, so an environment behind on
 	// any of them gets the activity without them rather than a 404 for every
 	// activity on the site. Each step drops one more, newest first.
-	const noSki = PUBLIC_ACTIVITY_COLUMNS.replace(', ski_segments', '');
+	const noMovie = PUBLIC_ACTIVITY_COLUMNS.replace(', movie_tmdb_id, movie_title', '');
+	const noSki = noMovie.replace(', ski_segments', '');
 	const attempts = [
 		PUBLIC_ACTIVITY_COLUMNS,
+		noMovie,
 		noSki,
 		noSki.replace(', hide_from_review', ''),
 		noSki.replace(', hide_from_review', '').replace(', private', ''),
@@ -676,12 +686,20 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 		// `hide_from_review` defaults to showing, since it guards nothing.
 		const row = data as unknown as Omit<
 			ActivityRow,
-			'private_notes' | 'tags' | 'private' | 'hide_from_review' | 'ski_segments'
+			| 'private_notes'
+			| 'tags'
+			| 'private'
+			| 'hide_from_review'
+			| 'ski_segments'
+			| 'movie_tmdb_id'
+			| 'movie_title'
 		> & {
 			tags?: string[];
 			private?: boolean;
 			hide_from_review?: boolean;
 			ski_segments?: SkiSegmentOverride[] | null;
+			movie_tmdb_id?: number | null;
+			movie_title?: string | null;
 		};
 		return {
 			...row,
@@ -689,6 +707,8 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 			private: row.private !== false,
 			hide_from_review: row.hide_from_review === true,
 			ski_segments: row.ski_segments ?? null,
+			movie_tmdb_id: row.movie_tmdb_id ?? null,
+			movie_title: row.movie_title ?? null,
 			private_notes: includePrivate ? await getActivityPrivateNotes(id) : null,
 		};
 	}
@@ -1004,6 +1024,10 @@ export interface UpdateActivityInput {
 	private?: boolean;
 	/** Keep this activity off /month. Presentation only — see migration 0044. */
 	hideFromReview?: boolean;
+	/** TMDB id of the film watched during the ride; null unlinks (migration 0056). */
+	movieTmdbId?: number | null;
+	/** Denormalised title stored with movieTmdbId; ignored unless movieTmdbId is set. */
+	movieTitle?: string | null;
 }
 
 /**
@@ -1032,6 +1056,13 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 	if (input.tags !== undefined) patch.tags = input.tags;
 	if (input.private !== undefined) patch.private = input.private;
 	if (input.hideFromReview !== undefined) patch.hide_from_review = input.hideFromReview;
+	// The film link is set and cleared together: a null id clears both columns,
+	// and a real id carries its captured title (null title is tolerated but the
+	// UI always sends one).
+	if (input.movieTmdbId !== undefined) {
+		patch.movie_tmdb_id = input.movieTmdbId;
+		patch.movie_title = input.movieTmdbId == null ? null : (input.movieTitle?.trim() || null);
+	}
 
 	const current = await getActivity(id);
 	if (!current) return false;
