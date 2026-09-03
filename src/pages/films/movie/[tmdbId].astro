@@ -177,6 +177,11 @@ const showtimesHref = `https://www.google.com/search?q=${encodeURIComponent(
 	`${movie.title} showtimes 10001`,
 )}`;
 
+// AMC search, deep-linked to this title. AMC's search route reads `?q=` on load
+// (unlike `?query=`, which it ignores), so this lands on the film's AMC result →
+// its showtimes/tickets. Owner-only, on unseen films, for A-List.
+const amcHref = `https://www.amctheatres.com/search?q=${encodeURIComponent(movie.title)}`;
+
 // Whether this film is actually in the Jellyfin library can't be answered here —
 // the server is tailnet-only and this render happens on Vercel. So we ship the
 // config and let the page ask from the browser; see the script at the foot of the
@@ -280,13 +285,8 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 									<a class="btn-ghost" href={showtimesHref} target="_blank" rel="noopener noreferrer">
 										<span class="btn-ghost__icon">🎟</span><span>Find showtimes</span>
 									</a>
-									{/* AMC (A-List) has no per-movie deep link — its search is client-only
-									    and not URL-addressable, and the /movies/<slug>-<id> page needs
-									    AMC's API (403s server-side) to resolve the id. So this lands on
-									    AMC's now-playing grid to find the film. The Google link above
-									    already surfaces AMC showtimes + direct booking when it's playing. */}
-									<a class="btn-ghost" href="https://www.amctheatres.com/movies" target="_blank" rel="noopener noreferrer">
-										<span class="btn-ghost__icon">🎬</span><span>AMC now playing</span>
+									<a class="btn-ghost" href={amcHref} target="_blank" rel="noopener noreferrer">
+										<span class="btn-ghost__icon">🎬</span><span>AMC showtimes</span>
 									</a>
 									<a class="btn-ghost" href={downloadHref} target="_blank" rel="noopener noreferrer">
 										<span class="btn-ghost__icon">↓</span><span>Download</span>
