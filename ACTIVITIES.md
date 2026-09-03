@@ -94,6 +94,46 @@ every new standalone activity on the upload AND the Strava-sync paths (a plain
 only; a triathlon's bike leg is never a trainer ride, so the leg builders don't
 call it.
 
+### The weigh-in sync (smart scale → Apple Health → the site)
+
+Body weight is a **daily time series**, not a threshold, so it lives in its own
+table `body_weight` (migration `0059`), one row per calendar day (upsert on
+`measured_on`). It deliberately does **not** go in `athlete_thresholds`:
+`thresholdsOn()` returns the single latest row on or before a date, so a
+weight-only threshold row would blank out FTP/LTHR for every activity scored
+that day.
+
+The scale (Etekcity, via VeSync) already writes **Body Mass** into Apple
+Health. An iOS **Personal Automation / Shortcut** reads the latest Body Mass
+sample and POSTs it — no VeSync credentials, no reverse-engineered API. Same
+machine-to-machine shape as the KOReader reading sync: a static bearer token
+(`WEIGHT_SYNC_TOKEN`) instead of the owner cookie.
+
+```
+POST /api/activities/weight
+Authorization: Bearer $WEIGHT_SYNC_TOKEN
+{ "weight": 165.2, "unit": "lb", "date": "2026-09-03" }
+```
+
+`unit` defaults to `lb` (US-locale Health samples come through in pounds);
+`date` defaults to today in UTC, so the Shortcut should send the device-local
+date. Stored in kg. `/activities/athlete` reads the series with `listWeighIns()`
+— the Weight sparkline and current value, and Power-to-weight, now come from the
+scale (older W/kg falls back to the threshold row's own `weight_kg` for dates
+before the scale was syncing). Weight is gone from the thresholds form/table.
+
+**One-time setup** (on the owner):
+
+1. Set `WEIGHT_SYNC_TOKEN` (any random string) in Vercel **and** local `.env`.
+2. `supabase db push` migration 0059.
+3. Build the iOS Shortcut: **Get Latest Health Sample** (Body Mass) →
+   **Get Contents of URL** (POST JSON as above) → save as a **Personal
+   Automation** on a daily schedule (or "when Health sample added").
+
+The scale's other metrics (body fat, muscle, water) are deliberately not
+stored — just weight, per the design decision. Add columns to `body_weight` if
+that changes.
+
 ### The importer
 
 ```
@@ -254,6 +294,7 @@ That difference decides most of the design:
 | `/activities/import` | Owner-only. Strava archive import + file drop. |
 | `/api/activities/list` | Reads, redacted for a visitor exactly as the pages are. |
 | `/api/activities/facets`, `/api/activities/routes` | Owner-only — both describe the private collection outright. |
+| `/api/activities/weight` | Bearer-token (`WEIGHT_SYNC_TOKEN`) POST — the iOS scale-sync Shortcut. See "The weigh-in sync". |
 | `/api/activities/**` (writes) | Owner-only. |
 
 ### Privacy
@@ -733,6 +774,22 @@ height_cm double precision                     -- recorded, not computed with (0
 
 Exactly one row is "in force" on a given date: the latest `effective_from <=`
 that date.
+
+### `body_weight`  (0059)
+
+Daily weigh-ins from the smart scale — a time series, separate from
+`athlete_thresholds` (see "The weigh-in sync" above for why).
+
+```
+measured_on  date primary key,   -- one canonical weight per day, upsert
+weight_kg    double precision not null check (> 20 and < 300),
+source       text not null default 'apple_health',
+created_at / updated_at
+```
+
+RLS on with **no policy**, like `strava_auth`: body measurements are private,
+reachable only by the service-role key. `listWeighIns()`/`upsertWeighIn()` in
+`activities.ts` are the only accessors.
 
 ### Views
 
