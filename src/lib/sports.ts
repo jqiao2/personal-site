@@ -252,7 +252,10 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 		label: 'Swim',
 		family: 'swim',
 		icon: 'swim',
-		indoor: true,
+		// A pool session isn't "indoor" the way a trainer ride is — the laps are
+		// really swum, so its distance is a true measurement (and the profile
+		// graph defaults to it), unlike a machine's simulated kilometres.
+		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_100m',
 		primaryStats: SWIM_PRIMARY,
