@@ -9,7 +9,7 @@
 //
 // THE PIN CARRIES THE TRIP ANSWER, and nothing else. Filled means worth the
 // trip; blank means not. One question, two states, no key to memorise — which
-// is the most a 26px mark can carry and be read at a glance. The verdict's six
+// is the most a small mark can carry and be read at a glance. The verdict's six
 // rungs and three colour bands used to live here and asked far more of the
 // mark than that, and asked it of pins that often had no verdict at all: the
 // whole to-try map is places nobody has been to. Everything else about a place
@@ -271,7 +271,7 @@ const hasKey = Boolean(config.key);
 			el.className = 'gl-pin';
 			el.href = `/restaurants/place/${p.id}`;
 			el.title = p.trip ? `${p.name} — worth the trip` : p.name;
-			el.innerHTML = `<svg viewBox="0 0 26 34" width="26" height="34" aria-hidden="true">
+			el.innerHTML = `<svg viewBox="0 0 26 34" width="18" height="23" aria-hidden="true">
 					<path d="M13 33 C13 33 24 20.5 24 13 A11 11 0 1 0 2 13 C2 20.5 13 33 13 33 Z"
 						fill="${p.trip ? MAP_TOKENS.pinRing : '#fdf7e8'}"
 						stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6"></path>
@@ -366,7 +366,7 @@ const hasKey = Boolean(config.key);
 				layout: {
 					'text-field': ['get', 'name'],
 					'text-font': ['Noto Sans Regular'],
-					'text-size': 11.5,
+					'text-size': 9.5,
 					// Under the pin's point, not over its head: the marker is 34px
 					// tall and anchored at the tip, so anything above the anchor
 					// lands on the pin itself.
@@ -443,7 +443,7 @@ const hasKey = Boolean(config.key);
 		transform: translateX(-50%);
 		white-space: nowrap;
 		font-family: var(--ui);
-		font-size: 10.5px;
+		font-size: 9.5px;
 		color: var(--ink);
 		background: rgba(253, 247, 232, 0.9);
 		padding: 1px 4px;
@@ -538,7 +538,7 @@ const hasKey = Boolean(config.key);
 
 	.map__caption {
 		position: absolute;
-		right: 14px;
+		left: 14px;
 		top: 14px;
 		z-index: 2;
 		background: rgba(253, 247, 232, 0.94);

@@ -15,9 +15,11 @@
 // the pins are the content and the basemap is the paper it is printed on.
 //
 // ROADS ARE DRAWN LIGHTER THAN THE LAND IS DARK. On a dark basemap you add
-// light to show a road; on paper you take ink away. Majors are a warm cream
-// with a hairline casing, minors barely separate from the ground — enough to
-// recognise a street grid by, not enough to compete with a pin.
+// light to show a road; on paper you take ink away. Majors are a warm tan
+// with a hairline casing, minors a shade lighter — dark enough against the
+// cream to read as a street grid at a glance, not so dark they compete with a
+// pin. (They used to sit a hair off the ground colour, which read as a map
+// that had not finished loading.)
 //
 // The token names match the design bundle's basemap spec one for one, so the
 // two can be diffed by eye.
@@ -26,9 +28,9 @@ export const MAP_TOKENS = {
 	land: '#f2e7d2', // the paper the map is printed on
 	water: '#c9d4c2', // a faded green wash — not blue
 	park: '#dee5c3', // parks, cemeteries, green space
-	roadMajor: '#e9d6ae', // arterials, bridges
-	roadCasing: '#cbb389', // hairline casing on majors only
-	roadMinor: '#efe4cd', // residential streets
+	roadMajor: '#dcc496', // arterials, bridges
+	roadCasing: '#b89b6e', // hairline casing on majors only
+	roadMinor: '#e4d4b0', // residential streets
 	building: '#e6d8bc', // building fill, no stroke
 	boundary: '#b8a180', // borough / state, dashed
 	label: '#4a3626', // place and street labels
