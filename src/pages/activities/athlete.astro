@@ -24,7 +24,7 @@ import SiteHeader from '../../components/SiteHeader.astro';
 import { requireOwner } from '../../lib/auth';
 import { listThresholds, listWeighIns } from '../../lib/activities';
 import { ALPINE } from '../../lib/activity-tokens';
-import { METRICS, seriesOf, weightSeries, wPerKgSeries, type Series } from '../../lib/athlete';
+import { METRICS, seriesOf, inForceNow, weightSeries, wPerKgSeries, type Series } from '../../lib/athlete';
 
 export const prerender = false;
 
@@ -44,20 +44,25 @@ try {
 }
 
 const latest = rows[0] ?? null;
+// Each threshold metric in force now is its latest recorded value, taken field
+// by field: a blank on the newest row means "unchanged", so an FTP entered
+// alone still shows the earlier LTHR beside it. Weight and W/kg override this
+// below — they read the scale.
+const current = inForceNow(rows);
 // Weight comes from the smart scale (body_weight), so its graph and current
 // value read the daily weigh-ins, not the typed threshold rows; power-to-weight
-// pairs each FTP change with the weight in force on its date.
+// pairs the FTP in force with the latest weigh-in.
 const latestKg = weighIns.length ? weighIns[weighIns.length - 1].weight_kg : (latest?.weight_kg ?? null);
 const series = METRICS.map((m) =>
 	m.key === 'weight_kg' ? weightSeries(weighIns) : m.key === 'w_per_kg' ? wPerKgSeries(rows, weighIns) : seriesOf(m, rows),
 ).filter((s) => s.points.length > 0);
 
 /** The current display value for the "in force now" grid. Weight and W/kg draw
- *  on the latest weigh-in; everything else on the latest threshold row. */
+ *  on the latest weigh-in; every other metric on its latest recorded value. */
 function nowDisplay(m: (typeof METRICS)[number]): number | null {
 	if (m.key === 'weight_kg') return latestKg == null ? null : m.toDisplay(latestKg);
-	if (m.key === 'w_per_kg') return latest?.ftp_w && latestKg ? m.toDisplay(latest.ftp_w / latestKg) : null;
-	const raw = latest ? m.read(latest) : null;
+	if (m.key === 'w_per_kg') return current?.ftp_w && latestKg ? m.toDisplay(current.ftp_w / latestKg) : null;
+	const raw = current ? m.read(current) : null;
 	return raw == null ? null : m.toDisplay(raw);
 }
 
