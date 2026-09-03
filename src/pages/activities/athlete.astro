@@ -22,9 +22,9 @@
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { requireOwner } from '../../lib/auth';
-import { listThresholds } from '../../lib/activities';
+import { listThresholds, listWeighIns } from '../../lib/activities';
 import { ALPINE } from '../../lib/activity-tokens';
-import { METRICS, seriesOf, inForceNow, type Series } from '../../lib/athlete';
+import { METRICS, seriesOf, inForceNow, weightSeries, wPerKgSeries, type Series } from '../../lib/athlete';
 
 export const prerender = false;
 
@@ -34,21 +34,42 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 let rows: Awaited<ReturnType<typeof listThresholds>> = [];
+let weighIns: Awaited<ReturnType<typeof listWeighIns>> = [];
 let unreachable = false;
 try {
-	rows = await listThresholds();
+	[rows, weighIns] = await Promise.all([listThresholds(), listWeighIns()]);
 } catch (err) {
 	unreachable = true;
-	console.error('athlete page: could not read athlete_thresholds —', err);
+	console.error('athlete page: could not read athlete numbers —', err);
 }
 
+const latest = rows[0] ?? null;
+// Each threshold metric in force now is its latest recorded value, taken field
+// by field: a blank on the newest row means "unchanged", so an FTP entered
+// alone still shows the earlier LTHR beside it. Weight and W/kg override this
+// below — they read the scale.
 const current = inForceNow(rows);
-const series = METRICS.map((m) => seriesOf(m, rows)).filter((s) => s.points.length > 0);
-// The table is a record of what was entered, so it shows only the columns that
-// exist — power-to-weight is computed from two of them and lives in the graph
-// and the summary, where it isn't also the column that pushes the row off the
-// right edge.
-const columns = METRICS.filter((m) => !m.derived);
+// Weight comes from the smart scale (body_weight), so its graph and current
+// value read the daily weigh-ins, not the typed threshold rows; power-to-weight
+// pairs the FTP in force with the latest weigh-in.
+const latestKg = weighIns.length ? weighIns[weighIns.length - 1].weight_kg : (latest?.weight_kg ?? null);
+const series = METRICS.map((m) =>
+	m.key === 'weight_kg' ? weightSeries(weighIns) : m.key === 'w_per_kg' ? wPerKgSeries(rows, weighIns) : seriesOf(m, rows),
+).filter((s) => s.points.length > 0);
+
+/** The current display value for the "in force now" grid. Weight and W/kg draw
+ *  on the latest weigh-in; every other metric on its latest recorded value. */
+function nowDisplay(m: (typeof METRICS)[number]): number | null {
+	if (m.key === 'weight_kg') return latestKg == null ? null : m.toDisplay(latestKg);
+	if (m.key === 'w_per_kg') return current?.ftp_w && latestKg ? m.toDisplay(current.ftp_w / latestKg) : null;
+	const raw = current ? m.read(current) : null;
+	return raw == null ? null : m.toDisplay(raw);
+}
+
+// The table is a record of what was typed into athlete_thresholds, so it shows
+// only those columns — power-to-weight is derived, and weight is scale-fed now,
+// so both live in the graph and the summary rather than as a table column.
+const columns = METRICS.filter((m) => !m.derived && !m.scaleFed);
 
 // The sparkline. A plain polyline in a 0..100 × 0..30 box, stretched by the
 // SVG's own preserveAspectRatio="none" — no axes, because the two labels
@@ -139,19 +160,19 @@ const today = new Date().toLocaleDateString('en-CA');
 			{unreachable && <p class="flash flash--err">Couldn’t reach the database.</p>}
 
 			{
-				current && (
+				(latest || latestKg != null) && (
 					<section class="now">
-						<h2 class="sec">In force now <span class="sec__note">from {fmtDate(current.effective_from)}</span></h2>
+						<h2 class="sec">In force now {latest && <span class="sec__note">from {fmtDate(latest.effective_from)}</span>}</h2>
 						<dl class="now__grid">
 							{METRICS.map((m) => {
-								const raw = m.read(current);
+								const value = nowDisplay(m);
 								return (
 									<div class="now__cell">
 										<dt>{m.label}</dt>
 										<dd>
-											{raw == null ? <span class="muted">—</span> : (
+											{value == null ? <span class="muted">—</span> : (
 												<>
-													{m.format(m.toDisplay(raw))}
+													{m.format(value)}
 													<span class="unit">{m.unit}</span>
 												</>
 											)}
@@ -290,7 +311,7 @@ const today = new Date().toLocaleDateString('en-CA');
 
 	const form = document.getElementById('thresholds') as HTMLFormElement | null;
 	const out = document.getElementById('out') as HTMLElement | null;
-	const editable = METRICS.filter((m) => !m.derived);
+	const editable = METRICS.filter((m) => !m.derived && !m.scaleFed);
 
 	const say = (text: string, ok: boolean) => {
 		if (!out) return;

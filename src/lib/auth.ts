@@ -68,8 +68,10 @@ export type SyncAuthResult = 'ok' | 'unauthorized' | 'unconfigured';
  * mistake should surface as a described failure, not a stack trace the runtime
  * turns into an opaque 500.
  */
-export function checkSyncToken(header: string | null | undefined): SyncAuthResult {
-	const expected = import.meta.env.READING_SYNC_TOKEN;
+export function checkSyncToken(
+	header: string | null | undefined,
+	expected: string | undefined = import.meta.env.READING_SYNC_TOKEN,
+): SyncAuthResult {
 	if (!expected) return 'unconfigured';
 	if (typeof header !== 'string') return 'unauthorized';
 	const match = /^Bearer\s+(.+)$/i.exec(header.trim());

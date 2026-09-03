@@ -5,7 +5,17 @@
 //
 //   node --import ./scripts/ts-hook.mjs scripts/athlete.test.mjs
 import assert from 'node:assert/strict';
-import { METRICS, parsePace, formatPace, seriesOf, KM_PER_MILE, LB_PER_KG } from '../src/lib/athlete.ts';
+import {
+	METRICS,
+	parsePace,
+	formatPace,
+	seriesOf,
+	weightSeries,
+	weightKgOn,
+	wPerKgSeries,
+	KM_PER_MILE,
+	LB_PER_KG,
+} from '../src/lib/athlete.ts';
 
 // --- pace parsing ---------------------------------------------------------
 assert.equal(parsePace('6:38'), 398);
@@ -65,6 +75,47 @@ assert.deepEqual(
 		['2026-06-01', 270],
 	],
 	'oldest first, nulls dropped',
+);
+
+// --- weigh-ins: the scale-fed weight series (0059) ------------------------
+// oldest-first, as listWeighIns returns. weightSeries plots pounds; the graph
+// must show one point per weigh-in in display units, unlike the sparse
+// threshold-derived series.
+const weighIns = [
+	{ measured_on: '2026-01-10', weight_kg: 73.0 },
+	{ measured_on: '2026-02-14', weight_kg: 72.0 },
+	{ measured_on: '2026-03-20', weight_kg: 71.5 },
+];
+const ws = weightSeries(weighIns);
+assert.equal(ws.metric.key, 'weight_kg');
+assert.equal(ws.points.length, 3);
+assert.equal(ws.points[0].value, Number((73.0 * LB_PER_KG).toFixed(1)), 'plotted in pounds');
+assert.equal(weightSeries([]).points.length, 0, 'no scale data → empty series, not a crash');
+
+// weightKgOn: the weigh-in in force on a date is the latest on or before it.
+assert.equal(weightKgOn('2026-02-14', weighIns), 72.0, 'exact day');
+assert.equal(weightKgOn('2026-03-01', weighIns), 72.0, 'between weigh-ins → the earlier one');
+assert.equal(weightKgOn('2027-01-01', weighIns), 71.5, 'after the last → the last');
+assert.equal(weightKgOn('2025-12-01', weighIns), null, 'before any weigh-in → null');
+
+// wPerKgSeries: each FTP change paired with the weight in force on its date —
+// a weigh-in where one exists, else the threshold row's own weight_kg.
+const wpk = wPerKgSeries(
+	[
+		{ effective_from: '2026-02-01', ftp_w: 265, weight_kg: null }, // uses weigh-in 73.0 (from 2026-01-10)
+		{ effective_from: '2025-06-01', ftp_w: 250, weight_kg: 74.0 }, // pre-scale → falls back to row weight
+		{ effective_from: '2026-03-25', ftp_w: 270, weight_kg: null }, // uses weigh-in 71.5 (from 2026-03-20)
+	],
+	weighIns,
+);
+assert.deepEqual(
+	wpk.points.map((p) => [p.date, Number(p.value.toFixed(2))]),
+	[
+		['2025-06-01', Number((250 / 74.0).toFixed(2))],
+		['2026-02-01', Number((265 / 73.0).toFixed(2))],
+		['2026-03-25', Number((270 / 71.5).toFixed(2))],
+	],
+	'oldest first; weigh-in where present, row weight before the scale',
 );
 
 console.log('athlete.test.mjs: ok');

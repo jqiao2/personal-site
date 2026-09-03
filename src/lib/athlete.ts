@@ -10,7 +10,7 @@
 // "6:40 a mile", and asking them to convert is how a wrong number gets typed.
 // So the storage unit is the metric one and the *only* place the imperial one
 // exists is this file, at the edge.
-import type { AthleteThresholds } from './activities';
+import type { AthleteThresholds, WeighIn } from './activities';
 
 export const KM_PER_MILE = 1.609344;
 export const LB_PER_KG = 2.20462262;
@@ -41,6 +41,10 @@ export interface Metric {
 	/** Paces are typed as mm:ss, not as a decimal. */
 	pace?: boolean;
 	derived?: boolean;
+	/** Comes from the smart scale (body_weight), not from a typed threshold row.
+	 *  The page drops it from the thresholds form/table and feeds it the daily
+	 *  weigh-in series instead. */
+	scaleFed?: boolean;
 }
 
 /** `398` → `6:38`. Seconds, floored to the second — a pace is not precise to
@@ -143,6 +147,7 @@ export const METRICS: Metric[] = [
 		label: 'Weight',
 		unit: 'lb',
 		better: 'none',
+		scaleFed: true,
 		toDisplay: (v) => round(v * LB_PER_KG, 1),
 		toStored: (v) => v / LB_PER_KG,
 		format: (v) => v.toFixed(1),
@@ -189,6 +194,45 @@ export function seriesOf(metric: Metric, rows: AthleteThresholds[]): Series {
 		.map((r) => ({ date: r.effective_from, value: metric.read(r) }))
 		.filter((p): p is { date: string; value: number } => p.value != null)
 		.map((p) => ({ date: p.date, value: metric.toDisplay(p.value) }))
+		.sort((a, b) => a.date.localeCompare(b.date));
+	return { metric, points };
+}
+
+const metricByKey = (key: string): Metric => METRICS.find((m) => m.key === key)!;
+
+/** The weight graph — one point per weigh-in, from the scale, not from typed
+ *  threshold rows. `weighIns` is oldest-first (listWeighIns's order). */
+export function weightSeries(weighIns: WeighIn[]): Series {
+	const metric = metricByKey('weight_kg');
+	return {
+		metric,
+		points: weighIns.map((w) => ({ date: w.measured_on, value: metric.toDisplay(w.weight_kg) })),
+	};
+}
+
+/** The weigh-in in force on a date: the latest one on or before it, in kg.
+ *  Null if the scale had recorded nothing yet. `weighIns` is oldest-first. */
+export function weightKgOn(date: string, weighIns: WeighIn[]): number | null {
+	let kg: number | null = null;
+	for (const w of weighIns) {
+		if (w.measured_on <= date) kg = w.weight_kg;
+		else break;
+	}
+	return kg;
+}
+
+/** Power-to-weight over time: each FTP change paired with the weight in force
+ *  on its date — the scale's weigh-in, or the threshold row's own weight_kg for
+ *  dates before the scale was syncing, so historical W/kg still resolves. */
+export function wPerKgSeries(rows: AthleteThresholds[], weighIns: WeighIn[]): Series {
+	const metric = metricByKey('w_per_kg');
+	const points = rows
+		.filter((r) => r.ftp_w != null)
+		.map((r) => {
+			const kg = weightKgOn(r.effective_from, weighIns) ?? r.weight_kg;
+			return kg ? { date: r.effective_from, value: r.ftp_w! / kg } : null;
+		})
+		.filter((p): p is { date: string; value: number } => p != null)
 		.sort((a, b) => a.date.localeCompare(b.date));
 	return { metric, points };
 }

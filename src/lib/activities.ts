@@ -939,6 +939,40 @@ export async function listThresholds(): Promise<AthleteThresholds[]> {
 }
 
 // ---------------------------------------------------------------------------
+// Body weight — daily weigh-ins from the smart scale (0059). A time series,
+// separate from athlete_thresholds; see the migration for why. Private, so
+// these go through supabaseAdmin (RLS-bypassing) rather than the anon client
+// the rest of this file reads with — the table has no anon policy at all.
+// ---------------------------------------------------------------------------
+
+export interface WeighIn {
+	measured_on: string; // YYYY-MM-DD
+	weight_kg: number;
+}
+
+/** Every weigh-in, oldest first — what the athlete page's weight graph plots. */
+export async function listWeighIns(): Promise<WeighIn[]> {
+	const { data, error } = await supabaseAdmin
+		.from('body_weight')
+		.select('measured_on, weight_kg')
+		.order('measured_on', { ascending: true });
+	if (error) {
+		if (isDegraded(error)) return [];
+		throw new Error(`listWeighIns failed: ${error.message}`);
+	}
+	return (data ?? []) as WeighIn[];
+}
+
+/** Upsert one day's weight. The scale can fire twice in a morning and a sync
+ *  can resend; both resolve to the last value for that day. */
+export async function upsertWeighIn(measured_on: string, weight_kg: number, source: string): Promise<void> {
+	const { error } = await supabaseAdmin
+		.from('body_weight')
+		.upsert({ measured_on, weight_kg, source, updated_at: new Date().toISOString() }, { onConflict: 'measured_on' });
+	if (error) throw new Error(`upsertWeighIn failed: ${error.message}`);
+}
+
+// ---------------------------------------------------------------------------
 // Gear + facets — the filter panel on /activities/all.
 // ---------------------------------------------------------------------------
 
