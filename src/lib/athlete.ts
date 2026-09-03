@@ -167,6 +167,23 @@ export interface Series {
 	points: { date: string; value: number }[];
 }
 
+/** The value of every metric in force now: for each field, the latest row that
+ *  recorded it, independently. A blank field on the newest row is "unchanged",
+ *  not "cleared" — so an FTP entered on 8/25 with weight left blank still shows
+ *  the weight from 5/17, and power-to-weight computes from both. Rows come in
+ *  newest-first (listThresholds order); null if the table is empty. */
+export function inForceNow(rows: AthleteThresholds[]): AthleteThresholds | null {
+	if (rows.length === 0) return null;
+	const merged = { ...rows[0] };
+	for (const m of METRICS) {
+		if (m.derived) continue;
+		if (merged[m.key as keyof AthleteThresholds] != null) continue;
+		const found = rows.find((r) => r[m.key as keyof AthleteThresholds] != null);
+		if (found) (merged as Record<string, unknown>)[m.key] = found[m.key as keyof AthleteThresholds];
+	}
+	return merged;
+}
+
 export function seriesOf(metric: Metric, rows: AthleteThresholds[]): Series {
 	const points = rows
 		.map((r) => ({ date: r.effective_from, value: metric.read(r) }))
