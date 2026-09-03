@@ -17,7 +17,9 @@ interface Props {
 }
 const { data } = Astro.props;
 const bothAxes = Boolean(data.t && data.d);
-const defaultMode = data.t ? 'time' : 'dist';
+// Default to distance whenever there's a distance axis — the route reads more
+// naturally against how far than how long. Time only when there's no distance.
+const defaultMode = data.d ? 'dist' : 'time';
 // Only elevation shows on load — HR/power/speed are there to be switched on,
 // not read all at once (they crowd the same axis). Falls back to the first
 // available series when the activity has no elevation (a treadmill, say).
@@ -29,22 +31,6 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 ---
 
 <section class="ag" data-graph>
-	<div class="ag__head">
-		<h2 class="ag__title">Profile</h2>
-		{
-			bothAxes && (
-				<div class="ag__axis" role="group" aria-label="X axis">
-					<button type="button" class="ag__axis-btn" data-mode="time" aria-pressed={defaultMode === 'time'}>
-						Time
-					</button>
-					<button type="button" class="ag__axis-btn" data-mode="dist" aria-pressed={defaultMode === 'dist'}>
-						Distance
-					</button>
-				</div>
-			)
-		}
-	</div>
-
 	<div class="ag__series">
 		{
 			data.series.map((s) => (
@@ -69,6 +55,18 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 					<span class="ag__swatch ag__swatch--ski" />
 					<span>Runs &amp; lifts</span>
 				</button>
+			)
+		}
+		{
+			bothAxes && (
+				<div class="ag__axis" role="group" aria-label="X axis">
+					<button type="button" class="ag__axis-btn" data-mode="time" aria-pressed={defaultMode === 'time'}>
+						Time
+					</button>
+					<button type="button" class="ag__axis-btn" data-mode="dist" aria-pressed={defaultMode === 'dist'}>
+						Distance
+					</button>
+				</div>
 			)
 		}
 	</div>
@@ -107,7 +105,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		// wanted. Lap dividers likewise start hidden.
 		const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
 		const active = new Set<string>(defaultKey ? [defaultKey] : []);
-		let mode: Mode = data.t ? 'time' : 'dist';
+		let mode: Mode = data.d ? 'dist' : 'time';
 		let lapsOn = false;
 		let skiOn = Boolean(data.skiSegments && data.skiSegments.length);
 
@@ -430,24 +428,13 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 	.ag {
 		margin-top: 0.75rem;
 	}
-	.ag__head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 0.6rem;
-	}
-	.ag__title {
-		font-size: 1.05rem;
-		font-family: 'Instrument Serif', Georgia, serif;
-		color: #3d4a55;
-		margin: 0;
-	}
 	.ag__axis {
 		display: inline-flex;
 		border: 1px solid #c9d4dc;
 		border-radius: 999px;
 		overflow: hidden;
+		/* Sit at the far end of the shared controls row, apart from the series chips. */
+		margin-left: auto;
 	}
 	.ag__axis-btn {
 		font-family: 'Instrument Sans', Arial, sans-serif;
@@ -469,6 +456,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 	.ag__series {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: center;
 		gap: 0.4rem;
 		margin-bottom: 0.5rem;
 	}
