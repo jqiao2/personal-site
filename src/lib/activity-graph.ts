@@ -17,6 +17,7 @@
 // array at exactly those — never per-series filtering, which would desync the
 // value readout from the map marker.
 import { ALPINE } from './activity-tokens';
+import { haversine } from './route-shape';
 import type { SkiSegment, SkiSegmentType } from './ski';
 
 const M_TO_FT = 3.28084;
@@ -123,7 +124,11 @@ export function buildGraphData(
 		return raw.map((v) => (v == null ? null : Math.round(v - base)));
 	};
 	const t = offsetFromStart(sample(streams.time_s, idx, (v) => v));
-	const d = offsetFromStart(sample(streams.distance_m, idx, (v) => v));
+	// Some GPS activities record a track but no distance channel (3757 is one).
+	// Cumulative haversine over the latlng gives an honest distance axis so the
+	// Time/Distance toggle — and the distance default — still work.
+	const distRaw = streams.distance_m ?? (streams.latlng ? cumulativeDistance(streams.latlng) : null);
+	const d = offsetFromStart(sample(distRaw, idx, (v) => v));
 	// A profile needs at least one axis to lay points on.
 	if (!t && !d) return null;
 
@@ -146,6 +151,23 @@ export function buildGraphData(
 	if (series.length === 0) return null;
 
 	return { n: idx.length, t, d, lat, lng, series, laps: lapBoundaries(laps), skiSegments: skiBands(streams, skiSegments) };
+}
+
+/** Cumulative distance (metres) along a `[lat, lng]` track, one entry per point,
+ *  for activities whose device recorded a route but no distance channel. Summed
+ *  with `haversine`; a null coordinate holds the running total and yields a null
+ *  at that index (so the axis breaks there rather than lurching). */
+function cumulativeDistance(latlng: [number, number][]): (number | null)[] {
+	let acc = 0;
+	const out: (number | null)[] = new Array(latlng.length);
+	for (let i = 0; i < latlng.length; i++) {
+		const p = latlng[i];
+		const prev = latlng[i - 1];
+		const pOk = p && finite(p[0]) && finite(p[1]);
+		if (i > 0 && pOk && prev && finite(prev[0]) && finite(prev[1])) acc += haversine(prev, p);
+		out[i] = pOk ? acc : null;
+	}
+	return out;
 }
 
 /** Ski segments → axis-offset bands. Reads the raw (full-resolution) streams at

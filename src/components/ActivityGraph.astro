@@ -14,10 +14,16 @@ import type { GraphData } from '../lib/activity-graph';
 
 interface Props {
 	data: GraphData;
+	/** Indoor sports (trainer, treadmill, erg) whose distance is machine-simulated
+	 *  rather than travelled — for these, time is the honest default axis. */
+	preferTime?: boolean;
 }
-const { data } = Astro.props;
+const { data, preferTime = false } = Astro.props;
 const bothAxes = Boolean(data.t && data.d);
-const defaultMode = data.t ? 'time' : 'dist';
+// Default to distance — the route reads more naturally against how far than how
+// long — except where distance is fabricated (a virtual ride's simulated km),
+// where time leads. Falls back to whichever axis actually exists.
+const defaultMode = preferTime && data.t ? 'time' : data.d ? 'dist' : 'time';
 // Only elevation shows on load — HR/power/speed are there to be switched on,
 // not read all at once (they crowd the same axis). Falls back to the first
 // available series when the activity has no elevation (a treadmill, say).
@@ -28,23 +34,7 @@ const hasLaps = Boolean(data.laps && data.laps.length > 0);
 const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 ---
 
-<section class="ag" data-graph>
-	<div class="ag__head">
-		<h2 class="ag__title">Profile</h2>
-		{
-			bothAxes && (
-				<div class="ag__axis" role="group" aria-label="X axis">
-					<button type="button" class="ag__axis-btn" data-mode="time" aria-pressed={defaultMode === 'time'}>
-						Time
-					</button>
-					<button type="button" class="ag__axis-btn" data-mode="dist" aria-pressed={defaultMode === 'dist'}>
-						Distance
-					</button>
-				</div>
-			)
-		}
-	</div>
-
+<section class="ag" data-graph data-prefer-time={preferTime ? '1' : undefined}>
 	<div class="ag__series">
 		{
 			data.series.map((s) => (
@@ -69,6 +59,18 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 					<span class="ag__swatch ag__swatch--ski" />
 					<span>Runs &amp; lifts</span>
 				</button>
+			)
+		}
+		{
+			bothAxes && (
+				<div class="ag__axis" role="group" aria-label="X axis">
+					<button type="button" class="ag__axis-btn" data-mode="time" aria-pressed={defaultMode === 'time'}>
+						Time
+					</button>
+					<button type="button" class="ag__axis-btn" data-mode="dist" aria-pressed={defaultMode === 'dist'}>
+						Distance
+					</button>
+				</div>
 			)
 		}
 	</div>
@@ -107,7 +109,8 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		// wanted. Lap dividers likewise start hidden.
 		const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
 		const active = new Set<string>(defaultKey ? [defaultKey] : []);
-		let mode: Mode = data.t ? 'time' : 'dist';
+		const preferTime = root.dataset.preferTime === '1';
+		let mode: Mode = preferTime && data.t ? 'time' : data.d ? 'dist' : 'time';
 		let lapsOn = false;
 		let skiOn = Boolean(data.skiSegments && data.skiSegments.length);
 
@@ -430,24 +433,13 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 	.ag {
 		margin-top: 0.75rem;
 	}
-	.ag__head {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 0.6rem;
-	}
-	.ag__title {
-		font-size: 1.05rem;
-		font-family: 'Instrument Serif', Georgia, serif;
-		color: #3d4a55;
-		margin: 0;
-	}
 	.ag__axis {
 		display: inline-flex;
 		border: 1px solid #c9d4dc;
 		border-radius: 999px;
 		overflow: hidden;
+		/* Sit at the far end of the shared controls row, apart from the series chips. */
+		margin-left: auto;
 	}
 	.ag__axis-btn {
 		font-family: 'Instrument Sans', Arial, sans-serif;
@@ -469,6 +461,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 	.ag__series {
 		display: flex;
 		flex-wrap: wrap;
+		align-items: center;
 		gap: 0.4rem;
 		margin-bottom: 0.5rem;
 	}
