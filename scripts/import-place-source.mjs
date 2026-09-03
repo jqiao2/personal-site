@@ -52,6 +52,11 @@ const BOXES = {
 	// The five boroughs with a margin, which also catches the near edge of
 	// Yonkers and Jersey City — where a few places on the list actually are.
 	nyc: [-74.30, 40.47, -73.68, 40.94],
+	// Cities lived in, imported so a backfill from another app finds its places
+	// here rather than adding them by hand. Metro-wide, not just the core:
+	// La Jolla to Chula Vista; Seattle across the water to the Eastside.
+	'san-diego': [-117.32, 32.53, -116.85, 33.12],
+	seattle: [-122.47, 47.40, -122.10, 47.78],
 };
 
 function box(name) {
