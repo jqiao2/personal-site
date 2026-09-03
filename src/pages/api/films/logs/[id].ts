@@ -6,7 +6,8 @@ import { json, apiError } from '../../../../lib/http';
 
 export const prerender = false;
 
-// PATCH /api/films/logs/123  (owner) — edit rating/review/date/flags/medium/tags/friends.
+// PATCH /api/films/logs/123  (owner) — edit rating/review/private note/date/flags/
+//                                       medium/tags/friends.
 // DELETE /api/films/logs/123 (owner) — soft-delete (sets deleted_at).
 
 export const PATCH: APIRoute = async ({ params, request, cookies }) => {
@@ -31,6 +32,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 		input.rating = rating;
 	}
 	if ('reviewText' in body) input.reviewText = textOrNull(body.reviewText);
+	if ('privateNote' in body) input.privateNote = textOrNull(body.privateNote);
 	if ('watchedDate' in body) input.watchedDate = dateOrNull(body.watchedDate);
 	if ('rewatched' in body) input.rewatched = Boolean(body.rewatched);
 	if ('liked' in body) input.liked = Boolean(body.liked);

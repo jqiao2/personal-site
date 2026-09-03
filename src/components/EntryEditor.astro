@@ -236,6 +236,19 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				<div>
 					<label class="lbl" for="ee-review">Review</label>
 					<textarea id="ee-review" rows="4" placeholder="Add your thoughts…"></textarea>
+					{/* The private note is a disclosure, not a field: the box is absent
+					    until this says the entry has something in it that isn't for the
+					    site. See the .privnote styles for why it looks the way it does. */}
+					<button
+						type="button"
+						class="privnote__toggle"
+						id="ee-private-toggle"
+						aria-expanded="false"
+						aria-controls="ee-private"
+					>
+						<span class="privnote__lock" aria-hidden="true">🔒</span>Private note
+					</button>
+					<textarea id="ee-private" class="privnote__box" rows="3" hidden></textarea>
 				</div>
 
 				<div class="chips-field">
@@ -393,6 +406,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 
 	#ee-q,
 	#ee-review,
+	#ee-private,
 	#ee-venue,
 	#ee-format,
 	#ee-other,
@@ -410,6 +424,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	}
 	#ee-q:focus,
 	#ee-review:focus,
+	#ee-private:focus,
 	#ee-venue:focus,
 	#ee-format:focus,
 	#ee-other:focus,
@@ -417,12 +432,64 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	#ee-friend-input:focus {
 		border-color: #d9b45a;
 	}
-	#ee-review {
+	#ee-review,
+	#ee-private {
 		padding: 12px 13px;
 		font-family: 'Newsreader', serif;
 		color: #f2e5cd;
 		line-height: 1.5;
 		resize: vertical;
+	}
+
+	/* THE PRIVATE NOTE, AND WHY IT LOOKS QUIETER THAN THE REVIEW ABOVE IT.
+	   Every other control in this modal lights up gold when it's on, because
+	   every other control describes something that will be published. This one
+	   is the opposite kind of switch, and a gold pill saying "Private note"
+	   would read as the loudest thing on the form. So: the pill stays outlined
+	   when open and only its lock warms up, and the box it reveals is DASHED —
+	   the same dashed edge the entry page draws the saved note in. Dashed is
+	   the whole vocabulary here; it means "this is not part of the page". */
+	.privnote__toggle {
+		margin-top: 10px;
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 12px;
+		font-weight: 600;
+		font-family: 'Archivo', sans-serif;
+		letter-spacing: 0.3px;
+		border-radius: 20px;
+		padding: 6px 13px;
+		cursor: pointer;
+		background: transparent;
+		color: #8a6f63;
+		border: 1px dashed #4a2529;
+	}
+	.privnote__toggle:hover,
+	.privnote__toggle:focus-visible {
+		color: #ddc9b4;
+		border-color: #6b3a3f;
+		outline: none;
+	}
+	.privnote__lock {
+		font-size: 11px;
+		filter: grayscale(1);
+		opacity: 0.75;
+	}
+	.privnote__toggle[aria-expanded='true'] {
+		color: #ddc9b4;
+		border-color: #6b3a3f;
+	}
+	.privnote__toggle[aria-expanded='true'] .privnote__lock {
+		filter: none;
+		opacity: 1;
+	}
+	.privnote__box {
+		margin-top: 8px;
+		border-style: dashed !important;
+	}
+	.privnote__box[hidden] {
+		display: none;
 	}
 
 	/* Date button + calendar popover */
@@ -985,6 +1052,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			venue: string;
 			format: string;
 			review: string;
+			privateNote: string;
 			tags: string[];
 			friends: string[];
 		}
@@ -1041,6 +1109,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		const calNext = $('ee-cal-next');
 
 		const reviewInput = $<HTMLTextAreaElement>('ee-review');
+		const privateInput = $<HTMLTextAreaElement>('ee-private');
+		const privateToggle = $<HTMLButtonElement>('ee-private-toggle');
 		const likeBtn = $<HTMLButtonElement>('ee-like');
 		const rewatchBtn = $<HTMLButtonElement>('ee-rewatch');
 		// The shared half-star picker (see StarPicker.astro). It owns its own
@@ -1501,6 +1571,27 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			(f) => `Remove ${f}`,
 		);
 
+		// ---- Private note ----
+		// Open/closed is derived from the text, never stored separately: an entry
+		// with a note always opens showing it, and a closed box is always empty.
+		// That is what keeps "hidden" from meaning "still saved but invisible" —
+		// there is no state in which the form holds a note you can't see.
+		function showPrivate(on: boolean) {
+			privateInput.hidden = !on;
+			privateToggle.setAttribute('aria-expanded', String(on));
+		}
+		privateToggle.addEventListener('click', () => {
+			if (privateInput.hidden) {
+				showPrivate(true);
+				privateInput.focus();
+				return;
+			}
+			// Closing discards, so say so — the only destructive thing this button does.
+			if (privateInput.value.trim() && !window.confirm('Discard the private note?')) return;
+			privateInput.value = '';
+			showPrivate(false);
+		});
+
 		// ---- Mode presentation (select ⇄ log ⇄ edit) ----
 		function renderMode() {
 			const select = mode === 'select';
@@ -1530,6 +1621,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				venue: medium === 'theater' ? venueInput.value.trim() : '',
 				format: medium === 'theater' ? formatInput.value.trim() : '',
 				review: reviewInput.value.trim(),
+				privateNote: privateInput.value.trim(),
 				tags: [...tagField.get()].sort(),
 				friends: [...friendField.get()].sort(),
 			});
@@ -1555,6 +1647,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			formatInput.value = init?.format ?? '';
 			otherInput.value = init?.otherMedium ?? '';
 			reviewInput.value = init?.review ?? '';
+			privateInput.value = init?.privateNote ?? '';
+			showPrivate(privateInput.value.length > 0);
 			tagInput.value = '';
 			friendInput.value = '';
 
@@ -1647,6 +1741,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			loggedDate: localDay(),
 			rating,
 			reviewText: reviewInput.value,
+			privateNote: privateInput.value,
 			rewatched: rewatch,
 			liked,
 			tags: tagField.get(),

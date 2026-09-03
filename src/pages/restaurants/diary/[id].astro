@@ -25,10 +25,11 @@ export const prerender = false;
 const id = Number(Astro.params.id);
 if (!Number.isInteger(id) || id <= 0) return Astro.redirect('/restaurants/diary');
 
-const visit = await getVisit(id);
-if (!visit) return new Response('Not found', { status: 404 });
-
+// Owner first: it decides whether getVisit fetches the private note off the base
+// table at all, so a visitor's `visit` never carries the text.
 const isOwner = await requireOwner(Astro.cookies);
+const visit = await getVisit(id, isOwner);
+if (!visit) return new Response('Not found', { status: 404 });
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 const pinned = isOwner ? await isPinned('meal', visit.id) : false;
 
@@ -79,6 +80,17 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 							{paragraphs.map((p) => (
 								<p class="rl-prose">{p}</p>
 							))}
+						</div>
+					)
+				}
+
+				{
+					visit.private_note && (
+						<div class="entry__private">
+							<div class="entry__private-label">
+								<span aria-hidden="true">🔒</span>Private note
+							</div>
+							<p class="rl-prose">{visit.private_note}</p>
 						</div>
 					)
 				}
@@ -159,6 +171,7 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 					revisit: visit.revisit,
 					friends: visit.friends,
 					review: visit.review ?? '',
+					privateNote: visit.private_note ?? '',
 					tags: visit.tags,
 				}}
 				photos={visit.photos.map((p) => ({ id: p.id, url: p.url }))}
@@ -228,6 +241,30 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 	}
 	.entry__review p + p {
 		color: var(--ink-soft);
+	}
+
+	.entry__private {
+		max-width: 660px;
+		margin-top: 20px;
+		padding: 12px 15px;
+		border: 1px dashed var(--dashed);
+		border-radius: 8px;
+	}
+	.entry__private-label {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 10.5px;
+		font-weight: 700;
+		letter-spacing: 1.5px;
+		text-transform: uppercase;
+		color: var(--ink-3);
+		margin-bottom: 8px;
+	}
+	.entry__private .rl-prose {
+		margin: 0;
+		color: var(--ink-soft);
+		white-space: pre-wrap;
 	}
 
 	.entry__tags {

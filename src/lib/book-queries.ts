@@ -53,6 +53,19 @@ export const TONES = [
  */
 export const VOCABULARY: string[] = [...PACING, ...FOCUS, ...MOODS, ...TONES];
 
+/** A PostgREST error that means "that column isn't there" — an environment
+ *  behind on a migration, not a real failure. Same test films.ts uses. */
+function isMissingColumn(err: { code?: string; message?: string } | null): boolean {
+	if (!err) return false;
+	const msg = (err.message ?? '').toLowerCase();
+	return (
+		err.code === '42703' ||
+		err.code === 'PGRST204' ||
+		(msg.includes('column') && msg.includes('does not exist')) ||
+		msg.includes('schema cache')
+	);
+}
+
 export interface BookRow {
 	id: number;
 	md5: string | null;
@@ -117,6 +130,9 @@ export interface ReviewRow {
 	loved: boolean;
 	gave_up: boolean;
 	review_text: string | null;
+	/** Owner-only note, or null. Null for BOTH "no note" and "not the owner":
+	 *  getBookReviews doesn't select the column unless asked to. */
+	private_note: string | null;
 	pacing: string | null;
 	focus: string | null;
 	moods: string[];
@@ -212,21 +228,45 @@ export async function getBookHours(bookId: number): Promise<BookHours> {
 	return { hours };
 }
 
-/** Reviews for a book, newest read first. */
-export async function getBookReviews(bookId: number): Promise<ReviewRow[]> {
+/**
+ * Reviews for a book, newest read first.
+ *
+ * `includePrivate` is the owner check, defaulting to false so a caller that
+ * forgets it never selects the private note at all — the text doesn't reach the
+ * process, so no template below can leak it. Pass `await requireOwner(cookies)`.
+ */
+export async function getBookReviews(
+	bookId: number,
+	includePrivate = false,
+): Promise<ReviewRow[]> {
+	const columns =
+		'id, read_from, read_to, rating, loved, gave_up, review_text, ' +
+		(includePrivate ? 'private_note, ' : '') +
+		'pacing, focus, moods, tones';
 	const { data, error } = await supabaseAdmin
 		.from('book_reviews')
-		.select('id, read_from, read_to, rating, loved, gave_up, review_text, pacing, focus, moods, tones')
+		.select(columns)
 		.eq('book_id', bookId)
 		.order('read_to', { ascending: false });
+	// An environment behind on 0053 has no private_note column; degrade to the
+	// review without it rather than 500ing the whole page on the owner.
+	if (error && includePrivate && isMissingColumn(error)) {
+		return getBookReviews(bookId, false);
+	}
 	if (error) throw new Error(`book reviews query failed: ${error.message}`);
 
-	return (data ?? []).map((r) => ({
-		...(r as unknown as ReviewRow),
-		rating: r.rating == null ? null : Number(r.rating),
-		moods: (r.moods as string[]) ?? [],
-		tones: (r.tones as string[]) ?? [],
-	}));
+	return (data ?? []).map((raw) => {
+		// The dynamic column string makes PostgREST's types give up, so pin the
+		// row shape once here rather than casting at every field.
+		const r = raw as unknown as ReviewRow;
+		return {
+			...r,
+			rating: r.rating == null ? null : Number(r.rating),
+			private_note: r.private_note ?? null,
+			moods: r.moods ?? [],
+			tones: r.tones ?? [],
+		};
+	});
 }
 
 /** Highlights in page order. Empty until the KOReader plugin starts sending them. */
@@ -270,6 +310,7 @@ export interface ReviewInput {
 	loved: boolean;
 	gave_up: boolean;
 	review_text: string | null;
+	private_note: string | null;
 	pacing: string | null;
 	focus: string | null;
 	moods: string[];
