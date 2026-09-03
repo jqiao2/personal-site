@@ -128,10 +128,22 @@ sparkline and current value, and Power-to-weight, now come from the scale
 (older W/kg falls back to the threshold row's own `weight_kg` for dates before
 the scale was syncing). Weight is gone from the thresholds form/table.
 
-**Backfill** the whole Apple Health history in one POST: a Shortcut that gets
-*all* Body Mass samples (not just the latest) and posts them as an array. The
-endpoint takes one reading or a batch through the same path; the daily
-automation is just a batch of one.
+**Backfill** the whole Apple Health history with `scripts/import-weights.mjs`.
+Shortcuts can't easily build an array of `{weight, date}` (a bare "Get Numbers"
+drops the dates), so the one-time history load runs locally off the Health
+export instead:
+
+```
+# Health app → profile → Export All Health Data → unzip → export.xml
+node --import ./scripts/ts-hook.mjs --env-file=.env \
+  scripts/import-weights.mjs <path-to-export.xml> [--dry]
+```
+
+It streams the `HKQuantityTypeIdentifierBodyMass` records (the file is hundreds
+of MB and never leaves the machine), runs them through the same `parseWeighIns`
++ `flagOutliers` as the endpoint, and upserts — idempotent, so a re-run
+resumes. The endpoint still takes a batch too (an array or `{weights:[…]}`),
+for anything that can build one; the daily automation is just a batch of one.
 
 **Outlier guard.** A scale mis-read (a foot half-off, a bag on the platform)
 lands wildly off the trend. `flagOutliers` marks any reading more than 10%
