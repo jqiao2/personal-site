@@ -950,11 +950,14 @@ export interface WeighIn {
 	weight_kg: number;
 }
 
-/** Every weigh-in, oldest first — what the athlete page's weight graph plots. */
+/** Accepted weigh-ins, oldest first — what the athlete page's weight graph
+ *  plots and what the outlier guard measures new readings against. Rows flagged
+ *  `ignored` (a likely scale mis-read, migration 0060) are left out of both. */
 export async function listWeighIns(): Promise<WeighIn[]> {
 	const { data, error } = await supabaseAdmin
 		.from('body_weight')
 		.select('measured_on, weight_kg')
+		.eq('ignored', false)
 		.order('measured_on', { ascending: true });
 	if (error) {
 		if (isDegraded(error)) return [];
@@ -963,13 +966,24 @@ export async function listWeighIns(): Promise<WeighIn[]> {
 	return (data ?? []) as WeighIn[];
 }
 
-/** Upsert one day's weight. The scale can fire twice in a morning and a sync
- *  can resend; both resolve to the last value for that day. */
-export async function upsertWeighIn(measured_on: string, weight_kg: number, source: string): Promise<void> {
+/** Upsert weigh-ins, one row per day. Takes a batch so a backfill of Apple
+ *  Health history is one statement, not one request per day; the live daily
+ *  sync just passes a batch of one. Rows must already be deduped by day
+ *  (parseWeighIns does it) — Postgres refuses the same conflict key twice in
+ *  one upsert. Returns how many days were written. */
+export async function upsertWeighIns(
+	rows: { measured_on: string; weight_kg: number; source: string; ignored: boolean }[],
+): Promise<number> {
+	if (rows.length === 0) return 0;
+	const updated_at = new Date().toISOString();
 	const { error } = await supabaseAdmin
 		.from('body_weight')
-		.upsert({ measured_on, weight_kg, source, updated_at: new Date().toISOString() }, { onConflict: 'measured_on' });
-	if (error) throw new Error(`upsertWeighIn failed: ${error.message}`);
+		.upsert(
+			rows.map((r) => ({ ...r, updated_at })),
+			{ onConflict: 'measured_on' },
+		);
+	if (error) throw new Error(`upsertWeighIns failed: ${error.message}`);
+	return rows.length;
 }
 
 // ---------------------------------------------------------------------------

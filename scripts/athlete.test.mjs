@@ -13,6 +13,8 @@ import {
 	weightSeries,
 	weightKgOn,
 	wPerKgSeries,
+	parseWeighIns,
+	flagOutliers,
 	KM_PER_MILE,
 	LB_PER_KG,
 } from '../src/lib/athlete.ts';
@@ -117,5 +119,109 @@ assert.deepEqual(
 	],
 	'oldest first; weigh-in where present, row weight before the scale',
 );
+
+// --- parseWeighIns: the ingest edge (single + backfill batch) -------------
+const TODAY = '2026-09-03';
+
+// unit defaults to lb; kg conversion is the same LB_PER_KG the display uses.
+{
+	const r = parseWeighIns([{ weight: 165.2, date: '2026-09-01' }], TODAY);
+	assert.ok('rows' in r);
+	assert.equal(r.rows.length, 1);
+	assert.equal(r.rows[0].measured_on, '2026-09-01');
+	assert.ok(Math.abs(r.rows[0].weight_kg - 165.2 / LB_PER_KG) < 1e-9, 'lb → kg');
+	assert.equal(r.rows[0].source, 'apple_health');
+}
+
+// explicit kg is taken as-is; a dateless item falls to `today`.
+{
+	const r = parseWeighIns([{ weight: 72.5, unit: 'kg' }], TODAY);
+	assert.ok('rows' in r);
+	assert.equal(r.rows[0].weight_kg, 72.5);
+	assert.equal(r.rows[0].measured_on, TODAY, 'no date → today');
+}
+
+// A full Health timestamp collapses to its day.
+assert.equal(
+	parseWeighIns([{ weight: 70, unit: 'kg', date: '2024-03-15 07:30:00 -0700' }], TODAY).rows[0].measured_on,
+	'2024-03-15',
+);
+
+// Backfill batch: one row per day, last item for a day wins (the table's key
+// is the day, and Postgres refuses the same conflict key twice per upsert).
+{
+	const r = parseWeighIns(
+		[
+			{ weight: 165, unit: 'lb', date: '2026-08-01' },
+			{ weight: 164, unit: 'lb', date: '2026-08-02' },
+			{ weight: 163.5, unit: 'lb', date: '2026-08-02' }, // same day, later → wins
+		],
+		TODAY,
+	);
+	assert.ok('rows' in r);
+	assert.equal(r.rows.length, 2, 'two distinct days');
+	const aug2 = r.rows.find((x) => x.measured_on === '2026-08-02');
+	assert.ok(Math.abs(aug2.weight_kg - 163.5 / LB_PER_KG) < 1e-9, 'last reading for the day wins');
+}
+
+// Rejections stop the whole batch rather than drop a day silently.
+assert.ok('error' in parseWeighIns([], TODAY), 'empty batch is an error');
+assert.ok('error' in parseWeighIns([{ weight: 0, date: TODAY }], TODAY), 'non-positive weight');
+assert.ok('error' in parseWeighIns([{ weight: 165, unit: 'stone', date: TODAY }], TODAY), 'bad unit');
+assert.ok('error' in parseWeighIns([{ weight: 5, unit: 'kg', date: TODAY }], TODAY), 'below the range');
+assert.ok('error' in parseWeighIns([{ weight: 500, unit: 'kg', date: TODAY }], TODAY), 'above the range');
+assert.ok('error' in parseWeighIns([{ weight: 165, date: 'Sept 1' }], TODAY), 'unparseable date');
+
+// --- flagOutliers: the >10% scale-misread guard ---------------------------
+const kg = (lb) => lb / LB_PER_KG;
+const mk = (date, lb) => ({ measured_on: date, weight_kg: kg(lb), source: 'test' });
+
+// The first reading, with no accepted history, is always kept.
+assert.equal(flagOutliers([], [mk('2026-01-01', 165)])[0].ignored, false, 'nothing to judge against');
+
+// Within 10% of the last accepted → kept; a wild reading → ignored, and it
+// does NOT poison the baseline for the reading after it.
+{
+	const accepted = [{ measured_on: '2026-01-01', weight_kg: kg(165) }];
+	const flagged = flagOutliers(accepted, [
+		mk('2026-01-02', 167), // +1.2% → kept
+		mk('2026-01-03', 210), // +27% off 167 → ignored (bag on the scale)
+		mk('2026-01-04', 166), // judged vs 167 (last ACCEPTED), not 210 → kept
+	]);
+	assert.deepEqual(
+		flagged.map((r) => [r.measured_on, r.ignored]),
+		[
+			['2026-01-02', false],
+			['2026-01-03', true],
+			['2026-01-04', false],
+		],
+		'an ignored spike never becomes the baseline',
+	);
+}
+
+// Exactly 10% is within tolerance (strictly greater is the cutoff).
+assert.equal(
+	flagOutliers([{ measured_on: '2026-02-01', weight_kg: 100 }], [{ measured_on: '2026-02-02', weight_kg: 110, source: 't' }])[0]
+		.ignored,
+	false,
+	'10% exactly is kept',
+);
+assert.equal(
+	flagOutliers([{ measured_on: '2026-02-01', weight_kg: 100 }], [{ measured_on: '2026-02-02', weight_kg: 111, source: 't' }])[0]
+		.ignored,
+	true,
+	'just over 10% is ignored',
+);
+
+// A re-measure of an existing day is judged against the PRIOR day, not its own
+// stale value: 165 → (re-measure 2026-01-01 as 200) has no prior, so kept.
+{
+	const accepted = [
+		{ measured_on: '2026-03-01', weight_kg: kg(165) },
+		{ measured_on: '2026-03-02', weight_kg: kg(166) },
+	];
+	const flagged = flagOutliers(accepted, [mk('2026-03-02', 190)]); // vs 2026-03-01's 165 → +15% → ignored
+	assert.equal(flagged[0].ignored, true, 're-measure judged against the prior day');
+}
 
 console.log('athlete.test.mjs: ok');
