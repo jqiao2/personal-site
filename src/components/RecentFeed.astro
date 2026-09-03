@@ -1,12 +1,16 @@
 ---
 // Server island: the cross-section home feed. Rendered on its own request
 // (server:defer on the homepage) so the static shell ships instantly and these
-// rows stream in after. recentJournal already reduces the four tracks to what a
-// visitor may see (see its header), so nothing here can leak a private row.
+// rows stream in after. recentJournal reduces the four tracks to what the
+// caller is allowed to see (see its header), so nothing here can leak a private
+// row to a visitor.
 import { recentJournal, TRACK_TAG } from '../lib/recent-journal';
 import { formatWatchedDate } from '../lib/format';
+import { requireOwner } from '../lib/auth';
 
-const recent = await recentJournal(15);
+// The island is its own request, so it does its own owner check rather than
+// trusting a prop from the page. Signed in, private activities join the feed.
+const recent = await recentJournal(15, await requireOwner(Astro.cookies));
 ---
 
 {
