@@ -112,15 +112,33 @@ machine-to-machine shape as the KOReader reading sync: a static bearer token
 ```
 POST /api/activities/weight
 Authorization: Bearer $WEIGHT_SYNC_TOKEN
-{ "weight": 165.2, "unit": "lb", "date": "2026-09-03" }
+{ "weight": 165.2, "unit": "lb", "date": "2026-09-03" }   # one reading
+[ { "weight": 165, "date": "2026-08-01" }, … ]            # a batch (backfill)
+{ "weights": [ … ] }                                      # the same, named
 ```
 
 `unit` defaults to `lb` (US-locale Health samples come through in pounds);
 `date` defaults to today in UTC, so the Shortcut should send the device-local
-date. Stored in kg. `/activities/athlete` reads the series with `listWeighIns()`
-— the Weight sparkline and current value, and Power-to-weight, now come from the
-scale (older W/kg falls back to the threshold row's own `weight_kg` for dates
-before the scale was syncing). Weight is gone from the thresholds form/table.
+date (a full Health timestamp is fine — it's reduced to its day). Stored in kg.
+Validation, kg conversion and the one-row-per-day rule live in `parseWeighIns`
+(`src/lib/athlete.ts`), tested in `scripts/athlete.test.mjs`.
+
+`/activities/athlete` reads the series with `listWeighIns()` — the Weight
+sparkline and current value, and Power-to-weight, now come from the scale
+(older W/kg falls back to the threshold row's own `weight_kg` for dates before
+the scale was syncing). Weight is gone from the thresholds form/table.
+
+**Backfill** the whole Apple Health history in one POST: a Shortcut that gets
+*all* Body Mass samples (not just the latest) and posts them as an array. The
+endpoint takes one reading or a batch through the same path; the daily
+automation is just a batch of one.
+
+**Outlier guard.** A scale mis-read (a foot half-off, a bag on the platform)
+lands wildly off the trend. `flagOutliers` marks any reading more than 10%
+(`OUTLIER_FRACTION`) from the last *accepted* weight as `ignored` — stored, but
+kept out of the series, the current value, and the baseline the next reading is
+judged against (so one spike can't cascade). The response reports how many were
+flagged: `{ ok, count, ignored }`.
 
 **One-time setup** (on the owner):
 
@@ -784,6 +802,7 @@ Daily weigh-ins from the smart scale — a time series, separate from
 measured_on  date primary key,   -- one canonical weight per day, upsert
 weight_kg    double precision not null check (> 20 and < 300),
 source       text not null default 'apple_health',
+ignored      boolean not null default false,  -- >10% off the last accepted → scale mis-read (0060)
 created_at / updated_at
 ```
 

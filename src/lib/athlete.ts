@@ -165,6 +165,102 @@ export const METRICS: Metric[] = [
 	},
 ];
 
+// ---------------------------------------------------------------------------
+// Weigh-in ingest — the pure edge of POST /api/activities/weight. Kept here,
+// beside LB_PER_KG and the display helpers, so the unit conversion and the
+// one-row-per-day rule are decided in one tested place rather than in the route.
+// ---------------------------------------------------------------------------
+
+export interface WeighInInput {
+	weight?: unknown;
+	unit?: unknown;
+	date?: unknown;
+	source?: unknown;
+}
+
+export interface WeighInRow {
+	measured_on: string;
+	weight_kg: number;
+	source: string;
+}
+
+/** How far a reading may sit from the last accepted weight before the ingest
+ *  treats it as a scale mis-read. 10% is generous — real day-to-day swing is a
+ *  percent or two — so this only catches gross errors, not a heavy meal. */
+export const OUTLIER_FRACTION = 0.1;
+
+/** Validate and normalise a batch of weigh-ins (one item is just a batch of
+ *  one). Converts to kg, defaults unit to lb and source to apple_health, and
+ *  collapses to one row per calendar day — a backfill often carries two
+ *  readings on a day, and body_weight's primary key is the day, so the last
+ *  item for a day wins (Postgres also refuses to upsert the same key twice in
+ *  one statement). Returns the first problem rather than a partial write, so a
+ *  malformed sample can't quietly drop a day. `today` is injected for the rare
+ *  dateless item, so the function stays pure and testable. */
+export function parseWeighIns(items: WeighInInput[], today: string): { rows: WeighInRow[] } | { error: string } {
+	if (items.length === 0) return { error: 'no weigh-ins in the request' };
+	const byDay = new Map<string, WeighInRow>();
+	for (let i = 0; i < items.length; i++) {
+		const it = items[i];
+		const w = Number(it.weight);
+		if (!Number.isFinite(w) || w <= 0) return { error: `item ${i}: weight must be a positive number` };
+		const unit = it.unit ?? 'lb';
+		if (unit !== 'lb' && unit !== 'kg') return { error: `item ${i}: unit must be 'lb' or 'kg'` };
+		const weight_kg = unit === 'lb' ? w / LB_PER_KG : w;
+		// The scale can't read a person outside this band; anything here is a
+		// unit slip, and the DB's own check would reject it.
+		if (weight_kg < 20 || weight_kg > 300) return { error: `item ${i}: weight out of range — check the unit` };
+		// A full Health timestamp ("2024-03-15 07:30:00 -0700") reduces to its
+		// day; the Shortcut should format that in device-local time so a
+		// late-night weigh-in lands on the right date.
+		const measured_on = (it.date == null ? today : String(it.date).trim()).slice(0, 10);
+		if (!/^\d{4}-\d{2}-\d{2}$/.test(measured_on)) return { error: `item ${i}: date must be YYYY-MM-DD` };
+		byDay.set(measured_on, {
+			measured_on,
+			weight_kg,
+			source: typeof it.source === 'string' ? it.source : 'apple_health',
+		});
+	}
+	return { rows: [...byDay.values()] };
+}
+
+/** Decide `ignored` for each incoming weigh-in: true when it sits more than
+ *  OUTLIER_FRACTION from the last ACCEPTED weight before its date. `accepted`
+ *  is the weigh-ins already trusted (listWeighIns returns only those); walked
+ *  in date order together with the incoming rows so a backfill judges each day
+ *  against the running accepted baseline — and an accepted incoming reading
+ *  becomes the baseline for the next, while an ignored one never does.
+ *
+ *  A day being re-measured is compared against the PRIOR day, not its own old
+ *  value, so its existing accepted row is dropped from the baseline first. The
+ *  first-ever reading has nothing to judge against and is always accepted. */
+export function flagOutliers(
+	accepted: WeighIn[],
+	incoming: WeighInRow[],
+	fraction: number = OUTLIER_FRACTION,
+): (WeighInRow & { ignored: boolean })[] {
+	const incomingDates = new Set(incoming.map((r) => r.measured_on));
+	const stream = [
+		...accepted
+			.filter((a) => !incomingDates.has(a.measured_on))
+			.map((a) => ({ date: a.measured_on, kg: a.weight_kg, row: null as WeighInRow | null })),
+		...incoming.map((r) => ({ date: r.measured_on, kg: r.weight_kg, row: r })),
+	].sort((a, b) => a.date.localeCompare(b.date));
+
+	let lastKg: number | null = null;
+	const out: (WeighInRow & { ignored: boolean })[] = [];
+	for (const pt of stream) {
+		if (!pt.row) {
+			lastKg = pt.kg; // an already-accepted baseline
+			continue;
+		}
+		const ignored = lastKg != null && Math.abs(pt.kg - lastKg) / lastKg > fraction;
+		out.push({ ...pt.row, ignored });
+		if (!ignored) lastKg = pt.kg;
+	}
+	return out;
+}
+
 /** One metric's history, oldest first, nulls dropped — what the graph plots
  *  and what the "since" arrow is computed from. */
 export interface Series {
