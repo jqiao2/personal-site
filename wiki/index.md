@@ -16,3 +16,4 @@ add or update a pattern.
 | [0008](patterns/0008-gazetteer-only-had-dohmh.md) | The place gazetteer only ever had one of its four sources | failure-mode | a known restaurant is missing from suggestions, a suggestion is ALL CAPS, or co-located venues collapse into one |
 | [0009](patterns/0009-beli-export-import.md) | Getting a Beli account's lists out, and into the log | strategy | exporting Beli data, or talking to a reverse-engineered app backend behind a bot gate |
 | [0010](patterns/0010-astro-check-fails-in-worktrees.md) | Dev server/`astro check` fail in a worktree when MAIN has no `node_modules` | failure-mode | dev server or `astro sync` dies with "Tsconfig not found astro/tsconfigs/strict" in a `.claude/worktrees/*` checkout |
+| [0011](patterns/0011-applying-a-migration-without-the-cli.md) | Applying a migration when there is no linked Supabase project | strategy | a migration must reach the live DB and `supabase link`/`db push` isn't available |
