@@ -47,16 +47,18 @@ function isMissingCreditColumn(err: { code?: string; message?: string } | null):
 async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const d = await getMovieDetails(tmdbId);
 	const facts = extractCreditFacts(d);
-	// The film's first US opening rather than TMDB's top-level release_date (which
-	// follows re-releases), with the year derived from that same date so the year and
-	// the full date can't disagree (a foreign premiere and the US run can straddle a
-	// New Year).
+	// Two dates, two jobs. `release_date` is the first US opening (preferredReleaseDate,
+	// which ignores re-releases) — the availability date the Watchlist's upcoming badge
+	// needs. `release_year` is the widely-accepted release year, taken from the premiere
+	// (earliest release anywhere) — the year the site sorts and displays by, and the same
+	// year YTS files a film under. The two can straddle a New Year; that's intended.
 	const releasedOn = preferredReleaseDate(d);
+	const premieredOn = premiereDate(d);
 	const now = new Date().toISOString();
 	const base = {
 		tmdb_id: d.id,
 		title: d.title,
-		release_year: releaseYear(releasedOn),
+		release_year: releaseYear(premieredOn),
 		poster_path: d.poster_path,
 		backdrop_path: d.backdrop_path,
 		overview: d.overview,
@@ -72,7 +74,7 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const withFacts = {
 		...base,
 		release_date: releasedOn,
-		premiere_date: premiereDate(d),
+		premiere_date: premieredOn,
 		genres: facts.genres,
 		languages: facts.languages,
 		countries: facts.countries,

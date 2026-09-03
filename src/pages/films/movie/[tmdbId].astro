@@ -79,9 +79,11 @@ const country = movie.countries[0] ?? null;
 const mpaRating = movie.mpa_rating;
 // The release date · runtime · country row, with only the facts we actually have.
 // The full date earns its place here because the title only carries the year;
-// original_language is still cached, it just isn't part of this row.
+// original_language is still cached, it just isn't part of this row. Shown as the
+// premiere date (earliest release anywhere), matching the year beside the title — the
+// US opening (release_date) is reserved for the Watchlist's "Out …" badge.
 const metaItems = [
-	formatWatchedDate(movie.release_date),
+	formatWatchedDate(movie.premiere_date),
 	formatRuntime(runtime),
 	country,
 ].filter(Boolean) as string[];

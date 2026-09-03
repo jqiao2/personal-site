@@ -231,7 +231,6 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 							data-order={i}
 							data-title={f.title.toLowerCase()}
 							data-year={f.release_year ?? ''}
-							data-release-date={f.release_date ?? ''}
 							data-upcoming={upcoming ? '1' : ''}
 						>
 							{isOwner && (
@@ -1273,13 +1272,12 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 
 			const items: Item[] = Array.from(grid.querySelectorAll<HTMLElement>('.item')).map((el) => {
 				const year = el.dataset.year ? Number(el.dataset.year) : null;
-				const releaseDate = el.dataset.releaseDate ?? '';
 				return {
 					el,
 					tmdbId: Number(el.dataset.tmdbId),
 					title: el.dataset.title ?? '',
 					year,
-					releaseKey: releaseDate || (year != null ? `${year}-00-00` : null),
+					releaseKey: year != null ? String(year) : null,
 					genres: [],
 					directors: [],
 					actors: [],
@@ -1371,10 +1369,10 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 
 				const ordered = visible.slice();
 				if (sort === 'shuffle') ordered.sort((a, b) => shuffleRank(a) - shuffleRank(b));
-				// Newest release first, by full date — a year alone can't tell a film out
-				// next week from one out in December. Films TMDB has no date for fall back
-				// to their year; films with neither go last, rather than sorting as year 0
-				// and burying the top of the list. Ties keep added_at order (stable sort).
+				// Newest release first, by the widely-accepted release year (the premiere
+				// year the tile displays), not the US opening date. Films TMDB has no year
+				// for go last, rather than sorting as year 0 and burying the top of the
+				// list. Ties keep added_at order (stable sort).
 				else if (sort === 'year') {
 					ordered.sort((a, b) => {
 						if (a.releaseKey == null || b.releaseKey == null) {
