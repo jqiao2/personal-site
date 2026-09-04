@@ -1,144 +1,19 @@
 ---
-// Every month that has anything in it, newest first — the index the combined
-// card steps through. Same role restaurants/month/index.astro and
-// activities/month/index.astro play for their sections.
-import JournalLayout from '../../layouts/JournalLayout.astro';
-import { listJournalMonths } from '../../lib/journal-months';
-import { TRACKS } from '../../lib/journal-month';
-import { monthLabel } from '../../lib/share-card';
+// No listing of its own — /month opens on the month it is now, and the picker
+// on /month/[month] steps to any other. Same role /films/month/index.astro and
+// /books/month/index.astro play: a request-time redirect, so the Journal nav
+// tab and the home-feed link can stay pointed at the stable /month while still
+// landing on the current month (a build-time hardcode would freeze to the
+// month the prerendered pages were built in).
+import { siteDay } from '../../lib/day';
 import { requireOwner } from '../../lib/auth';
 
 export const prerender = false;
 
-// OWNER ONLY — the index alone discloses which months have entries, and it
-// links to pages that are owner-gated anyway. See /month/[month].astro.
+// OWNER ONLY — the month in review is owner-gated at the destination anyway.
 if (!(await requireOwner(Astro.cookies))) {
 	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
 }
 
-const months = await listJournalMonths();
-const years = [...new Set(months.map((m) => m.key.slice(0, 4)))];
-const trackLabel = Object.fromEntries(TRACKS.map((t) => [t.id, t.label]));
+return Astro.redirect(`/month/${siteDay().slice(0, 7)}`, 302);
 ---
-
-<JournalLayout title="The month in review">
-	<div class="j-page">
-		<div class="head">
-			<div>
-				<a class="j-back" href="/projects">&larr; Projects</a>
-				<div class="head__title">The month in review</div>
-			</div>
-			<span class="count">{months.length} month{months.length === 1 ? '' : 's'}</span>
-		</div>
-
-		{
-			months.length === 0 ? (
-				<p class="empty">Nothing logged yet. One card per month, once a month has something in it.</p>
-			) : (
-				years.map((year) => (
-					<section class="year">
-						<div class="year__head">{year}</div>
-						<div class="grid">
-							{months
-								.filter((m) => m.key.startsWith(year))
-								.map((m) => (
-									<a class="mcard" href={`/month/${m.key}`}>
-										<div class="mcard__name">{monthLabel(m.key).split(' ')[0]}</div>
-										{/* Which tracks the month holds, as four dots — the shape of
-										    the month before you open it. */}
-										<div class="mcard__dots">
-											{TRACKS.map((t) => (
-												<span
-													class:list={[`dot dot--${t.id}`, !m.tracks.includes(t.id) && 'dot--off']}
-													title={trackLabel[t.id]}
-												/>
-											))}
-										</div>
-									</a>
-								))}
-						</div>
-					</section>
-				))
-			)
-		}
-	</div>
-</JournalLayout>
-
-<style>
-	.head {
-		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 16px;
-	}
-	.head__title {
-		margin-top: 4px;
-		font-family: var(--prose);
-		font-size: 27px;
-	}
-	.count {
-		font-size: 12.5px;
-		color: var(--ink-3);
-	}
-	.empty {
-		margin-top: 24px;
-		color: var(--ink-2);
-	}
-	.year {
-		margin-top: 26px;
-	}
-	.year__head {
-		font-family: var(--mono);
-		font-size: 12px;
-		letter-spacing: 2px;
-		color: var(--ink-3);
-		border-bottom: 1px solid var(--rule-2);
-		padding-bottom: 6px;
-	}
-	.grid {
-		margin-top: 14px;
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-		gap: 12px;
-	}
-	.mcard {
-		background: var(--paper);
-		border: 1px solid var(--rule-2);
-		padding: 15px 16px 17px;
-		color: var(--ink);
-	}
-	.mcard:hover {
-		border-color: var(--ink-3);
-		color: var(--ink);
-	}
-	.mcard__name {
-		font-family: var(--prose);
-		font-size: 24px;
-		line-height: 1;
-	}
-	.mcard__dots {
-		margin-top: 12px;
-		display: flex;
-		gap: 6px;
-	}
-	.dot {
-		width: 9px;
-		height: 9px;
-		border-radius: 50%;
-	}
-	.dot--off {
-		background: var(--rule-3) !important;
-	}
-	.dot--film {
-		background: var(--film);
-	}
-	.dot--book {
-		background: var(--book);
-	}
-	.dot--meal {
-		background: var(--meal);
-	}
-	.dot--move {
-		background: var(--move);
-	}
-</style>

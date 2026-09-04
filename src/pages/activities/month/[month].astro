@@ -19,6 +19,7 @@
 // stroked route or a sport glyph + headline figure), and the four summary
 // figures.
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
+import MonthPicker from '../../../components/MonthPicker.astro';
 import { listActivitiesForMonth } from '../../../lib/activities';
 import { supabasePublic } from '../../../lib/supabase';
 import { siteDay } from '../../../lib/day';
@@ -38,7 +39,6 @@ import {
 	monthLabel,
 	monthQuery,
 	parseMonthKey,
-	shiftMonth,
 	summarise,
 	weekRows,
 } from '../../../lib/activity-month';
@@ -132,45 +132,14 @@ const clientData = JSON.stringify({
 
 			<!-- Controls: screen only, never part of the exported card. -->
 			<div class="controls">
-				<div class="stepper" data-picker>
-					<a
-						class="step"
-						href={`/activities/month/${shiftMonth(key, -1)}${query}`}
-						data-month-link={`/activities/month/${shiftMonth(key, -1)}`}
-						aria-label="Previous month">←</a
-					>
-					<button class="step step--month" type="button" data-picker-toggle>
-						<span>{label}</span><span class="step__caret">▾</span>
-					</button>
-					<a
-						class="step"
-						href={`/activities/month/${shiftMonth(key, 1)}${query}`}
-						data-month-link={`/activities/month/${shiftMonth(key, 1)}`}
-						aria-label="Next month">→</a
-					>
-
-					<div class="picker" hidden data-picker-panel>
-						<div class="picker__head">
-							<button type="button" data-picker-year="-1" aria-label="Previous year">←</button>
-							<span data-picker-label>{parsed.year}</span>
-							<button type="button" data-picker-year="1" aria-label="Next year">→</button>
-						</div>
-						<div class="picker__grid">
-							{
-								pickerMonths.map((m) => (
-									<a
-										class:list={['picker__month', m.current && 'is-on']}
-										href={`/activities/month/${m.key}${query}`}
-										data-picker-month
-									>
-										<span class="picker__abbr">{m.abbr}</span>
-										<span class="picker__count">{m.count}</span>
-									</a>
-								))
-							}
-						</div>
-					</div>
-				</div>
+				<MonthPicker
+					basePath="/activities/month"
+					monthKey={key}
+					label={label}
+					year={parsed.year}
+					query={query}
+					tiles={pickerMonths}
+				/>
 
 				<div class="aspects">
 					{
@@ -189,7 +158,12 @@ const clientData = JSON.stringify({
 
 				<div class="actions">
 					<button class="btn" type="button" data-copy>Copy link</button>
-					<button class="btn btn--primary" type="button" data-download>Download image</button>
+					<button
+						class="btn btn--primary"
+						type="button"
+						data-download
+						data-share-label="Save image"
+					>Download image</button>
 				</div>
 			</div>
 
@@ -384,6 +358,26 @@ const clientData = JSON.stringify({
 
 	/* ---- controls ---- */
 	.controls {
+		/* Skin for the shared <MonthPicker>: the activity card's alpine light. */
+		--mp-step-border: var(--scree);
+		--mp-step-bg: var(--snow);
+		--mp-step-fg: var(--granite);
+		--mp-step-hover-border: var(--lake);
+		--mp-step-hover-fg: var(--lake);
+		--mp-month-fg: var(--granite);
+		--mp-caret-fg: var(--granite);
+		--mp-panel-bg: var(--snow);
+		--mp-panel-border: var(--scree);
+		--mp-panel-shadow: 0 20px 44px -14px rgba(61, 74, 85, 0.28);
+		--mp-head-font: 'Instrument Serif', Georgia, serif;
+		--mp-head-fg: var(--granite);
+		--mp-tile-fg: var(--granite);
+		--mp-tile-hover-bg: var(--sky);
+		--mp-tile-hover-fg: var(--granite);
+		--mp-tile-on-fg: var(--lake);
+		--mp-tile-on-bg: var(--sky);
+		--mp-tile-on-border: var(--lake);
+		--mp-count-fg: var(--granite);
 		background: var(--snow);
 		border: 1px solid var(--scree);
 		border-radius: 12px;
@@ -393,110 +387,6 @@ const clientData = JSON.stringify({
 		gap: 26px;
 		flex-wrap: wrap;
 		margin-bottom: 30px;
-	}
-	.stepper {
-		position: relative;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-	.step {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 8px;
-		border: 1px solid var(--scree);
-		background: var(--snow);
-		color: var(--granite);
-		font-size: 14px;
-		font-family: inherit;
-		cursor: pointer;
-	}
-	.step:hover {
-		border-color: var(--lake);
-		color: var(--lake);
-	}
-	.step--month {
-		justify-content: space-between;
-		gap: 10px;
-		min-width: 168px;
-		width: auto;
-		padding: 0 12px;
-		color: var(--granite);
-		font-size: 13px;
-	}
-	.step__caret {
-		font-size: 9px;
-		opacity: 0.6;
-	}
-	.picker {
-		position: absolute;
-		left: 0;
-		top: calc(100% + 8px);
-		z-index: 40;
-		background: var(--snow);
-		border: 1px solid var(--scree);
-		border-radius: 10px;
-		padding: 12px;
-		width: 290px;
-		box-shadow: 0 20px 44px -14px rgba(61, 74, 85, 0.28);
-	}
-	.picker__head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 10px;
-		font-family: 'Instrument Serif', Georgia, serif;
-		font-size: 19px;
-		color: var(--granite);
-	}
-	.picker__head button {
-		width: 24px;
-		height: 24px;
-		border: none;
-		background: none;
-		color: var(--granite);
-		opacity: 0.6;
-		cursor: pointer;
-		font-size: 13px;
-	}
-	.picker__head button:hover {
-		opacity: 1;
-	}
-	.picker__grid {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 5px;
-	}
-	.picker__month {
-		display: block;
-		text-align: center;
-		padding: 8px 0;
-		border-radius: 7px;
-		border: 1px solid transparent;
-		color: var(--granite);
-	}
-	.picker__month:hover {
-		background: var(--sky);
-		color: var(--granite);
-	}
-	.picker__month.is-on {
-		color: var(--lake);
-		background: var(--sky);
-		border-color: var(--lake);
-	}
-	.picker__abbr {
-		display: block;
-		font-size: 12px;
-	}
-	.picker__count {
-		display: block;
-		font-size: 10px;
-		color: var(--granite);
-		opacity: 0.6;
-		margin-top: 2px;
 	}
 	.aspects {
 		display: flex;
@@ -831,6 +721,16 @@ const clientData = JSON.stringify({
 </style>
 
 <script>
+	import {
+		fitScaler,
+		makeToast,
+		wireHistoryReplace,
+		syncMonthLinks,
+		wirePicker,
+		wireCopy,
+		wireSave,
+	} from '../../../lib/month-card';
+
 	interface Geometry {
 		height: number;
 		cell: number;
@@ -856,59 +756,17 @@ const clientData = JSON.stringify({
 		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
 		const defaultSlug = data.slugs[Object.keys(data.geometry)[0]];
 
-		// ---- carry the settings across a month step ----
 		// Mirrors monthQuery() in activity-month.ts: the aspect lives in the URL
 		// so a copied link reproduces the card that was on screen.
 		function query(): string {
 			return data.slugs[aspect] !== defaultSlug ? `?fmt=${data.slugs[aspect]}` : '';
 		}
-		function syncLinks(): void {
-			const q = query();
-			for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-month-link]'))
-				link.href = `${link.dataset.monthLink}${q}`;
-			for (const tile of document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]'))
-				tile.href = `${tile.pathname}${q}`;
-			history.replaceState(null, '', `${location.pathname}${q}`);
-		}
 
-		// Stepping to another month replaces the history entry rather than
-		// stacking one per month — same reasoning as the film card.
-		for (const link of document.querySelectorAll<HTMLAnchorElement>(
-			'[data-month-link], [data-picker-month]',
-		)) {
-			link.addEventListener('click', (event) => {
-				if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-					return;
-				event.preventDefault();
-				location.replace(link.href);
-			});
-		}
+		const toast = makeToast(document.querySelector<HTMLElement>('[data-toast]'));
+		fitScaler(viewport, { width: data.width });
+		wireHistoryReplace(query);
 
-		// ---- fit the 1080px artboard to whatever room the column has ----
-		const stage = viewport.parentElement;
-		function fit(): void {
-			const width = stage?.clientWidth ?? data.width;
-			const scale = Math.max(0.2, Math.min(0.62, width / data.width));
-			viewport!.style.setProperty('--s', String(scale));
-		}
-		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
-		else window.addEventListener('resize', fit);
-		fit();
-
-		// ---- toast ----
-		let toastTimer: ReturnType<typeof setTimeout> | undefined;
-		const toastEl = document.querySelector<HTMLElement>('[data-toast]');
-		function flash(message: string): void {
-			if (!toastEl) return;
-			toastEl.textContent = message;
-			toastEl.hidden = false;
-			clearTimeout(toastTimer);
-			toastTimer = setTimeout(() => {
-				toastEl.hidden = true;
-			}, 2600);
-		}
-
-		// ---- aspect ----
+		// ---- aspect (client-side geometry swap) ----
 		const dims = document.querySelector<HTMLElement>('[data-dims]');
 		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
 			button.addEventListener('click', () => {
@@ -924,49 +782,46 @@ const clientData = JSON.stringify({
 				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
-				syncLinks();
+				syncMonthLinks(query);
 			});
 		}
 		// The viewport sizes itself from --card-h too; seed it from the card's own.
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 
 		// ---- month picker ----
-		const picker = document.querySelector<HTMLElement>('[data-picker]');
-		const panel = document.querySelector<HTMLElement>('[data-picker-panel]');
-		const yearLabel = document.querySelector<HTMLElement>('[data-picker-label]');
-		const tiles = document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]');
-		let pickerYear = Number(data.key.slice(0, 4));
-
-		function paintPicker(): void {
-			if (yearLabel) yearLabel.textContent = String(pickerYear);
-			tiles.forEach((tile, i) => {
-				const id = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
+		wirePicker({
+			basePath: '/activities/month',
+			monthKey: data.key,
+			getQuery: query,
+			paintTile: (tile, id, current) => {
 				const count = data.counts[id] ?? 0;
-				tile.href = `/activities/month/${id}${query()}`;
-				tile.classList.toggle('is-on', id === data.key);
+				tile.classList.toggle('is-on', current);
 				const countEl = tile.querySelector('.picker__count');
 				if (countEl)
-					countEl.textContent = count ? `${count} ${count === 1 ? 'activity' : 'activities'}` : '—';
-			});
-		}
-		document.querySelector('[data-picker-toggle]')?.addEventListener('click', () => {
-			if (!panel) return;
-			panel.hidden = !panel.hidden;
-			if (!panel.hidden) {
-				pickerYear = Number(data.key.slice(0, 4));
-				paintPicker();
-			}
+					countEl.textContent = count
+						? `${count} ${count === 1 ? 'activity' : 'activities'}`
+						: '—';
+			},
 		});
-		for (const button of document.querySelectorAll<HTMLElement>('[data-picker-year]')) {
-			button.addEventListener('click', (event) => {
-				event.stopPropagation();
-				pickerYear += Number(button.dataset.pickerYear);
-				paintPicker();
-			});
-		}
-		document.addEventListener('mousedown', (event) => {
-			if (!panel || panel.hidden) return;
-			if (!picker?.contains(event.target as Node)) panel.hidden = true;
+
+		// ---- copy / save ----
+		wireCopy(document.querySelector('[data-copy]'), {
+			url: () => `${location.origin}/activities/month/${data.key}${query()}`,
+			toast,
+		});
+		wireSave({
+			button: document.querySelector<HTMLElement>('[data-download]'),
+			// Nothing here for html-to-image to fail to inline — every route is an
+			// inline <path> and every glyph an inline <svg>, so no cache-bust and no
+			// cold-pass insurance render, unlike the film and book cards.
+			render: () => ({
+				card,
+				backgroundColor: '#f8fbfd',
+				height: data.geometry[aspect].height,
+			}),
+			filename: () => `activity-log-${data.key}.png`,
+			state: () => `${data.key}|${aspect}`,
+			toast,
 		});
 
 		// ---- per-cell tooltip ----
@@ -991,101 +846,6 @@ const clientData = JSON.stringify({
 				if (tip) tip.hidden = true;
 			});
 		}
-
-		// ---- share ----
-		document.querySelector('[data-copy]')?.addEventListener('click', () => {
-			const url = `${location.origin}/activities/month/${data.key}${query()}`;
-			if (navigator.clipboard)
-				navigator.clipboard.writeText(url).then(
-					() => flash(`Link copied · ${url}`),
-					() => flash(url),
-				);
-			else flash(url);
-		});
-
-		// ---- saving the card ----
-		// Same phone-vs-desktop split as the film card: a downloaded file goes to
-		// Files on a phone, not Photos, so touch devices go through the share
-		// sheet instead of a plain download.
-		const download = document.querySelector<HTMLElement>('[data-download]');
-		const shareFile =
-			matchMedia('(pointer: coarse)').matches &&
-			typeof navigator.share === 'function' &&
-			(() => {
-				try {
-					return !!navigator.canShare?.({
-						files: [new File([new Blob()], 'card.png', { type: 'image/png' })],
-					});
-				} catch {
-					return false;
-				}
-			})();
-		if (shareFile && download) download.textContent = 'Save image';
-
-		let rendered: { state: string; file: File } | null = null;
-		const renderState = (): string => `${data.key}|${aspect}`;
-
-		/**
-		 * The card as a PNG blob. Unlike the film card, there is nothing here for
-		 * html-to-image to fail to inline — every route is an inline `<path>` and
-		 * every glyph an inline `<svg>`, so there's no poster `<img>` whose
-		 * cross-origin cache copy needs cache-busting, and no cold-pass insurance
-		 * render to guard against.
-		 */
-		async function render(height: number): Promise<Blob | null> {
-			if (!card) return null;
-			const { toBlob } = await import('html-to-image');
-			return toBlob(card, {
-				width: data.width,
-				height,
-				backgroundColor: '#f8fbfd',
-				pixelRatio: 1,
-				style: { transform: 'none' },
-			});
-		}
-
-		download?.addEventListener('click', async () => {
-			const height = data.geometry[aspect].height;
-			const name = `activity-log-${data.key}.png`;
-
-			if (shareFile && rendered?.state === renderState()) {
-				try {
-					await navigator.share({ files: [rendered.file] });
-				} catch (error) {
-					if ((error as DOMException)?.name !== 'AbortError') flash('Could not open the share sheet');
-				}
-				return;
-			}
-
-			flash(`Rendering ${data.width}×${height}…`);
-			try {
-				const blob = await render(height);
-				if (!blob) throw new Error('nothing was rendered');
-
-				if (shareFile) {
-					const file = new File([blob], name, { type: 'image/png' });
-					rendered = { state: renderState(), file };
-					try {
-						await navigator.share({ files: [file] });
-					} catch (error) {
-						const kind = (error as DOMException)?.name;
-						if (kind === 'NotAllowedError') flash('Ready. Tap Save image again.');
-						else if (kind !== 'AbortError') flash('Could not open the share sheet');
-					}
-					return;
-				}
-
-				const url = URL.createObjectURL(blob);
-				const link = document.createElement('a');
-				link.href = url;
-				link.download = name;
-				link.click();
-				setTimeout(() => URL.revokeObjectURL(url), 10_000);
-				flash(`Saved ${name}`);
-			} catch {
-				flash('Could not render the image');
-			}
-		});
 	}
 </script>
 </ActivityLayout>

@@ -1,0 +1,217 @@
+---
+// The month picker shared by all five month-in-review cards: a prev/next step
+// with a month button between them that drops a panel of twelve tiles and a year
+// stepper. Markup and behaviour are one copy (the client half is wirePicker in
+// src/lib/month-card.ts); the look is skinned per section through the --mp-*
+// custom properties, whose defaults below are the film card's warm dark.
+//
+// A tile shows either a count ("3 films") or, for the combined journal card,
+// four track dots — pass `dots` on the tiles and set --mp-dot-0..3.
+import { shiftMonth } from '../lib/share-card';
+
+export interface PickerTile {
+	key: string;
+	abbr: string;
+	current: boolean;
+	/** e.g. "3 films" or "—". Omitted when `dots` is given. */
+	count?: string;
+	/** Four booleans (film, book, meal, move present) for the journal card. */
+	dots?: boolean[];
+}
+
+interface Props {
+	basePath: string;
+	monthKey: string;
+	label: string;
+	year: number | string;
+	query: string;
+	tiles: PickerTile[];
+}
+
+const { basePath, monthKey, label, year, query, tiles } = Astro.props;
+const prev = shiftMonth(monthKey, -1);
+const next = shiftMonth(monthKey, 1);
+---
+
+<div class="stepper" data-picker>
+	<a
+		class="step"
+		href={`${basePath}/${prev}${query}`}
+		data-month-link={`${basePath}/${prev}`}
+		aria-label="Previous month">←</a
+	>
+	<button class="step step--month" type="button" data-picker-toggle>
+		<span>{label}</span><span class="step__caret">▾</span>
+	</button>
+	<a
+		class="step"
+		href={`${basePath}/${next}${query}`}
+		data-month-link={`${basePath}/${next}`}
+		aria-label="Next month">→</a
+	>
+
+	<div class="picker" hidden data-picker-panel>
+		<div class="picker__head">
+			<button type="button" data-picker-year="-1" aria-label="Previous year">←</button>
+			<span data-picker-label>{year}</span>
+			<button type="button" data-picker-year="1" aria-label="Next year">→</button>
+		</div>
+		<div class="picker__grid">
+			{
+				tiles.map((m) => (
+					<a
+						class:list={['picker__month', m.current && 'is-on']}
+						href={`${basePath}/${m.key}${query}`}
+						data-picker-month
+					>
+						<span class="picker__abbr">{m.abbr}</span>
+						{m.dots ? (
+							<span class="picker__dots">
+								{m.dots.map((on, i) => (
+									<span class:list={['picker__dot', `picker__dot--${i}`, !on && 'is-off']} />
+								))}
+							</span>
+						) : (
+							<span class="picker__count">{m.count}</span>
+						)}
+					</a>
+				))
+			}
+		</div>
+	</div>
+</div>
+
+<style>
+	.stepper {
+		position: relative;
+		display: flex;
+		align-items: center;
+		gap: var(--mp-gap, 6px);
+	}
+	.step {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: var(--mp-radius, 8px);
+		border: 1px solid var(--mp-step-border, #4a2529);
+		background: var(--mp-step-bg, #2a1214);
+		color: var(--mp-step-fg, #c2a99a);
+		font-size: 14px;
+		font-family: inherit;
+		cursor: pointer;
+	}
+	.step:hover {
+		border-color: var(--mp-step-hover-border, #d9b45a);
+		color: var(--mp-step-hover-fg, #f4e8d1);
+	}
+	.step--month {
+		justify-content: space-between;
+		gap: 10px;
+		min-width: var(--mp-month-min, 168px);
+		width: auto;
+		padding: 0 12px;
+		color: var(--mp-month-fg, #f4e8d1);
+		font-size: 13px;
+		font-family: var(--mp-month-font, inherit);
+	}
+	.step__caret {
+		font-size: 9px;
+		color: var(--mp-caret-fg, #a2857a);
+	}
+	.picker {
+		position: absolute;
+		left: var(--mp-panel-left, 0);
+		right: var(--mp-panel-right, auto);
+		top: calc(100% + 8px);
+		z-index: 40;
+		background: var(--mp-panel-bg, #20100f);
+		border: 1px solid var(--mp-panel-border, #4a2529);
+		border-radius: var(--mp-panel-radius, 10px);
+		padding: 12px;
+		width: var(--mp-panel-w, 290px);
+		box-shadow: var(--mp-panel-shadow, 0 20px 44px -14px rgba(0, 0, 0, 0.7));
+	}
+	.picker__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 10px;
+		font-family: var(--mp-head-font, 'Newsreader', serif);
+		font-size: 19px;
+		color: var(--mp-head-fg, #f4e8d1);
+	}
+	.picker__head button {
+		width: 24px;
+		height: 24px;
+		border: none;
+		background: none;
+		color: var(--mp-caret-fg, #a2857a);
+		cursor: pointer;
+		font-size: 13px;
+	}
+	.picker__head button:hover {
+		color: var(--mp-head-fg, #f4e8d1);
+	}
+	.picker__grid {
+		display: grid;
+		grid-template-columns: repeat(var(--mp-cols, 4), 1fr);
+		gap: 5px;
+	}
+	.picker__month {
+		display: block;
+		text-align: center;
+		padding: 8px 0;
+		border-radius: var(--mp-tile-radius, 7px);
+		border: 1px solid transparent;
+		color: var(--mp-tile-fg, #e9d9c4);
+	}
+	.picker__month:hover {
+		background: var(--mp-tile-hover-bg, #2a1214);
+		color: var(--mp-tile-hover-fg, #f4e8d1);
+	}
+	.picker__month.is-on {
+		color: var(--mp-tile-on-fg, #f0d488);
+		background: var(--mp-tile-on-bg, #33211a);
+		border-color: var(--mp-tile-on-border, #5c3a22);
+	}
+	.picker__abbr {
+		display: block;
+		font-size: 12px;
+		font-family: var(--mp-abbr-font, inherit);
+	}
+	.picker__count {
+		display: block;
+		font-size: 10px;
+		color: var(--mp-count-fg, #8a6f63);
+		margin-top: 2px;
+	}
+	.picker__dots {
+		display: flex;
+		justify-content: center;
+		gap: 4px;
+		margin-top: 6px;
+	}
+	.picker__dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--mp-dot, #8a6f63);
+	}
+	.picker__dot.is-off {
+		background: var(--mp-dot-off, #3a2a20) !important;
+	}
+	.picker__dot--0 {
+		background: var(--mp-dot-0, var(--mp-dot, #8a6f63));
+	}
+	.picker__dot--1 {
+		background: var(--mp-dot-1, var(--mp-dot, #8a6f63));
+	}
+	.picker__dot--2 {
+		background: var(--mp-dot-2, var(--mp-dot, #8a6f63));
+	}
+	.picker__dot--3 {
+		background: var(--mp-dot-3, var(--mp-dot, #8a6f63));
+	}
+</style>

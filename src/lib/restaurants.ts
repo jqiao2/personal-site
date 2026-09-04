@@ -589,6 +589,18 @@ export async function listMonthKeys(): Promise<string[]> {
 	return [...keys];
 }
 
+/** Meals per month, "YYYY-MM" → count — the month picker's tile figures. */
+export async function countVisitsByMonth(): Promise<Record<string, number>> {
+	const { data, error } = await supabasePublic.from('restaurant_diary').select('visited_on');
+	if (error) throw new Error(error.message);
+	const counts: Record<string, number> = {};
+	for (const r of (data ?? []) as { visited_on: string }[]) {
+		const key = r.visited_on.slice(0, 7);
+		counts[key] = (counts[key] ?? 0) + 1;
+	}
+	return counts;
+}
+
 /**
  * What the month card needs to know about the places it is about, beyond the
  * visits themselves: whether each was new, and where it is.

@@ -313,10 +313,10 @@ export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): Mo
  * map uses — see the card page's script, and why it can't be a picture the
  * server asks MapTiler for.
  *
- * The ranking — rating first, verdict as the tiebreaker, since the verdict is
- * the finer judgement of the two and the one that survives a month of
- * everything landing on a 7 — decides which cover sits on top when two meals
- * share a day.
+ * The ranking — a photograph first, then rating, then verdict as the finer
+ * tiebreaker (it survives a month of everything landing on a 7) — decides which
+ * cover sits on top when two meals share a day. A meal with a picture wins,
+ * because the picture is what the card is for.
  */
 export type Cover = { kind: 'photo'; url: string } & CoverMeta;
 export type MapCover = { kind: 'map'; at: MapPoint } & CoverMeta;
@@ -342,8 +342,13 @@ export interface CoverSources {
 	maps?: Map<number, MapPoint>;
 }
 
-/** Best first: rating, then verdict, then the earlier meal. */
+/** Best first: a meal I photographed, then rating, then verdict, then earlier. */
 function byRank(a: VisitDetail, b: VisitDetail): number {
+	// Photographs first. A plate I shot should outrank one I didn't, so the card
+	// prints the picture when there is one — a map is the fallback for a meal with
+	// no photo, not something that should sit on top of a meal that has one.
+	const photo = Number(b.photos.length > 0) - Number(a.photos.length > 0);
+	if (photo !== 0) return photo;
 	const rating = (b.rating ?? -1) - (a.rating ?? -1);
 	if (rating !== 0) return rating;
 	// Verdicts are ranks, 0 (definitely return) best — so this one sorts up.
@@ -353,11 +358,9 @@ function byRank(a: VisitDetail, b: VisitDetail): number {
 }
 
 /**
- * The month's covers by day, each day's best-ranked first.
- *
- * Ranking is done over every visit rather than over the ones that have a
- * photograph, so a meal's place in the month doesn't depend on whether I got my
- * phone out — the ranks stay the ranks, and the covers fall where they fall.
+ * The month's covers by day, each day's best-ranked first — and a meal I
+ * photographed ranks ahead of one I didn't (see byRank), so when a day holds two
+ * meals the plate on top is a picture whenever one exists rather than a map.
  */
 export function monthCovers(
 	visits: VisitDetail[],
