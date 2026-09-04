@@ -45,6 +45,12 @@ export interface Metric {
 	 *  The page drops it from the thresholds form/table and feeds it the daily
 	 *  weigh-in series instead. */
 	scaleFed?: boolean;
+	/** Recorded, but not a thing that trends — height and max HR get a number,
+	 *  not a graph. Kept out of the Progress section entirely. */
+	noGraph?: boolean;
+	/** Label for the in-card metric switcher, where "Power to weight" is too
+	 *  long to sit beside a sibling. */
+	short?: string;
 }
 
 /** `398` → `6:38`. Seconds, floored to the second — a pace is not precise to
@@ -73,6 +79,7 @@ export const METRICS: Metric[] = [
 	{
 		key: 'ftp_w',
 		label: 'FTP',
+		short: 'FTP',
 		unit: 'W',
 		better: 'up',
 		toDisplay: (v) => v,
@@ -83,6 +90,7 @@ export const METRICS: Metric[] = [
 	{
 		key: 'w_per_kg',
 		label: 'Power to weight',
+		short: 'W/kg',
 		unit: 'W/kg',
 		better: 'up',
 		derived: true,
@@ -105,6 +113,7 @@ export const METRICS: Metric[] = [
 		label: 'Max HR',
 		unit: 'bpm',
 		better: 'none',
+		noGraph: true,
 		toDisplay: (v) => v,
 		toStored: (v) => Math.round(v),
 		format: (v) => String(Math.round(v)),
@@ -158,6 +167,7 @@ export const METRICS: Metric[] = [
 		label: 'Height',
 		unit: 'in',
 		better: 'none',
+		noGraph: true,
 		toDisplay: (v) => round(v / CM_PER_INCH, 1),
 		toStored: (v) => v * CM_PER_INCH,
 		format: (v) => v.toFixed(1),
@@ -331,4 +341,99 @@ export function wPerKgSeries(rows: AthleteThresholds[], weighIns: WeighIn[]): Se
 		.filter((p): p is { date: string; value: number } => p != null)
 		.sort((a, b) => a.date.localeCompare(b.date));
 	return { metric, points };
+}
+
+// ---------------------------------------------------------------------------
+// The Progress graph. Pure geometry, so the page can render the initial view
+// server-side and the client script can redraw the same shape when the
+// timeframe or the metric changes — one implementation, not two that drift.
+// ---------------------------------------------------------------------------
+
+/** The plot box. Rendered WITHOUT preserveAspectRatio="none": stretching the
+ *  box to the card's width is what turned every dot into an oval. Uniform
+ *  scaling keeps circles circular and costs only a fixed aspect ratio. */
+export const PLOT_W = 100;
+export const PLOT_H = 26;
+
+/** Timeframes, in the order they appear in the toggle. `months: null` is "all".
+ *  Six months is the default: the window in which training actually moved. */
+export const RANGES = [
+	{ key: '6m', label: '6M', months: 6 },
+	{ key: '1y', label: '1Y', months: 12 },
+	{ key: 'all', label: 'All', months: null },
+] as const;
+
+export type RangeKey = (typeof RANGES)[number]['key'];
+export const DEFAULT_RANGE: RangeKey = '6m';
+
+/** Points inside a timeframe, oldest first. A window with nothing in it keeps
+ *  the last reading rather than emptying the card — an FTP set two years ago is
+ *  still the FTP in force, and a blank graph would read as missing data. */
+export function windowed(points: { date: string; value: number }[], range: RangeKey): { date: string; value: number }[] {
+	const months = RANGES.find((r) => r.key === range)?.months ?? null;
+	if (months == null) return points;
+	const cut = new Date();
+	cut.setMonth(cut.getMonth() - months);
+	const iso = cut.toLocaleDateString('en-CA');
+	const kept = points.filter((p) => p.date >= iso);
+	return kept.length ? kept : points.slice(-1);
+}
+
+export interface Plot {
+	lo: number;
+	hi: number;
+	line: string;
+	dots: { x: number; y: number }[];
+	first: { date: string; value: number };
+	last: { date: string; value: number };
+}
+
+export function plot(points: { date: string; value: number }[]): Plot | null {
+	if (points.length === 0) return null;
+	const values = points.map((p) => p.value);
+	const lo = Math.min(...values);
+	const hi = Math.max(...values);
+	const flat = hi === lo;
+	// Time on x, so a long gap between two tests reads as a long gap. A single
+	// point sits in the middle rather than dividing by zero.
+	const times = points.map((p) => Date.parse(p.date));
+	const t0 = times[0];
+	const tSpan = times[times.length - 1] - t0 || 1;
+	const pad = 2;
+	const dots = points.map((p, i) => ({
+		x: times.length === 1 ? PLOT_W / 2 : pad + ((times[i] - t0) / tSpan) * (PLOT_W - pad * 2),
+		// Inverted: SVG y grows downward, and a bigger number should sit higher.
+		// A metric that never moved has no range to scale against, and dividing
+		// by its zero span would pin it to the floor as if it were a minimum —
+		// so it draws down the middle, which is what "unchanged" looks like.
+		y: flat ? PLOT_H / 2 : PLOT_H - pad - ((p.value - lo) / (hi - lo)) * (PLOT_H - pad * 2),
+	}));
+	return {
+		lo,
+		hi,
+		line: dots.map((d) => `${d.x.toFixed(2)},${d.y.toFixed(2)}`).join(' '),
+		// Daily weigh-ins put a reading every ~1.5 units of a 100-wide box, and
+		// the overlapping circles blob into a caterpillar. Past a point the dots
+		// stop marking readings and only thicken the line, so drop them and let
+		// the line speak.
+		dots: dots.length > 20 ? [] : dots,
+		first: points[0],
+		last: points[points.length - 1],
+	};
+}
+
+/** The change across the visible window, as a signed number plus a judgement
+ *  taken from the metric's own direction — a falling threshold pace is an
+ *  improvement, a falling FTP is not. */
+export function trend(
+	metric: Metric,
+	points: { date: string; value: number }[],
+): { text: string; tone: 'good' | 'bad' | 'flat' } | null {
+	if (points.length < 2) return null;
+	const delta = points[points.length - 1].value - points[0].value;
+	if (delta === 0) return { text: 'no change', tone: 'flat' };
+	const rising = delta > 0;
+	const tone =
+		metric.better === 'none' ? 'flat' : rising === (metric.better === 'up') ? 'good' : 'bad';
+	return { text: `${rising ? '+' : '−'}${metric.format(Math.abs(delta))} ${metric.unit}`, tone };
 }

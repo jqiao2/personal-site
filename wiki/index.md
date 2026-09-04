@@ -17,3 +17,4 @@ add or update a pattern.
 | [0009](patterns/0009-beli-export-import.md) | Getting a Beli account's lists out, and into the log | strategy | exporting Beli data, or talking to a reverse-engineered app backend behind a bot gate |
 | [0010](patterns/0010-astro-check-fails-in-worktrees.md) | Dev server/`astro check` fail in a worktree when MAIN has no `node_modules` | failure-mode | dev server or `astro sync` dies with "Tsconfig not found astro/tsconfigs/strict" in a `.claude/worktrees/*` checkout |
 | [0011](patterns/0011-applying-a-migration-without-the-cli.md) | Applying a migration when there is no linked Supabase project | strategy | a migration must reach the live DB and `supabase link`/`db push` isn't available |
+| [0012](patterns/0012-stretched-svg-turns-dots-into-ovals.md) | A stretched SVG turns every dot into an oval | failure-mode | an inline SVG chart is sized with `width: 100%` / `preserveAspectRatio="none"` |
