@@ -253,7 +253,7 @@ function href(changes: Record<string, string | string[] | null>): string {
 								class="rl-chip"
 								href={href({ map: onMap === 'off' ? null : 'off' })}
 								aria-pressed={onMap === 'off' ? 'true' : 'false'}
-								title="Places with no point on the map — the ones the map screen cannot draw"
+								title="Places with no point on the map. The map screen cannot draw them"
 							>
 								<span>Not on the map</span>
 								<span class="rl-chip__n">{unplacedCount}</span>
@@ -289,7 +289,7 @@ function href(changes: Record<string, string | string[] | null>): string {
 			all.length === 0 ? (
 				<p class="rl-empty empty">
 					Nothing on the list yet. A name, roughly where it is, and one line about why
-					you want to go — that is the whole entry.
+					you want to go. That is the whole entry.
 				</p>
 			) : places.length === 0 ? (
 				<p class="rl-empty empty">

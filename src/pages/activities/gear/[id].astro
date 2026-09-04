@@ -452,7 +452,7 @@ function usedText(w: ComponentWear): string {
 					// Prefilled with whatever the row is currently judged against, so
 					// editing a window starts from the window rather than from blank.
 					const current = li?.querySelector('.part__interval')?.textContent?.trim() ?? '';
-					const raw = prompt('Replace window — "2500-5000 mi" or "4-8 mo". Blank uses the default.', current);
+					const raw = prompt('Replace window. Write it like "2500-5000 mi" or "4-8 mo". Blank uses the default.', current);
 					if (raw === null) return;
 					const parsed = raw.trim() ? parseInterval(raw) : null;
 					if (raw.trim() && !parsed) {
@@ -470,7 +470,7 @@ function usedText(w: ComponentWear): string {
 						null,
 					);
 				} else if (btn.dataset.act === 'delete') {
-					if (!confirm('Delete this component row? Replacing a part is "replace" — this erases it.')) return;
+					if (!confirm('Delete this component row? Replacing a part is "replace". This erases it.')) return;
 					send('DELETE', { target: 'component', id }, null);
 				}
 			});

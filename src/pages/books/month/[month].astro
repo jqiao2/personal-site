@@ -1241,7 +1241,7 @@ const clientData = JSON.stringify({
 						await navigator.share({ files: [file] });
 					} catch (error) {
 						const kind = (error as DOMException)?.name;
-						if (kind === 'NotAllowedError') flash('Ready — tap Save image again');
+						if (kind === 'NotAllowedError') flash('Ready. Tap Save image again');
 						else if (kind !== 'AbortError') flash('Could not open the share sheet');
 					}
 					return;
@@ -1255,7 +1255,7 @@ const clientData = JSON.stringify({
 				setTimeout(() => URL.revokeObjectURL(url), 10_000);
 				flash(`Saved ${name}`);
 			} catch {
-				flash('Could not render the image — covers may have blocked the export');
+				flash('Could not render the image. Covers may have blocked the export');
 			}
 		});
 	}

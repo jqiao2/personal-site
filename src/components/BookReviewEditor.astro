@@ -73,7 +73,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 					</div>
 				</div>
 				<div class="hint" id="br-loved-hint" hidden>
-					Loved with no stars is a complete answer — the page will show the heart on its own.
+					Loved with no stars is a complete answer. The page will show the heart on its own.
 				</div>
 			</div>
 
@@ -772,7 +772,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 				attachTitle.textContent = reread ? config.newRead.label : config.latestRead!.label;
 				attachBody.textContent = reread ? config.attachOnBody : config.attachOffBody;
 				attachAction.textContent = reread
-					? 'Not a re-read — keep it on the latest read'
+					? 'Not a re-read. Keep it on the latest read'
 					: '↻ This is a new read';
 			}
 

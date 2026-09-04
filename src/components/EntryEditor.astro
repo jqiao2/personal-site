@@ -1359,8 +1359,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 					const n = prior.logCount;
 					priorHint.textContent =
 						n > 0
-							? `Logged ${n} time${n === 1 ? '' : 's'} before — marked as a rewatch.`
-							: `You've watched this before — marked as a rewatch.`;
+							? `Logged ${n} time${n === 1 ? '' : 's'} before. Marked as a rewatch.`
+							: `You have watched this before. Marked as a rewatch.`;
 					priorHint.hidden = false;
 				}
 			} catch {

@@ -1069,7 +1069,7 @@ const clientData = JSON.stringify({
 						await navigator.share({ files: [file] });
 					} catch (error) {
 						const kind = (error as DOMException)?.name;
-						if (kind === 'NotAllowedError') flash('Ready — tap Save image again');
+						if (kind === 'NotAllowedError') flash('Ready. Tap Save image again.');
 						else if (kind !== 'AbortError') flash('Could not open the share sheet');
 					}
 					return;

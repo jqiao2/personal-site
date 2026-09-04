@@ -1188,7 +1188,7 @@ const clientData = JSON.stringify({
 						const kind = (error as DOMException)?.name;
 						// The sheet needs a gesture that hasn't gone stale; the render is
 						// kept, so tapping again opens it straight away.
-						if (kind === 'NotAllowedError') flash('Ready — tap Save image again');
+						if (kind === 'NotAllowedError') flash('Ready. Tap Save image again.');
 						else if (kind !== 'AbortError') flash('Could not open the share sheet');
 					}
 					return;
@@ -1203,7 +1203,7 @@ const clientData = JSON.stringify({
 				setTimeout(() => URL.revokeObjectURL(url), 10_000);
 				flash(`Saved ${name}`);
 			} catch {
-				flash('Could not render the image — posters may have blocked the export');
+				flash('Could not render the image. Posters may have blocked the export.');
 			}
 		});
 	}

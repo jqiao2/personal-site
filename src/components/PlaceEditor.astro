@@ -95,13 +95,13 @@ const config = {
 			</div>
 
 			<div class="pe__none" data-pe-none hidden>
-				Nothing in OpenStreetMap matches that. Try the name on its own, or leave it unplaced — the log
+				Nothing in OpenStreetMap matches that. Try the name on its own, or leave it unplaced. The log
 				works without a point.
 			</div>
 
 			{/* -------------------------------------------------- geocoder down */}
 			<div class="pe__down" data-pe-down hidden>
-				<div class="pe__down-title">OpenStreetMap didn’t answer.</div>
+				<div class="pe__down-title">OpenStreetMap did not answer.</div>
 				<p class="pe__down-body">
 					Nothing has been lost and nothing has been written. Try again in a minute, or write the
 					location in by hand and leave the point for later.
@@ -137,7 +137,7 @@ const config = {
 						placeholder="Q2MM+2C Brooklyn  ·  40.72174, -73.95809  ·  maps.app.goo.gl/…"
 					/>
 					<div class="pe__note" data-pe-paste-note>
-						A plus code places it exactly; Google shows one on the place page. A share link usually
+						A plus code places it exactly. Google shows one on the place page. A share link usually
 						carries only an address.
 					</div>
 					{/* The one thing left to try with an address: hand it to the
@@ -202,7 +202,7 @@ const config = {
 				</div>
 
 				<div class="pe__underneath">
-					Everything above is a suggestion until you save it, and editable after. What you typed stays in
+					Everything above is a suggestion until you save it. It stays editable after. What you typed stays in
 					the record underneath:<br />
 					<span class="pe__underneath-raw">{evidence}</span>
 				</div>
@@ -458,7 +458,7 @@ const config = {
 				// handled below, as "could not"
 			}
 			if (!ref) {
-				state.pasteNote = `Could not find ${near}, so the short code cannot be placed. Paste the full code, or the pair of coordinates.`;
+				state.pasteNote = `Could not find ${near}. The short code cannot be placed. Paste the full code, or the pair of coordinates.`;
 				render();
 				return;
 			}
@@ -488,7 +488,7 @@ const config = {
 					// links name the place and its street and keep the point in
 					// their own JavaScript.
 					state.linkAddress = body.address;
-					state.pasteNote = `No point in that link — it names “${body.address}”. Its plus code will place it exactly.`;
+					state.pasteNote = `No point in that link. It names “${body.address}”. Its plus code will place it exactly.`;
 				} else {
 					state.pasteNote = 'That link has nothing in it to place the restaurant by.';
 				}
@@ -514,7 +514,7 @@ const config = {
 				const meta = state.searching
 					? 'Looking…'
 					: state.hits.length
-						? `${state.hits.length} results, from ${[...new Set(state.hits.map((h) => h.sourceLabel ?? 'OpenStreetMap'))].join(' and ')}. They search names, so the where field is what separates the first two.`
+						? `${state.hits.length} results, from ${[...new Set(state.hits.map((h) => h.sourceLabel ?? 'OpenStreetMap'))].join(' and ')}. They search names. The where field is what separates the first two.`
 						: '';
 				$('[data-pe-result-meta]').textContent = meta;
 				renderHits();
@@ -540,7 +540,7 @@ const config = {
 
 			$('[data-pe-paste-note]').textContent =
 				state.pasteNote ||
-				'A plus code places it exactly; Google shows one on the place page. A share link usually carries only an address.';
+				'A plus code places it exactly. Google shows one on the place page. A share link usually carries only an address.';
 			show('[data-pe-try-address]', !!state.linkAddress && !state.coords);
 
 			// The footer says what saving will do, and the two outcomes are

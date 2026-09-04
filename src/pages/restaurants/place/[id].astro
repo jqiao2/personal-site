@@ -170,7 +170,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 							<div class="invite__evidence">{evidence}</div>
 							<p class="invite__body">
 								{where === 'unplaced'
-									? 'It doesn’t appear on the map screen, and its city counts toward nothing in the rollup.'
+									? 'It does not appear on the map screen. Its city counts toward nothing in the rollup.'
 									: 'The words are on record. The map still has nothing to draw, because a neighbourhood has no door to point at.'}
 							</p>
 							{
@@ -194,7 +194,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 						<div class="quiet">
 							<span class="quiet__line">
 								{where === 'unplaced'
-									? `${visitCountLabel(visits.length)} and no point on the map — it doesn’t appear on the map screen.`
+									? `${visitCountLabel(visits.length)} and no point on the map. It does not appear on the map screen.`
 									: 'Located in words only. Still nothing for the map to draw.'}
 							</span>
 							<button type="button" class="quiet__cta" data-open-place-editor>
