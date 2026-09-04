@@ -45,8 +45,8 @@ export interface Metric {
 	 *  The page drops it from the thresholds form/table and feeds it the daily
 	 *  weigh-in series instead. */
 	scaleFed?: boolean;
-	/** Recorded, but not a thing that trends — height gets a number, not a
-	 *  graph. Kept out of the Progress section entirely. */
+	/** Recorded, but not a thing that trends — height and max HR get a number,
+	 *  not a graph. Kept out of the Progress section entirely. */
 	noGraph?: boolean;
 	/** Label for the in-card metric switcher, where "Power to weight" is too
 	 *  long to sit beside a sibling. */
@@ -113,6 +113,7 @@ export const METRICS: Metric[] = [
 		label: 'Max HR',
 		unit: 'bpm',
 		better: 'none',
+		noGraph: true,
 		toDisplay: (v) => v,
 		toStored: (v) => Math.round(v),
 		format: (v) => String(Math.round(v)),
