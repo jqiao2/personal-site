@@ -65,7 +65,7 @@ import { sportMeta, sportIcon, formatStat, SPORTS, type StatKey, type StatRow } 
 import { detailRows } from '../../lib/activity-detail';
 import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
 import { timeInZones, HR_ZONES, POWER_ZONES } from '../../lib/zones';
-import { ALPINE, exertionInk, exertionLabel } from '../../lib/activity-tokens';
+import { ALPINE, exertionInk } from '../../lib/activity-tokens';
 
 export const prerender = false;
 
@@ -434,7 +434,6 @@ const showMovie = activity.sport === 'virtual_ride' || activity.movie_tmdb_id !=
 const pageTitle = `${activity.title} — Jason's activity log`;
 const glyph = sportIcon(activity.sport);
 const exInk = exertionInk(activity.exertion);
-const exWord = exertionLabel(activity.exertion);
 ---
 
 <ActivityLayout title={pageTitle}>
@@ -659,7 +658,7 @@ const exWord = exertionLabel(activity.exertion);
 								{activity.exertion != null && (
 									<div class="headline__item ex" tabindex="0">
 										<div class="headline__val figure" style={`color:${exInk}`}>{Math.round(activity.exertion)}</div>
-										<div class="headline__label">Exertion{exWord && <> · <span style={`color:${exInk}`}>{exWord}</span></>}</div>
+										<div class="headline__label">Exertion</div>
 										<div class="ex__pop">
 											<div class="exertion__badges">
 												{activity.exertion_method && <span class="badge">{METHOD_LABEL[activity.exertion_method] ?? activity.exertion_method}</span>}
@@ -1062,13 +1061,18 @@ const exWord = exertionLabel(activity.exertion);
 	   Collapses to a single column when the rail no longer has room. */
 	.head__grid {
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+		/* The rail sizes to its figures (which stay on one row) and the title
+		   takes the rest — a fixed rail width would either wrap the figures or
+		   waste space when they're short. */
+		grid-template-columns: minmax(0, 1fr) auto;
 		gap: 1.5rem 2.5rem;
 		align-items: start;
 	}
-	.head__main,
-	.head__stats {
+	.head__main {
 		min-width: 0;
+	}
+	.head__stats {
+		min-width: 16rem;
 	}
 	@media (max-width: 720px) {
 		.head__grid {
@@ -1080,19 +1084,23 @@ const exWord = exertionLabel(activity.exertion);
 	   the table, right-adjusted to sit against the prose. */
 	.headline {
 		display: flex;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
 		justify-content: flex-end;
-		gap: 1.4rem;
+		gap: 1.6rem;
 		text-align: right;
+		/* Clear of the pin/edit controls in the row above. */
+		margin-top: 0.6rem;
 	}
 	.headline__item {
-		min-width: 0;
+		flex: none;
 	}
 	.headline__val {
 		font-family: 'Instrument Serif', Georgia, serif;
-		font-size: 1.9rem;
-		line-height: 1.05;
+		/* Read at the same size as the activity title above. */
+		font-size: clamp(1.7rem, 4vw, 2.4rem);
+		line-height: 1.15;
 		color: #3d4a55;
+		white-space: nowrap;
 	}
 	.headline__label {
 		margin-top: 0.15rem;
