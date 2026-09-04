@@ -284,17 +284,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 											{starText(v.rating) && <span class="rl-stars">{starText(v.rating)}</span>}
 											{visitMarks(v) && <span class="rl-marks">{visitMarks(v)}</span>}
 											{isOwner && v.friends.length > 0 && (
-												<span class="visit__friends">
-													with{' '}
-													{v.friends.map((f, i) => (
-														<>
-															{i > 0 && ', '}
-															<a class="visit__friend" href={`/restaurants/places?friend=${encodeURIComponent(f)}`}>
-																{f}
-															</a>
-														</>
-													))}
-												</span>
+												<span class="visit__friends">with {v.friends.join(', ')}</span>
 											)}
 										</div>
 										{/* An entry with no review is frequent and fine. The row
@@ -835,16 +825,6 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	.visit__friends {
 		font-size: 11.5px;
 		color: var(--ink-3);
-	}
-	.visit__friend {
-		color: var(--ink-2);
-		text-decoration: underline;
-		text-decoration-color: var(--rule);
-		text-underline-offset: 2px;
-	}
-	.visit__friend:hover {
-		color: var(--terracotta);
-		text-decoration-color: currentColor;
 	}
 	.visit__review {
 		margin: 5px 0 0;
