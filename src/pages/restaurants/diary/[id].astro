@@ -66,7 +66,17 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 						<span>{placeLine(visit)}</span>
 						{
 							isOwner && visit.friends.length > 0 && (
-								<span class="entry__with">with {visit.friends.join(', ')}</span>
+								<span class="entry__with">
+									with{' '}
+									{visit.friends.map((f, i) => (
+										<>
+											{i > 0 && ', '}
+											<a class="entry__with-name" href={`/restaurants/places?friend=${encodeURIComponent(f)}`}>
+												{f}
+											</a>
+										</>
+									))}
+								</span>
 							)
 						}
 					</div>
@@ -228,6 +238,16 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 		margin-left: auto;
 		font-size: 12px;
 		color: var(--ink-3);
+	}
+	.entry__with-name {
+		color: var(--ink-2);
+		text-decoration: underline;
+		text-decoration-color: var(--rule);
+		text-underline-offset: 2px;
+	}
+	.entry__with-name:hover {
+		color: var(--terracotta);
+		text-decoration-color: currentColor;
 	}
 
 	.entry__review {

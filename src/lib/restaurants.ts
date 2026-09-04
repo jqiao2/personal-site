@@ -307,6 +307,8 @@ export interface PlaceQuery {
 	trip?: TripFilter | null;
 	/** Any of these why-tags. Absent means all. */
 	tags?: string[];
+	/** Places I've eaten at with any of these people. Owner-only; absent means all. */
+	friends?: string[];
 	/** On the map, or not on it. Absent means both. */
 	onMap?: MapFilter | null;
 	sort?: PlaceSort;
@@ -347,6 +349,12 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 	if (query.tags?.length) {
 		const want = new Set(query.tags);
 		rows = rows.filter((r) => r.to_try_tags.some((t) => want.has(t)));
+	}
+	if (query.friends?.length) {
+		// Friends live on the visits, not the place, so map the names back to the
+		// places they were eaten at and keep only those.
+		const ids = await placeIdsForFriends(query.friends);
+		rows = rows.filter((r) => ids.has(r.id));
 	}
 
 	return sortPlaces(rows, query.sort ?? (scope === 'to-try' ? 'added' : 'recent'));
@@ -711,6 +719,44 @@ async function distinctTextArray(column: 'tags' | 'friends'): Promise<string[]> 
 
 export const listTags = () => distinctTextArray('tags');
 export const listFriends = () => distinctTextArray('friends');
+
+/**
+ * The people I've eaten out with, each with the number of DISTINCT places we've
+ * been to — eating somewhere together twice is one place, not two. Owner-only,
+ * like friends are everywhere on the site. Commonest first, for the filter bar.
+ */
+export async function listFriendFacets(): Promise<CuisineFacet[]> {
+	const { data, error } = await supabasePublic
+		.from('restaurant_diary')
+		.select('restaurant_id, friends');
+	if (error) throw new Error(error.message);
+	const places = new Map<string, Set<number>>();
+	const display = new Map<string, string>();
+	for (const row of (data ?? []) as { restaurant_id: number; friends: string[] }[]) {
+		for (const f of new Set(row.friends ?? [])) {
+			const key = f.toLowerCase();
+			if (!display.has(key)) display.set(key, f);
+			(places.get(key) ?? places.set(key, new Set()).get(key)!).add(row.restaurant_id);
+		}
+	}
+	return [...places.entries()]
+		.map(([key, ids]) => ({ name: display.get(key) as string, count: ids.size }))
+		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
+}
+
+/** Restaurant ids with at least one visit tagged with any of these people. */
+async function placeIdsForFriends(friends: string[]): Promise<Set<number>> {
+	const want = new Set(friends.map((f) => f.toLowerCase()));
+	const { data, error } = await supabasePublic
+		.from('restaurant_diary')
+		.select('restaurant_id, friends');
+	if (error) throw new Error(error.message);
+	const ids = new Set<number>();
+	for (const row of (data ?? []) as { restaurant_id: number; friends: string[] }[]) {
+		if ((row.friends ?? []).some((f) => want.has(f.toLowerCase()))) ids.add(row.restaurant_id);
+	}
+	return ids;
+}
 
 /** Cuisines already in use, for the composer's controlled list. */
 export async function listCuisines(): Promise<string[]> {
