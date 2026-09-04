@@ -131,10 +131,6 @@ const today = new Date().toLocaleDateString('en-CA');
 			<header class="head">
 				<a class="back" href="/activities">← Activity log</a>
 				<h1 class="head__title">Athlete</h1>
-				<p class="head__sub">
-					The numbers every exertion score is measured against. Each row is in force from its date
-					until the next one supersedes it.
-				</p>
 			</header>
 
 			{unreachable && <p class="flash flash--err">Couldn’t reach the database.</p>}
@@ -496,7 +492,6 @@ const today = new Date().toLocaleDateString('en-CA');
 	.head { display: flex; flex-direction: column; gap: 0.35rem; }
 	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
 	.head__title { margin: 0; font-size: 1.6rem; }
-	.head__sub { margin: 0; max-width: 46ch; color: var(--granite-soft); font-size: 0.9rem; line-height: 1.5; }
 	.sec {
 		margin: 0 0 0.75rem;
 		font-size: 0.75rem;
