@@ -162,6 +162,11 @@ function routeStart(path: string): { x: number; y: number } | null {
 				<span>Training calendar</span><span class="navrow__n">→</span>
 			</a>
 			{isOwner && (
+				<a class="navrow navrow--link" href="/activities/fitness">
+					<span>Fitness trend</span><span class="navrow__n">→</span>
+				</a>
+			)}
+			{isOwner && (
 				<a class="navrow navrow--link" href="/activities/heatmap">
 					<span>Heatmap</span><span class="navrow__n">→</span>
 				</a>

@@ -578,6 +578,40 @@ export async function listActivityDays(
 }
 
 // ---------------------------------------------------------------------------
+// listDailyLoads — /activities/fitness. One number per day for the PMC.
+// ---------------------------------------------------------------------------
+
+/**
+ * Every day's total exertion, oldest first — the whole input to the fitness
+ * trend's Performance Management Chart (src/lib/fitness.ts fills the rest days
+ * between them). Reads the activity_days view, which already sums exertion per
+ * local_date, so this is one small column pair per active day rather than every
+ * activity row. Paged past PostgREST's 1000-row cap, like getActivityStats,
+ * since the whole history is read. Owner-only data (a fitness curve is the same
+ * disclosure the private cards make, pre-added), so the page gates on
+ * requireOwner before calling — the same contract as listThresholds.
+ */
+export async function listDailyLoads(): Promise<{ date: string; load: number }[]> {
+	const PAGE = 1000;
+	const out: { date: string; load: number }[] = [];
+	for (let offset = 0; ; offset += PAGE) {
+		const { data, error } = await supabasePublic
+			.from('activity_days')
+			.select('local_date, total_exertion')
+			.order('local_date', { ascending: true })
+			.range(offset, offset + PAGE - 1);
+		if (error) {
+			if (isDegraded(error)) return [];
+			throw new Error(`listDailyLoads failed: ${error.message}`);
+		}
+		const rows = (data ?? []) as { local_date: string; total_exertion: number | null }[];
+		for (const r of rows) out.push({ date: r.local_date, load: r.total_exertion ?? 0 });
+		if (rows.length < PAGE) break;
+	}
+	return out;
+}
+
+// ---------------------------------------------------------------------------
 // Single-activity reads — the detail page.
 // ---------------------------------------------------------------------------
 
