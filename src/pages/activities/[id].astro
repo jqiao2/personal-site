@@ -2,13 +2,16 @@
 // The activity detail page — ACTIVITIES.md §1: "primarily a view of the
 // activity on an interactive map", with sport-aware stats leading below it.
 //
-// STRUCTURE, TOP TO BOTTOM: a route map (or, when there is no GPS, a
-// stats-forward hero in its place — §7's "must read as deliberate, not
-// broken"), the sport's `primaryStats` set large, the exertion score with its
-// method and confidence spelled out (§3: never an unexplained claim), the
-// terrain/HR/power/speed charts built straight from `activity_streams`, a lap
-// table when the activity has laps, and the multisport thread (child legs for
-// a parent, a link back up for a child).
+// STRUCTURE, TOP TO BOTTOM: the header carries the title and notes on the left
+// and a stats rail on the right — three headline figures (distance, moving
+// time, exertion) over an Avg/Max table of everything else the sport has a
+// value for (src/lib/activity-detail.ts). Exertion shows only its number by
+// default; a hover/focus pill spells out its method, confidence and the
+// sentence behind it (§3: never an unexplained claim). Below the header: the
+// route map (only when there's GPS — no map, no hero, just the graph), the
+// terrain/HR/power/speed charts built straight from `activity_streams`, the
+// HR/power time-in-zone charts, a lap table when the activity has laps, and the
+// multisport thread (child legs for a parent, a link back up for a child).
 //
 // WHY THE EXERTION SENTENCE IS RECOMPUTED RATHER THAN JUST READ OFF THE ROW.
 // `activities.exertion`/`exertion_method`/`exertion_confidence` are the
@@ -58,10 +61,11 @@ import { requireOwner } from '../../lib/auth';
 import { isPinned } from '../../lib/pins';
 import PinButton from '../../components/PinButton.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
-import { sportMeta, sportIcon, formatStat, isStatRelevant, SPORTS, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
+import { sportMeta, sportIcon, formatStat, SPORTS, type StatKey, type StatRow } from '../../lib/sports';
+import { detailRows } from '../../lib/activity-detail';
 import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
 import { timeInZones, HR_ZONES, POWER_ZONES } from '../../lib/zones';
-import { ALPINE, exertionInk, exertionLabel } from '../../lib/activity-tokens';
+import { ALPINE, exertionInk } from '../../lib/activity-tokens';
 
 export const prerender = false;
 
@@ -217,39 +221,11 @@ const [streams, laps, parent, children, thresholds] = await Promise.all([
 ]);
 
 // ---------------------------------------------------------------------------
-// Sport-aware stats — §6. `sportMeta(activity.sport).primaryStats` decides
-// both which stats lead and in what order; everything else in the StatKey
-// union that has an actual value on this activity goes in the secondary
-// block below it. formatStat is already null-safe (returns '—' for a missing
-// input) — filtered out here rather than rendered, per §7's "never a dash".
+// Sport-aware stats — §6. The header leads with three figures (distance, moving
+// time, exertion); everything else this sport has a real value for drops into
+// the Avg/Max table beneath them (src/lib/activity-detail.ts). formatStat is
+// null-safe, so a stat the activity lacks is filtered out rather than dashed.
 // ---------------------------------------------------------------------------
-// 'exertion' is deliberately excluded from both grids below — it always gets
-// its own explained section (score + method + confidence + the sentence
-// behind it), never a bare number sitting in a tile with no context, which is
-// exactly the "unexplained claim" §3 rules out.
-const ALL_STAT_KEYS: StatKey[] = [
-	'distance',
-	'moving_time',
-	'elapsed_time',
-	'elevation_gain',
-	'avg_power',
-	'normalized_power',
-	'avg_speed',
-	'avg_pace',
-	'pace_100m',
-	'avg_hr',
-	'max_hr',
-	'swolf',
-	'pool_length',
-	'work_kj',
-	'elev_high',
-	'vertical_descent',
-	'max_speed',
-	'runs',
-	'water_temp',
-	'calories',
-];
-
 // Lift-served snow days get a real run/lift breakdown recovered from the
 // altitude stream (src/lib/ski-view.ts) — the `activity_laps` rows on these are
 // Strava's arbitrary auto-laps, each spanning part of a lift and part of a run,
@@ -299,37 +275,17 @@ const statRow: StatRow = {
 	runs: runsCount,
 };
 
-function statsFor(keys: StatKey[]): FormattedStat[] {
-	return keys.map((k) => formatStat(k, statRow)).filter((s) => s.value !== '—');
-}
+// The Avg/Max table under the headline figures — src/lib/activity-detail.ts
+// owns the ordering, sport-relevance and avg/max folding.
+const detailTable = detailRows(activity.sport, statRow, Boolean(skiView));
 
-const primaryKeys: StatKey[] = meta.primaryStats.filter((k) => k !== 'exertion');
-const primaryStats = statsFor(primaryKeys);
-
-// avg_pace / pace_100m / avg_speed are three renderings of the same
-// avg_speed_ms column — formatStat computes all three for any activity that
-// has a speed, regardless of sport, so without this the secondary block
-// would show a run's pace as minutes-per-mile AND minutes-per-100m AND mph
-// all at once. Only the one src/lib/sports.ts's paceStyle actually calls for
-// this sport belongs in the "everything else" grid.
-const PACE_KEYS: StatKey[] = ['avg_pace', 'pace_100m', 'avg_speed'];
-const paceKeyForSport: StatKey | null =
-	meta.paceStyle === 'per_km' ? 'avg_pace' : meta.paceStyle === 'per_100m' ? 'pace_100m' : meta.paceStyle === 'speed' ? 'avg_speed' : null;
-// isStatRelevant is the second gate, and it is about truth rather than tidiness:
-// a stat like `water_temp` reads `avg_temp_c`, which on a bike is the air, so an
-// "everything whose column is non-null" grid captions a real number with a false
-// label. See FAMILY_ONLY_STATS in src/lib/sports.ts.
-const secondaryKeys = ALL_STAT_KEYS.filter(
-	(k) =>
-		!primaryKeys.includes(k) &&
-		(!PACE_KEYS.includes(k) || k === paceKeyForSport) &&
-		// On a lift-served day the file's moving time is broken (see SNOW_PRIMARY);
-		// the "Runs & lifts" breakdown reports time skiing and time on lifts, so
-		// this stat stays out of the Details grid rather than resurfacing there.
-		!(skiView && k === 'moving_time') &&
-		isStatRelevant(activity.sport, k),
-);
-const secondaryStats = statsFor(secondaryKeys);
+// The three headline figures. Distance and moving time are shown only when the
+// activity has them — a lift-served ski day's file moving time is broken (the
+// "Runs & lifts" breakdown owns that time), so it drops here the same way it
+// drops from the table. Exertion is handled in the markup: it carries the
+// hover-pill with its method, confidence and explanation.
+const distanceHeadline = formatStat('distance', statRow);
+const movingHeadline = skiView ? null : formatStat('moving_time', statRow);
 
 // ---------------------------------------------------------------------------
 // Exertion — §3. See the header comment for why the sentence is recomputed
@@ -478,7 +434,6 @@ const showMovie = activity.sport === 'virtual_ride' || activity.movie_tmdb_id !=
 const pageTitle = `${activity.title} — Jason's activity log`;
 const glyph = sportIcon(activity.sport);
 const exInk = exertionInk(activity.exertion);
-const exWord = exertionLabel(activity.exertion);
 ---
 
 <ActivityLayout title={pageTitle}>
@@ -649,108 +604,104 @@ const exWord = exertionLabel(activity.exertion);
 						<input type="hidden" name="action" value="delete" />
 					</form>
 				) : (
-					<>
-						<h1 class="head__title">{activity.title}</h1>
-						<div class="head__meta">
-							<span>{formatDateLong(activity.local_date)}</span>
-							{activity.start_place && <span class="head__dot">·</span>}
-							{activity.start_place && <span>{activity.start_place}</span>}
-							{activityGear && <span class="head__dot">·</span>}
-							{activityGear && <span>{gearLabel(activityGear)}</span>}
-							{activity.device_name && <span class="head__dot">·</span>}
-							{activity.device_name && <span class="head__device">{activity.device_name}</span>}
+					<div class="head__grid">
+						<div class="head__main">
+							<h1 class="head__title">{activity.title}</h1>
+							<div class="head__meta">
+								<span>{formatDateLong(activity.local_date)}</span>
+								{activity.start_place && <span class="head__dot">·</span>}
+								{activity.start_place && <span>{activity.start_place}</span>}
+								{activityGear && <span class="head__dot">·</span>}
+								{activityGear && <span>{gearLabel(activityGear)}</span>}
+								{activity.device_name && <span class="head__dot">·</span>}
+								{activity.device_name && <span class="head__device">{activity.device_name}</span>}
+							</div>
+							{activity.notes && <p class="head__notes">{activity.notes}</p>}
+							{activity.movie_tmdb_id && (
+								<a class="head__movie" href={`/films/movie/${activity.movie_tmdb_id}`}>
+									<span aria-hidden="true">🎬</span> {activity.movie_title || 'Ride movie'}
+								</a>
+							)}
+							{activity.private_notes && (
+								<div class="head__private">
+									<div class="head__private-label"><span aria-hidden="true">🔒</span> Private note</div>
+									<p class="head__private-text">{activity.private_notes}</p>
+								</div>
+							)}
+							{activity.tags.length > 0 && (
+								<div class="head__tags">
+									{activity.tags.map((t) => (
+										<span class="head__tag">{t}</span>
+									))}
+								</div>
+							)}
 						</div>
-						{activity.notes && <p class="head__notes">{activity.notes}</p>}
-						{activity.movie_tmdb_id && (
-							<a class="head__movie" href={`/films/movie/${activity.movie_tmdb_id}`}>
-								<span aria-hidden="true">🎬</span> {activity.movie_title || 'Ride movie'}
-							</a>
-						)}
-						{activity.private_notes && (
-							<div class="head__private">
-								<div class="head__private-label"><span aria-hidden="true">🔒</span> Private note</div>
-								<p class="head__private-text">{activity.private_notes}</p>
+
+						{/* The stats rail — right-adjusted beside the title/notes. The three
+						    headline figures lead; exertion carries its explanation in a
+						    hover pill instead of a section of its own. The Avg/Max table
+						    of everything else sits beneath them in smaller text. */}
+						<aside class="head__stats">
+							<div class="headline">
+								{distanceHeadline.value !== '—' && (
+									<div class="headline__item">
+										<div class="headline__val figure">{distanceHeadline.value}</div>
+										<div class="headline__label">{distanceHeadline.label}</div>
+									</div>
+								)}
+								{movingHeadline && movingHeadline.value !== '—' && (
+									<div class="headline__item">
+										<div class="headline__val figure">{movingHeadline.value}</div>
+										<div class="headline__label">{movingHeadline.label}</div>
+									</div>
+								)}
+								{activity.exertion != null && (
+									<div class="headline__item ex" tabindex="0">
+										<div class="headline__val figure" style={`color:${exInk}`}>{Math.round(activity.exertion)}</div>
+										<div class="headline__label">Exertion</div>
+										<div class="ex__pop">
+											<div class="exertion__badges">
+												{activity.exertion_method && <span class="badge">{METHOD_LABEL[activity.exertion_method] ?? activity.exertion_method}</span>}
+												{activity.exertion_confidence && (
+													<span class:list={['badge', `badge--${activity.exertion_confidence}`]}>
+														{CONFIDENCE_LABEL[activity.exertion_confidence] ?? activity.exertion_confidence}
+													</span>
+												)}
+												{activity.intensity_factor != null && <span class="badge badge--quiet">IF {activity.intensity_factor.toFixed(2)}</span>}
+											</div>
+											{detail && <p class="exertion__detail">{detail}</p>}
+										</div>
+									</div>
+								)}
 							</div>
-						)}
-						{activity.tags.length > 0 && (
-							<div class="head__tags">
-								{activity.tags.map((t) => (
-									<span class="head__tag">{t}</span>
-								))}
-							</div>
-						)}
-					</>
+
+							{detailTable.length > 0 && (
+								<div class="dtable">
+									<div class="dtable__head">
+										<span />
+										<span>Avg</span>
+										<span>{detailTable.some((r) => r.max) ? 'Max' : ''}</span>
+									</div>
+									{detailTable.map((r) => (
+										<div class="dtable__row">
+											<span class="dtable__label">{r.label}</span>
+											<span class="dtable__avg figure">{r.avg}</span>
+											<span class="dtable__max figure">{r.max ?? ''}</span>
+										</div>
+									))}
+								</div>
+							)}
+						</aside>
+					</div>
 				)
 			}
 		</header>
 
-		{
-			hasRoute ? (
-				<>
-					<ActivityMap title={activity.title} sport={activity.sport} polyline={activity.polyline!} />
-					{graphData && <ActivityGraph data={graphData} preferTime={meta.indoor} />}
-					{
-						primaryStats.length > 0 && (
-							<div class="stats stats--row">
-								{
-									primaryStats.map((s) => (
-										<div class="stat">
-											<div class="stat__value figure">{s.value}</div>
-											<div class="stat__label">{s.label}</div>
-										</div>
-									))
-								}
-							</div>
-						)
-					}
-				</>
-			) : (
-				<>
-					<div class="nogps">
-						{
-							primaryStats.length > 0 && (
-								<div class="stats stats--hero">
-									{
-										primaryStats.map((s) => (
-											<div class="stat stat--hero">
-												<div class="stat__value stat__value--hero figure">{s.value}</div>
-												<div class="stat__label">{s.label}</div>
-											</div>
-										))
-									}
-								</div>
-							)
-						}
-					</div>
-					{/* No map to scrub, but the combined profile still reads the
-					    trainer/treadmill's HR, power and speed against time. */}
-					{graphData && <ActivityGraph data={graphData} preferTime={meta.indoor} />}
-				</>
-			)
-		}
-
-		{
-			activity.exertion != null && (
-				<section class="exertion">
-					<div class="exertion__score">
-						<span class="exertion__value figure" style={`color:${exInk}`}>{Math.round(activity.exertion)}</span>
-						<span class="exertion__word" style={`color:${exInk}`}>{exWord}</span>
-					</div>
-					<div class="exertion__body">
-						<div class="exertion__badges">
-							{activity.exertion_method && <span class="badge">{METHOD_LABEL[activity.exertion_method] ?? activity.exertion_method}</span>}
-							{activity.exertion_confidence && (
-								<span class:list={['badge', `badge--${activity.exertion_confidence}`]}>
-									{CONFIDENCE_LABEL[activity.exertion_confidence] ?? activity.exertion_confidence}
-								</span>
-							)}
-							{activity.intensity_factor != null && <span class="badge badge--quiet">IF {activity.intensity_factor.toFixed(2)}</span>}
-						</div>
-						{detail && <p class="exertion__detail">{detail}</p>}
-					</div>
-				</section>
-			)
-		}
+		{/* The map (when there's a route) and the profile graph. Stats now live in
+		    the header rail above, so a no-GPS activity just shows its graph — no
+		    stats-forward hero standing in for the missing map. */}
+		{hasRoute && <ActivityMap title={activity.title} sport={activity.sport} polyline={activity.polyline!} />}
+		{graphData && <ActivityGraph data={graphData} preferTime={meta.indoor} />}
 
 		{powerBins && (
 			<ActivityZones title="Power zones" bins={powerBins} unit="W" anchor={`FTP ${thresholds!.ftp_w}`} model="Coggan, % FTP" />
@@ -759,24 +710,6 @@ const exWord = exertionLabel(activity.exertion);
 		{hrBins && (
 			<ActivityZones title="Heart rate zones" bins={hrBins} unit="bpm" anchor={`LTHR ${thresholds!.lthr_bpm}`} model="Friel, % LTHR" />
 		)}
-
-		{
-			secondaryStats.length > 0 && (
-				<section class="secondary">
-					<h2 class="section-h">Details</h2>
-					<div class="stats stats--secondary">
-						{
-							secondaryStats.map((s) => (
-								<div class="stat stat--sm">
-									<div class="stat__value stat__value--sm figure">{s.value}</div>
-									<div class="stat__label">{s.label}</div>
-								</div>
-							))
-						}
-					</div>
-				</section>
-			)
-		}
 
 		{
 			editingRuns ? (
@@ -1124,6 +1057,136 @@ const exWord = exertionLabel(activity.exertion);
 		margin-top: 0.8rem;
 	}
 
+	/* Read-state header: title/notes on the left, the stats rail on the right.
+	   Collapses to a single column when the rail no longer has room. */
+	.head__grid {
+		display: grid;
+		/* The rail sizes to its figures (which stay on one row) and the title
+		   takes the rest — a fixed rail width would either wrap the figures or
+		   waste space when they're short. */
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: 1.5rem 2.5rem;
+		align-items: start;
+	}
+	.head__main {
+		min-width: 0;
+	}
+	.head__stats {
+		min-width: 16rem;
+	}
+	@media (max-width: 720px) {
+		.head__grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	/* The three headline figures — distance, moving time, exertion — right over
+	   the table, right-adjusted to sit against the prose. */
+	.headline {
+		display: flex;
+		flex-wrap: nowrap;
+		justify-content: flex-end;
+		gap: 1.6rem;
+		text-align: right;
+		/* Clear of the pin/edit controls in the row above. */
+		margin-top: 0.6rem;
+	}
+	.headline__item {
+		flex: none;
+	}
+	.headline__val {
+		font-family: 'Instrument Serif', Georgia, serif;
+		/* Read at the same size as the activity title above. */
+		font-size: clamp(1.7rem, 4vw, 2.4rem);
+		line-height: 1.15;
+		color: #3d4a55;
+		white-space: nowrap;
+	}
+	.headline__label {
+		margin-top: 0.15rem;
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #6b7b88;
+	}
+
+	/* Exertion carries its explanation in a pill instead of a section of its own:
+	   the number reads by default; hover or keyboard focus reveals the method,
+	   confidence and sentence, right-adjusted under the figure. */
+	.ex {
+		position: relative;
+		cursor: default;
+		outline: none;
+	}
+	.ex__pop {
+		position: absolute;
+		top: calc(100% + 0.5rem);
+		right: 0;
+		z-index: 6;
+		width: max-content;
+		max-width: 300px;
+		text-align: left;
+		background: #f8fbfd;
+		border: 1px solid #c9d4dc;
+		border-radius: 10px;
+		box-shadow: 0 10px 30px rgba(18, 73, 94, 0.15);
+		padding: 0.7rem 0.8rem;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateY(-2px);
+		transition: opacity 0.12s, transform 0.12s, visibility 0.12s;
+	}
+	.ex:hover .ex__pop,
+	.ex:focus-within .ex__pop {
+		opacity: 1;
+		visibility: visible;
+		transform: translateY(0);
+	}
+
+	/* The Avg/Max table beneath the headline — smaller text, the two value
+	   columns tabular so they line up down the page. */
+	.dtable {
+		margin-top: 1.3rem;
+		font-size: 0.82rem;
+	}
+	.dtable__head,
+	.dtable__row {
+		display: grid;
+		grid-template-columns: 1fr auto auto;
+		gap: 0.5rem 1.1rem;
+		align-items: baseline;
+	}
+	.dtable__head {
+		font-size: 0.68rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #6b7b88;
+		padding-bottom: 0.35rem;
+		border-bottom: 1px solid #dbe4ea;
+		margin-bottom: 0.35rem;
+	}
+	.dtable__head span:nth-child(2),
+	.dtable__head span:nth-child(3) {
+		text-align: right;
+		min-width: 3.4rem;
+	}
+	.dtable__row {
+		padding: 0.28rem 0;
+	}
+	.dtable__row + .dtable__row {
+		border-top: 1px solid #eef4f8;
+	}
+	.dtable__label {
+		color: #6b7b88;
+	}
+	.dtable__avg,
+	.dtable__max {
+		text-align: right;
+		min-width: 3.4rem;
+		color: #3d4a55;
+		font-variant-numeric: tabular-nums;
+	}
+
 	/* Ride-movie picker in the editor. Alpine palette (activity-tokens): snow
 	   card on scree hairlines, granite text, lake the one accent. */
 	#movie-pick {
@@ -1392,70 +1455,6 @@ const exWord = exertionLabel(activity.exertion);
 		color: #3d4a55;
 	}
 
-	/* No-GPS hero */
-	.nogps {
-		border: 1px solid #c9d4dc;
-		border-radius: 12px;
-		background: #f8fbfd;
-		padding: 2.5rem 1.5rem;
-	}
-
-	/* Stats — flex-wrap rather than a CSS grid on purpose: a grid's unfilled
-	   trailing cells on a partial last row paint as empty background boxes,
-	   which reads exactly like the broken/missing state §7 rules out. Each
-	   stat is its own small card instead, so any count wraps cleanly. */
-	.stats {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.55rem;
-	}
-	.stats--row {
-		margin-top: 1.25rem;
-	}
-	.stats--hero {
-		justify-content: center;
-		max-width: 760px;
-		margin: 0 auto;
-		gap: 1.5rem 2.5rem;
-	}
-	.stat {
-		background: #f8fbfd;
-		border: 1px solid #c9d4dc;
-		border-radius: 8px;
-		padding: 0.85rem 1rem;
-		flex: 1 1 110px;
-	}
-	.stat--hero {
-		background: transparent;
-		border: none;
-		padding: 0;
-		text-align: center;
-		flex: 0 1 auto;
-	}
-	.stat--sm {
-		padding: 0.7rem 0.9rem;
-		flex-basis: 120px;
-	}
-	.stat__value {
-		font-family: 'Instrument Serif', Georgia, serif;
-		font-size: 1.5rem;
-		color: #3d4a55;
-		line-height: 1.1;
-	}
-	.stat__value--hero {
-		font-size: clamp(2.4rem, 6vw, 3.4rem);
-	}
-	.stat__value--sm {
-		font-size: 1.15rem;
-	}
-	.stat__label {
-		margin-top: 0.2rem;
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: #6b7b88;
-	}
-
 	.section-h {
 		font-size: 1.05rem;
 		font-family: 'Instrument Serif', Georgia, serif;
@@ -1470,40 +1469,7 @@ const exWord = exertionLabel(activity.exertion);
 		margin-left: 0.4rem;
 	}
 
-	/* Exertion */
-	.exertion {
-		margin-top: 1.75rem;
-		display: flex;
-		gap: 1.5rem;
-		align-items: flex-start;
-		background: #f8fbfd;
-		border: 1px solid #c9d4dc;
-		border-radius: 10px;
-		padding: 1.1rem 1.3rem;
-		flex-wrap: wrap;
-	}
-	.exertion__score {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		flex: none;
-		min-width: 88px;
-	}
-	.exertion__value {
-		font-family: 'Instrument Serif', Georgia, serif;
-		font-size: 2.6rem;
-		line-height: 1;
-	}
-	.exertion__word {
-		margin-top: 0.2rem;
-		font-size: 0.72rem;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-	}
-	.exertion__body {
-		flex: 1 1 280px;
-		min-width: 0;
-	}
+	/* Exertion pill (in the header rail's hover-pop) */
 	.exertion__badges {
 		display: flex;
 		flex-wrap: wrap;

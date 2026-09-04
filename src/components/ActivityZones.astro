@@ -1,7 +1,8 @@
 ---
-// Time-in-zone for one activity — a stacked bar plus a per-zone row (range,
-// time, share). Fed a computed ZoneBin[] from src/lib/zones.ts; this file only
-// draws it. Rendered once for HR and once for power on the detail page.
+// Time-in-zone for one activity — a horizontal bar chart across the zones, one
+// bar per zone sized by time spent, with its range, time and share alongside.
+// Fed a computed ZoneBin[] from src/lib/zones.ts; this file only draws it.
+// Rendered once for HR and once for power on the detail page.
 //
 // COLOUR IS EFFORT, NOT TAXONOMY — the palette's one rule (activity-tokens.ts).
 // Zones are an intensity ramp, so they earn a warm-cool gradient the way the
@@ -23,6 +24,10 @@ interface Props {
 const { title, bins, unit, anchor, model } = Astro.props;
 
 const total = bins.reduce((s, b) => s + b.seconds, 0);
+// Bars are scaled to the busiest zone, so the longest bar fills the row and the
+// rest read as fractions of it — a bar chart of where the time went, not a
+// second copy of the percentages.
+const peak = bins.reduce((m, b) => Math.max(m, b.seconds), 0);
 
 // The lake → larch → alpenglow effort ramp, interpolated across however many
 // zones this breakdown has (5 for HR, 7 for power).
@@ -58,28 +63,19 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 <section class="zones">
 	<h2 class="section-h">{title} <span class="section-h__meta">{anchor} · {model}</span></h2>
 
-	<div class="zones__bar" role="img" aria-label={`Time in each zone: ${title.toLowerCase()}`}>
-		{
-			bins.map((b, i) =>
-				b.seconds > 0 ? (
-					<div
-						class="zones__seg"
-						style={`flex-grow:${b.seconds};background:${zoneColor(i, bins.length)}`}
-						title={`Z${b.zone.z} ${b.zone.label} — ${fmtTime(b.seconds)}`}
-					/>
-				) : null,
-			)
-		}
-	</div>
-
-	<div class="zones__rows">
+	<div class="zones__rows" role="img" aria-label={`Time in each zone: ${title.toLowerCase()}`}>
 		{
 			bins.map((b, i) => (
 				<div class="zones__row" class:list={[b.seconds === 0 && 'zones__row--empty']}>
-					<span class="zones__swatch" style={`background:${zoneColor(i, bins.length)}`} />
 					<span class="zones__z">Z{b.zone.z}</span>
 					<span class="zones__label">{b.zone.label}</span>
 					<span class="zones__range figure">{fmtRange(b)}</span>
+					<span class="zones__track">
+						<span
+							class="zones__fill"
+							style={`width:${peak > 0 ? (b.seconds / peak) * 100 : 0}%;background:${zoneColor(i, bins.length)}`}
+						/>
+					</span>
 					<span class="zones__time figure">{fmtTime(b.seconds)}</span>
 					<span class="zones__pct figure">{Math.round(pct(b.seconds))}%</span>
 				</div>
@@ -105,18 +101,6 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 		font-weight: 400;
 		margin-left: 0.4rem;
 	}
-	.zones__bar {
-		display: flex;
-		height: 0.9rem;
-		border-radius: 999px;
-		overflow: hidden;
-		background: #eef4f8;
-		margin-bottom: 1rem;
-	}
-	.zones__seg {
-		flex-basis: 0;
-		min-width: 2px;
-	}
 	.zones__rows {
 		display: flex;
 		flex-direction: column;
@@ -124,7 +108,7 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 	}
 	.zones__row {
 		display: grid;
-		grid-template-columns: 0.8rem 1.6rem 1fr auto auto 2.6rem;
+		grid-template-columns: 1.6rem 6.5rem 6.5rem 1fr auto 2.6rem;
 		align-items: center;
 		gap: 0.6rem;
 		padding: 0.3rem 0.1rem;
@@ -134,14 +118,6 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 	}
 	.zones__row--empty {
 		color: #9aa8b2;
-	}
-	.zones__swatch {
-		width: 0.7rem;
-		height: 0.7rem;
-		border-radius: 3px;
-	}
-	.zones__row--empty .zones__swatch {
-		opacity: 0.35;
 	}
 	.zones__z {
 		font-size: 0.72rem;
@@ -157,6 +133,28 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 	.zones__range {
 		color: #6b7b88;
 		font-size: 0.8rem;
+		white-space: nowrap;
+	}
+	/* The bar itself — a track the fill grows across, longest zone = full width. */
+	.zones__track {
+		height: 0.7rem;
+		border-radius: 999px;
+		background: #eef4f8;
+		overflow: hidden;
+	}
+	.zones__fill {
+		display: block;
+		height: 100%;
+		min-width: 2px;
+		border-radius: 999px;
+	}
+	.zones__row--empty .zones__track {
+		background: transparent;
+	}
+	/* A zone with no time gets no bar — the min-width on the fill would otherwise
+	   leave a 2px sliver of colour that reads as a trace of time that isn't there. */
+	.zones__row--empty .zones__fill {
+		display: none;
 	}
 	.zones__time {
 		font-variant-numeric: tabular-nums;
@@ -168,7 +166,7 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 	}
 	@media (max-width: 520px) {
 		.zones__row {
-			grid-template-columns: 0.8rem 1.6rem 1fr auto 2.4rem;
+			grid-template-columns: 1.6rem 5rem 1fr auto 2.4rem;
 		}
 		.zones__range {
 			display: none;
