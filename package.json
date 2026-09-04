@@ -30,6 +30,7 @@
     "graph:test": "node --import ./scripts/ts-hook.mjs scripts/activity-graph.test.mjs",
     "athlete:test": "node --import ./scripts/ts-hook.mjs scripts/athlete.test.mjs",
     "ski:test": "node --import ./scripts/ts-hook.mjs scripts/ski.test.mjs",
+    "zones:test": "node --import ./scripts/ts-hook.mjs scripts/zones.test.mjs",
     "shot": "node --env-file=.env scripts/shot.mjs"
   },
   "dependencies": {

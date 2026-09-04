@@ -35,6 +35,7 @@
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityMap from '../../components/ActivityMap.astro';
 import ActivityGraph from '../../components/ActivityGraph.astro';
+import ActivityZones from '../../components/ActivityZones.astro';
 import SkiRuns from '../../components/SkiRuns.astro';
 import SkiRunsEditor from '../../components/SkiRunsEditor.astro';
 import { buildGraphData } from '../../lib/activity-graph';
@@ -59,6 +60,7 @@ import PinButton from '../../components/PinButton.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { sportMeta, sportIcon, formatStat, isStatRelevant, SPORTS, type StatKey, type StatRow, type FormattedStat } from '../../lib/sports';
 import { computeExertion, type Thresholds, type ExertionStreams } from '../../lib/exertion';
+import { timeInZones, HR_ZONES, POWER_ZONES } from '../../lib/zones';
 import { ALPINE, exertionInk, exertionLabel } from '../../lib/activity-tokens';
 
 export const prerender = false;
@@ -420,6 +422,23 @@ const detail =
 const graphData = buildGraphData(streams, laps, undefined, skiSegments.length ? skiSegments : null);
 
 // ---------------------------------------------------------------------------
+// Time-in-zone — src/lib/zones.ts. HR against LTHR (any sport with an HR
+// stream), power against FTP (bike family only — see the note in zones.ts and
+// exertion.ts's power rung on why running watts don't get FTP zones). Both are
+// null unless the stream AND the threshold they need are present, so a ride
+// without a power meter or an athlete with no LTHR on file simply shows
+// neither section rather than an empty or fabricated one.
+// ---------------------------------------------------------------------------
+const hrBins =
+	streams?.heartrate && thresholds?.lthr_bpm
+		? timeInZones(streams.heartrate, streams.time_s ?? null, thresholds.lthr_bpm, HR_ZONES)
+		: null;
+const powerBins =
+	meta.family === 'bike' && streams?.power_w && thresholds?.ftp_w
+		? timeInZones(streams.power_w, streams.time_s ?? null, thresholds.ftp_w, POWER_ZONES)
+		: null;
+
+// ---------------------------------------------------------------------------
 // Formatting helpers local to this page.
 // ---------------------------------------------------------------------------
 function formatDuration(seconds: number | null | undefined): string {
@@ -732,6 +751,14 @@ const exWord = exertionLabel(activity.exertion);
 				</section>
 			)
 		}
+
+		{powerBins && (
+			<ActivityZones title="Power zones" bins={powerBins} unit="W" anchor={`FTP ${thresholds!.ftp_w}`} model="Coggan, % FTP" />
+		)}
+
+		{hrBins && (
+			<ActivityZones title="Heart rate zones" bins={hrBins} unit="bpm" anchor={`LTHR ${thresholds!.lthr_bpm}`} model="Friel, % LTHR" />
+		)}
 
 		{
 			secondaryStats.length > 0 && (

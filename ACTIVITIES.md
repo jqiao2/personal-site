@@ -98,10 +98,12 @@ call it.
 
 Body weight is a **daily time series**, not a threshold, so it lives in its own
 table `body_weight` (migration `0059`), one row per calendar day (upsert on
-`measured_on`). It deliberately does **not** go in `athlete_thresholds`:
-`thresholdsOn()` returns the single latest row on or before a date, so a
-weight-only threshold row would blank out FTP/LTHR for every activity scored
-that day.
+`measured_on`). It deliberately does **not** go in `athlete_thresholds`: that
+table is for values that change a handful of times a year, one `effective_from`
+row per retest, and a daily weigh-in would flood it with a row a day. (Threshold
+resolution is per-field anyway — `thresholdsOn()` carries each metric's latest
+non-null value forward, so a sparse row that updates only FTP no longer blanks
+LTHR; weight is separated for the cadence reason, not that one.)
 
 The scale (Etekcity, via VeSync) already writes **Body Mass** into Apple
 Health. An iOS **Personal Automation / Shortcut** reads the latest Body Mass
