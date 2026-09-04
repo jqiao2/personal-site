@@ -24,7 +24,6 @@ import {
 	monthLabel,
 	monthQuery,
 	parseMonthKey,
-	shiftMonth,
 	summarise,
 	weekRows,
 } from '../../../lib/month-view';
@@ -32,6 +31,7 @@ import {
 // Rendered on demand — reflects the live database.
 import { requireOwner } from '../../../lib/auth';
 import SiteHeader from '../../../components/SiteHeader.astro';
+import MonthPicker from '../../../components/MonthPicker.astro';
 
 export const prerender = false;
 
@@ -112,45 +112,14 @@ const clientData = JSON.stringify({
 
 			<!-- Controls: screen only, never part of the exported card. -->
 			<div class="controls">
-				<div class="stepper" data-picker>
-					<a
-						class="step"
-						href={`/films/month/${shiftMonth(key, -1)}${query}`}
-						data-month-link={`/films/month/${shiftMonth(key, -1)}`}
-						aria-label="Previous month">←</a
-					>
-					<button class="step step--month" type="button" data-picker-toggle>
-						<span>{label}</span><span class="step__caret">▾</span>
-					</button>
-					<a
-						class="step"
-						href={`/films/month/${shiftMonth(key, 1)}${query}`}
-						data-month-link={`/films/month/${shiftMonth(key, 1)}`}
-						aria-label="Next month">→</a
-					>
-
-					<div class="picker" hidden data-picker-panel>
-						<div class="picker__head">
-							<button type="button" data-picker-year="-1" aria-label="Previous year">←</button>
-							<span data-picker-label>{parsed.year}</span>
-							<button type="button" data-picker-year="1" aria-label="Next year">→</button>
-						</div>
-						<div class="picker__grid">
-							{
-								pickerMonths.map((m) => (
-									<a
-										class:list={['picker__month', m.current && 'is-on']}
-										href={`/films/month/${m.key}${query}`}
-										data-picker-month
-									>
-										<span class="picker__abbr">{m.abbr}</span>
-										<span class="picker__count">{m.count}</span>
-									</a>
-								))
-							}
-						</div>
-					</div>
-				</div>
+				<MonthPicker
+					basePath="/films/month"
+					monthKey={key}
+					label={label}
+					year={parsed.year}
+					query={query}
+					tiles={pickerMonths}
+				/>
 
 				<div class="aspects">
 					{
@@ -184,7 +153,12 @@ const clientData = JSON.stringify({
 
 				<div class="actions">
 					<button class="btn" type="button" data-copy>Copy link</button>
-					<button class="btn btn--primary" type="button" data-download>Download image</button>
+					<button
+						class="btn btn--primary"
+						type="button"
+						data-download
+						data-share-label="Save image"
+					>Download image</button>
 				</div>
 			</div>
 
@@ -384,108 +358,6 @@ const clientData = JSON.stringify({
 		gap: 26px;
 		flex-wrap: wrap;
 		margin-bottom: 30px;
-	}
-	.stepper {
-		position: relative;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-	.step {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 8px;
-		border: 1px solid #4a2529;
-		background: #2a1214;
-		color: #c2a99a;
-		font-size: 14px;
-		font-family: inherit;
-		cursor: pointer;
-	}
-	.step:hover {
-		border-color: #d9b45a;
-		color: #f4e8d1;
-	}
-	.step--month {
-		justify-content: space-between;
-		gap: 10px;
-		min-width: 168px;
-		width: auto;
-		padding: 0 12px;
-		color: #f4e8d1;
-		font-size: 13px;
-	}
-	.step__caret {
-		font-size: 9px;
-		color: #a2857a;
-	}
-	.picker {
-		position: absolute;
-		left: 0;
-		top: calc(100% + 8px);
-		z-index: 40;
-		background: #20100f;
-		border: 1px solid #4a2529;
-		border-radius: 10px;
-		padding: 12px;
-		width: 290px;
-		box-shadow: 0 20px 44px -14px rgba(0, 0, 0, 0.7);
-	}
-	.picker__head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 10px;
-		font-family: 'Newsreader', serif;
-		font-size: 19px;
-		color: #f4e8d1;
-	}
-	.picker__head button {
-		width: 24px;
-		height: 24px;
-		border: none;
-		background: none;
-		color: #a2857a;
-		cursor: pointer;
-		font-size: 13px;
-	}
-	.picker__head button:hover {
-		color: #f4e8d1;
-	}
-	.picker__grid {
-		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: 5px;
-	}
-	.picker__month {
-		display: block;
-		text-align: center;
-		padding: 8px 0;
-		border-radius: 7px;
-		border: 1px solid transparent;
-		color: #e9d9c4;
-	}
-	.picker__month:hover {
-		background: #2a1214;
-		color: #f4e8d1;
-	}
-	.picker__month.is-on {
-		color: #f0d488;
-		background: #33211a;
-		border-color: #5c3a22;
-	}
-	.picker__abbr {
-		display: block;
-		font-size: 12px;
-	}
-	.picker__count {
-		display: block;
-		font-size: 10px;
-		color: #8a6f63;
-		margin-top: 2px;
 	}
 	.aspects {
 		display: flex;
@@ -915,6 +787,16 @@ const clientData = JSON.stringify({
 </style>
 
 <script>
+	import {
+		fitScaler,
+		makeToast,
+		wireHistoryReplace,
+		syncMonthLinks,
+		wirePicker,
+		wireCopy,
+		wireSave,
+	} from '../../../lib/month-card';
+
 	interface Geometry {
 		height: number;
 		cell: number;
@@ -944,11 +826,8 @@ const clientData = JSON.stringify({
 		let showTheaters = data.showTheaters;
 		const defaultSlug = data.slugs[Object.keys(data.geometry)[0]];
 
-		// ---- carry the settings across a month step ----
-		// Stepping months is a real navigation, so the aspect and the likes switch
-		// live in the query string: every month link gets rewritten as they change,
-		// and the address bar follows so a reload or a copied link comes back to the
-		// same card. Mirrors monthQuery() in month-view.ts.
+		// The card's settings ride in the query string, so a month step keeps them
+		// and a copied link reopens the same card. Mirrors monthQuery() in month-view.ts.
 		function query(): string {
 			const parts: string[] = [];
 			if (data.slugs[aspect] !== defaultSlug) parts.push(`fmt=${data.slugs[aspect]}`);
@@ -956,58 +835,12 @@ const clientData = JSON.stringify({
 			if (!showTheaters) parts.push('theaters=0');
 			return parts.length ? `?${parts.join('&')}` : '';
 		}
-		function syncLinks(): void {
-			const q = query();
-			for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-month-link]'))
-				link.href = `${link.dataset.monthLink}${q}`;
-			for (const tile of document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]'))
-				tile.href = `${tile.pathname}${q}`;
-			history.replaceState(null, '', `${location.pathname}${q}`);
-		}
 
-		// Stepping to another month is a navigation, but the card is one place —
-		// so it replaces the history entry rather than stacking one per month.
-		// Otherwise Back walks you through every month you looked at instead of
-		// leaving for the page that sent you here.
-		for (const link of document.querySelectorAll<HTMLAnchorElement>(
-			'[data-month-link], [data-picker-month]',
-		)) {
-			link.addEventListener('click', (event) => {
-				// Anything but a plain left click still means "open this somewhere else".
-				if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-					return;
-				event.preventDefault();
-				location.replace(link.href);
-			});
-		}
+		const toast = makeToast(document.querySelector<HTMLElement>('[data-toast]'));
+		fitScaler(viewport, { width: data.width });
+		wireHistoryReplace(query);
 
-		// ---- fit the 1080px artboard to whatever room the column has ----
-		// Capped at 0.62 so the card doesn't outgrow the controls above it on a
-		// wide screen, and floored so it stays a picture on a phone.
-		const stage = viewport.parentElement;
-		function fit(): void {
-			const width = stage?.clientWidth ?? data.width;
-			const scale = Math.max(0.2, Math.min(0.62, width / data.width));
-			viewport!.style.setProperty('--s', String(scale));
-		}
-		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
-		else window.addEventListener('resize', fit);
-		fit();
-
-		// ---- toast ----
-		let toastTimer: ReturnType<typeof setTimeout> | undefined;
-		const toastEl = document.querySelector<HTMLElement>('[data-toast]');
-		function flash(message: string): void {
-			if (!toastEl) return;
-			toastEl.textContent = message;
-			toastEl.hidden = false;
-			clearTimeout(toastTimer);
-			toastTimer = setTimeout(() => {
-				toastEl.hidden = true;
-			}, 2600);
-		}
-
-		// ---- aspect ----
+		// ---- aspect (client-side geometry swap) ----
 		const dims = document.querySelector<HTMLElement>('[data-dims]');
 		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
 			button.addEventListener('click', () => {
@@ -1023,188 +856,59 @@ const clientData = JSON.stringify({
 				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
-				syncLinks();
+				syncMonthLinks(query);
 			});
 		}
 		// The viewport sizes itself from --card-h too; seed it from the card's own.
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 
-		// ---- likes ----
+		// ---- likes / theatres ----
 		const likes = document.querySelector<HTMLElement>('[data-likes]');
 		likes?.addEventListener('click', () => {
 			showLikes = !showLikes;
 			likes.setAttribute('aria-pressed', String(showLikes));
 			card.classList.toggle('no-likes', !showLikes);
-			syncLinks();
+			syncMonthLinks(query);
 		});
-
-		// ---- theatres ----
 		const theaters = document.querySelector<HTMLElement>('[data-theaters]');
 		theaters?.addEventListener('click', () => {
 			showTheaters = !showTheaters;
 			theaters.setAttribute('aria-pressed', String(showTheaters));
 			card.classList.toggle('no-theaters', !showTheaters);
-			syncLinks();
+			syncMonthLinks(query);
 		});
 
 		// ---- month picker ----
-		// The twelve tiles are server-rendered and stay in the DOM; changing the
-		// year rewrites their text and hrefs. (Building them here instead would
-		// put them outside this component's scoped styles.)
-		const picker = document.querySelector<HTMLElement>('[data-picker]');
-		const panel = document.querySelector<HTMLElement>('[data-picker-panel]');
-		const yearLabel = document.querySelector<HTMLElement>('[data-picker-label]');
-		const tiles = document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]');
-		let pickerYear = Number(data.key.slice(0, 4));
-
-		function paintPicker(): void {
-			if (yearLabel) yearLabel.textContent = String(pickerYear);
-			tiles.forEach((tile, i) => {
-				const id = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
+		wirePicker({
+			basePath: '/films/month',
+			monthKey: data.key,
+			getQuery: query,
+			paintTile: (tile, id, current) => {
 				const count = data.counts[id] ?? 0;
-				tile.href = `/films/month/${id}${query()}`;
-				tile.classList.toggle('is-on', id === data.key);
+				tile.classList.toggle('is-on', current);
 				const countEl = tile.querySelector('.picker__count');
-				if (countEl) countEl.textContent = count ? `${count} ${count === 1 ? 'film' : 'films'}` : '—';
-			});
-		}
-		document.querySelector('[data-picker-toggle]')?.addEventListener('click', () => {
-			if (!panel) return;
-			panel.hidden = !panel.hidden;
-			if (!panel.hidden) {
-				pickerYear = Number(data.key.slice(0, 4));
-				paintPicker();
-			}
-		});
-		for (const button of document.querySelectorAll<HTMLElement>('[data-picker-year]')) {
-			button.addEventListener('click', (event) => {
-				event.stopPropagation();
-				pickerYear += Number(button.dataset.pickerYear);
-				paintPicker();
-			});
-		}
-		document.addEventListener('mousedown', (event) => {
-			if (!panel || panel.hidden) return;
-			if (!picker?.contains(event.target as Node)) panel.hidden = true;
+				if (countEl)
+					countEl.textContent = count ? `${count} ${count === 1 ? 'film' : 'films'}` : '—';
+			},
 		});
 
-		// ---- share ----
-		document.querySelector('[data-copy]')?.addEventListener('click', () => {
-			// With the settings on it, so what opens is the card that was on screen.
-			const url = `${location.origin}/films/month/${data.key}${query()}`;
-			if (navigator.clipboard)
-				navigator.clipboard.writeText(url).then(
-					() => flash(`Link copied · ${url}`),
-					() => flash(url),
-				);
-			else flash(url);
+		// ---- copy / save ----
+		wireCopy(document.querySelector('[data-copy]'), {
+			url: () => `${location.origin}/films/month/${data.key}${query()}`,
+			toast,
 		});
-
-		// ---- saving the card ----
-		// On a phone a downloaded file goes to Files, not Photos, and Photos is where
-		// a picture you meant to post belongs. The share sheet's "Save Image" is the
-		// only way in, so on touch devices the render is handed to navigator.share.
-		// Desktop keeps the plain download: a share sheet there is a detour.
-		const download = document.querySelector<HTMLElement>('[data-download]');
-		const shareFile =
-			matchMedia('(pointer: coarse)').matches &&
-			typeof navigator.share === 'function' &&
-			(() => {
-				try {
-					return !!navigator.canShare?.({
-						files: [new File([new Blob()], 'card.png', { type: 'image/png' })],
-					});
-				} catch {
-					return false;
-				}
-			})();
-		if (shareFile && download) download.textContent = 'Save image';
-
-		// Rendering can outlast the tap that started it, and Safari won't open the
-		// sheet without a live user gesture. Keeping the render means the second tap
-		// can share immediately, inside its own gesture.
-		let rendered: { state: string; file: File } | null = null;
-		const renderState = (): string => `${data.key}|${aspect}|${showLikes}|${showTheaters}`;
-
-		// Safari and every iOS browser, which is Safari underneath.
-		const webkit =
-			/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
-
-		/**
-		 * The card as a PNG blob.
-		 *
-		 * html-to-image rasterises by dropping a clone into an SVG <foreignObject>,
-		 * and WebKit is known to paint that clone's text and borders on a cold pass
-		 * while dropping its <img>s — an export that comes back as a calendar of
-		 * empty prints. The export that showed those symptoms turned out to be a
-		 * stale deploy, so this second pass is insurance rather than a diagnosed
-		 * fix; it stays because it costs almost nothing (the inlined data URLs are
-		 * cached from the first pass) and the failure it guards against is silent.
-		 */
-		async function render(height: number): Promise<Blob | null> {
-			if (!card) return null; // unreachable: the block below only runs with a card
-			const { toBlob } = await import('html-to-image');
-			const options = {
-				width: data.width,
-				height,
+		wireSave({
+			button: document.querySelector<HTMLElement>('[data-download]'),
+			render: () => ({
+				card,
 				backgroundColor: '#1c0d0e',
-				pixelRatio: 1,
-				// The card sits inside a scaled wrapper; the clone must not inherit it.
-				style: { transform: 'none' },
-				// A poster is drawn by a plain <img>, so the copy in the browser cache
-				// came back without an Access-Control-Allow-Origin header on it (TMDB
-				// only sends one when asked, and caches for a year). Inlining it here
-				// is a real CORS fetch, which that copy can't satisfy — so bust the URL.
 				cacheBust: true,
-			};
-			const first = await toBlob(card, options);
-			return webkit ? await toBlob(card, options) : first;
-		}
-
-		download?.addEventListener('click', async () => {
-			const height = data.geometry[aspect].height;
-			const name = `film-log-${data.key}.png`;
-
-			if (shareFile && rendered?.state === renderState()) {
-				try {
-					await navigator.share({ files: [rendered.file] });
-				} catch (error) {
-					if ((error as DOMException)?.name !== 'AbortError') flash('Could not open the share sheet');
-				}
-				return;
-			}
-
-			flash(`Rendering ${data.width}×${height}…`);
-			try {
-				const blob = await render(height);
-				if (!blob) throw new Error('nothing was rendered');
-
-				if (shareFile) {
-					const file = new File([blob], name, { type: 'image/png' });
-					rendered = { state: renderState(), file };
-					try {
-						await navigator.share({ files: [file] });
-					} catch (error) {
-						const kind = (error as DOMException)?.name;
-						// The sheet needs a gesture that hasn't gone stale; the render is
-						// kept, so tapping again opens it straight away.
-						if (kind === 'NotAllowedError') flash('Ready. Tap Save image again.');
-						else if (kind !== 'AbortError') flash('Could not open the share sheet');
-					}
-					return;
-				}
-
-				const url = URL.createObjectURL(blob);
-				const link = document.createElement('a');
-				link.href = url;
-				link.download = name;
-				link.click();
-				// Revoked late: some browsers are still reading the blob when click() returns.
-				setTimeout(() => URL.revokeObjectURL(url), 10_000);
-				flash(`Saved ${name}`);
-			} catch {
-				flash('Could not render the image. Posters may have blocked the export.');
-			}
+				webkitDouble: true,
+				height: data.geometry[aspect].height,
+			}),
+			filename: () => `film-log-${data.key}.png`,
+			state: () => `${data.key}|${aspect}|${showLikes}|${showTheaters}`,
+			toast,
 		});
 	}
 </script>

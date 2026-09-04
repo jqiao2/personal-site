@@ -21,18 +21,24 @@
 // second layout.
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
+import MonthPicker from '../../../components/MonthPicker.astro';
 import { requireOwner } from '../../../lib/auth';
 import { photoSrc } from '../../../lib/photo-src';
-import { listMonthKeys, listMonthVisits, placesForMonth } from '../../../lib/restaurants';
+import {
+	countVisitsByMonth,
+	listMonthVisits,
+	placesForMonth,
+} from '../../../lib/restaurants';
 import { monthCalendar, monthFigures } from '../../../lib/restaurant-view';
 import type { MapPoint } from '../../../lib/restaurant-view';
 import {
 	ASPECTS,
 	aspectBySlug,
+	MONTH_ABBR,
+	monthKey as monthKeyOf,
 	monthLabel,
 	monthQuery,
 	parseMonthKey,
-	shiftMonth,
 	WEEKDAYS,
 } from '../../../lib/share-card';
 
@@ -47,11 +53,19 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = Astro.params.month ?? '';
-if (!parseMonthKey(key)) return Astro.redirect('/restaurants/month');
+const parsed = parseMonthKey(key);
+if (!parsed) return Astro.redirect('/restaurants/month');
 
-const [visits, allKeys] = await Promise.all([listMonthVisits(key), listMonthKeys()]);
+const [visits, counts] = await Promise.all([listMonthVisits(key), countVisitsByMonth()]);
 // The gate above already established this.
 const isOwner = true;
+
+// The month picker's twelve tiles for the opening year, each with its meal count.
+const pickerMonths = MONTH_ABBR.map((abbr, i) => {
+	const id = monthKeyOf(parsed.year, i + 1);
+	const n = counts[id] ?? 0;
+	return { abbr, key: id, count: n ? `${n} ${n === 1 ? 'meal' : 'meals'}` : '—', current: id === key };
+});
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
 
@@ -80,9 +94,6 @@ const usesMaps = cells.some((c) => c.covers.some((cover) => cover.kind === 'map'
 const newIds = new Set([...places].filter(([, p]) => p.isNew).map(([id]) => id));
 const figures = monthFigures(visits, newIds);
 
-const prev = shiftMonth(key, -1);
-const next = shiftMonth(key, 1);
-const has = (k: string) => allKeys.includes(k);
 const query = monthQuery(aspect);
 
 ---
@@ -114,31 +125,18 @@ const query = monthQuery(aspect);
 			</div>
 		</div>
 
-		<!-- Stepping to another month is a navigation, but the card is one place, so
-		     the steps replace the history entry rather than stacking one per month
-		     (data-rl-replace; the layout does the work). Otherwise Back walks you
-		     through every month you looked at instead of leaving for the page that
-		     sent you here. The film log's month card behaves the same way. -->
-		<nav class="stepper">
-			{
-				has(prev) ? (
-					<a class="stepper__go" href={`/restaurants/month/${prev}${query}`} data-rl-replace>
-						&larr; {monthLabel(prev)}
-					</a>
-				) : (
-					<span class="stepper__go stepper__go--off">&larr;</span>
-				)
-			}
-			<a class="stepper__all" href="/restaurants/month">All months</a>
-			{
-				has(next) ? (
-					<a class="stepper__go" href={`/restaurants/month/${next}${query}`} data-rl-replace>
-						{monthLabel(next)} &rarr;
-					</a>
-				) : (
-					<span class="stepper__go stepper__go--off">&rarr;</span>
-				)
-			}
+		<!-- The month picker steps to any other month and replaces the history entry
+		     rather than stacking one per month (wireHistoryReplace), so Back leaves
+		     for the page that sent you here. Same picker the other four cards use. -->
+		<nav class="monthnav">
+			<MonthPicker
+				basePath="/restaurants/month"
+				monthKey={key}
+				label={monthLabel(key)}
+				year={parsed.year}
+				query={query}
+				tiles={pickerMonths}
+			/>
 		</nav>
 
 		<div class="stage">
@@ -260,32 +258,52 @@ const query = monthQuery(aspect);
 			)
 		}
 	</div>
+
+	<div class="toast" hidden data-toast></div>
+
+	<script
+		type="application/json"
+		data-month-data
+		set:html={JSON.stringify({ key, counts })}
+	/>
 </RestaurantLayout>
 
 <script>
-	const button = document.querySelector<HTMLButtonElement>('[data-save-card]');
+	import { fitScaler, makeToast, wireHistoryReplace, wirePicker, wireSave } from '../../../lib/month-card';
+
+	interface MonthData {
+		key: string;
+		counts: Record<string, number>;
+	}
+
 	const card = document.querySelector<HTMLElement>('[data-card]');
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+	const dataEl = document.querySelector('[data-month-data]');
+	const data: MonthData = dataEl?.textContent
+		? JSON.parse(dataEl.textContent)
+		: { key: '', counts: {} };
+	const toast = makeToast(document.querySelector<HTMLElement>('[data-toast]'));
 
-	// ---- fit the 1080px artboard to whatever room the column has ----
-	// The card is drawn at its real size and shrunk by a transform on the wrapper,
-	// so the export keeps its 1080 whatever the screen is. The scale is worked out
-	// here rather than in CSS because a length divided by a length is not a number
-	// as far as `scale()` is concerned — the arithmetic this replaced was invalid,
-	// which dropped the transform and left phones showing the artboard at full
-	// size. Capped at 0.62 so the card doesn't outgrow the controls above it, and
-	// floored so it stays a picture on a phone. Same fit as the film card's.
-	const stage = viewport?.parentElement;
-	function fit(): void {
-		if (!viewport) return;
-		const width = stage?.clientWidth ?? 1080;
-		viewport.style.setProperty('--s', String(Math.max(0.2, Math.min(0.62, width / 1080))));
-	}
-	if (viewport) {
-		if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
-		else window.addEventListener('resize', fit);
-		fit();
-	}
+	// Fit the 1080px artboard into the column; the export keeps its 1080 whatever
+	// the screen is. Same rig as the other four cards.
+	if (viewport) fitScaler(viewport);
+
+	// The aspect lives in the URL (each Export link is a full navigation), so a
+	// month step just carries the current query along and replaces the entry.
+	wireHistoryReplace(() => location.search);
+
+	// ---- month picker ----
+	wirePicker({
+		basePath: '/restaurants/month',
+		monthKey: data.key,
+		getQuery: () => location.search,
+		paintTile: (tile, id, current) => {
+			const n = data.counts[id] ?? 0;
+			tile.classList.toggle('is-on', current);
+			const countEl = tile.querySelector('.picker__count');
+			if (countEl) countEl.textContent = n ? `${n} ${n === 1 ? 'meal' : 'meals'}` : '—';
+		},
+	});
 
 	// A cover that never arrives — a photo whose object has gone, a map that
 	// couldn't be drawn — leaves the cell as the ruled paper it would have been,
@@ -423,132 +441,29 @@ const query = monthQuery(aspect);
 	}
 
 	// ---- saving the card ----
-	//
-	// THIS USED TO BE `toPng` INTO AN `<a download>`, AND ON A PHONE IT STOPPED
-	// WORKING: iOS put up its download prompt and then produced nothing. Two
-	// reasons, and the film card had already answered both.
-	//
-	// The first is that a `data:` URL of a whole 1080×1350 artboard is a string
-	// megabytes long, and longer again now the map cells carry their snapshots as
-	// data URLs of their own — a size Safari quietly declines to save. A Blob has
-	// no such ceiling.
-	//
-	// The second is where the file would land even if it saved. A download goes
-	// to Files; a picture you meant to post belongs in Photos, and the share
-	// sheet's "Save Image" is the only door into it. So on a touch device the
-	// render is handed to navigator.share, and desktop keeps the plain download,
-	// where a share sheet would be a detour.
-	const shareFile =
-		matchMedia('(pointer: coarse)').matches &&
-		typeof navigator.share === 'function' &&
-		(() => {
-			try {
-				return !!navigator.canShare?.({
-					files: [new File([new Blob()], 'card.png', { type: 'image/png' })],
-				});
-			} catch {
-				return false;
-			}
-		})();
-
-	// Rendering can outlast the tap that started it, and Safari won't open the
-	// sheet without a live user gesture. Keeping the render means the second tap
-	// can share immediately, inside its own gesture. The map snapshots are part of
-	// the state: a render made before they landed is a different card.
-	let rendered: { state: string; file: File } | null = null;
-	const renderState = (): string =>
-		`${location.pathname}${location.search}|${document.querySelectorAll('.plate__shot').length}`;
-
-	// Safari and every iOS browser, which is Safari underneath. html-to-image
-	// rasterises through an SVG <foreignObject>, and WebKit is known to paint
-	// that clone's text on a cold pass while dropping its images; the second pass
-	// costs almost nothing, since the inlined data URLs are cached from the first.
-	const webkit =
-		/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
-
-	async function render(): Promise<Blob | null> {
-		if (!card) return null;
-		const { toBlob } = await import('html-to-image');
-		const options = {
-			// Drawn at the artboard's own size rather than the scaled-down preview,
-			// so the export is 1080 wide whatever the screen is.
-			width: card.offsetWidth,
-			height: card.offsetHeight,
-			pixelRatio: 1,
-			backgroundColor: '#fdf7e8',
-			// The card sits inside a scaled wrapper; the clone must not inherit it.
-			style: { transform: 'none' },
-			// EVERY OPTIMISED PHOTO IS THE SAME URL UNTIL THE `?`. html-to-image
-			// caches each fetched resource under `url.replace(/\?.*/, '')` unless
-			// this is set (dataurl.js, `getCacheKey`) — and `photoSrc` returns
-			// `/_vercel/image?url=…&w=320`, so every photograph on the card hashes
-			// to the one key `/_vercel/image`. The first one fetched was then
-			// handed back for all of them, and the export came out with the same
-			// plate on every day it drew. Posters and covers are absolute URLs with
-			// distinct paths, which is why only the photographs collapsed.
-			includeQueryParams: true,
-			cacheBust: true,
-		};
-		const first = await toBlob(card, options);
-		return webkit ? await toBlob(card, options) : first;
-	}
-
-	button?.addEventListener('click', async () => {
-		if (!card) return;
-		const idle = button.dataset.label ?? button.textContent ?? 'Save image';
-		button.dataset.label = idle;
-		const name = `${document.title.split(' ·')[0].replace(/\s+/g, '-').toLowerCase()}-eating.png`;
-
-		// A render is already in hand and still current: share it now, while the
-		// tap that asked for it is still what the browser is acting on.
-		if (shareFile && rendered?.state === renderState()) {
-			try {
-				await navigator.share({ files: [rendered.file] });
-			} catch (error) {
-				if ((error as DOMException)?.name !== 'AbortError')
-					button.textContent = 'Could not open the share sheet';
-			}
-			return;
-		}
-
-		let next = idle;
-		button.disabled = true;
-		button.textContent = 'Drawing…';
-		try {
+	// The one place all five cards already agreed; now the one copy (wireSave in
+	// month-card.ts). Restaurants keeps two quirks: the map snapshots are part of
+	// the render state (a render made before they landed is a different card), and
+	// includeQueryParams — without it every `/_vercel/image?…` photo hashes to the
+	// one cache key and the export draws the same plate on every day.
+	if (card)
+		wireSave({
+			button: document.querySelector<HTMLElement>('[data-save-card]'),
+			render: () => ({
+				card,
+				backgroundColor: '#fdf7e8',
+				includeQueryParams: true,
+				cacheBust: true,
+				webkitDouble: true,
+			}),
+			filename: () =>
+				`${document.title.split(' ·')[0].replace(/\s+/g, '-').toLowerCase()}-eating.png`,
+			state: () =>
+				`${location.pathname}${location.search}|${document.querySelectorAll('.plate__shot').length}`,
 			// A card whose maps haven't arrived yet would export with holes in it.
-			await mapsDrawn;
-			const blob = await render();
-			if (!blob) throw new Error('nothing was rendered');
-
-			if (shareFile) {
-				const file = new File([blob], name, { type: 'image/png' });
-				rendered = { state: renderState(), file };
-				try {
-					await navigator.share({ files: [file] });
-				} catch (error) {
-					const kind = (error as DOMException)?.name;
-					// The sheet needs a gesture that hasn't gone stale; the render is
-					// kept, so tapping again opens it straight away.
-					if (kind === 'NotAllowedError') next = 'Ready. Tap again';
-					else if (kind !== 'AbortError') next = 'Could not open the share sheet';
-				}
-				return;
-			}
-
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = name;
-			a.click();
-			// Revoked late: some browsers are still reading the blob when click() returns.
-			setTimeout(() => URL.revokeObjectURL(url), 10_000);
-		} catch {
-			next = 'Could not draw the card';
-		} finally {
-			button.disabled = false;
-			button.textContent = next;
-		}
-	});
+			beforeRender: () => mapsDrawn,
+			toast,
+		});
 </script>
 
 <style>
@@ -575,19 +490,43 @@ const query = monthQuery(aspect);
 		color: var(--ground);
 	}
 
-	.stepper {
+	/* The shared <MonthPicker>, skinned in the restaurant log's paper and ink. */
+	.monthnav {
 		margin-top: 14px;
-		display: flex;
-		align-items: center;
-		gap: 16px;
-		font-size: 12.5px;
+		--mp-step-bg: var(--card);
+		--mp-step-border: var(--dashed);
+		--mp-step-fg: var(--ink-2);
+		--mp-step-hover-border: var(--terracotta);
+		--mp-step-hover-fg: var(--terracotta-deep);
+		--mp-month-fg: var(--ink);
+		--mp-caret-fg: var(--ink-3);
+		--mp-panel-bg: var(--card);
+		--mp-panel-border: var(--rule);
+		--mp-panel-shadow: 0 20px 44px -14px rgba(60, 45, 30, 0.28);
+		--mp-head-font: var(--display);
+		--mp-head-fg: var(--ink);
+		--mp-tile-fg: var(--ink-2);
+		--mp-tile-hover-bg: var(--ground);
+		--mp-tile-hover-fg: var(--ink);
+		--mp-tile-on-fg: var(--terracotta-deep);
+		--mp-tile-on-bg: var(--rule-4);
+		--mp-tile-on-border: var(--terracotta);
+		--mp-count-fg: var(--ink-3);
 	}
-	.stepper__all {
-		margin-left: auto;
-		color: var(--ink-3);
-	}
-	.stepper__go--off {
-		color: var(--rule);
+
+	.toast {
+		position: fixed;
+		left: 50%;
+		bottom: 34px;
+		transform: translateX(-50%);
+		background: var(--card);
+		border: 1px solid var(--rule);
+		border-radius: 9px;
+		padding: 11px 18px;
+		font-size: 13px;
+		color: var(--ink);
+		box-shadow: 0 16px 40px -12px rgba(60, 45, 30, 0.32);
+		z-index: 60;
 	}
 
 	/* ---- the artboard ----

@@ -91,3 +91,5 @@ wiki across every iteration, even reverted ones).
 
 - 2026-09-03 — Built /activities/athlete (versioned thresholds table, per-metric progress sparklines, owner-only PUT/DELETE). Added pattern 0011: reaching the live database through the pooler when the repo has no `supabase/config.toml`; found the applied history one migration behind the directory (0057 committed, never applied).
 - 2026-09-03 — Athlete Progress reworked for mobile: FTP and W/kg share a card behind a switcher, height dropped from the graphs, a 6M/1Y/All timeframe toggle defaulting to six months, and the plot geometry moved into `src/lib/athlete.ts` so the server render and the client redraw share one implementation. The oval dots root-caused to `preserveAspectRatio="none"` → pattern 0012.
+
+- 2026-09-04 — unified all five month-in-review cards onto a shared MonthPicker.astro + month-card.ts (picker, save/copy/toast/fit); ported the two outliers (journal, restaurants) off their bespoke chrome. Also: journal/activities month links now redirect to the current month; restaurant month covers order photos first, then rating/verdict.
