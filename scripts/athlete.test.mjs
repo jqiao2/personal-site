@@ -225,3 +225,58 @@ assert.equal(
 }
 
 console.log('athlete.test.mjs: ok');
+
+// --- Progress graph --------------------------------------------------------
+{
+	const { plot, trend, windowed, PLOT_W, PLOT_H } = await import('../src/lib/athlete.ts');
+	const m = METRICS.find((x) => x.key === 'ftp_w');
+	const iso = (d) => d.toLocaleDateString('en-CA');
+	const monthsAgo = (n) => {
+		const d = new Date();
+		d.setMonth(d.getMonth() - n);
+		return iso(d);
+	};
+
+	// The window keeps what is inside it, and never empties a card.
+	const pts = [
+		{ date: monthsAgo(24), value: 160 },
+		{ date: monthsAgo(3), value: 250 },
+		{ date: monthsAgo(1), value: 257 },
+	];
+	assert.equal(windowed(pts, '6m').length, 2, '6M drops the two-year-old reading');
+	assert.equal(windowed(pts, 'all').length, 3, 'All keeps everything');
+	assert.deepEqual(
+		windowed([{ date: monthsAgo(24), value: 160 }], '6m'),
+		[{ date: monthsAgo(24), value: 160 }],
+		'an empty window falls back to the last reading rather than blanking',
+	);
+
+	// Geometry: inside the box, oldest on the left, bigger values higher.
+	const p = plot(windowed(pts, '6m'));
+	assert.equal(p.dots.length, 2);
+	assert.ok(p.dots[0].x < p.dots[1].x, 'time runs left to right');
+	assert.ok(p.dots[1].y < p.dots[0].y, 'the bigger number sits higher');
+	for (const d of p.dots) {
+		assert.ok(d.x >= 0 && d.x <= PLOT_W && d.y >= 0 && d.y <= PLOT_H, 'dots stay inside the box');
+	}
+	assert.equal(plot([]), null, 'no points, no plot');
+
+	// A metric that never moved draws down the middle instead of on the floor.
+	const flat = plot([{ date: monthsAgo(2), value: 177 }, { date: monthsAgo(1), value: 177 }]);
+	assert.deepEqual([flat.dots[0].y, flat.dots[1].y], [PLOT_H / 2, PLOT_H / 2]);
+
+	// Dense series drop their dots.
+	const dense = Array.from({ length: 60 }, (_, i) => ({ date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`, value: 70 + i }));
+	assert.equal(plot(dense).dots.length, 0, 'a daily series draws a line, not a caterpillar');
+
+	// Trend judges by the metric's own direction.
+	assert.equal(trend(m, pts).tone, 'good', 'FTP rising is good');
+	assert.equal(trend(METRICS.find((x) => x.key === 'rest_hr'), [{ date: 'a', value: 55 }, { date: 'b', value: 50 }]).tone, 'good', 'resting HR falling is good');
+	assert.equal(trend(m, [pts[0]]), null, 'one point has no trend');
+	assert.equal(trend(m, [{ date: 'a', value: 5 }, { date: 'b', value: 5 }]).text, 'no change');
+
+	// Height is a number, not a graph.
+	assert.equal(METRICS.find((x) => x.key === 'height_cm').noGraph, true);
+}
+
+console.log('athlete.test.mjs: progress graph ok');
