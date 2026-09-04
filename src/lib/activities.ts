@@ -905,22 +905,47 @@ export async function getActivityStats(isOwner = false): Promise<ActivityStats> 
 // thresholdsOn — the exertion calculator's input for a given date.
 // ---------------------------------------------------------------------------
 
-/** The athlete_thresholds row in force on `date` — the latest one with
- * effective_from <= date. Null if the table is empty or every row is later
- * than `date` (nothing was in force yet). */
+/** The thresholds in force on `date`, resolved PER FIELD: each metric takes its
+ * latest non-null value from any row with effective_from <= date, not just the
+ * single most-recent row. An entry that updates FTP alone (leaving LTHR/max/rest
+ * null) must not blank out an LTHR set months earlier — the athlete only retests
+ * one number at a time, so a sparse row is an amendment, not a reset. Now that
+ * weight lives in its own `body_weight` table (0059) there are no field-only
+ * rows that should reset a sibling, so carrying forward is unambiguously right.
+ *
+ * `effective_from`/`id`/`created_at` come from the latest contributing row.
+ * Null only if no row is on or before `date` (nothing in force yet). */
+const THRESHOLD_FIELDS = [
+	'ftp_w',
+	'lthr_bpm',
+	'max_hr',
+	'rest_hr',
+	'threshold_pace_s_per_km',
+	'css_pace_s_per_100m',
+	'weight_kg',
+	'height_cm',
+] as const;
+
 export async function thresholdsOn(date: string): Promise<AthleteThresholds | null> {
 	const { data, error } = await supabasePublic
 		.from('athlete_thresholds')
 		.select('*')
 		.lte('effective_from', date)
-		.order('effective_from', { ascending: false })
-		.limit(1)
-		.maybeSingle();
+		.order('effective_from', { ascending: true });
 	if (error) {
 		if (isDegraded(error)) return null;
 		throw new Error(`thresholdsOn failed: ${error.message}`);
 	}
-	return (data as AthleteThresholds | null) ?? null;
+	const rows = (data as AthleteThresholds[] | null) ?? [];
+	if (rows.length === 0) return null;
+	// Oldest → newest so each later non-null overwrites; nulls leave the
+	// carried-forward value standing.
+	const merged = { ...rows[rows.length - 1] };
+	for (const field of THRESHOLD_FIELDS) {
+		const latest = rows.findLast((r) => r[field] != null);
+		merged[field] = latest ? latest[field] : null;
+	}
+	return merged;
 }
 
 /** Every threshold row, newest first — the table and graph on
