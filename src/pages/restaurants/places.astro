@@ -29,10 +29,12 @@ import {
 	isPriceBand,
 	isTripFilter,
 	listCuisineFacets,
+	listFriendFacets,
 	listFriends,
 	listPlaces,
 	listTags,
 	PRICE_BANDS,
+	type CuisineFacet,
 	type PlaceSort,
 	type PriceBand,
 	type TripFilter,
@@ -58,11 +60,17 @@ const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as
 const isMap = params.get('view') === 'map';
 const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
 
-const [all, filtered, cuisineFacets, isOwner] = await Promise.all([
+// Friends are owner-only everywhere on the site, so who you ate with can only
+// filter — or even be read from the URL — as the owner. Resolve that first so a
+// hand-typed `?friend=…` narrows nothing for a visitor.
+const isOwner = await requireOwner(Astro.cookies);
+const selectedFriends = isOwner ? params.getAll('friend') : [];
+
+const [all, filtered, cuisineFacets, friendFacets] = await Promise.all([
 	listPlaces(),
-	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, trip, sort }),
+	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, trip, sort, friends: selectedFriends }),
 	listCuisineFacets(),
-	requireOwner(Astro.cookies),
+	isOwner ? listFriendFacets() : Promise.resolve([] as CuisineFacet[]),
 ]);
 
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
@@ -100,6 +108,11 @@ const HEAD_CHIPS = 8;
 const head = cuisineFacets.filter((c) => c.count > 1).slice(0, HEAD_CHIPS);
 const tail = cuisineFacets.filter((c) => !head.some((h) => h.name === c.name));
 
+// Same head/tail as cuisine — the people you eat with are long-tailed too, one
+// meal with most of them — so the row shows the regulars and hides the rest.
+const friendHead = friendFacets.slice(0, HEAD_CHIPS);
+const friendTail = friendFacets.slice(HEAD_CHIPS);
+
 const mapPoints: MapPoint[] = filtered
 	.filter((p) => p.lat != null && p.lng != null)
 	.map((p) => ({
@@ -124,6 +137,7 @@ const activeFilters = [
 	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
 	...(verdictAtLeast != null ? [{ label: thresholdLabel(verdictAtLeast), href: href({ verdict: null }) }] : []),
 	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
+	...selectedFriends.map((f) => ({ label: `with ${f}`, href: href({ friend: toggle(selectedFriends, f) }) })),
 ];
 
 const countLine = `${filtered.length} of ${all.length}`;
@@ -194,6 +208,41 @@ const sorts: { key: PlaceSort; label: string }[] = [
 					)
 				}
 			</div>
+
+			{
+				isOwner && friendFacets.length > 0 && (
+					<div class="rl-filters__row">
+						<span class="rl-filters__legend">With</span>
+						{friendHead.map((f) => (
+							<a
+								class="rl-chip"
+								href={href({ friend: toggle(selectedFriends, f.name) })}
+								aria-pressed={selectedFriends.includes(f.name) ? 'true' : 'false'}
+							>
+								<span>{f.name}</span>
+								<span class="rl-chip__n">{f.count}</span>
+							</a>
+						))}
+						{friendTail.length > 0 && (
+							<details class="rl-more">
+								<summary class="rl-chip rl-chip--more">{friendTail.length} more</summary>
+								<div class="rl-more__panel">
+									{friendTail.map((f) => (
+										<a
+											class="rl-chip"
+											href={href({ friend: toggle(selectedFriends, f.name) })}
+											aria-pressed={selectedFriends.includes(f.name) ? 'true' : 'false'}
+										>
+											<span>{f.name}</span>
+											<span class="rl-chip__n">{f.count}</span>
+										</a>
+									))}
+								</div>
+							</details>
+						)}
+					</div>
+				)
+			}
 
 			<div class="rl-filters__row rl-filters__row--split">
 				<span class="rl-filters__legend">Price</span>
