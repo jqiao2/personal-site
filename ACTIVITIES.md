@@ -146,11 +146,16 @@ resumes. The endpoint still takes a batch too (an array or `{weights:[…]}`),
 for anything that can build one; the daily automation is just a batch of one.
 
 **Outlier guard.** A scale mis-read (a foot half-off, a bag on the platform)
-lands wildly off the trend. `flagOutliers` marks any reading more than 10%
-(`OUTLIER_FRACTION`) from the last *accepted* weight as `ignored` — stored, but
-kept out of the series, the current value, and the baseline the next reading is
-judged against (so one spike can't cascade). The response reports how many were
-flagged: `{ ok, count, ignored }`.
+lands wildly off the trend. `flagOutliers` marks a reading `ignored` only when
+it disagrees with **both** the last *accepted* weight AND the next reading by
+more than 10% (`OUTLIER_FRACTION`) — a lone spike. A reading the next one
+confirms is a real new plateau and is accepted, so a genuine sustained gain or
+loss isn't rejected wholesale (the first cut of this — plain ">10% off the last
+accepted" — froze the baseline and flagged a real ~20 lb gain across 26 days on
+the backfill). The most recent reading, and the live single-reading case, have
+no next to confirm against and fall back to the plain baseline test, so a sudden
+jump is still caught on the spot. Ignored rows are stored but kept out of the
+series, the current value, and the baseline. Response: `{ ok, count, ignored }`.
 
 **One-time setup** (on the owner):
 
