@@ -56,7 +56,8 @@ const items = [];
 let scanned = 0;
 const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
 for await (const line of rl) {
-	if (!line.includes('HKQuantityTypeIdentifierBodyMass')) continue;
+	// Exact type — the closing quote keeps BodyMassIndex (BMI, unit "count") out.
+	if (!line.includes('type="HKQuantityTypeIdentifierBodyMass"')) continue;
 	scanned++;
 	const rawValue = attr(line, 'value');
 	const rawUnit = (attr(line, 'unit') ?? '').toLowerCase();
@@ -113,7 +114,18 @@ console.log(`Range: ${rows[0].measured_on} … ${rows[rows.length - 1].measured_
 // drain instead.
 if (dry) {
 	console.log('--dry: nothing written.');
-	if (flagged.length) console.log('Would flag:', flagged.map((r) => r.measured_on).join(', '));
+	// Show each flagged reading against the accepted weight it was judged
+	// against, so a real step-change can be told from a lone scale mis-read.
+	const toLb = (kg) => (kg * 2.20462262).toFixed(1);
+	let lastKg = existing?.length ? existing[existing.length - 1].weight_kg : null;
+	for (const r of rows) {
+		if (r.ignored) {
+			const pct = lastKg ? (((r.weight_kg - lastKg) / lastKg) * 100).toFixed(1) : '?';
+			console.log(`  flag ${r.measured_on}: ${toLb(r.weight_kg)} lb vs ${lastKg ? toLb(lastKg) : '—'} (${pct}%)`);
+		} else {
+			lastKg = r.weight_kg;
+		}
+	}
 } else {
 	const updated_at = new Date().toISOString();
 	const { error: writeErr } = await db

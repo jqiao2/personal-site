@@ -224,16 +224,24 @@ export function parseWeighIns(items: WeighInInput[], today: string): { rows: Wei
 	return { rows: [...byDay.values()] };
 }
 
-/** Decide `ignored` for each incoming weigh-in: true when it sits more than
- *  OUTLIER_FRACTION from the last ACCEPTED weight before its date. `accepted`
- *  is the weigh-ins already trusted (listWeighIns returns only those); walked
- *  in date order together with the incoming rows so a backfill judges each day
- *  against the running accepted baseline — and an accepted incoming reading
- *  becomes the baseline for the next, while an ignored one never does.
+/** Decide `ignored` for each incoming weigh-in — a guard against scale
+ *  mis-reads (a foot half-off, a bag on the platform), not against real change.
  *
- *  A day being re-measured is compared against the PRIOR day, not its own old
- *  value, so its existing accepted row is dropped from the baseline first. The
- *  first-ever reading has nothing to judge against and is always accepted. */
+ *  A reading is ignored only when it disagrees with BOTH the last accepted
+ *  weight AND the next reading — a lone spike. One that the next reading
+ *  confirms is a new plateau (a real gain or loss) and is accepted, becoming
+ *  the baseline; otherwise a genuine sustained change would be rejected
+ *  wholesale, every reading measured forever against a frozen old weight. The
+ *  last reading in the series has nothing after it to confirm against, so it
+ *  falls back to the plain "> fraction from baseline" test — which is also
+ *  exactly the live daily case, one new reading with no next, where a sudden
+ *  jump should be flagged on the spot.
+ *
+ *  `accepted` is the weigh-ins already trusted (listWeighIns returns only
+ *  those); it and the incoming rows are walked together in date order. A
+ *  re-measured day is judged against the prior day, not its own stale value, so
+ *  its existing accepted row is dropped from the baseline first. The first-ever
+ *  reading has no baseline and is always accepted. */
 export function flagOutliers(
 	accepted: WeighIn[],
 	incoming: WeighInRow[],
@@ -243,18 +251,25 @@ export function flagOutliers(
 	const stream = [
 		...accepted
 			.filter((a) => !incomingDates.has(a.measured_on))
-			.map((a) => ({ date: a.measured_on, kg: a.weight_kg, row: null as WeighInRow | null })),
-		...incoming.map((r) => ({ date: r.measured_on, kg: r.weight_kg, row: r })),
+			.map((a) => ({ kg: a.weight_kg, row: null as WeighInRow | null, date: a.measured_on })),
+		...incoming.map((r) => ({ kg: r.weight_kg, row: r, date: r.measured_on })),
 	].sort((a, b) => a.date.localeCompare(b.date));
 
 	let lastKg: number | null = null;
 	const out: (WeighInRow & { ignored: boolean })[] = [];
-	for (const pt of stream) {
+	for (let k = 0; k < stream.length; k++) {
+		const pt = stream[k];
 		if (!pt.row) {
 			lastKg = pt.kg; // an already-accepted baseline
 			continue;
 		}
-		const ignored = lastKg != null && Math.abs(pt.kg - lastKg) / lastKg > fraction;
+		const offBaseline = lastKg != null && Math.abs(pt.kg - lastKg) / lastKg > fraction;
+		// A lone spike also disagrees with the next reading. No next (the most
+		// recent reading, and the live single-reading case) → trust the baseline
+		// test alone, so a sudden jump is still caught immediately.
+		const next = stream[k + 1];
+		const offNext = next == null ? true : Math.abs(pt.kg - next.kg) / pt.kg > fraction;
+		const ignored = offBaseline && offNext;
 		out.push({ ...pt.row, ignored });
 		if (!ignored) lastKg = pt.kg;
 	}

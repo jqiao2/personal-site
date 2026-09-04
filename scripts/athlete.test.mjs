@@ -199,6 +199,26 @@ assert.equal(flagOutliers([], [mk('2026-01-01', 165)])[0].ignored, false, 'nothi
 	);
 }
 
+// A real sustained gain is NOT flagged: each big step is confirmed by the next
+// reading, so the baseline advances instead of freezing (the backfill bug where
+// a 155→175→185 climb was rejected wholesale against a frozen 155).
+{
+	const flagged = flagOutliers(
+		[{ measured_on: '2020-01-01', weight_kg: kg(155) }],
+		[mk('2021-01-01', 175), mk('2022-01-01', 180), mk('2023-01-01', 185)],
+	);
+	assert.deepEqual(flagged.map((r) => r.ignored), [false, false, false], 'a confirmed climb is accepted');
+}
+
+// A lone spike inside a plateau still gets caught: it disagrees with both sides.
+{
+	const flagged = flagOutliers(
+		[{ measured_on: '2026-05-01', weight_kg: kg(175) }],
+		[mk('2026-05-02', 176), mk('2026-05-03', 210), mk('2026-05-04', 177)],
+	);
+	assert.deepEqual(flagged.map((r) => r.ignored), [false, true, false], 'lone spike between normal readings');
+}
+
 // Exactly 10% is within tolerance (strictly greater is the cutoff).
 assert.equal(
 	flagOutliers([{ measured_on: '2026-02-01', weight_kg: 100 }], [{ measured_on: '2026-02-02', weight_kg: 110, source: 't' }])[0]
