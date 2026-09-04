@@ -182,7 +182,7 @@ const spines = Array.from({ length: 18 }, () => ({
 								v.byHand && (
 									<Fragment>
 										{v.stoppedLine && <div class="status__stopped">{v.stoppedLine}</div>}
-										<div class="status__note">Called done by hand — the rest is endnotes and sources.</div>
+										<div class="status__note">Called done by hand. The rest is endnotes and sources.</div>
 									</Fragment>
 								)
 							}
@@ -2330,10 +2330,10 @@ const spines = Array.from({ length: 18 }, () => ({
 			const { results } = (await res.json()) as { results: Result[] };
 			list.replaceChildren();
 			meta.textContent = !results.length
-				? 'Nothing on Open Library matches that. Try the author alone, or leave it unmatched — the reading log works without it.'
+				? 'Nothing on Open Library matches that. Try the author alone, or leave it unmatched. The reading log works without it.'
 				: results.length === 1
 					? 'One edition on Open Library.'
-					: `${results.length} editions on Open Library — the year and page count are how you tell them apart`;
+					: `${results.length} editions on Open Library. The year and page count are how you tell them apart.`;
 
 			for (const result of results) {
 				const row = document.createElement('button');

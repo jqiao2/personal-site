@@ -428,7 +428,7 @@ const scopeDummy: ActivityCardRow = {
 						{row.exertion != null && row.exertion_confidence && row.exertion_confidence !== 'measured' && (
 							<span
 								class="conf-badge"
-								title={`Exertion ${row.exertion_confidence} — via ${row.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream, so treat it as a rough read rather than a precise one.`}
+								title={`Exertion ${row.exertion_confidence}. Via ${row.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream. Treat it as a rough read rather than a precise one.`}
 							>
 								{row.exertion_confidence === 'estimated' ? 'Est.' : 'Assumed'}
 							</span>
@@ -439,7 +439,7 @@ const scopeDummy: ActivityCardRow = {
 		</div>
 
 		<p class="empty" id="empty-unfiltered" hidden={!(total === 0 && !hasFilters)}>
-			No activities logged yet. The <a href="/activities/settings">import</a> hasn't run.
+			No activities logged yet. The <a href="/activities/settings">import</a> has not run.
 		</p>
 		<p class="empty" id="empty-filtered" hidden={!(total === 0 && hasFilters)}>
 			No activities match these filters.
@@ -450,7 +450,7 @@ const scopeDummy: ActivityCardRow = {
 			<span class="sentinel__text">Loading more…</span>
 		</div>
 		<p id="load-error" class="load-error" hidden>
-			Couldn't load more activities. <button type="button" id="retry">Retry</button>
+			Could not load more activities. <button type="button" id="retry">Retry</button>
 		</p>
 	</div>
 
@@ -1500,7 +1500,7 @@ const scopeDummy: ActivityCardRow = {
 					pageScope,
 					a.exertion_confidence === 'estimated' ? 'Est.' : 'Assumed',
 				);
-				badge.title = `Exertion ${a.exertion_confidence} — via ${a.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream, so treat it as a rough read rather than a precise one.`;
+				badge.title = `Exertion ${a.exertion_confidence}. Via ${a.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream. Treat it as a rough read rather than a precise one.`;
 				wrap.appendChild(badge);
 			}
 			return wrap;

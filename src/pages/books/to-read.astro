@@ -34,8 +34,8 @@ const countLabel = pile.length === 0 ? 'empty' : `${pile.length} book${pile.leng
 // own labels — the automatic transition is the only thing here a reader could
 // not work out by looking.
 const mechanicNote = isOwner
-	? 'A book leaves the pile by itself: the first page turn the Kindle sends moves it to Currently reading.'
-	: 'A book leaves the pile by itself, on the first page turn the Kindle sends.';
+	? 'A book leaves the pile by itself. The first page turn the Kindle sends moves it to Currently reading.'
+	: 'A book leaves the pile by itself. This happens on the first page turn the Kindle sends.';
 
 // The ghost a resolved row leaves in the cover's place.
 const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;

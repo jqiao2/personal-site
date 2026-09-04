@@ -533,7 +533,7 @@ const exWord = exertionLabel(activity.exertion);
 								class="edit__input edit__notes"
 								name="private_notes"
 								rows="3"
-								placeholder="Just for you — never shown to anyone else."
+								placeholder="Just for you. Never shown to anyone else."
 							>{activity.private_notes ?? ''}</textarea>
 						</details>
 
@@ -591,7 +591,7 @@ const exWord = exertionLabel(activity.exertion);
 
 						<label class="edit__toggle">
 							<input type="checkbox" name="private" value="public" checked={!activity.private} />
-							<span>Public — anyone can see this activity, its route and its numbers</span>
+							<span>Public. Anyone can see this activity, its route and its numbers.</span>
 						</label>
 
 						<label class="edit__toggle">

@@ -529,7 +529,7 @@ const query = monthQuery(aspect);
 					const kind = (error as DOMException)?.name;
 					// The sheet needs a gesture that hasn't gone stale; the render is
 					// kept, so tapping again opens it straight away.
-					if (kind === 'NotAllowedError') next = 'Ready — tap again';
+					if (kind === 'NotAllowedError') next = 'Ready. Tap again';
 					else if (kind !== 'AbortError') next = 'Could not open the share sheet';
 				}
 				return;

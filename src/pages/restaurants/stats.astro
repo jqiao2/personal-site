@@ -71,8 +71,8 @@ const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 				<p class="stub__body">
 					{stats.visits} visit{stats.visits === 1 ? '' : 's'} across {stats.places} place{
 						stats.places === 1 ? '' : 's'
-					} are logged, and every field these charts need is already on them. The
-					drawing is the part that isn&rsquo;t done.
+					} are logged. Every field these charts need is already on them. The
+					drawing is the part that is not done.
 				</p>
 				<div class="stub__actions">
 					<a class="stub__go" href="/restaurants/diary">Go to the diary</a>
@@ -104,7 +104,7 @@ const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 							}
 						</div>
 						<p class="sketch__note">
-							A place with two cuisines counts in both, so these will sum to more
+							A place with two cuisines counts in both. These will sum to more
 							than {stats.places}.
 						</p>
 					</div>
@@ -131,7 +131,7 @@ const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 							<span class="blob" style="left:70%; top:52%; width:10px; height:10px"></span>
 						</div>
 						<p class="sketch__note">
-							Neighbourhoods inside New York; cities everywhere else, because
+							Neighbourhoods inside New York. Cities everywhere else, because
 							outside New York the neighbourhood is usually null.
 						</p>
 					</div>
@@ -146,8 +146,8 @@ const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 							}
 						</div>
 						<p class="sketch__note">
-							From <code>visited_on</code>. What a meal cost is not on the model —
-							the price band belongs to the restaurant, not the bill.
+							From <code>visited_on</code>. What a meal cost is not on the model.
+							The price band belongs to the restaurant, not the bill.
 						</p>
 					</div>
 				</div>

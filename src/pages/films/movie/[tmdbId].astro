@@ -406,7 +406,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 									<span class="block__count">{movieLogs.length} {movieLogs.length === 1 ? 'entry' : 'entries'}</span>
 								</div>
 								{movieLogs.length === 0 ? (
-									<p class="empty">No review yet — just marked watched.</p>
+									<p class="empty">No review yet. Just marked watched.</p>
 								) : (
 									<div class="reviews">
 										{movieLogs.map((r) => (
@@ -1134,7 +1134,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 						toggle.textContent = adding ? '✓ On watchlist' : '+ Add to watchlist';
 						toggle.setAttribute('aria-pressed', adding ? 'true' : 'false');
 					} catch {
-						toggle.textContent = "Couldn't save — try again";
+						toggle.textContent = 'Could not save. Try again.';
 					} finally {
 						toggle.disabled = false;
 					}

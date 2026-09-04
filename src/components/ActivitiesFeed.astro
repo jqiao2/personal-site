@@ -75,9 +75,9 @@ function routeStart(path: string): { x: number; y: number } | null {
 	<main class="feed">
 		{unreachable ? (
 			<p class="feed__msg feed__msg--error">
-				The activity log couldn’t be reached, so this feed is showing nothing
-				rather than showing that nothing happened. The two look alike and are
-				not the same — try again in a moment.
+				The activity log could not be reached. This feed shows nothing
+				rather than showing that nothing happened. The two look alike, but
+				they are not the same. Try again in a moment.
 			</p>
 		) : rows.length === 0 ? (
 			<p class="feed__msg">Nothing logged yet.</p>

@@ -133,7 +133,7 @@ const today = new Date().toLocaleDateString('en-CA');
 				<h1 class="head__title">Athlete</h1>
 			</header>
 
-			{unreachable && <p class="flash flash--err">Couldn’t reach the database.</p>}
+			{unreachable && <p class="flash flash--err">Could not reach the database.</p>}
 
 			{
 				(latest || latestKg != null) && (
@@ -273,7 +273,7 @@ const today = new Date().toLocaleDateString('en-CA');
 			<section class="entry">
 				<h2 class="sec" id="form-title">Record a change</h2>
 				<p class="muted">
-					Save under a date that already exists and that row is amended; a new date adds one. Leave a
+					Save under a date that already exists and that row is changed. A new date adds one. Leave a
 					field blank to leave it unrecorded.
 				</p>
 				<form id="thresholds">
@@ -303,7 +303,7 @@ const today = new Date().toLocaleDateString('en-CA');
 				</form>
 				<p id="out" class="out" hidden></p>
 				<p class="muted footnote">
-					Saving does not re-score activities already imported — they keep the numbers they were
+					Saving does not re-score activities already imported. They keep the numbers they were
 					scored against. To re-run the whole table through the new values:
 					<code>node --import ./scripts/ts-hook.mjs --env-file=.env scripts/recompute-exertion.mjs</code>
 				</p>
@@ -340,7 +340,7 @@ const today = new Date().toLocaleDateString('en-CA');
 			}
 			const display = m.pace ? parsePace(raw) : Number(raw);
 			if (display == null || !Number.isFinite(display)) {
-				return `${m.label}: couldn’t read “${raw}”${m.pace ? ' — try mm:ss' : ''}`;
+				return `${m.label}: could not read “${raw}”${m.pace ? '. Try mm:ss' : ''}`;
 			}
 			body[m.key] = m.toStored!(display);
 		}

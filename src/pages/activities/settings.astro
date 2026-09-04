@@ -81,8 +81,8 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 			</header>
 
 			{connectedFlash && <p class="flash flash--ok">Connected.</p>}
-			{errorFlash && <p class="flash flash--err">Couldn’t connect: {errorFlash}</p>}
-			{unreachable && <p class="flash flash--err">Couldn’t reach the database.</p>}
+			{errorFlash && <p class="flash flash--err">Could not connect: {errorFlash}</p>}
+			{unreachable && <p class="flash flash--err">Could not reach the database.</p>}
 
 			{connection ? (
 				<dl class="status">
