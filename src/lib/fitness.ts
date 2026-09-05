@@ -137,6 +137,19 @@ const PAD_R = 6;
 const PAD_T = 12;
 const PAD_B = 18;
 
+/** One day's plotted position — the day's values and where each series sits in
+ *  the box. The scrubber snaps to the nearest of these by x. */
+export interface FitnessMark {
+	x: number;
+	date: string;
+	ctl: number;
+	atl: number;
+	tsb: number;
+	yCtl: number;
+	yAtl: number;
+	yTsb: number;
+}
+
 export interface FitnessPlot {
 	/** Polyline `points` strings for the two lines. */
 	ctlLine: string;
@@ -145,6 +158,9 @@ export interface FitnessPlot {
 	tsbArea: string;
 	/** The Form line itself, drawn over its fill. */
 	tsbLine: string;
+	/** Per-day scaled coordinates — what the scrubber snaps to, and what the
+	 *  three lines above are built from (one source of geometry). */
+	marks: FitnessMark[];
 	/** y of the Form baseline (value 0), for the dashed zero rule. */
 	zeroY: number;
 	/** Axis extent actually drawn against. */
@@ -193,16 +209,25 @@ export function plotPmc(points: PmcPoint[]): FitnessPlot | null {
 	const x = (i: number) => PAD_L + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
 	const y = (v: number) => PAD_T + ((hi - v) / (hi - lo)) * innerH;
 
-	const line = (read: (p: PmcPoint) => number) =>
-		points.map((p, i) => `${x(i).toFixed(1)},${y(read(p)).toFixed(1)}`).join(' ');
+	// Scale every day once; the three lines are then just projections of it.
+	const marks: FitnessMark[] = points.map((p, i) => ({
+		x: Number(x(i).toFixed(1)),
+		date: p.date,
+		ctl: p.ctl,
+		atl: p.atl,
+		tsb: p.tsb,
+		yCtl: Number(y(p.ctl).toFixed(1)),
+		yAtl: Number(y(p.atl).toFixed(1)),
+		yTsb: Number(y(p.tsb).toFixed(1)),
+	}));
 
-	const ctlLine = line((p) => p.ctl);
-	const atlLine = line((p) => p.atl);
-	const tsbLine = line((p) => p.tsb);
+	const ctlLine = marks.map((m) => `${m.x},${m.yCtl}`).join(' ');
+	const atlLine = marks.map((m) => `${m.x},${m.yAtl}`).join(' ');
+	const tsbLine = marks.map((m) => `${m.x},${m.yTsb}`).join(' ');
 	const zeroY = y(0);
 	// Form area: the line, then back along the zero baseline and closed. One
 	// polygon shades above and below zero alike — fresh and buried both read.
-	const tsbArea = `M${x(0).toFixed(1)},${zeroY.toFixed(1)} L${tsbLine} L${x(n - 1).toFixed(1)},${zeroY.toFixed(1)} Z`;
+	const tsbArea = `M${marks[0].x},${zeroY.toFixed(1)} L${tsbLine} L${marks[n - 1].x},${zeroY.toFixed(1)} Z`;
 
 	// y gridlines at a nice step, across the whole [lo, hi] extent.
 	const step = niceStep((hi - lo) / 4);
@@ -238,6 +263,7 @@ export function plotPmc(points: PmcPoint[]): FitnessPlot | null {
 		atlLine,
 		tsbArea,
 		tsbLine,
+		marks,
 		zeroY,
 		lo,
 		hi,

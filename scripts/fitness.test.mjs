@@ -129,6 +129,15 @@ assert.equal(plotPmc([]), null, 'no points, no plot');
 	assert.ok(p.xTicks.length >= 1 && p.xTicks[0].label.length > 0, 'month ticks are labelled');
 	assert.ok(p.yTicks.length >= 1, 'y gridlines exist');
 	assert.equal(p.last.date, '2026-02-01', 'last point is today');
+
+	// Scrub marks: one per day, coordinates in the box, lines built from them.
+	assert.equal(p.marks.length, pmc.length, 'one mark per day');
+	assert.equal(p.marks[p.marks.length - 1].date, p.last.date);
+	for (const m of p.marks) {
+		assert.ok(m.x >= 0 && m.x <= PLOT_W, 'mark x in box');
+		for (const my of [m.yCtl, m.yAtl, m.yTsb]) assert.ok(my >= 0 && my <= PLOT_H, 'mark y in box');
+	}
+	assert.equal(p.ctlLine.split(' ')[0], `${p.marks[0].x},${p.marks[0].yCtl}`, 'the line is the marks');
 }
 
 console.log('fitness.test.mjs: ok');
