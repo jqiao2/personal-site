@@ -1,0 +1,439 @@
+---
+// Schedule-a-film modal for the Screening Room (owner only). Render once on a
+// page; any element with `data-open-screening` opens it, and a `data-date`
+// attribute on that element pre-fills the day (an empty calendar cell passes the
+// day it stands for). Searches TMDB, POSTs to /api/films/screening-queue, then
+// reloads. Mirrors WatchlistComposer, plus a date and an optional venue.
+---
+
+<div class="modal" id="sched" hidden>
+	<div class="modal__backdrop" id="sched-backdrop"></div>
+	<div class="modal__panel" role="dialog" aria-modal="true" aria-label="Schedule a film">
+		<div class="modal__head">
+			<span class="modal__title">Schedule a film</span>
+			<button type="button" class="modal__close" id="sched-close" aria-label="Close">✕</button>
+		</div>
+
+		<div class="modal__body">
+			<label class="lbl" for="s-q">Film</label>
+			<div class="search" id="s-search">
+				<input type="text" id="s-q" placeholder="Search a film…" autocomplete="off" />
+				<ul class="results" id="s-results" hidden></ul>
+			</div>
+			<div class="selected" id="s-selected" hidden>
+				<img id="s-sel-poster" alt="" width="26" height="39" />
+				<span id="s-sel-title"></span>
+				<button type="button" class="link" id="s-change">change</button>
+			</div>
+
+			<div class="row">
+				<div class="field">
+					<label class="lbl" for="s-date">Date</label>
+					<input type="date" id="s-date" />
+				</div>
+				<div class="field">
+					<label class="lbl" for="s-venue">Theatre <span class="opt">optional</span></label>
+					<input type="text" id="s-venue" placeholder="e.g. AMC 34th Street 14" autocomplete="off" />
+				</div>
+			</div>
+		</div>
+
+		<div class="modal__foot">
+			<span class="save-msg" id="sched-msg"></span>
+			<button type="button" class="btn-ghost" id="sched-cancel">Cancel</button>
+			<button type="button" class="btn-save" id="sched-save" disabled>Schedule</button>
+		</div>
+	</div>
+</div>
+
+<style>
+	.modal {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		display: flex;
+		align-items: flex-start;
+		justify-content: center;
+		padding: 72px 24px;
+	}
+	.modal[hidden] {
+		display: none;
+	}
+	.modal__backdrop {
+		position: absolute;
+		inset: 0;
+		background: rgba(10, 4, 5, 0.72);
+		backdrop-filter: blur(3px);
+	}
+	.modal__panel {
+		position: relative;
+		width: 100%;
+		max-width: 480px;
+		background: #241012;
+		border: 1px solid #4a2529;
+		border-radius: 14px;
+		box-shadow: 0 30px 70px -20px rgba(0, 0, 0, 0.7);
+		overflow: hidden;
+	}
+	.modal__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 20px 24px;
+		border-bottom: 1px solid #402226;
+	}
+	.modal__title {
+		font-family: 'Newsreader', serif;
+		font-style: italic;
+		font-size: 22px;
+		color: #f4e8d1;
+	}
+	.modal__close {
+		width: 30px;
+		height: 30px;
+		border: 1px solid #4a2529;
+		background: transparent;
+		color: #c2a99a;
+		border-radius: 7px;
+		cursor: pointer;
+		font-size: 14px;
+		line-height: 1;
+	}
+	.modal__close:hover {
+		background: #402226;
+		color: #f4e8d1;
+	}
+	.modal__body {
+		padding: 22px 24px 26px;
+	}
+	.lbl {
+		display: block;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.4px;
+		color: #8a6f63;
+		margin-bottom: 7px;
+	}
+	.opt {
+		text-transform: none;
+		letter-spacing: 0;
+		font-style: italic;
+		color: #6f5850;
+	}
+	.search {
+		position: relative;
+	}
+	#s-q,
+	#s-date,
+	#s-venue {
+		width: 100%;
+		background: #1c0d0e;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		color: #f4e8d1;
+		font-family: 'Archivo', sans-serif;
+		padding: 11px 13px;
+		font-size: 14px;
+		outline: none;
+	}
+	#s-q:focus,
+	#s-date:focus,
+	#s-venue:focus {
+		border-color: #d9b45a;
+	}
+	/* The native date picker indicator is near-invisible on a dark field. */
+	#s-date::-webkit-calendar-picker-indicator {
+		filter: invert(0.8) sepia(1) saturate(3) hue-rotate(5deg);
+		cursor: pointer;
+	}
+	.results {
+		list-style: none;
+		margin: 6px 0 0;
+		padding: 0;
+		position: absolute;
+		z-index: 10;
+		width: 100%;
+		max-height: 300px;
+		overflow-y: auto;
+		background: #1c0d0e;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+	}
+	.results :global(li) {
+		display: flex;
+		gap: 10px;
+		align-items: center;
+		padding: 7px 9px;
+		cursor: pointer;
+		color: #e9d9c4;
+		font-size: 13px;
+	}
+	.results :global(li:hover) {
+		background: #331619;
+	}
+	.results :global(img) {
+		width: 30px;
+		height: 45px;
+		object-fit: cover;
+		border-radius: 3px;
+		background: #4a2529;
+		flex-shrink: 0;
+	}
+	.results :global(.r-year) {
+		color: #a2857a;
+		margin-left: 6px;
+	}
+	.selected {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		margin-top: 12px;
+		font-family: 'Newsreader', serif;
+		font-size: 15px;
+		color: #f2e5cd;
+	}
+	.selected img {
+		object-fit: cover;
+		border-radius: 3px;
+		background: #4a2529;
+	}
+	.link {
+		background: none;
+		border: none;
+		color: #a2857a;
+		cursor: pointer;
+		font-size: 12px;
+		text-decoration: underline;
+		font-family: 'Archivo', sans-serif;
+		padding: 0;
+	}
+	.link:hover {
+		color: #f4e8d1;
+	}
+	.row {
+		display: flex;
+		gap: 14px;
+		margin-top: 18px;
+	}
+	.field {
+		flex: 1;
+		min-width: 0;
+	}
+	.modal__foot {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 12px;
+		padding: 16px 24px;
+		border-top: 1px solid #402226;
+		background: #1f0e10;
+	}
+	.btn-ghost {
+		font-size: 14px;
+		font-weight: 600;
+		color: #ddc9b4;
+		background: transparent;
+		border: 1px solid #4a2529;
+		border-radius: 8px;
+		padding: 10px 20px;
+		cursor: pointer;
+		font-family: 'Archivo', sans-serif;
+	}
+	.btn-ghost:hover {
+		border-color: #a2857a;
+		color: #f4e8d1;
+	}
+	.btn-save {
+		font-size: 14px;
+		font-weight: 700;
+		border: none;
+		border-radius: 8px;
+		padding: 10px 22px;
+		font-family: 'Archivo', sans-serif;
+		background: #d9b45a;
+		color: #2a1214;
+		cursor: pointer;
+	}
+	.btn-save:disabled {
+		background: #4a2529;
+		color: #8a6f63;
+		cursor: not-allowed;
+	}
+	.save-msg {
+		font-size: 13px;
+		color: #a2857a;
+		margin-right: auto;
+	}
+	.save-msg.error {
+		color: #e0736f;
+	}
+</style>
+
+<script>
+	// Schedule a film (owner only). Any element with `data-open-screening` opens
+	// this; its `data-date` seeds the date field so an empty calendar cell opens
+	// on the day it stands for. Bails cleanly when the modal isn't in the DOM.
+	const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-open-screening]'));
+	const modal = document.getElementById('sched') as HTMLDivElement | null;
+
+	if (triggers.length && modal) {
+		const IMG = 'https://image.tmdb.org/t/p/w92';
+		const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+		const close = $('sched-close');
+		const cancel = $('sched-cancel');
+		const backdrop = $('sched-backdrop');
+		const save = $<HTMLButtonElement>('sched-save');
+		const msg = $<HTMLSpanElement>('sched-msg');
+		const q = $<HTMLInputElement>('s-q');
+		const results = $<HTMLUListElement>('s-results');
+		const searchWrap = $('s-search');
+		const selected = $('s-selected');
+		const selPoster = $<HTMLImageElement>('s-sel-poster');
+		const selTitle = $<HTMLSpanElement>('s-sel-title');
+		const change = $('s-change');
+		const dateInput = $<HTMLInputElement>('s-date');
+		const venueInput = $<HTMLInputElement>('s-venue');
+
+		let tmdbId: number | null = null;
+
+		const pad = (n: number) => String(n).padStart(2, '0');
+		const today = () => {
+			const d = new Date();
+			return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+		};
+
+		function syncSave() {
+			save.disabled = !(tmdbId && dateInput.value);
+		}
+
+		// --- TMDB search (debounced) ---
+		let timer: number | undefined;
+		q.addEventListener('input', () => {
+			window.clearTimeout(timer);
+			const query = q.value.trim();
+			if (!query) return hideResults();
+			timer = window.setTimeout(() => runSearch(query), 300);
+		});
+		async function runSearch(query: string) {
+			try {
+				const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+				if (!res.ok) return hideResults();
+				const data = await res.json();
+				renderResults(data.results ?? []);
+			} catch {
+				hideResults();
+			}
+		}
+		function renderResults(items: any[]) {
+			results.textContent = '';
+			if (!items.length) return hideResults();
+			for (const m of items.slice(0, 8)) {
+				const li = document.createElement('li');
+				const img = document.createElement('img');
+				if (m.poster_path) img.src = IMG + m.poster_path;
+				img.alt = '';
+				const label = document.createElement('span');
+				label.textContent = m.title;
+				if (m.release_date) {
+					const yr = document.createElement('span');
+					yr.className = 'r-year';
+					yr.textContent = m.release_date.slice(0, 4);
+					label.appendChild(yr);
+				}
+				li.append(img, label);
+				li.addEventListener('click', () => selectMovie(m));
+				results.appendChild(li);
+			}
+			results.hidden = false;
+		}
+		function hideResults() {
+			results.hidden = true;
+			results.textContent = '';
+		}
+		function selectMovie(m: any) {
+			tmdbId = m.id;
+			selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+			if (m.poster_path) {
+				selPoster.src = IMG + m.poster_path;
+				selPoster.hidden = false;
+			} else {
+				selPoster.removeAttribute('src');
+				selPoster.hidden = true;
+			}
+			hideResults();
+			searchWrap.hidden = true;
+			selected.hidden = false;
+			msg.className = 'save-msg';
+			msg.textContent = '';
+			syncSave();
+		}
+		change.addEventListener('click', () => {
+			tmdbId = null;
+			selected.hidden = true;
+			searchWrap.hidden = false;
+			q.value = '';
+			q.focus();
+			syncSave();
+		});
+		dateInput.addEventListener('input', syncSave);
+		document.addEventListener('click', (e) => {
+			if (!searchWrap.contains(e.target as Node)) hideResults();
+		});
+
+		const closeModal = () => {
+			modal.hidden = true;
+		};
+		const openModal = (date?: string) => {
+			// Reset to a clean state each open — a trigger may seed a different day.
+			tmdbId = null;
+			selected.hidden = true;
+			searchWrap.hidden = false;
+			q.value = '';
+			venueInput.value = '';
+			dateInput.value = date || today();
+			msg.className = 'save-msg';
+			msg.textContent = '';
+			syncSave();
+			modal.hidden = false;
+			q.focus();
+		};
+		for (const trigger of triggers) {
+			trigger.addEventListener('click', () => openModal(trigger.dataset.date));
+		}
+		close.addEventListener('click', closeModal);
+		cancel.addEventListener('click', closeModal);
+		backdrop.addEventListener('click', closeModal);
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape' && !modal.hidden) closeModal();
+		});
+
+		save.addEventListener('click', async () => {
+			if (!tmdbId || !dateInput.value) return;
+			save.disabled = true;
+			msg.className = 'save-msg';
+			msg.textContent = 'Scheduling…';
+			try {
+				const res = await fetch('/api/films/screening-queue', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({
+						tmdbId,
+						date: dateInput.value,
+						venue: venueInput.value.trim() || null,
+					}),
+				});
+				if (res.status === 401) {
+					window.location.href = '/films/login?redirect=/films/screening-room';
+					return;
+				}
+				const data = await res.json().catch(() => ({}));
+				if (!res.ok) throw new Error(data.error || 'Schedule failed');
+				window.location.reload();
+			} catch (err) {
+				msg.className = 'save-msg error';
+				msg.textContent = err instanceof Error ? err.message : 'Schedule failed';
+				syncSave();
+			}
+		});
+	}
+</script>

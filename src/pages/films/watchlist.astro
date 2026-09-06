@@ -1,7 +1,9 @@
 ---
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import WatchlistComposer from '../../components/WatchlistComposer.astro';
+import ScreeningPreview from '../../components/ScreeningPreview.astro';
 import { listAllWatchlist } from '../../lib/films';
+import { listUpcomingQueue } from '../../lib/screening-queue';
 import { requireOwner } from '../../lib/auth';
 import { siteDay } from '../../lib/day';
 import { formatWatchedDate } from '../../lib/format';
@@ -16,7 +18,11 @@ export const prerender = false;
 // roughly double the query and, written out as per-tile data attributes, more than
 // double this page — all for a panel that starts collapsed. Nothing on a tile shows
 // them; they only ever feed the filters. See applyFacets in the script.
-const [films, isOwner] = await Promise.all([listAllWatchlist(), requireOwner(Astro.cookies)]);
+const [films, isOwner, queued] = await Promise.all([
+	listAllWatchlist(),
+	requireOwner(Astro.cookies),
+	listUpcomingQueue(5),
+]);
 
 // The whole watchlist ships to the browser, which does the filtering and sorting
 // from data attributes on the tiles. Unlike the "All films" grid — which pages
@@ -84,6 +90,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 						<span class="sub__n" id="shown">{num(films.length)}</span>
 					</div>
 				</div>
+				{queued.length > 0 && <ScreeningPreview entries={queued} />}
 			</div>
 
 			<div class="filterbar">
