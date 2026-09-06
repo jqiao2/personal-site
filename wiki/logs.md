@@ -93,3 +93,10 @@ wiki across every iteration, even reverted ones).
 - 2026-09-03 — Athlete Progress reworked for mobile: FTP and W/kg share a card behind a switcher, height dropped from the graphs, a 6M/1Y/All timeframe toggle defaulting to six months, and the plot geometry moved into `src/lib/athlete.ts` so the server render and the client redraw share one implementation. The oval dots root-caused to `preserveAspectRatio="none"` → pattern 0012.
 
 - 2026-09-04 — unified all five month-in-review cards onto a shared MonthPicker.astro + month-card.ts (picker, save/copy/toast/fit); ported the two outliers (journal, restaurants) off their bespoke chrome. Also: journal/activities month links now redirect to the current month; restaurant month covers order photos first, then rating/verdict.
+
+- 2026-09-06 — Designed the jq logo family (PR #195). For the first-pass concept
+  gallery, `npm run shot` was unavailable (a fresh worktree has no node_modules,
+  so no Playwright). Screenshotted a standalone mockup HTML with the system
+  Chrome instead — `chrome.exe --headless=new --screenshot=OUT file://IN` — zero
+  deps, good for static design comps before deciding to `npm install`. Used the
+  real `npm run shot --el ".sh"` for final on-page verification once installed.

@@ -39,6 +39,22 @@ const { pathname, theme = 'root', max, sidebar = false } = Astro.props;
 const nav = siteNav(pathname);
 const style = headerThemeStyle(theme, max);
 
+// The brand mark: `jq` (the initials, and the JSON processor every backend runs
+// on) applied to the section as a jq filter path — so the site reads as one
+// pipeline over a life. Home is the identity filter `.` (returns everything, the
+// cross-section feed); each section is the path that pulls it out. The `jq` stays
+// constant, the accent-coloured filter names the section — the tool is the small
+// constant, the hobby it surfaces is the loud part.
+const FILTERS: Record<string, string> = {
+	root: '.',
+	film: '.films',
+	book: '.books',
+	restaurant: '.meals',
+	activity: '.activities',
+	subway: '.subway',
+};
+const filter = FILTERS[theme] ?? FILTERS.root;
+
 // The admin sign-in lives here so every page with a header offers it. A visitor
 // gets the "Log in" button + dialog; the owner gets neither (their session is
 // already established, and each section passes its own owner controls — "+ Log
@@ -50,6 +66,9 @@ const owner = await requireOwner(Astro.cookies);
 
 <header class="sh" style={style} data-theme={theme}>
 	<nav class="sh__inner" aria-label="Primary">
+		<a class="sh__brand" href="/" aria-label={`jq ${filter} — home`}>
+			<span class="sh__brand-jq">jq</span><span class="sh__brand-filter">{filter}</span>
+		</a>
 		<div class="sh__tabs">
 		{
 			nav.map((n) =>
@@ -317,6 +336,35 @@ const owner = await requireOwner(Astro.cookies);
 		gap: 2px;
 		flex-wrap: wrap;
 	}
+	/* Brand mark: `jq .section` set in mono so it reads as a jq filter. Themed by
+	   the same --sh-* vars as everything else — `jq` in the section's strong
+	   colour, the filter path in its accent. Its own right margin holds it off
+	   the tabs; the mono face is the system stack, no webfont added for six
+	   glyphs. */
+	.sh__brand {
+		display: inline-flex;
+		align-items: center;
+		margin-right: 18px;
+		padding: 0 2px;
+		font-family: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+		font-size: 16px;
+		font-weight: 600;
+		letter-spacing: -0.5px;
+		text-decoration: none;
+		white-space: nowrap;
+	}
+	.sh__brand-jq {
+		color: var(--sh-active);
+	}
+	.sh__brand-filter {
+		margin-left: 0.32em;
+		font-weight: 700;
+		color: var(--sh-accent);
+	}
+	.sh__brand:hover .sh__brand-jq {
+		color: var(--sh-hover);
+	}
+
 	/* The primary tabs, as one flex child so they can be hidden as a group when
 	   the header collapses to a hamburger on mobile. */
 	.sh__tabs {
@@ -525,6 +573,10 @@ const owner = await requireOwner(Astro.cookies);
 	@media (max-width: 640px) {
 		.sh__link {
 			padding: 16px 11px 14px;
+		}
+		.sh__brand {
+			font-size: 15px;
+			margin-right: 12px;
 		}
 	}
 
