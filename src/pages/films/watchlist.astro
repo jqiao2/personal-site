@@ -90,7 +90,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 						<span class="sub__n" id="shown">{num(films.length)}</span>
 					</div>
 				</div>
-				{queued.length > 0 && <ScreeningPreview entries={queued} />}
+				<ScreeningPreview entries={queued} />
 			</div>
 
 			<div class="filterbar">
