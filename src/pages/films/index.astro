@@ -23,7 +23,7 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 <FilmLayout title="Jason's film log">
 	<div class="page">
 		<div class="card">
-			<SiteHeader pathname={Astro.url.pathname} theme="film">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" sidebar>
 				<Fragment slot="actions">
 					{isOwner && (
 						<>
@@ -34,7 +34,7 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 				</Fragment>
 			</SiteHeader>
 
-			<FilmsFeed server:defer>
+			<FilmsFeed pathname={Astro.url.pathname} server:defer>
 				<div slot="fallback" class="shell-skel" aria-hidden="true">
 					<div class="feed-skel">
 						{Array.from({ length: 6 }).map(() => (

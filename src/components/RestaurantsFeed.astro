@@ -4,10 +4,15 @@
 // shell (header + "+ Log meal") ships from the fast owner check and this
 // data-heavy body — stats + recent visits — streams in on its own request.
 import VerdictMark from './VerdictMark.astro';
+import DrawerNav from './DrawerNav.astro';
 import { requireOwner } from '../lib/auth';
 import { getRestaurantStats, listRecentVisits } from '../lib/restaurants';
 import { placeLine, shortDate, visitMarks } from '../lib/restaurant-view';
 import { starText, excerpt } from '../lib/format';
+
+// Page path from restaurants/index.astro — see the note in FilmsFeed: a
+// server:defer island's Astro.url is the island endpoint, not the page.
+const { pathname } = Astro.props as { pathname: string };
 
 const [stats, recent, isOwner] = await Promise.all([
 	getRestaurantStats(),
@@ -75,7 +80,8 @@ const navRows = [
 	</main>
 
 	<!-- Sidebar -->
-	<aside class="side">
+	<aside class="side" id="site-drawer" data-site-drawer>
+		<DrawerNav pathname={pathname} theme="restaurant" />
 		<div class="brand">Jason&rsquo;s<br />restaurant log</div>
 		<div class="brand__sub">{yearLine}</div>
 
@@ -108,10 +114,12 @@ const navRows = [
 			gap: 1.6rem;
 			padding: 26px 22px 36px;
 		}
+		/* Off-canvas drawer (positioning from SiteHeader's global rule): opaque
+		   paper ground, its own padding, and a left edge against the dimmed page. */
 		.side {
-			order: 2;
-			border-top: 1px solid var(--rule);
-			padding-top: 1.4rem;
+			background: var(--ground);
+			border-left: 1px solid var(--rule);
+			padding: 1.8rem 1.4rem;
 		}
 	}
 

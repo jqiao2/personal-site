@@ -28,9 +28,9 @@ export const prerender = false;
 		}}
 	>
 		<div class="card">
-			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
+			<SiteHeader pathname={Astro.url.pathname} theme="activity" sidebar />
 
-			<ActivitiesFeed server:defer>
+			<ActivitiesFeed pathname={Astro.url.pathname} server:defer>
 				<div slot="fallback" class="shell-skel" aria-hidden="true">
 					<div class="feed-skel">
 						{Array.from({ length: 6 }).map(() => (

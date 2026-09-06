@@ -3,10 +3,16 @@
 // sidebar index. Split out of films/index.astro so the page ships its themed
 // shell (header + "+ Log film") from the fast owner check, and this data-heavy
 // body — stats + the latest logs — streams in on its own request.
+import DrawerNav from './DrawerNav.astro';
 import { getFilmLogStats, listLogs } from '../lib/films';
 import { requireOwner } from '../lib/auth';
 import { starText, formatWatchedDate, excerpt } from '../lib/format';
 import { imageUrl } from '../lib/tmdb';
+
+// The page path, passed in from films/index.astro: inside a server:defer island
+// Astro.url is the island's own endpoint, not the page, so the drawer nav can't
+// read the current route from here.
+const { pathname } = Astro.props as { pathname: string };
 
 const [stats, recent, isOwner] = await Promise.all([
 	getFilmLogStats(),
@@ -54,7 +60,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 	</main>
 
 	<!-- Sidebar -->
-	<aside class="side">
+	<aside class="side" id="site-drawer" data-site-drawer>
+		<DrawerNav pathname={pathname} theme="film" />
 		<div class="brand">Jason's<br />film log</div>
 		<div class="brand__sub">{stats.thisYear} films this year</div>
 
@@ -88,12 +95,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 288px;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
 		.shell {
 			grid-template-columns: 1fr;
-		}
-		.side {
-			order: 2;
 		}
 	}
 
@@ -208,10 +212,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 		display: flex;
 		flex-direction: column;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
+		/* As a right-edge drawer the sidebar keeps its left border — that edge is
+		   now what separates it from the dimmed page behind it. */
 		.side {
-			border-left: none;
-			border-top: 1px solid #4a2529;
+			padding: 34px 26px;
 		}
 	}
 	.brand {
@@ -260,7 +265,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		font-size: 13px;
 	}
 
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
 		.feed {
 			padding: 28px 22px 34px;
 		}

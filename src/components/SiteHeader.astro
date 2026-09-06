@@ -15,20 +15,29 @@
 // placements.
 import { siteNav } from '../lib/nav';
 import { requireOwner } from '../lib/auth';
+import { headerThemeStyle, type HeaderTheme } from '../lib/header-theme';
+import DrawerNav from './DrawerNav.astro';
 
 interface Props {
 	/** Pathname used to light the active tab. */
 	pathname: string;
 	/** Which section's palette to wear. */
-	theme?: 'root' | 'film' | 'book' | 'restaurant' | 'activity' | 'subway';
+	theme?: HeaderTheme;
 	/** Width of the inner column, when the page's own column isn't the theme's
 	    default — the film subpages run narrower than the film log's 1120px card,
 	    and the nav has to line up with whatever is under it. */
 	max?: string;
+	/** Set by pages that already render their own `[data-site-drawer]` sidebar
+	    (home, film/restaurant/activity logs), which doubles as the mobile drawer.
+	    When false — every other page — the header supplies its own nav-only drawer
+	    so the hamburger menu is universal. Either way the tabs fold into it below
+	    820px. */
+	sidebar?: boolean;
 }
 
-const { pathname, theme = 'root', max } = Astro.props;
+const { pathname, theme = 'root', max, sidebar = false } = Astro.props;
 const nav = siteNav(pathname);
+const style = headerThemeStyle(theme, max);
 
 // The admin sign-in lives here so every page with a header offers it. A visitor
 // gets the "Log in" button + dialog; the owner gets neither (their session is
@@ -37,92 +46,11 @@ const nav = siteNav(pathname);
 // call on any page: no cookie → false, and it only needs SESSION_SECRET to
 // verify a token that's actually present.
 const owner = await requireOwner(Astro.cookies);
-
-// Each theme is just a bag of CSS custom properties. `--sh-max` caps the inner
-// column; `none` lets the strip run edge to edge (the subway map wants that).
-// `root` leans on the variables Layout.astro already defines so it follows the
-// light/dark scheme; every other section is art-directed to a fixed palette.
-const THEMES: Record<string, Record<string, string>> = {
-	root: {
-		'--sh-bg': 'transparent',
-		'--sh-border': 'var(--border, #ddd)',
-		'--sh-link': 'var(--fg, #111)',
-		'--sh-hover': 'var(--fg, #111)',
-		'--sh-active': 'var(--fg, #111)',
-		'--sh-accent': 'var(--fg, #111)',
-		'--sh-font': 'system-ui, sans-serif',
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': 'var(--bg, #fff)',
-	},
-	film: {
-		'--sh-bg': '#20100f',
-		'--sh-border': '#4a2529',
-		'--sh-link': '#c2a99a',
-		'--sh-hover': '#f4e8d1',
-		'--sh-active': '#f4e8d1',
-		'--sh-accent': '#d9b45a',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': '#20100f',
-	},
-	book: {
-		'--sh-bg': '#150e07',
-		'--sh-border': '#45341f',
-		'--sh-link': '#bfa886',
-		'--sh-hover': '#f2e6cd',
-		'--sh-active': '#f2e6cd',
-		'--sh-accent': '#cfa452',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1008px',
-		'--sh-menu-bg': '#150e07',
-	},
-	restaurant: {
-		'--sh-bg': '#efe1c3',
-		'--sh-border': '#c4ad86',
-		'--sh-link': '#6d5740',
-		'--sh-hover': '#8e3220',
-		'--sh-active': '#2f1e12',
-		'--sh-accent': '#b34328',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': '#fdf7e8',
-	},
-	activity: {
-		'--sh-bg': 'transparent',
-		'--sh-border': '#c9d4dc',
-		'--sh-link': '#6b7b88',
-		'--sh-hover': '#3d4a55',
-		'--sh-active': '#1c6e8c',
-		'--sh-accent': '#1c6e8c',
-		'--sh-font': "'Instrument Sans', sans-serif",
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': '#f8fbfd',
-	},
-	subway: {
-		'--sh-bg': '#20100f',
-		'--sh-border': '#4a2529',
-		'--sh-link': '#c2a99a',
-		'--sh-hover': '#f4e8d1',
-		'--sh-active': '#f4e8d1',
-		'--sh-accent': '#d9b45a',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': 'none',
-		'--sh-menu-bg': '#20100f',
-	},
-};
-
-const vars = { ...(THEMES[theme] ?? THEMES.root), ...(max ? { '--sh-max': max } : {}) };
-const style = Object.entries(vars)
-	.map(([k, v]) => `${k}:${v}`)
-	.join(';');
 ---
 
 <header class="sh" style={style} data-theme={theme}>
 	<nav class="sh__inner" aria-label="Primary">
+		<div class="sh__tabs">
 		{
 			nav.map((n) =>
 				n.children ? (
@@ -171,14 +99,38 @@ const style = Object.entries(vars)
 				),
 			)
 		}
+		</div>
 		<div class="sh__actions">
 			<slot name="actions" />
 			{!owner && (
 				<button type="button" class="sh-login-btn" data-login-open>Log in</button>
 			)}
+			<button
+				type="button"
+				class="sh-burger"
+				data-drawer-toggle
+				aria-label="Open menu"
+				aria-controls="site-drawer"
+				aria-expanded="false"
+			>
+				<svg viewBox="0 0 20 14" width="20" height="14" aria-hidden="true">
+					<path d="M0 1h20M0 7h20M0 13h20" fill="none" stroke="currentColor" stroke-width="1.6" />
+				</svg>
+			</button>
 		</div>
 	</nav>
 </header>
+
+<button type="button" class="sh-drawer-backdrop" data-drawer-backdrop aria-label="Close menu" hidden />
+
+{/* Pages with their own sidebar (sidebar=true) supply the drawer themselves —
+    the section index, with DrawerNav folded in at its top. Everyone else gets
+    this nav-only drawer so the hamburger works site-wide. */}
+{!sidebar && (
+	<aside id="site-drawer" class="sh-menu" data-site-drawer style={style} aria-label="Menu">
+		<DrawerNav pathname={pathname} theme={theme} divider={false} />
+	</aside>
+)}
 
 {
 	!owner && (
@@ -285,6 +237,60 @@ const style = Object.entries(vars)
 	}
 </script>
 
+<script>
+	// Mobile drawer. Below 820px the section's right sidebar is taken out of the
+	// feed and parked off-canvas (see the [data-site-drawer] rule below); this
+	// toggles a class on <html> that slides it in, plus a backdrop. Only wired
+	// when the page opted in with `sidebar` — the button and backdrop exist then.
+	const burger = document.querySelector<HTMLButtonElement>('[data-drawer-toggle]');
+	const backdrop = document.querySelector<HTMLElement>('[data-drawer-backdrop]');
+	if (burger) {
+		const set = (open: boolean) => {
+			document.documentElement.classList.toggle('sh-drawer-open', open);
+			burger.setAttribute('aria-expanded', String(open));
+			if (backdrop) backdrop.hidden = !open;
+		};
+		burger.addEventListener('click', () =>
+			set(!document.documentElement.classList.contains('sh-drawer-open')),
+		);
+		backdrop?.addEventListener('click', () => set(false));
+		document.addEventListener('keydown', (e) => {
+			if (e.key === 'Escape') set(false);
+		});
+	}
+</script>
+
+<style is:global>
+	/* The mobile drawer, shared by every page that passes `sidebar` to the header.
+	   Below 820px the page's own sidebar (marked [data-site-drawer]) is lifted out
+	   of the feed grid and parked off the right edge; the header's hamburger slides
+	   it in. Positioning only — each sidebar keeps its own themed background and
+	   padding (set in that section's styles), so the drawer reads as that section. */
+	@media (max-width: 820px) {
+		[data-site-drawer] {
+			position: fixed;
+			top: 0;
+			right: 0;
+			bottom: 0;
+			width: min(310px, 84vw);
+			margin: 0;
+			z-index: 90;
+			overflow-y: auto;
+			transform: translateX(100%);
+			transition: transform 0.26s ease;
+			box-shadow: -14px 0 40px rgba(0, 0, 0, 0.32);
+		}
+		html.sh-drawer-open [data-site-drawer] {
+			transform: translateX(0);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		[data-site-drawer] {
+			transition: none;
+		}
+	}
+</style>
+
 <style>
 	/* The strip: full viewport width, its content held to the section column.
 	   `margin-left: calc(50% - 50vw)` is the bleed — a no-op when the header is
@@ -306,6 +312,14 @@ const style = Object.entries(vars)
 		max-width: var(--sh-max);
 		margin: 0 auto;
 		padding: 0 var(--sh-pad, clamp(14px, 4vw, 28px));
+		display: flex;
+		align-items: stretch;
+		gap: 2px;
+		flex-wrap: wrap;
+	}
+	/* The primary tabs, as one flex child so they can be hidden as a group when
+	   the header collapses to a hamburger on mobile. */
+	.sh__tabs {
 		display: flex;
 		align-items: stretch;
 		gap: 2px;
@@ -430,10 +444,82 @@ const style = Object.entries(vars)
 		margin-left: auto;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 12px;
 	}
 	.sh__actions:empty {
 		display: none;
+	}
+
+	/* Mobile: the primary tabs fold into the hamburger drawer (rendered there by
+	   DrawerNav) on every page, leaving the header a single row of action buttons
+	   + hamburger. The tabs no longer set the row height, so pad the strip to keep
+	   breathing room above the divider. */
+	@media (max-width: 820px) {
+		.sh__tabs {
+			display: none;
+		}
+		.sh__inner {
+			padding-top: 13px;
+			padding-bottom: 15px;
+		}
+	}
+
+	/* The header's own nav-only drawer, used on pages that don't render a section
+	   sidebar. Hidden on desktop (the tabs show in the strip); below 820px the
+	   global [data-site-drawer] rule parks it off-canvas and the hamburger slides
+	   it in. Wears the section's menu background. */
+	.sh-menu {
+		display: none;
+	}
+	@media (max-width: 820px) {
+		.sh-menu {
+			display: block;
+			background: var(--sh-menu-bg);
+			padding: 22px 24px;
+		}
+	}
+
+	/* Hamburger — mobile only, sits to the right of any owner action buttons.
+	   Wears the section palette like the Log-in button next to it. */
+	.sh-burger {
+		display: none;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: 1px solid var(--sh-border);
+		border-radius: 4px;
+		color: var(--sh-link);
+		padding: 7px 9px;
+		cursor: pointer;
+	}
+	.sh-burger:hover {
+		color: var(--sh-hover);
+		border-color: var(--sh-accent);
+	}
+	.sh-burger svg {
+		display: block;
+	}
+	.sh-drawer-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 80;
+		border: 0;
+		background: rgba(0, 0, 0, 0.44);
+		cursor: pointer;
+	}
+	.sh-drawer-backdrop[hidden] {
+		display: none;
+	}
+	@media (max-width: 820px) {
+		.sh-burger {
+			display: inline-flex;
+		}
+	}
+	/* The drawer is a mobile affordance; never leave the backdrop up past it. */
+	@media (min-width: 821px) {
+		.sh-drawer-backdrop {
+			display: none;
+		}
 	}
 
 	@media (max-width: 640px) {

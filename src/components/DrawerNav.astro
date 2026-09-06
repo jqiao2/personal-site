@@ -1,0 +1,140 @@
+---
+// The primary site tabs, folded into the mobile drawer.
+//
+// Below 820px SiteHeader hides its tab strip (see .sh[data-sidebar] .sh__tabs)
+// so the header fits one row. This renders those same tabs — Home, About,
+// Projects, and the Journal group with its four logs — as a vertical block at
+// the top of the section's drawer, so the whole site is still reachable from
+// the hamburger. Hidden above 820px, where the header strip carries the tabs.
+//
+// It wears the section's header palette (the same --sh-* variables SiteHeader
+// uses), so the folded tabs read as the same nav painted for this section.
+import { siteNav } from '../lib/nav';
+import { headerThemeStyle, type HeaderTheme } from '../lib/header-theme';
+
+interface Props {
+	/** Pathname used to light the active row. */
+	pathname: string;
+	/** Section palette to wear — matches the page's SiteHeader theme. */
+	theme?: HeaderTheme;
+	/** Rule + gap below the nav, separating it from section content underneath.
+	    Off when the nav is the drawer's only content (the header's own menu). */
+	divider?: boolean;
+}
+
+const { pathname, theme = 'root', divider = true } = Astro.props;
+const nav = siteNav(pathname);
+const style = headerThemeStyle(theme);
+---
+
+<nav class:list={['dnav', !divider && 'dnav--flush']} style={style} aria-label="Sections">
+	{
+		nav.map((n) =>
+			n.children ? (
+				// The Journal tab is a submenu, not a flat dump of the four logs: a
+				// native <details> so it toggles with no JS, opened by default when
+				// you're already inside one of the logs.
+				<details class="dnav__group" open={n.children.some((c) => c.active) || undefined}>
+					<summary class:list={['dnav__row', 'dnav__summary', n.active && 'dnav__row--active']}>
+						<span>{n.label}</span>
+						<svg class="dnav__caret" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
+							<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
+						</svg>
+					</summary>
+					<div class="dnav__kids">
+						{n.children.map((c) => (
+							<a
+								class:list={['dnav__kid', c.active && 'dnav__kid--active']}
+								href={c.href}
+								aria-current={c.active ? 'page' : undefined}
+							>
+								{c.label}
+							</a>
+						))}
+					</div>
+				</details>
+			) : (
+				<a
+					class:list={['dnav__row', n.active && 'dnav__row--active']}
+					href={n.href}
+					aria-current={n.active ? 'page' : undefined}
+				>
+					{n.label}
+				</a>
+			),
+		)
+	}
+</nav>
+
+<style>
+	/* Desktop shows the tabs in the header strip, so this stays hidden there; it
+	   only appears once the drawer itself is in play. */
+	.dnav {
+		display: none;
+	}
+	@media (max-width: 820px) {
+		.dnav {
+			display: block;
+			margin-bottom: 22px;
+			padding-bottom: 16px;
+			border-bottom: 1px solid var(--sh-border);
+		}
+		.dnav--flush {
+			margin-bottom: 0;
+			padding-bottom: 0;
+			border-bottom: none;
+		}
+	}
+	.dnav__row {
+		display: block;
+		padding: 8px 0;
+		font-family: var(--sh-font);
+		font-size: 15px;
+		color: var(--sh-link);
+		text-decoration: none;
+	}
+	.dnav__row--active {
+		color: var(--sh-active);
+		font-weight: 600;
+	}
+	/* Journal's summary row: the label + a caret, no default disclosure triangle. */
+	.dnav__summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		list-style: none;
+		cursor: pointer;
+	}
+	.dnav__summary::-webkit-details-marker {
+		display: none;
+	}
+	.dnav__caret {
+		flex: none;
+		transition: transform 0.14s;
+	}
+	.dnav__group[open] .dnav__caret {
+		transform: rotate(180deg);
+	}
+	/* The four logs, as an indented vertical submenu under Journal. */
+	.dnav__kids {
+		display: flex;
+		flex-direction: column;
+		padding: 2px 0 6px 14px;
+	}
+	.dnav__kid {
+		font-family: var(--sh-font);
+		font-size: 14px;
+		color: var(--sh-link);
+		text-decoration: none;
+		padding: 7px 0;
+	}
+	.dnav__kid--active {
+		color: var(--sh-active);
+		font-weight: 600;
+	}
+	.dnav__row:hover,
+	.dnav__kid:hover {
+		color: var(--sh-hover);
+	}
+</style>
