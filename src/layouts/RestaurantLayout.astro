@@ -33,9 +33,11 @@ interface Props {
 	/** Pathname used to light the active site-nav tab. */
 	pathname: string;
 	isOwner?: boolean;
+	/** The landing page has a right sidebar; opt it into the header's mobile drawer. */
+	sidebar?: boolean;
 }
 
-const { title, pathname, isOwner = false } = Astro.props;
+const { title, pathname, isOwner = false, sidebar = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -52,7 +54,7 @@ const { title, pathname, isOwner = false } = Astro.props;
 		/>
 	</head>
 	<body>
-		<SiteHeader pathname={pathname} theme="restaurant">
+		<SiteHeader pathname={pathname} theme="restaurant" sidebar={sidebar}>
 			<Fragment slot="actions">
 				{isOwner && (
 					<>

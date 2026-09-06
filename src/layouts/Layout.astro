@@ -6,9 +6,11 @@ interface Props {
 	showTmdbFooter?: boolean;
 	/** Home opts in to the full two-column width; prose pages stay at reading measure. */
 	wide?: boolean;
+	/** Pages with a right sidebar opt in to the header's mobile drawer. */
+	sidebar?: boolean;
 }
 
-const { title, showTmdbFooter = false, wide = false } = Astro.props;
+const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -21,7 +23,7 @@ const { title, showTmdbFooter = false, wide = false } = Astro.props;
 		<title>{title}</title>
 	</head>
 	<body>
-		<SiteHeader pathname={Astro.url.pathname} theme="root" />
+		<SiteHeader pathname={Astro.url.pathname} theme="root" sidebar={sidebar} />
 		<main class={wide ? 'wide' : ''}>
 			<slot />
 		</main>

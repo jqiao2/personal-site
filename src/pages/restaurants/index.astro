@@ -15,7 +15,7 @@ const isOwner = await requireOwner(Astro.cookies);
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 ---
 
-<RestaurantLayout title="Jason's restaurant log" pathname={Astro.url.pathname} isOwner={isOwner}>
+<RestaurantLayout title="Jason's restaurant log" pathname={Astro.url.pathname} isOwner={isOwner} sidebar>
 	<RestaurantsFeed server:defer>
 		<div slot="fallback" class="shell-skel" aria-hidden="true">
 			<div class="feed-skel">

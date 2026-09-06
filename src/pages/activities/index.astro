@@ -28,7 +28,7 @@ export const prerender = false;
 		}}
 	>
 		<div class="card">
-			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
+			<SiteHeader pathname={Astro.url.pathname} theme="activity" sidebar />
 
 			<ActivitiesFeed server:defer>
 				<div slot="fallback" class="shell-skel" aria-hidden="true">

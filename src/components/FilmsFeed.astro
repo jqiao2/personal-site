@@ -54,7 +54,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 	</main>
 
 	<!-- Sidebar -->
-	<aside class="side">
+	<aside class="side" id="site-drawer" data-site-drawer>
 		<div class="brand">Jason's<br />film log</div>
 		<div class="brand__sub">{stats.thisYear} films this year</div>
 
@@ -88,12 +88,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 288px;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
 		.shell {
 			grid-template-columns: 1fr;
-		}
-		.side {
-			order: 2;
 		}
 	}
 
@@ -208,10 +205,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 		display: flex;
 		flex-direction: column;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
+		/* As a right-edge drawer the sidebar keeps its left border — that edge is
+		   now what separates it from the dimmed page behind it. */
 		.side {
-			border-left: none;
-			border-top: 1px solid #4a2529;
+			padding: 34px 26px;
 		}
 	}
 	.brand {
@@ -260,7 +258,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		font-size: 13px;
 	}
 
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
 		.feed {
 			padding: 28px 22px 34px;
 		}

@@ -149,7 +149,7 @@ function routeStart(path: string): { x: number; y: number } | null {
 	</main>
 
 	<!-- Sidebar -->
-	<aside class="side">
+	<aside class="side" id="site-drawer" data-site-drawer>
 		<div class="brand">Jason's<br />activity log</div>
 		{isOwner && <div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>}
 
@@ -202,12 +202,9 @@ function routeStart(path: string): { x: number; y: number } | null {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 288px;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
 		.shell {
 			grid-template-columns: 1fr;
-		}
-		.side {
-			order: 2;
 		}
 	}
 
@@ -349,10 +346,12 @@ function routeStart(path: string): { x: number; y: number } | null {
 		display: flex;
 		flex-direction: column;
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 820px) {
+		/* As a right-edge drawer the sidebar keeps its left border and takes an
+		   opaque snow ground so the page behind it doesn't show through. */
 		.side {
-			border-left: none;
-			border-top: 1px solid var(--scree);
+			background: var(--snow);
+			padding: 34px 26px;
 		}
 		.feed {
 			padding: 28px 22px 34px;

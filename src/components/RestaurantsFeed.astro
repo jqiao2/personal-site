@@ -75,7 +75,7 @@ const navRows = [
 	</main>
 
 	<!-- Sidebar -->
-	<aside class="side">
+	<aside class="side" id="site-drawer" data-site-drawer>
 		<div class="brand">Jason&rsquo;s<br />restaurant log</div>
 		<div class="brand__sub">{yearLine}</div>
 
@@ -108,10 +108,12 @@ const navRows = [
 			gap: 1.6rem;
 			padding: 26px 22px 36px;
 		}
+		/* Off-canvas drawer (positioning from SiteHeader's global rule): opaque
+		   paper ground, its own padding, and a left edge against the dimmed page. */
 		.side {
-			order: 2;
-			border-top: 1px solid var(--rule);
-			padding-top: 1.4rem;
+			background: var(--ground);
+			border-left: 1px solid var(--rule);
+			padding: 1.8rem 1.4rem;
 		}
 	}
 
