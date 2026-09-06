@@ -16,6 +16,7 @@
 import { siteNav } from '../lib/nav';
 import { requireOwner } from '../lib/auth';
 import { headerThemeStyle, type HeaderTheme } from '../lib/header-theme';
+import DrawerNav from './DrawerNav.astro';
 
 interface Props {
 	/** Pathname used to light the active tab. */
@@ -26,10 +27,11 @@ interface Props {
 	    default — the film subpages run narrower than the film log's 1120px card,
 	    and the nav has to line up with whatever is under it. */
 	max?: string;
-	/** Set on pages with a right sidebar (home, film/restaurant/activity logs).
-	    Adds the mobile hamburger + off-canvas drawer that, below 820px, slides
-	    that page's `[data-site-drawer]` sidebar in instead of stacking it under
-	    the feed. */
+	/** Set by pages that already render their own `[data-site-drawer]` sidebar
+	    (home, film/restaurant/activity logs), which doubles as the mobile drawer.
+	    When false — every other page — the header supplies its own nav-only drawer
+	    so the hamburger menu is universal. Either way the tabs fold into it below
+	    820px. */
 	sidebar?: boolean;
 }
 
@@ -46,7 +48,7 @@ const style = headerThemeStyle(theme, max);
 const owner = await requireOwner(Astro.cookies);
 ---
 
-<header class="sh" style={style} data-theme={theme} data-sidebar={sidebar ? '' : undefined}>
+<header class="sh" style={style} data-theme={theme}>
 	<nav class="sh__inner" aria-label="Primary">
 		<div class="sh__tabs">
 		{
@@ -103,25 +105,32 @@ const owner = await requireOwner(Astro.cookies);
 			{!owner && (
 				<button type="button" class="sh-login-btn" data-login-open>Log in</button>
 			)}
-			{sidebar && (
-				<button
-					type="button"
-					class="sh-burger"
-					data-drawer-toggle
-					aria-label="Open menu"
-					aria-controls="site-drawer"
-					aria-expanded="false"
-				>
-					<svg viewBox="0 0 20 14" width="20" height="14" aria-hidden="true">
-						<path d="M0 1h20M0 7h20M0 13h20" fill="none" stroke="currentColor" stroke-width="1.6" />
-					</svg>
-				</button>
-			)}
+			<button
+				type="button"
+				class="sh-burger"
+				data-drawer-toggle
+				aria-label="Open menu"
+				aria-controls="site-drawer"
+				aria-expanded="false"
+			>
+				<svg viewBox="0 0 20 14" width="20" height="14" aria-hidden="true">
+					<path d="M0 1h20M0 7h20M0 13h20" fill="none" stroke="currentColor" stroke-width="1.6" />
+				</svg>
+			</button>
 		</div>
 	</nav>
 </header>
 
-{sidebar && <button type="button" class="sh-drawer-backdrop" data-drawer-backdrop aria-label="Close menu" hidden />}
+<button type="button" class="sh-drawer-backdrop" data-drawer-backdrop aria-label="Close menu" hidden />
+
+{/* Pages with their own sidebar (sidebar=true) supply the drawer themselves —
+    the section index, with DrawerNav folded in at its top. Everyone else gets
+    this nav-only drawer so the hamburger works site-wide. */}
+{!sidebar && (
+	<aside id="site-drawer" class="sh-menu" data-site-drawer style={style} aria-label="Menu">
+		<DrawerNav pathname={pathname} theme={theme} divider={false} />
+	</aside>
+)}
 
 {
 	!owner && (
@@ -441,17 +450,32 @@ const owner = await requireOwner(Astro.cookies);
 		display: none;
 	}
 
-	/* Mobile, on the pages that carry a sidebar drawer: the primary tabs fold
-	   into the drawer (rendered there by DrawerNav), leaving the header a single
-	   row of action buttons + hamburger. The tabs no longer set the row height,
-	   so pad the strip to keep breathing room above the divider. */
+	/* Mobile: the primary tabs fold into the hamburger drawer (rendered there by
+	   DrawerNav) on every page, leaving the header a single row of action buttons
+	   + hamburger. The tabs no longer set the row height, so pad the strip to keep
+	   breathing room above the divider. */
 	@media (max-width: 820px) {
-		.sh[data-sidebar] .sh__tabs {
+		.sh__tabs {
 			display: none;
 		}
-		.sh[data-sidebar] .sh__inner {
+		.sh__inner {
 			padding-top: 13px;
 			padding-bottom: 15px;
+		}
+	}
+
+	/* The header's own nav-only drawer, used on pages that don't render a section
+	   sidebar. Hidden on desktop (the tabs show in the strip); below 820px the
+	   global [data-site-drawer] rule parks it off-canvas and the hamburger slides
+	   it in. Wears the section's menu background. */
+	.sh-menu {
+		display: none;
+	}
+	@media (max-width: 820px) {
+		.sh-menu {
+			display: block;
+			background: var(--sh-menu-bg);
+			padding: 22px 24px;
 		}
 	}
 

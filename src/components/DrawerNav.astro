@@ -17,14 +17,17 @@ interface Props {
 	pathname: string;
 	/** Section palette to wear — matches the page's SiteHeader theme. */
 	theme?: HeaderTheme;
+	/** Rule + gap below the nav, separating it from section content underneath.
+	    Off when the nav is the drawer's only content (the header's own menu). */
+	divider?: boolean;
 }
 
-const { pathname, theme = 'root' } = Astro.props;
+const { pathname, theme = 'root', divider = true } = Astro.props;
 const nav = siteNav(pathname);
 const style = headerThemeStyle(theme);
 ---
 
-<nav class="dnav" style={style} aria-label="Sections">
+<nav class:list={['dnav', !divider && 'dnav--flush']} style={style} aria-label="Sections">
 	{
 		nav.map((n) =>
 			n.children ? (
@@ -75,6 +78,11 @@ const style = headerThemeStyle(theme);
 			margin-bottom: 22px;
 			padding-bottom: 16px;
 			border-bottom: 1px solid var(--sh-border);
+		}
+		.dnav--flush {
+			margin-bottom: 0;
+			padding-bottom: 0;
+			border-bottom: none;
 		}
 	}
 	.dnav__row {
