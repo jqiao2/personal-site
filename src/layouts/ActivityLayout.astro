@@ -63,14 +63,23 @@ const { title } = Astro.props;
 		<style is:global>
 			/* Country-flag emoji (🇦🇷 …) have no glyphs in Windows' Segoe UI Emoji,
 			   so a flag in an activity title renders as the bare letters "AR". This
-			   flag-only Twemoji subset supplies just those glyphs; listed first in
-			   the stacks below, it fixes flags and falls through to the real
-			   typefaces for everything else, including other emoji. */
+			   flag-only Twemoji subset supplies just those glyphs; it leads both
+			   type tokens below, so it fixes flags everywhere and falls through to
+			   the real typefaces for all other text and emoji. */
 			@font-face {
 				font-family: 'Twemoji Country Flags';
 				src: url('/fonts/TwemojiCountryFlags.woff2') format('woff2');
 				unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F;
 				font-display: swap;
+			}
+			/* The activity section's two typefaces, as tokens rather than a literal
+			   repeated in every component: --serif (Instrument Serif) for titles and
+			   headings, --sans (Instrument Sans) for body, labels and figures. The
+			   same names Layout.astro uses for the home spine, so a component that
+			   renders in either section reaches for the same variable. */
+			:root {
+				--serif: 'Twemoji Country Flags', 'Instrument Serif', Georgia, serif;
+				--sans: 'Twemoji Country Flags', 'Instrument Sans', Arial, sans-serif;
 			}
 			* {
 				box-sizing: border-box;
@@ -91,7 +100,7 @@ const { title } = Astro.props;
 				background: linear-gradient(180deg, #dceaf4 0%, #f8fbfd 640px, #f8fbfd 100%);
 				background-attachment: fixed;
 				color: #3d4a55;
-				font-family: 'Twemoji Country Flags', 'Instrument Sans', Arial, sans-serif;
+				font-family: var(--sans);
 				-webkit-font-smoothing: antialiased;
 			}
 			a {
@@ -104,7 +113,7 @@ const { title } = Astro.props;
 			h1,
 			h2,
 			h3 {
-				font-family: 'Twemoji Country Flags', 'Instrument Serif', Georgia, serif;
+				font-family: var(--serif);
 				font-weight: 400;
 			}
 			/* Any figure sitting in a column — stats, distances, times — lines up on

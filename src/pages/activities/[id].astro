@@ -969,7 +969,7 @@ const exInk = exertionInk(activity.exertion);
 		display: inline-flex;
 		gap: 0.25rem;
 		/* Match the pin to the Edit link on the same header row. */
-		--pin-font-family: 'Instrument Sans', Arial, sans-serif;
+		--pin-font-family: var(--sans);
 		--pin-font-size: 0.75rem;
 		--pin-weight: 400;
 		--pin-pad: 0.25rem 0.6rem;
@@ -1005,7 +1005,7 @@ const exInk = exertionInk(activity.exertion);
 		border-radius: 6px;
 		padding: 0.25rem 0.6rem;
 		cursor: pointer;
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 	}
 	.head__fav-btn:hover {
 		border-color: #d99a3a;
@@ -1095,7 +1095,7 @@ const exInk = exertionInk(activity.exertion);
 		flex: none;
 	}
 	.headline__val {
-		font-family: 'Instrument Serif', Georgia, serif;
+		font-family: var(--serif);
 		/* Read at the same size as the activity title above. */
 		font-size: clamp(1.7rem, 4vw, 2.4rem);
 		line-height: 1.15;
@@ -1206,14 +1206,14 @@ const exInk = exertionInk(activity.exertion);
 		border-radius: 8px;
 	}
 	.movie-chosen__title {
-		font-family: 'Instrument Serif', Georgia, serif;
+		font-family: var(--serif);
 		font-size: 1.15rem;
 		line-height: 1.2;
 		color: #3d4a55;
 	}
 	.movie-chosen__clear {
 		flex: none;
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 		font-size: 0.75rem;
 		letter-spacing: 0.03em;
 		color: #6b7b88;
@@ -1255,7 +1255,7 @@ const exInk = exertionInk(activity.exertion);
 		width: 100%;
 		text-align: left;
 		padding: 0.5rem 0.65rem;
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 		color: #3d4a55;
 		background: none;
 		border: none;
@@ -1323,7 +1323,7 @@ const exInk = exertionInk(activity.exertion);
 	}
 	.edit__input,
 	.edit__title {
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 		font-size: 0.95rem;
 		color: #3d4a55;
 		background: #fff;
@@ -1335,7 +1335,7 @@ const exInk = exertionInk(activity.exertion);
 	/* The title reads at the size it will be read at, so saving changes nothing
 	   about how the page looks except the words. */
 	.edit__title {
-		font-family: 'Instrument Serif', Georgia, serif;
+		font-family: var(--serif);
 		font-size: clamp(1.7rem, 4vw, 2.4rem);
 		line-height: 1.15;
 		padding: 0.1rem 0.5rem;
@@ -1414,7 +1414,7 @@ const exInk = exertionInk(activity.exertion);
 		gap: 0.9rem;
 	}
 	.edit__save {
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 		font-size: 0.85rem;
 		color: #fff;
 		background: #1c6e8c;
@@ -1436,7 +1436,7 @@ const exInk = exertionInk(activity.exertion);
 	   row and only one of them is reversible. */
 	.edit__delete {
 		margin-left: auto;
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 		font-size: 0.85rem;
 		color: #a8323a;
 		background: none;
@@ -1457,12 +1457,12 @@ const exInk = exertionInk(activity.exertion);
 
 	.section-h {
 		font-size: 1.05rem;
-		font-family: 'Instrument Serif', Georgia, serif;
+		font-family: var(--serif);
 		color: #3d4a55;
 		margin: 2.5rem 0 1rem;
 	}
 	.section-h__meta {
-		font-family: 'Instrument Sans', Arial, sans-serif;
+		font-family: var(--sans);
 		font-size: 0.75rem;
 		color: #6b7b88;
 		font-weight: 400;
