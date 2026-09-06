@@ -1,0 +1,139 @@
+---
+// A compact row of what's queued up next, for the top of the watchlist page.
+// Most-imminent film on the left, furthest out on the right; empty slots fill
+// the row so it always reads as a shelf. The whole thing links through to the
+// Screening Room calendar.
+import type { QueueEntry } from '../lib/screening-queue';
+import { imageUrl } from '../lib/tmdb';
+
+interface Props {
+	entries: QueueEntry[];
+	/** How many slots the shelf shows (filled then empty). */
+	slots?: number;
+}
+const { entries, slots = 5 } = Astro.props;
+const shown = entries.slice(0, slots);
+const empties = Math.max(0, slots - shown.length);
+
+const dateLabel = (iso: string) =>
+	new Date(`${iso}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+---
+
+<a class="preview" href="/films/screening-room" aria-label="Open the Screening Room">
+	<div class="preview__head">
+		<span class="preview__label">Screening Room</span>
+		<span class="preview__link">Up next →</span>
+	</div>
+	<div class="preview__row">
+		{shown.map((f) => {
+			const poster = imageUrl(f.poster_path, 'w185');
+			return (
+				<div class="slot slot--full">
+					<div class={poster ? 'slot__tile' : 'slot__tile slot__tile--noimg'}>
+						{poster ? (
+							<img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" />
+						) : (
+							<span class="slot__fallback">{f.title}</span>
+						)}
+					</div>
+					<span class="slot__date">{dateLabel(f.scheduled_date)}</span>
+				</div>
+			);
+		})}
+		{Array.from({ length: empties }).map(() => (
+			<div class="slot slot--empty">
+				<div class="slot__tile slot__tile--placeholder"></div>
+				<span class="slot__date">—</span>
+			</div>
+		))}
+	</div>
+</a>
+
+<style>
+	.preview {
+		display: block;
+		width: 100%;
+		max-width: 340px;
+		border: 1px solid #4a2529;
+		border-radius: 12px;
+		padding: 14px 16px 12px;
+		background: #1f0e10;
+		transition: border-color 0.12s;
+	}
+	.preview:hover {
+		border-color: #d9b45a;
+	}
+	.preview__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		margin-bottom: 12px;
+	}
+	.preview__label {
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.6px;
+		color: #8a6f63;
+	}
+	.preview__link {
+		font-size: 12px;
+		color: #d9b45a;
+	}
+	.preview:hover .preview__link {
+		color: #f0d488;
+	}
+	.preview__row {
+		display: grid;
+		grid-template-columns: repeat(5, 1fr);
+		gap: 8px;
+	}
+	.slot {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 5px;
+		min-width: 0;
+	}
+	.slot__tile {
+		width: 100%;
+		aspect-ratio: 2 / 3;
+		border-radius: 4px;
+		overflow: hidden;
+		border: 1px solid #4a2529;
+		background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+	}
+	.slot__tile img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+	.slot__tile--noimg {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 3px;
+	}
+	.slot__fallback {
+		font-family: 'Newsreader', serif;
+		font-size: 8px;
+		line-height: 1.1;
+		color: #f2e5cd;
+		text-align: center;
+		overflow: hidden;
+	}
+	/* Empty slots read as waiting frames, not missing content. */
+	.slot__tile--placeholder {
+		border-style: dashed;
+		border-color: #3a1f22;
+		background-image: none;
+		background: #190b0c;
+	}
+	.slot__date {
+		font-size: 10px;
+		color: #a2857a;
+	}
+	.slot--empty .slot__date {
+		color: #573331;
+	}
+</style>

@@ -1,0 +1,580 @@
+---
+// The Screening Room — the "queued" watchlist as a month calendar. Films you've
+// scheduled to watch (at home or in a theatre) sit on the day you plan to see
+// them. Owner can schedule a film onto any day, remove one, and pull AMC-style
+// events in from the connected Movies calendar.
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import ScreeningComposer from '../../components/ScreeningComposer.astro';
+import { requireOwner } from '../../lib/auth';
+import { listQueue, type QueueEntry } from '../../lib/screening-queue';
+import { isConfigured as calendarConfigured } from '../../lib/google-calendar';
+import { siteDay } from '../../lib/day';
+import { imageUrl } from '../../lib/tmdb';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const [queue, isOwner] = await Promise.all([listQueue(), requireOwner(Astro.cookies)]);
+const calSync = isOwner && calendarConfigured();
+
+// The month to show. `?m=YYYY-MM`, defaulting to the current month in the site's
+// zone; anything malformed falls back to it too.
+const today = siteDay();
+const MONTH_RE = /^(\d{4})-(\d{2})$/;
+const mParam = Astro.url.searchParams.get('m') ?? '';
+const key = MONTH_RE.test(mParam) ? mParam : today.slice(0, 7);
+const [year, month] = key.split('-').map(Number); // month: 1–12
+
+// Films grouped by their scheduled day.
+const byDay = new Map<string, QueueEntry[]>();
+for (const e of queue) {
+	const list = byDay.get(e.scheduled_date);
+	if (list) list.push(e);
+	else byDay.set(e.scheduled_date, [e]);
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const dayKey = (d: number) => `${year}-${pad(month)}-${pad(d)}`;
+
+// Sunday-first grid, matching the film month card. Leading blanks for the
+// weekday the 1st lands on, then the days, then trailing blanks to square off
+// the last week.
+const firstWeekday = new Date(year, month - 1, 1).getDay(); // 0 = Sun
+const daysInMonth = new Date(year, month, 0).getDate();
+interface Cell {
+	date: string | null; // null = padding cell outside the month
+	day: number;
+	films: QueueEntry[];
+	isToday: boolean;
+}
+const cells: Cell[] = [];
+for (let i = 0; i < firstWeekday; i++) cells.push({ date: null, day: 0, films: [], isToday: false });
+for (let d = 1; d <= daysInMonth; d++) {
+	const date = dayKey(d);
+	cells.push({ date, day: d, films: byDay.get(date) ?? [], isToday: date === today });
+}
+while (cells.length % 7 !== 0) cells.push({ date: null, day: 0, films: [], isToday: false });
+
+// Month navigation.
+const shift = (delta: number) => {
+	const m0 = month - 1 + delta; // 0-based month arithmetic
+	const y = year + Math.floor(m0 / 12);
+	const m = ((m0 % 12) + 12) % 12;
+	return `${y}-${pad(m + 1)}`;
+};
+const prevKey = shift(-1);
+const nextKey = shift(1);
+const label = new Date(year, month - 1, 1).toLocaleDateString('en-US', {
+	month: 'long',
+	year: 'numeric',
+});
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
+---
+
+<FilmLayout title="Screening Room — Jason's film log">
+	<div class="page">
+		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
+
+			<header class="topbar">
+				<a class="back" href="/films/watchlist">
+					<span class="back__arrow">←</span><span>Watchlist</span>
+				</a>
+				<span class="topbar__tag">Screening Room</span>
+			</header>
+
+			<div class="titleblock">
+				<div>
+					<h1>Screening Room</h1>
+					<div class="sub">What's queued up — at home and in theatres</div>
+				</div>
+				{isOwner && (
+					<div class="titleblock__actions">
+						{calSync && (
+							<button type="button" class="btn-ghost" id="sync-btn" data-configured>
+								↻ Sync from calendar
+							</button>
+						)}
+						<button type="button" class="btn-add" data-open-screening>+ Schedule a film</button>
+					</div>
+				)}
+			</div>
+
+			{isOwner && <p class="sync-msg" id="sync-msg" hidden></p>}
+
+			<div class="monthbar">
+				<a class="nav" href={`/films/screening-room?m=${prevKey}`} aria-label="Previous month">←</a>
+				<span class="monthbar__label">{label}</span>
+				<a class="nav" href={`/films/screening-room?m=${nextKey}`} aria-label="Next month">→</a>
+				{key !== today.slice(0, 7) && (
+					<a class="today-link" href="/films/screening-room">Today</a>
+				)}
+			</div>
+
+			<div class="calendar">
+				<div class="dow" aria-hidden="true">
+					{WEEKDAYS.map((d) => <span>{d}</span>)}
+				</div>
+				<div class="grid">
+					{cells.map((cell) =>
+						cell.date === null ? (
+							<div class="cell cell--out"></div>
+						) : (
+							<div class:list={['cell', cell.isToday && 'cell--today']}>
+								<div class="cell__num">{cell.day}</div>
+								{isOwner && (
+									<button
+										type="button"
+										class="cell__add"
+										data-open-screening
+										data-date={cell.date}
+										aria-label={`Schedule a film on ${cell.date}`}
+									>+</button>
+								)}
+								<div class="cell__films">
+									{cell.films.map((f) => {
+										const poster = imageUrl(f.poster_path, 'w185');
+										return (
+											<div class="film" data-tmdb-id={f.tmdb_id}>
+												<a
+													class={poster ? 'film__tile' : 'film__tile film__tile--noimg'}
+													href={`/films/movie/${f.tmdb_id}`}
+												>
+													{poster ? (
+														<img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" />
+													) : (
+														<span class="film__fallback">{f.title}</span>
+													)}
+												</a>
+												<div class="film__meta">
+													<span class="film__title">{f.title}</span>
+													{f.venue && <span class="film__venue">{f.venue}</span>}
+												</div>
+												{isOwner && (
+													<button
+														type="button"
+														class="film__remove"
+														aria-label={`Remove ${f.title} from the queue`}
+													>✕</button>
+												)}
+											</div>
+										);
+									})}
+								</div>
+							</div>
+						),
+					)}
+				</div>
+			</div>
+
+			{scheduledThisMonth === 0 && (
+				<p class="empty">Nothing queued for {label}.</p>
+			)}
+		</div>
+	</div>
+
+	{isOwner && <ScreeningComposer />}
+
+	<style>
+		.page {
+			overflow-x: hidden;
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 1000px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 34px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+
+		.titleblock {
+			display: flex;
+			align-items: flex-end;
+			justify-content: space-between;
+			margin-bottom: 20px;
+			flex-wrap: wrap;
+			gap: 16px;
+		}
+		h1 {
+			font-family: 'Newsreader', serif;
+			font-weight: 500;
+			font-size: 52px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.sub {
+			font-size: 13px;
+			color: #a2857a;
+			margin-top: 10px;
+		}
+		.titleblock__actions {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+		}
+		.btn-add {
+			font-size: 13px;
+			font-weight: 700;
+			color: #2a1214;
+			background: #d9b45a;
+			border: none;
+			border-radius: 8px;
+			padding: 10px 18px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			white-space: nowrap;
+		}
+		.btn-add:hover {
+			background: #f0d488;
+		}
+		.btn-ghost {
+			font-size: 12.5px;
+			padding: 10px 16px;
+			border-radius: 8px;
+			cursor: pointer;
+			font-family: 'Archivo', sans-serif;
+			border: 1px solid #6b4a42;
+			background: transparent;
+			color: #f0d488;
+			white-space: nowrap;
+		}
+		.btn-ghost:hover {
+			border-color: #d9b45a;
+			background: #241012;
+		}
+		.btn-ghost:disabled {
+			opacity: 0.6;
+			cursor: default;
+		}
+		.sync-msg {
+			margin: 0 0 18px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.sync-msg[hidden] {
+			display: none;
+		}
+		.sync-msg.error {
+			color: #e0736f;
+		}
+
+		.monthbar {
+			display: flex;
+			align-items: center;
+			gap: 16px;
+			margin-bottom: 20px;
+		}
+		.monthbar__label {
+			font-family: 'Newsreader', serif;
+			font-size: 22px;
+			color: #f4e8d1;
+			min-width: 190px;
+		}
+		.nav {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			width: 34px;
+			height: 34px;
+			border-radius: 8px;
+			border: 1px solid #4a2529;
+			color: #ddc9b4;
+			font-size: 15px;
+		}
+		.nav:hover {
+			border-color: #d9b45a;
+			color: #f4e8d1;
+		}
+		.today-link {
+			font-size: 12.5px;
+			color: #a2857a;
+			text-decoration: underline;
+		}
+		.today-link:hover {
+			color: #f0d488;
+		}
+
+		.calendar {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+		}
+		.dow {
+			display: grid;
+			grid-template-columns: repeat(7, minmax(0, 1fr));
+			gap: 10px;
+			font-size: 11.5px;
+			letter-spacing: 1.5px;
+			text-transform: uppercase;
+			color: #8a6f63;
+			padding: 0 2px;
+		}
+		.grid {
+			display: grid;
+			grid-template-columns: repeat(7, minmax(0, 1fr));
+			gap: 10px;
+		}
+		.cell {
+			position: relative;
+			min-height: 118px;
+			border: 1px solid #3a1f22;
+			border-radius: 8px;
+			padding: 6px;
+			background: #1f0e10;
+		}
+		.cell--out {
+			background: transparent;
+			border-color: transparent;
+		}
+		.cell--today {
+			border-color: #d9b45a;
+		}
+		.cell__num {
+			font-family: 'Newsreader', serif;
+			font-size: 14px;
+			color: #7c6156;
+			padding: 2px 4px;
+		}
+		.cell--today .cell__num {
+			color: #d9b45a;
+		}
+		/* Owner-only "+" to schedule onto this day; shows on cell hover/focus. */
+		.cell__add {
+			position: absolute;
+			top: 5px;
+			right: 5px;
+			width: 22px;
+			height: 22px;
+			border-radius: 6px;
+			border: 1px solid #4a2529;
+			background: rgba(20, 8, 9, 0.7);
+			color: #d9b45a;
+			font-size: 15px;
+			line-height: 1;
+			cursor: pointer;
+			opacity: 0;
+			transition: opacity 0.12s;
+		}
+		.cell:hover .cell__add,
+		.cell__add:focus-visible {
+			opacity: 1;
+		}
+		.cell__add:hover {
+			background: #d9b45a;
+			color: #2a1214;
+		}
+		.cell__films {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			margin-top: 4px;
+		}
+		.film {
+			position: relative;
+			display: flex;
+			gap: 8px;
+			align-items: flex-start;
+		}
+		.film__tile {
+			flex-shrink: 0;
+			width: 34px;
+			aspect-ratio: 2 / 3;
+			border-radius: 3px;
+			overflow: hidden;
+			border: 1px solid #4a2529;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 6px, #2c1518 6px 12px);
+			display: block;
+		}
+		.film__tile img {
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+			display: block;
+		}
+		.film__tile--noimg {
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			padding: 2px;
+		}
+		.film__fallback {
+			font-family: 'Newsreader', serif;
+			font-size: 8px;
+			line-height: 1.1;
+			color: #f2e5cd;
+			text-align: center;
+			overflow: hidden;
+		}
+		.film__meta {
+			min-width: 0;
+			flex: 1;
+			padding-top: 1px;
+		}
+		.film__title {
+			display: block;
+			font-family: 'Newsreader', serif;
+			font-size: 12.5px;
+			line-height: 1.2;
+			color: #f4e8d1;
+			overflow: hidden;
+			display: -webkit-box;
+			-webkit-line-clamp: 2;
+			-webkit-box-orient: vertical;
+		}
+		.film__venue {
+			display: block;
+			font-size: 10px;
+			color: #8a6f63;
+			margin-top: 2px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+		.film__remove {
+			position: absolute;
+			top: -4px;
+			right: -4px;
+			width: 18px;
+			height: 18px;
+			border-radius: 50%;
+			background: rgba(20, 8, 9, 0.9);
+			border: 1px solid #4a2529;
+			color: #f2e5cd;
+			font-size: 9px;
+			line-height: 1;
+			cursor: pointer;
+			opacity: 0;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			transition: opacity 0.12s;
+		}
+		.film:hover .film__remove,
+		.film__remove:focus-visible {
+			opacity: 1;
+		}
+		.film__remove:hover {
+			background: #d9b45a;
+			color: #2a1214;
+			border-color: #d9b45a;
+		}
+		.film__remove:disabled {
+			opacity: 0.5;
+			cursor: default;
+		}
+
+		.empty {
+			padding: 40px 0;
+			text-align: center;
+			color: #8a6f63;
+			font-size: 15px;
+			font-style: italic;
+			font-family: 'Newsreader', serif;
+		}
+
+		@media (max-width: 640px) {
+			h1 {
+				font-size: 40px;
+			}
+			.cell {
+				min-height: 92px;
+			}
+			.film__tile {
+				width: 26px;
+			}
+			.film__venue {
+				display: none;
+			}
+		}
+	</style>
+
+	<script>
+		// Remove a queued film (owner). Delegated so a cell's ✕ hits the API and
+		// drops the film from the grid without a reload.
+		document.querySelectorAll<HTMLButtonElement>('.film__remove').forEach((btn) => {
+			btn.addEventListener('click', async () => {
+				const film = btn.closest<HTMLElement>('.film');
+				const tmdbId = film?.dataset.tmdbId;
+				if (!tmdbId) return;
+				btn.disabled = true;
+				try {
+					const res = await fetch(`/api/films/screening-queue?tmdbId=${tmdbId}`, { method: 'DELETE' });
+					if (res.status === 401) {
+						window.location.href = '/films/login?redirect=/films/screening-room';
+						return;
+					}
+					if (!res.ok) throw new Error();
+					film!.remove();
+				} catch {
+					btn.disabled = false;
+				}
+			});
+		});
+
+		// Sync from the Movies calendar (owner). Pulls AMC-style events in, then
+		// reloads to show them. Reports what came back.
+		const syncBtn = document.getElementById('sync-btn') as HTMLButtonElement | null;
+		const syncMsg = document.getElementById('sync-msg');
+		syncBtn?.addEventListener('click', async () => {
+			syncBtn.disabled = true;
+			if (syncMsg) {
+				syncMsg.hidden = false;
+				syncMsg.className = 'sync-msg';
+				syncMsg.textContent = 'Syncing from calendar…';
+			}
+			try {
+				const res = await fetch('/api/films/screening-queue/sync', { method: 'POST' });
+				const data = await res.json().catch(() => ({}));
+				if (!res.ok) throw new Error(data.error || 'Sync failed');
+				if (data.added > 0) {
+					window.location.reload();
+					return;
+				}
+				if (syncMsg) {
+					const bits = [`${data.added} added`, `${data.skipped} already synced`];
+					if (data.unresolved?.length) bits.push(`couldn't match: ${data.unresolved.join(', ')}`);
+					syncMsg.textContent = bits.join(' · ');
+				}
+				syncBtn.disabled = false;
+			} catch (err) {
+				if (syncMsg) {
+					syncMsg.className = 'sync-msg error';
+					syncMsg.textContent = err instanceof Error ? err.message : 'Sync failed';
+				}
+				syncBtn.disabled = false;
+			}
+		});
+	</script>
+</FilmLayout>
