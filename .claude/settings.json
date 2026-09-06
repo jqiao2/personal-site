@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(./src/pages/archive/**)",
+      "Edit(./src/pages/archive/**)",
+      "Write(./src/pages/archive/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-archive.mjs\""
+          }
+        ]
+      }
+    ]
+  }
+}

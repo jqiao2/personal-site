@@ -12,6 +12,19 @@ WikiSkill (arXiv:2608.27454). Run this loop:
 - **Promote** a pattern's actionable core into this file once it has proven useful
   across more than one session. The wiki is never reset; see `wiki/README.md`.
 
+## The archive is off limits
+
+`src/pages/archive/` holds retired features, frozen exactly as they came off the
+page they used to live on. **Do not read, edit, refactor, lint-fix, rename or
+delete anything in that directory** — not to "update" it, not as a drive-by
+while touching something nearby, not to see how it works. It is not reference
+material and it is not maintained. `.claude/settings.json` denies Read/Edit/Write
+there; that also means no `cat`/`sed`/`grep` at those files through Bash.
+
+The only editable part is the listing at `src/pages/archive.astro`. Archiving
+something new means moving the code into `src/pages/archive/` untouched and
+adding a row there.
+
 ## Visual checks
 
 Anything whose correctness is visual — layout, overlap, a share card, a chart —

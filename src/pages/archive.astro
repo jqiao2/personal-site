@@ -1,0 +1,47 @@
+---
+// Things that were built, lived on a page for a while, and then came off it.
+// They still run — they just aren't part of the site's working surface any more.
+// Server-rendered so the header's owner check runs per-request, not at build.
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+
+const archived = [
+	{
+		href: '/archive/film-wheel',
+		title: 'Film Wheel',
+		retired: 'September 2026',
+		description:
+			'A prize wheel over the film watchlist — every film a wedge, wooden ticks as the boundaries ' +
+			'cross the pointer, confetti on the winner. It lived as a modal on /films/watchlist; the ' +
+			'screening queue does the picking now, so it spins the whole watchlist here instead.',
+	},
+];
+---
+
+<Layout title="Archive">
+	<h1>Archive</h1>
+	<ul>
+		{
+			archived.map((item) => (
+				<li>
+					<a href={item.href}>{item.title}</a> <span class="tag">{item.retired}</span>
+					<p>{item.description}</p>
+				</li>
+			))
+		}
+	</ul>
+</Layout>
+
+<style>
+	.tag {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		border: 1px solid var(--border);
+		border-radius: 999px;
+		padding: 0.05rem 0.4rem;
+		opacity: 0.7;
+		vertical-align: 0.1em;
+	}
+</style>
