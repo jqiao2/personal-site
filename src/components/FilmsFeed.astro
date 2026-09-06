@@ -3,6 +3,7 @@
 // sidebar index. Split out of films/index.astro so the page ships its themed
 // shell (header + "+ Log film") from the fast owner check, and this data-heavy
 // body — stats + the latest logs — streams in on its own request.
+import DrawerNav from './DrawerNav.astro';
 import { getFilmLogStats, listLogs } from '../lib/films';
 import { requireOwner } from '../lib/auth';
 import { starText, formatWatchedDate, excerpt } from '../lib/format';
@@ -55,6 +56,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 	<!-- Sidebar -->
 	<aside class="side" id="site-drawer" data-site-drawer>
+		<DrawerNav pathname={Astro.url.pathname} theme="film" />
 		<div class="brand">Jason's<br />film log</div>
 		<div class="brand__sub">{stats.thisYear} films this year</div>
 

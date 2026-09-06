@@ -11,6 +11,7 @@
 // default); the island re-derives owner from the request cookies, so the
 // redaction and the owner-only stats/nav below are decided here, not trusted
 // from the shell.
+import DrawerNav from './DrawerNav.astro';
 import { requireOwner } from '../lib/auth';
 import { getActivityStats, type ActivityListRow } from '../lib/activities';
 import { fetchActivityPage, activityQueryFromParams } from '../lib/activity-params';
@@ -150,6 +151,7 @@ function routeStart(path: string): { x: number; y: number } | null {
 
 	<!-- Sidebar -->
 	<aside class="side" id="site-drawer" data-site-drawer>
+		<DrawerNav pathname={Astro.url.pathname} theme="activity" />
 		<div class="brand">Jason's<br />activity log</div>
 		{isOwner && <div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>}
 

@@ -15,12 +15,13 @@
 // placements.
 import { siteNav } from '../lib/nav';
 import { requireOwner } from '../lib/auth';
+import { headerThemeStyle, type HeaderTheme } from '../lib/header-theme';
 
 interface Props {
 	/** Pathname used to light the active tab. */
 	pathname: string;
 	/** Which section's palette to wear. */
-	theme?: 'root' | 'film' | 'book' | 'restaurant' | 'activity' | 'subway';
+	theme?: HeaderTheme;
 	/** Width of the inner column, when the page's own column isn't the theme's
 	    default — the film subpages run narrower than the film log's 1120px card,
 	    and the nav has to line up with whatever is under it. */
@@ -34,6 +35,7 @@ interface Props {
 
 const { pathname, theme = 'root', max, sidebar = false } = Astro.props;
 const nav = siteNav(pathname);
+const style = headerThemeStyle(theme, max);
 
 // The admin sign-in lives here so every page with a header offers it. A visitor
 // gets the "Log in" button + dialog; the owner gets neither (their session is
@@ -42,92 +44,11 @@ const nav = siteNav(pathname);
 // call on any page: no cookie → false, and it only needs SESSION_SECRET to
 // verify a token that's actually present.
 const owner = await requireOwner(Astro.cookies);
-
-// Each theme is just a bag of CSS custom properties. `--sh-max` caps the inner
-// column; `none` lets the strip run edge to edge (the subway map wants that).
-// `root` leans on the variables Layout.astro already defines so it follows the
-// light/dark scheme; every other section is art-directed to a fixed palette.
-const THEMES: Record<string, Record<string, string>> = {
-	root: {
-		'--sh-bg': 'transparent',
-		'--sh-border': 'var(--border, #ddd)',
-		'--sh-link': 'var(--fg, #111)',
-		'--sh-hover': 'var(--fg, #111)',
-		'--sh-active': 'var(--fg, #111)',
-		'--sh-accent': 'var(--fg, #111)',
-		'--sh-font': 'system-ui, sans-serif',
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': 'var(--bg, #fff)',
-	},
-	film: {
-		'--sh-bg': '#20100f',
-		'--sh-border': '#4a2529',
-		'--sh-link': '#c2a99a',
-		'--sh-hover': '#f4e8d1',
-		'--sh-active': '#f4e8d1',
-		'--sh-accent': '#d9b45a',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': '#20100f',
-	},
-	book: {
-		'--sh-bg': '#150e07',
-		'--sh-border': '#45341f',
-		'--sh-link': '#bfa886',
-		'--sh-hover': '#f2e6cd',
-		'--sh-active': '#f2e6cd',
-		'--sh-accent': '#cfa452',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1008px',
-		'--sh-menu-bg': '#150e07',
-	},
-	restaurant: {
-		'--sh-bg': '#efe1c3',
-		'--sh-border': '#c4ad86',
-		'--sh-link': '#6d5740',
-		'--sh-hover': '#8e3220',
-		'--sh-active': '#2f1e12',
-		'--sh-accent': '#b34328',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': '#fdf7e8',
-	},
-	activity: {
-		'--sh-bg': 'transparent',
-		'--sh-border': '#c9d4dc',
-		'--sh-link': '#6b7b88',
-		'--sh-hover': '#3d4a55',
-		'--sh-active': '#1c6e8c',
-		'--sh-accent': '#1c6e8c',
-		'--sh-font': "'Instrument Sans', sans-serif",
-		'--sh-max': '1120px',
-		'--sh-pad': 'clamp(14px, 4vw, 32px)',
-		'--sh-menu-bg': '#f8fbfd',
-	},
-	subway: {
-		'--sh-bg': '#20100f',
-		'--sh-border': '#4a2529',
-		'--sh-link': '#c2a99a',
-		'--sh-hover': '#f4e8d1',
-		'--sh-active': '#f4e8d1',
-		'--sh-accent': '#d9b45a',
-		'--sh-font': "'Archivo', sans-serif",
-		'--sh-max': 'none',
-		'--sh-menu-bg': '#20100f',
-	},
-};
-
-const vars = { ...(THEMES[theme] ?? THEMES.root), ...(max ? { '--sh-max': max } : {}) };
-const style = Object.entries(vars)
-	.map(([k, v]) => `${k}:${v}`)
-	.join(';');
 ---
 
-<header class="sh" style={style} data-theme={theme}>
+<header class="sh" style={style} data-theme={theme} data-sidebar={sidebar ? '' : undefined}>
 	<nav class="sh__inner" aria-label="Primary">
+		<div class="sh__tabs">
 		{
 			nav.map((n) =>
 				n.children ? (
@@ -176,6 +97,7 @@ const style = Object.entries(vars)
 				),
 			)
 		}
+		</div>
 		<div class="sh__actions">
 			<slot name="actions" />
 			{!owner && (
@@ -386,6 +308,14 @@ const style = Object.entries(vars)
 		gap: 2px;
 		flex-wrap: wrap;
 	}
+	/* The primary tabs, as one flex child so they can be hidden as a group when
+	   the header collapses to a hamburger on mobile. */
+	.sh__tabs {
+		display: flex;
+		align-items: stretch;
+		gap: 2px;
+		flex-wrap: wrap;
+	}
 	.sh__link {
 		display: inline-flex;
 		align-items: center;
@@ -505,10 +435,24 @@ const style = Object.entries(vars)
 		margin-left: auto;
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: 12px;
 	}
 	.sh__actions:empty {
 		display: none;
+	}
+
+	/* Mobile, on the pages that carry a sidebar drawer: the primary tabs fold
+	   into the drawer (rendered there by DrawerNav), leaving the header a single
+	   row of action buttons + hamburger. The tabs no longer set the row height,
+	   so pad the strip to keep breathing room above the divider. */
+	@media (max-width: 820px) {
+		.sh[data-sidebar] .sh__tabs {
+			display: none;
+		}
+		.sh[data-sidebar] .sh__inner {
+			padding-top: 13px;
+			padding-bottom: 15px;
+		}
 	}
 
 	/* Hamburger — mobile only, sits to the right of any owner action buttons.
