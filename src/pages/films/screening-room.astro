@@ -139,20 +139,18 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 										const poster = imageUrl(f.poster_path, 'w185');
 										return (
 											<div class="film" data-tmdb-id={f.tmdb_id}>
+												{/* Poster-only tile with a hover overlay, same as the
+												    watchlist/watched grids — clicks through to the film. */}
 												<a
-													class={poster ? 'film__tile' : 'film__tile film__tile--noimg'}
+													class={poster ? 'tile' : 'tile tile--noimg'}
 													href={`/films/movie/${f.tmdb_id}`}
 												>
-													{poster ? (
-														<img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" />
-													) : (
-														<span class="film__fallback">{f.title}</span>
-													)}
+													{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" />}
+													<div class="tile__overlay">
+														<div class="tile__title">{f.title}</div>
+														{f.venue && <div class="tile__venue">{f.venue}</div>}
+													</div>
 												</a>
-												<div class="film__meta">
-													<span class="film__title">{f.title}</span>
-													{f.venue && <span class="film__venue">{f.venue}</span>}
-												</div>
 												{isOwner && (
 													<button
 														type="button"
@@ -395,68 +393,71 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			background: #d9b45a;
 			color: #2a1214;
 		}
+		/* Poster tiles wrap within a day; each is the watchlist/watched tile —
+		   poster fills a 2/3 box, caption overlay fades in on hover. */
 		.cell__films {
 			display: flex;
-			flex-direction: column;
-			gap: 8px;
+			flex-wrap: wrap;
+			gap: 6px;
 			margin-top: 4px;
 		}
 		.film {
 			position: relative;
-			display: flex;
-			gap: 8px;
-			align-items: flex-start;
+			width: 46px;
 		}
-		.film__tile {
-			flex-shrink: 0;
-			width: 34px;
+		.tile {
+			position: relative;
+			display: block;
 			aspect-ratio: 2 / 3;
-			border-radius: 3px;
+			border-radius: 4px;
 			overflow: hidden;
 			border: 1px solid #4a2529;
-			background-image: repeating-linear-gradient(135deg, #351a1d 0 6px, #2c1518 6px 12px);
-			display: block;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
+			transition: border-color 0.12s;
 		}
-		.film__tile img {
+		.tile:hover {
+			border-color: #d9b45a;
+		}
+		.tile img {
+			position: absolute;
+			inset: 0;
 			width: 100%;
 			height: 100%;
 			object-fit: cover;
-			display: block;
 		}
-		.film__tile--noimg {
+		.tile__overlay {
+			position: absolute;
+			inset: 0;
 			display: flex;
-			align-items: center;
+			flex-direction: column;
+			justify-content: flex-end;
+			padding: 5px;
+			background: rgba(18, 8, 9, 0.86);
+			opacity: 0;
+			transition: opacity 0.16s ease;
+		}
+		.tile:hover .tile__overlay {
+			opacity: 1;
+		}
+		.tile--noimg .tile__overlay {
+			opacity: 1;
+			background: transparent;
 			justify-content: center;
-			padding: 2px;
-		}
-		.film__fallback {
-			font-family: 'Newsreader', serif;
-			font-size: 8px;
-			line-height: 1.1;
-			color: #f2e5cd;
 			text-align: center;
-			overflow: hidden;
 		}
-		.film__meta {
-			min-width: 0;
-			flex: 1;
-			padding-top: 1px;
-		}
-		.film__title {
-			display: block;
+		.tile__title {
 			font-family: 'Newsreader', serif;
-			font-size: 12.5px;
-			line-height: 1.2;
+			font-size: 10px;
+			line-height: 1.15;
 			color: #f4e8d1;
 			overflow: hidden;
 			display: -webkit-box;
-			-webkit-line-clamp: 2;
+			-webkit-line-clamp: 4;
 			-webkit-box-orient: vertical;
 		}
-		.film__venue {
-			display: block;
-			font-size: 10px;
-			color: #8a6f63;
+		.tile__venue {
+			font-size: 8.5px;
+			color: #a2857a;
 			margin-top: 2px;
 			overflow: hidden;
 			text-overflow: ellipsis;
@@ -464,8 +465,9 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 		}
 		.film__remove {
 			position: absolute;
-			top: -4px;
-			right: -4px;
+			top: -5px;
+			right: -5px;
+			z-index: 2;
 			width: 18px;
 			height: 18px;
 			border-radius: 50%;
@@ -511,11 +513,8 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			.cell {
 				min-height: 92px;
 			}
-			.film__tile {
-				width: 26px;
-			}
-			.film__venue {
-				display: none;
+			.film {
+				width: 38px;
 			}
 		}
 	</style>
