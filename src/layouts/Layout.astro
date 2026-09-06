@@ -41,6 +41,17 @@ const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.p
 			)
 		}
 		<style>
+			/* Country-flag emoji (🇦🇷 …) have no glyphs in Windows' Segoe UI Emoji,
+			   so a flag renders as the bare letters "AR". This flag-only Twemoji
+			   subset supplies just those glyphs; listed first in --serif and --sans
+			   below, it fixes flags and falls through to the real typefaces for
+			   everything else, including other emoji. */
+			@font-face {
+				font-family: 'Twemoji Country Flags';
+				src: url('/fonts/TwemojiCountryFlags.woff2') format('woff2');
+				unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F;
+				font-display: swap;
+			}
 			:root {
 				color-scheme: light dark;
 
@@ -57,8 +68,8 @@ const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.p
 				--accent: #8c4a2f;
 				--accent-bg: #efe3d7;
 
-				--serif: Georgia, 'Times New Roman', serif;
-				--sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
+				--serif: 'Twemoji Country Flags', Georgia, 'Times New Roman', serif;
+				--sans: 'Twemoji Country Flags', system-ui, -apple-system, 'Segoe UI', sans-serif;
 				--measure: 720px;
 				--shell: 1120px;
 
