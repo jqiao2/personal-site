@@ -26,16 +26,18 @@ const style = headerThemeStyle(theme);
 
 <nav class="dnav" style={style} aria-label="Sections">
 	{
-		nav.map((n) => (
-			<>
-				<a
-					class:list={['dnav__row', n.active && 'dnav__row--active']}
-					href={n.href}
-					aria-current={n.active ? 'page' : undefined}
-				>
-					{n.label}
-				</a>
-				{n.children && (
+		nav.map((n) =>
+			n.children ? (
+				// The Journal tab is a submenu, not a flat dump of the four logs: a
+				// native <details> so it toggles with no JS, opened by default when
+				// you're already inside one of the logs.
+				<details class="dnav__group" open={n.children.some((c) => c.active) || undefined}>
+					<summary class:list={['dnav__row', 'dnav__summary', n.active && 'dnav__row--active']}>
+						<span>{n.label}</span>
+						<svg class="dnav__caret" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
+							<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
+						</svg>
+					</summary>
 					<div class="dnav__kids">
 						{n.children.map((c) => (
 							<a
@@ -47,9 +49,17 @@ const style = headerThemeStyle(theme);
 							</a>
 						))}
 					</div>
-				)}
-			</>
-		))
+				</details>
+			) : (
+				<a
+					class:list={['dnav__row', n.active && 'dnav__row--active']}
+					href={n.href}
+					aria-current={n.active ? 'page' : undefined}
+				>
+					{n.label}
+				</a>
+			),
+		)
 	}
 </nav>
 
@@ -79,17 +89,37 @@ const style = headerThemeStyle(theme);
 		color: var(--sh-active);
 		font-weight: 600;
 	}
+	/* Journal's summary row: the label + a caret, no default disclosure triangle. */
+	.dnav__summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		list-style: none;
+		cursor: pointer;
+	}
+	.dnav__summary::-webkit-details-marker {
+		display: none;
+	}
+	.dnav__caret {
+		flex: none;
+		transition: transform 0.14s;
+	}
+	.dnav__group[open] .dnav__caret {
+		transform: rotate(180deg);
+	}
+	/* The four logs, as an indented vertical submenu under Journal. */
 	.dnav__kids {
 		display: flex;
-		flex-wrap: wrap;
-		gap: 6px 14px;
-		padding: 2px 0 8px 12px;
+		flex-direction: column;
+		padding: 2px 0 6px 14px;
 	}
 	.dnav__kid {
 		font-family: var(--sh-font);
-		font-size: 13.5px;
+		font-size: 14px;
 		color: var(--sh-link);
 		text-decoration: none;
+		padding: 7px 0;
 	}
 	.dnav__kid--active {
 		color: var(--sh-active);

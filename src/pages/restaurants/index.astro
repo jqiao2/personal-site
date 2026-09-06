@@ -16,7 +16,7 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 ---
 
 <RestaurantLayout title="Jason's restaurant log" pathname={Astro.url.pathname} isOwner={isOwner} sidebar>
-	<RestaurantsFeed server:defer>
+	<RestaurantsFeed pathname={Astro.url.pathname} server:defer>
 		<div slot="fallback" class="shell-skel" aria-hidden="true">
 			<div class="feed-skel">
 				{Array.from({ length: 6 }).map(() => (

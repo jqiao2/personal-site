@@ -18,6 +18,10 @@ import { fetchActivityPage, activityQueryFromParams } from '../lib/activity-para
 import { sportMeta, sportIcon, formatStat, type StatKey } from '../lib/sports';
 import { excerpt } from '../lib/format';
 
+// Page path from activities/index.astro — see the note in FilmsFeed: a
+// server:defer island's Astro.url is the island endpoint, not the page.
+const { pathname } = Astro.props as { pathname: string };
+
 const FEED_LIMIT = 25;
 
 let rows: ActivityListRow[] = [];
@@ -151,7 +155,7 @@ function routeStart(path: string): { x: number; y: number } | null {
 
 	<!-- Sidebar -->
 	<aside class="side" id="site-drawer" data-site-drawer>
-		<DrawerNav pathname={Astro.url.pathname} theme="activity" />
+		<DrawerNav pathname={pathname} theme="activity" />
 		<div class="brand">Jason's<br />activity log</div>
 		{isOwner && <div class="brand__sub">{num(stats.activitiesThisYear)} activities this year</div>}
 

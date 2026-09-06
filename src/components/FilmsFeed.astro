@@ -9,6 +9,11 @@ import { requireOwner } from '../lib/auth';
 import { starText, formatWatchedDate, excerpt } from '../lib/format';
 import { imageUrl } from '../lib/tmdb';
 
+// The page path, passed in from films/index.astro: inside a server:defer island
+// Astro.url is the island's own endpoint, not the page, so the drawer nav can't
+// read the current route from here.
+const { pathname } = Astro.props as { pathname: string };
+
 const [stats, recent, isOwner] = await Promise.all([
 	getFilmLogStats(),
 	listLogs(25),
@@ -56,7 +61,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 	<!-- Sidebar -->
 	<aside class="side" id="site-drawer" data-site-drawer>
-		<DrawerNav pathname={Astro.url.pathname} theme="film" />
+		<DrawerNav pathname={pathname} theme="film" />
 		<div class="brand">Jason's<br />film log</div>
 		<div class="brand__sub">{stats.thisYear} films this year</div>
 

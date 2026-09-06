@@ -10,6 +10,10 @@ import { getRestaurantStats, listRecentVisits } from '../lib/restaurants';
 import { placeLine, shortDate, visitMarks } from '../lib/restaurant-view';
 import { starText, excerpt } from '../lib/format';
 
+// Page path from restaurants/index.astro — see the note in FilmsFeed: a
+// server:defer island's Astro.url is the island endpoint, not the page.
+const { pathname } = Astro.props as { pathname: string };
+
 const [stats, recent, isOwner] = await Promise.all([
 	getRestaurantStats(),
 	listRecentVisits(25),
@@ -77,7 +81,7 @@ const navRows = [
 
 	<!-- Sidebar -->
 	<aside class="side" id="site-drawer" data-site-drawer>
-		<DrawerNav pathname={Astro.url.pathname} theme="restaurant" />
+		<DrawerNav pathname={pathname} theme="restaurant" />
 		<div class="brand">Jason&rsquo;s<br />restaurant log</div>
 		<div class="brand__sub">{yearLine}</div>
 
