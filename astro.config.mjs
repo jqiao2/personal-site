@@ -1,5 +1,5 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import { defineConfig, fontProviders } from 'astro/config';
 import vercel from '@astrojs/vercel';
 import { loadEnv } from 'vite';
 import { PHOTO_WIDTHS } from './src/lib/photo-src.ts';
@@ -52,6 +52,65 @@ export default defineConfig({
 			minimumCacheTTL: 31_536_000,
 		},
 	}),
+	// The site's typefaces, self-hosted rather than fetched from Google at
+	// runtime. Three things follow from this, all of them about the page holding
+	// still:
+	//
+	//  - No third-party round trip. A <link> to fonts.googleapis.com is a DNS +
+	//    TLS + CSS fetch before the font request can even start.
+	//  - Astro generates a metric-matched fallback @font-face (`optimizedFallbacks`,
+	//    on by default) with the ascent/descent/size-adjust of the real face, so
+	//    the swap from fallback to webfont does NOT reflow the text. That is the
+	//    whole reason this is worth doing: `&display=swap` on the old links
+	//    relaid every page mid-load.
+	//  - <Font preload /> in each layout puts the file in the critical path.
+	//
+	// The stack lives in the cssVariable — reach for `var(--font-newsreader)`,
+	// not `'Newsreader', serif`, or the fallback metrics are skipped and the
+	// reflow comes back.
+	fonts: [
+		{
+			provider: fontProviders.google(),
+			name: 'Newsreader',
+			cssVariable: '--font-newsreader',
+			weights: [400, 500, 600],
+			styles: ['normal', 'italic'],
+			fallbacks: ['Georgia', 'serif'],
+		},
+		{
+			provider: fontProviders.google(),
+			name: 'Archivo',
+			cssVariable: '--font-archivo',
+			weights: [400, 500, 600, 700],
+			styles: ['normal', 'italic'],
+			fallbacks: ['Arial', 'sans-serif'],
+		},
+		{
+			provider: fontProviders.google(),
+			name: 'Instrument Serif',
+			cssVariable: '--font-instrument-serif',
+			weights: [400],
+			styles: ['normal', 'italic'],
+			fallbacks: ['Georgia', 'serif'],
+		},
+		{
+			provider: fontProviders.google(),
+			name: 'Instrument Sans',
+			cssVariable: '--font-instrument-sans',
+			weights: [400, 500, 600, 700],
+			styles: ['normal', 'italic'],
+			fallbacks: ['Arial', 'sans-serif'],
+		},
+		{
+			// The restaurant log's masthead only.
+			provider: fontProviders.google(),
+			name: 'Ultra',
+			cssVariable: '--font-ultra',
+			weights: [400],
+			styles: ['normal'],
+			fallbacks: ['Georgia', 'serif'],
+		},
+	],
 	// MapLibre loads its tile-decoding worker as an ES module worker. Vite's
 	// default worker format is a classic IIFE, which that would fail to parse —
 	// so the worker build emits ESM to match.

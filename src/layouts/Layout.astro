@@ -96,6 +96,12 @@ const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.p
 					--accent-bg: #2a201a;
 				}
 			}
+			html {
+				/* Hold the scrollbar's width whether or not there is one, so a short
+				   page and a long one line up and nothing slides sideways when a
+				   modal locks scrolling or an island makes the page taller. */
+				scrollbar-gutter: stable;
+			}
 			body {
 				font-family: var(--serif);
 				font-size: 1.0625rem;

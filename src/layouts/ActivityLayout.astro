@@ -24,7 +24,7 @@
 // it queries on every tile; this section's cards are self-drawn SVG (see
 // ActivityCard.astro) and never touch a third-party image host, so there is
 // nothing here worth warming a connection for.
-import { FONT_LINK } from '../lib/activity-tokens';
+import { Font } from 'astro:assets';
 
 interface Props {
 	title: string;
@@ -40,9 +40,8 @@ const { title } = Astro.props;
 		<meta name="apple-mobile-web-app-title" content="jq" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>{title}</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link href={FONT_LINK} rel="stylesheet" />
+		<Font cssVariable="--font-instrument-serif" preload />
+		<Font cssVariable="--font-instrument-sans" preload />
 	</head>
 	<body>
 		<slot />
@@ -80,8 +79,8 @@ const { title } = Astro.props;
 			   same names Layout.astro uses for the home spine, so a component that
 			   renders in either section reaches for the same variable. */
 			:root {
-				--serif: 'Twemoji Country Flags', 'Instrument Serif', Georgia, serif;
-				--sans: 'Twemoji Country Flags', 'Instrument Sans', Arial, sans-serif;
+				--serif: 'Twemoji Country Flags', var(--font-instrument-serif);
+				--sans: 'Twemoji Country Flags', var(--font-instrument-sans);
 			}
 			* {
 				box-sizing: border-box;
@@ -89,6 +88,10 @@ const { title } = Astro.props;
 			html {
 				-webkit-text-size-adjust: 100%;
 				text-size-adjust: 100%;
+				/* Hold the scrollbar's width whether or not there is one, so a short
+				   page and a long one line up and nothing slides sideways when a
+				   modal locks scrolling or an island makes the page taller. */
+				scrollbar-gutter: stable;
 			}
 			html,
 			body {

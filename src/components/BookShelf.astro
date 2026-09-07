@@ -138,7 +138,7 @@ const { spines, emptyLine } = Astro.props;
 			inset 0 14px 20px -16px rgba(0, 0, 0, 0.9);
 	}
 	.shelf__empty {
-		font-family: 'Newsreader', serif;
+		font-family: var(--font-newsreader);
 		font-style: italic;
 		font-size: 17px;
 		color: #a68f6e;
@@ -291,7 +291,7 @@ const { spines, emptyLine } = Astro.props;
 		line-clamp: var(--lines);
 		overflow: hidden;
 		overflow-wrap: break-word;
-		font-family: 'Newsreader', serif;
+		font-family: var(--font-newsreader);
 		font-weight: 500;
 		font-size: var(--ts);
 		line-height: 1.15;
@@ -312,7 +312,7 @@ const { spines, emptyLine } = Astro.props;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-family: 'Archivo', sans-serif;
+		font-family: var(--font-archivo);
 		font-size: var(--as);
 		letter-spacing: 0.7px;
 		text-transform: uppercase;

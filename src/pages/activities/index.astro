@@ -67,9 +67,14 @@ export const prerender = false;
 
 		/* Skeleton shown while the ActivitiesFeed island streams in. Mirrors the
 		   feed's two-column geometry so the shell doesn't reflow when it arrives. */
+		/* Reserves the height of the real feed, so nothing below the island moves
+		   when it lands and a reader who scrolls during the load isn't yanked.
+		   ponytail: measured (FEED_LIMIT 25 at 1280px/420px), not derived —
+		   re-measure if the row template or that limit changes. */
 		.shell-skel {
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) 288px;
+			min-height: 3240px;
 		}
 		.feed-skel {
 			padding: 38px 40px 44px clamp(14px, 4vw, 32px);
@@ -116,6 +121,8 @@ export const prerender = false;
 		@media (max-width: 720px) {
 			.shell-skel {
 				grid-template-columns: 1fr;
+				/* Rows wrap narrower, so the same 25 activities run taller. */
+				min-height: 3450px;
 			}
 			.side-skel {
 				display: none;

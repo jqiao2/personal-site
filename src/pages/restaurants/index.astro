@@ -40,6 +40,10 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 <style>
 	/* Skeleton shown while the RestaurantsFeed island streams in. Mirrors the
 	   feed's two-column geometry so the shell doesn't reflow when it arrives. */
+	/* Reserves the height of the real feed, so nothing below the island moves
+	   when it lands and a reader who scrolls during the load isn't yanked.
+	   ponytail: measured (listRecentVisits(25) at 1280px/420px), not derived —
+	   re-measure if the row template or that limit changes. */
 	.shell-skel {
 		max-width: 1080px;
 		margin: 0 auto;
@@ -47,6 +51,7 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 		grid-template-columns: minmax(0, 1fr) 288px;
 		gap: 2.6rem;
 		padding: 34px 40px 48px;
+		min-height: 3870px;
 	}
 	.skel-item {
 		display: flex;
@@ -88,6 +93,8 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 			grid-template-columns: 1fr;
 			gap: 1.6rem;
 			padding: 26px 22px 36px;
+			/* Rows wrap narrower, so the same 25 visits run taller. */
+			min-height: 4690px;
 		}
 		.side-skel {
 			display: none;
