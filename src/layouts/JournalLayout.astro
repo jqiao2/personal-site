@@ -91,8 +91,11 @@ const { title } = Astro.props;
 				--meal: #a8642a;
 				--move: #3f6f63;
 
-				--ui: 'Archivo', Helvetica, Arial, sans-serif;
-				--prose: 'Newsreader', Georgia, serif;
+				/* The generated vars, not the literal names — they carry Astro's
+				   metric-matched fallback face, so the webfont swap doesn't reflow.
+				   Each already ends in the fallback stack from astro.config.mjs. */
+				--ui: var(--font-archivo);
+				--prose: var(--font-newsreader);
 				--mono: ui-monospace, Menlo, Consolas, monospace;
 			}
 

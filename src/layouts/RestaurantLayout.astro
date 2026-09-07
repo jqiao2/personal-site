@@ -152,9 +152,12 @@ const { title, pathname, isOwner = false, sidebar = false } = Astro.props;
 				--sunk: #f0e2c2; /* pressed / locked field */
 				--disabled: #e0d1b2;
 
-				--display: 'Ultra', Georgia, serif;
-				--ui: 'Archivo', Helvetica, Arial, sans-serif;
-				--prose: 'Newsreader', Georgia, serif;
+				/* The generated vars, not the literal names — they carry Astro's
+				   metric-matched fallback face, so the webfont swap doesn't reflow.
+				   Each already ends in the fallback stack from astro.config.mjs. */
+				--display: var(--font-ultra);
+				--ui: var(--font-archivo);
+				--prose: var(--font-newsreader);
 				--mono: ui-monospace, Menlo, Consolas, monospace;
 
 				--gutter: clamp(14px, 4vw, 32px);
