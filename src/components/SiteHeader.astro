@@ -322,7 +322,9 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 			   into or swallow a click meant for the hamburger. */
 			transform: translateX(100%);
 			visibility: hidden;
-			box-shadow: -14px 0 40px rgba(0, 0, 0, 0.32);
+			/* Enough to read as a layer over the page; the 40px spread it used to
+		   carry was doing the work the backdrop already does. */
+		box-shadow: -6px 0 16px rgba(0, 0, 0, 0.22);
 		}
 		html.sh-drawer-open [data-site-drawer] {
 			transform: translateX(0);
@@ -344,7 +346,9 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		overflow-y: auto;
 		transform: translateX(100%);
 		visibility: hidden;
-		box-shadow: -14px 0 40px rgba(0, 0, 0, 0.32);
+		/* Enough to read as a layer over the page; the 40px spread it used to
+		   carry was doing the work the backdrop already does. */
+		box-shadow: -6px 0 16px rgba(0, 0, 0, 0.22);
 	}
 	html.sh-drawer-open .sh-menu--wide[data-site-drawer] {
 		transform: translateX(0);
