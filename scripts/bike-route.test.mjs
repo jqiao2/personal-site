@@ -11,6 +11,7 @@ import {
 	haversine,
 	normalizeShape,
 	orientRing,
+	removeBacktracks,
 } from '../src/lib/bike-route.ts';
 
 // A ~1° square near the equator, as each GeoJSON shape the picker can hand us.
@@ -101,5 +102,25 @@ const ccw = orientRing(square, false);
 assert.deepEqual(ccw, square, 'an already-CCW ring is left alone when CCW is asked');
 assert.deepEqual(cw, square.slice().reverse(), 'a CCW ring is reversed when CW is asked');
 assert.deepEqual(orientRing(cw, true), cw, 'orienting an already-CW ring to CW is a no-op');
+
+// removeBacktracks collapses an out-and-back spur but keeps the path connected.
+const spur = removeBacktracks([
+	[0, 0],
+	[0, 1],
+	[0, 2], // out along the vertical…
+	[0, 1],
+	[0, 0], // …and back down over the same road
+	[1, 0], // then continue east
+]);
+assert.deepEqual(spur, [[0, 0], [1, 0]], 'an out-and-back spur is removed, continuity kept');
+// A nested spur (a→b→c→b→a) collapses in one call.
+assert.deepEqual(
+	removeBacktracks([[0, 0], [1, 0], [2, 0], [1, 0], [0, 0]]),
+	[[0, 0]],
+	'a fully-retraced there-and-back collapses to its start'
+);
+// A genuine loop encloses area rather than retracing, so it is left intact.
+const loop = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
+assert.deepEqual(removeBacktracks(loop), loop, 'a real loop is not touched');
 
 console.log('bike-route: all checks passed');

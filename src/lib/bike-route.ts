@@ -24,17 +24,25 @@ export type LngLat = [number, number];
 const BROUTER = 'https://brouter.de/brouter';
 // Nominatim gives us the outline of any named place as GeoJSON.
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
-// Natural Earth's land-clipped country polygons (110m — ~210KB, CORS-open). We
-// prefer these for countries because Nominatim's admin boundary drags in
-// territorial water, which bloats the coastline into blocky offshore steps that
-// aren't a shape anyone would trace. NE follows the actual coast.
+// Natural Earth's land-clipped country polygons (50m — ~1MB gzipped, CORS-open,
+// fetched once per session). We prefer these for countries because Nominatim's
+// admin boundary drags in territorial water, which bloats the coastline into
+// blocky offshore steps that aren't a shape anyone would trace. NE follows the
+// actual coast. 50m, not 110m: 110m is too coarse for smaller countries (Taiwan
+// was ~9 points, a crude blob that bulged past its own coast); 50m gives ~60,
+// enough for a recognizable silhouette without the 25MB of the 10m set.
 const NE_COUNTRIES =
-	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson';
+	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson';
 
-// URL length and the router's own limits cap how many waypoints one request can
-// carry. ponytail: hard cap, not a chunker — past this the caller is told to
-// widen the spacing. A country at 120 waypoints is already a recognizable shape.
-export const MAX_WAYPOINTS = 120;
+// One BRouter request stays comfortable at ~100 waypoints (URL length, server
+// cost). Beyond that we chunk into overlapping batches and stitch, so a shape
+// can be traced with many more points than a single request would take — denser
+// sampling is what keeps the road route hugging the outline instead of taking
+// long detours between far-apart waypoints (a big source of retraced road).
+const BATCH = 100;
+// The overall ceiling across all chunks — enough for a very detailed trace,
+// while still bounding how many sequential requests we fire at the public server.
+export const MAX_WAYPOINTS = 600;
 
 // Profiles the public brouter.de server ships. `trekking` is the sensible
 // bike default; `safety` favours quiet roads; `shortest` hugs the border
@@ -170,6 +178,34 @@ export function pathLength(coords: LngLat[]): number {
 	let s = 0;
 	for (let i = 1; i < coords.length; i++) s += haversine(coords[i - 1], coords[i]);
 	return s;
+}
+
+/**
+ * Remove out-and-back retracing from a routed path — the "double-backing" a
+ * per-hop router produces when it dives down a road to reach a waypoint in a
+ * notch and comes straight back over the same tarmac.
+ *
+ * A stack does it: walk the points, and whenever the next point steps back onto
+ * the one before the top of the stack, that top was a spur tip — pop it instead
+ * of pushing. This cancels a spur of any length (a → x → y → x → a collapses to
+ * a) and nests, and because a spur always returns to where it began, cutting it
+ * never breaks the path: the route just skips the dead-end excursion. Iterated
+ * to a fixed point, since removing one spur can make its neighbours adjacent.
+ * Genuine loops (which enclose area rather than retrace) are left alone.
+ */
+export function removeBacktracks(coords: LngLat[]): LngLat[] {
+	const key = (p: LngLat) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
+	let cur = coords;
+	for (let pass = 0; pass < 8; pass++) {
+		const st: LngLat[] = [];
+		for (const p of cur) {
+			if (st.length >= 2 && key(st[st.length - 2]) === key(p)) st.pop();
+			else if (st.length === 0 || key(st[st.length - 1]) !== key(p)) st.push(p);
+		}
+		if (st.length === cur.length) return st; // stable
+		cur = st;
+	}
+	return cur;
 }
 
 /**
@@ -335,25 +371,45 @@ export interface RoutedPath {
 	ascend: number | null;
 }
 
-/** Route through an ordered waypoint list on rideable roads via BRouter. */
+/** One BRouter call over an ordered waypoint list. Returns the road geometry
+ *  (as [lng, lat], dropping any elevation) and the climb it reports. */
+async function brouterLeg(waypoints: LngLat[], profile: Profile): Promise<{ coords: LngLat[]; ascend: number }> {
+	const lonlats = waypoints.map(([lng, lat]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join('|');
+	const url = `${BROUTER}?lonlats=${lonlats}&profile=${profile}&alternativeidx=0&format=geojson`;
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(`Router failed (${res.status}). The shape may sit over water or a road-less area.`);
+	const fc = await res.json();
+	const feat = fc?.features?.[0];
+	if (!feat?.geometry?.coordinates?.length) throw new Error('Router returned no route.');
+	const coords: LngLat[] = feat.geometry.coordinates.map((c: number[]) => [c[0], c[1]]);
+	const ascend = feat.properties?.['filtered ascend'];
+	return { coords, ascend: ascend != null ? Number(ascend) : 0 };
+}
+
+/**
+ * Route through an ordered waypoint list on rideable roads via BRouter, then
+ * strip the out-and-back retracing the router leaves behind (removeBacktracks).
+ *
+ * Long lists are split into overlapping batches — each batch shares its last
+ * waypoint with the next batch's first, so the legs join seam-to-seam — because
+ * one request can't carry hundreds of waypoints. The dedupe runs on the stitched
+ * whole, so a spur straddling a seam is still removed.
+ */
 export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Promise<RoutedPath> {
 	if (waypoints.length < 2) throw new Error('Need at least two waypoints to route.');
 	if (waypoints.length > MAX_WAYPOINTS) {
 		throw new Error(`${waypoints.length} waypoints exceeds the ${MAX_WAYPOINTS} limit — widen the spacing.`);
 	}
-	const lonlats = waypoints.map(([lng, lat]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join('|');
-	const url = `${BROUTER}?lonlats=${lonlats}&profile=${profile}&alternativeidx=0&format=geojson`;
-	const res = await fetch(url);
-	if (!res.ok) throw new Error(`Router failed (${res.status}). The shape may cross water with no road bridge.`);
-	const fc = await res.json();
-	const feat = fc?.features?.[0];
-	if (!feat?.geometry?.coordinates?.length) throw new Error('Router returned no route.');
-	// BRouter's LineString may be [lng, lat, ele] triples; keep just [lng, lat].
-	const coords: LngLat[] = feat.geometry.coordinates.map((c: number[]) => [c[0], c[1]]);
-	const props = feat.properties ?? {};
-	return {
-		coords,
-		length: Number(props['track-length']) || pathLength(coords),
-		ascend: props['filtered ascend'] != null ? Number(props['filtered ascend']) : null,
-	};
+	let coords: LngLat[] = [];
+	let ascend = 0;
+	for (let start = 0; start < waypoints.length - 1; start += BATCH - 1) {
+		const batch = waypoints.slice(start, start + BATCH);
+		const leg = await brouterLeg(batch, profile);
+		ascend += leg.ascend;
+		// Drop the first point of every leg after the first — it repeats the shared
+		// seam waypoint the previous leg already ended on.
+		coords = coords.length ? coords.concat(leg.coords.slice(1)) : leg.coords;
+	}
+	coords = removeBacktracks(coords);
+	return { coords, length: pathLength(coords), ascend };
 }
