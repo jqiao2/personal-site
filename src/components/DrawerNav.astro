@@ -27,15 +27,26 @@ interface Props {
 	sectionLinks?: boolean;
 	/** Owner state, so owner-only section links show only for the owner. */
 	owner?: boolean;
+	/** Show the nav at every width, not just below 820px. On when it lives in a
+	    drawer that stays available on wide screens too (a subpage whose section
+	    has its own pages — see SiteHeader's ownDrawerWide). */
+	always?: boolean;
 }
 
-const { pathname, theme = 'root', divider = true, sectionLinks = false, owner = false } = Astro.props;
+const {
+	pathname,
+	theme = 'root',
+	divider = true,
+	sectionLinks = false,
+	owner = false,
+	always = false,
+} = Astro.props;
 const nav = siteNav(pathname);
 const section = sectionLinks ? sectionNav(theme, pathname, owner) : [];
 const style = headerThemeStyle(theme);
 ---
 
-<nav class:list={['dnav', !divider && 'dnav--flush']} style={style} aria-label="Sections">
+<nav class:list={['dnav', !divider && 'dnav--flush', always && 'dnav--always']} style={style} aria-label="Sections">
 	{
 		nav.map((n) =>
 			n.children ? (
@@ -114,6 +125,11 @@ const style = headerThemeStyle(theme);
 			padding-bottom: 0;
 			border-bottom: none;
 		}
+	}
+	/* Shown at every width — for drawers that stay in play on wide screens. It's
+	   always flush there (the header's own drawer), so no divider handling needed. */
+	.dnav--always {
+		display: block;
 	}
 	.dnav__row {
 		display: block;
