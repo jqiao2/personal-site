@@ -126,3 +126,30 @@ wiki across every iteration, even reverted ones).
   `new Response('<html>…')` error pages: no `<Font>` runs in those, so they must
   keep a literal stack. (3) `scrollbar-gutter: stable` on html in every layout.
   Also capped `--measure` 720px -> 640px (82 rendered characters -> 72).
+
+## 2026-09-07 — Screening Room: continuous calendar + poster drag and drop
+- Replaced the month-at-a-time grid with one continuous Sunday-first run,
+  paginated by week and appended on scroll.
+- First pass drew the month seam as a full-width row with a tiled S-wave SVG.
+  Wrong read of the ask: the "S" was the *grid line* stepping around the 1st,
+  not a decoration. Second pass deletes the row — the seam is now a 2px border
+  on the cells themselves (top of the 1st and the rest of its week, left of the
+  1st, bottom of the days before it), and the 1st carries a short month name.
+  Lesson: when a request describes a shape, check whether the shape is something
+  to draw or something the existing layout already makes.
+- Reused an Astro **partial** route for the appended pages rather than rebuilding
+  rows in JS: same component, same scope hash, so the appended markup is styled
+  with no `:global()`. Wrote that up as 0014.
+- Paginating by month would have duplicated the week straddling each seam. Weeks
+  tile exactly, and each week works out its own seam edges, so nothing has to be
+  carried across a page boundary.
+- Drag and drop is native HTML5, and the drop reuses the existing
+  `POST /api/films/screening-queue` (it already upserts by movie, so a re-POST
+  with a new date IS the move, and the Google event is re-created for free).
+  The poster's `data-venue` rides along so a move doesn't drop the theatre.
+- Verified in a real browser with a throwaway Playwright script and a stubbed
+  POST: 84 → 168 cells on scroll, appended cells styled, drag moved the poster
+  and sent `date: 2026-09-13`.
+- Main landed #205 ("The site does not move") and #206 (self-hosted fonts as
+  `var(--font-*)`) mid-branch; both conventions were applied to the new
+  component rather than merged around.

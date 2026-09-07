@@ -1,16 +1,19 @@
 ---
-// The Screening Room — the "queued" watchlist as a month calendar. Films you've
-// scheduled to watch (at home or in a theatre) sit on the day you plan to see
-// them. Owner can schedule a film onto any day, remove one, and pull AMC-style
-// events in from the connected Movies calendar.
+// The Screening Room — the "queued" watchlist as one continuous calendar. Films
+// you've scheduled to watch (at home or in a theatre) sit on the day you plan to
+// see them. The run is a plain 7-column grid that scrolls forever, month seams
+// marked by nothing but a bolder grid line stepping around the 1st; the owner
+// can schedule a film onto any day, drag one to another day, remove one, and
+// pull AMC-style events in from the connected Movies calendar.
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import ScreeningComposer from '../../components/ScreeningComposer.astro';
+import ScreeningCalendar from '../../components/ScreeningCalendar.astro';
 import { requireOwner } from '../../lib/auth';
-import { listQueue, type QueueEntry } from '../../lib/screening-queue';
+import { listQueue } from '../../lib/screening-queue';
 import { isConfigured as calendarConfigured } from '../../lib/google-calendar';
 import { siteDay } from '../../lib/day';
-import { imageUrl } from '../../lib/tmdb';
+import { addWeeks, buildWeeks, firstSunday, runStartMonth } from '../../lib/screening-calendar';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -18,60 +21,13 @@ export const prerender = false;
 const [queue, isOwner] = await Promise.all([listQueue(), requireOwner(Astro.cookies)]);
 const calSync = isOwner && calendarConfigured();
 
-// The month to show. `?m=YYYY-MM`, defaulting to the current month in the site's
-// zone; anything malformed falls back to it too.
 const today = siteDay();
-const MONTH_RE = /^(\d{4})-(\d{2})$/;
-const mParam = Astro.url.searchParams.get('m') ?? '';
-const key = MONTH_RE.test(mParam) ? mParam : today.slice(0, 7);
-const [year, month] = key.split('-').map(Number); // month: 1–12
-
-// Films grouped by their scheduled day.
-const byDay = new Map<string, QueueEntry[]>();
-for (const e of queue) {
-	const list = byDay.get(e.scheduled_date);
-	if (list) list.push(e);
-	else byDay.set(e.scheduled_date, [e]);
-}
-
-const pad = (n: number) => String(n).padStart(2, '0');
-const dayKey = (d: number) => `${year}-${pad(month)}-${pad(d)}`;
-
-// Sunday-first grid, matching the film month card. Leading blanks for the
-// weekday the 1st lands on, then the days, then trailing blanks to square off
-// the last week.
-const firstWeekday = new Date(year, month - 1, 1).getDay(); // 0 = Sun
-const daysInMonth = new Date(year, month, 0).getDate();
-interface Cell {
-	date: string | null; // null = padding cell outside the month
-	day: number;
-	films: QueueEntry[];
-	isToday: boolean;
-}
-const cells: Cell[] = [];
-for (let i = 0; i < firstWeekday; i++) cells.push({ date: null, day: 0, films: [], isToday: false });
-for (let d = 1; d <= daysInMonth; d++) {
-	const date = dayKey(d);
-	cells.push({ date, day: d, films: byDay.get(date) ?? [], isToday: date === today });
-}
-while (cells.length % 7 !== 0) cells.push({ date: null, day: 0, films: [], isToday: false });
-
-// Month navigation.
-const shift = (delta: number) => {
-	const m0 = month - 1 + delta; // 0-based month arithmetic
-	const y = year + Math.floor(m0 / 12);
-	const m = ((m0 % 12) + 12) % 12;
-	return `${y}-${pad(m + 1)}`;
-};
-const prevKey = shift(-1);
-const nextKey = shift(1);
-const label = new Date(year, month - 1, 1).toLocaleDateString('en-US', {
-	month: 'long',
-	year: 'numeric',
-});
+const PAGE_WEEKS = 12;
+const start = firstSunday(runStartMonth(queue, today));
+const rendered = buildWeeks({ startSunday: start, weeks: PAGE_WEEKS, queue, today });
+const next = addWeeks(start, PAGE_WEEKS);
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 ---
 
 <FilmLayout title="Screening Room — Jason's film log">
@@ -105,72 +61,15 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 
 			{isOwner && <p class="sync-msg" id="sync-msg" hidden></p>}
 
-			<div class="monthbar">
-				<a class="nav" href={`/films/screening-room?m=${prevKey}`} aria-label="Previous month">←</a>
-				<span class="monthbar__label">{label}</span>
-				<a class="nav" href={`/films/screening-room?m=${nextKey}`} aria-label="Next month">→</a>
-				{key !== today.slice(0, 7) && (
-					<a class="today-link" href="/films/screening-room">Today</a>
-				)}
-			</div>
-
 			<div class="calendar">
 				<div class="dow" aria-hidden="true">
 					{WEEKDAYS.map((d) => <span>{d}</span>)}
 				</div>
-				<div class="grid">
-					{cells.map((cell) =>
-						cell.date === null ? (
-							<div class="cell cell--out"></div>
-						) : (
-							<div class:list={['cell', cell.isToday && 'cell--today']}>
-								<div class="cell__num">{cell.day}</div>
-								{isOwner && (
-									<button
-										type="button"
-										class="cell__add"
-										data-open-screening
-										data-date={cell.date}
-										aria-label={`Schedule a film on ${cell.date}`}
-									>+</button>
-								)}
-								<div class="cell__films">
-									{cell.films.map((f) => {
-										const poster = imageUrl(f.poster_path, 'w185');
-										return (
-											<div class="film" data-tmdb-id={f.tmdb_id}>
-												{/* Poster-only tile with a hover overlay, same as the
-												    watchlist/watched grids — clicks through to the film. */}
-												<a
-													class={poster ? 'tile' : 'tile tile--noimg'}
-													href={`/films/movie/${f.tmdb_id}`}
-												>
-													{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" />}
-													<div class="tile__overlay">
-														<div class="tile__title">{f.title}</div>
-														{f.venue && <div class="tile__venue">{f.venue}</div>}
-													</div>
-												</a>
-												{isOwner && (
-													<button
-														type="button"
-														class="film__remove"
-														aria-label={`Remove ${f.title} from the queue`}
-													>✕</button>
-												)}
-											</div>
-										);
-									})}
-								</div>
-							</div>
-						),
-					)}
+				<div class="grid" id="run" data-next={next} data-weeks={PAGE_WEEKS} data-today={today}>
+					<ScreeningCalendar weeks={rendered} isOwner={isOwner} />
 				</div>
 			</div>
-
-			{scheduledThisMonth === 0 && (
-				<p class="empty">Nothing queued for {label}.</p>
-			)}
+			<div class="sentinel" id="sentinel"></div>
 		</div>
 	</div>
 
@@ -288,48 +187,16 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			color: #e0736f;
 		}
 
-		.monthbar {
-			display: flex;
-			align-items: center;
-			gap: 16px;
-			margin-bottom: 20px;
-		}
-		.monthbar__label {
-			font-family: var(--font-newsreader);
-			font-size: 22px;
-			color: #f4e8d1;
-			min-width: 190px;
-		}
-		.nav {
-			display: inline-flex;
-			align-items: center;
-			justify-content: center;
-			width: 34px;
-			height: 34px;
-			border-radius: 8px;
-			border: 1px solid #4a2529;
-			color: #ddc9b4;
-			font-size: 15px;
-		}
-		.nav:hover {
-			border-color: #d9b45a;
-			color: #f4e8d1;
-		}
-		.today-link {
-			font-size: 12.5px;
-			color: #a2857a;
-			text-decoration: underline;
-		}
-		.today-link:hover {
-			color: #f0d488;
-		}
-
 		.calendar {
 			display: flex;
 			flex-direction: column;
 			gap: 10px;
 		}
+		/* The weekday strip stays put while the run scrolls under it. */
 		.dow {
+			position: sticky;
+			top: 0;
+			z-index: 3;
 			display: grid;
 			grid-template-columns: repeat(7, minmax(0, 1fr));
 			gap: 10px;
@@ -337,209 +204,165 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			letter-spacing: 1.5px;
 			text-transform: uppercase;
 			color: #8a6f63;
-			padding: 0 2px;
+			padding: 10px 2px;
+			background: #140809;
 		}
+		/* One grid for the whole run — nothing but days, month to month. */
 		.grid {
 			display: grid;
 			grid-template-columns: repeat(7, minmax(0, 1fr));
 			gap: 10px;
+			align-items: start;
 		}
-		.cell {
-			position: relative;
-			min-height: 118px;
-			border: 1px solid #3a1f22;
-			border-radius: 8px;
-			padding: 6px;
-			background: #1f0e10;
-		}
-		.cell--out {
-			background: transparent;
-			border-color: transparent;
-		}
-		.cell--today {
-			border-color: #d9b45a;
-		}
-		.cell__num {
-			font-family: var(--font-newsreader);
-			font-size: 14px;
-			color: #7c6156;
-			padding: 2px 4px;
-		}
-		.cell--today .cell__num {
-			color: #d9b45a;
-		}
-		/* Owner-only "+" to schedule onto this day; shows on cell hover/focus. */
-		.cell__add {
-			position: absolute;
-			top: 5px;
-			right: 5px;
-			width: 22px;
-			height: 22px;
-			border-radius: 6px;
-			border: 1px solid #4a2529;
-			background: rgba(20, 8, 9, 0.7);
-			color: #d9b45a;
-			font-size: 15px;
-			line-height: 1;
-			cursor: pointer;
-			opacity: 0;
-		}
-		.cell:hover .cell__add,
-		.cell__add:focus-visible {
-			opacity: 1;
-		}
-		.cell__add:hover {
-			background: #d9b45a;
-			color: #2a1214;
-		}
-		/* Poster tiles wrap within a day; each is the watchlist/watched tile —
-		   poster fills a 2/3 box, caption overlay shows on hover. */
-		.cell__films {
-			display: flex;
-			flex-wrap: wrap;
-			gap: 6px;
-			margin-top: 4px;
-		}
-		.film {
-			position: relative;
-			width: 46px;
-		}
-		.tile {
-			position: relative;
-			display: block;
-			aspect-ratio: 2 / 3;
-			border-radius: 4px;
-			overflow: hidden;
-			border: 1px solid #4a2529;
-			background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
-		}
-		.tile:hover {
-			border-color: #d9b45a;
-		}
-		.tile img {
-			position: absolute;
-			inset: 0;
-			width: 100%;
-			height: 100%;
-			object-fit: cover;
-		}
-		.tile__overlay {
-			position: absolute;
-			inset: 0;
-			display: flex;
-			flex-direction: column;
-			justify-content: flex-end;
-			padding: 5px;
-			background: rgba(18, 8, 9, 0.86);
-			opacity: 0;
-		}
-		.tile:hover .tile__overlay {
-			opacity: 1;
-		}
-		.tile--noimg .tile__overlay {
-			opacity: 1;
-			background: transparent;
-			justify-content: center;
-			text-align: center;
-		}
-		.tile__title {
-			font-family: var(--font-newsreader);
-			font-size: 10px;
-			line-height: 1.15;
-			color: #f4e8d1;
-			overflow: hidden;
-			display: -webkit-box;
-			-webkit-line-clamp: 4;
-			-webkit-box-orient: vertical;
-		}
-		.tile__venue {
-			font-size: 8.5px;
-			color: #a2857a;
-			margin-top: 2px;
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-		.film__remove {
-			position: absolute;
-			top: -5px;
-			right: -5px;
-			z-index: 2;
-			width: 18px;
-			height: 18px;
-			border-radius: 50%;
-			background: rgba(20, 8, 9, 0.9);
-			border: 1px solid #4a2529;
-			color: #f2e5cd;
-			font-size: 9px;
-			line-height: 1;
-			cursor: pointer;
-			opacity: 0;
-			display: flex;
-			align-items: center;
-			justify-content: center;
-		}
-		.film:hover .film__remove,
-		.film__remove:focus-visible {
-			opacity: 1;
-		}
-		.film__remove:hover {
-			background: #d9b45a;
-			color: #2a1214;
-			border-color: #d9b45a;
-		}
-		.film__remove:disabled {
-			opacity: 0.5;
-			cursor: default;
-		}
-
-		.empty {
-			padding: 40px 0;
-			text-align: center;
-			color: #8a6f63;
-			font-size: 15px;
-			font-style: italic;
-			font-family: var(--font-newsreader);
+		.sentinel {
+			height: 1px;
 		}
 
 		@media (max-width: 640px) {
 			h1 {
 				font-size: 40px;
 			}
-			.cell {
-				min-height: 92px;
-			}
-			.film {
-				width: 38px;
-			}
 		}
 	</style>
 
 	<script>
-		// Remove a queued film (owner). Delegated so a cell's ✕ hits the API and
-		// drops the film from the grid without a reload.
-		document.querySelectorAll<HTMLButtonElement>('.film__remove').forEach((btn) => {
-			btn.addEventListener('click', async () => {
-				const film = btn.closest<HTMLElement>('.film');
-				const tmdbId = film?.dataset.tmdbId;
-				if (!tmdbId) return;
-				btn.disabled = true;
+		const run = document.getElementById('run') as HTMLElement | null;
+
+		// --- Infinite scroll ---
+		// Pages are whole weeks, so a boundary never splits one. The partial route
+		// returns the same rows this page rendered, ready to append.
+		if (run) {
+			const sentinel = document.getElementById('sentinel')!;
+			const weeks = Number(run.dataset.weeks) || 12;
+			let loading = false;
+
+			const loadMore = async () => {
+				if (loading) return;
+				loading = true;
+				const from = run.dataset.next!;
 				try {
-					const res = await fetch(`/api/films/screening-queue?tmdbId=${tmdbId}`, { method: 'DELETE' });
+					const res = await fetch(`/films/screening-room/months?from=${from}&weeks=${weeks}`);
+					if (!res.ok) throw new Error();
+					run.insertAdjacentHTML('beforeend', await res.text());
+					const d = new Date(`${from}T00:00:00`);
+					d.setDate(d.getDate() + weeks * 7);
+					run.dataset.next = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+					loading = false;
+				} catch {
+					// Left loading — a failed page stops the run rather than hammering
+					// the endpoint on every scroll tick.
+				}
+			};
+
+			new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), {
+				rootMargin: '600px',
+			}).observe(sentinel);
+
+			// Open on today rather than at the top of the scrollback.
+			run.querySelector(`[data-date="${run.dataset.today}"]`)?.scrollIntoView({ block: 'center' });
+		}
+
+		// --- Remove a queued film (owner) ---
+		// Delegated, so films on pages appended later behave the same.
+		run?.addEventListener('click', async (e) => {
+			const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.film__remove');
+			if (!btn) return;
+			const film = btn.closest<HTMLElement>('.film');
+			const tmdbId = film?.dataset.tmdbId;
+			if (!tmdbId) return;
+			btn.disabled = true;
+			try {
+				const res = await fetch(`/api/films/screening-queue?tmdbId=${tmdbId}`, { method: 'DELETE' });
+				if (res.status === 401) {
+					window.location.href = '/films/login?redirect=/films/screening-room';
+					return;
+				}
+				if (!res.ok) throw new Error();
+				film!.remove();
+			} catch {
+				btn.disabled = false;
+			}
+		});
+
+		// --- Drag a film onto another day (owner) ---
+		// Native HTML5 drag and drop. The poster moves first and the write follows;
+		// a failed write puts it back where it came from.
+		if (run) {
+			let dragged: HTMLElement | null = null;
+
+			run.addEventListener('dragstart', (e) => {
+				const film = (e.target as HTMLElement).closest<HTMLElement>('.film[draggable="true"]');
+				if (!film) return;
+				dragged = film;
+				film.classList.add('is-dragging');
+				e.dataTransfer!.effectAllowed = 'move';
+				// Firefox refuses to start a drag with an empty payload.
+				e.dataTransfer!.setData('text/plain', film.dataset.tmdbId ?? '');
+			});
+			run.addEventListener('dragend', () => {
+				dragged?.classList.remove('is-dragging');
+				run.querySelectorAll('.cell.is-over').forEach((c) => c.classList.remove('is-over'));
+				dragged = null;
+			});
+
+			const cellUnder = (e: DragEvent) =>
+				dragged ? (e.target as HTMLElement).closest<HTMLElement>('.cell') : null;
+
+			run.addEventListener('dragover', (e) => {
+				const cell = cellUnder(e);
+				if (!cell) return;
+				e.preventDefault();
+				e.dataTransfer!.dropEffect = 'move';
+				if (!cell.classList.contains('is-over')) {
+					run.querySelectorAll('.cell.is-over').forEach((c) => c.classList.remove('is-over'));
+					cell.classList.add('is-over');
+				}
+			});
+			run.addEventListener('dragleave', (e) => {
+				const cell = cellUnder(e);
+				if (cell && !cell.contains(e.relatedTarget as Node)) cell.classList.remove('is-over');
+			});
+
+			run.addEventListener('drop', async (e) => {
+				const cell = cellUnder(e);
+				const film = dragged;
+				if (!cell || !film) return;
+				e.preventDefault();
+				cell.classList.remove('is-over');
+
+				const home = film.parentElement!;
+				const target = cell.querySelector('.cell__films')!;
+				if (home === target) return;
+
+				const sibling = film.nextSibling;
+				target.appendChild(film);
+				film.classList.add('is-saving');
+				try {
+					const res = await fetch('/api/films/screening-queue', {
+						method: 'POST',
+						headers: { 'content-type': 'application/json' },
+						body: JSON.stringify({
+							tmdbId: Number(film.dataset.tmdbId),
+							date: cell.dataset.date,
+							// Carried through so a move doesn't drop the theatre.
+							venue: film.dataset.venue || null,
+						}),
+					});
 					if (res.status === 401) {
 						window.location.href = '/films/login?redirect=/films/screening-room';
 						return;
 					}
 					if (!res.ok) throw new Error();
-					film!.remove();
 				} catch {
-					btn.disabled = false;
+					home.insertBefore(film, sibling);
+				} finally {
+					film.classList.remove('is-saving');
 				}
 			});
-		});
+		}
 
-		// Sync from the Movies calendar (owner). Pulls AMC-style events in, then
-		// reloads to show them. Reports what came back.
+		// --- Sync from the Movies calendar (owner) ---
+		// Pulls AMC-style events in, then reloads to show them. Reports what came back.
 		const syncBtn = document.getElementById('sync-btn') as HTMLButtonElement | null;
 		const syncMsg = document.getElementById('sync-msg');
 		syncBtn?.addEventListener('click', async () => {

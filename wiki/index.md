@@ -19,3 +19,4 @@ add or update a pattern.
 | [0011](patterns/0011-applying-a-migration-without-the-cli.md) | Applying a migration when there is no linked Supabase project | strategy | a migration must reach the live DB and `supabase link`/`db push` isn't available |
 | [0012](patterns/0012-stretched-svg-turns-dots-into-ovals.md) | A stretched SVG turns every dot into an oval | failure-mode | an inline SVG chart is sized with `width: 100%` / `preserveAspectRatio="none"` |
 | [0013](patterns/0013-vite-outdated-optimize-dep-after-new-shared-import.md) | Vite "504 Outdated Optimize Dep" after a new module imports a heavy dep | failure-mode | a new lib/component imports a pre-bundled dep mid-session and a `<script>` dynamic-imports it |
+| [0014](patterns/0014-astro-partial-for-infinite-scroll.md) | Infinite scroll without a second renderer: an Astro partial | strategy | a page must append more server-rendered rows as you scroll |
