@@ -2,6 +2,8 @@
 // Shell for the book log — the film log's sibling, shifted from its wine
 // red to a paper brown. Same Archivo + Newsreader pairing, same art-directed
 // approach: page-specific styles live in the page.
+import { Font } from 'astro:assets';
+
 interface Props {
 	title: string;
 }
@@ -16,12 +18,8 @@ const { title } = Astro.props;
 		<meta name="apple-mobile-web-app-title" content="jq" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>{title}</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap"
-			rel="stylesheet"
-		/>
+		<Font cssVariable="--font-newsreader" preload />
+		<Font cssVariable="--font-archivo" preload />
 	</head>
 	<body>
 		<slot />
@@ -34,11 +32,16 @@ const { title } = Astro.props;
 				margin: 0;
 				padding: 0;
 			}
+			html {
+				/* Hold the scrollbar's width whether or not there is one, so nothing
+				   slides sideways when the page's height changes. */
+				scrollbar-gutter: stable;
+			}
 			body {
 				min-height: 100vh;
 				background: #1a120a;
 				color: #f2e6cd;
-				font-family: 'Archivo', Arial, sans-serif;
+				font-family: var(--font-archivo);
 				-webkit-font-smoothing: antialiased;
 			}
 			a {

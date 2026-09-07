@@ -61,7 +61,7 @@ export const prerender = false;
 		margin-bottom: 40px;
 	}
 	.head__title {
-		font-family: 'Newsreader', serif;
+		font-family: var(--font-newsreader);
 		font-weight: 500;
 		font-size: clamp(38px, 9vw, 52px);
 		color: #f2e6cd;
@@ -77,11 +77,21 @@ export const prerender = false;
 		max-width: 280px;
 	}
 
-	/* Skeleton shown while the BooksBody island streams in. */
+	/* Skeleton shown while the BooksBody island streams in, sized to the height
+	   the real body comes back at so nothing below it moves on arrival.
+	   ponytail: measured (1280px/420px), not derived — the reading record's
+	   height follows how many books are open, so re-measure if that changes by
+	   much. */
 	.body-skel {
 		display: flex;
 		flex-direction: column;
 		gap: 46px;
+		min-height: 2100px;
+	}
+	@media (max-width: 820px) {
+		.body-skel {
+			min-height: 2380px;
+		}
 	}
 	.skel-line--head {
 		height: 20px;

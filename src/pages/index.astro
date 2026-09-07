@@ -91,7 +91,20 @@ export const prerender = false;
 	}
 
 	/* Skeleton rows shown while the RecentFeed island streams in. Mirrors the
-	   real row geometry so the shell doesn't reflow when the feed arrives. */
+	   real row geometry, and reserves the height of the whole feed, so nothing
+	   below it moves when the island lands — the six rows are what the reader
+	   sees, the min-height is what holds the rest of the page still.
+	   ponytail: the reserve is measured (15 rows at 1280px/420px), not derived.
+	   It drifts if the row template or `recentJournal(15)` changes; re-measure
+	   with a script like tmp/measure.mjs rather than guessing. */
+	.feed__skeleton {
+		min-height: 1730px;
+	}
+	@media (max-width: 820px) {
+		.feed__skeleton {
+			min-height: 1800px;
+		}
+	}
 	.skel-item {
 		display: flex;
 		gap: 1rem;
