@@ -1,8 +1,11 @@
 ---
-// Ride the outline of any shape. Pick a place (or paste GeoJSON), and the page
-// samples its border, routes the samples along real rideable roads via BRouter,
-// and hands back a GPX in the shape of the thing. All the geometry and routing
-// lives in src/lib/bike-route.ts; this page is the map and the wiring.
+// A route-shape stencil. Load a shape (a country silhouette, or pasted GeoJSON)
+// and it floats above the map at a fixed screen size. Pan and zoom the real map
+// underneath to place the shape over roads you'd actually ride — the map's zoom
+// sets how many km the fixed-size stencil covers. Generate, and the stencil's
+// on-screen pixels are unprojected to wherever they sit and routed on real roads
+// there, clockwise or counter-clockwise. The maths is in src/lib/bike-route.ts;
+// this page is the map, the overlay, and the wiring.
 //
 // Server-rendered so the header's owner check runs per-request, not at build.
 export const prerender = false;
@@ -19,9 +22,9 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	<div class="bo">
 		<div class="bo__controls">
 			<div class="bo__field">
-				<label for="bo-place">Place</label>
+				<label for="bo-place">Shape</label>
 				<div class="bo__row">
-					<input id="bo-place" type="text" placeholder="Portugal, Central Park, Lake Como…" />
+					<input id="bo-place" type="text" placeholder="Italy, France, a country…" />
 					<button id="bo-load" type="button">Find</button>
 				</div>
 			</div>
@@ -33,8 +36,16 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			</details>
 
 			<div class="bo__field bo__field--inline">
+				<label for="bo-direction">Direction</label>
+				<select id="bo-direction">
+					<option value="cw">Clockwise</option>
+					<option value="ccw">Counter-clockwise</option>
+				</select>
+			</div>
+
+			<div class="bo__field bo__field--inline">
 				<label for="bo-spacing">Spacing (km)</label>
-				<input id="bo-spacing" type="number" min="1" max="200" step="1" value="8" />
+				<input id="bo-spacing" type="number" min="0.2" max="200" step="0.5" value="3" />
 			</div>
 
 			<div class="bo__field bo__field--inline">
@@ -55,12 +66,13 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 				<div><dt>Distance</dt><dd id="bo-dist">—</dd></div>
 				<div><dt>Climb</dt><dd id="bo-climb">—</dd></div>
 				<div><dt>Waypoints</dt><dd id="bo-wps">—</dd></div>
-				<div><dt>Border deviation</dt><dd id="bo-dev">—</dd></div>
+				<div><dt>Shape deviation</dt><dd id="bo-dev">—</dd></div>
 			</dl>
 		</div>
 
 		<div class="bo__mapwrap">
 			<div id="bo-map" class="bo__map"></div>
+			<svg id="bo-stencil" class="bo__stencil" aria-hidden="true"></svg>
 			{
 				!key && (
 					<p class="bo__nokey">
@@ -82,6 +94,8 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	import { alpineBasemap, bareAlpineGround } from '../lib/activity-map';
 	import {
 		outerRing,
+		normalizeShape,
+		orientRing,
 		resample,
 		deviation,
 		toGPX,
@@ -92,18 +106,25 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	} from '../lib/bike-route';
 
 	const cfg = JSON.parse(document.getElementById('bo-config')!.textContent || '{}') as { key: string };
+	const SVGNS = 'http://www.w3.org/2000/svg';
+	// The stencil's longer axis is this fraction of the map's shorter side.
+	const STENCIL_FRACTION = 0.55;
 
 	const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 	const placeIn = $<HTMLInputElement>('bo-place');
 	const geojsonIn = $<HTMLTextAreaElement>('bo-geojson');
+	const directionIn = $<HTMLSelectElement>('bo-direction');
 	const spacingIn = $<HTMLInputElement>('bo-spacing');
 	const profileIn = $<HTMLSelectElement>('bo-profile');
 	const genBtn = $<HTMLButtonElement>('bo-generate');
 	const exportBtn = $<HTMLButtonElement>('bo-export');
 	const statusEl = $<HTMLParagraphElement>('bo-status');
 	const statsEl = $<HTMLElement>('bo-stats');
+	const mapEl = $<HTMLElement>('bo-map');
+	const stencilEl = document.getElementById('bo-stencil') as unknown as SVGSVGElement;
 
-	let geometry: unknown = null;
+	// The loaded shape, normalized to a centred unit box (null until one loads).
+	let shapeNorm: [number, number][] | null = null;
 	let name = 'outline';
 	let routeCoords: LngLat[] = [];
 
@@ -113,12 +134,12 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	}
 
 	const map = new maplibregl.Map({
-		container: 'bo-map',
+		container: mapEl,
 		style: cfg.key
 			? (alpineBasemap(cfg.key) as maplibregl.StyleSpecification)
 			: (bareAlpineGround() as maplibregl.StyleSpecification),
-		center: [10, 48],
-		zoom: 3.5,
+		center: [-73.97, 40.75],
+		zoom: 10,
 		attributionControl: { compact: true },
 		dragRotate: false,
 		pitchWithRotate: false,
@@ -126,6 +147,9 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	});
 	map.touchZoomRotate.disableRotation();
 	map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+	// Dev-only handle so the page can be driven from a screenshot script; the
+	// `import.meta.env.DEV` guard dead-code-eliminates it from the production build.
+	if (import.meta.env.DEV) (window as any).__map = map;
 	map.on('error', (e) => console.warn('bike-outline map:', e.error?.message ?? 'tile/style request failed'));
 
 	function whenReady(fn: () => void) {
@@ -133,28 +157,49 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		else map.once('styledata', fn);
 	}
 
-	function line(coords: LngLat[]) {
-		return { type: 'Feature' as const, geometry: { type: 'LineString' as const, coordinates: coords }, properties: {} };
+	// --- the fixed-screen stencil -------------------------------------------
+
+	/** The stencil's vertices in map-container pixels, at the current size. The
+	 *  overlay and generate both read this, so what you see is what gets placed. */
+	function stencilPixels(): [number, number][] {
+		if (!shapeNorm) return [];
+		const w = mapEl.clientWidth, h = mapEl.clientHeight;
+		const scale = STENCIL_FRACTION * Math.min(w, h);
+		return shapeNorm.map(([nx, ny]) => [w / 2 + nx * scale, h / 2 + ny * scale]);
 	}
 
-	function setSource(id: string, coords: LngLat[]) {
-		const data = line(coords) as maplibregl.GeoJSONSourceSpecification['data'];
-		const src = map.getSource(id) as maplibregl.GeoJSONSource | undefined;
+	function drawStencil() {
+		stencilEl.replaceChildren();
+		if (!shapeNorm) return;
+		const px = stencilPixels();
+		const poly = document.createElementNS(SVGNS, 'polygon');
+		poly.setAttribute('points', px.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '));
+		poly.setAttribute('class', 'bo__stencil-shape');
+		stencilEl.appendChild(poly);
+		// A dot at the first vertex — where the ride starts.
+		const dot = document.createElementNS(SVGNS, 'circle');
+		dot.setAttribute('cx', px[0][0].toFixed(1));
+		dot.setAttribute('cy', px[0][1].toFixed(1));
+		dot.setAttribute('r', '5');
+		dot.setAttribute('class', 'bo__stencil-start');
+		stencilEl.appendChild(dot);
+	}
+
+	// Keep the stencil the same screen size and centred as the map resizes.
+	if (typeof ResizeObserver !== 'undefined') new ResizeObserver(drawStencil).observe(mapEl);
+
+	// --- the generated route (a real map layer, moves with the map) ----------
+
+	function setRoute(coords: LngLat[]) {
+		const data = {
+			type: 'Feature' as const,
+			geometry: { type: 'LineString' as const, coordinates: coords },
+			properties: {},
+		} as maplibregl.GeoJSONSourceSpecification['data'];
+		const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined;
 		if (src) src.setData(data);
-		else map.addSource(id, { type: 'geojson', data });
-	}
-
-	function drawLayers() {
-		if (!map.getLayer('bo-outline')) {
-			map.addLayer({
-				id: 'bo-outline',
-				type: 'line',
-				source: 'outline',
-				layout: { 'line-cap': 'round', 'line-join': 'round' },
-				paint: { 'line-color': '#8c4a2f', 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.7 },
-			});
-		}
-		if (!map.getLayer('bo-route')) {
+		else {
+			map.addSource('route', { type: 'geojson', data });
 			map.addLayer({
 				id: 'bo-route',
 				type: 'line',
@@ -165,38 +210,19 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		}
 	}
 
-	function bounds(coords: LngLat[]): [[number, number], [number, number]] {
-		let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
-		for (const [lng, lat] of coords) {
-			if (lng < w) w = lng;
-			if (lng > e) e = lng;
-			if (lat < s) s = lat;
-			if (lat > n) n = lat;
-		}
-		return [[w, s], [e, n]];
-	}
+	// --- load a shape --------------------------------------------------------
 
-	function fit(coords: LngLat[]) {
-		if (coords.length < 2) return;
-		map.resize();
-		map.fitBounds(bounds(coords), { padding: 40, animate: false });
-	}
-
-	function showOutline() {
-		const ring = outerRing(geometry) as LngLat[];
-		whenReady(() => {
-			setSource('outline', ring);
-			setSource('route', []); // clear any previous route
-			drawLayers();
-			fit(ring);
-		});
+	function loadRing(ring: LngLat[], label: string) {
+		shapeNorm = normalizeShape(ring);
+		name = label;
+		drawStencil();
 		genBtn.disabled = false;
 		exportBtn.disabled = true;
 		statsEl.hidden = true;
 		routeCoords = [];
+		whenReady(() => setRoute([])); // clear any previous route
+		status('Pan and zoom the map to place the shape, then generate.');
 	}
-
-	// --- load a shape --------------------------------------------------------
 
 	$<HTMLButtonElement>('bo-load').addEventListener('click', async () => {
 		const q = placeIn.value.trim();
@@ -204,10 +230,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		status(`Looking up “${q}”…`, 'busy');
 		try {
 			const outline = await fetchOutline(q);
-			geometry = outline.geometry;
-			name = outline.name.split(',')[0];
-			showOutline();
-			status(`Loaded ${outline.name}. Set a spacing and generate.`);
+			loadRing(outline.ring, outline.name);
 		} catch (err) {
 			status(err instanceof Error ? err.message : 'Lookup failed.', 'error');
 		}
@@ -218,40 +241,38 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	$<HTMLButtonElement>('bo-loadgeo').addEventListener('click', () => {
 		try {
-			geometry = JSON.parse(geojsonIn.value);
-			name = 'outline';
-			showOutline();
-			status('Shape loaded. Set a spacing and generate.');
+			loadRing(outerRing(JSON.parse(geojsonIn.value)) as LngLat[], 'outline');
 		} catch (err) {
 			status(err instanceof Error ? err.message : 'That is not valid GeoJSON.', 'error');
 		}
 	});
 
-	// --- generate the route --------------------------------------------------
+	// --- generate the route where the stencil sits ---------------------------
 
 	genBtn.addEventListener('click', async () => {
-		if (!geometry) return;
-		const spacingKm = Math.max(1, Number(spacingIn.value) || 8);
-		const profile = profileIn.value as Profile;
-		const ring = outerRing(geometry) as LngLat[];
+		if (!shapeNorm) return;
+		// Unproject the stencil's on-screen pixels to where they now sit on the map.
+		const placed = stencilPixels().map((p) => {
+			const ll = map.unproject(p as maplibregl.PointLike);
+			return [ll.lng, ll.lat] as LngLat;
+		});
+		const ring = orientRing(placed, directionIn.value === 'cw');
+		const spacingKm = Math.max(0.2, Number(spacingIn.value) || 3);
 		const waypoints = resample(ring, spacingKm * 1000);
 		status(`Routing ${waypoints.length} waypoints on real roads…`, 'busy');
 		genBtn.disabled = true;
 		try {
-			const routed = await routeWaypoints(waypoints, profile);
+			const routed = await routeWaypoints(waypoints, profileIn.value as Profile);
 			routeCoords = routed.coords;
-			whenReady(() => {
-				setSource('route', routeCoords);
-				fit(routeCoords);
-			});
+			setRoute(routeCoords);
 			const dev = deviation(routeCoords, waypoints);
-			$('bo-dist').textContent = `${(routed.length / 1000).toFixed(0)} km`;
+			$('bo-dist').textContent = `${(routed.length / 1000).toFixed(1)} km`;
 			$('bo-climb').textContent = routed.ascend != null ? `${routed.ascend.toLocaleString()} m` : '—';
 			$('bo-wps').textContent = String(waypoints.length);
-			$('bo-dev').textContent = `${(dev.mean / 1000).toFixed(1)} km avg · ${(dev.max / 1000).toFixed(1)} km max`;
+			$('bo-dev').textContent = `${(dev.mean / 1000).toFixed(2)} km avg · ${(dev.max / 1000).toFixed(2)} km max`;
 			statsEl.hidden = false;
 			exportBtn.disabled = false;
-			status('Route generated. Fix any rough sections in RideWithGPS after export.');
+			status('Route placed. Reposition and generate again, or export.');
 		} catch (err) {
 			status(err instanceof Error ? err.message : 'Routing failed.', 'error');
 		} finally {
@@ -332,7 +353,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	}
 	.bo__field--inline input,
 	.bo__field--inline select {
-		width: 42%;
+		width: 52%;
 	}
 	button {
 		cursor: pointer;
@@ -413,13 +434,34 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		height: min(72vh, 640px);
 		min-height: 400px;
 	}
+	/* The stencil floats over the map, fixed in screen space — clicks pass
+	   through so the map underneath stays draggable. */
+	.bo__stencil {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		z-index: 2;
+	}
+	:global(.bo__stencil-shape) {
+		fill: rgba(140, 74, 47, 0.1);
+		stroke: #8c4a2f;
+		stroke-width: 2;
+		stroke-dasharray: 6 4;
+	}
+	:global(.bo__stencil-start) {
+		fill: #8c4a2f;
+		stroke: #fbf9f4;
+		stroke-width: 2;
+	}
 	.bo__nokey {
 		position: absolute;
 		left: 50%;
 		top: 12px;
 		transform: translateX(-50%);
 		margin: 0;
-		z-index: 2;
+		z-index: 3;
 		font-family: var(--sans);
 		font-size: 12px;
 		color: var(--ink-soft);

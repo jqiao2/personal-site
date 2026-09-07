@@ -1,14 +1,18 @@
-// Trace the outline of any shape as a rideable route.
+// Trace the outline of any shape as a rideable route — used as a stencil.
 //
-// The manual workflow this replaces: drop a 50%-opaque country on top of
-// RideWithGPS and hand-plot the border onto roads. The insight that collapses
-// most of that work is that a cycling router already does the hard part — given
-// an ordered list of waypoints it will connect them along real, rideable roads.
-// So the whole pipeline is: take any GeoJSON shape (a country from Nominatim, a
-// pasted polygon, a lake, a park), pull its outline, drop a waypoint every few
-// km around it, and hand that ordered list to BRouter. What comes back is a
-// continuous road route in the shape of the thing. The border deviation stats
-// tell you how faithfully the roads managed to trace it.
+// The tool this feeds isn't for literally riding a country's border. You load a
+// shape (a country silhouette, a pasted polygon), it floats fixed above the map
+// at a constant screen size, and you pan/zoom the real map underneath to drop
+// that shape over roads you'd actually ride — at whatever scale the map zoom
+// gives it. On "generate", the shape's on-screen pixels are unprojected to
+// wherever they now sit and handed, in order, to BRouter, whose one job is to
+// connect an ordered waypoint list along real rideable roads. What comes back is
+// a road route in the shape of the thing, dropped where you placed it.
+//
+// This file is the shape + routing maths: pulling an outline out of any GeoJSON,
+// normalizing it to a screen box, orienting its winding (clockwise vs not),
+// resampling, scoring how faithfully the roads traced it, GPX, and the two API
+// calls. The screen-to-map placement and the overlay live on the page.
 //
 // Everything here is coordinate order [lng, lat] — GeoJSON's order, MapLibre's
 // order, BRouter's order — never [lat, lng]. Distances are metres.
@@ -20,6 +24,12 @@ export type LngLat = [number, number];
 const BROUTER = 'https://brouter.de/brouter';
 // Nominatim gives us the outline of any named place as GeoJSON.
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+// Natural Earth's land-clipped country polygons (110m — ~210KB, CORS-open). We
+// prefer these for countries because Nominatim's admin boundary drags in
+// territorial water, which bloats the coastline into blocky offshore steps that
+// aren't a shape anyone would trace. NE follows the actual coast.
+const NE_COUNTRIES =
+	'https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson';
 
 // URL length and the router's own limits cap how many waypoints one request can
 // carry. ponytail: hard cap, not a chunker — past this the caller is told to
@@ -162,6 +172,48 @@ export function pathLength(coords: LngLat[]): number {
 	return s;
 }
 
+/**
+ * Flatten a lng/lat ring into a centered unit box for drawing as a fixed-size
+ * screen stencil. The longer axis spans [-0.5, 0.5]; the page scales that by a
+ * pixel size and drops it at the map's centre. Longitude is squeezed by
+ * cos(latitude) so the silhouette keeps its true proportions instead of
+ * stretching east-west, and latitude is negated because screen y grows downward
+ * while north is up. The geographic meaning is re-derived at generate time by
+ * unprojecting these screen points, so this is purely how the shape *looks*.
+ */
+export function normalizeShape(ring: LngLat[]): [number, number][] {
+	const meanLat = ring.reduce((s, p) => s + p[1], 0) / ring.length;
+	const k = Math.cos((meanLat * Math.PI) / 180);
+	const flat = ring.map(([lng, lat]) => [lng * k, -lat] as [number, number]);
+	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+	for (const [x, y] of flat) {
+		if (x < minX) minX = x;
+		if (x > maxX) maxX = x;
+		if (y < minY) minY = y;
+		if (y > maxY) maxY = y;
+	}
+	const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+	const span = Math.max(maxX - minX, maxY - minY) || 1;
+	return flat.map(([x, y]) => [(x - cx) / span, (y - cy) / span]);
+}
+
+/** Signed area of a ring (shoelace, x=lng y=lat): positive is counter-clockwise
+ *  in a north-up frame. */
+function signedArea(ring: LngLat[]): number {
+	let s = 0;
+	for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+		s += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+	}
+	return s / 2;
+}
+
+/** Return the ring wound in the requested direction, reversing it if it isn't
+ *  already. `clockwise` here is as the rider sees it on a north-up map. */
+export function orientRing(ring: LngLat[], clockwise: boolean): LngLat[] {
+	const isClockwise = signedArea(ring) < 0;
+	return isClockwise === clockwise ? ring.slice() : ring.slice().reverse();
+}
+
 /** Metres from point `p` to segment `a`–`b`, in a local flat projection good
  *  enough at ride scale (a few hundred km). */
 function pointToSegment(p: LngLat, a: LngLat, b: LngLat): number {
@@ -225,13 +277,46 @@ ${pts}
 
 export interface Outline {
 	name: string;
-	geometry: unknown;
+	ring: LngLat[];
 }
 
-/** Look up any named place (a country, a city, a park, a lake) and return its
- *  outline geometry. Nominatim is the gazetteer; `polygon_geojson=1` asks it
- *  for the boundary rather than just a pin. */
+// The Natural Earth country set, fetched once and reused. Kept module-level so a
+// second lookup doesn't re-download the file.
+let neCache: Promise<any> | null = null;
+function naturalEarth(): Promise<any> {
+	if (!neCache) {
+		neCache = fetch(NE_COUNTRIES).then((r) => {
+			if (!r.ok) throw new Error(`Country data failed (${r.status}).`);
+			return r.json();
+		});
+	}
+	return neCache;
+}
+
+/** Find a country in the Natural Earth set by an exact (case-insensitive) name
+ *  or ISO code, so "Italy", "italy", "IT" and "ITA" all land. */
+function matchCountry(fc: any, query: string): any | null {
+	const q = query.trim().toLowerCase();
+	const fields = ['ADMIN', 'NAME', 'NAME_LONG', 'NAME_EN', 'BRK_NAME', 'ISO_A2', 'ISO_A3'];
+	return (
+		fc.features.find((f: any) => fields.some((k) => String(f.properties[k] ?? '').toLowerCase() === q)) ?? null
+	);
+}
+
+/**
+ * Look up a place and return its outline ring. Countries come from Natural
+ * Earth's land-clipped silhouettes (no territorial-water bloat); everything
+ * else — parks, lakes, cities, and the small countries NE drops at 110m —
+ * falls back to Nominatim's `polygon_geojson`.
+ */
 export async function fetchOutline(query: string): Promise<Outline> {
+	try {
+		const fc = await naturalEarth();
+		const hit = matchCountry(fc, query);
+		if (hit) return { name: hit.properties.ADMIN, ring: outerRing(hit.geometry) };
+	} catch {
+		// A country-data hiccup shouldn't sink the lookup — try Nominatim.
+	}
 	const url = `${NOMINATIM}?q=${encodeURIComponent(query)}&format=jsonv2&polygon_geojson=1&limit=1`;
 	const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
 	if (!res.ok) throw new Error(`Place lookup failed (${res.status}).`);
@@ -239,7 +324,7 @@ export async function fetchOutline(query: string): Promise<Outline> {
 	if (!Array.isArray(hits) || hits.length === 0) throw new Error(`No place found for "${query}".`);
 	const hit = hits[0];
 	if (!hit.geojson) throw new Error(`"${hit.display_name}" has no outline to trace.`);
-	return { name: hit.display_name, geometry: hit.geojson };
+	return { name: hit.display_name.split(',')[0], ring: outerRing(hit.geojson) };
 }
 
 export interface RoutedPath {

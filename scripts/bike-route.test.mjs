@@ -2,7 +2,16 @@
 //
 // Run: node --import ./scripts/ts-hook.mjs scripts/bike-route.test.mjs
 import assert from 'node:assert/strict';
-import { outerRing, resample, pathLength, deviation, toGPX, haversine } from '../src/lib/bike-route.ts';
+import {
+	outerRing,
+	resample,
+	pathLength,
+	deviation,
+	toGPX,
+	haversine,
+	normalizeShape,
+	orientRing,
+} from '../src/lib/bike-route.ts';
 
 // A ~1° square near the equator, as each GeoJSON shape the picker can hand us.
 const square = [
@@ -61,5 +70,36 @@ assert.ok(gpx.startsWith('<?xml'), 'GPX declares xml');
 assert.match(gpx, /<trkpt lat="0.000000" lon="0.000000">/);
 assert.equal((gpx.match(/<trkpt /g) || []).length, square.length, 'every point becomes a trkpt');
 assert.ok(!gpx.includes('<loop>'), 'name is escaped against breaking the XML');
+
+// normalizeShape centres the shape and fits its longer axis in [-0.5, 0.5].
+const norm = normalizeShape(square);
+let nMinX = Infinity, nMaxX = -Infinity, nMinY = Infinity, nMaxY = -Infinity;
+for (const [x, y] of norm) {
+	nMinX = Math.min(nMinX, x); nMaxX = Math.max(nMaxX, x);
+	nMinY = Math.min(nMinY, y); nMaxY = Math.max(nMaxY, y);
+}
+assert.ok(Math.abs(nMinX + nMaxX) < 1e-9 && Math.abs(nMinY + nMaxY) < 1e-9, 'normalized shape is centred on the origin');
+assert.ok(Math.max(nMaxX - nMinX, nMaxY - nMinY) - 1 < 1e-9, 'longer axis spans 1.0');
+// Longitude is squeezed by cos(lat): a square at 60°N (cos = 0.5) is half as
+// wide as it is tall, so height dominates and spans the full [-0.5, 0.5].
+const north = [
+	[0, 60],
+	[1, 60],
+	[1, 61],
+	[0, 61],
+	[0, 60],
+];
+const nn = normalizeShape(north);
+const w = Math.max(...nn.map((p) => p[0])) - Math.min(...nn.map((p) => p[0]));
+const h = Math.max(...nn.map((p) => p[1])) - Math.min(...nn.map((p) => p[1]));
+assert.ok(Math.abs(h - 1) < 1e-9 && w < 0.6 && w > 0.4, `cos(lat) squeeze: expected w≈0.5 h=1, got w=${w.toFixed(2)} h=${h.toFixed(2)}`);
+
+// orientRing enforces the requested winding. `square` as written (CCW: right,
+// up, left, down) has positive signed area, so asking for clockwise reverses it.
+const cw = orientRing(square, true);
+const ccw = orientRing(square, false);
+assert.deepEqual(ccw, square, 'an already-CCW ring is left alone when CCW is asked');
+assert.deepEqual(cw, square.slice().reverse(), 'a CCW ring is reversed when CW is asked');
+assert.deepEqual(orientRing(cw, true), cw, 'orienting an already-CW ring to CW is a no-op');
 
 console.log('bike-route: all checks passed');
