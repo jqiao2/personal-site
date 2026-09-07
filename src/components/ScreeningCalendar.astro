@@ -1,120 +1,105 @@
 ---
 // One page of the Screening Room's continuous calendar: a Sunday-first run of
-// weeks with a thin S-wave barrier at each month seam. Rendered both by
-// /films/screening-room and by its `months` partial, so appended pages come
-// back as the same markup under the same scope hash — and stay styled.
-import type { CalendarRow } from '../lib/screening-calendar';
+// weeks in a plain 7-column grid. Rendered both by /films/screening-room and by
+// its `months` partial, so appended pages come back as the same markup under
+// the same scope hash — and stay styled.
+import type { CalendarWeek } from '../lib/screening-calendar';
 import { imageUrl } from '../lib/tmdb';
 
 interface Props {
-	rows: CalendarRow[];
+	weeks: CalendarWeek[];
 	isOwner: boolean;
 }
-const { rows, isOwner } = Astro.props;
+const { weeks, isOwner } = Astro.props;
 ---
 
-{rows.map((row) =>
-	row.kind === 'barrier' ? (
-		<div class="barrier" data-month={row.month}>
-			<span class="barrier__label">{row.label}</span>
-			<span class="barrier__wave" aria-hidden="true"></span>
-		</div>
-	) : (
-		row.days.map((cell) => (
-			<div
-				class:list={['cell', cell.isToday && 'cell--today', !cell.inMonth && 'cell--off']}
-				data-date={cell.date}
-			>
-				<div class="cell__num">{cell.day}</div>
-				{isOwner && (
-					<button
-						type="button"
-						class="cell__add"
-						data-open-screening
-						data-date={cell.date}
-						aria-label={`Schedule a film on ${cell.date}`}
-					>+</button>
-				)}
-				<div class="cell__films">
-					{cell.films.map((f) => {
-						const poster = imageUrl(f.poster_path, 'w185');
-						return (
-							<div
-								class="film"
-								data-tmdb-id={f.tmdb_id}
-								data-venue={f.venue ?? ''}
-								draggable={isOwner ? 'true' : 'false'}
-							>
-								{/* Poster-only tile with a hover overlay, same as the
-								    watchlist/watched grids — clicks through to the film. */}
-								<a
-									class={poster ? 'tile' : 'tile tile--noimg'}
-									href={`/films/movie/${f.tmdb_id}`}
-									draggable="false"
-								>
-									{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" draggable="false" />}
-									<div class="tile__overlay">
-										<div class="tile__title">{f.title}</div>
-										{f.venue && <div class="tile__venue">{f.venue}</div>}
-									</div>
-								</a>
-								{isOwner && (
-									<button
-										type="button"
-										class="film__remove"
-										aria-label={`Remove ${f.title} from the queue`}
-									>&#10005;</button>
-								)}
-							</div>
-						);
-					})}
-				</div>
+{weeks.map((week) =>
+	week.days.map((cell) => (
+		<div
+			class:list={[
+				'cell',
+				cell.isToday && 'cell--today',
+				// The month seam, drawn on whichever of this cell's edges it runs along.
+				cell.edgeTop && 'seam-t',
+				cell.edgeBottom && 'seam-b',
+				cell.edgeLeft && 'seam-l',
+			]}
+			data-date={cell.date}
+		>
+			<div class="cell__num">
+				{cell.monthLabel && <span class="cell__month">{cell.monthLabel}</span>}
+				{cell.day}
 			</div>
-		))
-	),
+			{isOwner && (
+				<button
+					type="button"
+					class="cell__add"
+					data-open-screening
+					data-date={cell.date}
+					aria-label={`Schedule a film on ${cell.date}`}
+				>+</button>
+			)}
+			<div class="cell__films">
+				{cell.films.map((f) => {
+					const poster = imageUrl(f.poster_path, 'w185');
+					return (
+						<div
+							class="film"
+							data-tmdb-id={f.tmdb_id}
+							data-venue={f.venue ?? ''}
+							draggable={isOwner ? 'true' : 'false'}
+						>
+							{/* Poster-only tile with a hover overlay, same as the
+							    watchlist/watched grids — clicks through to the film. */}
+							<a
+								class={poster ? 'tile' : 'tile tile--noimg'}
+								href={`/films/movie/${f.tmdb_id}`}
+								draggable="false"
+							>
+								{poster && <img src={poster} alt={`${f.title} poster`} loading="lazy" decoding="async" draggable="false" />}
+								<div class="tile__overlay">
+									<div class="tile__title">{f.title}</div>
+									{f.venue && <div class="tile__venue">{f.venue}</div>}
+								</div>
+							</a>
+							{isOwner && (
+								<button
+									type="button"
+									class="film__remove"
+									aria-label={`Remove ${f.title} from the queue`}
+								>&#10005;</button>
+							)}
+						</div>
+					);
+				})}
+			</div>
+		</div>
+	)),
 )}
 
 <style>
-	/* Every row lives in the page's one 7-column grid; a barrier spans it. */
-	.barrier {
-		grid-column: 1 / -1;
-		display: flex;
-		align-items: center;
-		gap: 14px;
-		padding: 22px 2px 6px;
-	}
-	.barrier__label {
-		font-family: 'Newsreader', serif;
-		font-size: 19px;
-		color: #f4e8d1;
-		white-space: nowrap;
-	}
-	/* The seam itself: a thin S wave tiled across the remaining width. Tiled as
-	   a background rather than a stretched SVG so it never distorts. */
-	.barrier__wave {
-		flex: 1;
-		height: 10px;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='10' viewBox='0 0 24 10'%3E%3Cpath d='M0 5C4 0 8 0 12 5s8 5 12 0' fill='none' stroke='%234a2529' stroke-width='1.2'/%3E%3C/svg%3E");
-		background-repeat: repeat-x;
-		background-position: left center;
-	}
-
 	.cell {
 		position: relative;
+		box-sizing: border-box;
 		min-height: 118px;
 		border: 1px solid #3a1f22;
 		border-radius: 8px;
 		padding: 6px;
 		background: #1f0e10;
 	}
-	/* Days of the neighbouring month that a straddling week picks up. */
-	.cell--off {
-		background: transparent;
-		border-style: dashed;
-		border-color: #33191c;
+	/* The month seam. It cuts the run of days between the last of one month and
+	   the 1st of the next, so on a 7-column grid it steps: along the top of the
+	   1st and the rest of its week, down the left of the 1st, and along the
+	   bottom of the days before it. Each segment is drawn once, on the cell it
+	   belongs to, so nothing doubles up across the gap. */
+	.seam-t {
+		border-top: 2px solid #9c6f63;
 	}
-	.cell--off .cell__num {
-		color: #4e3a35;
+	.seam-b {
+		border-bottom: 2px solid #9c6f63;
+	}
+	.seam-l {
+		border-left: 2px solid #9c6f63;
 	}
 	.cell--today {
 		border-color: #d9b45a;
@@ -129,6 +114,11 @@ const { rows, isOwner } = Astro.props;
 		font-size: 14px;
 		color: #7c6156;
 		padding: 2px 4px;
+	}
+	/* The 1st carries the only month name on the page. */
+	.cell__month {
+		color: #e0cbb0;
+		margin-right: 4px;
 	}
 	.cell--today .cell__num {
 		color: #d9b45a;
@@ -274,9 +264,6 @@ const { rows, isOwner } = Astro.props;
 		}
 		.film {
 			width: 38px;
-		}
-		.barrier__label {
-			font-size: 16px;
 		}
 	}
 </style>

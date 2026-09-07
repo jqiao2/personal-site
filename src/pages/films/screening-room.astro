@@ -1,9 +1,10 @@
 ---
 // The Screening Room — the "queued" watchlist as one continuous calendar. Films
 // you've scheduled to watch (at home or in a theatre) sit on the day you plan to
-// see them. The run scrolls forever, month seams marked only by a thin S wave;
-// the owner can schedule a film onto any day, drag one to another day, remove
-// one, and pull AMC-style events in from the connected Movies calendar.
+// see them. The run is a plain 7-column grid that scrolls forever, month seams
+// marked by nothing but a bolder grid line stepping around the 1st; the owner
+// can schedule a film onto any day, drag one to another day, remove one, and
+// pull AMC-style events in from the connected Movies calendar.
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import ScreeningComposer from '../../components/ScreeningComposer.astro';
@@ -12,7 +13,7 @@ import { requireOwner } from '../../lib/auth';
 import { listQueue } from '../../lib/screening-queue';
 import { isConfigured as calendarConfigured } from '../../lib/google-calendar';
 import { siteDay } from '../../lib/day';
-import { addWeeks, buildRows, firstSunday, runStartMonth } from '../../lib/screening-calendar';
+import { addWeeks, buildWeeks, firstSunday, runStartMonth } from '../../lib/screening-calendar';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -23,7 +24,7 @@ const calSync = isOwner && calendarConfigured();
 const today = siteDay();
 const PAGE_WEEKS = 12;
 const start = firstSunday(runStartMonth(queue, today));
-const rows = buildRows({ startSunday: start, weeks: PAGE_WEEKS, queue, today });
+const rendered = buildWeeks({ startSunday: start, weeks: PAGE_WEEKS, queue, today });
 const next = addWeeks(start, PAGE_WEEKS);
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -65,7 +66,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 					{WEEKDAYS.map((d) => <span>{d}</span>)}
 				</div>
 				<div class="grid" id="run" data-next={next} data-weeks={PAGE_WEEKS} data-today={today}>
-					<ScreeningCalendar rows={rows} isOwner={isOwner} />
+					<ScreeningCalendar weeks={rendered} isOwner={isOwner} />
 				</div>
 			</div>
 			<div class="sentinel" id="sentinel"></div>
@@ -206,8 +207,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 			padding: 10px 2px;
 			background: #140809;
 		}
-		/* One grid for the whole run: every week's days, plus the barriers between
-		   months, which span all seven columns. */
+		/* One grid for the whole run — nothing but days, month to month. */
 		.grid {
 			display: grid;
 			grid-template-columns: repeat(7, minmax(0, 1fr));
