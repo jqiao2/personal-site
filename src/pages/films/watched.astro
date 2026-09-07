@@ -622,15 +622,9 @@ const summary = hasFilters
 		.md__chevron {
 			font-size: 11px;
 			color: #8a6f63;
-			transition: transform 0.15s ease;
 		}
 		.md__toggle[aria-expanded='true'] .md__chevron {
 			transform: rotate(90deg);
-		}
-		@media (prefers-reduced-motion: reduce) {
-			.md__chevron {
-				transition: none;
-			}
 		}
 		.md__label {
 			font-size: 11px;
@@ -892,7 +886,6 @@ const summary = hasFilters
 			overflow: hidden;
 			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
 			border: 1px solid #4a2529;
-			transition: border-color 0.12s;
 		}
 		.tile:hover {
 			border-color: #d9b45a;
@@ -913,7 +906,6 @@ const summary = hasFilters
 			padding: 12px;
 			background: rgba(18, 8, 9, 0.82);
 			opacity: 0;
-			transition: opacity 0.18s ease;
 		}
 		.tile:hover .tile__overlay {
 			opacity: 1;

@@ -280,8 +280,8 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 
 <script>
 	// Mobile drawer. Below 820px the section's right sidebar is taken out of the
-	// feed and parked off-canvas (see the [data-site-drawer] rule below); this
-	// toggles a class on <html> that slides it in, plus a backdrop. Only wired
+	// feed and hidden (see the [data-site-drawer] rule below); this
+	// toggles a class on <html> that shows it, plus a backdrop. Only wired
 	// when the page opted in with `sidebar` — the button and backdrop exist then.
 	const burger = document.querySelector<HTMLButtonElement>('[data-drawer-toggle]');
 	const backdrop = document.querySelector<HTMLElement>('[data-drawer-backdrop]');
@@ -304,8 +304,8 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 <style is:global>
 	/* The mobile drawer, shared by every page that passes `sidebar` to the header.
 	   Below 820px the page's own sidebar (marked [data-site-drawer]) is lifted out
-	   of the feed grid and parked off the right edge; the header's hamburger slides
-	   it in. Positioning only — each sidebar keeps its own themed background and
+	   of the feed grid and hidden against the right edge; the header's hamburger
+	   shows it. Positioning only — each sidebar keeps its own themed background and
 	   padding (set in that section's styles), so the drawer reads as that section. */
 	@media (max-width: 820px) {
 		[data-site-drawer] {
@@ -317,16 +317,20 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 			margin: 0;
 			z-index: 90;
 			overflow-y: auto;
+			/* Parked off the right edge, with no travel between the two states —
+			   `visibility` (not just the offset) so a closed drawer can't be tabbed
+			   into or swallow a click meant for the hamburger. */
 			transform: translateX(100%);
-			transition: transform 0.26s ease;
+			visibility: hidden;
 			box-shadow: -14px 0 40px rgba(0, 0, 0, 0.32);
 		}
 		html.sh-drawer-open [data-site-drawer] {
 			transform: translateX(0);
+			visibility: visible;
 		}
 	}
-	/* The wide drawer (a subpage whose section has its own pages) is parked
-	   off-canvas at ALL widths, not just below 820px — same box as above, lifted
+	/* The wide drawer (a subpage whose section has its own pages) is hidden
+	   until opened at ALL widths, not just below 820px — same box as above, lifted
 	   out of the media query. The extra class outweighs the mobile rule, so the two
 	   never fight where both match. */
 	.sh-menu--wide[data-site-drawer] {
@@ -339,16 +343,12 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		z-index: 90;
 		overflow-y: auto;
 		transform: translateX(100%);
-		transition: transform 0.26s ease;
+		visibility: hidden;
 		box-shadow: -14px 0 40px rgba(0, 0, 0, 0.32);
 	}
 	html.sh-drawer-open .sh-menu--wide[data-site-drawer] {
 		transform: translateX(0);
-	}
-	@media (prefers-reduced-motion: reduce) {
-		[data-site-drawer] {
-			transition: none;
-		}
+		visibility: visible;
 	}
 </style>
 
@@ -424,7 +424,6 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		text-decoration: none;
 		padding: 22px 15px 20px;
 		border-bottom: 2px solid transparent;
-		transition: color 0.12s;
 		white-space: nowrap;
 	}
 	.sh__link:hover {
@@ -476,9 +475,6 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	.sh-logs:focus-within .sh-logs__toggle {
 		color: var(--sh-hover);
 	}
-	.sh-logs__toggle svg {
-		transition: transform 0.14s;
-	}
 	.sh-logs:hover .sh-logs__toggle svg,
 	.sh-logs:focus-within .sh-logs__toggle svg,
 	.sh-logs[data-open] .sh-logs__toggle svg {
@@ -502,15 +498,12 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		   opacity) so the links aren't tab-reachable while collapsed. */
 		opacity: 0;
 		visibility: hidden;
-		transform: translateY(-4px);
-		transition: opacity 0.12s, transform 0.12s, visibility 0.12s;
 	}
 	.sh-logs:hover .sh-logs__menu,
 	.sh-logs:focus-within .sh-logs__menu,
 	.sh-logs[data-open] .sh-logs__menu {
 		opacity: 1;
 		visibility: visible;
-		transform: translateY(0);
 	}
 	.sh-logs__item {
 		display: block;
@@ -556,8 +549,8 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 
 	/* The header's own nav-only drawer, used on pages that don't render a section
 	   sidebar. Hidden on desktop (the tabs show in the strip); below 820px the
-	   global [data-site-drawer] rule parks it off-canvas and the hamburger slides
-	   it in. Wears the section's menu background. */
+	   global [data-site-drawer] rule parks it off-canvas and the hamburger shows
+	   it. Wears the section's menu background. */
 	.sh-menu {
 		display: none;
 	}
@@ -570,7 +563,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	}
 	/* The wide variant (a subpage with section pages) shows at every width — its
 	   off-canvas positioning is set globally below so it's parked off-screen until
-	   the hamburger slides it in, the same as the narrow drawer. */
+	   the hamburger shows it, the same as the narrow drawer. */
 	.sh-menu--wide {
 		display: block;
 		background: var(--sh-menu-bg);

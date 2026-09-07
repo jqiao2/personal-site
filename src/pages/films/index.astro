@@ -145,7 +145,6 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 			height: 11.5px;
 			border-radius: 2px;
 			background: #402226;
-			animation: skel-pulse 1.4s ease-in-out infinite;
 		}
 		.skel-line--meta {
 			width: 38%;
@@ -158,20 +157,6 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 		}
 		.skel-line--note {
 			width: 90%;
-		}
-		@keyframes skel-pulse {
-			0%,
-			100% {
-				opacity: 1;
-			}
-			50% {
-				opacity: 0.45;
-			}
-		}
-		@media (prefers-reduced-motion: reduce) {
-			.skel-line {
-				animation: none;
-			}
 		}
 		@media (max-width: 720px) {
 			.shell-skel {

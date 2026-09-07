@@ -174,11 +174,9 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		border-radius: 10px;
 		overflow: hidden;
 		color: var(--granite);
-		transition: border-color 0.15s ease, transform 0.15s ease;
 	}
 	.ac:hover {
 		border-color: var(--lake);
-		transform: translateY(-1px);
 	}
 	.ac__face {
 		position: relative;
@@ -293,7 +291,6 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	}
 	.ac--redacted:hover {
 		border-color: var(--scree);
-		transform: none;
 	}
 	.ac__redacted-mark {
 		width: 40%;
