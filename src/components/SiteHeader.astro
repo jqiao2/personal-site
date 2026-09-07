@@ -147,7 +147,7 @@ const owner = await requireOwner(Astro.cookies);
     this nav-only drawer so the hamburger works site-wide. */}
 {!sidebar && (
 	<aside id="site-drawer" class="sh-menu" data-site-drawer style={style} aria-label="Menu">
-		<DrawerNav pathname={pathname} theme={theme} divider={false} />
+		<DrawerNav pathname={pathname} theme={theme} divider={false} sectionLinks owner={owner} />
 	</aside>
 )}
 

@@ -9,7 +9,7 @@
 //
 // It wears the section's header palette (the same --sh-* variables SiteHeader
 // uses), so the folded tabs read as the same nav painted for this section.
-import { siteNav } from '../lib/nav';
+import { siteNav, sectionNav } from '../lib/nav';
 import { headerThemeStyle, type HeaderTheme } from '../lib/header-theme';
 
 interface Props {
@@ -20,10 +20,18 @@ interface Props {
 	/** Rule + gap below the nav, separating it from section content underneath.
 	    Off when the nav is the drawer's only content (the header's own menu). */
 	divider?: boolean;
+	/** Also fold this section's own pages (the sidebar's link list) into the
+	    drawer, below the site tabs. On when the page has no sidebar of its own —
+	    a section subpage — so its sibling pages stay reachable from the hamburger.
+	    Off on the section index, whose sidebar already lists them. */
+	sectionLinks?: boolean;
+	/** Owner state, so owner-only section links show only for the owner. */
+	owner?: boolean;
 }
 
-const { pathname, theme = 'root', divider = true } = Astro.props;
+const { pathname, theme = 'root', divider = true, sectionLinks = false, owner = false } = Astro.props;
 const nav = siteNav(pathname);
+const section = sectionLinks ? sectionNav(theme, pathname, owner) : [];
 const style = headerThemeStyle(theme);
 ---
 
@@ -66,6 +74,24 @@ const style = headerThemeStyle(theme);
 					{n.label}
 				</a>
 			),
+		)
+	}
+	{
+		// The section's own pages, folded in below the site tabs so a subpage's
+		// siblings stay reachable from the hamburger. Only rendered when asked
+		// (sectionLinks) — the section index leaves this to its full sidebar.
+		section.length > 0 && (
+			<div class="dnav__section">
+				{section.map((s) => (
+					<a
+						class:list={['dnav__row', 'dnav__sectionrow', s.active && 'dnav__row--active']}
+						href={s.href}
+						aria-current={s.active ? 'page' : undefined}
+					>
+						{s.label}
+					</a>
+				))}
+			</div>
 		)
 	}
 </nav>
@@ -150,5 +176,16 @@ const style = headerThemeStyle(theme);
 	.dnav__label:hover,
 	.dnav__kid:hover {
 		color: var(--sh-hover);
+	}
+
+	/* The section's own pages, set off from the site tabs above by a hairline —
+	   this is "where you are" (the log) versus "the rest of the site". */
+	.dnav__section {
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top: 1px solid var(--sh-border);
+	}
+	.dnav__sectionrow {
+		font-size: 14px;
 	}
 </style>
