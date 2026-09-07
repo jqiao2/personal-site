@@ -272,11 +272,12 @@
 <script>
 	// Schedule a film (owner only). Any element with `data-open-screening` opens
 	// this; its `data-date` seeds the date field so an empty calendar cell opens
-	// on the day it stands for. Bails cleanly when the modal isn't in the DOM.
-	const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-open-screening]'));
+	// on the day it stands for. Triggers are matched at click time, so days the
+	// Screening Room appends as you scroll open it too. Bails cleanly when the
+	// modal isn't in the DOM.
 	const modal = document.getElementById('sched') as HTMLDivElement | null;
 
-	if (triggers.length && modal) {
+	if (modal) {
 		const IMG = 'https://image.tmdb.org/t/p/w92';
 		const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 		const close = $('sched-close');
@@ -397,9 +398,10 @@
 			modal.hidden = false;
 			q.focus();
 		};
-		for (const trigger of triggers) {
-			trigger.addEventListener('click', () => openModal(trigger.dataset.date));
-		}
+		document.addEventListener('click', (e) => {
+			const trigger = (e.target as HTMLElement).closest<HTMLElement>('[data-open-screening]');
+			if (trigger) openModal(trigger.dataset.date);
+		});
 		close.addEventListener('click', closeModal);
 		cancel.addEventListener('click', closeModal);
 		backdrop.addEventListener('click', closeModal);

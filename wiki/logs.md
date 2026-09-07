@@ -100,3 +100,20 @@ wiki across every iteration, even reverted ones).
   Chrome instead — `chrome.exe --headless=new --screenshot=OUT file://IN` — zero
   deps, good for static design comps before deciding to `npm install`. Used the
   real `npm run shot --el ".sh"` for final on-page verification once installed.
+
+## 2026-09-07 — Screening Room: continuous calendar + poster drag and drop
+- Replaced the month-at-a-time grid with one continuous Sunday-first run,
+  paginated by week and appended on scroll. Month seams are a thin S wave tiled
+  as a background SVG (a stretched `<svg>` would distort it — see 0012).
+- Reused an Astro **partial** route for the appended pages rather than rebuilding
+  rows in JS: same component, same scope hash, so the appended markup is styled
+  with no `:global()`. Wrote that up as 0014.
+- Paginating by month would have duplicated the week straddling each seam. Weeks
+  tile exactly; the barrier is emitted in front of the week carrying a 1st.
+- Drag and drop is native HTML5, and the drop reuses the existing
+  `POST /api/films/screening-queue` (it already upserts by movie, so a re-POST
+  with a new date IS the move, and the Google event is re-created for free).
+  The poster's `data-venue` rides along so a move doesn't drop the theatre.
+- Verified in a real browser with a throwaway Playwright script and a stubbed
+  POST: 84 → 168 cells on scroll, appended cells styled, drag moved the poster
+  and sent `date: 2026-09-13`.
