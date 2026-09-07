@@ -145,14 +145,12 @@ const SIZES = `(max-width: 560px) 25vw, ${CAP}px`;
 		box-shadow: inset 0 0 0 1px rgba(47, 30, 18, 0.18);
 		background: var(--panel);
 	}
-	/* Pointing at one photograph steps the rest back, so the line underneath
-	   plainly belongs to the one under the pointer rather than to the row. */
-	.shots__rail:hover .shot__img {
-		opacity: 0.42;
-	}
+	/* The pointed-at photograph takes a terracotta rule, which is enough to say
+	   the line underneath belongs to it. Dimming the whole rest of the row to
+	   42% to make the same point was the loudest thing on the page for a
+	   pointer that only passed over it. */
 	.shots__rail .shot:hover .shot__img,
 	.shot:focus-visible .shot__img {
-		opacity: 1;
 		box-shadow: inset 0 0 0 2px var(--terracotta);
 	}
 	.shot:focus-visible {

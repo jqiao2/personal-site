@@ -72,7 +72,11 @@ const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.p
 
 				--serif: 'Twemoji Country Flags', Georgia, 'Times New Roman', serif;
 				--sans: 'Twemoji Country Flags', system-ui, -apple-system, 'Segoe UI', sans-serif;
-				--measure: 720px;
+				/* The reading measure, not just a column width: 720px put ~82
+				   characters on a line, well past the ~70 where the eye starts
+				   losing its place on the return sweep. Sized so the text inside
+				   (this minus the 2rem gutters) lands near 70. */
+				--measure: 640px;
 				--shell: 1120px;
 
 				/* SiteHeader's `root` theme reads these, so mapping them to the warm
