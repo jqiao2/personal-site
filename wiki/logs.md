@@ -110,3 +110,19 @@ wiki across every iteration, even reverted ones).
   so future work doesn't reintroduce motion. Related: the biggest remaining
   on-screen movement is not CSS — it is layout shift from `server:defer` islands
   landing and Google Fonts `display=swap`.
+
+- 2026-09-07 — Follow-up to the animation cull: the movement left on the page
+  was layout, not CSS. Fixed three sources. (1) The `server:defer` fallbacks
+  reserved about a fifth of the height they were replaced by (home 605px for
+  1730px), so everything below jumped; each now carries a measured `min-height`
+  per breakpoint. Measure island heights by intercepting `**/_server-islands/**`
+  in Playwright and delaying the route — the fallback then stays on screen long
+  enough to read, and the same node's height after the swap is the number to
+  reserve. (2) Google Fonts with `&display=swap` relaid every page mid-load;
+  moved to Astro 7's `fonts` config + `<Font preload />`, whose
+  `optimizedFallbacks` emits a metric-matched fallback face. That only applies
+  through the generated cssVariable, so every `font-family: 'Newsreader', serif`
+  had to become `var(--font-newsreader)` — 183 of them. Watch for standalone
+  `new Response('<html>…')` error pages: no `<Font>` runs in those, so they must
+  keep a literal stack. (3) `scrollbar-gutter: stable` on html in every layout.
+  Also capped `--measure` 720px -> 640px (82 rendered characters -> 72).
