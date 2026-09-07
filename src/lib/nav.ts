@@ -9,6 +9,8 @@
 // logs hang off it as children. Subway is no longer a tab — it lives on the
 // projects page now, as the interactive thing it is.
 
+import type { HeaderTheme } from './header-theme';
+
 export interface NavLink {
 	href: string;
 	label: string;
@@ -58,6 +60,59 @@ export function siteNav(current?: string): NavItem[] {
 			children,
 		},
 	];
+}
+
+// A section's own pages — the links that used to live only in that section's
+// right-hand sidebar (the "log index"). Kept here as data so the same list can be
+// folded into the mobile drawer on EVERY page of a section, not just its index:
+// from a film diary entry the drawer can now still reach Watchlist, Stats, and so
+// on. The section index keeps rendering its richer sidebar (with live counts); the
+// drawer just needs the labels. `ownerOnly` links mirror the sidebar's own
+// owner-gating, so a visitor never sees a page they can't open.
+export interface SectionLink extends NavLink {
+	ownerOnly?: boolean;
+}
+
+const SECTION_NAV: Partial<Record<HeaderTheme, readonly SectionLink[]>> = {
+	film: [
+		{ href: '/films/watched', label: 'Films watched' },
+		{ href: '/films/diary', label: 'Diary' },
+		{ href: '/films/watchlist', label: 'Watchlist' },
+		{ href: '/films/stats', label: 'Stats' },
+		{ href: '/films/month', label: 'The month in film', ownerOnly: true },
+	],
+	book: [
+		{ href: '/books/to-read', label: 'To read' },
+		{ href: '/books/month', label: 'Month in review', ownerOnly: true },
+	],
+	restaurant: [
+		{ href: '/restaurants/places', label: 'All restaurants' },
+		{ href: '/restaurants/diary', label: 'Diary' },
+		{ href: '/restaurants/to-try', label: 'To try' },
+		{ href: '/restaurants/stats', label: 'Stats' },
+		{ href: '/restaurants/month', label: 'Month in review', ownerOnly: true },
+	],
+	activity: [
+		{ href: '/activities/all', label: 'All activities' },
+		{ href: '/activities/training', label: 'Training calendar' },
+		{ href: '/activities/fitness', label: 'Fitness trend', ownerOnly: true },
+		{ href: '/activities/heatmap', label: 'Heatmap', ownerOnly: true },
+		{ href: '/activities/athlete', label: 'Athlete', ownerOnly: true },
+		{ href: '/activities/gear', label: 'Gear', ownerOnly: true },
+		{ href: '/activities/month', label: 'Month in review', ownerOnly: true },
+		{ href: '/activities/settings', label: 'Settings', ownerOnly: true },
+	],
+};
+
+/**
+ * A section's own pages, with the active one flagged and owner-only links dropped
+ * for visitors. Empty for sections without a sub-nav (root, subway). `current` is
+ * the pathname; `owner` gates the owner-only rows.
+ */
+export function sectionNav(theme: HeaderTheme, current?: string, owner = false): NavItem[] {
+	return (SECTION_NAV[theme] ?? [])
+		.filter((l) => owner || !l.ownerOnly)
+		.map((l) => ({ href: l.href, label: l.label, active: isActive(l.href, current) }));
 }
 
 function isActive(href: string, current?: string): boolean {
