@@ -114,7 +114,6 @@ export const prerender = false;
 		height: 0.72rem;
 		border-radius: 2px;
 		background: var(--rule-soft);
-		animation: skel-pulse 1.4s ease-in-out infinite;
 	}
 	.skel-line--meta {
 		width: 40%;
@@ -128,21 +127,6 @@ export const prerender = false;
 	.skel-line--note {
 		width: 90%;
 	}
-	@keyframes skel-pulse {
-		0%,
-		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.45;
-		}
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.skel-line {
-			animation: none;
-		}
-	}
-
 	.feed__more {
 		font-family: var(--sans);
 		font-size: 0.8rem;

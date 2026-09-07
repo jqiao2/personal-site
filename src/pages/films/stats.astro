@@ -578,18 +578,12 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			text-decoration: none;
 			cursor: pointer;
 			border-radius: 6px;
-			transition: background 0.12s;
 		}
 		a.person:hover {
 			background: #2a1a15;
 		}
 		a.person:hover .person__name {
 			color: #f4e8d1;
-		}
-		@media (prefers-reduced-motion: reduce) {
-			a.person {
-				transition: none;
-			}
 		}
 
 		@media (max-width: 720px) {

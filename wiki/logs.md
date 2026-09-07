@@ -100,3 +100,13 @@ wiki across every iteration, even reverted ones).
   Chrome instead — `chrome.exe --headless=new --screenshot=OUT file://IN` — zero
   deps, good for static design comps before deciding to `npm install`. Used the
   real `npm run shot --el ".sh"` for final on-page verification once installed.
+
+- 2026-09-07 — Animation audit: stripped every `transition`, decorative
+  `@keyframes` (skeleton pulses) and hover-motion `transform` from the site, plus
+  the now-dead `prefers-reduced-motion` blocks. Only the `spin` loaders survive.
+  The mobile drawer went from `translateX(100%)` + transition to plain
+  `display: none` / `display: block`, which also takes it out of the tab order
+  while closed. Rule written into CLAUDE.md/AGENTS.md ("The site does not move")
+  so future work doesn't reintroduce motion. Related: the biggest remaining
+  on-screen movement is not CSS — it is layout shift from `server:defer` islands
+  landing and Google Fonts `display=swap`.

@@ -521,7 +521,7 @@ async function main() {
 
 	function focusNode(node) {
 		const { x, y } = graph.getNodeAttributes(node);
-		renderer.getCamera().animate({ x, y, ratio: 0.1 }, { duration: 500 });
+		renderer.getCamera().animate({ x, y, ratio: 0.1 }, { duration: 0 });
 	}
 
 	/** Relax whichever filters are hiding this node, so picking a search result

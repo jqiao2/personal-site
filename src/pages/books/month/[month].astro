@@ -429,7 +429,6 @@ const clientData = JSON.stringify({
 		height: 17px;
 		border-radius: 9px;
 		background: #3d2d1a;
-		transition: background 0.15s ease;
 	}
 	.switch__knob {
 		position: absolute;
@@ -439,7 +438,6 @@ const clientData = JSON.stringify({
 		height: 13px;
 		border-radius: 50%;
 		background: #8a745a;
-		transition: left 0.15s ease;
 	}
 	.switch__label {
 		font-size: 12px;
@@ -637,7 +635,6 @@ const clientData = JSON.stringify({
 				calc(var(--k) * var(--step) * var(--fan))
 			)
 			rotate(calc(var(--rot) * var(--fan-rot)));
-		transition: transform 0.18s ease;
 	}
 	.print--top {
 		border: 2px solid #f2e6cd;
@@ -816,11 +813,6 @@ const clientData = JSON.stringify({
 		z-index: 60;
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.print--behind {
-			transition: none;
-		}
-	}
 	@media (max-width: 720px) {
 		.controls {
 			gap: 16px;

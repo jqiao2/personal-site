@@ -100,19 +100,9 @@
 		font-size: 0;
 		color: transparent;
 	}
-	/* Fade each poster in as it lands, so a grid filling in reads as one motion
-	   rather than a scatter of pop-ins. */
+	/* Hidden until it lands, so an empty tile stays blank rather than showing a
+	   half-drawn image. */
 	img[data-poster] {
 		opacity: 0;
-	}
-	img[data-poster],
-	img.poster--ready {
-		transition: opacity 0.25s ease;
-	}
-	@media (prefers-reduced-motion: reduce) {
-		img[data-poster],
-		img.poster--ready {
-			transition: none;
-		}
 	}
 </style>

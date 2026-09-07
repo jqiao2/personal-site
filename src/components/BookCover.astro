@@ -156,10 +156,6 @@ const Tag = href ? 'a' : 'div';
 		/* Square at the hinge, rounded at the fore-edge — the shelf's convention. */
 		border-radius: 2px 4px 4px 2px;
 		background: #241a10;
-		transition:
-			transform 0.16s ease,
-			border-color 0.16s ease,
-			box-shadow 0.16s ease;
 	}
 	.cover--full {
 		width: 100%;
@@ -282,23 +278,13 @@ const Tag = href ? 'a' : 'div';
 		display: none;
 	}
 
-	/* Pulled off the shelf. Only where the picture is a link — the cover on a
-	   book's own page is not going anywhere. */
+	/* Marked as a link on hover/focus. Only where the picture is a link — the
+	   cover on a book's own page is not going anywhere. */
 	a.cover:hover,
 	a.cover:focus-visible {
-		transform: translateY(-7px);
 		border-color: #cfa452;
 		box-shadow:
 			0 12px 22px -8px rgba(0, 0, 0, 0.8),
 			0 0 0 1px rgba(207, 164, 82, 0.4);
-	}
-	@media (prefers-reduced-motion: reduce) {
-		.cover {
-			transition: none;
-		}
-		a.cover:hover,
-		a.cover:focus-visible {
-			transform: none;
-		}
 	}
 </style>

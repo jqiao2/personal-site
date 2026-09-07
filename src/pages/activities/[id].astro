@@ -1133,14 +1133,11 @@ const exInk = exertionInk(activity.exertion);
 		padding: 0.7rem 0.8rem;
 		opacity: 0;
 		visibility: hidden;
-		transform: translateY(-2px);
-		transition: opacity 0.12s, transform 0.12s, visibility 0.12s;
 	}
 	.ex:hover .ex__pop,
 	.ex:focus-within .ex__pop {
 		opacity: 1;
 		visibility: visible;
-		transform: translateY(0);
 	}
 
 	/* The Avg/Max table beneath the headline — smaller text, the two value
@@ -1222,7 +1219,6 @@ const exInk = exertionInk(activity.exertion);
 		padding: 0.35rem 0.5rem;
 		border-radius: 6px;
 		cursor: pointer;
-		transition: color 0.12s, background 0.12s;
 	}
 	.movie-chosen__clear:hover {
 		color: #12495e;
@@ -1261,7 +1257,6 @@ const exInk = exertionInk(activity.exertion);
 		border: none;
 		border-radius: 7px;
 		cursor: pointer;
-		transition: background 0.12s, color 0.12s;
 	}
 	:global(.movie-results__item + .movie-results__item) {
 		margin-top: 1px;

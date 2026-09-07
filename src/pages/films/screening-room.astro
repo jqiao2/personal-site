@@ -383,7 +383,6 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			line-height: 1;
 			cursor: pointer;
 			opacity: 0;
-			transition: opacity 0.12s;
 		}
 		.cell:hover .cell__add,
 		.cell__add:focus-visible {
@@ -394,7 +393,7 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			color: #2a1214;
 		}
 		/* Poster tiles wrap within a day; each is the watchlist/watched tile —
-		   poster fills a 2/3 box, caption overlay fades in on hover. */
+		   poster fills a 2/3 box, caption overlay shows on hover. */
 		.cell__films {
 			display: flex;
 			flex-wrap: wrap;
@@ -413,7 +412,6 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			overflow: hidden;
 			border: 1px solid #4a2529;
 			background-image: repeating-linear-gradient(135deg, #351a1d 0 7px, #2c1518 7px 14px);
-			transition: border-color 0.12s;
 		}
 		.tile:hover {
 			border-color: #d9b45a;
@@ -434,7 +432,6 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			padding: 5px;
 			background: rgba(18, 8, 9, 0.86);
 			opacity: 0;
-			transition: opacity 0.16s ease;
 		}
 		.tile:hover .tile__overlay {
 			opacity: 1;
@@ -481,7 +478,6 @@ const scheduledThisMonth = cells.reduce((n, c) => n + c.films.length, 0);
 			display: flex;
 			align-items: center;
 			justify-content: center;
-			transition: opacity 0.12s;
 		}
 		.film:hover .film__remove,
 		.film__remove:focus-visible {

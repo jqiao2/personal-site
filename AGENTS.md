@@ -30,6 +30,21 @@ pages need no login: `requireOwner()` is true in dev. Pass the route WITHOUT a
 leading slash — Git Bash rewrites `/month` into a Windows path. See
 `wiki/patterns/0002-screenshot-the-page-yourself.md`.
 
+## The site does not move
+
+Nothing on the page animates. The content is the point, and motion pulls the eye
+off it. No `transition`, no `@keyframes`, no JS-driven tween, no scroll effect,
+no hover lift, no fade or slide on anything opening or closing. State changes are
+instant: a drawer is shown or hidden, a hover changes colour on the frame it is
+hovered.
+
+The one exception is a loading spinner on a pending request. Adding a second
+exception needs a reason better than "it feels nice".
+
+`prefers-reduced-motion` blocks are therefore also gone — there is nothing left
+for them to turn off. Don't reintroduce one to guard a new animation; drop the
+animation instead.
+
 ## Development
 
 When starting the dev server, use background mode:
