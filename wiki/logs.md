@@ -101,6 +101,16 @@ wiki across every iteration, even reverted ones).
   deps, good for static design comps before deciding to `npm install`. Used the
   real `npm run shot --el ".sh"` for final on-page verification once installed.
 
+- 2026-09-07 — Animation audit: stripped every `transition`, decorative
+  `@keyframes` (skeleton pulses) and hover-motion `transform` from the site, plus
+  the now-dead `prefers-reduced-motion` blocks. Only the `spin` loaders survive.
+  The mobile drawer went from `translateX(100%)` + transition to plain
+  `display: none` / `display: block`, which also takes it out of the tab order
+  while closed. Rule written into CLAUDE.md/AGENTS.md ("The site does not move")
+  so future work doesn't reintroduce motion. Related: the biggest remaining
+  on-screen movement is not CSS — it is layout shift from `server:defer` islands
+  landing and Google Fonts `display=swap`.
+
 ## 2026-09-07 — Screening Room: continuous calendar + poster drag and drop
 - Replaced the month-at-a-time grid with one continuous Sunday-first run,
   paginated by week and appended on scroll. Month seams are a thin S wave tiled
@@ -117,3 +127,5 @@ wiki across every iteration, even reverted ones).
 - Verified in a real browser with a throwaway Playwright script and a stubbed
   POST: 84 → 168 cells on scroll, appended cells styled, drag moved the poster
   and sent `date: 2026-09-13`.
+- Main landed "The site does not move" (#205) mid-branch; the new
+  ScreeningCalendar component was stripped of its transitions to match.

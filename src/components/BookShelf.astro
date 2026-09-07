@@ -187,11 +187,6 @@ const { spines, emptyLine } = Astro.props;
 		height: var(--h);
 		outline: none;
 		z-index: 1;
-		transition: transform 0.16s ease;
-	}
-	/* Less than the pull, so the hint and the state never read as the same thing. */
-	.spine:hover {
-		transform: translateY(-7px);
 	}
 	.spine:focus-visible {
 		outline: 2px solid #cfa452;
@@ -215,9 +210,6 @@ const { spines, emptyLine } = Astro.props;
 			6px 0 10px -7px rgba(0, 0, 0, 0.9),
 			0 9px 13px -8px rgba(0, 0, 0, 0.95),
 			inset -1px 0 0 rgba(0, 0, 0, 0.5);
-		transition:
-			transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
-			box-shadow 0.3s ease;
 	}
 	.spine--pulled .spine__body {
 		transform: translateY(-30px) scale(1.05) rotate(-1.4deg);
@@ -327,15 +319,4 @@ const { spines, emptyLine } = Astro.props;
 		opacity: 0.88;
 	}
 
-	/* The pull still happens — it is the state the second click depends on. It
-	   just arrives without travelling. */
-	@media (prefers-reduced-motion: reduce) {
-		.spine,
-		.spine__body {
-			transition: none;
-		}
-		.spine:hover {
-			transform: none;
-		}
-	}
 </style>
