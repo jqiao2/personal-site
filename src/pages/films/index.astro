@@ -89,7 +89,7 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 			border-radius: 8px;
 			padding: 8px 16px;
 			cursor: pointer;
-			font-family: 'Archivo', sans-serif;
+			font-family: var(--font-archivo);
 		}
 		.nav-btn--log {
 			color: #2a1214;
@@ -112,9 +112,14 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 
 		/* Skeleton shown while the FilmsFeed island streams in. Mirrors the feed's
 		   two-column geometry so the shell doesn't reflow when it arrives. */
+		/* Reserves the height of the real feed, so nothing below the island moves
+		   when it lands and a reader who scrolls during the load isn't yanked.
+		   ponytail: measured (listLogs(25) at 1280px/420px), not derived —
+		   re-measure if the row template or that limit changes. */
 		.shell-skel {
 			display: grid;
 			grid-template-columns: minmax(0, 1fr) 288px;
+			min-height: 3850px;
 		}
 		.feed-skel {
 			padding: 38px 40px 44px clamp(14px, 4vw, 32px);
@@ -161,6 +166,8 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 		@media (max-width: 720px) {
 			.shell-skel {
 				grid-template-columns: 1fr;
+				/* Rows wrap narrower, so the same 25 logs run taller. */
+				min-height: 4770px;
 			}
 			.side-skel {
 				display: none;

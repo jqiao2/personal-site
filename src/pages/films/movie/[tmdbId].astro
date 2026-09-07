@@ -1,4 +1,5 @@
 ---
+import { Font } from 'astro:assets';
 import EntryEditor from '../../../components/EntryEditor.astro';
 import PosterLoader from '../../../components/PosterLoader.astro';
 import {
@@ -197,12 +198,8 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>{movie.title} — Jason's film log</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap"
-			rel="stylesheet"
-		/>
+		<Font cssVariable="--font-newsreader" preload />
+		<Font cssVariable="--font-archivo" preload />
 		<link rel="preconnect" href="https://image.tmdb.org" />
 	</head>
 	<body>
@@ -492,7 +489,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 			body {
 				background: #1c0d0e;
 				color: #f4e8d1;
-				font-family: 'Archivo', Arial, sans-serif;
+				font-family: var(--font-archivo);
 				-webkit-font-smoothing: antialiased;
 			}
 			a {
@@ -591,7 +588,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 			.poster__title {
 				position: relative;
 				padding: 14px;
-				font-family: 'Newsreader', serif;
+				font-family: var(--font-newsreader);
 				font-size: 18px;
 				color: #f2e5cd;
 				line-height: 1.2;
@@ -670,7 +667,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				border-radius: 9px;
 				padding: 12px;
 				cursor: pointer;
-				font-family: 'Archivo', sans-serif;
+				font-family: var(--font-archivo);
 			}
 			.btn-primary:hover {
 				background: #f0d488;
@@ -686,7 +683,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				line-height: 15px;
 				font-size: 13px;
 				font-weight: 600;
-				font-family: 'Archivo', sans-serif;
+				font-family: var(--font-archivo);
 				border-radius: 9px;
 				padding: 11px;
 				background: transparent;
@@ -746,7 +743,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				padding-top: 150px;
 			}
 			h1 {
-				font-family: 'Newsreader', serif;
+				font-family: var(--font-newsreader);
 				font-weight: 500;
 				font-size: 46px;
 				color: #f4e8d1;
@@ -827,7 +824,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				margin-top: 28px;
 			}
 			.block__head {
-				font-family: 'Newsreader', serif;
+				font-family: var(--font-newsreader);
 				font-style: italic;
 				font-size: 17px;
 				color: #ecdcbd;
@@ -841,7 +838,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				justify-content: space-between;
 			}
 			.block__count {
-				font-family: 'Archivo', sans-serif;
+				font-family: var(--font-archivo);
 				font-style: normal;
 				font-size: 12px;
 				color: #8a6f63;
@@ -858,7 +855,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				margin-bottom: -10px;
 			}
 			.tab {
-				font-family: 'Newsreader', serif;
+				font-family: var(--font-newsreader);
 				font-style: italic;
 				font-size: 17px;
 				background: none;
@@ -967,7 +964,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				border: 1px solid #4a2529;
 				border-radius: 6px;
 				padding: 5px 11px;
-				font-family: 'Archivo', sans-serif;
+				font-family: var(--font-archivo);
 			}
 			.review__view:hover {
 				border-color: #d9b45a;
@@ -977,7 +974,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				font-size: 12px;
 			}
 			.review__text {
-				font-family: 'Newsreader', serif;
+				font-family: var(--font-newsreader);
 				font-size: 16px;
 				color: #e6d8c3;
 				line-height: 1.6;

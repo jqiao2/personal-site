@@ -26,6 +26,7 @@
 // because eight pages share one typographic vocabulary — the price column, the
 // section rule, the verdict mark in the left margin — and eight copies of it
 // would drift apart by the third page.
+import { Font } from 'astro:assets';
 import SiteHeader from '../components/SiteHeader.astro';
 
 interface Props {
@@ -48,12 +49,9 @@ const { title, pathname, isOwner = false, sidebar = false } = Astro.props;
 		<meta name="apple-mobile-web-app-title" content="jq" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>{title}</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link
-			href="https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&family=Ultra&display=swap"
-			rel="stylesheet"
-		/>
+		<Font cssVariable="--font-newsreader" preload />
+		<Font cssVariable="--font-archivo" preload />
+		<Font cssVariable="--font-ultra" preload />
 	</head>
 	<body>
 		<SiteHeader pathname={pathname} theme="restaurant" sidebar={sidebar}>
@@ -170,6 +168,11 @@ const { title, pathname, isOwner = false, sidebar = false } = Astro.props;
 			body {
 				margin: 0;
 				padding: 0;
+			}
+			html {
+				/* Hold the scrollbar's width whether or not there is one, so nothing
+				   slides sideways when the page's height changes. */
+				scrollbar-gutter: stable;
 			}
 			body {
 				min-height: 100vh;

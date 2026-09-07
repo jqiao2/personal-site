@@ -277,7 +277,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			display: flex;
 			align-items: flex-end;
 			padding: 12px;
-			font-family: 'Newsreader', serif;
+			font-family: var(--font-newsreader);
 			font-size: 15px;
 			color: #f2e5cd;
 			line-height: 1.2;
@@ -311,7 +311,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 		}
 		.how__medium {
 			display: inline-block;
-			font-family: 'Newsreader', serif;
+			font-family: var(--font-newsreader);
 			font-size: 19px;
 			color: #f4e8d1;
 			line-height: 1.1;
@@ -371,7 +371,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			align-items: center;
 			gap: 10px;
 			/* Match the pin to the Edit-entry button beside it. */
-			--pin-font-family: 'Archivo', sans-serif;
+			--pin-font-family: var(--font-archivo);
 			--pin-font-size: 12px;
 			--pin-weight: 600;
 			--pin-pad: 7px 14px;
@@ -391,14 +391,14 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			border-radius: 7px;
 			padding: 7px 14px;
 			cursor: pointer;
-			font-family: 'Archivo', sans-serif;
+			font-family: var(--font-archivo);
 		}
 		.edit-btn:hover {
 			border-color: #d9b45a;
 			color: #f4e8d1;
 		}
 		.watched {
-			font-family: 'Newsreader', serif;
+			font-family: var(--font-newsreader);
 			font-style: italic;
 			font-size: 15px;
 			color: #c2a99a;
@@ -411,7 +411,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			color: #f0d488;
 		}
 		h1 {
-			font-family: 'Newsreader', serif;
+			font-family: var(--font-newsreader);
 			font-weight: 500;
 			font-size: 40px;
 			color: #f4e8d1;
@@ -467,7 +467,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			margin-top: 24px;
 		}
 		.review__label {
-			font-family: 'Newsreader', serif;
+			font-family: var(--font-newsreader);
 			font-style: italic;
 			font-size: 18px;
 			color: #ecdcbd;
@@ -476,7 +476,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			margin-bottom: 16px;
 		}
 		.review__body {
-			font-family: 'Newsreader', serif;
+			font-family: var(--font-newsreader);
 			font-size: 18px;
 			color: #e6d8c3;
 			line-height: 1.7;

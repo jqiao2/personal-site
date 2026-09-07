@@ -144,9 +144,9 @@ export function noGpsStats(row: CardStatRow): string[] {
 	return leadFigures(row, 2);
 }
 
-// One string so ActivityLayout and any future share card (the month-in-review
-// family FilmLayout's siblings already use) request the exact same font set —
-// two requests for the same stylesheet cost nothing, but two *different*
-// weight/style subsets do, and drift apart the moment someone edits one copy.
-export const FONT_LINK =
-	'https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&display=swap';
+// The section's typefaces are no longer requested by URL from here: they are
+// declared once in astro.config.mjs (`fonts`) and pulled into the layout with
+// <Font cssVariable="--font-instrument-serif" />, which self-hosts them and
+// generates the metric-matched fallback that keeps the page from reflowing when
+// they land. One declaration site, same as this constant was for, minus the
+// third-party round trip.

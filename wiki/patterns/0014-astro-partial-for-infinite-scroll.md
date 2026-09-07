@@ -19,8 +19,8 @@ Put the rows in a component, then render that component from **two** places:
 2. a sibling route with `export const partial = true`, for every block after.
 
 ```
-src/components/ScreeningCalendar.astro       # rows + their <style>
-src/pages/films/screening-room.astro         # <ScreeningCalendar rows={first} />
+src/components/ScreeningCalendar.astro       # the day cells + their <style>
+src/pages/films/screening-room.astro         # <ScreeningCalendar weeks={first} />
 src/pages/films/screening-room/months.astro  # partial: same component, ?from=…
 ```
 
@@ -45,7 +45,8 @@ the container around them. Nothing about the appended block is a special case.
   `[data-open-screening]` on load, so it now matches at click time instead, which
   fixes every future caller too.
 - **Paginate by the unit that can't be split.** A calendar paginated by month
-  duplicates the week that straddles a seam. Pages of *weeks* tile exactly, and
-  the month label becomes a row emitted in front of the week carrying a 1st.
-  `scripts/screening-calendar.test.mjs` asserts consecutive pages share no week
-  key and no month gets two barriers.
+  duplicates the week that straddles a seam. Pages of *weeks* tile exactly. The
+  corollary is that every week has to work out its own appearance from its own
+  dates — the month seam here is a 2px border computed per week, with no state
+  carried across the page boundary. `scripts/screening-calendar.test.mjs`
+  asserts consecutive pages share no week key and no month is opened twice.
