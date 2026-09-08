@@ -26,6 +26,7 @@ const HEADLINE: StatKey[] = ['distance', 'moving_time', 'exertion'];
 const PAIRS: { avg: StatKey; max: StatKey; label: string }[] = [
 	{ avg: 'avg_speed', max: 'max_speed', label: 'Speed' },
 	{ avg: 'avg_hr', max: 'max_hr', label: 'Heart rate' },
+	{ avg: 'avg_power', max: 'max_power', label: 'Power' },
 ];
 
 // Table order, top to bottom. A key absent here never renders; a key here with
@@ -38,6 +39,7 @@ const ORDER: StatKey[] = [
 	'avg_hr',
 	'max_hr',
 	'avg_power',
+	'max_power',
 	'normalized_power',
 	'work_kj',
 	'elevation_gain',

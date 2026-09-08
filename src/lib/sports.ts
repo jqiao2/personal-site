@@ -115,6 +115,7 @@ export type StatKey =
 	| 'elapsed_time'
 	| 'elevation_gain'
 	| 'avg_power'
+	| 'max_power'
 	| 'normalized_power'
 	| 'avg_speed'
 	| 'avg_pace'
@@ -493,6 +494,7 @@ export interface StatRow {
 	elev_high_m?: number | null;
 	elevation_loss_m?: number | null;
 	avg_power_w?: number | null;
+	max_power_w?: number | null;
 	normalized_power_w?: number | null;
 	avg_speed_ms?: number | null;
 	max_speed_ms?: number | null;
@@ -589,6 +591,8 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 		}
 		case 'avg_power':
 			return withLabel('Avg power', { value: row.avg_power_w == null ? '—' : `${row.avg_power_w}W` });
+		case 'max_power':
+			return withLabel('Max power', { value: row.max_power_w == null ? '—' : `${row.max_power_w}W` });
 		case 'normalized_power':
 			return withLabel('NP', { value: row.normalized_power_w == null ? '—' : `${row.normalized_power_w}W` });
 		case 'avg_speed': {

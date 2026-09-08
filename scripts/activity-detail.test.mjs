@@ -19,6 +19,7 @@ import { detailRows } from '../src/lib/activity-detail.ts';
 			avg_hr: 150,
 			max_hr: 179,
 			avg_power_w: 192,
+			max_power_w: 620,
 			normalized_power_w: 210,
 			elevation_gain_m: 300,
 			calories: 766,
@@ -30,6 +31,8 @@ import { detailRows } from '../src/lib/activity-detail.ts';
 	assert.ok(speed && speed.max, 'Speed pairs avg + max');
 	const hr = rows.find((r) => r.label === 'Heart rate');
 	assert.ok(hr && hr.max, 'Heart rate pairs avg + max');
+	const power = rows.find((r) => r.label === 'Power');
+	assert.ok(power && power.avg === '192W' && power.max === '620W', 'Power pairs avg + max');
 	assert.ok(
 		rows.some((r) => r.label === 'NP' && r.max === undefined),
 		'NP is a single-column row',
