@@ -566,9 +566,14 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		.head {
 			padding: 22px 18px 14px;
 		}
+		.page {
+			min-height: 100dvh;
+		}
 		.map {
-			margin: 0 18px 30px;
-			height: min(70vh, 560px);
+			margin: 0 18px 18px;
+			flex: 1;
+			height: auto;
+			min-height: 420px;
 		}
 	}
 </style>

@@ -192,7 +192,7 @@ function niceStep(target: number): number {
  * then rides the same axis with a zero baseline so its sign reads directly.
  * `null` when the window is empty.
  */
-export function plotPmc(points: PmcPoint[]): FitnessPlot | null {
+export function plotPmc(points: PmcPoint[], height: number = PLOT_H): FitnessPlot | null {
 	if (points.length === 0) return null;
 
 	let hi = 0;
@@ -204,7 +204,7 @@ export function plotPmc(points: PmcPoint[]): FitnessPlot | null {
 	if (hi === lo) hi = lo + 1; // a dead-flat all-zero window still has an axis
 
 	const innerW = PLOT_W - PAD_L - PAD_R;
-	const innerH = PLOT_H - PAD_T - PAD_B;
+	const innerH = height - PAD_T - PAD_B;
 	const n = points.length;
 	const x = (i: number) => PAD_L + (n === 1 ? innerW / 2 : (i / (n - 1)) * innerW);
 	const y = (v: number) => PAD_T + ((hi - v) / (hi - lo)) * innerH;
