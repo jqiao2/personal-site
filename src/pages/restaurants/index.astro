@@ -45,13 +45,16 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 	   ponytail: measured (listRecentVisits(25) at 1280px/420px), not derived —
 	   re-measure if the row template or that limit changes. */
 	.shell-skel {
-		max-width: 1080px;
+		/* Matches RestaurantsFeed's .shell: max-width from the header's
+		   --sh-max (1120px), same 288px sidebar as the film/activity logs. */
+		max-width: 1120px;
 		margin: 0 auto;
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 288px;
-		gap: 2.6rem;
-		padding: 34px 40px 48px;
 		min-height: 3870px;
+	}
+	.feed-skel {
+		padding: 38px 40px 44px clamp(14px, 4vw, 32px);
 	}
 	.skel-item {
 		display: flex;
@@ -91,10 +94,11 @@ const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), lis
 	@media (max-width: 820px) {
 		.shell-skel {
 			grid-template-columns: 1fr;
-			gap: 1.6rem;
-			padding: 26px 22px 36px;
 			/* Rows wrap narrower, so the same 25 visits run taller. */
 			min-height: 4690px;
+		}
+		.feed-skel {
+			padding: 28px 22px 34px;
 		}
 		.side-skel {
 			display: none;

@@ -8,7 +8,14 @@
 // edge (the subway map wants that). `root` leans on the variables Layout.astro
 // already defines so it follows the light/dark scheme; every other section is
 // art-directed to a fixed palette.
-export type HeaderTheme = 'root' | 'film' | 'book' | 'restaurant' | 'activity' | 'subway';
+export type HeaderTheme =
+	| 'root'
+	| 'film'
+	| 'book'
+	| 'restaurant'
+	| 'activity'
+	| 'subway'
+	| 'journal';
 
 export const HEADER_THEMES: Record<HeaderTheme, Record<string, string>> = {
 	root: {
@@ -80,6 +87,21 @@ export const HEADER_THEMES: Record<HeaderTheme, Record<string, string>> = {
 		'--sh-font': 'var(--font-archivo)',
 		'--sh-max': 'none',
 		'--sh-menu-bg': '#20100f',
+	},
+	// The month-in-review journal: cream stock and ink, same palette as
+	// JournalLayout.astro's --paper/--ink/--rule/--margin-red — always this,
+	// never following light/dark like `root`, since the journal card itself
+	// never does either.
+	journal: {
+		'--sh-bg': '#fbf5e6',
+		'--sh-border': '#c9b795',
+		'--sh-link': '#6a5b49',
+		'--sh-hover': '#c2604f',
+		'--sh-active': '#2c2118',
+		'--sh-accent': '#c2604f',
+		'--sh-font': 'var(--font-archivo)',
+		'--sh-max': '1120px',
+		'--sh-menu-bg': '#fdf7e8',
 	},
 };
 

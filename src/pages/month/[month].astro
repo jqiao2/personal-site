@@ -50,6 +50,7 @@ import {
 import { listJournalMonths } from '../../lib/journal-months';
 import { requireOwner } from '../../lib/auth';
 import MonthPicker from '../../components/MonthPicker.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
 
 // The books query runs on the service-role client (the reading tables have RLS
 // with no policies), so this can only ever be a request-time render.
@@ -118,6 +119,8 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 
 <JournalLayout title={`${monthLabel(key)} · The month in review`}>
 	<div class="j-page">
+		<SiteHeader pathname={Astro.url.pathname} theme="journal" />
+
 		<div class="head">
 			<div>
 				<a class="j-back" href="/projects">&larr; Projects</a>
@@ -310,6 +313,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 
 <style>
 	.head {
+		margin-top: 26px;
 		display: flex;
 		align-items: flex-end;
 		justify-content: space-between;
