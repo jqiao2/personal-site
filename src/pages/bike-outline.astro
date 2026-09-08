@@ -67,6 +67,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 				<div><dt>Climb</dt><dd id="bo-climb">—</dd></div>
 				<div><dt>Waypoints</dt><dd id="bo-wps">—</dd></div>
 				<div><dt>Shape deviation</dt><dd id="bo-dev">—</dd></div>
+				<div><dt>Retraced road</dt><dd id="bo-retraced">—</dd></div>
 			</dl>
 		</div>
 
@@ -270,6 +271,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			$('bo-climb').textContent = routed.ascend != null ? `${routed.ascend.toLocaleString()} m` : '—';
 			$('bo-wps').textContent = String(waypoints.length);
 			$('bo-dev').textContent = `${(dev.mean / 1000).toFixed(2)} km avg · ${(dev.max / 1000).toFixed(2)} km max`;
+			$('bo-retraced').textContent = `${(routed.retraced * 100).toFixed(1)}%`;
 			statsEl.hidden = false;
 			exportBtn.disabled = false;
 			status('Route placed. Reposition and generate again, or export.');

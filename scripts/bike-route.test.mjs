@@ -12,6 +12,8 @@ import {
 	normalizeShape,
 	orientRing,
 	removeBacktracks,
+	removeLoops,
+	retracedFraction,
 } from '../src/lib/bike-route.ts';
 
 // A ~1° square near the equator, as each GeoJSON shape the picker can hand us.
@@ -122,5 +124,28 @@ assert.deepEqual(
 // A genuine loop encloses area rather than retracing, so it is left intact.
 const loop = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
 assert.deepEqual(removeBacktracks(loop), loop, 'a real loop is not touched');
+
+// removeLoops drops a lasso: out east, around a block, back near the start.
+const lasso = [
+	[0, 0],
+	[0.001, 0],
+	[0.002, 0], // east ~222m
+	[0.002, 0.001], // north
+	[0.0002, 0.001], // west
+	[0.0002, 0], // back down to ~22m from the start — the near-return
+	[-0.001, 0], // then continue west
+];
+const unlassoed = removeLoops(lasso);
+assert.ok(unlassoed.length < lasso.length, 'the lasso loop is removed');
+assert.deepEqual(unlassoed[0], [0, 0], 'the path still starts where it did');
+assert.deepEqual(unlassoed[unlassoed.length - 1], [-0.001, 0], 'and continues past the loop');
+assert.ok(pathLength(unlassoed) < pathLength(lasso) / 2, 'the excursion length is gone');
+// A tight bend that never returns near itself is left alone.
+const bend = [[0, 0], [0.002, 0], [0.004, 0.001], [0.006, 0]];
+assert.deepEqual(removeLoops(bend), bend, 'a genuine bend is not cut');
+
+// retracedFraction: an out-and-back reuses its one segment (~50%); a clean loop 0.
+assert.ok(Math.abs(retracedFraction([[0, 0], [0.001, 0], [0, 0]]) - 0.5) < 1e-6, 'out-and-back is ~50% retraced');
+assert.equal(retracedFraction(square), 0, 'a shape that never repeats a segment is 0% retraced');
 
 console.log('bike-route: all checks passed');

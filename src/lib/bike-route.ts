@@ -209,6 +209,63 @@ export function removeBacktracks(coords: LngLat[]): LngLat[] {
 }
 
 /**
+ * Drop the "lasso" loops a per-hop router makes to reach a waypoint — it leaves
+ * the outline, circles a block, touches the waypoint, and rejoins near where it
+ * left, enclosing area rather than retracing (so removeBacktracks can't see it).
+ *
+ * Detected as a near-return: a later point that lands back within `tol` of an
+ * earlier one after a much longer path than the straight chord between them
+ * (`path > minLoop` and `path > 4·chord`, so a genuine tight bend isn't cut).
+ * The excursion is spliced out by jumping straight to the return point, which
+ * bounds the one introduced connector to the chord (≤ tol), and every point
+ * after it stays original road geometry. Iterated, since cutting one loop can
+ * bring the next into range.
+ */
+export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop = 6000): LngLat[] {
+	let cur = coords;
+	for (let pass = 0; pass < 6; pass++) {
+		const out: LngLat[] = [];
+		let i = 0;
+		while (i < cur.length) {
+			out.push(cur[i]);
+			let best = -1;
+			let path = 0;
+			for (let j = i + 1; j < cur.length && path <= maxLoop; j++) {
+				path += haversine(cur[j - 1], cur[j]);
+				const chord = haversine(cur[i], cur[j]);
+				if (path > minLoop && chord <= tol && path > 4 * chord) best = j; // farthest return = biggest loop
+			}
+			i = best >= 0 ? best : i + 1;
+		}
+		if (out.length === cur.length) return out;
+		cur = out;
+	}
+	return cur;
+}
+
+/** Fraction of the route (0–1) that rides a road segment already ridden — the
+ *  "wrong-way / sidewalk" proxy, since the road graph's legal directions aren't
+ *  available here. Undirected: a segment counts as reused however it's traversed. */
+export function retracedFraction(coords: LngLat[]): number {
+	const key = (a: LngLat, b: LngLat) => {
+		const ka = `${a[0].toFixed(5)},${a[1].toFixed(5)}`;
+		const kb = `${b[0].toFixed(5)},${b[1].toFixed(5)}`;
+		return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+	};
+	const seen = new Set<string>();
+	let total = 0, reused = 0;
+	for (let i = 1; i < coords.length; i++) {
+		const L = haversine(coords[i - 1], coords[i]);
+		if (L === 0) continue;
+		total += L;
+		const k = key(coords[i - 1], coords[i]);
+		if (seen.has(k)) reused += L;
+		else seen.add(k);
+	}
+	return total ? reused / total : 0;
+}
+
+/**
  * Flatten a lng/lat ring into a centered unit box for drawing as a fixed-size
  * screen stencil. The longer axis spans [-0.5, 0.5]; the page scales that by a
  * pixel size and drops it at the map's centre. Longitude is squeezed by
@@ -365,10 +422,12 @@ export async function fetchOutline(query: string): Promise<Outline> {
 
 export interface RoutedPath {
 	coords: LngLat[];
-	/** Route length in metres, as the router reports it. */
+	/** Route length in metres. */
 	length: number;
 	/** Total climb in metres, if the router reports it. */
 	ascend: number | null;
+	/** Fraction (0–1) of the route on already-ridden road — the wrong-way proxy. */
+	retraced: number;
 }
 
 /** One BRouter call over an ordered waypoint list. Returns the road geometry
@@ -392,8 +451,9 @@ async function brouterLeg(waypoints: LngLat[], profile: Profile): Promise<{ coor
  *
  * Long lists are split into overlapping batches — each batch shares its last
  * waypoint with the next batch's first, so the legs join seam-to-seam — because
- * one request can't carry hundreds of waypoints. The dedupe runs on the stitched
- * whole, so a spur straddling a seam is still removed.
+ * one request can't carry hundreds of waypoints. The cleanup runs on the
+ * stitched whole: first removeBacktracks (out-and-back spurs), then removeLoops
+ * (the block-circling lassoes), so an excursion straddling a seam is still cut.
  */
 export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Promise<RoutedPath> {
 	if (waypoints.length < 2) throw new Error('Need at least two waypoints to route.');
@@ -411,5 +471,7 @@ export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Pro
 		coords = coords.length ? coords.concat(leg.coords.slice(1)) : leg.coords;
 	}
 	coords = removeBacktracks(coords);
-	return { coords, length: pathLength(coords), ascend };
+	coords = removeLoops(coords);
+	coords = removeBacktracks(coords); // a spliced loop can leave a small new spur
+	return { coords, length: pathLength(coords), ascend, retraced: retracedFraction(coords) };
 }
