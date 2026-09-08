@@ -116,7 +116,7 @@ const DEFAULT_GEAR: Partial<Record<Sport, string>> = {
 	hike: 'Altra Lone Peak 9',
 };
 
-interface GearRow {
+export interface GearRow {
 	id: number;
 	name: string;
 	first_used_on: string | null;
@@ -126,7 +126,7 @@ interface GearRow {
 /** The gear a sport defaults to on a date, or a reason there is none. A default
  *  only applies while the gear was IN SERVICE on the day — a June hike uploaded
  *  after a July shoe change is not credited to the pair that replaced them. */
-function defaultGearFor(sport: Sport, date: string, gear: GearRow[]): GearRow | { out: string } | null {
+export function defaultGearFor(sport: Sport, date: string, gear: GearRow[]): GearRow | { out: string } | null {
 	const name = DEFAULT_GEAR[sport];
 	if (!name) return null;
 	const g = gear.find((r) => r.name.toLowerCase() === name.toLowerCase());

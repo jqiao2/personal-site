@@ -14,7 +14,14 @@ import { supabaseAdmin } from './supabase';
 import { getAccessToken, stravaGet } from './strava';
 import { toRows, localDate, UnknownSportError, virtualizeGpslessRide } from './ingest/canonical';
 import { activityToCanonical, type StravaActivity, type StravaStreams } from './ingest/providers/strava';
-import { FIVE_MINUTES, thresholdsFrom, insertActivity, bumpGearDistance } from './activity-ingest';
+import {
+	FIVE_MINUTES,
+	thresholdsFrom,
+	insertActivity,
+	bumpGearDistance,
+	defaultGearFor,
+	type GearRow,
+} from './activity-ingest';
 import type { AthleteThresholds } from './activities';
 
 // A synced ride is Strava's copy, not the device's — same rung as the archive
@@ -58,15 +65,18 @@ async function alreadyStored(a: StravaActivity, canonicalSport: string): Promise
 /** Strava gear id → our activity_gear id, by matching the Strava gear name to a
  *  gear name or nickname. Built once per run, and only if a ride carries gear.
  *
+ *  The name comes from /gear/{id}, NOT /athlete. The detailed athlete only
+ *  carries its bikes/shoes with the profile:read_all scope, which this app
+ *  doesn't request (STRAVA_SCOPE is read,activity:read_all) — so athlete.bikes
+ *  was always undefined and every ride landed untagged. /gear/{id} works on the
+ *  activity scope. Resolutions are cached per id so a multi-ride sync hits each
+ *  gear once.
+ *
  *  ponytail: name match, not a stored id map. The archive never recorded
  *  Strava's gear ids, so name is what there is to match on; a rename on either
  *  side drops the tag (the ride lands untagged and stays editable). Good enough
  *  for a trickle of live rides; wire real ids in if it ever misses often. */
-async function buildGearResolver(): Promise<(gearId: string | null | undefined) => number | null> {
-	const athlete = (await stravaGet('/athlete')) as { bikes?: Gear[]; shoes?: Gear[] };
-	const stravaGear = [...(athlete.bikes ?? []), ...(athlete.shoes ?? [])];
-	if (!stravaGear.length) return () => null;
-
+async function buildGearResolver(): Promise<(gearId: string | null | undefined) => Promise<number | null>> {
 	const { data } = await supabaseAdmin.from('activity_gear').select('id, name, nickname').is('retired_at', null);
 	const byName = new Map<string, number>();
 	for (const g of (data ?? []) as { id: number; name: string; nickname: string | null }[]) {
@@ -74,18 +84,34 @@ async function buildGearResolver(): Promise<(gearId: string | null | undefined) 
 		if (g.nickname) byName.set(g.nickname.toLowerCase(), g.id);
 	}
 
-	const stravaName = new Map<string, string>();
-	for (const g of stravaGear) if (g.id && g.name) stravaName.set(g.id, g.name);
-
-	return (gearId) => {
+	const cache = new Map<string, number | null>();
+	return async (gearId) => {
 		if (!gearId) return null;
-		const name = stravaName.get(gearId);
-		return name ? byName.get(name.toLowerCase()) ?? null : null;
+		const hit = cache.get(gearId);
+		if (hit !== undefined) return hit;
+		let id: number | null = null;
+		try {
+			const gear = (await stravaGet(`/gear/${gearId}`)) as { name?: string; nickname?: string };
+			const name = gear.nickname || gear.name;
+			id = name ? byName.get(name.toLowerCase()) ?? null : null;
+		} catch {
+			// A gear that 404s or a transient failure lands the ride untagged and
+			// still editable — never fatal to the sync.
+			id = null;
+		}
+		cache.set(gearId, id);
+		return id;
 	};
 }
-interface Gear {
-	id?: string;
-	name?: string;
+
+/** Every gear with the dates defaultGearFor needs, for the per-sport fallback
+ *  when a ride names no Strava gear. Retired gear is included on purpose — an
+ *  old ride synced late still belongs to whatever was in service that day. */
+async function loadDefaultGear(): Promise<GearRow[]> {
+	const { data } = await supabaseAdmin
+		.from('activity_gear')
+		.select('id, name, first_used_on, retired_at');
+	return (data ?? []) as GearRow[];
 }
 
 /**
@@ -106,7 +132,11 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 	const thresholds = (thresholdRows ?? []) as AthleteThresholds[];
 
 	const result: SyncResult = { fetched: 0, added: 0, duplicate: 0, failed: 0, unknownSports: [] };
-	let gearFor: ((id: string | null | undefined) => number | null) | null = null;
+	let gearFor: ((id: string | null | undefined) => Promise<number | null>) | null = null;
+	// Loaded once, the first time a ride needs a per-sport default (a run with no
+	// shoes on Strava, say). Carries dates so a default only credits gear that
+	// was in service on the ride's day.
+	let defaultGear: GearRow[] | null = null;
 	let newestStart = after ? after * 1000 : 0;
 	let reachedMax = false;
 
@@ -148,10 +178,20 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 				const date = localDate(canonical.started_at, canonical.utc_offset_minutes ?? 0);
 				const { activity, streams: streamRow, laps } = toRows(canonical, thresholdsFrom(thresholds, date));
 
+				// Prefer the gear Strava names on the ride; if it names none (or the
+				// name doesn't match), fall back to this sport's default — the same
+				// table the file-upload path uses — so every synced activity lands on
+				// the right gear, not just the bikes Strava tracks. Still editable
+				// after, so a default is a first guess, not a fact.
 				if (detail.gear_id) {
 					if (!gearFor) gearFor = await buildGearResolver();
-					const gearId = gearFor(detail.gear_id);
+					const gearId = await gearFor(detail.gear_id);
 					if (gearId) activity.gear_id = gearId;
+				}
+				if (activity.gear_id == null) {
+					if (!defaultGear) defaultGear = await loadDefaultGear();
+					const g = defaultGearFor(canonical.sport, date, defaultGear);
+					if (g && !('out' in g)) activity.gear_id = g.id;
 				}
 
 				await insertActivity(activity, streamRow, laps, {
