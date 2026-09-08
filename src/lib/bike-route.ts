@@ -353,32 +353,35 @@ export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 
 // --- stochastic descent ---------------------------------------------------
 //
-// Roads never trace an outline exactly, so a freshly placed stencil leaves the
-// route bulging away from the border wherever no road follows it. This co-adapts
-// the two: route the current outline, pull each outline vertex toward the road
-// the router actually found (hardest where the route strayed most — that's the
-// "direction of the deviation"), tighten the sampling, and route again. Each
-// round the outline sits a little closer to real tarmac and the finer spacing
-// hugs it better. It stops when the next spacing would need more waypoints than
-// one run allows (can't go finer) or when it reaches the floor, and returns the
-// lowest-deviation round it saw — not necessarily the last, since over-pulling
-// can erode the shape past the point it helps.
+// You draw an outline and a rough area, but you don't know exactly where in that
+// area the shape sits best on real roads. This searches the placement: the shape
+// stays rigid — same size, same proportions — and only slides around. Route the
+// outline where it currently sits, measure which way the road route pulled away
+// from it on average (the "direction of the deviation"), shift the whole outline
+// that way, tighten the sampling, and route again. Each round the rigid shape
+// moves toward the spot where roads trace it most faithfully. It stops when the
+// next spacing would need more waypoints than one run allows (can't go finer) or
+// when it reaches the floor, and returns the lowest-deviation placement it saw.
 
-/** Pull each outline vertex a `rate` fraction of the way to its nearest point on
- *  the routed road. A vertex the route missed by a lot moves a lot; one already
- *  on a road barely moves — the nudge is the deviation vector, scaled. */
-function nudgeToward(ring: LngLat[], route: LngLat[], rate: number): LngLat[] {
+/** The average offset from the outline to the road route: for each outline
+ *  vertex, the vector to its nearest routed point, meaned over the ring. This is
+ *  the single direction the whole rigid shape should slide to sit better on the
+ *  roads — no per-vertex movement, so the shape never deforms. */
+function meanOffset(ring: LngLat[], route: LngLat[]): LngLat {
 	// ponytail: O(ring·route) nearest-point scan per round. Rings are ~dozens and
 	// routes ~thousands of points, so it's a few hundred k ops — fine. A grid index
 	// is the upgrade if outlines ever get large.
-	return ring.map((v) => {
+	let sx = 0, sy = 0;
+	for (const v of ring) {
 		let bx = v[0], by = v[1], bd = Infinity;
 		for (const p of route) {
 			const d = (p[0] - v[0]) ** 2 + (p[1] - v[1]) ** 2;
 			if (d < bd) { bd = d; bx = p[0]; by = p[1]; }
 		}
-		return [v[0] + (bx - v[0]) * rate, v[1] + (by - v[1]) * rate] as LngLat;
-	});
+		sx += bx - v[0];
+		sy += by - v[1];
+	}
+	return [sx / ring.length, sy / ring.length];
 }
 
 export interface DescentRound {
@@ -387,7 +390,7 @@ export interface DescentRound {
 	waypoints: number;
 	meanDev: number;
 	maxDev: number;
-	ring: LngLat[]; // the outline routed this round (before its nudge)
+	ring: LngLat[]; // the rigid outline where it sat this round (before its shift)
 	routed: RoutedPath; // this round's route — draw it to watch the descent
 }
 
@@ -402,23 +405,24 @@ export interface DescentResult {
 export interface DescentOpts {
 	startSpacing: number; // metres
 	minSpacing: number; // metres — the floor
-	shrink?: number; // spacing multiplier per round, 0<shrink<1 (default 0.75)
-	rate?: number; // nudge fraction toward the route, 0..1 (default 0.4)
+	shrink?: number; // spacing multiplier per round, 0<shrink<1 (default 0.85)
+	rate?: number; // fraction of the mean offset to slide per round, 0..1 (default 0.2)
 	onRound?: (r: DescentRound) => void;
 }
 
 /**
- * Iteratively fit an outline to the roads under it while tightening the sampling.
+ * Slide a rigid outline to the placement where roads trace it best, tightening
+ * the sampling each round. The shape is only ever translated, never reshaped.
  * `route` is injected so this stays pure of network wiring (the page passes a
- * BRouter call). Returns the lowest-mean-deviation round.
+ * BRouter call). Returns the lowest-mean-deviation placement.
  */
 export async function descend(
 	ring0: LngLat[],
 	route: (waypoints: LngLat[]) => Promise<RoutedPath>,
 	opts: DescentOpts,
 ): Promise<DescentResult> {
-	const shrink = opts.shrink ?? 0.75;
-	const rate = opts.rate ?? 0.4;
+	const shrink = opts.shrink ?? 0.85;
+	const rate = opts.rate ?? 0.2;
 	let ring = ring0.slice();
 	let spacing = opts.startSpacing;
 	let best: DescentResult | null = null;
@@ -442,7 +446,8 @@ export async function descend(
 			bestMean = dev.mean;
 			best = { ring: ring.slice(), waypoints, routed, spacing, rounds: round + 1 };
 		}
-		ring = nudgeToward(ring, routed.coords, rate);
+		const [dx, dy] = meanOffset(ring, routed.coords);
+		ring = ring.map(([x, y]) => [x + dx * rate, y + dy * rate] as LngLat); // rigid slide
 		spacing *= shrink;
 		round++;
 	}
