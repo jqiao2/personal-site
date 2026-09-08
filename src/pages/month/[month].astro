@@ -118,9 +118,8 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 ---
 
 <JournalLayout title={`${monthLabel(key)} · The month in review`}>
+	<SiteHeader pathname={Astro.url.pathname} theme="journal" />
 	<div class="j-page">
-		<SiteHeader pathname={Astro.url.pathname} theme="journal" />
-
 		<div class="head">
 			<div>
 				<a class="j-back" href="/projects">&larr; Projects</a>
@@ -313,7 +312,6 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 
 <style>
 	.head {
-		margin-top: 26px;
 		display: flex;
 		align-items: flex-end;
 		justify-content: space-between;
