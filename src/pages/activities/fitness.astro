@@ -198,6 +198,17 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		const today = svg.getAttribute('data-today') ?? new Date().toLocaleDateString('en-CA');
 		const SVG_NS = 'http://www.w3.org/2000/svg';
 		const W = Number(svg.viewBox.baseVal.width);
+		// Narrow screens get twice the plot height: at phone widths a 3:1 box is
+		// only a few dozen pixels tall and the three curves collapse into each
+		// other. The whole SVG is redrawn below anyway, so it just replots taller.
+		const tall = window.matchMedia('(max-width: 640px)');
+		let H = PLOT_H;
+		function setHeight() {
+			H = tall.matches ? PLOT_H * 2 : PLOT_H;
+			svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+			(svg.querySelector('[data-hit]') as SVGElement).setAttribute('height', String(H));
+			crossLine.setAttribute('y2', String(H - 18));
+		}
 
 		// The days plotted in the current window — what the scrubber snaps to.
 		let marks: FitnessMark[] = [];
@@ -232,7 +243,7 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 
 		function draw(from: string, to: string) {
 			const win = windowPmc(PMC, from || null, to || null);
-			const p = plotPmc(win);
+			const p = plotPmc(win, H);
 			if (!p) return;
 
 			(svg.querySelector('[data-line-ctl]') as SVGElement).setAttribute('points', p.ctlLine);
@@ -254,7 +265,7 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 			const xaxis = svg.querySelector('[data-xaxis]')!;
 			xaxis.textContent = '';
 			for (const t of p.xTicks) {
-				const label = el('text', { class: 'xlabel', x: t.x, y: PLOT_H - 5, 'text-anchor': 'middle' });
+				const label = el('text', { class: 'xlabel', x: t.x, y: H - 5, 'text-anchor': 'middle' });
 				label.textContent = t.label;
 				xaxis.appendChild(label);
 			}
@@ -343,8 +354,14 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		svg.addEventListener('pointerdown', (e) => scrub(e.clientX));
 		svg.addEventListener('pointerleave', hideScrub);
 
-		// The server already rendered the default window; redraw it once (same
-		// output) so `marks` is populated and scrubbing works before any toggle.
+		tall.addEventListener('change', () => {
+			setHeight();
+			draw(fromInput.value, toInput.value);
+		});
+
+		// The server already rendered the default window; redraw it once (taller
+		// on phones) so `marks` is populated and scrubbing works before any toggle.
+		setHeight();
 		draw(fromInput.value, toInput.value);
 	}
 </script>
@@ -477,5 +494,8 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 	@media (max-width: 640px) {
 		.now { grid-template-columns: 1fr; }
 		.controls { align-items: stretch; }
+		/* Matches the doubled viewBox the script sets, so the taller plot is
+		   already reserved before it redraws. */
+		.plot { aspect-ratio: 720 / 480; }
 	}
 </style>
