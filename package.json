@@ -33,6 +33,7 @@
     "ski:test": "node --import ./scripts/ts-hook.mjs scripts/ski.test.mjs",
     "zones:test": "node --import ./scripts/ts-hook.mjs scripts/zones.test.mjs",
     "screening:test": "node --import ./scripts/ts-hook.mjs scripts/screening-calendar.test.mjs",
+    "bike:test": "node --import ./scripts/ts-hook.mjs scripts/bike-route.test.mjs",
     "shot": "node --env-file=.env scripts/shot.mjs"
   },
   "dependencies": {
