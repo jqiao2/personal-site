@@ -387,6 +387,8 @@ export interface DescentRound {
 	waypoints: number;
 	meanDev: number;
 	maxDev: number;
+	ring: LngLat[]; // the outline routed this round (before its nudge)
+	routed: RoutedPath; // this round's route — draw it to watch the descent
 }
 
 export interface DescentResult {
@@ -433,6 +435,8 @@ export async function descend(
 			waypoints: waypoints.length,
 			meanDev: dev.mean,
 			maxDev: dev.max,
+			ring: ring.slice(),
+			routed,
 		});
 		if (dev.mean < bestMean) {
 			bestMean = dev.mean;

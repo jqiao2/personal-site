@@ -55,6 +55,16 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 				</select>
 			</div>
 
+			<div class="bo__field bo__field--inline">
+				<label for="bo-rate">Nudge rate</label>
+				<input id="bo-rate" type="number" min="0.05" max="1" step="0.05" value="0.2" />
+			</div>
+
+			<div class="bo__field bo__field--inline">
+				<label for="bo-shrink">Spacing shrink</label>
+				<input id="bo-shrink" type="number" min="0.5" max="0.95" step="0.05" value="0.85" />
+			</div>
+
 			<div class="bo__actions">
 				<button id="bo-generate" type="button" disabled>Generate route</button>
 				<button id="bo-optimize" type="button" disabled>Optimize</button>
@@ -119,6 +129,8 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	const directionIn = $<HTMLSelectElement>('bo-direction');
 	const spacingIn = $<HTMLInputElement>('bo-spacing');
 	const profileIn = $<HTMLSelectElement>('bo-profile');
+	const rateIn = $<HTMLInputElement>('bo-rate');
+	const shrinkIn = $<HTMLInputElement>('bo-shrink');
 	const genBtn = $<HTMLButtonElement>('bo-generate');
 	const optBtn = $<HTMLButtonElement>('bo-optimize');
 	const exportBtn = $<HTMLButtonElement>('bo-export');
@@ -340,12 +352,18 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			const best = await descend(ring, (wps) => routeWaypoints(wps, profileIn.value as Profile), {
 				startSpacing: startKm * 1000,
 				minSpacing: MIN_SPACING_KM * 1000,
-				onRound: (r) =>
+				rate: Math.min(1, Math.max(0.05, Number(rateIn.value) || 0.2)),
+				shrink: Math.min(0.95, Math.max(0.5, Number(shrinkIn.value) || 0.85)),
+				onRound: (r) => {
+					// Draw each round as it lands so the descent is watchable.
+					setOutline(r.ring);
+					setRoute(r.routed.coords);
 					status(
 						`Round ${r.round + 1}: ${r.spacingKm.toFixed(1)} km spacing, ` +
 							`${r.waypoints} wps, deviation ${(r.meanDev / 1000).toFixed(2)} km avg…`,
 						'busy',
-					),
+					);
+				},
 			});
 			routeCoords = best.routed.coords;
 			setOutline(best.ring);
