@@ -395,6 +395,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		font-family: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
 		font-size: 16px;
 		font-weight: 600;
+		line-height: 1;
 		letter-spacing: -0.5px;
 		text-decoration: none;
 		white-space: nowrap;
@@ -423,6 +424,11 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		display: inline-flex;
 		align-items: center;
 		font-size: 13px;
+		/* Fixed, rather than left to each theme's font — Archivo, Instrument Sans
+		   and the system stack all carry different default line-heights, which
+		   made the strip a few px taller on whichever pages picked the tallest
+		   one (align-items: stretch on .sh__inner spreads that to the whole row). */
+		line-height: 1;
 		letter-spacing: 0.4px;
 		color: var(--sh-link);
 		text-decoration: none;
