@@ -220,8 +220,23 @@ export function removeBacktracks(coords: LngLat[]): LngLat[] {
  * bounds the one introduced connector to the chord (≤ tol), and every point
  * after it stays original road geometry. Iterated, since cutting one loop can
  * bring the next into range.
+ *
+ * A thin *intended* feature — a peninsula the outline itself asked for, like
+ * Florida — looks exactly like a lasso (down one road, up a parallel one within
+ * `tol`). What tells them apart is the waypoints: a real peninsula carries a run
+ * of the outline's own sample points down and back, a router lasso between two
+ * waypoints carries none in between. So when `anchorKeys` (the keys of route
+ * points nearest each waypoint) is given, an excursion holding two or more of
+ * them is kept, not cut.
  */
-export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop = 6000): LngLat[] {
+export function removeLoops(
+	coords: LngLat[],
+	tol = 70,
+	minLoop = 250,
+	maxLoop = 6000,
+	anchorKeys?: Set<string>,
+): LngLat[] {
+	const key = (p: LngLat) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 	let cur = coords;
 	for (let pass = 0; pass < 6; pass++) {
 		const out: LngLat[] = [];
@@ -230,10 +245,13 @@ export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop =
 			out.push(cur[i]);
 			let best = -1;
 			let path = 0;
+			let anchorsInside = 0;
 			for (let j = i + 1; j < cur.length && path <= maxLoop; j++) {
 				path += haversine(cur[j - 1], cur[j]);
+				if (anchorKeys?.has(key(cur[j - 1])) && j - 1 > i) anchorsInside++;
 				const chord = haversine(cur[i], cur[j]);
-				if (path > minLoop && chord <= tol && path > 4 * chord) best = j; // farthest return = biggest loop
+				// Two-plus of the outline's own waypoints inside ⇒ intended feature, leave it.
+				if (path > minLoop && chord <= tol && path > 4 * chord && anchorsInside < 2) best = j;
 			}
 			i = best >= 0 ? best : i + 1;
 		}
@@ -241,6 +259,22 @@ export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop =
 		cur = out;
 	}
 	return cur;
+}
+
+/** Keys (5-dp) of the route point nearest each waypoint — the route's "anchors",
+ *  the points the outline actually asked for, so cleanup can spare intended thin
+ *  features (peninsulas) while still cutting router artifacts. */
+function anchorKeySet(coords: LngLat[], waypoints: LngLat[]): Set<string> {
+	const set = new Set<string>();
+	for (const w of waypoints) {
+		let bi = -1, bd = Infinity;
+		for (let i = 0; i < coords.length; i++) {
+			const d = (coords[i][0] - w[0]) ** 2 + (coords[i][1] - w[1]) ** 2;
+			if (d < bd) { bd = d; bi = i; }
+		}
+		if (bi >= 0) set.add(`${coords[bi][0].toFixed(5)},${coords[bi][1].toFixed(5)}`);
+	}
+	return set;
 }
 
 /** Fraction of the route (0–1) that rides a road segment already ridden — the
@@ -576,7 +610,9 @@ export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Pro
 		coords = coords.length ? coords.concat(leg.coords.slice(1)) : leg.coords;
 	}
 	coords = removeBacktracks(coords);
-	coords = removeLoops(coords);
+	// Spare the outline's own thin features (peninsulas) from the lasso cleanup —
+	// they carry a run of waypoints; a router artifact between waypoints doesn't.
+	coords = removeLoops(coords, 70, 250, 6000, anchorKeySet(coords, waypoints));
 	coords = removeBacktracks(coords); // a spliced loop can leave a small new spur
 	return { coords, length: pathLength(coords), ascend, retraced: retracedFraction(coords) };
 }
