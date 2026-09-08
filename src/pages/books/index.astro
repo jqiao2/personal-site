@@ -5,23 +5,18 @@ import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand so the header reflects the live session. The reading record
 // is a server island (BooksBody, server:defer) so the shell paints immediately
-// and the data-heavy body streams in on its own request.
+// and the data-heavy body — feed + sidebar — streams in on its own request.
 export const prerender = false;
 ---
 
 <BookLayout title="Books">
 	<div class="page">
-		<SiteHeader pathname={Astro.url.pathname} theme="book" />
+		<div class="card">
+			<SiteHeader pathname={Astro.url.pathname} theme="book" sidebar />
 
-		<div class="wrap">
-			<div class="col">
-				<header class="head">
-					<h1 class="head__title">Books</h1>
-					<p class="head__note">Logged automatically via Kindle</p>
-				</header>
-
-				<BooksBody server:defer>
-					<div slot="fallback" class="body-skel" aria-hidden="true">
+			<BooksBody pathname={Astro.url.pathname} server:defer>
+				<div slot="fallback" class="shell-skel" aria-hidden="true">
+					<div class="feed-skel">
 						{Array.from({ length: 3 }).map(() => (
 							<div class="skel-block">
 								<div class="skel-line skel-line--head"></div>
@@ -29,8 +24,9 @@ export const prerender = false;
 							</div>
 						))}
 					</div>
-				</BooksBody>
-			</div>
+					<div class="side-skel"></div>
+				</div>
+			</BooksBody>
 		</div>
 	</div>
 </BookLayout>
@@ -39,59 +35,35 @@ export const prerender = false;
 	.page {
 		min-height: 100vh;
 		background: #1a120a;
-	}
-
-	.wrap {
 		display: flex;
 		justify-content: center;
-		padding: 34px clamp(14px, 4vw, 24px) 90px;
+		overflow-x: hidden;
 	}
-	.col {
+	.card {
 		width: 100%;
-		max-width: 960px;
-	}
-
-	/* Header */
-	.head {
+		max-width: 1120px;
 		display: flex;
-		align-items: flex-end;
-		justify-content: space-between;
-		gap: 14px;
-		flex-wrap: wrap;
-		margin-bottom: 40px;
-	}
-	.head__title {
-		font-family: var(--font-newsreader);
-		font-weight: 500;
-		font-size: clamp(38px, 9vw, 52px);
-		color: #f2e6cd;
-		letter-spacing: -0.5px;
-		line-height: 1;
-		margin: 0;
-	}
-	.head__note {
-		margin: 0;
-		font-size: 12.5px;
-		color: #8a745a;
-		line-height: 1.5;
-		max-width: 280px;
+		flex-direction: column;
 	}
 
-	/* Skeleton shown while the BooksBody island streams in, sized to the height
-	   the real body comes back at so nothing below it moves on arrival.
+	/* Skeleton shown while the BooksBody island streams in. Mirrors the body's
+	   two-column geometry so the shell doesn't reflow when it arrives.
 	   ponytail: measured (1280px/420px), not derived — the reading record's
 	   height follows how many books are open, so re-measure if that changes by
 	   much. */
-	.body-skel {
+	.shell-skel {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) 288px;
+		min-height: 2100px;
+	}
+	.feed-skel {
 		display: flex;
 		flex-direction: column;
 		gap: 46px;
-		min-height: 2100px;
+		padding: 38px 40px 44px clamp(14px, 4vw, 32px);
 	}
-	@media (max-width: 820px) {
-		.body-skel {
-			min-height: 2380px;
-		}
+	.side-skel {
+		border-left: 1px solid #392a19;
 	}
 	.skel-line--head {
 		height: 20px;
@@ -105,5 +77,17 @@ export const prerender = false;
 		border-radius: 10px;
 		border: 1px solid #392a19;
 		background: #241a10;
+	}
+	@media (max-width: 820px) {
+		.shell-skel {
+			grid-template-columns: 1fr;
+			min-height: 2380px;
+		}
+		.side-skel {
+			display: none;
+		}
+		.feed-skel {
+			padding: 28px 22px 34px;
+		}
 	}
 </style>
