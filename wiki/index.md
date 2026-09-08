@@ -20,3 +20,4 @@ add or update a pattern.
 | [0012](patterns/0012-stretched-svg-turns-dots-into-ovals.md) | A stretched SVG turns every dot into an oval | failure-mode | an inline SVG chart is sized with `width: 100%` / `preserveAspectRatio="none"` |
 | [0013](patterns/0013-vite-outdated-optimize-dep-after-new-shared-import.md) | Vite "504 Outdated Optimize Dep" after a new module imports a heavy dep | failure-mode | a new lib/component imports a pre-bundled dep mid-session and a `<script>` dynamic-imports it |
 | [0014](patterns/0014-astro-partial-for-infinite-scroll.md) | Infinite scroll without a second renderer: an Astro partial | strategy | a page must append more server-rendered rows as you scroll |
+| [0015](patterns/0015-route-cleanup-eats-thin-shape-features.md) | Route cleanup eats thin shape features (peninsulas) | failure-mode | a traced outline route drops Florida/Maine-style thin features the outline still shows |

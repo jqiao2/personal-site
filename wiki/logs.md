@@ -153,3 +153,5 @@ wiki across every iteration, even reverted ones).
 - Main landed #205 ("The site does not move") and #206 (self-hosted fonts as
   `var(--font-*)`) mid-branch; both conventions were applied to the new
   component rather than merged around.
+
+- 2026-09-08 — traced-outline routes were dropping thin peninsulas (Florida/Maine); made `removeLoops` waypoint-aware so intended thin features survive while router lassos still get cut. [0015]

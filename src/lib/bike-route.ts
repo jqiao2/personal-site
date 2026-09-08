@@ -220,8 +220,23 @@ export function removeBacktracks(coords: LngLat[]): LngLat[] {
  * bounds the one introduced connector to the chord (≤ tol), and every point
  * after it stays original road geometry. Iterated, since cutting one loop can
  * bring the next into range.
+ *
+ * A thin *intended* feature — a peninsula the outline itself asked for, like
+ * Florida — looks exactly like a lasso (down one road, up a parallel one within
+ * `tol`). What tells them apart is the waypoints: a real peninsula carries a run
+ * of the outline's own sample points down and back, a router lasso between two
+ * waypoints carries none in between. So when `anchorKeys` (the keys of route
+ * points nearest each waypoint) is given, an excursion holding two or more of
+ * them is kept, not cut.
  */
-export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop = 6000): LngLat[] {
+export function removeLoops(
+	coords: LngLat[],
+	tol = 70,
+	minLoop = 250,
+	maxLoop = 6000,
+	anchorKeys?: Set<string>,
+): LngLat[] {
+	const key = (p: LngLat) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 	let cur = coords;
 	for (let pass = 0; pass < 6; pass++) {
 		const out: LngLat[] = [];
@@ -230,10 +245,13 @@ export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop =
 			out.push(cur[i]);
 			let best = -1;
 			let path = 0;
+			let anchorsInside = 0;
 			for (let j = i + 1; j < cur.length && path <= maxLoop; j++) {
 				path += haversine(cur[j - 1], cur[j]);
+				if (anchorKeys?.has(key(cur[j - 1])) && j - 1 > i) anchorsInside++;
 				const chord = haversine(cur[i], cur[j]);
-				if (path > minLoop && chord <= tol && path > 4 * chord) best = j; // farthest return = biggest loop
+				// Two-plus of the outline's own waypoints inside ⇒ intended feature, leave it.
+				if (path > minLoop && chord <= tol && path > 4 * chord && anchorsInside < 2) best = j;
 			}
 			i = best >= 0 ? best : i + 1;
 		}
@@ -241,6 +259,22 @@ export function removeLoops(coords: LngLat[], tol = 70, minLoop = 250, maxLoop =
 		cur = out;
 	}
 	return cur;
+}
+
+/** Keys (5-dp) of the route point nearest each waypoint — the route's "anchors",
+ *  the points the outline actually asked for, so cleanup can spare intended thin
+ *  features (peninsulas) while still cutting router artifacts. */
+function anchorKeySet(coords: LngLat[], waypoints: LngLat[]): Set<string> {
+	const set = new Set<string>();
+	for (const w of waypoints) {
+		let bi = -1, bd = Infinity;
+		for (let i = 0; i < coords.length; i++) {
+			const d = (coords[i][0] - w[0]) ** 2 + (coords[i][1] - w[1]) ** 2;
+			if (d < bd) { bd = d; bi = i; }
+		}
+		if (bi >= 0) set.add(`${coords[bi][0].toFixed(5)},${coords[bi][1].toFixed(5)}`);
+	}
+	return set;
 }
 
 /** Fraction of the route (0–1) that rides a road segment already ridden — the
@@ -349,6 +383,111 @@ export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 	const mean = dists.reduce((a, b) => a + b, 0) / dists.length;
 	const p95 = dists[Math.min(dists.length - 1, Math.floor(dists.length * 0.95))];
 	return { mean, p95, max: dists[dists.length - 1] };
+}
+
+// --- stochastic descent ---------------------------------------------------
+//
+// You draw an outline and a rough area, but you don't know exactly where in that
+// area the shape sits best on real roads. This searches the placement: the shape
+// stays rigid — same size, same proportions — and only slides around. Route the
+// outline where it currently sits, measure which way the road route pulled away
+// from it on average (the "direction of the deviation"), shift the whole outline
+// that way, tighten the sampling, and route again. Each round the rigid shape
+// moves toward the spot where roads trace it most faithfully. It stops when the
+// next spacing would need more waypoints than one run allows (can't go finer) or
+// when it reaches the floor, and returns the lowest-deviation placement it saw.
+
+/** The average offset from the outline to the road route: for each outline
+ *  vertex, the vector to its nearest routed point, meaned over the ring. This is
+ *  the single direction the whole rigid shape should slide to sit better on the
+ *  roads — no per-vertex movement, so the shape never deforms. */
+function meanOffset(ring: LngLat[], route: LngLat[]): LngLat {
+	// ponytail: O(ring·route) nearest-point scan per round. Rings are ~dozens and
+	// routes ~thousands of points, so it's a few hundred k ops — fine. A grid index
+	// is the upgrade if outlines ever get large.
+	let sx = 0, sy = 0;
+	for (const v of ring) {
+		let bx = v[0], by = v[1], bd = Infinity;
+		for (const p of route) {
+			const d = (p[0] - v[0]) ** 2 + (p[1] - v[1]) ** 2;
+			if (d < bd) { bd = d; bx = p[0]; by = p[1]; }
+		}
+		sx += bx - v[0];
+		sy += by - v[1];
+	}
+	return [sx / ring.length, sy / ring.length];
+}
+
+export interface DescentRound {
+	round: number;
+	spacingKm: number;
+	waypoints: number;
+	meanDev: number;
+	maxDev: number;
+	ring: LngLat[]; // the rigid outline where it sat this round (before its shift)
+	routed: RoutedPath; // this round's route — draw it to watch the descent
+}
+
+export interface DescentResult {
+	ring: LngLat[]; // the nudged outline that produced the best route
+	waypoints: LngLat[];
+	routed: RoutedPath;
+	spacing: number; // metres, the spacing of the winning round
+	rounds: number;
+}
+
+export interface DescentOpts {
+	startSpacing: number; // metres
+	minSpacing: number; // metres — the floor
+	shrink?: number; // spacing multiplier per round, 0<shrink<1 (default 0.85)
+	rate?: number; // fraction of the mean offset to slide per round, 0..1 (default 0.2)
+	onRound?: (r: DescentRound) => void;
+}
+
+/**
+ * Slide a rigid outline to the placement where roads trace it best, tightening
+ * the sampling each round. The shape is only ever translated, never reshaped.
+ * `route` is injected so this stays pure of network wiring (the page passes a
+ * BRouter call). Returns the lowest-mean-deviation placement.
+ */
+export async function descend(
+	ring0: LngLat[],
+	route: (waypoints: LngLat[]) => Promise<RoutedPath>,
+	opts: DescentOpts,
+): Promise<DescentResult> {
+	const shrink = opts.shrink ?? 0.85;
+	const rate = opts.rate ?? 0.2;
+	let ring = ring0.slice();
+	let spacing = opts.startSpacing;
+	let best: DescentResult | null = null;
+	let bestMean = Infinity;
+	let round = 0;
+	while (spacing >= opts.minSpacing) {
+		const waypoints = resample(ring, spacing);
+		if (waypoints.length > MAX_WAYPOINTS) break; // can't decrease spacing any further
+		const routed = await route(waypoints);
+		const dev = deviation(routed.coords, waypoints);
+		opts.onRound?.({
+			round,
+			spacingKm: spacing / 1000,
+			waypoints: waypoints.length,
+			meanDev: dev.mean,
+			maxDev: dev.max,
+			ring: ring.slice(),
+			routed,
+		});
+		if (dev.mean < bestMean) {
+			bestMean = dev.mean;
+			best = { ring: ring.slice(), waypoints, routed, spacing, rounds: round + 1 };
+		}
+		const [dx, dy] = meanOffset(ring, routed.coords);
+		ring = ring.map(([x, y]) => [x + dx * rate, y + dy * rate] as LngLat); // rigid slide
+		spacing *= shrink;
+		round++;
+	}
+	if (!best) throw new Error('Could not route the outline at any spacing.');
+	best.rounds = round;
+	return best;
 }
 
 /** A GPX track from a list of [lng, lat] points, ready to import into
@@ -471,7 +610,9 @@ export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Pro
 		coords = coords.length ? coords.concat(leg.coords.slice(1)) : leg.coords;
 	}
 	coords = removeBacktracks(coords);
-	coords = removeLoops(coords);
+	// Spare the outline's own thin features (peninsulas) from the lasso cleanup —
+	// they carry a run of waypoints; a router artifact between waypoints doesn't.
+	coords = removeLoops(coords, 70, 250, 6000, anchorKeySet(coords, waypoints));
 	coords = removeBacktracks(coords); // a spliced loop can leave a small new spur
 	return { coords, length: pathLength(coords), ascend, retraced: retracedFraction(coords) };
 }
