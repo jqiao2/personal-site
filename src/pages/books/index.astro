@@ -12,7 +12,7 @@ export const prerender = false;
 <BookLayout title="Books">
 	<div class="page">
 		<div class="card">
-			<SiteHeader pathname={Astro.url.pathname} theme="book" sidebar />
+			<SiteHeader pathname={Astro.url.pathname} theme="book" max="1120px" sidebar />
 
 			<BooksBody pathname={Astro.url.pathname} server:defer>
 				<div slot="fallback" class="shell-skel" aria-hidden="true">
