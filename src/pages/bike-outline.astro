@@ -57,6 +57,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 			<div class="bo__actions">
 				<button id="bo-generate" type="button" disabled>Generate route</button>
+				<button id="bo-optimize" type="button" disabled>Optimize</button>
 				<button id="bo-export" type="button" disabled>Export GPX</button>
 			</div>
 
@@ -102,6 +103,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		toGPX,
 		fetchOutline,
 		routeWaypoints,
+		descend,
 		type LngLat,
 		type Profile,
 	} from '../lib/bike-route';
@@ -118,6 +120,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	const spacingIn = $<HTMLInputElement>('bo-spacing');
 	const profileIn = $<HTMLSelectElement>('bo-profile');
 	const genBtn = $<HTMLButtonElement>('bo-generate');
+	const optBtn = $<HTMLButtonElement>('bo-optimize');
 	const exportBtn = $<HTMLButtonElement>('bo-export');
 	const statusEl = $<HTMLParagraphElement>('bo-status');
 	const statsEl = $<HTMLElement>('bo-stats');
@@ -211,6 +214,49 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		}
 	}
 
+	// The nudged outline from a descent, drawn as a faint dashed layer so you can
+	// see where the stencil was pulled to. Empty coords clear it.
+	function setOutline(coords: LngLat[]) {
+		const data = {
+			type: 'Feature' as const,
+			geometry: { type: 'LineString' as const, coordinates: coords },
+			properties: {},
+		} as maplibregl.GeoJSONSourceSpecification['data'];
+		const src = map.getSource('outline') as maplibregl.GeoJSONSource | undefined;
+		if (src) src.setData(data);
+		else {
+			map.addSource('outline', { type: 'geojson', data });
+			map.addLayer({
+				id: 'bo-outline',
+				type: 'line',
+				source: 'outline',
+				layout: { 'line-cap': 'round', 'line-join': 'round' },
+				paint: { 'line-color': '#8c4a2f', 'line-width': 1.5, 'line-dasharray': [3, 2], 'line-opacity': 0.7 },
+			});
+		}
+	}
+
+	// The stencil, unprojected to where it now sits on the map and wound in the
+	// chosen direction — the geographic outline both Generate and Optimize start from.
+	function placedRing(): LngLat[] {
+		const placed = stencilPixels().map((p) => {
+			const ll = map.unproject(p as maplibregl.PointLike);
+			return [ll.lng, ll.lat] as LngLat;
+		});
+		return orientRing(placed, directionIn.value === 'cw');
+	}
+
+	// Fill the stats panel from a routed result against its waypoints.
+	function showStats(waypoints: LngLat[], routed: Awaited<ReturnType<typeof routeWaypoints>>) {
+		const dev = deviation(routed.coords, waypoints);
+		$('bo-dist').textContent = `${(routed.length / 1000).toFixed(1)} km`;
+		$('bo-climb').textContent = routed.ascend != null ? `${routed.ascend.toLocaleString()} m` : '—';
+		$('bo-wps').textContent = String(waypoints.length);
+		$('bo-dev').textContent = `${(dev.mean / 1000).toFixed(2)} km avg · ${(dev.max / 1000).toFixed(2)} km max`;
+		$('bo-retraced').textContent = `${(routed.retraced * 100).toFixed(1)}%`;
+		statsEl.hidden = false;
+	}
+
 	// --- load a shape --------------------------------------------------------
 
 	function loadRing(ring: LngLat[], label: string) {
@@ -218,10 +264,14 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		name = label;
 		drawStencil();
 		genBtn.disabled = false;
+		optBtn.disabled = false;
 		exportBtn.disabled = true;
 		statsEl.hidden = true;
 		routeCoords = [];
-		whenReady(() => setRoute([])); // clear any previous route
+		whenReady(() => {
+			setRoute([]); // clear any previous route
+			setOutline([]);
+		});
 		status('Pan and zoom the map to place the shape, then generate.');
 	}
 
@@ -252,33 +302,63 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	genBtn.addEventListener('click', async () => {
 		if (!shapeNorm) return;
-		// Unproject the stencil's on-screen pixels to where they now sit on the map.
-		const placed = stencilPixels().map((p) => {
-			const ll = map.unproject(p as maplibregl.PointLike);
-			return [ll.lng, ll.lat] as LngLat;
-		});
-		const ring = orientRing(placed, directionIn.value === 'cw');
+		const ring = placedRing();
 		const spacingKm = Math.max(0.2, Number(spacingIn.value) || 3);
 		const waypoints = resample(ring, spacingKm * 1000);
 		status(`Routing ${waypoints.length} waypoints on real roads…`, 'busy');
 		genBtn.disabled = true;
+		optBtn.disabled = true;
+		setOutline([]); // this is a fresh manual placement, not a descent
 		try {
 			const routed = await routeWaypoints(waypoints, profileIn.value as Profile);
 			routeCoords = routed.coords;
 			setRoute(routeCoords);
-			const dev = deviation(routeCoords, waypoints);
-			$('bo-dist').textContent = `${(routed.length / 1000).toFixed(1)} km`;
-			$('bo-climb').textContent = routed.ascend != null ? `${routed.ascend.toLocaleString()} m` : '—';
-			$('bo-wps').textContent = String(waypoints.length);
-			$('bo-dev').textContent = `${(dev.mean / 1000).toFixed(2)} km avg · ${(dev.max / 1000).toFixed(2)} km max`;
-			$('bo-retraced').textContent = `${(routed.retraced * 100).toFixed(1)}%`;
-			statsEl.hidden = false;
+			showStats(waypoints, routed);
 			exportBtn.disabled = false;
 			status('Route placed. Reposition and generate again, or export.');
 		} catch (err) {
 			status(err instanceof Error ? err.message : 'Routing failed.', 'error');
 		} finally {
 			genBtn.disabled = false;
+			optBtn.disabled = false;
+		}
+	});
+
+	// --- descend: fit the outline to the roads, tightening spacing each round ---
+
+	// The finest spacing the descent will try (km). It also stops on its own when
+	// a finer step would exceed the router's waypoint budget.
+	const MIN_SPACING_KM = 0.5;
+
+	optBtn.addEventListener('click', async () => {
+		if (!shapeNorm) return;
+		const ring = placedRing();
+		const startKm = Math.max(0.2, Number(spacingIn.value) || 3);
+		genBtn.disabled = true;
+		optBtn.disabled = true;
+		try {
+			const best = await descend(ring, (wps) => routeWaypoints(wps, profileIn.value as Profile), {
+				startSpacing: startKm * 1000,
+				minSpacing: MIN_SPACING_KM * 1000,
+				onRound: (r) =>
+					status(
+						`Round ${r.round + 1}: ${r.spacingKm.toFixed(1)} km spacing, ` +
+							`${r.waypoints} wps, deviation ${(r.meanDev / 1000).toFixed(2)} km avg…`,
+						'busy',
+					),
+			});
+			routeCoords = best.routed.coords;
+			setOutline(best.ring);
+			setRoute(routeCoords);
+			showStats(best.waypoints, best.routed);
+			spacingIn.value = (best.spacing / 1000).toFixed(1);
+			exportBtn.disabled = false;
+			status(`Settled after ${best.rounds} rounds at ${(best.spacing / 1000).toFixed(1)} km spacing.`);
+		} catch (err) {
+			status(err instanceof Error ? err.message : 'Optimization failed.', 'error');
+		} finally {
+			genBtn.disabled = false;
+			optBtn.disabled = false;
 		}
 	});
 

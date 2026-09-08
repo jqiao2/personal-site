@@ -351,6 +351,102 @@ export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 	return { mean, p95, max: dists[dists.length - 1] };
 }
 
+// --- stochastic descent ---------------------------------------------------
+//
+// Roads never trace an outline exactly, so a freshly placed stencil leaves the
+// route bulging away from the border wherever no road follows it. This co-adapts
+// the two: route the current outline, pull each outline vertex toward the road
+// the router actually found (hardest where the route strayed most — that's the
+// "direction of the deviation"), tighten the sampling, and route again. Each
+// round the outline sits a little closer to real tarmac and the finer spacing
+// hugs it better. It stops when the next spacing would need more waypoints than
+// one run allows (can't go finer) or when it reaches the floor, and returns the
+// lowest-deviation round it saw — not necessarily the last, since over-pulling
+// can erode the shape past the point it helps.
+
+/** Pull each outline vertex a `rate` fraction of the way to its nearest point on
+ *  the routed road. A vertex the route missed by a lot moves a lot; one already
+ *  on a road barely moves — the nudge is the deviation vector, scaled. */
+function nudgeToward(ring: LngLat[], route: LngLat[], rate: number): LngLat[] {
+	// ponytail: O(ring·route) nearest-point scan per round. Rings are ~dozens and
+	// routes ~thousands of points, so it's a few hundred k ops — fine. A grid index
+	// is the upgrade if outlines ever get large.
+	return ring.map((v) => {
+		let bx = v[0], by = v[1], bd = Infinity;
+		for (const p of route) {
+			const d = (p[0] - v[0]) ** 2 + (p[1] - v[1]) ** 2;
+			if (d < bd) { bd = d; bx = p[0]; by = p[1]; }
+		}
+		return [v[0] + (bx - v[0]) * rate, v[1] + (by - v[1]) * rate] as LngLat;
+	});
+}
+
+export interface DescentRound {
+	round: number;
+	spacingKm: number;
+	waypoints: number;
+	meanDev: number;
+	maxDev: number;
+}
+
+export interface DescentResult {
+	ring: LngLat[]; // the nudged outline that produced the best route
+	waypoints: LngLat[];
+	routed: RoutedPath;
+	spacing: number; // metres, the spacing of the winning round
+	rounds: number;
+}
+
+export interface DescentOpts {
+	startSpacing: number; // metres
+	minSpacing: number; // metres — the floor
+	shrink?: number; // spacing multiplier per round, 0<shrink<1 (default 0.75)
+	rate?: number; // nudge fraction toward the route, 0..1 (default 0.4)
+	onRound?: (r: DescentRound) => void;
+}
+
+/**
+ * Iteratively fit an outline to the roads under it while tightening the sampling.
+ * `route` is injected so this stays pure of network wiring (the page passes a
+ * BRouter call). Returns the lowest-mean-deviation round.
+ */
+export async function descend(
+	ring0: LngLat[],
+	route: (waypoints: LngLat[]) => Promise<RoutedPath>,
+	opts: DescentOpts,
+): Promise<DescentResult> {
+	const shrink = opts.shrink ?? 0.75;
+	const rate = opts.rate ?? 0.4;
+	let ring = ring0.slice();
+	let spacing = opts.startSpacing;
+	let best: DescentResult | null = null;
+	let bestMean = Infinity;
+	let round = 0;
+	while (spacing >= opts.minSpacing) {
+		const waypoints = resample(ring, spacing);
+		if (waypoints.length > MAX_WAYPOINTS) break; // can't decrease spacing any further
+		const routed = await route(waypoints);
+		const dev = deviation(routed.coords, waypoints);
+		opts.onRound?.({
+			round,
+			spacingKm: spacing / 1000,
+			waypoints: waypoints.length,
+			meanDev: dev.mean,
+			maxDev: dev.max,
+		});
+		if (dev.mean < bestMean) {
+			bestMean = dev.mean;
+			best = { ring: ring.slice(), waypoints, routed, spacing, rounds: round + 1 };
+		}
+		ring = nudgeToward(ring, routed.coords, rate);
+		spacing *= shrink;
+		round++;
+	}
+	if (!best) throw new Error('Could not route the outline at any spacing.');
+	best.rounds = round;
+	return best;
+}
+
 /** A GPX track from a list of [lng, lat] points, ready to import into
  *  RideWithGPS. */
 export function toGPX(coords: LngLat[], name: string): string {
