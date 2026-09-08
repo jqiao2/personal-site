@@ -20,6 +20,7 @@
 // figures.
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
 import MonthPicker from '../../../components/MonthPicker.astro';
+import SiteHeader from '../../../components/SiteHeader.astro';
 import { listActivitiesForMonth } from '../../../lib/activities';
 import { supabasePublic } from '../../../lib/supabase';
 import { siteDay } from '../../../lib/day';
@@ -116,6 +117,8 @@ const clientData = JSON.stringify({
 <ActivityLayout title={`${label} in activities — Jason's activity log`}>
 	<div class="page" style={{ '--sky': ALPINE.sky, '--snow': ALPINE.snow, '--granite': ALPINE.granite, '--scree': ALPINE.scree, '--lake': ALPINE.lake }}>
 		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="activity" max="964px" />
+
 			<header class="topbar">
 				<a class="back" href="/activities">
 					<span class="back__arrow">←</span><span>Activity log</span>
