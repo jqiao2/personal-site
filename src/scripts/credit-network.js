@@ -93,10 +93,23 @@ function escapeHtml(s) {
 
 async function main() {
 	const container = $('#graph');
-	const res = await fetch('/data/credit-network.json');
-	if (!res.ok) throw new Error(`could not load graph data (${res.status})`);
-	const payload = await res.json();
+	// Data source: an inline <script id="graph-data"> when the page embeds the
+	// payload server-side (the per-year film-log network), otherwise the shipped
+	// static JSON (the 36k-film corpus).
+	const inline = document.getElementById('graph-data');
+	let payload;
+	if (inline) {
+		payload = JSON.parse(inline.textContent);
+	} else {
+		const res = await fetch('/data/credit-network.json');
+		if (!res.ok) throw new Error(`could not load graph data (${res.status})`);
+		payload = await res.json();
+	}
 	const { roles, metrics, colorModes, nodes, edges, meta } = payload;
+
+	// A page can pin the renderer's light/dark colours (the film-log network is
+	// always on the dark maroon surface, whatever the OS theme says).
+	if (meta.forceTheme && THEME[meta.forceTheme]) theme = THEME[meta.forceTheme];
 
 	// --- Decode -------------------------------------------------------------
 	// Positional arrays; indices come from nodeFields so the two files can't
@@ -225,7 +238,9 @@ async function main() {
 		metric: metrics[0].key,
 		colorBy: colorModes[0].key,
 		topN: Math.min(DEFAULT_TOP_N, nodes.length),
-		minWeight: meta.minEdge,
+		// A dense small graph reads better starting above the edge floor; the slider
+		// still goes down to meta.minEdge.
+		minWeight: meta.defaultMinWeight ?? meta.minEdge,
 		minFilms: 0,
 		// One enabled-bucket set per dimension, all on to start. Filters combine as
 		// OR within a dimension and AND across them, so unticking everything but
@@ -412,6 +427,7 @@ async function main() {
 	});
 
 	prefersDark.addEventListener('change', (e) => {
+		if (meta.forceTheme) return; // page pins the theme; ignore OS changes
 		theme = e.matches ? THEME.dark : THEME.light;
 		renderer.setSetting('defaultEdgeColor', theme.idle);
 		renderer.setSetting('labelColor', { color: getComputedStyle(document.body).color || '#111' });
@@ -571,6 +587,16 @@ async function main() {
 	// --- Details panel -------------------------------------------------------
 	const details = $('#details');
 
+	/** Where a node's "view" link points. Defaults to TMDB by person id; a payload
+	 * can override with meta.personHref, where {role} is the person's primary role
+	 * key and {name} the (encoded) name — used by the film-log network, which has
+	 * no TMDB person ids and links into the filtered watch log instead. */
+	function personHref(a) {
+		if (!meta.personHref) return `https://www.themoviedb.org/person/${a.tmdbId}`;
+		const role = roles[a.held.findIndex(Boolean)].role;
+		return meta.personHref.replace('{role}', role).replace('{name}', encodeURIComponent(a.label));
+	}
+
 	function renderDetails(node) {
 		if (!node) {
 			details.innerHTML = '<p class="muted small">Click a node, or search, to see someone\'s collaborators.</p>';
@@ -616,7 +642,7 @@ async function main() {
 			<ol class="partners">
 				${partners.slice(0, 30).map((p) => `<li><button data-node="${p.key}">${escapeHtml(p.name)}</button><span>${p.w}</span></li>`).join('')}
 			</ol>
-			<p><a href="https://www.themoviedb.org/person/${a.tmdbId}" target="_blank" rel="noopener noreferrer">View on TMDB &nearr;</a></p>`;
+			<p><a href="${personHref(a)}" target="_blank" rel="noopener noreferrer">${escapeHtml(meta.personLabel ?? 'View on TMDB ↗')}</a></p>`;
 
 		for (const b of details.querySelectorAll('button[data-node]')) {
 			b.addEventListener('click', () => goTo(b.dataset.node));
@@ -748,7 +774,7 @@ async function main() {
 
 	const weightInput = $('#min-weight');
 	weightInput.min = String(meta.minEdge);
-	weightInput.value = String(meta.minEdge);
+	weightInput.value = String(state.minWeight);
 	$('#min-weight-out').textContent = state.minWeight;
 	weightInput.addEventListener('input', () => {
 		state.minWeight = Number(weightInput.value);
@@ -1085,6 +1111,9 @@ async function main() {
 	renderGroups();
 	recomputeVisible();
 	renderDetails(null);
+	// A payload seeded on a circle (the per-year film-log network) settles from
+	// there on load; the pre-laid-out corpus does not.
+	if (meta.settleOnLoad) startPhysics({ burst: true });
 	$('#meta').textContent =
 		`${meta.films.toLocaleString()} films · ${meta.nodes.toLocaleString()} people in graph · ` +
 		`built ${new Date(meta.generated).toISOString().slice(0, 10)}`;

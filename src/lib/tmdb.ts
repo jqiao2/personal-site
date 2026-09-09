@@ -77,6 +77,10 @@ export interface TmdbMovieDetails {
 	runtime: number | null;
 	vote_average: number;
 	vote_count: number;
+	/** Worldwide gross (nominal USD, 0 when TMDB has none) and TMDB popularity —
+	 * top-level on /movie/{id}, used by the credit-graph sync. */
+	revenue?: number;
+	popularity?: number;
 	/** TMDB's original-language ISO-639-1 code, e.g. "en", "ja". */
 	original_language?: string;
 	genres: { id: number; name: string }[];
