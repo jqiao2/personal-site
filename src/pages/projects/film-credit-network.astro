@@ -1,0 +1,606 @@
+---
+// Credit collaboration network built from the films Jason has *watched*, scoped
+// to one calendar year (or all-time). Reuses the /projects/credit-network
+// renderer (src/scripts/credit-network.js) unchanged — the payload is the same
+// positional-array schema — but the data comes from getFilmCreditNetwork over
+// the watch log, seeded on a circle and settled client-side on load. Full-bleed
+// with its own <html>, like /projects/credit-network, because an 800px column
+// strangles a force-directed graph. Warm palette to match /films/stats, which
+// links here.
+import SiteHeader from '../../components/SiteHeader.astro';
+import { getFilmCreditNetwork } from '../../lib/films';
+
+// Reflects the live watch log.
+export const prerender = false;
+
+const yearParam = Astro.url.searchParams.get('year');
+const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
+const net = await getFilmCreditNetwork(scope);
+
+const href = (key: number | 'all') => (key === 'all' ? '/projects/film-credit-network' : `/projects/film-credit-network?year=${key}`);
+const graphJson = net.graph ? JSON.stringify(net.graph).replace(/</g, '\\u003c') : null;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Film Credit Network</title>
+		<meta
+			name="description"
+			content="A collaboration network of the actors and directors in the films Jason has watched, for one year."
+		/>
+	</head>
+	<body>
+		<SiteHeader pathname={Astro.url.pathname} theme="film" />
+
+		<div class="cn-shell">
+			<aside class="cn-side">
+				<div class="cn-head">
+					<h1>Credit Network</h1>
+					<p class="muted small">How the actors and directors in your {net.selectedLabel.toLowerCase()} films connect — joined when they share one.</p>
+					<details class="picker">
+						<summary>
+							<span>{net.selectedLabel}</span>
+							<span class="picker__caret">▾</span>
+						</summary>
+						<div class="picker__menu">
+							{net.yearOptions.map((o) => {
+								const on = o.label === net.selectedLabel;
+								return (
+									<a class={on ? 'picker__row picker__row--on' : 'picker__row'} href={href(o.key)}>
+										<span class="picker__check">{on ? '✓' : ''}</span>
+										<span class="picker__label">{o.label}</span>
+										<span class="picker__count">{o.count}</span>
+									</a>
+								);
+							})}
+						</div>
+					</details>
+					<p id="meta" class="muted small"></p>
+					<p id="counts" class="counts"></p>
+				</div>
+
+				{graphJson ? (
+					<>
+						<section class="physics">
+							<div class="actions">
+								<button id="layout-toggle" type="button">&#9654; Re-settle</button>
+								<button id="reset-view" type="button">Reset view</button>
+							</div>
+							<label class="check">
+								<input id="auto-resettle" type="checkbox" checked />
+								Re-settle on filter change
+							</label>
+						</section>
+
+						<section class="search-wrap">
+							<label class="field">
+								<span>Find someone</span>
+								<input id="search" type="search" placeholder="e.g. a director you like" autocomplete="off" />
+							</label>
+							<ul id="search-results" hidden></ul>
+						</section>
+
+						<section>
+							<h2>Size &amp; rank by</h2>
+							<label class="field">
+								<select id="metric"></select>
+							</label>
+							<p id="metric-note" class="muted small"></p>
+						</section>
+
+						<section>
+							<h2>How much to show</h2>
+							<label class="field">
+								<span>Top <output id="top-n-out"></output> people</span>
+								<input id="top-n" type="range" min="20" step="10" />
+							</label>
+						</section>
+
+						<section hidden>
+							<h2>Colour by</h2>
+							<label class="field">
+								<select id="color-by"></select>
+							</label>
+							<p id="color-note" class="muted small"></p>
+						</section>
+
+						<section>
+							<h2>Show</h2>
+							<div id="filter-groups"></div>
+							<p class="muted small">A role needs a quarter of someone's credits to count, so someone you've seen both direct and act reads as both.</p>
+						</section>
+
+						<section>
+							<h2>Filters</h2>
+							<label class="field">
+								<span>Min. shared films <output id="min-weight-out"></output></span>
+								<input id="min-weight" type="range" min="1" max="12" step="1" />
+							</label>
+							<label class="field">
+								<span>Min. films watched <output id="min-films-out">0</output></span>
+								<input id="min-films" type="range" min="0" max="20" step="1" value="0" />
+							</label>
+						</section>
+
+						<section id="details" class="details"></section>
+
+						<section class="about">
+							<p class="muted small">
+								Built from the films you've logged as watched. Each contributes its directors and
+								top-billed cast; two people are joined when they appear together, and anyone left
+								with no shared film is dropped.
+							</p>
+						</section>
+					</>
+				) : null}
+			</aside>
+
+			<main class="cn-main">
+				{graphJson ? (
+					<>
+						<div id="graph"></div>
+						<p id="loading">Settling the network…</p>
+					</>
+				) : (
+					<div class="empty">
+						<p>Not enough recurring people in your {net.selectedLabel.toLowerCase()} watches to draw a network yet.</p>
+						<p class="muted small">A person has to appear in at least two of your films, sharing at least one with someone else. Try a busier year or the all-time view.</p>
+					</div>
+				)}
+			</main>
+		</div>
+
+		{graphJson && (
+			<>
+				<script type="application/json" id="graph-data" set:html={graphJson}></script>
+				<script>
+					import '../../scripts/credit-network.js';
+				</script>
+			</>
+		)}
+
+		<!--
+			is:global for the same reason as /projects/credit-network: the sidebar's
+			details panel, legend and search results are built in JS with innerHTML,
+			so scoped styles (which compile against data-astro-cid) never match them.
+			Selectors are all page-specific and this page owns its own <html>.
+		-->
+		<style is:global>
+			:root {
+				color-scheme: dark;
+				--bg: #1a0e0d;
+				--fg: #f2e5cd;
+				--muted: #a2857a;
+				--border: #4a2529;
+				--panel: #20100f;
+				--accent: #d9b45a;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				font-family: system-ui, sans-serif;
+				background: var(--bg);
+				color: var(--fg);
+				margin: 0;
+				height: 100dvh;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+			.cn-shell {
+				flex: 1 1 auto;
+				display: grid;
+				grid-template-columns: 320px 1fr;
+				min-height: 0;
+			}
+			.cn-side {
+				border-right: 1px solid var(--border);
+				background: var(--panel);
+				padding: 1.25rem;
+				overflow-y: auto;
+				display: flex;
+				flex-direction: column;
+				gap: 1.5rem;
+			}
+			.cn-side > section {
+				flex: 0 0 auto;
+			}
+			.physics {
+				position: sticky;
+				top: -1.25rem;
+				z-index: 4;
+				background: var(--panel);
+				padding: 0.6rem 0;
+				margin-bottom: -0.4rem;
+				border-bottom: 1px solid var(--border);
+			}
+			.cn-main {
+				position: relative;
+				min-width: 0;
+			}
+			#graph {
+				position: absolute;
+				inset: 0;
+			}
+			#loading,
+			.empty {
+				position: absolute;
+				inset: 0;
+				display: grid;
+				place-content: center;
+				margin: 0;
+				color: var(--muted);
+				text-align: center;
+				padding: 2rem;
+				gap: 0.6rem;
+			}
+
+			h1 {
+				font-family: var(--font-newsreader, Georgia, serif);
+				font-size: 1.6rem;
+				margin: 0 0 0.35rem;
+				color: var(--fg);
+			}
+			h2 {
+				font-size: 0.75rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: var(--muted);
+				margin: 0 0 0.6rem;
+			}
+			h3 {
+				font-size: 1rem;
+				margin: 0 0 0.4rem;
+			}
+			p {
+				margin: 0 0 0.5rem;
+			}
+			.muted {
+				color: var(--muted);
+			}
+			.small {
+				font-size: 0.78rem;
+				line-height: 1.45;
+			}
+			.counts {
+				font-variant-numeric: tabular-nums;
+				font-size: 0.85rem;
+				margin: 0;
+			}
+
+			/* Year picker (borrowed from /films/stats). */
+			.picker {
+				position: relative;
+				margin: 0.6rem 0;
+			}
+			.picker summary {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				font-size: 13px;
+				color: var(--fg);
+				background: #2a1214;
+				border: 1px solid var(--border);
+				border-radius: 9px;
+				padding: 8px 12px;
+				cursor: pointer;
+				justify-content: space-between;
+				list-style: none;
+			}
+			.picker summary::-webkit-details-marker {
+				display: none;
+			}
+			.picker summary:hover {
+				border-color: var(--accent);
+			}
+			.picker__caret {
+				font-size: 10px;
+				color: var(--muted);
+			}
+			.picker[open] .picker__caret {
+				transform: rotate(180deg);
+			}
+			.picker__menu {
+				position: absolute;
+				left: 0;
+				right: 0;
+				top: calc(100% + 6px);
+				background: var(--panel);
+				border: 1px solid var(--border);
+				border-radius: 10px;
+				padding: 6px;
+				z-index: 30;
+				max-height: 18rem;
+				overflow-y: auto;
+				box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.6);
+			}
+			.picker__row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 7px 9px;
+				border-radius: 7px;
+				color: #e9d9c4;
+				text-decoration: none;
+			}
+			.picker__row:hover {
+				background: #2a1a15;
+			}
+			.picker__row--on {
+				background: #33211a;
+			}
+			.picker__check {
+				width: 16px;
+				color: var(--accent);
+				font-size: 12px;
+			}
+			.picker__label {
+				flex: 1;
+				font-size: 13px;
+			}
+			.picker__count {
+				font-size: 11.5px;
+				color: var(--muted);
+			}
+
+			.field {
+				display: flex;
+				flex-direction: column;
+				gap: 0.3rem;
+				font-size: 0.82rem;
+			}
+			.field + .field {
+				margin-top: 0.75rem;
+			}
+			.field input[type='search'] {
+				padding: 0.45rem 0.55rem;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				color: var(--fg);
+				font: inherit;
+			}
+			.field input[type='range'] {
+				width: 100%;
+				accent-color: var(--accent);
+			}
+			output {
+				font-variant-numeric: tabular-nums;
+				font-weight: 600;
+			}
+
+			.search-wrap {
+				position: relative;
+			}
+			#search-results {
+				list-style: none;
+				margin: 0.35rem 0 0;
+				padding: 0;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				max-height: 17rem;
+				overflow-y: auto;
+				position: absolute;
+				left: 0;
+				right: 0;
+				z-index: 5;
+				box-shadow: 0 6px 18px rgb(0 0 0 / 0.4);
+			}
+			#search-results button {
+				display: flex;
+				flex-direction: column;
+				gap: 0.1rem;
+				width: 100%;
+				border: 0;
+				border-radius: 0;
+				background: none;
+				text-align: left;
+				padding: 0.4rem 0.6rem;
+				cursor: pointer;
+				color: var(--fg);
+			}
+			#search-results button:hover {
+				background: var(--panel);
+			}
+			#search-results em {
+				font-style: normal;
+				font-size: 0.72rem;
+				color: var(--muted);
+			}
+			#search-results .empty {
+				padding: 0.5rem 0.6rem;
+				font-size: 0.78rem;
+				color: var(--muted);
+				position: static;
+			}
+			select {
+				font: inherit;
+				font-size: 0.85rem;
+				padding: 0.4rem 0.5rem;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				color: var(--fg);
+				width: 100%;
+			}
+			.minor {
+				opacity: 0.8;
+			}
+
+			#filter-groups {
+				display: flex;
+				flex-direction: column;
+				gap: 0.9rem;
+			}
+			.group-head {
+				display: flex;
+				align-items: baseline;
+				gap: 0.4rem;
+				margin-bottom: 0.15rem;
+			}
+			.group-head h3 {
+				font-size: 0.75rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				color: var(--muted);
+				margin: 0;
+				flex: 1 1 auto;
+				font-weight: 600;
+			}
+			.group-head .muted {
+				text-transform: none;
+				letter-spacing: 0;
+			}
+			button.link {
+				border: 0;
+				background: none;
+				padding: 0;
+				font-size: 0.72rem;
+				color: var(--muted);
+				cursor: pointer;
+				text-decoration: underline;
+			}
+			button.link:hover {
+				color: var(--accent);
+			}
+			.check {
+				display: flex;
+				align-items: center;
+				gap: 0.45rem;
+				font-size: 0.82rem;
+				margin-top: 0.6rem;
+				cursor: pointer;
+			}
+			#legend.no-swatch .swatch {
+				display: none;
+			}
+			.legend-item {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				font-size: 0.85rem;
+				padding: 0.15rem 0;
+				cursor: pointer;
+			}
+			.swatch {
+				width: 0.85rem;
+				height: 0.85rem;
+				border-radius: 50%;
+				flex: 0 0 auto;
+			}
+
+			.actions {
+				display: flex;
+				gap: 0.5rem;
+			}
+			button {
+				font: inherit;
+				font-size: 0.82rem;
+				padding: 0.45rem 0.7rem;
+				border: 1px solid var(--border);
+				border-radius: 6px;
+				background: var(--bg);
+				color: var(--fg);
+				cursor: pointer;
+			}
+			button:hover {
+				border-color: var(--accent);
+			}
+			button.running {
+				border-color: var(--accent);
+				color: var(--accent);
+			}
+
+			.details {
+				border-top: 1px solid var(--border);
+				padding-top: 1rem;
+				min-height: 6rem;
+			}
+			.chips {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.35rem;
+				margin-bottom: 0.5rem;
+			}
+			.chip {
+				font-size: 0.72rem;
+				padding: 0.15rem 0.45rem;
+				border-radius: 999px;
+				border: 1px solid var(--c);
+				color: var(--c);
+				white-space: nowrap;
+			}
+			.partners {
+				list-style: none;
+				margin: 0.5rem 0;
+				padding: 0;
+				max-height: 15rem;
+				overflow-y: auto;
+				font-size: 0.82rem;
+			}
+			.partners li {
+				display: flex;
+				justify-content: space-between;
+				gap: 0.5rem;
+				padding: 0.12rem 0;
+			}
+			.partners button {
+				border: 0;
+				background: none;
+				padding: 0;
+				text-align: left;
+				color: var(--fg);
+				cursor: pointer;
+				font-size: inherit;
+			}
+			.partners button:hover {
+				color: var(--accent);
+				text-decoration: underline;
+			}
+			.partners span {
+				font-variant-numeric: tabular-nums;
+				color: var(--muted);
+			}
+			.about a,
+			.details a {
+				color: var(--accent);
+			}
+
+			@media (max-width: 800px) {
+				body {
+					overflow: auto;
+					height: auto;
+				}
+				.cn-shell {
+					grid-template-columns: 1fr;
+				}
+				.cn-side {
+					border-right: 0;
+					border-bottom: 1px solid var(--border);
+					overflow: visible;
+				}
+				.cn-main {
+					height: 70dvh;
+				}
+			}
+		</style>
+
+		<script>
+			// Close the year picker on an outside click (native <details> only toggles
+			// on its summary).
+			const picker = document.querySelector('.picker');
+			if (picker) {
+				document.addEventListener('mousedown', (e) => {
+					if (picker.hasAttribute('open') && !picker.contains(e.target as Node)) {
+						picker.removeAttribute('open');
+					}
+				});
+			}
+		</script>
+	</body>
+</html>

@@ -2575,3 +2575,196 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		actors: rankPeople(rows, (r) => r.actors),
 	};
 }
+
+// ---------------------------------------------------------------------------
+// Credit collaboration network (from watched films only)
+// ---------------------------------------------------------------------------
+
+/** The graph payload the /projects/film-credit-network client renders, in the
+ * same positional-array schema as scripts/credit-graph/build.mjs so the shared
+ * renderer (src/scripts/credit-network.js) reads it unchanged — but built from
+ * the films *you've watched* rather than the 36k-film TMDB corpus, and scoped to
+ * one calendar year. Only the credits the movies table carries exist here
+ * (directors and actors, by name), so there's no composer role, no region/era
+ * colouring and no prominence metric. Positions are seeded on a circle and the
+ * client settles them on load (meta.settleOnLoad). */
+export interface FilmCreditNetwork {
+	scope: number | 'all';
+	selectedLabel: string;
+	yearOptions: YearOption[];
+	/** The renderer payload; null when the scope has too few recurring people to
+	 * draw anything. */
+	graph: Record<string, unknown> | null;
+}
+
+/** Appear in this many of your films (per role) to be a node; share at least
+ * this fraction of your credits in a role to be drawn as it; connect on one
+ * shared film. Far lower than the global graph — a personal log is small, and
+ * someone recurring even twice is the whole point. */
+const NET_MIN_ROLE = 2;
+const NET_ROLE_SHARE_FLOOR = 0.25;
+const NET_MIN_EDGE = 1;
+
+const NET_ROLES = [
+	{ role: 'actor', label: 'Actor', color: '#d9b45a' },
+	{ role: 'director', label: 'Director', color: '#c8695a' },
+];
+
+export async function getFilmCreditNetwork(scope: number | 'all' = 'all'): Promise<FilmCreditNetwork> {
+	const all = await loadWatchedFacts();
+
+	// Year picker, identical to getFilmStats so the two pages agree on scopes.
+	const perYear = new Map<number, number>();
+	for (const r of all) {
+		const y = yearOf(r.first_watched);
+		if (y != null) perYear.set(y, (perYear.get(y) ?? 0) + 1);
+	}
+	const eligibleYears = [...perYear.entries()]
+		.filter(([, c]) => c > 10)
+		.map(([y]) => y)
+		.sort((a, b) => b - a);
+	const yearOptions: YearOption[] = [
+		{ key: 'all', label: 'All time', count: '' },
+		...eligibleYears.map((y) => ({ key: y, label: String(y), count: `${perYear.get(y)} films` })),
+	];
+
+	const isAll = scope === 'all' || !eligibleYears.includes(scope as number);
+	const selected: number | 'all' = isAll ? 'all' : (scope as number);
+	const rows = isAll ? all : all.filter((r) => yearOf(r.first_watched) === selected);
+
+	// All-time spans ~1,000 films, so require someone in 2+ of them to keep the
+	// graph to real recurrences. A single year is ~35 films where almost nobody
+	// repeats, so anyone in a film qualifies and the structure comes from each
+	// film's shared cast — isolates (nobody to share with) are dropped either way.
+	const minRole = isAll ? NET_MIN_ROLE : 1;
+
+	// 1. Tally each person's per-role film counts and rating, over films in scope.
+	//    Keyed by name — the movies table stores credits as names, not TMDB ids.
+	const roleOf = { actor: 0, director: 1 };
+	type P = { counts: number[]; films: Set<number>; ratingSum: number; rated: number };
+	const people = new Map<string, P>();
+	rows.forEach((r, filmIdx) => {
+		const seen = new Set<string>();
+		for (const name of r.actors) tallyPerson(name, roleOf.actor);
+		for (const name of r.directors) tallyPerson(name, roleOf.director);
+		function tallyPerson(name: string, ri: number) {
+			if (!name) return;
+			let p = people.get(name);
+			if (!p) {
+				p = { counts: [0, 0], films: new Set(), ratingSum: 0, rated: 0 };
+				people.set(name, p);
+			}
+			p.counts[ri]++;
+			if (!seen.has(name)) {
+				seen.add(name);
+				p.films.add(filmIdx);
+				if (r.rating != null) {
+					p.ratingSum += r.rating;
+					p.rated++;
+				}
+			}
+		}
+	});
+
+	// 2. Qualify people who clear the threshold in a role; the roles they're drawn
+	//    as are the ones holding a real share of their credits (see the share floor).
+	type Q = P & { qmask: number };
+	const qualified = new Map<string, Q>();
+	for (const [name, p] of people) {
+		const cleared = [0, 1].filter((i) => p.counts[i] >= minRole);
+		if (!cleared.length) continue;
+		const total = p.counts[0] + p.counts[1];
+		const major = cleared.filter((i) => p.counts[i] / total >= NET_ROLE_SHARE_FLOOR);
+		const drawn = major.length
+			? major
+			: [cleared.reduce((best, i) => (p.counts[i] > p.counts[best] ? i : best), cleared[0])];
+		qualified.set(name, { ...p, qmask: drawn.reduce((m, i) => m | (1 << i), 0) });
+	}
+
+	// 3. Project to co-credit edges: every pair of qualified people on one of your
+	//    films shares it; weight is how many they share.
+	const edgeW = new Map<string, number>();
+	for (const r of rows) {
+		const on = [...new Set([...r.actors, ...r.directors])].filter((n) => qualified.has(n)).sort();
+		for (let i = 0; i < on.length; i++) {
+			for (let j = i + 1; j < on.length; j++) {
+				const key = `${on[i]} ${on[j]}`;
+				edgeW.set(key, (edgeW.get(key) ?? 0) + 1);
+			}
+		}
+	}
+
+	// 4. Keep only people with a surviving edge — an isolated dot says nothing in a
+	//    collaboration graph.
+	const connected = new Set<string>();
+	const edges: [string, string, number][] = [];
+	for (const [key, w] of edgeW) {
+		if (w < NET_MIN_EDGE) continue;
+		const [a, b] = key.split(' ');
+		edges.push([a, b, w]);
+		connected.add(a);
+		connected.add(b);
+	}
+
+	const names = [...connected];
+	if (names.length < 2) {
+		return { scope: selected, selectedLabel: isAll ? 'All time' : String(selected), yearOptions, graph: null };
+	}
+	const idx = new Map(names.map((n, i) => [n, i]));
+
+	// 5. Seed positions on a circle; the client's ForceAtlas2 settles from there.
+	const r2 = (v: number) => Math.round(v * 100) / 100;
+	const nodes = names.map((name, i) => {
+		const p = qualified.get(name)!;
+		const a = (2 * Math.PI * i) / names.length;
+		const rating = p.rated ? r2(p.ratingSum / p.rated) : 0;
+		return [name, r2(Math.cos(a) * 1000), r2(Math.sin(a) * 1000), p.films.size, rating, p.qmask, p.counts[0], p.counts[1]];
+	});
+
+	const graph = {
+		meta: {
+			generated: new Date().toISOString(),
+			films: rows.length,
+			people: people.size,
+			nodes: names.length,
+			edges: edges.length,
+			minEdge: NET_MIN_EDGE,
+			// All-time is dense enough that one shared film whites out the core, so
+			// start it on recurring collaborations (2+); a single year is sparse, so
+			// start at the floor. The slider still reaches down to minEdge either way.
+			defaultMinWeight: isAll ? 2 : NET_MIN_EDGE,
+			// This page is always the dark maroon film-log surface, so pin the
+			// renderer's palette rather than letting it follow the OS theme.
+			forceTheme: 'dark',
+			// The shared client seeds on a circle and settles on load only when this
+			// is set; the 36k-film page ships pre-settled and must not.
+			settleOnLoad: true,
+			// No TMDB person ids here, so a node links into your own filtered log
+			// instead. {role} is the person's primary role key (actor|director),
+			// which doubles as the /films/watched filter param.
+			personHref: '/films/watched?{role}={name}',
+			personLabel: 'See these in your log ↗',
+		},
+		roles: NET_ROLES.map((r) => ({ role: r.role, label: r.label, color: r.color, minFilms: NET_MIN_ROLE })),
+		metrics: [
+			{ key: 'films', label: 'Films in your log', note: 'How many of your watched films they appear in.' },
+			{ key: 'rating', label: 'Your average rating', note: 'Mean of your ratings across their films; unrated counts as 0.' },
+		],
+		roleShareFloor: NET_ROLE_SHARE_FLOOR,
+		colorModes: [
+			{
+				key: 'role',
+				label: 'Role',
+				field: null,
+				note: 'Someone you’ve seen both direct and act splits half-and-half.',
+				legend: NET_ROLES.map((r) => ({ label: r.label, light: r.color, dark: r.color })),
+			},
+		],
+		nodeFields: ['name', 'x', 'y', 'films', 'rating', 'roleMask', 'n_actor', 'n_director'],
+		edgeFields: ['source', 'target', 'weight'],
+		nodes,
+		edges: edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]),
+	};
+
+	return { scope: selected, selectedLabel: isAll ? 'All time' : String(selected), yearOptions, graph };
+}

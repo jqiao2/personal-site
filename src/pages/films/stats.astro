@@ -210,6 +210,17 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 					</section>
 				)
 			))}
+
+			<!-- Credit collaboration network, scoped to match this view -->
+			<a
+				class="network-link"
+				href={scopeYear != null ? `/projects/film-credit-network?year=${scopeYear}` : '/projects/film-credit-network'}
+			>
+				<span class="network-link__label">Explore the credit network →</span>
+				<span class="network-link__note">
+					See how the actors and directors in your {stats.selectedLabel.toLowerCase()} films connect.
+				</span>
+			</a>
 		</div>
 	</div>
 
@@ -584,6 +595,32 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 		}
 		a.person:hover .person__name {
 			color: #f4e8d1;
+		}
+
+		/* Credit-network link */
+		.network-link {
+			display: flex;
+			flex-direction: column;
+			gap: 4px;
+			margin-top: 40px;
+			padding: 20px 22px;
+			background: #2a1214;
+			border: 1px solid #4a2529;
+			border-radius: 10px;
+			text-decoration: none;
+		}
+		.network-link:hover {
+			border-color: #d9b45a;
+		}
+		.network-link__label {
+			font-family: var(--font-newsreader);
+			font-style: italic;
+			font-size: 20px;
+			color: #d9b45a;
+		}
+		.network-link__note {
+			font-size: 13px;
+			color: #a2857a;
 		}
 
 		@media (max-width: 720px) {
