@@ -2624,17 +2624,28 @@ const LAST_ERA = (ERA_MODE?.legend.length ?? 1) - 1;
 async function creditsForFilms(tmdbIds: number[]): Promise<Map<number, [number, number][]>> {
 	const byFilm = new Map<number, [number, number][]>();
 	for (let i = 0; i < tmdbIds.length; i += 300) {
-		const { data, error } = await supabasePublic
-			.from('credits')
-			.select('film_id, person_id, role')
-			.in('film_id', tmdbIds.slice(i, i + 300));
-		if (error) throw new Error(`credits read failed: ${error.message}`);
-		for (const r of data ?? []) {
-			const ri = ROLE_IDX[r.role as string];
-			if (ri === undefined) continue;
-			const arr = byFilm.get(r.film_id);
-			if (arr) arr.push([r.person_id, ri]);
-			else byFilm.set(r.film_id, [[r.person_id, ri]]);
+		const chunk = tmdbIds.slice(i, i + 300);
+		// Page past PostgREST's 1000-row cap: 300 films carry several thousand
+		// credit rows, and a truncated page drops whole films — which then fall
+		// through to the name-based fallback and duplicate people into a second,
+		// id-less network (wiki 0017).
+		for (let offset = 0; ; offset += 1000) {
+			const { data, error } = await supabasePublic
+				.from('credits')
+				.select('film_id, person_id, role')
+				.in('film_id', chunk)
+				.order('film_id', { ascending: true })
+				.order('person_id', { ascending: true })
+				.range(offset, offset + 999);
+			if (error) throw new Error(`credits read failed: ${error.message}`);
+			for (const r of data ?? []) {
+				const ri = ROLE_IDX[r.role as string];
+				if (ri === undefined) continue;
+				const arr = byFilm.get(r.film_id);
+				if (arr) arr.push([r.person_id, ri]);
+				else byFilm.set(r.film_id, [[r.person_id, ri]]);
+			}
+			if ((data ?? []).length < 1000) break;
 		}
 	}
 	return byFilm;
