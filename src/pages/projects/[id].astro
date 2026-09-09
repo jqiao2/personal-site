@@ -1,16 +1,13 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getEntry, render } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
 
-export async function getStaticPaths() {
-	const projects = await getCollection('projects');
-	return projects.map((project) => ({
-		params: { id: project.id },
-		props: { project },
-	}));
-}
+// SSR so the header's requireOwner() runs per request; prerendered, it bakes
+// owner=false at build and shows the "Log in" button to the signed-in owner.
+export const prerender = false;
 
-const { project } = Astro.props;
+const project = await getEntry('projects', Astro.params.id!);
+if (!project) return Astro.rewrite('/404');
 const { Content } = await render(project);
 ---
 

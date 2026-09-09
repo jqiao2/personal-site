@@ -1,5 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+// SSR so the header's requireOwner() runs per request; prerendered, it bakes
+// owner=false at build and shows the "Log in" button to the signed-in owner.
+export const prerender = false;
 ---
 
 <Layout title="404 — Page not found">
