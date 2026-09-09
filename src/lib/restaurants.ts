@@ -648,16 +648,31 @@ export async function placesForMonth(
 // Autocomplete
 // ---------------------------------------------------------------------------
 
-/** Places whose name contains `query`, for the composer's search field. */
+/**
+ * Places matching `query`, for the composer's search field.
+ *
+ * Word by word, over the name and where it is — the same bargain the gazetteer
+ * strikes next to it (see `searchGazetteer`), for the same reason: "Daily
+ * Provisions Park" names no restaurant, and matching the whole string against
+ * the name alone answers nothing. A logged place has no street address, so the
+ * words that are not the name are matched against the neighbourhood and city,
+ * which is what this side knows about where a place is.
+ */
 export async function searchPlaces(query: string, limit = 6): Promise<Place[]> {
-	const q = query.trim();
-	if (!q) return [];
-	const { data, error } = await supabasePublic
-		.from('restaurant_places')
-		.select(PLACE_COLUMNS)
-		.ilike('name', `%${q}%`)
-		.order('visit_count', { ascending: false })
-		.limit(limit);
+	const terms = query
+		.trim()
+		// A comma would end the filter it is spliced into, and `%`/`*` would
+		// widen it; nothing else in a restaurant's name can break the syntax.
+		.replace(/[,%*()"]/g, ' ')
+		.split(/\s+/)
+		.filter(Boolean)
+		.slice(0, 5);
+	if (terms.length === 0) return [];
+	let sel = supabasePublic.from('restaurant_places').select(PLACE_COLUMNS);
+	for (const t of terms) {
+		sel = sel.or(`name.ilike.*${t}*,neighborhood.ilike.*${t}*,city.ilike.*${t}*`);
+	}
+	const { data, error } = await sel.order('visit_count', { ascending: false }).limit(limit);
 	if (error) throw new Error(error.message);
 	return (data ?? []) as Place[];
 }

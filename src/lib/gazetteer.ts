@@ -112,6 +112,13 @@ export interface GazetteerQuery {
 /**
  * Places matching `q`, best first.
  *
+ * THE WORDS ARE MATCHED SEPARATELY, AND THE ADDRESS COUNTS. "Daily Provisions
+ * Park" is how you say the one on Park Avenue out loud, and it is not the name
+ * of anything — no row's name contains that string. So every word you type has
+ * to appear SOMEWHERE on the row, in the name or in the address, rather than
+ * the whole query having to sit inside the name. The words that name the place
+ * find the four Daily Provisions; the word that names the street picks the one.
+ *
  * FETCH WIDE, RANK HERE. The database can find the rows — a trigram index over
  * thirty thousand names answers in milliseconds — but "best" is a judgement
  * involving three things it would take a stored procedure to express: whether
@@ -122,16 +129,29 @@ export interface GazetteerQuery {
 export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerHit[]> {
 	const norm = normalise(query.q);
 	if (norm.length < 2) return [];
+	// Normalisation leaves only A-Z, 0-9 and spaces, so no term can carry a
+	// comma or a percent into the filter it is spliced into below.
+	const terms = norm.split(' ').filter(Boolean).slice(0, 5);
 
-	const { data, error } = await supabasePublic
+	// One `.or()` per word, and PostgREST ANDs the parameters together: every
+	// word on the row, each of them in either column.
+	let q = supabasePublic
 		.from('place_sources')
-		.select('id,source,name,lat,lng,address,locality,city,region,country,cuisines,phone,website')
-		.ilike('name_norm', `%${norm}%`)
-		.limit(60);
+		.select('id,source,name,lat,lng,address,locality,city,region,country,cuisines,phone,website');
+	for (const t of terms) q = q.or(`name_norm.ilike.*${t}*,address.ilike.*${t}*`);
+	const { data, error } = await q.limit(60);
 	if (error) throw new Error(error.message);
 
 	const rows = (data ?? []) as Omit<GazetteerHit, 'sourceLabel' | 'distance'>[];
 	const near = query.near ?? null;
+
+	/** How well the NAME alone answers the query — 0 is best. */
+	const rank = (name: string): number => {
+		const n = normalise(name);
+		if (n.startsWith(norm)) return 0;
+		if (n.includes(norm)) return 1;
+		return terms.every((t) => n.includes(t)) ? 2 : 3;
+	};
 
 	return rows
 		.map((r) => ({
@@ -146,10 +166,10 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 		.sort((a, b) => {
 			// A name that STARTS with what you typed is what you meant; "Thai
 			// Villa" should not sit under "Original Thai Villa Express" because
-			// the latter happens to be nearer.
-			const aStarts = normalise(a.name).startsWith(norm);
-			const bStarts = normalise(b.name).startsWith(norm);
-			if (aStarts !== bStarts) return aStarts ? -1 : 1;
+			// the latter happens to be nearer. Below that, a name holding the
+			// whole query, then one holding all the words, then everything that
+			// needed the address to match at all.
+			if (rank(a.name) !== rank(b.name)) return rank(a.name) - rank(b.name);
 			if (a.distance != null && b.distance != null && a.distance !== b.distance) {
 				return a.distance - b.distance;
 			}
