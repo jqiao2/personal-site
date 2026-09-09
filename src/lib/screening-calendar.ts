@@ -1,4 +1,4 @@
-// Shape of the Screening Room calendar: one continuous Sunday-first run of
+// Shape of the Screening Room calendar: one continuous Monday-first run of
 // weeks, paginated by week so a page boundary never falls inside one. Months
 // aren't separate grids and don't get a row of their own — the seam is drawn on
 // the grid lines themselves, which step around the 1st into an S.
@@ -35,32 +35,32 @@ export function parseDay(s: string): Date {
 	return new Date(y, m - 1, d);
 }
 
-/** The Sunday on or before the 1st of `month` ("YYYY-MM") — where a run starts. */
-export function firstSunday(month: string): string {
+/** The Monday on or before the 1st of `month` ("YYYY-MM") — where a run starts. */
+export function firstMonday(month: string): string {
 	const [y, m] = month.split('-').map(Number);
 	const d = new Date(y, m - 1, 1);
-	d.setDate(1 - d.getDay());
+	d.setDate(1 - ((d.getDay() + 6) % 7)); // Mon-first column of the 1st
 	return dayKey(d);
 }
 
-/** `weeks` weeks on from a Sunday — the cursor the next page starts at. */
-export function addWeeks(sunday: string, weeks: number): string {
-	const d = parseDay(sunday);
+/** `weeks` weeks on from a Monday — the cursor the next page starts at. */
+export function addWeeks(monday: string, weeks: number): string {
+	const d = parseDay(monday);
 	d.setDate(d.getDate() + weeks * 7);
 	return dayKey(d);
 }
 
 /**
- * Build one page of the run: `weeks` weeks from `startSunday`.
+ * Build one page of the run: `weeks` weeks from `startMonday`.
  *
  * A month seam is a cut in the linear run of days, so on a 7-column grid it
  * comes out as a step: along the top of the 1st and everything after it in that
  * week, down the left of the 1st, and along the bottom of the days before it.
- * When the 1st is itself a Sunday the step flattens to a single line. Each week
+ * When the 1st is itself a Monday the step flattens to a single line. Each week
  * decides its own edges, so nothing has to be carried across a page boundary.
  */
 export function buildWeeks(opts: {
-	startSunday: string;
+	startMonday: string;
 	weeks: number;
 	queue: QueueEntry[];
 	today: string;
@@ -73,7 +73,7 @@ export function buildWeeks(opts: {
 	}
 
 	const out: CalendarWeek[] = [];
-	const cursor = parseDay(opts.startSunday);
+	const cursor = parseDay(opts.startMonday);
 	for (let w = 0; w < opts.weeks; w++) {
 		const dates: Date[] = [];
 		for (let i = 0; i < 7; i++) {

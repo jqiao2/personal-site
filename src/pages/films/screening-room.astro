@@ -13,7 +13,7 @@ import { requireOwner } from '../../lib/auth';
 import { listQueue } from '../../lib/screening-queue';
 import { isConfigured as calendarConfigured } from '../../lib/google-calendar';
 import { siteDay } from '../../lib/day';
-import { addWeeks, buildWeeks, firstSunday, runStartMonth } from '../../lib/screening-calendar';
+import { addWeeks, buildWeeks, firstMonday, runStartMonth } from '../../lib/screening-calendar';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -23,11 +23,11 @@ const calSync = isOwner && calendarConfigured();
 
 const today = siteDay();
 const PAGE_WEEKS = 12;
-const start = firstSunday(runStartMonth(queue, today));
-const rendered = buildWeeks({ startSunday: start, weeks: PAGE_WEEKS, queue, today });
+const start = firstMonday(runStartMonth(queue, today));
+const rendered = buildWeeks({ startMonday: start, weeks: PAGE_WEEKS, queue, today });
 const next = addWeeks(start, PAGE_WEEKS);
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 ---
 
 <FilmLayout title="Screening Room — Jason's film log">

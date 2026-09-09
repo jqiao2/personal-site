@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import {
 	addWeeks,
 	buildWeeks,
-	firstSunday,
+	firstMonday,
 	runStartMonth,
 } from '../src/lib/screening-calendar.ts';
 
@@ -24,43 +24,43 @@ const q = (date, tmdb_id = 1) => ({
 });
 
 // --- Where a run opens ------------------------------------------------------
-// 2026-09-01 is a Tuesday, so its week opens on Sunday 2026-08-30.
-assert.equal(firstSunday('2026-09'), '2026-08-30');
-// 2026-11-01 is itself a Sunday.
-assert.equal(firstSunday('2026-11'), '2026-11-01');
-assert.equal(addWeeks('2026-08-30', 12), '2026-11-22');
-assert.equal(addWeeks('2026-01-03', -1), '2025-12-27');
+// 2026-09-01 is a Tuesday, so its week opens on Monday 2026-08-31.
+assert.equal(firstMonday('2026-09'), '2026-08-31');
+// 2026-06-01 is itself a Monday.
+assert.equal(firstMonday('2026-06'), '2026-06-01');
+assert.equal(addWeeks('2026-08-31', 12), '2026-11-23');
+assert.equal(addWeeks('2026-01-05', -1), '2025-12-29');
 
 // --- Weeks ------------------------------------------------------------------
-const page1 = buildWeeks({ startSunday: '2026-08-30', weeks: 12, queue: [], today: '2026-09-07' });
+const page1 = buildWeeks({ startMonday: '2026-08-31', weeks: 12, queue: [], today: '2026-09-07' });
 assert.equal(page1.length, 12);
-// A week is seven consecutive days, Sunday first, keyed by its Sunday.
+// A week is seven consecutive days, Monday first, keyed by its Monday.
 for (const w of page1) {
 	assert.equal(w.days.length, 7);
 	assert.equal(w.key, w.days[0].date);
 }
 
 // --- The seam steps around the 1st ------------------------------------------
-// Sep 1 2026 is a Tuesday: Aug 30–31 close out August, Sep 1–5 open September.
-// So the line runs under Sun–Mon, down the left of Tue, and over Tue–Sat.
+// Sep 1 2026 is a Tuesday: Aug 31 closes out August, Sep 1–6 open September.
+// So the line runs under Mon, down the left of Tue, and over Tue–Sun.
 const cutWeek = page1[0];
-assert.deepEqual(cutWeek.days.map((d) => d.edgeBottom), [true, true, false, false, false, false, false]);
-assert.deepEqual(cutWeek.days.map((d) => d.edgeTop), [false, false, true, true, true, true, true]);
-assert.deepEqual(cutWeek.days.map((d) => d.edgeLeft), [false, false, true, false, false, false, false]);
+assert.deepEqual(cutWeek.days.map((d) => d.edgeBottom), [true, false, false, false, false, false, false]);
+assert.deepEqual(cutWeek.days.map((d) => d.edgeTop), [false, true, true, true, true, true, true]);
+assert.deepEqual(cutWeek.days.map((d) => d.edgeLeft), [false, true, false, false, false, false, false]);
 // Only the 1st is labelled, and it says which month it opens.
-assert.deepEqual(cutWeek.days.map((d) => d.monthLabel), [null, null, 'Sep', null, null, null, null]);
+assert.deepEqual(cutWeek.days.map((d) => d.monthLabel), [null, 'Sep', null, null, null, null, null]);
 
 // A week wholly inside a month carries no seam at all.
 const plainWeek = page1[1];
 assert.ok(plainWeek.days.every((d) => !d.edgeTop && !d.edgeBottom && !d.edgeLeft));
 assert.ok(plainWeek.days.every((d) => d.monthLabel === null));
 
-// When the 1st is a Sunday the step flattens: one line across the whole top,
+// When the 1st is a Monday the step flattens: one line across the whole top,
 // nothing hanging below, and no vertical segment.
-const nov = buildWeeks({ startSunday: '2026-11-01', weeks: 1, queue: [], today: '2026-09-07' });
-assert.ok(nov[0].days.every((d) => d.edgeTop));
-assert.ok(nov[0].days.every((d) => !d.edgeBottom && !d.edgeLeft));
-assert.equal(nov[0].days[0].monthLabel, 'Nov');
+const jun = buildWeeks({ startMonday: '2026-06-01', weeks: 1, queue: [], today: '2026-09-07' });
+assert.ok(jun[0].days.every((d) => d.edgeTop));
+assert.ok(jun[0].days.every((d) => !d.edgeBottom && !d.edgeLeft));
+assert.equal(jun[0].days[0].monthLabel, 'Jun');
 
 // Every month in the page gets exactly one seam, and the run has no stray ones.
 const opens = page1.flatMap((w) => w.days).filter((d) => d.monthLabel !== null);
@@ -69,7 +69,7 @@ assert.deepEqual(opens.map((d) => d.date), ['2026-09-01', '2026-10-01', '2026-11
 // --- Pagination tiles exactly -----------------------------------------------
 // The next page starts where this one stopped: no gap, no repeated week.
 const page2 = buildWeeks({
-	startSunday: addWeeks('2026-08-30', 12),
+	startMonday: addWeeks('2026-08-31', 12),
 	weeks: 12,
 	queue: [],
 	today: '2026-09-07',
@@ -86,7 +86,7 @@ assert.equal(new Set(months).size, months.length, 'a month was opened twice');
 
 // --- Films land on their day ------------------------------------------------
 const withFilms = buildWeeks({
-	startSunday: '2026-08-30',
+	startMonday: '2026-08-31',
 	weeks: 2,
 	queue: [q('2026-09-07', 11), q('2026-09-07', 22), q('2026-09-09', 33)],
 	today: '2026-09-07',
