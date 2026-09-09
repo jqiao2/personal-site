@@ -155,3 +155,4 @@ wiki across every iteration, even reverted ones).
   component rather than merged around.
 
 - 2026-09-08 — traced-outline routes were dropping thin peninsulas (Florida/Maine); made `removeLoops` waypoint-aware so intended thin features survive while router lassos still get cut. [0015]
+2026-09-09 — Built /projects/film-credit-network (network from watched films, scoped by /films/stats year), reusing the credit-network renderer via 4 payload-driven client hooks. Added pattern 0016.
