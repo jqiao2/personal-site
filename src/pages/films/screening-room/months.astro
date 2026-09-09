@@ -19,7 +19,7 @@ const weeks = Math.min(26, Math.max(1, Number(Astro.url.searchParams.get('weeks'
 if (!DAY_RE.test(from)) return new Response('bad from', { status: 400 });
 
 const [queue, isOwner] = await Promise.all([listQueue(), requireOwner(Astro.cookies)]);
-const rendered = buildWeeks({ startSunday: from, weeks, queue, today: siteDay() });
+const rendered = buildWeeks({ startMonday: from, weeks, queue, today: siteDay() });
 ---
 
 <ScreeningCalendar weeks={rendered} isOwner={isOwner} />
