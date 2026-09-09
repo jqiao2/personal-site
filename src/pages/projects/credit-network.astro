@@ -9,6 +9,11 @@
 // client-side by src/scripts/credit-network.js from a static JSON built by
 // scripts/credit-graph/build.mjs.
 import SiteHeader from '../../components/SiteHeader.astro';
+
+// SSR so requireOwner() runs per request. Prerendered, it bakes owner=false at
+// build time and the header's "Log in" button shows even when the owner is
+// signed in. The graph data is still a static asset; only the shell is dynamic.
+export const prerender = false;
 ---
 
 <html lang="en">
