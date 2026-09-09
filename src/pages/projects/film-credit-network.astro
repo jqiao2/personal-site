@@ -39,7 +39,7 @@ const graphJson = net.graph ? JSON.stringify(net.graph).replace(/</g, '\\u003c')
 			<aside class="cn-side">
 				<div class="cn-head">
 					<h1>Credit Network</h1>
-					<p class="muted small">How the actors and directors in your {net.selectedLabel.toLowerCase()} films connect — joined when they share one.</p>
+					<p class="muted small">How the actors, directors and composers in your {net.selectedLabel.toLowerCase()} films connect — joined when they share one.</p>
 					<details class="picker">
 						<summary>
 							<span>{net.selectedLabel}</span>
@@ -99,7 +99,7 @@ const graphJson = net.graph ? JSON.stringify(net.graph).replace(/</g, '\\u003c')
 							</label>
 						</section>
 
-						<section hidden>
+						<section>
 							<h2>Colour by</h2>
 							<label class="field">
 								<select id="color-by"></select>
@@ -129,9 +129,11 @@ const graphJson = net.graph ? JSON.stringify(net.graph).replace(/</g, '\\u003c')
 
 						<section class="about">
 							<p class="muted small">
-								Built from the films you've logged as watched. Each contributes its directors and
-								top-billed cast; two people are joined when they appear together, and anyone left
-								with no shared film is dropped.
+								Built from the films you've logged as watched. Each contributes its top-billed cast,
+								directors and composers; two people are joined when they appear together, and anyone
+								left with no shared film is dropped. Region, era and prominence come from each
+								person's whole filmography in the TMDB credit corpus behind
+								<a href="/projects/credit-network">/projects/credit-network</a>.
 							</p>
 						</section>
 					</>

@@ -2,6 +2,9 @@
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
 import { supabaseAdmin, supabasePublic } from './supabase';
+// Precomputed credit-graph enrichment (region/era/prominence per person + a
+// per-film credit map), built by scripts/credit-graph/build-film-enrichment.mjs.
+import enrichment from '../data/credit-enrichment.json';
 import { siteDay, siteYear } from './day';
 import { monthOf, shiftMonth, type MonthWatch } from './month-view';
 import {
@@ -2311,6 +2314,7 @@ export interface FilmStats {
 
 /** A watched film flattened with the movie facts the Stats page aggregates over. */
 interface WatchedFacts {
+	tmdb_id: number | null;
 	/** Null when the first watch is unknown (migration 0011) — such films count in
 	 * all-time totals but can't be attributed to any calendar year. */
 	first_watched: string | null;
@@ -2333,14 +2337,15 @@ interface WatchedFacts {
  */
 async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 	const tiers = [
-		'movies!inner(release_year, runtime, genres, countries, directors, actors, original_language)', // 0009
-		'movies!inner(release_year, runtime, genres, countries, directors, actors)', // 0008
-		'movies!inner(release_year, runtime)', // pre-0008
+		'movies!inner(tmdb_id, release_year, runtime, genres, countries, directors, actors, original_language)', // 0009
+		'movies!inner(tmdb_id, release_year, runtime, genres, countries, directors, actors)', // 0008
+		'movies!inner(tmdb_id, release_year, runtime)', // pre-0008
 	];
 	type Row = {
 		first_watched: string | null;
 		rating: number | null;
 		movies: {
+			tmdb_id: number | null;
 			release_year: number | null;
 			runtime: number | null;
 			genres?: string[] | null;
@@ -2372,6 +2377,7 @@ async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 	}
 
 	return rows.map((r) => ({
+		tmdb_id: r.movies.tmdb_id,
 		first_watched: r.first_watched,
 		rating: r.rating,
 		release_year: r.movies.release_year,
@@ -2577,38 +2583,47 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 }
 
 // ---------------------------------------------------------------------------
-// Credit collaboration network (from watched films only)
+// Credit collaboration network (from watched films)
 // ---------------------------------------------------------------------------
 
 /** The graph payload the /projects/film-credit-network client renders, in the
  * same positional-array schema as scripts/credit-graph/build.mjs so the shared
- * renderer (src/scripts/credit-network.js) reads it unchanged — but built from
- * the films *you've watched* rather than the 36k-film TMDB corpus, and scoped to
- * one calendar year. Only the credits the movies table carries exist here
- * (directors and actors, by name), so there's no composer role, no region/era
- * colouring and no prominence metric. Positions are seeded on a circle and the
- * client settles them on load (meta.settleOnLoad). */
+ * renderer (src/scripts/credit-network.js) reads it unchanged. Built from the
+ * films you've watched, scoped to one calendar year, and joined to the credit_*
+ * corpus (via src/data/credit-enrichment.json) for exact TMDB person ids,
+ * composer credits, and career-wide region / era / prominence -- the same
+ * dimensions the corpus page carries. */
 export interface FilmCreditNetwork {
 	scope: number | 'all';
 	selectedLabel: string;
 	yearOptions: YearOption[];
-	/** The renderer payload; null when the scope has too few recurring people to
-	 * draw anything. */
+	/** The renderer payload; null when the scope has too few connected people. */
 	graph: Record<string, unknown> | null;
 }
 
-/** Appear in this many of your films (per role) to be a node; share at least
- * this fraction of your credits in a role to be drawn as it; connect on one
- * shared film. Far lower than the global graph — a personal log is small, and
- * someone recurring even twice is the whole point. */
-const NET_MIN_ROLE = 2;
-const NET_ROLE_SHARE_FLOOR = 0.25;
-const NET_MIN_EDGE = 1;
+/** Shape of the precomputed enrichment artifact (build-film-enrichment.mjs). */
+interface EnrichmentFile {
+	config: {
+		roles: { role: string; label: string; color: string }[];
+		roleShareFloor: number;
+		colorModes: {
+			key: string;
+			label: string;
+			field: string | null;
+			filterField?: string;
+			note: string;
+			legend: { label: string; light: string; dark: string }[];
+		}[];
+	};
+	/** film tmdb_id -> [[person tmdb_id, roleIdx], ...] (roleIdx indexes config.roles) */
+	byFilm: Record<string, [number, number][]>;
+	/** person tmdb_id -> [name, country, countryList, era, reach, hit] */
+	byId: Record<string, [string, number, number[], number, number, number]>;
+}
 
-const NET_ROLES = [
-	{ role: 'actor', label: 'Actor', color: '#d9b45a' },
-	{ role: 'director', label: 'Director', color: '#c8695a' },
-];
+const enrich = enrichment as unknown as EnrichmentFile;
+const NET_ROLE_SHARE_FLOOR = enrich.config.roleShareFloor;
+const NET_MIN_EDGE = 1;
 
 export async function getFilmCreditNetwork(scope: number | 'all' = 'all'): Promise<FilmCreditNetwork> {
 	const all = await loadWatchedFacts();
@@ -2631,94 +2646,131 @@ export async function getFilmCreditNetwork(scope: number | 'all' = 'all'): Promi
 	const isAll = scope === 'all' || !eligibleYears.includes(scope as number);
 	const selected: number | 'all' = isAll ? 'all' : (scope as number);
 	const rows = isAll ? all : all.filter((r) => yearOf(r.first_watched) === selected);
+	const selectedLabel = isAll ? 'All time' : String(selected);
+	const empty: FilmCreditNetwork = { scope: selected, selectedLabel, yearOptions, graph: null };
 
 	// All-time spans ~1,000 films, so require someone in 2+ of them to keep the
 	// graph to real recurrences. A single year is ~35 films where almost nobody
 	// repeats, so anyone in a film qualifies and the structure comes from each
-	// film's shared cast — isolates (nobody to share with) are dropped either way.
-	const minRole = isAll ? NET_MIN_ROLE : 1;
+	// film's shared cast. Isolates (nobody to share with) are dropped either way.
+	const minRole = isAll ? 2 : 1;
 
-	// 1. Tally each person's per-role film counts and rating, over films in scope.
-	//    Keyed by name — the movies table stores credits as names, not TMDB ids.
-	const roleOf = { actor: 0, director: 1 };
-	type P = { counts: number[]; films: Set<number>; ratingSum: number; rated: number };
+	const { config, byFilm, byId } = enrich;
+	const roleCount = config.roles.length; // actor, director, composer
+	// Fallback buckets for a person with no enrichment (a just-watched film not
+	// yet in the precompute): "Elsewhere" and the latest era.
+	const region = config.colorModes.find((m) => m.key === 'country');
+	const eraMode = config.colorModes.find((m) => m.key === 'era');
+	const OTHER = (region?.legend.length ?? 1) - 1;
+	const LAST_ERA = (eraMode?.legend.length ?? 1) - 1;
+
+	// 1. Tally each person over films in scope. Key by TMDB person id when the
+	//    film is in the corpus (exact -- disambiguates same-named people and adds
+	//    composers); otherwise fall back to the movies-table names, which cover
+	//    actors and directors only and carry no enrichment.
+	type P = {
+		key: string;
+		name: string;
+		id: number | null;
+		counts: number[];
+		films: Set<number>;
+		ratingSum: number;
+		rated: number;
+	};
 	const people = new Map<string, P>();
-	rows.forEach((r, filmIdx) => {
-		const seen = new Set<string>();
-		for (const name of r.actors) tallyPerson(name, roleOf.actor);
-		for (const name of r.directors) tallyPerson(name, roleOf.director);
-		function tallyPerson(name: string, ri: number) {
-			if (!name) return;
-			let p = people.get(name);
+	const filmKeys: string[][] = [];
+	rows.forEach((r, fi) => {
+		const onFilm = new Set<string>();
+		const bump = (key: string, name: string, id: number | null, ri: number) => {
+			let p = people.get(key);
 			if (!p) {
-				p = { counts: [0, 0], films: new Set(), ratingSum: 0, rated: 0 };
-				people.set(name, p);
+				p = { key, name, id, counts: new Array(roleCount).fill(0), films: new Set(), ratingSum: 0, rated: 0 };
+				people.set(key, p);
 			}
 			p.counts[ri]++;
-			if (!seen.has(name)) {
-				seen.add(name);
-				p.films.add(filmIdx);
+			if (!onFilm.has(key)) {
+				onFilm.add(key);
+				p.films.add(fi);
 				if (r.rating != null) {
 					p.ratingSum += r.rating;
 					p.rated++;
 				}
 			}
+		};
+		const credits = r.tmdb_id != null ? byFilm[r.tmdb_id] : undefined;
+		if (credits) {
+			for (const [pid, ri] of credits) bump(`id:${pid}`, byId[pid]?.[0] ?? `#${pid}`, pid, ri);
+		} else {
+			for (const n of r.actors) if (n) bump(`nm:${n}`, n, null, 0);
+			for (const n of r.directors) if (n) bump(`nm:${n}`, n, null, 1);
 		}
+		filmKeys.push([...onFilm]);
 	});
 
-	// 2. Qualify people who clear the threshold in a role; the roles they're drawn
-	//    as are the ones holding a real share of their credits (see the share floor).
+	// 2. Qualify people who clear the role threshold; the roles they're drawn as
+	//    are the ones holding a real share of their credits (the share floor).
 	type Q = P & { qmask: number };
 	const qualified = new Map<string, Q>();
-	for (const [name, p] of people) {
-		const cleared = [0, 1].filter((i) => p.counts[i] >= minRole);
+	for (const [key, p] of people) {
+		const cleared = p.counts.flatMap((c, i) => (c >= minRole ? [i] : []));
 		if (!cleared.length) continue;
-		const total = p.counts[0] + p.counts[1];
+		const total = p.counts.reduce((a, b) => a + b, 0);
 		const major = cleared.filter((i) => p.counts[i] / total >= NET_ROLE_SHARE_FLOOR);
 		const drawn = major.length
 			? major
 			: [cleared.reduce((best, i) => (p.counts[i] > p.counts[best] ? i : best), cleared[0])];
-		qualified.set(name, { ...p, qmask: drawn.reduce((m, i) => m | (1 << i), 0) });
+		qualified.set(key, { ...p, qmask: drawn.reduce((m, i) => m | (1 << i), 0) });
 	}
 
-	// 3. Project to co-credit edges: every pair of qualified people on one of your
-	//    films shares it; weight is how many they share.
+	// 3. Project to co-credit edges: every pair of qualified people on a film.
 	const edgeW = new Map<string, number>();
-	for (const r of rows) {
-		const on = [...new Set([...r.actors, ...r.directors])].filter((n) => qualified.has(n)).sort();
+	for (const keys of filmKeys) {
+		const on = keys.filter((k) => qualified.has(k)).sort();
 		for (let i = 0; i < on.length; i++) {
 			for (let j = i + 1; j < on.length; j++) {
-				const key = `${on[i]} ${on[j]}`;
-				edgeW.set(key, (edgeW.get(key) ?? 0) + 1);
+				const e = `${on[i]}\t${on[j]}`;
+				edgeW.set(e, (edgeW.get(e) ?? 0) + 1);
 			}
 		}
 	}
 
-	// 4. Keep only people with a surviving edge — an isolated dot says nothing in a
-	//    collaboration graph.
+	// 4. Keep people with a surviving edge -- an isolated dot says nothing here.
 	const connected = new Set<string>();
 	const edges: [string, string, number][] = [];
-	for (const [key, w] of edgeW) {
+	for (const [k, w] of edgeW) {
 		if (w < NET_MIN_EDGE) continue;
-		const [a, b] = key.split(' ');
+		const [a, b] = k.split('\t');
 		edges.push([a, b, w]);
 		connected.add(a);
 		connected.add(b);
 	}
-
-	const names = [...connected];
-	if (names.length < 2) {
-		return { scope: selected, selectedLabel: isAll ? 'All time' : String(selected), yearOptions, graph: null };
-	}
-	const idx = new Map(names.map((n, i) => [n, i]));
+	const keys = [...connected];
+	if (keys.length < 2) return empty;
+	const idx = new Map(keys.map((k, i) => [k, i]));
 
 	// 5. Seed positions on a circle; the client's ForceAtlas2 settles from there.
 	const r2 = (v: number) => Math.round(v * 100) / 100;
-	const nodes = names.map((name, i) => {
-		const p = qualified.get(name)!;
-		const a = (2 * Math.PI * i) / names.length;
+	const nodes = keys.map((key, i) => {
+		const p = qualified.get(key)!;
+		const e = p.id != null ? byId[p.id] : undefined; // [name, country, countryList, era, reach, hit]
+		const a = (2 * Math.PI * i) / keys.length;
 		const rating = p.rated ? r2(p.ratingSum / p.rated) : 0;
-		return [name, r2(Math.cos(a) * 1000), r2(Math.sin(a) * 1000), p.films.size, rating, p.qmask, p.counts[0], p.counts[1]];
+		return [
+			p.name,
+			r2(Math.cos(a) * 1000),
+			r2(Math.sin(a) * 1000),
+			p.films.size,
+			rating,
+			e ? e[4] : 0, // reach
+			e ? e[5] : 0, // hit
+			p.qmask,
+			e ? e[1] : OTHER, // country bucket
+			e ? e[2] : [OTHER], // countryList buckets
+			e ? e[3] : LAST_ERA, // era bucket
+			p.counts[0],
+			p.counts[1],
+			p.counts[2] ?? 0,
+		];
 	});
 
 	const graph = {
@@ -2726,45 +2778,39 @@ export async function getFilmCreditNetwork(scope: number | 'all' = 'all'): Promi
 			generated: new Date().toISOString(),
 			films: rows.length,
 			people: people.size,
-			nodes: names.length,
+			nodes: keys.length,
 			edges: edges.length,
 			minEdge: NET_MIN_EDGE,
 			// All-time is dense enough that one shared film whites out the core, so
 			// start it on recurring collaborations (2+); a single year is sparse, so
-			// start at the floor. The slider still reaches down to minEdge either way.
+			// start at the floor. The slider still reaches down to minEdge.
 			defaultMinWeight: isAll ? 2 : NET_MIN_EDGE,
-			// This page is always the dark maroon film-log surface, so pin the
-			// renderer's palette rather than letting it follow the OS theme.
+			// This page is always the dark maroon film-log surface.
 			forceTheme: 'dark',
-			// The shared client seeds on a circle and settles on load only when this
-			// is set; the 36k-film page ships pre-settled and must not.
+			// Seeded on a circle, so settle on load.
 			settleOnLoad: true,
-			// No TMDB person ids here, so a node links into your own filtered log
-			// instead. {role} is the person's primary role key (actor|director),
-			// which doubles as the /films/watched filter param.
+			// No TMDB person page here; a node links into your own filtered log.
 			personHref: '/films/watched?{role}={name}',
 			personLabel: 'See these in your log ↗',
 		},
-		roles: NET_ROLES.map((r) => ({ role: r.role, label: r.label, color: r.color, minFilms: NET_MIN_ROLE })),
+		roles: config.roles.map((r) => ({ role: r.role, label: r.label, color: r.color, minFilms: minRole })),
 		metrics: [
 			{ key: 'films', label: 'Films in your log', note: 'How many of your watched films they appear in.' },
 			{ key: 'rating', label: 'Your average rating', note: 'Mean of your ratings across their films; unrated counts as 0.' },
+			{ key: 'reach', label: 'Prominence', note: 'Career standing across all their films, era-adjusted so older figures are not buried by modern vote counts.' },
+			{ key: 'hit', label: 'Typical hit size', note: 'Era-adjusted box office per film across their whole career -- big films rather than many.' },
 		],
 		roleShareFloor: NET_ROLE_SHARE_FLOOR,
-		colorModes: [
-			{
-				key: 'role',
-				label: 'Role',
-				field: null,
-				note: 'Someone you’ve seen both direct and act splits half-and-half.',
-				legend: NET_ROLES.map((r) => ({ label: r.label, light: r.color, dark: r.color })),
-			},
+		// role / where they work / era of their career -- straight from the artifact.
+		colorModes: config.colorModes,
+		nodeFields: [
+			'name', 'x', 'y', 'films', 'rating', 'reach', 'hit', 'roleMask',
+			'country', 'countryList', 'era', 'n_actor', 'n_director', 'n_composer',
 		],
-		nodeFields: ['name', 'x', 'y', 'films', 'rating', 'roleMask', 'n_actor', 'n_director'],
 		edgeFields: ['source', 'target', 'weight'],
 		nodes,
 		edges: edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]),
 	};
 
-	return { scope: selected, selectedLabel: isAll ? 'All time' : String(selected), yearOptions, graph };
+	return { scope: selected, selectedLabel, yearOptions, graph };
 }
