@@ -22,3 +22,4 @@ add or update a pattern.
 | [0014](patterns/0014-astro-partial-for-infinite-scroll.md) | Infinite scroll without a second renderer: an Astro partial | strategy | a page must append more server-rendered rows as you scroll |
 | [0015](patterns/0015-route-cleanup-eats-thin-shape-features.md) | Route cleanup eats thin shape features (peninsulas) | failure-mode | a traced outline route drops Florida/Maine-style thin features the outline still shows |
 | [0016](patterns/0016-screenshot-waits-for-networkidle-not-the-layout.md) | `npm run shot` fires at networkidle, before a client-settled graph paints | failure-mode | screenshotting a page whose content is drawn by a client-side layout/animation that starts after load |
+| [0017](patterns/0017-postgrest-1000-row-cap-skews-windows.md) | PostgREST's 1000-row cap silently skews a percentile window | failure-mode | a Supabase query gathers a population to compute a statistic (percentile/median/mean) over, not a bounded list |

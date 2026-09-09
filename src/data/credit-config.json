@@ -1,0 +1,210 @@
+{
+	"generated": "2026-09-09T16:36:15.832Z",
+	"roles": [
+		{
+			"role": "actor",
+			"label": "Actor",
+			"color": "#e0574f"
+		},
+		{
+			"role": "director",
+			"label": "Director",
+			"color": "#4a8fd4"
+		},
+		{
+			"role": "composer",
+			"label": "Composer",
+			"color": "#3fa87a"
+		}
+	],
+	"roleShareFloor": 0.25,
+	"reachPrior": 0.497984320372549,
+	"grossPrior": 0.500321167697531,
+	"colorModes": [
+		{
+			"key": "role",
+			"label": "Role",
+			"field": null,
+			"note": "Two substantial roles split the node.",
+			"legend": [
+				{
+					"label": "Actor",
+					"light": "#e0574f",
+					"dark": "#e0574f"
+				},
+				{
+					"label": "Director",
+					"light": "#4a8fd4",
+					"dark": "#4a8fd4"
+				},
+				{
+					"label": "Composer",
+					"light": "#3fa87a",
+					"dark": "#3fa87a"
+				}
+			]
+		},
+		{
+			"key": "country",
+			"label": "Where they work",
+			"field": "country",
+			"filterField": "countryList",
+			"note": "Coloured by where most of their films were made; filters match any country they have 3+ films in. Four colours reused down the list -- filter to read a specific one.",
+			"legend": [
+				{
+					"label": "United States",
+					"light": "#E69F00",
+					"dark": "#E69F00"
+				},
+				{
+					"label": "France",
+					"light": "#4400DD",
+					"dark": "#4400DD"
+				},
+				{
+					"label": "United Kingdom",
+					"light": "#56B4E9",
+					"dark": "#56B4E9"
+				},
+				{
+					"label": "Italy",
+					"light": "#B03060",
+					"dark": "#B03060"
+				},
+				{
+					"label": "Japan",
+					"light": "#E69F00",
+					"dark": "#E69F00"
+				},
+				{
+					"label": "India",
+					"light": "#4400DD",
+					"dark": "#4400DD"
+				},
+				{
+					"label": "Germany",
+					"light": "#56B4E9",
+					"dark": "#56B4E9"
+				},
+				{
+					"label": "South Korea",
+					"light": "#B03060",
+					"dark": "#B03060"
+				},
+				{
+					"label": "Spain",
+					"light": "#E69F00",
+					"dark": "#E69F00"
+				},
+				{
+					"label": "Canada",
+					"light": "#4400DD",
+					"dark": "#4400DD"
+				},
+				{
+					"label": "Hong Kong",
+					"light": "#56B4E9",
+					"dark": "#56B4E9"
+				},
+				{
+					"label": "Australia",
+					"light": "#B03060",
+					"dark": "#B03060"
+				},
+				{
+					"label": "Russia / USSR",
+					"light": "#E69F00",
+					"dark": "#E69F00"
+				},
+				{
+					"label": "Mexico",
+					"light": "#4400DD",
+					"dark": "#4400DD"
+				},
+				{
+					"label": "China",
+					"light": "#56B4E9",
+					"dark": "#56B4E9"
+				},
+				{
+					"label": "Poland",
+					"light": "#B03060",
+					"dark": "#B03060"
+				},
+				{
+					"label": "Brazil",
+					"light": "#E69F00",
+					"dark": "#E69F00"
+				},
+				{
+					"label": "Turkey",
+					"light": "#4400DD",
+					"dark": "#4400DD"
+				},
+				{
+					"label": "Denmark",
+					"light": "#56B4E9",
+					"dark": "#56B4E9"
+				},
+				{
+					"label": "Sweden",
+					"light": "#B03060",
+					"dark": "#B03060"
+				},
+				{
+					"label": "Belgium",
+					"light": "#E69F00",
+					"dark": "#E69F00"
+				},
+				{
+					"label": "Norway",
+					"light": "#4400DD",
+					"dark": "#4400DD"
+				},
+				{
+					"label": "Ireland",
+					"light": "#56B4E9",
+					"dark": "#56B4E9"
+				},
+				{
+					"label": "Elsewhere",
+					"light": "#9A9A95",
+					"dark": "#9A9A95"
+				}
+			]
+		},
+		{
+			"key": "era",
+			"label": "Era of their career",
+			"field": "era",
+			"note": "The era containing the median year of their whole filmography.",
+			"legend": [
+				{
+					"label": "Silent, to 1928",
+					"light": "#7AD151",
+					"dark": "#FDE725"
+				},
+				{
+					"label": "Studio era, 1929–59",
+					"light": "#22A884",
+					"dark": "#5EC962"
+				},
+				{
+					"label": "New Hollywood, 1960–80",
+					"light": "#2A788E",
+					"dark": "#21918C"
+				},
+				{
+					"label": "Blockbuster, 1981–99",
+					"light": "#414487",
+					"dark": "#3B528B"
+				},
+				{
+					"label": "Modern, 2000–",
+					"light": "#440154",
+					"dark": "#7E6FC4"
+				}
+			]
+		}
+	]
+}

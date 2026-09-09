@@ -118,8 +118,23 @@ export function careerEra(filmIds, filmById) {
 // Prominence (era-adjusted percentiles)
 // ---------------------------------------------------------------------------
 
-const MIN_WINDOW = 30;
+export const MIN_WINDOW = 30;
 const SHRINKAGE = 3;
+
+/** Percentile (0..1) of `value` within an ascending-sorted window, matching the
+ * rank eraPercentiles assigns: lower-bound index / (length - 1). Used by the
+ * live add-path to score one new film against its contemporaries. */
+export function pctRank(value, sortedAsc) {
+	if (sortedAsc.length < 2) return null;
+	let lo = 0;
+	let hi = sortedAsc.length;
+	while (lo < hi) {
+		const mid = (lo + hi) >> 1;
+		if (sortedAsc[mid] < value) lo = mid + 1;
+		else hi = mid;
+	}
+	return lo / (sortedAsc.length - 1);
+}
 
 /** Per-film percentile of `field` within a ±2-year (widening) window of
  * contemporaries, plus the corpus mean as a shrinkage prior. */
