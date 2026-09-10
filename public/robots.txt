@@ -1,0 +1,12 @@
+# Every page here is server-rendered, so a crawler's sweep is a bill, not just
+# traffic. src/middleware.ts makes the second sweep cheap; this file keeps the
+# first one off what is expensive to render and worthless to index.
+User-agent: *
+
+# Rebuilds the whole collaboration graph from the watch log on every request —
+# the most expensive route on the site by an order of magnitude, and it renders
+# to a canvas, so a crawler gets no text out of it either way.
+Disallow: /projects/film-credit-network
+
+# JSON for the site's own pages. Never a search result.
+Disallow: /api/
