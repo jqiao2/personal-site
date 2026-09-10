@@ -3,7 +3,8 @@
 **Type:** failure-mode
 **Applies when:** a Vercel/serverless bill (Fluid Active CPU, invocations) runs
 over on a low-traffic site, or a route is made `prerender = false` for a reason
-unrelated to its data.
+unrelated to its data. The **egress** half below applies when a Supabase (or any
+DB) egress allowance is blown, or before adding a `select('*')` on a view.
 
 ## What happened
 
@@ -90,3 +91,32 @@ fix above holds regardless of how the traffic was distributed.
 The deeper fix, not taken: render the header's "Log in" button for everyone and
 hide it client-side from a non-httpOnly `owner=1` cookie. Most of the site could
 then be genuinely static and cost nothing at all.
+
+## The other half of the same bill: DB egress
+
+The same incident also blew Supabase's 5 GB egress allowance, and it is worth
+measuring separately — CPU and egress fail independently, and the cache above
+does nothing for a render that was already cheap in CPU but fat on the wire.
+
+The tool is the same throwaway `fetch` shim, but counting **response** bytes from
+the Supabase host per request instead of CPU. Wrap `globalThis.fetch`, clone any
+response whose URL contains the Supabase host, and append
+`response.arrayBuffer().byteLength` to a log keyed by the PostgREST path. Load it
+via `NODE_OPTIONS="--import ./scripts/_shim.mjs"` — but note Astro's dev CLI
+re-spawns and loses `NODE_OPTIONS`; start the server in-process instead
+(`import { dev } from 'astro'; await dev({ root: process.cwd() })`) so the shim
+survives. Server islands are a second request here too.
+
+What it found: every feed/landing render pulled 150 KB–1.7 MB from the DB, and
+`/rss.xml` spent 299 KB to emit a 9 KB feed. The cause was one fat column on a
+shared view — `activity_list.polyline`, a full-fidelity GPS track, was 72% of the
+view's bytes, and the four `select('*')` reads of that view never touched it. It
+rode along on every home feed, every `/month`, every RSS poll.
+
+The lesson that generalizes: **`select('*')` on a view is a standing egress leak
+the moment anyone adds a heavy column to the view**, because the callers don't
+change and nobody re-checks what they now drag. Grep for the column's real
+readers before assuming a `*` needs it; here two pages wanted the track and both
+read it straight off the base table, so the view never needed to carry it.
+Migration 0064 dropped it (drop-and-rebuild, per wiki 0003). Measured saving:
+~70% on the affected reads.
