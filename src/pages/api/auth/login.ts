@@ -1,5 +1,12 @@
 import type { APIRoute } from 'astro';
-import { checkPassword, createSessionToken, COOKIE_NAME, sessionCookieOptions } from '../../../lib/auth';
+import {
+	checkPassword,
+	createSessionToken,
+	COOKIE_NAME,
+	OWNER_HINT_COOKIE,
+	sessionCookieOptions,
+	ownerHintCookieOptions,
+} from '../../../lib/auth';
 import { json, apiError } from '../../../lib/http';
 
 export const prerender = false;
@@ -18,5 +25,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!checkPassword(body.password ?? '')) return apiError('invalid password', 401);
 
 	cookies.set(COOKIE_NAME, await createSessionToken(), sessionCookieOptions());
+	// The readable companion, set in lockstep so the header can hide the "Log in"
+	// button client-side on statically-served pages. Carries no authority.
+	cookies.set(OWNER_HINT_COOKIE, '1', ownerHintCookieOptions());
 	return json({ ok: true });
 };

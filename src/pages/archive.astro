@@ -1,9 +1,8 @@
 ---
 // Things that were built, lived on a page for a while, and then came off it.
 // They still run — they just aren't part of the site's working surface any more.
-// Server-rendered so the header's owner check runs per-request, not at build.
-export const prerender = false;
-
+// Static: the header's "Log in" button is hidden client-side for the owner now
+// (see SiteHeader.astro), which was the only reason this was server-rendered.
 import Layout from '../layouts/Layout.astro';
 
 const archived = [

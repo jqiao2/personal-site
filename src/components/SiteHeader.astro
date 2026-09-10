@@ -55,12 +55,22 @@ const FILTERS: Record<string, string> = {
 };
 const filter = FILTERS[theme] ?? FILTERS.root;
 
-// The admin sign-in lives here so every page with a header offers it. A visitor
-// gets the "Log in" button + dialog; the owner gets neither (their session is
-// already established, and each section passes its own owner controls — "+ Log
-// film", "+ Log meal" — through the `actions` slot). requireOwner is safe to
-// call on any page: no cookie → false, and it only needs SESSION_SECRET to
-// verify a token that's actually present.
+// The admin sign-in lives here so every page with a header offers it. The "Log
+// in" button and its dialog are rendered UNCONDITIONALLY — for the owner too —
+// and hidden client-side by the inline script below when the readable `owner`
+// cookie is present. That is deliberate: it makes the header's markup identical
+// for everyone, which is what lets a page whose only per-request difference was
+// this button be served as one static file to all comers (see /about, /subway,
+// /projects, the credit-network shell). The owner's own controls still come
+// through the `actions` slot on the pages that render them.
+//
+// `owner` is still resolved server-side, but now only feeds the drawer's
+// owner-only section links and `ownDrawerWide` — both of which matter only on
+// the four log sections, which are server-rendered for their data regardless.
+// On a statically-built page it bakes to false, which is correct: those pages
+// have no owner-only nav, and the button is handled on the client. requireOwner
+// is safe to call anywhere — no cookie → false, and it only touches
+// SESSION_SECRET to verify a token that is actually present.
 const owner = await requireOwner(Astro.cookies);
 
 // When this header supplies its own drawer (a subpage, `sidebar` false) AND the
@@ -72,6 +82,16 @@ const owner = await requireOwner(Astro.cookies);
 // for nothing.
 const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 ---
+
+{/* Runs synchronously, before the header below is parsed and painted, so the
+    owner never sees the "Log in" button flash in and out — the one thing the
+    site's "nothing moves" rule would not forgive. `is:inline` keeps it exactly
+    here rather than being hoisted into a deferred module. It reads one readable,
+    authority-free cookie and marks the document; the CSS below does the hiding.
+    A stranger who somehow carries `owner=1` only hides a button from themselves. */}
+<script is:inline>
+	if (document.cookie.split('; ').includes('owner=1')) document.documentElement.dataset.owner = '1';
+</script>
 
 <header class="sh" style={style} data-theme={theme}>
 	<nav class="sh__inner" aria-label="Primary">
@@ -130,9 +150,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		</div>
 		<div class="sh__actions">
 			<slot name="actions" />
-			{!owner && (
-				<button type="button" class="sh-login-btn" data-login-open>Log in</button>
-			)}
+			<button type="button" class="sh-login-btn" data-login-open>Log in</button>
 			<button
 				type="button"
 				class:list={['sh-burger', ownDrawerWide && 'sh-burger--own']}
@@ -173,36 +191,35 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	</aside>
 )}
 
-{
-	!owner && (
-		<div class="sh-login" data-login-modal hidden>
-			<div class="sh-login__backdrop" data-login-close />
-			<div
-				class="sh-login__box"
-				role="dialog"
-				aria-modal="true"
-				aria-labelledby="sh-login-title"
-			>
-				<div class="sh-login__title" id="sh-login-title">Admin sign in</div>
-				<div class="sh-login__sub">Enter the admin password to log entries and edit this profile.</div>
-				<form class="sh-login__form" data-login-form>
-					<input
-						type="password"
-						data-login-pw
-						placeholder="Password"
-						autocomplete="current-password"
-						required
-					/>
-					<div class="sh-login__err" data-login-err hidden>Incorrect password. Try again.</div>
-					<div class="sh-login__actions">
-						<button type="button" class="sh-login__cancel" data-login-close>Cancel</button>
-						<button type="submit" class="sh-login__submit">Sign in</button>
-					</div>
-				</form>
+{/* Rendered for everyone (like the button that opens it) so the header markup
+    is owner-independent and cacheable as one static file; `hidden` by default,
+    and the owner never reaches it because the button that opens it is hidden. */}
+<div class="sh-login" data-login-modal hidden>
+	<div class="sh-login__backdrop" data-login-close />
+	<div
+		class="sh-login__box"
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="sh-login-title"
+	>
+		<div class="sh-login__title" id="sh-login-title">Admin sign in</div>
+		<div class="sh-login__sub">Enter the admin password to log entries and edit this profile.</div>
+		<form class="sh-login__form" data-login-form>
+			<input
+				type="password"
+				data-login-pw
+				placeholder="Password"
+				autocomplete="current-password"
+				required
+			/>
+			<div class="sh-login__err" data-login-err hidden>Incorrect password. Try again.</div>
+			<div class="sh-login__actions">
+				<button type="button" class="sh-login__cancel" data-login-close>Cancel</button>
+				<button type="submit" class="sh-login__submit">Sign in</button>
 			</div>
-		</div>
-	)
-}
+		</form>
+	</div>
+</div>
 
 <script>
 	// The Journal dropdown. It opens on hover and keyboard focus by CSS alone
@@ -302,6 +319,17 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 </script>
 
 <style is:global>
+	/* Owner sign-in, hidden client-side. The button and dialog are in the markup
+	   for everyone (so the page is one cacheable static file); the inline script
+	   at the top of the header sets html[data-owner] before paint when the
+	   readable `owner` cookie is present, and these rules take them back out for
+	   the signed-in owner with no flash and no server round trip. Global because
+	   the selector is anchored on <html>, which lives outside this component. */
+	html[data-owner] .sh-login-btn,
+	html[data-owner] [data-login-modal] {
+		display: none;
+	}
+
 	/* The mobile drawer, shared by every page that passes `sidebar` to the header.
 	   Below 820px the page's own sidebar (marked [data-site-drawer]) is lifted out
 	   of the feed grid and hidden against the right edge; the header's hamburger

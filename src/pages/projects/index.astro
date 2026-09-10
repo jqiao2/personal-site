@@ -1,7 +1,7 @@
 ---
-// Server-rendered so the header's owner check runs per-request, not at build.
-export const prerender = false;
-
+// Static. The header's "Log in" button is hidden client-side for the owner now
+// (see SiteHeader.astro), so this page prerenders to one CDN-served file. The
+// project list is a build-time content collection either way.
 import { getCollection } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
 
