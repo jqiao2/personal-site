@@ -82,15 +82,19 @@ Two traps in this repo: `astro dev status` gives you the pid, and server islands
 (`/_server-islands/...`) are *separate invocations* — timing the page alone
 misses them, so pull the island URL out of the HTML and time it too.
 
-## Still open
+## Resolved since
 
-Vercel's own per-route usage is the one thing that would confirm the split, and
-it needs a dashboard/CLI login this environment does not have. The structural
-fix above holds regardless of how the traffic was distributed.
+The deeper fix **was** taken (#226): `SiteHeader` renders "Log in" for everyone
+and an `is:inline` script hides it from a non-httpOnly `owner=1` cookie before
+first paint. `film_session` (signed, httpOnly) stays the only thing the server
+trusts; `owner=1` grants nothing. Nine header-only-differing pages became static
+CDN files, so most of the site now costs nothing at all — the button that drove
+the whole bill no longer forces SSR.
 
-The deeper fix, not taken: render the header's "Log in" button for everyone and
-hide it client-side from a non-httpOnly `owner=1` cookie. Most of the site could
-then be genuinely static and cost nothing at all.
+Still not confirmable here: Vercel's own per-route usage, which would have shown
+the CPU split, needs a dashboard/CLI login this environment does not have. Moot
+now that the routes it would have measured are static; the structural fix holds
+regardless of how the traffic was distributed.
 
 ## The other half of the same bill: DB egress
 

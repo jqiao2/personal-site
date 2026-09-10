@@ -160,3 +160,8 @@ wiki across every iteration, even reverted ones).
 2026-09-09 — Fixed duplicate film-credit-network: creditsForFilms didn't page, so the PostgREST 1000-row cap dropped most credit rows and those films fell to the name fallback, splitting the graph into an id-keyed and a name-keyed copy. Second instance of wiki 0017.
 2026-09-10 — Hit Vercel's 4-hour Fluid Active CPU free-tier cap. Measured per-route CPU: /projects/film-credit-network is the worst route by ~4x (109ms CPU, 4.9s wall, 702KB) but nowhere near enough to explain it. Root cause was structural — ~100 routes prerender=false with zero Cache-Control and no robots.txt, so every request incl. every crawler paid a cold start. Added src/middleware.ts (CDN caching for cookie-less GETs, Vary: Cookie; private/no-store for the owner) and a robots.txt. Pattern 0018.
 2026-09-10 — Followed up wiki 0018's "deeper fix": added a readable, authority-free `owner=1` cookie set beside the signed session, made SiteHeader render the "Log in" button for everyone and hide it client-side (is:inline pre-paint script + html[data-owner] CSS, no flash), and moved 9 header-only pages to static (about, subway, projects, projects/[id], credit-network shell, 404, home, archive, bike-outline). Home stays static with RecentFeed as a server island. Pattern 0019.
+
+- 2026-09-10 — Closed the open items in pattern 0018: the deeper fix (render "Log
+  in" for everyone, hide client-side, go static) shipped in #226 and the GPS-track
+  egress leak in #225/migration 0064. Only Vercel per-route usage stays unconfirmable
+  here, and it is now moot since those routes are static.
