@@ -202,7 +202,12 @@ export interface ActivityListRow {
 	exertion_method: ExertionMethod | null;
 	exertion_confidence: ExertionConfidence | null;
 	intensity_factor: number | null;
-	polyline: string | null;
+	/** The simplified thumbnail path the month feed draws its squiggle from.
+	 * There is deliberately no `polyline` beside it: the full-fidelity track was
+	 * 72% of this view's bytes and no list read ever looked at it, so migration
+	 * 0064 took it back out of the view. The two places that do want a track —
+	 * the activity detail page and the heatmap — name their own columns against
+	 * `activities` and are unaffected. */
 	route_path: string | null;
 	start_lat: number | null;
 	start_lng: number | null;
