@@ -57,8 +57,6 @@ const parsed = parseMonthKey(key);
 if (!parsed) return Astro.redirect('/restaurants/month');
 
 const [visits, counts] = await Promise.all([listMonthVisits(key), countVisitsByMonth()]);
-// The gate above already established this.
-const isOwner = true;
 
 // The month picker's twelve tiles for the opening year, each with its meal count.
 const pickerMonths = MONTH_ABBR.map((abbr, i) => {
@@ -101,7 +99,6 @@ const query = monthQuery(aspect);
 <RestaurantLayout
 	title={`${monthLabel(key)} · Jason's restaurant log`}
 	pathname="/restaurants"
-	isOwner={isOwner}
 >
 	<div class="rl-page">
 		<div class="rl-head">

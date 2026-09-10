@@ -42,7 +42,6 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 <RestaurantLayout
 	title={`${visit.restaurant_name}, ${visit.visited_on} · Jason's restaurant log`}
 	pathname="/restaurants"
-	isOwner={isOwner}
 >
 	<div class="rl-page rl-page--flush">
 		<div class="rl-topbar">

@@ -25,12 +25,12 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 		<div class="card">
 			<SiteHeader pathname={Astro.url.pathname} theme="film" sidebar>
 				<Fragment slot="actions">
-					{isOwner && (
-						<>
-							<button type="button" class="nav-btn nav-btn--watch" data-open-watchlist>+ To watch</button>
-							<button type="button" class="nav-btn nav-btn--log" data-open-entry-editor>+ Log film</button>
-						</>
-					)}
+					{/* Rendered for everyone and hidden client-side (data-owner-only-nav)
+					    like the Log-in button and Journal tab, so the header markup is
+					    owner-independent and a cached visitor copy can never leak the
+					    owner's controls. The editors they open stay server-gated below. */}
+					<button type="button" class="nav-btn nav-btn--watch" data-owner-only-nav data-open-watchlist>+ To watch</button>
+					<button type="button" class="nav-btn nav-btn--log" data-owner-only-nav data-open-entry-editor>+ Log film</button>
 				</Fragment>
 			</SiteHeader>
 

@@ -33,12 +33,11 @@ interface Props {
 	title: string;
 	/** Pathname used to light the active site-nav tab. */
 	pathname: string;
-	isOwner?: boolean;
 	/** The landing page has a right sidebar; opt it into the header's mobile drawer. */
 	sidebar?: boolean;
 }
 
-const { title, pathname, isOwner = false, sidebar = false } = Astro.props;
+const { title, pathname, sidebar = false } = Astro.props;
 ---
 
 <html lang="en">
@@ -56,12 +55,12 @@ const { title, pathname, isOwner = false, sidebar = false } = Astro.props;
 	<body>
 		<SiteHeader pathname={pathname} theme="restaurant" sidebar={sidebar}>
 			<Fragment slot="actions">
-				{isOwner && (
-					<>
-						<button type="button" class="rl-btn" data-open-try-editor>+ To try</button>
-						<button type="button" class="rl-btn rl-btn--primary" data-open-meal-editor>+ Log meal</button>
-					</>
-				)}
+				{/* Rendered for everyone and hidden client-side (data-owner-only-nav)
+				    like the Log-in button and Journal tab, so the header markup is
+				    owner-independent and a cached visitor copy can never leak the
+				    owner's controls. The editor they open stays server-gated. */}
+				<button type="button" class="rl-btn" data-owner-only-nav data-open-try-editor>+ To try</button>
+				<button type="button" class="rl-btn rl-btn--primary" data-owner-only-nav data-open-meal-editor>+ Log meal</button>
 			</Fragment>
 		</SiteHeader>
 
