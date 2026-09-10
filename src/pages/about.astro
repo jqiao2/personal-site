@@ -1,7 +1,8 @@
 ---
-// Server-rendered so the header's owner check runs per-request, not at build.
-export const prerender = false;
-
+// Static. The header's "Log in" button is now rendered for everyone and hidden
+// client-side for the owner (see SiteHeader.astro), so this page no longer needs
+// a per-request owner check — it prerenders to one file the CDN serves to all,
+// with no function invocation.
 import Layout from '../layouts/Layout.astro';
 
 const experience = [

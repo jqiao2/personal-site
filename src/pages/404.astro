@@ -1,9 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
 
-// SSR so the header's requireOwner() runs per request; prerendered, it bakes
-// owner=false at build and shows the "Log in" button to the signed-in owner.
-export const prerender = false;
+// Static (a real 404.html). The header's "Log in" button is hidden client-side
+// for the owner now (see SiteHeader.astro), so baking owner=false at build no
+// longer shows the button to the signed-in owner — the reason this was SSR.
 ---
 
 <Layout title="404 — Page not found">

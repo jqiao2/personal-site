@@ -1,13 +1,18 @@
 ---
-import { getEntry, render } from 'astro:content';
+import { getCollection, render } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
 
-// SSR so the header's requireOwner() runs per request; prerendered, it bakes
-// owner=false at build and shows the "Log in" button to the signed-in owner.
-export const prerender = false;
+// Static: one prerendered file per project entry. This was briefly SSR (#222) so
+// the header's owner check ran per request — otherwise it baked owner=false and
+// showed the "Log in" button to the signed-in owner. The button is now hidden
+// client-side (see SiteHeader.astro), so the reason is gone and getStaticPaths
+// comes back, which also restores the natural 404 for an unknown id.
+export async function getStaticPaths() {
+	const projects = await getCollection('projects');
+	return projects.map((project) => ({ params: { id: project.id }, props: { project } }));
+}
 
-const project = await getEntry('projects', Astro.params.id!);
-if (!project) return Astro.rewrite('/404');
+const { project } = Astro.props;
 const { Content } = await render(project);
 ---
 

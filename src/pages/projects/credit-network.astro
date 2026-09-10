@@ -10,10 +10,10 @@
 // scripts/credit-graph/build.mjs.
 import SiteHeader from '../../components/SiteHeader.astro';
 
-// SSR so requireOwner() runs per request. Prerendered, it bakes owner=false at
-// build time and the header's "Log in" button shows even when the owner is
-// signed in. The graph data is still a static asset; only the shell is dynamic.
-export const prerender = false;
+// Static. The shell has no per-request data — the graph is a static JSON drawn
+// client-side — and the only thing that made it SSR was the header's owner
+// check, which is now handled client-side (see SiteHeader.astro). So it
+// prerenders to one CDN-served file with no function invocation.
 ---
 
 <html lang="en">

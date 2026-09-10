@@ -7,6 +7,21 @@
 import type { AstroCookies } from 'astro';
 
 export const COOKIE_NAME = 'film_session';
+
+// A NON-httpOnly companion to the session cookie, carrying no authority at all.
+// The signed `film_session` above is the only thing the server ever trusts;
+// this one exists solely so client JS can read one bit — "is the owner signed
+// in on this device" — WITHOUT a server round trip. That is what lets a page be
+// served as one static file to everybody: the header renders the visitor's
+// "Log in" button unconditionally, and a tiny inline script hides it before
+// paint when this cookie is present. See SiteHeader.astro.
+//
+// It is set and cleared in lockstep with the session (login/logout). Forging it
+// buys nothing: it changes only whether a button is hidden, never what the
+// server will do — every real gate still calls requireOwner() against the
+// signed cookie. Not httpOnly by design (JS must read it); everything else
+// matches the session cookie so the two travel and expire together.
+export const OWNER_HINT_COOKIE = 'owner';
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 const encoder = new TextEncoder();
 
@@ -143,4 +158,11 @@ export function sessionCookieOptions(): {
 		path: '/',
 		maxAge: MAX_AGE_SECONDS,
 	};
+}
+
+/** Options for the owner-hint cookie: identical to the session cookie's except
+ *  httpOnly is off, because the whole point is that client JS can read it (see
+ *  OWNER_HINT_COOKIE). It carries no authority, so exposing it to JS is safe. */
+export function ownerHintCookieOptions(): ReturnType<typeof sessionCookieOptions> {
+	return { ...sessionCookieOptions(), httpOnly: false };
 }

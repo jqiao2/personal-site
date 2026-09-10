@@ -7,9 +7,10 @@
 // there, clockwise or counter-clockwise. The maths is in src/lib/bike-route.ts;
 // this page is the map, the overlay, and the wiring.
 //
-// Server-rendered so the header's owner check runs per-request, not at build.
-export const prerender = false;
-
+// Static: the map and routing are entirely client-side, and the only thing that
+// made this server-rendered was the header's owner check, now handled on the
+// client (see SiteHeader.astro). PUBLIC_MAPTILER_KEY is inlined at build the
+// same as it was read at runtime — it is a public, client-visible key already.
 import Layout from '../layouts/Layout.astro';
 import { PROFILES } from '../lib/bike-route';
 

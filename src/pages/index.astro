@@ -2,11 +2,12 @@
 import Layout from '../layouts/Layout.astro';
 import RecentFeed from '../components/RecentFeed.astro';
 
-// Server-rendered so SiteHeader's owner check runs per-request and the "Log in"
-// button hides when signed in. The data-heavy cross-section feed is still a
-// server island (RecentFeed, server:defer below): only the fast owner check
-// blocks this response and the rows stream in after.
-export const prerender = false;
+// Static shell. The header's "Log in" button is hidden client-side for the owner
+// now (see SiteHeader.astro), which was the only thing that made this whole
+// response server-rendered. The cross-section feed stays a server island
+// (RecentFeed, server:defer below) — it re-checks the owner from cookies and
+// streams in per request — so the most-hit page on the site is now one static
+// file the CDN serves with no function invocation for its shell.
 ---
 
 <Layout title="Jason Qiao" wide sidebar>
