@@ -102,7 +102,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		{
 			nav.map((n) =>
 				n.children ? (
-					<div class="sh-logs" data-logs>
+					<div class="sh-logs" data-logs data-owner-only-nav>
 						<a
 							class:list={['sh__link', 'sh-logs__link', n.active && 'sh__link--active']}
 							href={n.href}
@@ -327,6 +327,15 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	   the selector is anchored on <html>, which lives outside this component. */
 	html[data-owner] .sh-login-btn,
 	html[data-owner] [data-login-modal] {
+		display: none;
+	}
+
+	/* The Journal group (the four logs + the owner-only month-in-review it points
+	   at) is owner-facing, so it's hidden from visitors. Same client-side trick,
+	   inverted: rendered for everyone so the page stays one cacheable static file,
+	   then hidden until the inline script above marks html[data-owner] before paint
+	   — so the owner sees it with no flash and a visitor never does. */
+	html:not([data-owner]) [data-owner-only-nav] {
 		display: none;
 	}
 

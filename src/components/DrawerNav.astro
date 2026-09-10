@@ -53,7 +53,7 @@ const style = headerThemeStyle(theme);
 				// The Journal tab is a submenu, not a flat dump of the four logs: a
 				// native <details> so it toggles with no JS, opened by default when
 				// you're already inside one of the logs.
-				<details class="dnav__group" open={n.children.some((c) => c.active) || undefined}>
+				<details class="dnav__group" data-owner-only-nav open={n.children.some((c) => c.active) || undefined}>
 					<summary class:list={['dnav__row', 'dnav__summary', n.active && 'dnav__row--active']}>
 						{/* The label is a link to the month in review; only the caret
 						    (the rest of the summary) opens the submenu. */}
