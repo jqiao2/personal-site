@@ -44,6 +44,9 @@ const { friendOptions, tagOptions } = Astro.props;
 		</div>
 	</div>
 
+	<!-- Everything below appears once a place is picked — same reveal as the film
+	     composer and the to-try pane. -->
+	<div class="me__log-rest" data-me-log-rest hidden>
 	<div class="me__field">
 		<label class="rl-label" for="me-date">Visited</label>
 		<input class="me__input me__input--mono" id="me-date" data-me-date type="date" />
@@ -182,5 +185,6 @@ const { friendOptions, tagOptions } = Astro.props;
 		<datalist id="me-tag-options">
 			{tagOptions.map((t) => <option value={t} />)}
 		</datalist>
+	</div>
 	</div>
 </div>

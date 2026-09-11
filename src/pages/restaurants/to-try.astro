@@ -40,7 +40,6 @@ import {
 	listTags,
 	listWhyTagFacets,
 	PRICE_BANDS,
-	WHY_TAGS,
 	type MapFilter,
 	type PlaceSort,
 	type PriceBand,
@@ -65,7 +64,9 @@ const selectedPrices = params.getAll('price').filter(isPriceBand) as PriceBand[]
 const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'added';
 const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
 const onMap: MapFilter | null = isMapFilter(params.get('map')) ? (params.get('map') as MapFilter) : null;
-const selectedTags = params.getAll('why').filter((t) => (WHY_TAGS as readonly string[]).includes(t));
+// Free-form now: any tag on record is a valid filter, so keep whatever's in the
+// query string and let the membership match decide (an unknown tag matches none).
+const selectedTags = params.getAll('why').map((t) => t.trim()).filter(Boolean);
 
 const [all, places, cuisineFacets, whyFacets, isOwner] = await Promise.all([
 	listPlaces({ scope: 'to-try' }),
