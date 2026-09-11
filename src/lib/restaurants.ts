@@ -297,8 +297,36 @@ export function isPlaceSort(v: unknown): v is PlaceSort {
 	);
 }
 
+/**
+ * Split a search box into lowercased terms, the same bargain `searchPlaces`
+ * strikes for the composer: word by word, so "Daily Provisions Park" finds the
+ * Daily Provisions places and then narrows to the one on Park. Same characters
+ * stripped as there, for the same reason.
+ */
+export function searchTerms(query: string): string[] {
+	return query
+		.trim()
+		.toLowerCase()
+		.replace(/[,%*()"]/g, ' ')
+		.split(/\s+/)
+		.filter(Boolean);
+}
+
+/**
+ * Every term must appear somewhere across the given fields — the name and where
+ * a place is. A logged place has no street address, so "where" is the location
+ * columns (neighbourhood, city, region, country). Empty terms match everything.
+ */
+export function matchesSearch(fields: (string | null | undefined)[], terms: string[]): boolean {
+	if (terms.length === 0) return true;
+	const hay = fields.filter(Boolean).join(' ').toLowerCase();
+	return terms.every((t) => hay.includes(t));
+}
+
 export interface PlaceQuery {
 	scope?: PlaceScope;
+	/** Word-by-word match over the name and location fields. Absent means all. */
+	search?: string;
 	cuisines?: string[];
 	prices?: PriceBand[];
 	/** "This rung or better", as a rank. 5 (Avoid) means no threshold at all. */
@@ -329,6 +357,12 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 	if (error) throw new Error(error.message);
 	let rows = (data ?? []) as Place[];
 
+	if (query.search?.trim()) {
+		const terms = searchTerms(query.search);
+		rows = rows.filter((r) =>
+			matchesSearch([r.name, r.neighborhood, r.city, r.state_region, r.country], terms),
+		);
+	}
 	if (query.cuisines?.length) {
 		const want = new Set(query.cuisines.map((c) => c.toLowerCase()));
 		rows = rows.filter((r) => cuisineTerms(r.cuisines).some((c) => want.has(c.toLowerCase())));

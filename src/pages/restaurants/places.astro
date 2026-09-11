@@ -59,6 +59,7 @@ const verdictAtLeast = rawVerdict != null && /^[0-5]$/.test(rawVerdict) ? Number
 const sort: PlaceSort = isPlaceSort(params.get('sort')) ? (params.get('sort') as PlaceSort) : 'recent';
 const isMap = params.get('view') === 'map';
 const trip: TripFilter | null = isTripFilter(params.get('trip')) ? (params.get('trip') as TripFilter) : null;
+const q = params.get('q') ?? '';
 
 // Friends are owner-only everywhere on the site, so who you ate with can only
 // filter — or even be read from the URL — as the owner. Resolve that first so a
@@ -68,7 +69,7 @@ const selectedFriends = isOwner ? params.getAll('friend') : [];
 
 const [all, filtered, cuisineFacets, friendFacets] = await Promise.all([
 	listPlaces(),
-	listPlaces({ cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, trip, sort, friends: selectedFriends }),
+	listPlaces({ search: q, cuisines: selectedCuisines, prices: selectedPrices, verdictAtLeast, trip, sort, friends: selectedFriends }),
 	listCuisineFacets(),
 	isOwner ? listFriendFacets() : Promise.resolve([] as CuisineFacet[]),
 ]);
@@ -133,12 +134,26 @@ const mapPoints: MapPoint[] = filtered
 	}));
 
 const activeFilters = [
+	...(q.trim() ? [{ label: `“${q.trim()}”`, href: href({ q: null }) }] : []),
 	...selectedCuisines.map((c) => ({ label: c, href: href({ cuisine: toggle(selectedCuisines, c) }) })),
 	...selectedPrices.map((p) => ({ label: p, href: href({ price: toggle(selectedPrices, p) }) })),
 	...(verdictAtLeast != null ? [{ label: thresholdLabel(verdictAtLeast), href: href({ verdict: null }) }] : []),
 	...(trip ? [{ label: trip === 'trip' ? 'Worth the trip †' : 'If I’m nearby', href: href({ trip: null }) }] : []),
 	...selectedFriends.map((f) => ({ label: `with ${f}`, href: href({ friend: toggle(selectedFriends, f) }) })),
 ];
+
+// The chip disclosure opens itself when a chip filter is on — search is not one
+// of them, it lives in its own always-visible box above.
+const filtersOpen =
+	selectedCuisines.length > 0 ||
+	selectedPrices.length > 0 ||
+	verdictAtLeast != null ||
+	trip != null ||
+	selectedFriends.length > 0;
+
+// The params to carry through the search form, so submitting a query keeps the
+// active filters. Page is dropped: a new search starts over, like every filter.
+const carried = [...params.entries()].filter(([k]) => k !== 'q' && k !== 'page');
 
 const countLine = `${filtered.length} of ${all.length}`;
 const trips: { key: TripFilter | null; label: string }[] = [
@@ -174,6 +189,20 @@ const sorts: { key: PlaceSort; label: string }[] = [
 		<!-- The filter bar reads identically in both views; only the thing under
 		     it changes. -->
 		<div class="rl-filters">
+			<form class="rl-search" method="get" action="/restaurants/places" role="search">
+				{carried.map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+				<input
+					class="rl-search__in"
+					type="search"
+					name="q"
+					value={q}
+					placeholder="Search a name or place…"
+					aria-label="Search restaurants by name or place"
+				/>
+			</form>
+
+			<details class="rl-filterbox" open={filtersOpen}>
+				<summary>Filters</summary>
 			<div class="rl-filters__row">
 				<span class="rl-filters__legend">Cuisine</span>
 				{
@@ -301,6 +330,7 @@ const sorts: { key: PlaceSort; label: string }[] = [
 					}
 				</span>
 			</div>
+			</details>
 
 			{
 				activeFilters.length > 0 && (

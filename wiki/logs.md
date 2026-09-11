@@ -179,3 +179,5 @@ wiki across every iteration, even reverted ones).
   Astro-specific how.
 
 - 2026-09-11 — restaurant log + to-try composers now reveal fields only after a place is picked (like the film adder); to-try loses where/cuisine/price/why-tags and its "why" becomes free-form autocompleting tag chips. See 0022.
+
+- 2026-09-11 — added a name/location search (`?q=`) to the Restaurants list and the Diary, and made the Restaurants + To-try chip filters collapse behind a native `<details>`. Search is a JS-free GET form carrying the other params as hidden inputs; matching reuses two new shared helpers (`searchTerms`/`matchesSearch`) mirroring `searchPlaces`. See 0023.
