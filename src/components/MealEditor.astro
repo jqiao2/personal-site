@@ -1591,12 +1591,16 @@ const config = {
 	.me__body[hidden] {
 		display: none;
 	}
-	/* Stars sit on one row with the two toggles. */
+	/* Stars sit on one row with the two toggles, which are pushed to the right
+	   edge (as in the film composer). */
 	.me__rating-row {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		flex-wrap: nowrap;
+	}
+	.me__rating-row .me__toggle--heart {
+		margin-left: auto;
 	}
 	/* When that row can't hold the words too, the toggles fall back to their
 	   ♥ / ↻ glyphs alone. */
