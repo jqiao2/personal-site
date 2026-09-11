@@ -1104,6 +1104,86 @@ export async function removeFromToTry(id: number): Promise<'deleted' | 'unlisted
 	return 'unlisted';
 }
 
+/**
+ * Fold duplicate places into one canonical row (see 0066_restaurant_merge.sql).
+ *
+ * Non-destructive: the dropped rows are kept and pointed at `keepId` via
+ * `merged_into`, which hides them from every view and repoints their visits.
+ * A wrong merge is undone by clearing that column.
+ *
+ * ORDER MATTERS — supabase-js has no transaction, so if a step fails partway the
+ * intermediate state must still be coherent. Repoint the visits FIRST (a visit
+ * briefly on the canonical row is correct; a visit orphaned on a hidden row is
+ * not), then fill the canonical row, then hide the drops LAST — so nothing
+ * disappears from view before its visits have somewhere to land.
+ */
+export async function mergePlaces(keepId: number, dropIds: number[]): Promise<void> {
+	const drops = [...new Set(dropIds)].filter((id) => id !== keepId);
+	if (drops.length === 0) throw new Error('nothing to merge into the kept place');
+
+	// Every id must exist and none may already be merged — merging a merged row
+	// would strand whatever was folded into it.
+	const { data: rows, error: readError } = await supabaseAdmin
+		.from('restaurants')
+		.select('*')
+		.in('id', [keepId, ...drops]);
+	if (readError) throw new Error(readError.message);
+	const byId = new Map((rows ?? []).map((r: Record<string, unknown>) => [r.id as number, r]));
+	for (const id of [keepId, ...drops]) {
+		const row = byId.get(id);
+		if (!row) throw new Error(`place ${id} does not exist`);
+		if (row.merged_into != null) throw new Error(`place ${id} is already merged`);
+	}
+	const keep = byId.get(keepId) as Record<string, unknown>;
+	const dropRows = drops.map((id) => byId.get(id) as Record<string, unknown>);
+
+	// 1. Repoint visits (and their photos, which hang off the visit) onto keep.
+	const repoint = await supabaseAdmin
+		.from('restaurant_visits')
+		.update({ restaurant_id: keepId })
+		.in('restaurant_id', drops);
+	if (repoint.error) throw new Error(repoint.error.message);
+
+	// 2. Fill onto keep only what it is MISSING — never overwrite its own values.
+	const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+	const fillScalar = (col: string) => {
+		if (keep[col] != null) return;
+		const from = dropRows.find((d) => d[col] != null);
+		if (from) payload[col] = from[col];
+	};
+	for (const col of [
+		'lat', 'lng', 'neighborhood', 'borough', 'city', 'state_region', 'country',
+		'price_band', 'website_url', 'yelp_url', 'beli_url', 'google_place_id',
+		'to_try_added_at', 'to_try_reason',
+	]) {
+		fillScalar(col);
+	}
+	// Arrays union; a place worth going out of the way for on any row is worth it.
+	const union = (col: string) => {
+		const seen = new Set<string>();
+		for (const row of [keep, ...dropRows]) for (const v of (row[col] as string[] | null) ?? []) seen.add(v);
+		return [...seen];
+	};
+	const cuisines = union('cuisines');
+	if (cuisines.length > (keep.cuisines as string[] ?? []).length) payload.cuisines = cuisines;
+	const toTryTags = union('to_try_tags');
+	if (toTryTags.length > (keep.to_try_tags as string[] ?? []).length) payload.to_try_tags = toTryTags;
+	if (!keep.trip && dropRows.some((d) => d.trip)) payload.trip = true;
+
+	if (Object.keys(payload).length > 1) {
+		const fill = await supabaseAdmin.from('restaurants').update(payload).eq('id', keepId);
+		if (fill.error) throw new Error(fill.error.message);
+	}
+
+	// 3. Hide the drops. Clear their to-try flag so an un-merge later doesn't
+	//    resurrect them onto the to-try list — their reason has moved to keep.
+	const mark = await supabaseAdmin
+		.from('restaurants')
+		.update({ merged_into: keepId, to_try_added_at: null, updated_at: new Date().toISOString() })
+		.in('id', drops);
+	if (mark.error) throw new Error(mark.error.message);
+}
+
 export interface PhotoInput {
 	storagePath: string;
 	caption?: string | null;
