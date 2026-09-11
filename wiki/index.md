@@ -26,3 +26,4 @@ add or update a pattern.
 | [0018](patterns/0018-ssr-everywhere-has-no-cache-floor.md) | An all-SSR site has no floor under its compute bill | failure-mode | a Vercel compute limit is hit, or a route is made `prerender = false` for a reason unrelated to its data |
 | [0019](patterns/0019-owner-hint-cookie-frees-static-pages.md) | A readable owner-hint cookie lets owner-aware pages go static | strategy | a page is `prerender = false` only so a server-rendered header can tell the owner from a visitor |
 | [0020](patterns/0020-splitting-astro-files.md) | Splitting oversized `.astro` files (don't just extract the CSS) | strategy | an `.astro` file is large or duplicates a sibling's block, and you're editing it anyway |
+| [0021](patterns/0021-small-files-cut-agent-read-cost.md) | Keep files small to cut agent read-cost (ts/js/astro/html) | strategy | an oversized lib module, page, or client script is being edited — deciding whether/how to split it |
