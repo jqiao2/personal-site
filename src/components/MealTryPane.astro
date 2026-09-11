@@ -2,17 +2,32 @@
 // The "add to to-try" pane of the meal composer. Markup only — wired and styled
 // by MealEditor.astro (its stylesheet is `is:global`, so the `me__` rules reach
 // this). Split out purely to shrink the composer file. See wiki 0020.
-import { PRICE_BANDS, WHY_TAGS } from '../lib/restaurants';
+//
+// Like the log pane and the film composer, it opens as one field: name the place
+// and pick it (a geocoder hit, or "add it anyway"). Only then does the rest —
+// worth-the-trip and the why-tags — appear. A place you mean to try is a name,
+// roughly where it is, and one line about why; where/cuisine/price are the
+// restaurant's own facts, edited on its page, not asked when jotting it down.
+interface Props {
+	/** Existing why-tags, for the free-form "why" field's autocomplete. */
+	whyOptions: string[];
+}
+const { whyOptions } = Astro.props;
 ---
 
 <!-- ----------------------------------------------- add to-try -->
 <div class="me__body" data-me-pane="try" hidden>
 	<div class="me__field me__field--rel">
 		<label class="rl-label" for="me-try-name">Place</label>
+		<div class="me__locked" data-me-try-locked hidden>
+			<span class="me__locked-name" data-me-try-locked-name></span>
+			<span class="me__locked-meta" data-me-try-locked-meta></span>
+			<button type="button" class="rl-btn me__change" data-me-try-unlock>Change</button>
+		</div>
 		<input class="me__input" id="me-try-name" data-me-try-name type="text" autocomplete="off" placeholder="Wu's Wonton King" />
-		<!-- Candidates from the geocoder. Picking one fills the location
-		     fields and pins the place; everything stays editable after,
-		     because OSM's idea of a neighbourhood is often not yours. -->
+		<!-- Candidates from the geocoder, then "add it anyway". Picking one pins
+		     the place and reveals the rest; picking "add it anyway" reveals it
+		     without a point. -->
 		<div class="me__suggest" data-me-geo hidden></div>
 		<div class="me__pinned" data-me-pinned hidden>
 			<span class="me__pinned-mark">◎</span>
@@ -20,56 +35,37 @@ import { PRICE_BANDS, WHY_TAGS } from '../lib/restaurants';
 			<button type="button" class="me__pinned-x" data-me-unpin>clear</button>
 		</div>
 	</div>
-	<div class="me__grid">
-		<div class="me__field">
-			<label class="rl-label" for="me-try-where">Where</label>
-			<input class="me__input" id="me-try-where" data-me-try-where type="text" autocomplete="off" placeholder="Two Bridges, Manhattan" />
-		</div>
-		<div class="me__field">
-			<label class="rl-label" for="me-try-cuisine">Cuisine</label>
-			<input class="me__input" id="me-try-cuisine" data-me-try-cuisine type="text" autocomplete="off" placeholder="Cantonese" />
-		</div>
-	</div>
-	<div class="me__field">
-		<span class="rl-label">Price</span>
-		<div class="me__prices" data-me-try-prices>
-			{
-				PRICE_BANDS.map((p) => (
-					<button type="button" class="me__price" data-me-try-price={p}>
-						{p}
-					</button>
-				))
-			}
-		</div>
-	</div>
-	<div class="me__field">
-		<span class="rl-label">Would I go out of my way</span>
-		<div class="me__trip" data-me-try-trips>
-			<button type="button" class="me__trip-b" data-me-try-trip="0">If I&rsquo;m nearby</button>
-			<button type="button" class="me__trip-b" data-me-try-trip="1">Worth the trip †</button>
-		</div>
-	</div>
 
-	{/*
-		Beside the sentence, never instead of it. The line you write is the
-		record; these eight words are what makes eighty of them a list you
-		can cut down.
-	*/}
-	<div class="me__field">
-		<span class="rl-label">What kind of why</span>
-		<div class="me__whytags" data-me-why-tags>
-			{
-				WHY_TAGS.map((t) => (
-					<button type="button" class="me__whytag" data-me-why-tag={t}>
-						{t}
-					</button>
-				))
-			}
+	<!-- Everything below appears once a place is picked. -->
+	<div class="me__try-rest" data-me-try-rest hidden>
+		<div class="me__field">
+			<span class="rl-label">Would I go out of my way</span>
+			<div class="me__trip" data-me-try-trips>
+				<button type="button" class="me__trip-b" data-me-try-trip="0">If I&rsquo;m nearby</button>
+				<button type="button" class="me__trip-b" data-me-try-trip="1">Worth the trip †</button>
+			</div>
 		</div>
-	</div>
 
-	<div class="me__field">
-		<label class="rl-label" for="me-try-why">Why</label>
-		<input class="me__input me__input--prose" id="me-try-why" data-me-try-why type="text" autocomplete="off" placeholder="Peking duck, BYOB, a big table" />
+		{/*
+			Why it's on the list, as free-form tags — a dish, a recommendation,
+			whatever the reason was — autocompleting off the tags already in use so
+			the list stays consistent without a fixed vocabulary to pick from.
+		*/}
+		<div class="me__field">
+			<label class="rl-label" for="me-try-why">Why</label>
+			<div class="me__tags" data-me-why-chips></div>
+			<input
+				class="me__input"
+				id="me-try-why"
+				data-me-why-input
+				type="text"
+				list="me-why-options"
+				autocomplete="off"
+				placeholder="a dish, a recommendation… (Enter to add)"
+			/>
+			<datalist id="me-why-options">
+				{whyOptions.map((t) => <option value={t} />)}
+			</datalist>
+		</div>
 	</div>
 </div>

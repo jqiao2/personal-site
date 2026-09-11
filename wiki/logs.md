@@ -177,3 +177,5 @@ wiki across every iteration, even reverted ones).
   small cohesive modules + a stable types module over barrels, with a repo hit-list
   (films.ts 2860, activities.ts 1400, books/[id].astro 2411). 0020 recast as the
   Astro-specific how.
+
+- 2026-09-11 — restaurant log + to-try composers now reveal fields only after a place is picked (like the film adder); to-try loses where/cuisine/price/why-tags and its "why" becomes free-form autocompleting tag chips. See 0022.

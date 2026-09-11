@@ -23,6 +23,7 @@
 // Only the stars survive onto a tile, only the verdict survives onto a map pin,
 // and the heart appears on the entry and as a small mark next to a name.
 import { VERDICTS } from '../lib/verdict';
+import { listToTryTags } from '../lib/restaurants';
 import MealLogPane from './MealLogPane.astro';
 import MealTryPane from './MealTryPane.astro';
 
@@ -83,6 +84,10 @@ const {
 	deleteRedirect = '/restaurants/diary',
 } = Astro.props;
 
+// Only rendered for an owner (every caller gates on isOwner), so this runs on
+// owner page loads alone — no prop-drilling through six pages for one list.
+const whyOptions = await listToTryTags();
+
 const config = {
 	redirect,
 	place,
@@ -116,7 +121,7 @@ const config = {
 		</div>
 
 		<MealLogPane friendOptions={friendOptions} tagOptions={tagOptions} />
-		<MealTryPane />
+		<MealTryPane whyOptions={whyOptions} />
 
 		<div class="me__foot">
 			<span class="me__summary" data-me-summary></span>
@@ -134,7 +139,7 @@ const config = {
 </div>
 
 <script>
-	import { hitWhere, lookupPlaces, type GeoHit } from '../lib/place-lookup';
+	import { lookupPlaces, type GeoHit } from '../lib/place-lookup';
 	import { localDay } from '../lib/day';
 	import { wireStarPicker } from '../lib/star-picker';
 	import { preparePhoto, type PreparedPhoto } from '../lib/photo';
@@ -243,7 +248,9 @@ const config = {
 			// deletion: the file goes when the visit is saved, so Cancel leaves the
 			// entry exactly as it was found.
 			removed: [] as number[],
-			tryPrice: null as string | null,
+			// Whether a to-try place has been picked yet — the gate that reveals the
+			// rest of that pane, the way a locked place does in the log pane.
+			tryLocked: false,
 			// The place's own answer, in both panes. Seeded from the place when
 			// the composer opens on one, so logging a meal doesn't quietly
 			// un-mark somewhere already marked.
@@ -274,6 +281,17 @@ const config = {
 			// A point belongs to the place you were naming, not to the dialog, so
 			// it does not survive being closed and reopened on something else.
 			state.geo = null;
+			// The to-try pane opens fresh every time: nothing picked, nothing typed.
+			if (pane === 'try') {
+				state.tryLocked = false;
+				state.tryTrip = false;
+				// Emptied in place, not replaced: the chip-input handler closes over
+				// this array reference.
+				state.whyTags.length = 0;
+				($('[data-me-try-name]') as HTMLInputElement).value = '';
+				($('[data-me-why-input]') as HTMLInputElement).value = '';
+				$('[data-me-geo]')!.hidden = true;
+			}
 			root.hidden = false;
 			document.body.style.overflow = 'hidden';
 			$('[data-me-pane="log"]')!.hidden = pane !== 'log';
@@ -300,10 +318,7 @@ const config = {
 			if (state.pane === 'try') {
 				return Boolean(
 					value('[data-me-try-name]') ||
-						value('[data-me-try-where]') ||
-						value('[data-me-try-cuisine]') ||
-						value('[data-me-try-why]') ||
-						state.tryPrice ||
+						value('[data-me-why-input]') ||
 						state.tryTrip ||
 						state.whyTags.length,
 				);
@@ -332,6 +347,29 @@ const config = {
 		}
 
 		// -- rendering --------------------------------------------------------
+		// Removable chips over a string array — the visit tags and the to-try
+		// why-tags are the same interaction, so they share this.
+		function renderChips(box: HTMLElement, list: string[]) {
+			box.replaceChildren(
+				...list.map((name, i) => {
+					const chip = document.createElement('span');
+					chip.className = 'me__tag';
+					chip.textContent = name;
+					const x = document.createElement('button');
+					x.type = 'button';
+					x.className = 'me__tag-x';
+					x.textContent = '×';
+					x.setAttribute('aria-label', `Remove ${name}`);
+					x.addEventListener('click', () => {
+						list.splice(i, 1);
+						render();
+					});
+					chip.append(x);
+					return chip;
+				}),
+			);
+		}
+
 		function render() {
 			const locked = state.locked;
 			$('[data-me-locked]')!.hidden = !locked;
@@ -340,6 +378,14 @@ const config = {
 				$('[data-me-locked-name]')!.textContent = locked.name;
 				$('[data-me-locked-meta]')!.textContent = locked.meta;
 			}
+			// The rest of the log pane appears only once a place is picked — same
+			// reveal as the film composer.
+			$('[data-me-log-rest]')!.hidden = !locked;
+			// Before a place is picked the body is short, so its scroll container
+			// would clip the suggestion dropdown. Let it overflow until there's a
+			// form under it — the same trick the film composer's picker mode uses.
+			$('[data-me-pane="log"]')!.classList.toggle('me__body--picker', !locked);
+			$('[data-me-pane="try"]')!.classList.toggle('me__body--picker', !state.tryLocked);
 
 			starPicker.set(state.rating || null);
 
@@ -354,38 +400,29 @@ const config = {
 
 			$('[data-me-heart]')!.classList.toggle('me__toggle--on', state.hearted);
 			$('[data-me-revisit]')!.classList.toggle('me__toggle--on', state.revisit);
-			$$('[data-me-try-price]').forEach((el) =>
-				el.classList.toggle('me__price--on', el.dataset.meTryPrice === state.tryPrice),
-			);
 			$$('[data-me-trip]').forEach((el) =>
 				el.classList.toggle('me__trip-b--on', (el.dataset.meTrip === '1') === state.trip),
 			);
 			$$('[data-me-try-trip]').forEach((el) =>
 				el.classList.toggle('me__trip-b--on', (el.dataset.meTryTrip === '1') === state.tryTrip),
 			);
-			$$('[data-me-why-tag]').forEach((el) =>
-				el.classList.toggle('me__whytag--on', state.whyTags.includes(el.dataset.meWhyTag ?? '')),
-			);
 
-			const tags = $('[data-me-tags]')!;
-			tags.replaceChildren(
-				...state.tags.map((name, i) => {
-					const chip = document.createElement('span');
-					chip.className = 'me__tag';
-					chip.textContent = name;
-					const x = document.createElement('button');
-					x.type = 'button';
-					x.className = 'me__tag-x';
-					x.textContent = '×';
-					x.setAttribute('aria-label', `Remove ${name}`);
-					x.addEventListener('click', () => {
-						state.tags.splice(i, 1);
-						render();
-					});
-					chip.append(x);
-					return chip;
-				}),
-			);
+			// The to-try pane's own place gate: locked box + reveal, mirroring the
+			// log pane above. The name lives in the (now hidden) input, so it stays
+			// the thing that gets saved.
+			const tName = value('[data-me-try-name]');
+			$('[data-me-try-locked]')!.hidden = !state.tryLocked;
+			($('[data-me-try-name]') as HTMLInputElement).hidden = state.tryLocked;
+			$('[data-me-try-rest]')!.hidden = !state.tryLocked;
+			if (state.tryLocked) {
+				$('[data-me-try-locked-name]')!.textContent = tName;
+				$('[data-me-try-locked-meta]')!.textContent = state.geo
+					? [state.geo.neighborhood, state.geo.city].filter(Boolean).join(', ')
+					: 'new place · no point on the map';
+			}
+
+			renderChips($('[data-me-tags]')!, state.tags);
+			renderChips($('[data-me-why-chips]')!, state.whyTags);
 
 			const photos = $('[data-me-photos]')!;
 			photos.replaceChildren(
@@ -498,7 +535,7 @@ const config = {
 		}
 
 		function canSave(): boolean {
-			if (state.pane === 'try') return Boolean(value('[data-me-try-name]'));
+			if (state.pane === 'try') return state.tryLocked && Boolean(value('[data-me-try-name]'));
 			return Boolean(state.placeId || value('[data-me-place]'));
 		}
 
@@ -695,9 +732,8 @@ const config = {
 		}
 
 		// -- the to-try composer's lookup --------------------------------------
-		// The same candidates, in the pane that has a Where field to narrow them
-		// with — which is what separates the four Tacos El Bronco from each
-		// other.
+		// Name a place, then pick it: a geocoder hit, or "add it anyway" for a
+		// place no map knows. Picking is what reveals the rest of the pane.
 		let tryTimer = 0;
 		function lookupPlace() {
 			window.clearTimeout(tryTimer);
@@ -707,46 +743,27 @@ const config = {
 				box.hidden = true;
 				return;
 			}
-			const hint = value('[data-me-try-where]');
 			tryTimer = window.setTimeout(async () => {
-				const { hits } = await lookupPlaces(name, hint);
+				const { hits } = await lookupPlaces(name);
+				// The name may have moved on while the geocoder was answering.
+				if (value('[data-me-try-name]') !== name) return;
 				box.replaceChildren();
-				if (hits.length === 0) {
-					// Nothing by that name. Saying so beats an empty box — the place
-					// is still perfectly addable, just without a point.
-					const row = document.createElement('div');
-					row.className = 'me__sug me__sug--none';
-					row.textContent = 'No exact match. It will be added without a point on the map.';
-					box.append(row);
-					box.hidden = false;
-					return;
-				}
 				for (const hit of hits) box.append(geoRow(hit, () => pick(hit)));
+				// Always offer the place as typed, point or no point — the same
+				// "add it anyway" the log pane ends its list with.
+				box.append(sugRow(`“${name}”`, 'new place · no point on the map', 'add', () => pick(null)));
 				box.hidden = false;
 			}, 420);
 		}
 
-		function pick(hit: GeoHit) {
+		/** Lock the to-try place: a geocoder hit, or null for an unplaced one. */
+		function pick(hit: GeoHit | null) {
 			state.geo = hit;
 			$('[data-me-geo]')!.hidden = true;
-
-			// Picking a hit means "this is the place", so the form becomes that
-			// place: its real name — properly spelled and accented, which is the
-			// half you can't type on a phone — then where it is and what it
-			// serves. Every field stays editable; OSM files Ba Xuyên under Dyker
-			// Heights when anyone who goes there says Sunset Park, so the geocode
-			// is a suggestion and the field is the record.
-			if (hit.name) ($('[data-me-try-name]') as HTMLInputElement).value = hit.name;
-
-			const where = hitWhere(hit);
-			if (where) ($('[data-me-try-where]') as HTMLInputElement).value = where;
-
-			// Only fill a cuisine that is empty — a typed one is a choice, and
-			// OSM's is a guess.
-			const cuisineField = $('[data-me-try-cuisine]') as HTMLInputElement;
-			if (hit.cuisines.length > 0 && !cuisineField.value.trim()) {
-				cuisineField.value = hit.cuisines.join(', ');
-			}
+			// A picked hit carries the proper spelling and accents — the half you
+			// can't type on a phone — so it becomes the name that gets saved.
+			if (hit?.name) ($('[data-me-try-name]') as HTMLInputElement).value = hit.name;
+			state.tryLocked = true;
 			render();
 		}
 
@@ -767,36 +784,24 @@ const config = {
 		}
 
 		async function saveToTry() {
-			const where = value('[data-me-try-where]');
-			// "Two Bridges, Manhattan" and plain "Austin" both arrive in one
-			// field, because that is how you say where a place is. The comma
-			// splits neighbourhood from city; without one, it is all city.
-			const [first, ...rest] = where.split(',').map((s) => s.trim()).filter(Boolean);
+			// Location and cuisines are whatever the geocoder pinned; a place added
+			// anyway has none, and the place page is where either gets corrected.
+			// Where/cuisine/price are facts about the restaurant, not asked here.
 			const g = state.geo;
 			const body = {
 				name: value('[data-me-try-name]'),
-				// One field, but the column is an array and a place is legitimately
-				// "Vietnamese, Sandwich". Stored whole, that becomes a single
-				// cuisine nothing can filter by and a chip the width of the row.
-				cuisines: value('[data-me-try-cuisine]')
-					.split(',')
-					.map((c) => c.trim())
-					.filter(Boolean),
-				priceBand: state.tryPrice,
+				cuisines: g?.cuisines ?? [],
 				trip: state.tryTrip,
+				// Free-form now: the "why" is just tags, no separate prose reason.
 				toTryTags: state.whyTags,
-				// What you typed wins over what the geocoder guessed — you edited
-				// it after picking, or you never picked at all. The coordinates
-				// and the country are the parts only the geocoder knows.
-				neighborhood: rest.length ? first : null,
-				city: rest.length ? rest.join(', ') : first || g?.city || null,
+				neighborhood: g?.neighborhood ?? null,
+				city: g?.city ?? null,
 				stateRegion: g?.stateRegion ?? null,
 				country: g?.country ?? null,
 				// A neighbourhood centroid is not where the restaurant is, so an
 				// imprecise hit contributes its NAMES and nothing else.
 				lat: g?.precise ? g.lat : null,
 				lng: g?.precise ? g.lng : null,
-				toTryReason: value('[data-me-try-why]'),
 				toTry: true,
 			};
 			const res = await fetch('/api/restaurants/places', {
@@ -1020,13 +1025,6 @@ const config = {
 			state.revisit = !state.revisit;
 			render();
 		});
-		$$('[data-me-try-price]').forEach((el) =>
-			el.addEventListener('click', () => {
-				const p = el.dataset.meTryPrice ?? null;
-				state.tryPrice = state.tryPrice === p ? null : p;
-				render();
-			}),
-		);
 		// Two buttons rather than one toggle, because "if I'm nearby" is an
 		// answer and not the absence of one.
 		$$('[data-me-trip]').forEach((el) =>
@@ -1041,25 +1039,21 @@ const config = {
 				render();
 			}),
 		);
-		$$('[data-me-why-tag]').forEach((el) =>
-			el.addEventListener('click', () => {
-				const tag = el.dataset.meWhyTag ?? '';
-				state.whyTags = state.whyTags.includes(tag)
-					? state.whyTags.filter((t) => t !== tag)
-					: [...state.whyTags, tag];
+		// Enter adds a chip. Same interaction for the visit's tags and the to-try
+		// why-tags — only which list they land in differs.
+		function wireChipInput(sel: string, list: string[]) {
+			$(sel)!.addEventListener('keydown', (e) => {
+				const input = e.target as HTMLInputElement;
+				if (e.key !== 'Enter' || !input.value.trim()) return;
+				e.preventDefault();
+				const tag = input.value.trim();
+				if (!list.some((t) => t.toLowerCase() === tag.toLowerCase())) list.push(tag);
+				input.value = '';
 				render();
-			}),
-		);
-
-		$('[data-me-tag-input]')!.addEventListener('keydown', (e) => {
-			const input = e.target as HTMLInputElement;
-			if (e.key !== 'Enter' || !input.value.trim()) return;
-			e.preventDefault();
-			const tag = input.value.trim();
-			if (!state.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) state.tags.push(tag);
-			input.value = '';
-			render();
-		});
+			});
+		}
+		wireChipInput('[data-me-tag-input]', state.tags);
+		wireChipInput('[data-me-why-input]', state.whyTags);
 
 		$('[data-me-photo-input]')!.addEventListener('change', async (e) => {
 			const input = e.target as HTMLInputElement;
@@ -1096,17 +1090,23 @@ const config = {
 			el.addEventListener('input', render),
 		);
 
-		// The to-try composer looks a place up as you name it; editing "Where"
-		// re-runs it, because the hint is what separates two places of the name.
+		// The to-try composer looks a place up as you name it.
 		$('[data-me-try-name]')!.addEventListener('input', () => {
 			state.geo = null;
 			lookupPlace();
 		});
-		$('[data-me-try-where]')!.addEventListener('input', lookupPlace);
 		$('[data-me-try-name]')!.addEventListener('blur', () => {
 			window.setTimeout(() => {
 				$('[data-me-geo]')!.hidden = true;
 			}, 160);
+		});
+		// Change: unpick the place and go back to naming one, like the log pane's.
+		$('[data-me-try-unlock]')!.addEventListener('click', () => {
+			state.tryLocked = false;
+			state.geo = null;
+			render();
+			($('[data-me-try-name]') as HTMLInputElement).focus();
+			lookupPlace();
 		});
 		$$('[data-me-unpin]').forEach((el) =>
 			el.addEventListener('click', () => {
@@ -1247,6 +1247,13 @@ const config = {
 	.me__body[hidden] {
 		display: none;
 	}
+	/* Before a place is picked the body holds only the name field; letting it
+	   overflow keeps the suggestion dropdown from being clipped by the scroll
+	   container. Restored to a capped scroll once the form is revealed. */
+	.me__body--picker {
+		overflow: visible;
+		max-height: none;
+	}
 	/* Stars sit on one row with the two toggles, which are pushed to the right
 	   edge (as in the film composer). */
 	.me__rating-row {
@@ -1272,6 +1279,18 @@ const config = {
 	}
 	.me__field--rel {
 		position: relative;
+	}
+	/* The revealed-after-a-place-is-picked block, in both panes. Its own column
+	   gap, since it is one flex child of the body. */
+	.me__log-rest,
+	.me__try-rest {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.me__log-rest[hidden],
+	.me__try-rest[hidden] {
+		display: none;
 	}
 	.me__grid {
 		display: grid;
@@ -1509,52 +1528,6 @@ const config = {
 		background: var(--ink);
 		border-color: var(--ink);
 		color: var(--ground);
-	}
-
-	.me__whytags {
-		display: flex;
-		gap: 6px;
-		flex-wrap: wrap;
-		margin-top: 6px;
-	}
-	.me__whytag {
-		background: var(--card);
-		border: 1px solid var(--rule);
-		color: var(--ink-soft);
-		font-family: var(--ui);
-		font-size: 12px;
-		padding: 4px 10px;
-		cursor: pointer;
-		white-space: nowrap;
-	}
-	.me__whytag:hover {
-		border-color: var(--terracotta);
-	}
-	.me__whytag--on {
-		background: var(--ink);
-		border-color: var(--ink);
-		color: var(--ground);
-	}
-
-	.me__prices {
-		display: flex;
-		gap: 6px;
-		max-width: 260px;
-	}
-	.me__price {
-		flex: 1;
-		border: 1px solid var(--rule);
-		background: var(--ground);
-		color: var(--ink-soft);
-		font-family: var(--mono);
-		font-size: 12.5px;
-		padding: 8px 0;
-		cursor: pointer;
-	}
-	.me__price--on {
-		background: var(--ink);
-		color: var(--ground);
-		border-color: var(--ink);
 	}
 
 	.me__photos {

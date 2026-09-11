@@ -800,7 +800,7 @@ export async function listCuisines(): Promise<string[]> {
 // Writes (owner only — every caller checks requireOwner first)
 // ---------------------------------------------------------------------------
 
-/** Counts per why-tag, in the fixed vocabulary's order, zeroes dropped. */
+/** Why-tag facets, commonest first — the to-try filter's chips. Free-form. */
 export async function listWhyTagFacets(scope: PlaceScope = 'to-try'): Promise<CuisineFacet[]> {
 	const { data, error } = await inScope(
 		supabasePublic.from('restaurant_places').select('to_try_tags'),
@@ -811,10 +811,26 @@ export async function listWhyTagFacets(scope: PlaceScope = 'to-try'): Promise<Cu
 	for (const row of (data ?? []) as { to_try_tags: string[] }[]) {
 		for (const t of new Set(row.to_try_tags)) counts.set(t, (counts.get(t) ?? 0) + 1);
 	}
-	// The vocabulary's own order, not frequency: it is eight fixed words in a
-	// row, and a row that reorders itself as you tag things is a row you have
-	// to re-read every time.
-	return WHY_TAGS.filter((t) => counts.has(t)).map((name) => ({ name, count: counts.get(name) ?? 0 }));
+	return [...counts.entries()]
+		.map(([name, count]) => ({ name, count }))
+		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
+}
+
+/** Distinct why-tags in use on the to-try list, for the composer's autocomplete. */
+export async function listToTryTags(): Promise<string[]> {
+	const { data, error } = await supabasePublic
+		.from('restaurant_places')
+		.select('to_try_tags')
+		.eq('on_to_try', true);
+	if (error) throw new Error(error.message);
+	const seen = new Map<string, string>();
+	for (const row of (data ?? []) as { to_try_tags: string[] }[]) {
+		for (const t of row.to_try_tags ?? []) {
+			const key = t.toLowerCase();
+			if (!seen.has(key)) seen.set(key, t);
+		}
+	}
+	return [...seen.values()].sort((a, b) => a.localeCompare(b, 'en'));
 }
 
 export interface PlaceInput {
@@ -869,7 +885,9 @@ function placePayload(input: PlaceInput): Record<string, unknown> {
 	if (input.beliUrl !== undefined) payload.beli_url = emptyToNull(input.beliUrl);
 	if (input.toTryReason !== undefined) payload.to_try_reason = emptyToNull(input.toTryReason);
 	if (input.trip !== undefined) payload.trip = input.trip;
-	if (input.toTryTags !== undefined) payload.to_try_tags = input.toTryTags.filter(isWhyTag);
+	// Free-form now — the composer's "why" is a tag field autocompleting off the
+	// tags already in use, not a fixed vocabulary. cleanList trims and de-dupes.
+	if (input.toTryTags !== undefined) payload.to_try_tags = cleanList(input.toTryTags);
 	if (input.toTry) payload.to_try_added_at = new Date().toISOString();
 	return payload;
 }
