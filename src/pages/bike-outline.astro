@@ -72,6 +72,11 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			</div>
 
 			<div class="bo__field bo__field--inline">
+				<label for="bo-homepull" title="How strongly the optimizer stays near where you placed the shape. 0 = chase the best road fit anywhere; higher = only move when it clearly helps.">Stay near start</label>
+				<input id="bo-homepull" type="number" min="0" max="3" step="0.25" value="0.5" />
+			</div>
+
+			<div class="bo__field bo__field--inline">
 				<label for="bo-shrink">Spacing shrink</label>
 				<input id="bo-shrink" type="number" min="0.5" max="0.95" step="0.05" value="0.85" />
 			</div>
@@ -146,6 +151,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	const spacingIn = $<HTMLInputElement>('bo-spacing');
 	const profileIn = $<HTMLSelectElement>('bo-profile');
 	const scaleIn = $<HTMLInputElement>('bo-maxscale');
+	const homePullIn = $<HTMLInputElement>('bo-homepull');
 	const shrinkIn = $<HTMLInputElement>('bo-shrink');
 	const genBtn = $<HTMLButtonElement>('bo-generate');
 	const optBtn = $<HTMLButtonElement>('bo-optimize');
@@ -437,6 +443,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		const { path, close } = placedPath();
 		const startKm = Math.max(0.2, Number(spacingIn.value) || 3);
 		const maxScale = Math.min(0.5, Math.max(0, (Number(scaleIn.value) || 15) / 100));
+		const homePull = Math.max(0, Number(homePullIn.value) || 0);
 		genBtn.disabled = true;
 		optBtn.disabled = true;
 		try {
@@ -444,6 +451,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 				startSpacing: startKm * 1000,
 				minSpacing: MIN_SPACING_KM * 1000,
 				maxScale,
+				homePull,
 				close,
 				shrink: Math.min(0.95, Math.max(0.5, Number(shrinkIn.value) || 0.85)),
 				onRound: (r) => {

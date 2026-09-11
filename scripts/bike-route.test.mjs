@@ -164,7 +164,7 @@ assert.equal(retracedFraction(square), 0, 'a shape that never repeats a segment 
 	];
 	const initial = deviation((await gridRoute(resample(ring0, 20000))).coords, resample(ring0, 20000)).mean;
 	const res = await descend(ring0, gridRoute, {
-		startSpacing: 30000, minSpacing: 15000, maxScale: 0.15, maxEvals: 40,
+		startSpacing: 30000, minSpacing: 15000, maxScale: 0.15, maxEvals: 40, homePull: 0,
 	});
 	assert.ok(res.rounds > 0, 'the search actually moved');
 	assert.ok(res.routed && deviation(res.routed.coords, res.waypoints).mean <= initial + 1e-9, 'fit did not get worse');
@@ -202,6 +202,30 @@ assert.equal(retracedFraction(square), 0, 'a shape that never repeats a segment 
 	const cx = res.ring.reduce((s, p) => s + p[0], 0) / res.ring.length;
 	assert.ok(cx <= 2.7, 'the winning placement stayed on routable ground, not in the water');
 	assert.ok(refusals > 0, 'the test actually exercised a router refusal');
+}
+
+// homePull keeps the search near where you placed the shape. Router fits better
+// the further east you go (grid gets finer), so pure fidelity drifts far east;
+// a strong pull home should refuse that marginal gain and stay put.
+{
+	const { descend } = await import('../src/lib/bike-route.ts');
+	// The route sits a uniform distance off the outline, and that gap shrinks
+	// smoothly the further east the shape is — so fidelity improves monotonically
+	// with eastward drift, with no phase noise to trap the hill-climb.
+	const eastwardBetter = async (wp) => {
+		const cx = wp.reduce((s, p) => s + p[0], 0) / wp.length;
+		const gap = Math.max(0, 0.3 - 0.03 * cx); // degrees of offset, smaller as x grows
+		const coords = wp.map(([x, y]) => [x, y + gap]);
+		return { coords, length: pathLength(coords), ascend: 0, retraced: 0 };
+	};
+	const ring0 = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5], [-0.5, -0.5]];
+	const cxOf = (r) => r.reduce((s, p) => s + p[0], 0) / r.length;
+	const opts = { startSpacing: 40000, minSpacing: 40000, maxScale: 0, maxEvals: 60 };
+	const loose = await descend(ring0, eastwardBetter, { ...opts, homePull: 0 });
+	const held = await descend(ring0, eastwardBetter, { ...opts, homePull: 3 });
+	assert.ok(cxOf(loose.ring) > 3, 'with no pull the search drifts far east for the better fit');
+	assert.ok(Math.abs(cxOf(held.ring)) < 0.6, 'with a strong pull it stays near where it was placed');
+	assert.ok(cxOf(loose.ring) > cxOf(held.ring) + 2, 'the pull demonstrably curbs the drift');
 }
 
 console.log('bike-route: all checks passed');
