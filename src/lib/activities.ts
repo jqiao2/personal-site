@@ -1378,9 +1378,14 @@ export async function listRoutePolylines(isOwner = false): Promise<{ family: Spo
 		// starts at a front door. A visitor gets the published ones only, at the
 		// query, so a private route is never even loaded into a process that is
 		// answering a stranger.
+		// Reads the base `activities` table, not the `activity_list` view: 0064
+		// dropped `polyline` from the view (it was 72% of every feed row's egress)
+		// and this is one of the two readers the migration named. The view's other
+		// job here — hiding soft-deleted rows — is done by the deleted_at filter.
 		let req = supabasePublic
-			.from('activity_list')
+			.from('activities')
 			.select('id, parent_id, sport, sub_sport, polyline')
+			.is('deleted_at', null)
 			.not('polyline', 'is', null);
 		if (!isOwner) req = req.eq('private', false);
 		const { data, error } = await req.range(offset, offset + PAGE - 1);
