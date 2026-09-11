@@ -8,7 +8,7 @@
 // src/lib/activity-privacy.ts, which is deliberately free of any database
 // import so this can run with no .env and no network.
 import assert from 'node:assert/strict';
-import { redactActivities, visitorQuery } from '../src/lib/activity-privacy.ts';
+import { redactActivities, visitorQuery, defaultPrivate } from '../src/lib/activity-privacy.ts';
 
 const ride = (over = {}) => ({
 	id: 7,
@@ -137,6 +137,28 @@ for (const value of [undefined, null, true, 'false', 0]) {
 		if (['sports', 'dateFrom', 'dateTo', 'sortDir', 'sort'].includes(key)) continue;
 		assert.equal(q[key], undefined, `${key} reached the query`);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// defaultPrivate — the rule an import applies, mirroring migration 0061.
+// ---------------------------------------------------------------------------
+{
+	// Seattle, UTC-7. 2026-03-04 is a Wednesday, 2026-03-07 a Saturday.
+	const pdt = -7 * 60;
+	const at = (utc, secs = 3600) => defaultPrivate(utc, pdt, secs);
+
+	assert.equal(at('2026-03-04T13:00:00Z'), false, 'Wed 06:00 local, before work');
+	assert.equal(at('2026-03-05T02:00:00Z'), false, 'Wed 19:00 local, after work');
+	assert.equal(at('2026-03-04T18:00:00Z'), true, 'Wed 11:00 local, mid-work');
+	assert.equal(at('2026-03-04T15:30:00Z', 2 * 3600), true, 'starts 08:30, ends 10:30 — overlaps');
+	assert.equal(at('2026-03-04T23:30:00Z', 2 * 3600), true, 'starts 16:30, ends 18:30 — overlaps');
+	assert.equal(at('2026-03-07T18:00:00Z'), false, 'Saturday 11:00 is not work');
+	assert.equal(at('2026-03-04T13:00:00Z', 17 * 3600), true, 'long enough to swallow a work window');
+	assert.equal(defaultPrivate('2026-03-07T18:00:00Z', null, 3600), true, 'unknown local time stays private');
+	assert.equal(defaultPrivate('not a date', pdt, 3600), true, 'unparseable stays private');
+	// The endpoints themselves: 09:00 is work, 17:00 is not.
+	assert.equal(at('2026-03-04T16:00:00Z', 0), true, 'Wed 09:00 exactly');
+	assert.equal(at('2026-03-05T00:00:00Z', 0), false, 'Wed 17:00 exactly');
 }
 
 console.log('privacy.test.mjs: ok');
