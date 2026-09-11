@@ -25,3 +25,4 @@ add or update a pattern.
 | [0017](patterns/0017-postgrest-1000-row-cap-skews-windows.md) | PostgREST's 1000-row cap silently skews a percentile window | failure-mode | a Supabase query gathers a population to compute a statistic (percentile/median/mean) over, not a bounded list |
 | [0018](patterns/0018-ssr-everywhere-has-no-cache-floor.md) | An all-SSR site has no floor under its compute bill | failure-mode | a Vercel compute limit is hit, or a route is made `prerender = false` for a reason unrelated to its data |
 | [0019](patterns/0019-owner-hint-cookie-frees-static-pages.md) | A readable owner-hint cookie lets owner-aware pages go static | strategy | a page is `prerender = false` only so a server-rendered header can tell the owner from a visitor |
+| [0020](patterns/0020-splitting-astro-files.md) | Splitting oversized `.astro` files (don't just extract the CSS) | strategy | an `.astro` file is large or duplicates a sibling's block, and you're editing it anyway |

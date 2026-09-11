@@ -165,3 +165,8 @@ wiki across every iteration, even reverted ones).
   in" for everyone, hide client-side, go static) shipped in #226 and the GPS-track
   egress leak in #225/migration 0064. Only Vercel per-route usage stays unconfirmable
   here, and it is now moot since those routes are static.
+
+- 2026-09-10: Added pattern 0020 (splitting oversized .astro files). Prompted by a
+  request to detangle CSS out of components; research showed externalising a
+  scoped `<style>` makes it global, so the pattern reframes the detangle as
+  component-splitting + custom-property theming + logic-to-lib, not CSS extraction.
