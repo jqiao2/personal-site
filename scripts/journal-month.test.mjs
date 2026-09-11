@@ -17,12 +17,11 @@ import {
 	MARK_MIN,
 	PRINT_ASPECT,
 	MEAL_MINUTES,
-	SNACK_MINUTES,
+	mealTier,
 	activityItems,
 	bookItems,
 	buildCells,
 	filmItems,
-	isSnack,
 	dayLayer,
 	markBox,
 	CELL_MAX_H,
@@ -53,20 +52,34 @@ assert.ok(markSize(MEAL_MINUTES) > MARK_MIN && markSize(MEAL_MINUTES) < MARK_MAX
 // 3. Ordering across the four tracks at their real weights: a snack is the
 //    smallest thing on the card, a meal beats it, a feature beats that. If a
 //    constant is retuned into a nonsense order this is what says so.
-assert.ok(markSize(SNACK_MINUTES) < markSize(MEAL_MINUTES));
+const SNACK = mealTier({ tags: ['coffee'] }).minutes;
+assert.equal(SNACK, 20);
+assert.ok(markSize(SNACK) < markSize(MEAL_MINUTES));
 assert.ok(markSize(MEAL_MINUTES) < markSize(FILM_MINUTES));
 // ...and the snack/meal split reads as "smaller thing", not "different kind of
 // thing" — a 3:1 time ratio must stay under 2x across.
-assert.ok(markSize(MEAL_MINUTES) / markSize(SNACK_MINUTES) < 2);
+assert.ok(markSize(MEAL_MINUTES) / markSize(SNACK) < 2);
 
-// 4. The snack classifier. It reads name, cuisines and tags; brunch and bars
-//    are meals on purpose.
-assert.ok(isSnack({ restaurant_name: 'Balthazar Bakery' }));
-assert.ok(isSnack({ restaurant_name: 'x', cuisines: ['Dessert'] }));
-assert.ok(isSnack({ restaurant_name: 'x', tags: ['coffee'] }));
-assert.ok(!isSnack({ restaurant_name: 'Gramercy Tavern', cuisines: ['American'] }));
-assert.ok(!isSnack({ restaurant_name: 'Sunday in Brooklyn', tags: ['brunch'] }));
-assert.ok(!isSnack({ restaurant_name: 'Attaboy', cuisines: ['Cocktail bar'] }));
+// 4. The dwell-time classifier. It reads name, cuisines and tags, and the tiers
+//    run shortest-sitting to longest: a grab-and-go counter is smaller than a
+//    casual meal, which is smaller than a bar sitting or a tasting menu.
+const min = (fields) => mealTier(fields).minutes;
+assert.equal(min({ restaurant_name: 'Balthazar Bakery' }), 20);
+assert.equal(min({ restaurant_name: 'x', cuisines: ['Dessert'] }), 20);
+assert.equal(min({ restaurant_name: 'x', tags: ['coffee'] }), 20);
+assert.equal(min({ restaurant_name: 'Los Tacos No. 1' }), 30);
+assert.equal(min({ restaurant_name: 'Gramercy Tavern', cuisines: ['American'] }), 60); // default meal
+assert.equal(min({ restaurant_name: 'Sunday in Brooklyn', tags: ['brunch'] }), 90);
+assert.equal(min({ restaurant_name: 'Attaboy', cuisines: ['Cocktail bar'] }), 90);
+assert.equal(min({ restaurant_name: 'Peter Luger Steakhouse' }), 135);
+// Specificity, not length: the distinctive word wins over the generic one it
+// contains — "dessert bar" is a snack, not a bar; "steakhouse" is fine dining.
+assert.equal(min({ restaurant_name: 'Milk Bar', cuisines: ['Dessert'] }), 20);
+// Whole words, Unicode-aware: an accented snack word still matches, and a bar
+// word buried inside another word does not — "barbecue" is a meal, not a bar.
+assert.equal(min({ restaurant_name: 'Café de Flore' }), 20);
+assert.equal(min({ restaurant_name: 'Hometown', cuisines: ['Barbecue'] }), 60);
+assert.ok(markSize(20) < markSize(60) && markSize(60) < markSize(90) && markSize(90) < markSize(135));
 
 // 5. The book boost is applied once, to measured seconds.
 const [chapter] = bookItems(

@@ -73,10 +73,10 @@ export const TRACKS: readonly { id: Track; label: string }[] = [
  * mark with no size is worse than a mark with an average one. 105 is close to
  * the median feature.
  *
- * `MEAL_MINUTES` / `SNACK_MINUTES` — a sit-down meal is an hour; a bakery, a
- * breakfast or a dessert is twenty minutes. That 3:1 ratio is the point: it
- * shows up as a 1.7x mark, which reads as "smaller thing, same day" rather
- * than as a different category of event.
+ * `MEAL_MINUTES` — the default sit-down: a casual restaurant's table-turn time
+ * runs ~50–60 minutes across the industry's own benchmarks, so an hour is the
+ * honest middle. The other establishment types scale off it (see `MEAL_TIERS`);
+ * this is the one every unmatched visit falls back to.
  *
  * `BOOK_BOOST` — reading time is the only one of the four that is MEASURED
  * rather than assumed (KOReader reports real seconds per book per day), and
@@ -90,74 +90,111 @@ export const TRACKS: readonly { id: Track; label: string }[] = [
  */
 export const FILM_MINUTES = 105;
 export const MEAL_MINUTES = 60;
-export const SNACK_MINUTES = 20;
 export const BOOK_BOOST = 1.3;
 
 /**
- * Words that mean "this was twenty minutes, not an hour".
+ * How long a sitting takes, by the kind of place it was.
  *
- * THE SNACK/MEAL SPLIT HAS NO COLUMN BEHIND IT. `restaurant_visits` records
- * `visited_on` as a date and nothing about the sitting — deliberately, per
- * migration 0030 ("nobody remembers what time they sat down"). So the split is
- * inferred from the free text that does exist: the place's cuisines, the
- * visit's tags, and the place's own name, which is where "Bakery" and "Coffee"
- * actually live.
+ * NO COLUMN BEHIND IT. `restaurant_visits` records `visited_on` as a date and
+ * nothing about the sitting — deliberately, per migration 0030 ("nobody
+ * remembers what time they sat down"). So the kind of place is inferred from
+ * the free text that does exist: the place's cuisines, the visit's tags, and
+ * the place's own name, which is where "Bakery" and "Steakhouse" actually live.
  *
- * Kept to unambiguous words. "Brunch" is not here — brunch is a meal that
- * takes an hour and a half. Nor is "bar": drinks are not short.
+ * THE NUMBERS ARE DWELL TIMES, NOT GUESSES. Each tier is set to the middle of
+ * the published table-turn / diner-dwell range for that kind of establishment:
+ *
+ *   snack  20  — grab-and-go counters (bakery, coffee, ice cream): 15–20 min
+ *   fast   30  — fast food / quick-service, eaten at a counter: 25–30 min
+ *   meal   60  — casual sit-down, the default: table-turn ~50–60 min
+ *   long   90  — bars, pubs and brunch, where a sitting stretches: ~90 min
+ *   fine  135  — fine dining and tasting menus, multi-course: 120–150 min
+ *
+ * The 20→135 span is a 6.7:1 ratio, which the √-area sizing draws as a 2.6x
+ * mark — a pastry and a tasting menu read as the same kind of event at very
+ * different scales, which is the point.
+ *
+ * ORDER IS SPECIFICITY, NOT LENGTH. First tier whose words match wins, so the
+ * distinctive signals are checked before the generic ones: "dessert" beats the
+ * "bar" in "dessert bar" (snack), and the "steak" in "steakhouse" beats a plain
+ * meal (fine). A place with no matching word falls through to `meal`.
  *
  * ponytail: keyword match on free text, ~90% right on this diary. The upgrade
  * is a `meal` enum on `restaurant_visits`; do it when a wrong-sized mark
  * actually bothers you, not before.
  */
-const SNACK_WORDS = [
-	'bakery',
-	'bakeries',
-	'boulangerie',
-	'patisserie',
-	'pâtisserie',
-	'pastry',
-	'pastries',
-	'dessert',
-	'desserts',
-	'ice cream',
-	'gelato',
-	'frozen yogurt',
-	'donut',
-	'doughnut',
-	'cookie',
-	'cupcake',
-	'chocolate',
-	'candy',
-	'cafe',
-	'café',
-	'coffee',
-	'espresso',
-	'tea house',
-	'teahouse',
-	'boba',
-	'bubble tea',
-	'juice',
-	'smoothie',
-	'breakfast',
-	'bagel',
-	'snack',
-	'snacks',
+export const MEAL_TIERS: readonly { label: string; minutes: number; words: string[] }[] = [
+	{
+		label: 'Snack',
+		minutes: 20,
+		words: [
+			'bakery', 'bakeries', 'boulangerie', 'patisserie', 'pâtisserie', 'pastry',
+			'pastries', 'dessert', 'ice cream', 'gelato', 'frozen yogurt', 'donut',
+			'doughnut', 'cookie', 'cupcake', 'chocolate', 'candy', 'cafe', 'café',
+			'coffee', 'espresso', 'tea house', 'teahouse', 'boba', 'bubble tea',
+			'juice', 'smoothie', 'breakfast', 'bagel', 'snack',
+		],
+	},
+	{
+		label: 'Fine dining',
+		minutes: 135,
+		words: [
+			'fine dining', 'tasting menu', 'tasting', 'omakase', 'kaiseki', 'prix fixe',
+			'prix-fixe', 'michelin', 'steakhouse', 'chophouse', 'fine',
+		],
+	},
+	{
+		// Drinks stretch a sitting the way no plate does — so a bar reads long even
+		// though nobody would call it a big meal.
+		label: 'Bar',
+		minutes: 90,
+		words: [
+			'bar', 'pub', 'gastropub', 'brewery', 'brewpub', 'taproom', 'beer hall',
+			'wine bar', 'winery', 'cocktail', 'izakaya', 'brunch',
+		],
+	},
+	{
+		label: 'Quick bite',
+		minutes: 30,
+		words: [
+			'fast food', 'fast-food', 'burger', 'taco', 'taqueria', 'deli', 'sandwich',
+			'sub shop', 'hot dog', 'food truck', 'food court', 'food hall', 'noodle bar',
+			'ramen', 'pho', 'pizza slice', 'slice shop', 'counter',
+		],
+	},
 ];
 
+/** The default sitting, when no tier's words match — a casual sit-down hour. */
+const DEFAULT_TIER = { label: 'Meal', minutes: MEAL_MINUTES };
+
+/** Each tier's words as one whole-word matcher, compiled once. WHOLE words
+ *  because the short ones are substrings of unrelated ones — bare "bar" is
+ *  inside "barbecue" (a meal, not a bar) and "pho" inside "phosphate". The
+ *  boundaries are Unicode letter/number lookarounds rather than `\b`, which is
+ *  ASCII-only and would refuse to end a word on "café" or "pâtisserie". */
+const TIER_RE = MEAL_TIERS.map((tier) => ({
+	tier,
+	re: new RegExp(
+		`(?<![\\p{L}\\p{N}])(?:${tier.words
+			.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+			.join('|')})s?(?![\\p{L}\\p{N}])`,
+		'u',
+	),
+}));
+
 /**
- * Whether a visit was a snack rather than a meal — see `SNACK_WORDS` for why
- * this is a guess and what would replace it.
+ * The kind of place a visit was — its dwell time and its fallback label. See
+ * `MEAL_TIERS` for why this is inferred from free text and what would replace it.
  */
-export function isSnack(fields: {
+export function mealTier(fields: {
 	restaurant_name?: string | null;
 	cuisines?: string[] | null;
 	tags?: string[] | null;
-}): boolean {
+}): { label: string; minutes: number } {
 	const haystack = [fields.restaurant_name ?? '', ...(fields.cuisines ?? []), ...(fields.tags ?? [])]
 		.join(' ')
 		.toLowerCase();
-	return SNACK_WORDS.some((word) => haystack.includes(word));
+	return (TIER_RE.find(({ re }) => re.test(haystack))?.tier ?? DEFAULT_TIER);
 }
 
 /**
@@ -403,16 +440,16 @@ interface VisitRow {
 
 export function mealItems(visits: VisitRow[]): JournalItem[] {
 	return visits.map((v) => {
-		const snack = isSnack(v);
+		const tier = mealTier(v);
 		const photo = v.photos?.[0];
 		return {
 			track: 'meal' as const,
 			key: String(v.id),
 			day: v.visited_on,
 			logged: v.created_at,
-			minutes: snack ? SNACK_MINUTES : MEAL_MINUTES,
+			minutes: tier.minutes,
 			title: v.restaurant_name,
-			detail: v.cuisines?.join(' · ') || v.neighborhood || (snack ? 'Snack' : 'Meal'),
+			detail: v.cuisines?.join(' · ') || v.neighborhood || tier.label,
 			image: photo ? photoSrc(photo.url, 320) : null,
 			// The photograph's own shape, when the row recorded it. A plate shot
 			// with no dimensions falls back to square rather than guessing
