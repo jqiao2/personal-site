@@ -297,6 +297,57 @@ const { title, pathname, sidebar = false } = Astro.props;
 			text-decoration: underline;
 			}
 
+			/* Search stays out of the disclosure below — it is the primary way in,
+			   the filters are secondary. A plain GET form: no script, and the URL
+			   it produces survives a reload and a share like every filter link. */
+			.rl-search {
+			display: flex;
+			}
+			.rl-search__in {
+			width: 100%;
+			max-width: 360px;
+			font: inherit;
+			font-size: 13px;
+			padding: 7px 10px;
+			border: 1px solid var(--rule);
+			background: var(--card);
+			color: var(--ink);
+			}
+
+			/* The chip rows collapse behind a disclosure so the page opens clean.
+			   A native <details>: instant show/hide, no JS, no motion. Held open
+			   from the server when a filter is active, so a filtered view never
+			   hides why it is filtered. */
+			.rl-filterbox > summary {
+			list-style: none;
+			cursor: pointer;
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			width: max-content;
+			font-size: 10.5px;
+			font-weight: 700;
+			letter-spacing: 1.4px;
+			text-transform: uppercase;
+			color: var(--ink-3);
+			padding: 2px 0;
+			}
+			.rl-filterbox > summary::-webkit-details-marker {
+			display: none;
+			}
+			.rl-filterbox > summary::before {
+			content: '▸';
+			font-size: 9px;
+			}
+			.rl-filterbox[open] > summary::before {
+			content: '▾';
+			}
+			.rl-filterbox[open] {
+			display: flex;
+			flex-direction: column;
+			gap: 10px;
+			}
+
 			.rl-more {
 			position: relative;
 			}

@@ -122,6 +122,15 @@ const activeFilters = [
 	...(onMap ? [{ label: onMap === 'off' ? 'Not on the map' : 'On the map', href: href({ map: null }) }] : []),
 ];
 
+// The chip disclosure opens itself when a filter is on, so a filtered list
+// never hides why it is filtered.
+const filtersOpen =
+	selectedCuisines.length > 0 ||
+	selectedPrices.length > 0 ||
+	selectedTags.length > 0 ||
+	trip != null ||
+	onMap != null;
+
 const countLine =
 	places.length === all.length
 		? `${all.length} place${all.length === 1 ? '' : 's'}`
@@ -179,6 +188,8 @@ function href(changes: Record<string, string | string[] | null>): string {
 		{
 			all.length > 0 && (
 				<div class="rl-filters">
+					<details class="rl-filterbox" open={filtersOpen}>
+						<summary>Filters</summary>
 					<div class="rl-filters__row">
 						<span class="rl-filters__legend">Cuisine</span>
 						{head.map((c) => (
@@ -270,6 +281,7 @@ function href(changes: Record<string, string | string[] | null>): string {
 							))}
 						</span>
 					</div>
+					</details>
 
 					{activeFilters.length > 0 && (
 						<div class="rl-filters__row rl-filters__row--active">

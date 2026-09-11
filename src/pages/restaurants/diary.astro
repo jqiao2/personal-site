@@ -21,7 +21,7 @@ import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../components/MealEditor.astro';
 import VerdictMark from '../../components/VerdictMark.astro';
 import { requireOwner } from '../../lib/auth';
-import { groupByMonth, listDiary, listFriends, listTags, getRestaurantStats } from '../../lib/restaurants';
+import { groupByMonth, listDiary, listFriends, listTags, getRestaurantStats, searchTerms, matchesSearch } from '../../lib/restaurants';
 import { placeLine } from '../../lib/restaurant-view';
 import { starText } from '../../lib/format';
 import { photoUrl } from '../../lib/restaurants';
@@ -36,6 +36,8 @@ export const prerender = false;
 // a picture the width of a fingernail.
 const THUMB = 38;
 const THUMB_WIDTHS = photoWidthsFor(THUMB);
+
+const params = Astro.url.searchParams;
 
 const [visits, stats, isOwner] = await Promise.all([
 	listDiary(),
@@ -64,7 +66,17 @@ if (visits.length > 0) {
 	}
 }
 
-const months = groupByMonth(visits);
+// Same word-by-word search as the Restaurants list, over the visit's restaurant
+// name and where it was. Filtered before grouping, so a month with no match
+// simply doesn't appear.
+const q = params.get('q') ?? '';
+const terms = searchTerms(q);
+const matched = terms.length
+	? visits.filter((v) =>
+			matchesSearch([v.restaurant_name, v.neighborhood, v.city, v.state_region, v.country], terms),
+		)
+	: visits;
+const months = groupByMonth(matched);
 ---
 
 <RestaurantLayout title="Diary · Jason's restaurant log" pathname="/restaurants">
@@ -79,12 +91,32 @@ const months = groupByMonth(visits);
 			</span>
 		</div>
 
+		<div class="rl-filters">
+			<form class="rl-search" method="get" action="/restaurants/diary" role="search">
+				<input
+					class="rl-search__in"
+					type="search"
+					name="q"
+					value={q}
+					placeholder="Search a name or place…"
+					aria-label="Search the diary by name or place"
+				/>
+			</form>
+		</div>
+
 		{
 			months.length === 0 ? (
-				<p class="rl-empty empty">
-					No meals logged yet. Every visit lands here, newest first, under the month
-					it happened in.
-				</p>
+				q.trim() ? (
+					<p class="rl-empty empty">
+						Nothing in the diary matches “{q.trim()}”.{' '}
+						<a href="/restaurants/diary">Clear the search</a> to see every visit.
+					</p>
+				) : (
+					<p class="rl-empty empty">
+						No meals logged yet. Every visit lands here, newest first, under the month
+						it happened in.
+					</p>
+				)
 			) : (
 				months.map((m) => (
 					<section class="month">
