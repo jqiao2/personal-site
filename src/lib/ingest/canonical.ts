@@ -19,6 +19,7 @@
 import { computeExertion, type Thresholds } from './../exertion';
 import { encodePolyline, routePath, bounds } from './../route-shape';
 import { SPORT_META, type Sport } from './../sports';
+import { defaultPrivate } from './../activity-privacy';
 
 // ---------------------------------------------------------------------------
 // The canonical shapes
@@ -515,6 +516,10 @@ export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRo
 
 		has_streams: hasStreams,
 		device_name: a.device_name ?? null,
+
+		// Public unless it overlaps the working day — migration 0061's backfill
+		// rule, applied to everything imported since. Editable on the site after.
+		private: defaultPrivate(a.started_at, offset, a.elapsed_seconds),
 	};
 
 	const stored = hasStreams ? trimFloatNoise(a.streams as CanonicalStreams) : null;

@@ -81,3 +81,48 @@ export function visitorQuery(query: ActivityFilterQuery): ActivityFilterQuery {
 		sortDir: query.sortDir,
 	};
 }
+
+// ---------------------------------------------------------------------------
+// The default on import — migration 0061's backfill, as a function.
+// ---------------------------------------------------------------------------
+
+/** Mon–Fri 09:00–17:00 local. Anything overlapping it stays private. */
+const WORK_DAYS = [1, 2, 3, 4, 5];
+const WORK_START_H = 9;
+const WORK_END_H = 17;
+/** An activity long enough to swallow a whole work window without either end
+ *  landing in one (Mon 17:00 → Tue 09:00) stays private rather than being
+ *  reasoned about. */
+const TOO_LONG_S = 16 * 3600;
+
+/**
+ * What `private` an imported activity gets: public unless it happened during
+ * work hours. This is migration 0061's backfill rule applied going forward, so
+ * a sync doesn't re-hide everything the backfill published.
+ *
+ * Overlap, not start time: a ride that starts at 08:30 and ends at 10:15 was a
+ * ride during work hours. Only the two endpoints are tested — same as the SQL.
+ *
+ * Local time, because a run at 06:00 in Tokyo is not a run at 21:00 UTC. An
+ * unknown offset, like an unknown anything here, stays private.
+ *
+ * Holidays and vacation days are not modelled; flip those by hand on the site.
+ */
+export function defaultPrivate(
+	startedAt: string,
+	utcOffsetMinutes: number | null | undefined,
+	elapsedSeconds: number,
+): boolean {
+	const start = Date.parse(startedAt);
+	if (!Number.isFinite(start) || utcOffsetMinutes === null || utcOffsetMinutes === undefined) return true;
+	if (!(elapsedSeconds < TOO_LONG_S)) return true;
+
+	const localStart = start + utcOffsetMinutes * 60_000;
+	return [localStart, localStart + elapsedSeconds * 1000].some(inWorkHours);
+}
+
+function inWorkHours(ms: number): boolean {
+	const t = new Date(ms);
+	const hour = t.getUTCHours() + t.getUTCMinutes() / 60 + t.getUTCSeconds() / 3600;
+	return WORK_DAYS.includes(t.getUTCDay()) && hour >= WORK_START_H && hour < WORK_END_H;
+}
