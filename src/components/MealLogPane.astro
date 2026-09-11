@@ -1,0 +1,186 @@
+---
+// The "log a meal" pane of the meal composer. Markup only — every control here
+// is wired and styled by MealEditor.astro, which renders this inside
+// #meal-editor: the script finds these by their `data-me-*` hooks, and the
+// `me__` styles reach them because MealEditor's stylesheet is `is:global` (a
+// scoped block never would — see wiki 0020). Split out purely to shrink the
+// composer file; it is not independently mounted anywhere.
+import StarPicker from './StarPicker.astro';
+import { verdictRotation } from '../lib/verdict';
+
+interface Props {
+	friendOptions: string[];
+	tagOptions: string[];
+}
+const { friendOptions, tagOptions } = Astro.props;
+---
+
+<!-- ------------------------------------------------ log a meal -->
+<div class="me__body" data-me-pane="log">
+	<div class="me__field me__field--rel">
+		<label class="rl-label" for="me-place">Place</label>
+		<div class="me__locked" data-me-locked hidden>
+			<span class="me__locked-name" data-me-locked-name></span>
+			<span class="me__locked-meta" data-me-locked-meta></span>
+			<button type="button" class="rl-btn me__change" data-me-unlock>Change</button>
+		</div>
+		<input
+			class="me__input"
+			id="me-place"
+			data-me-place
+			type="text"
+			autocomplete="off"
+			placeholder="Search or type a new place"
+		/>
+		<!-- Places already in the log, then the same candidates the to-try
+		     composer offers, then "add it anyway". See searchPlaces. -->
+		<div class="me__suggest" data-me-suggest hidden></div>
+		<!-- What a picked candidate attached, stated plainly: seeing it is
+		     the confirmation, and clearing it is how you refuse it. -->
+		<div class="me__pinned" data-me-log-pinned hidden>
+			<span class="me__pinned-mark">◎</span>
+			<span class="me__pinned-text" data-me-log-pinned-text></span>
+			<button type="button" class="me__pinned-x" data-me-unpin>clear</button>
+		</div>
+	</div>
+
+	<div class="me__field">
+		<label class="rl-label" for="me-date">Visited</label>
+		<input class="me__input me__input--mono" id="me-date" data-me-date type="date" />
+	</div>
+
+	<div class="me__field">
+		<span class="rl-label">Rating</span>
+		<!-- Stars and the two toggles share one row. The same picker the film
+		     composer uses, in this page's palette: a half star is a click on
+		     the left half of a star, so there is no half-step mode to arm
+		     first. -->
+		<div class="me__rating-row">
+			<StarPicker
+				style="--sp-size:22px;--sp-empty:#dbc7a2;--sp-fill:var(--marigold);--sp-label:var(--ink-3)"
+			/>
+			<button type="button" class="me__toggle me__toggle--heart" data-me-heart
+				>♥ <span class="me__toggle-label">Loved it</span></button
+			>
+			<button type="button" class="me__toggle" data-me-revisit
+				>↻ <span class="me__toggle-label">Been before</span></button
+			>
+		</div>
+	</div>
+
+	<div class="me__field">
+		<label class="rl-label" for="me-verdict">Would I go back</label>
+		<div class="me__verdict">
+			{/* The compass doubles as the on/off switch: tapping it clears the
+			    verdict (and taps back on), which is why there's no separate
+			    checkbox. Dimmed and reading "Not recorded" when unset. */}
+			<button
+				type="button"
+				class="me__needle"
+				data-me-verdict-toggle
+				aria-label="Clear the verdict"
+			>
+				<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+					<circle cx="12" cy="12" r="11" fill="none" stroke="var(--rule)" stroke-width="1.2"></circle>
+					<g data-me-needle transform={verdictRotation(0)}>
+						<path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="var(--avocado)"></path>
+						<rect x="11.2" y="9.2" width="1.6" height="10" fill="var(--avocado)"></rect>
+					</g>
+				</svg>
+			</button>
+			<input
+				class="me__range"
+				id="me-verdict"
+				data-me-verdict
+				type="range"
+				min="0"
+				max="5"
+				step="1"
+				value="0"
+			/>
+			<span class="me__verdict-name" data-me-verdict-name>Definitely return</span>
+		</div>
+		<p class="me__gloss" data-me-verdict-gloss></p>
+	</div>
+
+	<div class="me__field">
+		<label class="rl-label" for="me-friends">With</label>
+		<input
+			class="me__input"
+			id="me-friends"
+			data-me-friends
+			type="text"
+			list="me-friend-options"
+			autocomplete="off"
+			placeholder="Priya, Dan"
+		/>
+		<datalist id="me-friend-options">
+			{friendOptions.map((f) => <option value={f} />)}
+		</datalist>
+	</div>
+
+	{/*
+		A property of the PLACE, asked here because a meal is when you find
+		out. It is not a sixth rung of the verdict: the verdict is "would I
+		come back", this is "would I cross town to", and a place can easily
+		earn one and not the other.
+	*/}
+	<div class="me__field">
+		<span class="rl-label">Would I go out of my way</span>
+		<div class="me__trip" data-me-trips>
+			<button type="button" class="me__trip-b" data-me-trip="0">If I&rsquo;m nearby</button>
+			<button type="button" class="me__trip-b" data-me-trip="1">Worth the trip †</button>
+		</div>
+	</div>
+
+	<div class="me__field">
+		<label class="rl-label" for="me-notes">Notes</label>
+		<textarea
+			class="me__textarea"
+			id="me-notes"
+			data-me-notes
+			rows="3"
+			placeholder="What you ate, what to order next time"></textarea>
+		<button
+			type="button"
+			class="me__privtoggle"
+			data-me-private-toggle
+			aria-expanded="false"
+			aria-controls="me-private"
+		>
+			<span class="me__privlock" aria-hidden="true">🔒</span>Private note
+		</button>
+		<textarea
+			class="me__textarea me__private"
+			id="me-private"
+			data-me-private
+			rows="3"
+			hidden></textarea>
+	</div>
+
+	<div class="me__field">
+		<span class="rl-label">Photos</span>
+		<div class="me__photos" data-me-photos></div>
+		<label class="me__addphoto">
+			+
+			<input type="file" accept="image/*" multiple data-me-photo-input hidden />
+		</label>
+	</div>
+
+	<div class="me__field">
+		<label class="rl-label" for="me-tags">Tags</label>
+		<div class="me__tags" data-me-tags></div>
+		<input
+			class="me__input"
+			id="me-tags"
+			data-me-tag-input
+			type="text"
+			list="me-tag-options"
+			autocomplete="off"
+			placeholder="Enter to add"
+		/>
+		<datalist id="me-tag-options">
+			{tagOptions.map((t) => <option value={t} />)}
+		</datalist>
+	</div>
+</div>
