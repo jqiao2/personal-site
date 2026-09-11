@@ -180,4 +180,28 @@ assert.equal(retracedFraction(square), 0, 'a shape that never repeats a segment 
 	assert.equal(res.scale, 1, 'maxScale 0 pins the size');
 }
 
+// descend recovers when the router refuses a placement (a 400 over water):
+// the failed candidate is skipped, the search stays on routable ground and
+// returns a result instead of throwing.
+{
+	const { descend } = await import('../src/lib/bike-route.ts');
+	let refusals = 0;
+	// Everything east of lng 2.7 is "water" — routing there throws, like a 400.
+	const coastRoute = async (wp) => {
+		const cx = wp.reduce((s, p) => s + p[0], 0) / wp.length;
+		if (cx > 2.7) { refusals++; throw new Error('Router failed (400).'); }
+		const coords = wp.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+		return { coords, length: pathLength(coords), ascend: 0, retraced: 0 };
+	};
+	// A shape on land near the coast, so bold eastward steps land in the water.
+	const ring0 = [[2.4, 0], [2.9, 0], [2.9, 0.5], [2.4, 0.5], [2.4, 0]];
+	const res = await descend(ring0, coastRoute, {
+		startSpacing: 30000, minSpacing: 15000, maxScale: 0.1, maxEvals: 40,
+	});
+	assert.ok(res && res.routed, 'the search returns a result despite refusals');
+	const cx = res.ring.reduce((s, p) => s + p[0], 0) / res.ring.length;
+	assert.ok(cx <= 2.7, 'the winning placement stayed on routable ground, not in the water');
+	assert.ok(refusals > 0, 'the test actually exercised a router refusal');
+}
+
 console.log('bike-route: all checks passed');

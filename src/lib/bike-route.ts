@@ -488,14 +488,22 @@ export async function descend(
 	let bestMean = Infinity;
 	let round = 0;
 
-	// Route the shape at the current spacing and score it; null if it can't sample
-	// (too many waypoints, or the eval budget is spent).
+	// Route the shape at the current spacing and score it. Null means "not a usable
+	// placement" — too many waypoints, budget spent, or the router refused it (a
+	// 400: the shape sits over water or a road-less patch). A refusal is not fatal:
+	// the search simply doesn't move there and keeps trying other directions, which
+	// is how it backs out of a step that wandered off the road network.
 	const evalRing = async (r: LngLat[]) => {
 		if (evals >= maxEvals) return null;
 		const wp = resample(r, spacing, close);
 		if (wp.length < 2 || wp.length > MAX_WAYPOINTS) return null;
 		evals++;
-		const routed = await route(wp);
+		let routed: RoutedPath;
+		try {
+			routed = await route(wp);
+		} catch {
+			return null; // infeasible placement — skip it, don't crash the search
+		}
 		const dev = deviation(routed.coords, wp);
 		return { wp, routed, mean: dev.mean, max: dev.max };
 	};
