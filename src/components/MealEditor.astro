@@ -152,25 +152,43 @@ const config = {
 
 			<div class="me__field">
 				<span class="rl-label">Rating</span>
-				<!-- The same picker the film composer uses, in this page's palette:
-				     a half star is a click on the left half of a star, so there is
-				     no half-step mode to arm first. -->
-				<StarPicker
-					clearable
-					style="--sp-size:22px;--sp-empty:#dbc7a2;--sp-fill:var(--marigold);--sp-label:var(--ink-3)"
-				/>
+				<!-- Stars and the two toggles share one row. The same picker the film
+				     composer uses, in this page's palette: a half star is a click on
+				     the left half of a star, so there is no half-step mode to arm
+				     first. -->
+				<div class="me__rating-row">
+					<StarPicker
+						style="--sp-size:22px;--sp-empty:#dbc7a2;--sp-fill:var(--marigold);--sp-label:var(--ink-3)"
+					/>
+					<button type="button" class="me__toggle me__toggle--heart" data-me-heart
+						>♥ <span class="me__toggle-label">Loved it</span></button
+					>
+					<button type="button" class="me__toggle" data-me-revisit
+						>↻ <span class="me__toggle-label">Been before</span></button
+					>
+				</div>
 			</div>
 
 			<div class="me__field">
 				<label class="rl-label" for="me-verdict">Would I go back</label>
 				<div class="me__verdict">
-					<svg class="me__needle" viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
-						<circle cx="12" cy="12" r="11" fill="none" stroke="var(--rule)" stroke-width="1.2"></circle>
-						<g data-me-needle transform={verdictRotation(0)}>
-							<path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="var(--avocado)"></path>
-							<rect x="11.2" y="9.2" width="1.6" height="10" fill="var(--avocado)"></rect>
-						</g>
-					</svg>
+					{/* The compass doubles as the on/off switch: tapping it clears the
+					    verdict (and taps back on), which is why there's no separate
+					    checkbox. Dimmed and reading "Not recorded" when unset. */}
+					<button
+						type="button"
+						class="me__needle"
+						data-me-verdict-toggle
+						aria-label="Clear the verdict"
+					>
+						<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+							<circle cx="12" cy="12" r="11" fill="none" stroke="var(--rule)" stroke-width="1.2"></circle>
+							<g data-me-needle transform={verdictRotation(0)}>
+								<path d="M12 3.4 L16.2 11.4 L12 9.5 L7.8 11.4 Z" fill="var(--avocado)"></path>
+								<rect x="11.2" y="9.2" width="1.6" height="10" fill="var(--avocado)"></rect>
+							</g>
+						</svg>
+					</button>
 					<input
 						class="me__range"
 						id="me-verdict"
@@ -184,15 +202,6 @@ const config = {
 					<span class="me__verdict-name" data-me-verdict-name>Definitely return</span>
 				</div>
 				<p class="me__gloss" data-me-verdict-gloss></p>
-				<label class="me__unset">
-					<input type="checkbox" data-me-verdict-unset checked />
-					<span>No verdict yet</span>
-				</label>
-			</div>
-
-			<div class="me__toggles">
-				<button type="button" class="me__toggle me__toggle--heart" data-me-heart>♥ Loved it</button>
-				<button type="button" class="me__toggle" data-me-revisit>↻ Been before</button>
 			</div>
 
 			<div class="me__field">
@@ -578,7 +587,6 @@ const config = {
 			$('[data-me-verdict-name]')!.textContent = state.verdictSet ? v.label : 'Not recorded';
 			$('[data-me-verdict-gloss]')!.textContent = state.verdictSet ? v.gloss : '';
 			($('[data-me-verdict]') as HTMLInputElement).value = String(state.verdict);
-			($('[data-me-verdict-unset]') as HTMLInputElement).checked = !state.verdictSet;
 
 			$('[data-me-heart]')!.classList.toggle('me__toggle--on', state.hearted);
 			$('[data-me-revisit]')!.classList.toggle('me__toggle--on', state.revisit);
@@ -665,7 +673,6 @@ const config = {
 
 			const bits: string[] = [];
 			if (state.rating) bits.push(`${state.rating}★`);
-			if (state.verdictSet) bits.push(v.label.toLowerCase());
 			if (state.photos.length) bits.push(`${state.photos.length} photo${state.photos.length === 1 ? '' : 's'}`);
 			$('[data-me-summary]')!.textContent = state.pane === 'try' ? '' : bits.join(' · ');
 
@@ -1234,8 +1241,10 @@ const config = {
 			state.verdictSet = true;
 			render();
 		});
-		$('[data-me-verdict-unset]')!.addEventListener('change', (e) => {
-			state.verdictSet = !(e.target as HTMLInputElement).checked;
+		// The compass is the verdict's on/off switch, replacing a checkbox:
+		// tapping it clears a recorded verdict, and taps it back on.
+		$('[data-me-verdict-toggle]')!.addEventListener('click', () => {
+			state.verdictSet = !state.verdictSet;
 			render();
 		});
 
@@ -1575,9 +1584,26 @@ const config = {
 		max-height: calc(100vh - 190px);
 		overflow-y: auto;
 		overflow-x: hidden;
+		/* The rating row drops its toggle labels by its own width — see the
+		   @container rule below. */
+		container-type: inline-size;
 	}
 	.me__body[hidden] {
 		display: none;
+	}
+	/* Stars sit on one row with the two toggles. */
+	.me__rating-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		flex-wrap: nowrap;
+	}
+	/* When that row can't hold the words too, the toggles fall back to their
+	   ♥ / ↻ glyphs alone. */
+	@container (max-width: 420px) {
+		.me__toggle-label {
+			display: none;
+		}
 	}
 	.me__field {
 		display: flex;
@@ -1745,6 +1771,12 @@ const config = {
 	}
 	.me__needle {
 		flex: none;
+		display: inline-flex;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		line-height: 0;
 	}
 	.me__range {
 		flex: 1;
@@ -1767,20 +1799,6 @@ const config = {
 		font-size: 13px;
 		color: var(--ink-3);
 		min-height: 1em;
-	}
-	.me__unset {
-		display: flex;
-		align-items: center;
-		gap: 7px;
-		font-size: 12px;
-		color: var(--ink-3);
-		cursor: pointer;
-	}
-
-	.me__toggles {
-		display: flex;
-		gap: 8px;
-		flex-wrap: wrap;
 	}
 	.me__toggle {
 		border: 1px solid var(--rule);
@@ -1958,6 +1976,19 @@ const config = {
 		background: var(--disabled);
 		color: var(--ink-4);
 		cursor: not-allowed;
+	}
+
+	/* MOBILE AND DESKTOP DIVERGE HERE. On desktop the body scrolls inside a
+	   fixed bar/foot, capped at the viewport. On mobile that inner scroll is
+	   dropped: the sheet grows to its full content height (off the screen if it
+	   must) and the whole .me container scrolls as one, so a thumb drags the
+	   entire dialog rather than a box within it. Any new dialog feature has to
+	   be checked in both layouts. */
+	@media (max-width: 640px) {
+		.me__body {
+			max-height: none;
+			overflow: visible;
+		}
 	}
 </style>
 

@@ -188,8 +188,8 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 							style="--sp-empty:#4a2529;--sp-fill:#d9b45a;--sp-label:#a2857a"
 						/>
 						<div class="toggles">
-							<button type="button" class="toggle" id="ee-like">♥ Like</button>
-							<button type="button" class="toggle" id="ee-rewatch">↻ Rewatch</button>
+							<button type="button" class="toggle" id="ee-like">♥ <span class="toggle__label">Like</span></button>
+							<button type="button" class="toggle" id="ee-rewatch">↻ <span class="toggle__label">Rewatch</span></button>
 						</div>
 					</div>
 				</div>
@@ -365,6 +365,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		display: flex;
 		flex-direction: column;
 		gap: 20px;
+		/* The rating row drops its Like/Rewatch labels by its own width, not the
+		   viewport's — see the @container rule below. */
+		container-type: inline-size;
 	}
 	.full-form[hidden] {
 		display: none;
@@ -734,7 +737,14 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		display: flex;
 		align-items: center;
 		gap: 14px;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+	}
+	/* Stars + Like + Rewatch stay on one line; when that line can't hold the
+	   words too, the pills fall back to their ♥ / ↻ glyphs alone. */
+	@container (max-width: 400px) {
+		.rating-row .toggle__label {
+			display: none;
+		}
 	}
 	.toggles {
 		display: flex;
@@ -1015,6 +1025,12 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		background: #e89b70;
 	}
 
+	/* MOBILE AND DESKTOP DIVERGE HERE. On desktop the panel is capped at the
+	   viewport and its body scrolls inside a fixed head/foot. On mobile that
+	   inner scroll is dropped: the panel grows to its full content height (off
+	   the screen if it must) and the whole modal scrolls as one, so a thumb
+	   drags the entire dialog rather than a box within it. Any new dialog
+	   feature has to be checked in both layouts. */
 	@media (max-width: 640px) {
 		.field-grid {
 			grid-template-columns: 1fr;
@@ -1022,6 +1038,39 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		.cal {
 			right: auto;
 			left: 0;
+		}
+		.modal {
+			overflow-y: auto;
+			/* Narrower gutter than desktop, to leave the row of medium buttons
+			   room to keep its words on a phone. */
+			padding: 40px 12px;
+		}
+		/* Fixed so the darkened backdrop covers the viewport no matter how far
+		   the (now taller-than-screen) panel is scrolled. */
+		.modal__backdrop {
+			position: fixed;
+		}
+		.modal__panel {
+			max-height: none;
+		}
+		.modal__body {
+			overflow: visible;
+			padding: 20px 16px 24px;
+		}
+		/* Keep the five medium buttons on a single row. They shrink to fit and
+		   only ellipsize on the narrowest phones. */
+		.mediums {
+			flex-wrap: nowrap;
+			gap: 5px;
+		}
+		.mediums .toggle {
+			flex: 0 1 auto;
+			min-width: 0;
+			padding: 8px 6px;
+			font-size: 11.5px;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 	}
 </style>
