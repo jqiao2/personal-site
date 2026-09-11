@@ -530,14 +530,23 @@ export async function descend(
 		}
 	};
 
+	// Share the eval budget across the spacing levels so the search actually
+	// reaches the fine ones. Without this, halving the step down to minStep at the
+	// coarsest spacing (a dozen-plus router calls that often improve nothing) can
+	// eat the whole budget before spacing ever tightens — the "it stopped shrinking
+	// the spacing" bug. Each level gets a fair slice; when it's spent, move finer.
+	const levelCount = Math.max(1, Math.ceil(Math.log(opts.minSpacing / opts.startSpacing) / Math.log(shrink)) + 1);
+	const perLevel = Math.max(5, Math.ceil(maxEvals / levelCount));
+
 	while (spacing >= opts.minSpacing && evals < maxEvals) {
+		const levelCeil = evals + perLevel; // this level's eval budget
 		const cur = await evalRing(ring);
 		if (!cur) break;
 		report(ring, cur);
 		let curScore = cur.score;
 		let step = size * 0.25; // bold: reach across the area, not inch
 		const minStep = size * 0.01;
-		while (step >= minStep && evals < maxEvals) {
+		while (step >= minStep && evals < maxEvals && evals < levelCeil) {
 			// Neighbours: slide N/S/E/W by the current step, and (within the bound)
 			// scale up/down. A move is adopted only when it improves the score — road
 			// fit net of the pull home — so drifting away has to earn its distance.

@@ -228,4 +228,39 @@ assert.equal(retracedFraction(square), 0, 'a shape that never repeats a segment 
 	assert.ok(cxOf(loose.ring) > cxOf(held.ring) + 2, 'the pull demonstrably curbs the drift');
 }
 
+// The search keeps tightening the spacing through the eval budget — it doesn't
+// burn the whole budget churning at the coarsest spacing. Router traces perfectly
+// (no move ever improves), which is exactly the case that used to stall.
+{
+	const { descend } = await import('../src/lib/bike-route.ts');
+	const perfect = async (wp) => ({ coords: wp.map((p) => [p[0], p[1]]), length: 0, ascend: 0, retraced: 0 });
+	const ring0 = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
+	const spacingsKm = [];
+	await descend(ring0, perfect, {
+		startSpacing: 30000, minSpacing: 2000, shrink: 0.7, maxEvals: 40,
+		onRound: (r) => spacingsKm.push(r.spacingKm),
+	});
+	const distinct = new Set(spacingsKm.map((s) => s.toFixed(2))).size;
+	assert.ok(distinct >= 4, `spacing tightened through several levels (saw ${distinct})`);
+	assert.ok(Math.min(...spacingsKm) < 8, 'the search reached a fine spacing, not stuck at the start');
+}
+
+// When a finer spacing genuinely traces better, the optimizer settles at a fine
+// spacing — it doesn't get stuck at the start spacing (the reported regression).
+{
+	const { descend } = await import('../src/lib/bike-route.ts');
+	const finerBetter = async (wp) => {
+		let seg = 0;
+		for (let i = 1; i < wp.length; i++) seg += Math.hypot(wp[i][0] - wp[i - 1][0], wp[i][1] - wp[i - 1][1]);
+		const off = (seg / Math.max(1, wp.length - 1)) * 0.2; // deviation ∝ spacing
+		const coords = wp.map(([x, y]) => [x, y + off]);
+		return { coords, length: 0, ascend: 0, retraced: 0 };
+	};
+	const ring0 = [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]];
+	const res = await descend(ring0, finerBetter, {
+		startSpacing: 30000, minSpacing: 3000, shrink: 0.7, maxEvals: 60,
+	});
+	assert.ok(res.spacing < 30000 * 0.6, `settled at a finer spacing than the start (${res.spacing} m)`);
+}
+
 console.log('bike-route: all checks passed');

@@ -62,7 +62,11 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			<div class="bo__field bo__field--inline">
 				<label for="bo-profile">Profile</label>
 				<select id="bo-profile">
-					{PROFILES.map((p) => <option value={p}>{p}</option>)}
+					{PROFILES.map((p) => (
+						<option value={p} selected={p === 'fastbike'}>
+							{p === 'fastbike' ? 'cycling' : p}
+						</option>
+					))}
 				</select>
 			</div>
 
