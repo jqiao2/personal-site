@@ -149,7 +149,7 @@ function geomSize(geom: any): number {
  * a border no road follows anyway. The first point is always kept, and the last
  * is snapped back to the first so the ride closes into a loop.
  */
-export function resample(ring: LngLat[], spacing: number): LngLat[] {
+export function resample(ring: LngLat[], spacing: number, close = true): LngLat[] {
 	if (ring.length < 2) return ring.slice();
 	const out: LngLat[] = [ring[0]];
 	let carried = 0; // distance walked since the last emitted point
@@ -168,8 +168,10 @@ export function resample(ring: LngLat[], spacing: number): LngLat[] {
 		}
 		carried += (1 - start) * segLen;
 	}
-	// Close the loop back to the start rather than leaving a dangling last vertex.
-	if (haversine(out[out.length - 1], ring[0]) > spacing / 4) out.push(ring[0]);
+	// A country ring closes back to the start; an open trail (a line drawing, which
+	// already walks its own path end to end) keeps its final vertex as its end.
+	if (close && haversine(out[out.length - 1], ring[0]) > spacing / 4) out.push(ring[0]);
+	else if (!close && out[out.length - 1] !== ring[ring.length - 1]) out.push(ring[ring.length - 1]);
 	return out;
 }
 
@@ -385,37 +387,49 @@ export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 	return { mean, p95, max: dists[dists.length - 1] };
 }
 
-// --- stochastic descent ---------------------------------------------------
+// --- placement search ------------------------------------------------------
 //
 // You draw an outline and a rough area, but you don't know exactly where in that
-// area the shape sits best on real roads. This searches the placement: the shape
-// stays rigid — same size, same proportions — and only slides around. Route the
-// outline where it currently sits, measure which way the road route pulled away
-// from it on average (the "direction of the deviation"), shift the whole outline
-// that way, tighten the sampling, and route again. Each round the rigid shape
-// moves toward the spot where roads trace it most faithfully. It stops when the
-// next spacing would need more waypoints than one run allows (can't go finer) or
-// when it reaches the floor, and returns the lowest-deviation placement it saw.
+// area the shape sits best on real roads. This searches the placement by direct
+// hill-climbing on road fidelity: route the shape where it sits, then try nudging
+// the whole shape N/S/E/W (and, within a bound, scaling it up or down), keep any
+// move that makes the road route trace the outline more faithfully, and repeat.
+// The step starts bold — a quarter of the shape's own size — so early moves reach
+// clear across the area instead of inching; when no neighbour improves, the step
+// halves to refine in place, and the sample spacing tightens each level. It ends
+// at the spacing floor or a hard cap on router calls, returning the best it saw.
+//
+// This replaced a timid single-direction slide (0.2 of the mean offset per round)
+// that barely moved — fine for a country you eyeball into place, useless for a
+// line drawing dropped anywhere. Scaling is bounded (default ±15%) on purpose, so
+// the fitted ride stays about as long as you intended; set maxScale to 0 to pin
+// the size and search translation only.
+// ponytail: greedy local search — a bold coordinate-descent, not simulated
+// annealing. It can still settle in a local optimum; if that bites, seed a few
+// random restarts or anneal. Router calls are the cost, so maxEvals caps them.
 
-/** The average offset from the outline to the road route: for each outline
- *  vertex, the vector to its nearest routed point, meaned over the ring. This is
- *  the single direction the whole rigid shape should slide to sit better on the
- *  roads — no per-vertex movement, so the shape never deforms. */
-function meanOffset(ring: LngLat[], route: LngLat[]): LngLat {
-	// ponytail: O(ring·route) nearest-point scan per round. Rings are ~dozens and
-	// routes ~thousands of points, so it's a few hundred k ops — fine. A grid index
-	// is the upgrade if outlines ever get large.
+/** Centroid of a ring (mean of its vertices). */
+function centroidOf(ring: LngLat[]): LngLat {
 	let sx = 0, sy = 0;
-	for (const v of ring) {
-		let bx = v[0], by = v[1], bd = Infinity;
-		for (const p of route) {
-			const d = (p[0] - v[0]) ** 2 + (p[1] - v[1]) ** 2;
-			if (d < bd) { bd = d; bx = p[0]; by = p[1]; }
-		}
-		sx += bx - v[0];
-		sy += by - v[1];
-	}
+	for (const p of ring) { sx += p[0]; sy += p[1]; }
 	return [sx / ring.length, sy / ring.length];
+}
+
+/** Scale a ring about `c` by `sMul`, then translate by (dx, dy). */
+function transform(ring: LngLat[], dx: number, dy: number, sMul: number, c: LngLat): LngLat[] {
+	return ring.map(([x, y]) => [c[0] + (x - c[0]) * sMul + dx, c[1] + (y - c[1]) * sMul + dy] as LngLat);
+}
+
+/** The bounding-box diagonal of a ring, in degrees — the shape's own size, used
+ *  to scale the search step so "a quarter of the shape" means the same whether the
+ *  outline spans a city or a country. */
+function ringSpan(ring: LngLat[]): number {
+	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+	for (const [x, y] of ring) {
+		if (x < minX) minX = x; if (x > maxX) maxX = x;
+		if (y < minY) minY = y; if (y > maxY) maxY = y;
+	}
+	return Math.hypot(maxX - minX, maxY - minY) || 1;
 }
 
 export interface DescentRound {
@@ -424,31 +438,34 @@ export interface DescentRound {
 	waypoints: number;
 	meanDev: number;
 	maxDev: number;
-	ring: LngLat[]; // the rigid outline where it sat this round (before its shift)
-	routed: RoutedPath; // this round's route — draw it to watch the descent
+	scale: number; // cumulative scale vs the start (1 = unchanged)
+	ring: LngLat[]; // the outline where it sat when this was reported
+	routed: RoutedPath; // its route — draw it to watch the search
 }
 
 export interface DescentResult {
-	ring: LngLat[]; // the nudged outline that produced the best route
+	ring: LngLat[]; // the placed outline that produced the best route
 	waypoints: LngLat[];
 	routed: RoutedPath;
 	spacing: number; // metres, the spacing of the winning round
 	rounds: number;
+	scale: number; // final cumulative scale vs the start
 }
 
 export interface DescentOpts {
 	startSpacing: number; // metres
 	minSpacing: number; // metres — the floor
-	shrink?: number; // spacing multiplier per round, 0<shrink<1 (default 0.85)
-	rate?: number; // fraction of the mean offset to slide per round, 0..1 (default 0.2)
+	shrink?: number; // spacing multiplier per level, 0<shrink<1 (default 0.85)
+	maxScale?: number; // max |scale − 1| allowed, e.g. 0.15; 0 pins the size (default 0.15)
+	maxEvals?: number; // hard cap on router calls the whole search may make (default 60)
+	close?: boolean; // closed ring (country) or open trail (line drawing) — default true
 	onRound?: (r: DescentRound) => void;
 }
 
 /**
- * Slide a rigid outline to the placement where roads trace it best, tightening
- * the sampling each round. The shape is only ever translated, never reshaped.
- * `route` is injected so this stays pure of network wiring (the page passes a
- * BRouter call). Returns the lowest-mean-deviation placement.
+ * Search where (and, within `maxScale`, how big) the shape sits so roads trace it
+ * best. `route` is injected so this stays pure of network wiring (the page passes
+ * a BRouter call). Returns the lowest-mean-deviation placement it found.
  */
 export async function descend(
 	ring0: LngLat[],
@@ -456,38 +473,84 @@ export async function descend(
 	opts: DescentOpts,
 ): Promise<DescentResult> {
 	const shrink = opts.shrink ?? 0.85;
-	const rate = opts.rate ?? 0.2;
+	const maxScale = opts.maxScale ?? 0.15;
+	const maxEvals = opts.maxEvals ?? 60;
+	const close = opts.close ?? true;
+	const size = ringSpan(ring0);
+
 	let ring = ring0.slice();
+	let scale = 1; // cumulative scale vs ring0
 	let spacing = opts.startSpacing;
-	let best: DescentResult | null = null;
+	let evals = 0;
+	// A holder, not a bare `let`: `best` is only ever assigned inside the `report`
+	// closure, and TS won't narrow a closure-assigned local, so a property does it.
+	const found: { best: DescentResult | null } = { best: null };
 	let bestMean = Infinity;
 	let round = 0;
-	while (spacing >= opts.minSpacing) {
-		const waypoints = resample(ring, spacing);
-		if (waypoints.length > MAX_WAYPOINTS) break; // can't decrease spacing any further
-		const routed = await route(waypoints);
-		const dev = deviation(routed.coords, waypoints);
+
+	// Route the shape at the current spacing and score it; null if it can't sample
+	// (too many waypoints, or the eval budget is spent).
+	const evalRing = async (r: LngLat[]) => {
+		if (evals >= maxEvals) return null;
+		const wp = resample(r, spacing, close);
+		if (wp.length < 2 || wp.length > MAX_WAYPOINTS) return null;
+		evals++;
+		const routed = await route(wp);
+		const dev = deviation(routed.coords, wp);
+		return { wp, routed, mean: dev.mean, max: dev.max };
+	};
+	const report = (r: LngLat[], e: { wp: LngLat[]; routed: RoutedPath; mean: number; max: number }) => {
 		opts.onRound?.({
-			round,
-			spacingKm: spacing / 1000,
-			waypoints: waypoints.length,
-			meanDev: dev.mean,
-			maxDev: dev.max,
-			ring: ring.slice(),
-			routed,
+			round, spacingKm: spacing / 1000, waypoints: e.wp.length,
+			meanDev: e.mean, maxDev: e.max, scale, ring: r.slice(), routed: e.routed,
 		});
-		if (dev.mean < bestMean) {
-			bestMean = dev.mean;
-			best = { ring: ring.slice(), waypoints, routed, spacing, rounds: round + 1 };
+		if (e.mean < bestMean) {
+			bestMean = e.mean;
+			found.best = { ring: r.slice(), waypoints: e.wp, routed: e.routed, spacing, rounds: round + 1, scale };
 		}
-		const [dx, dy] = meanOffset(ring, routed.coords);
-		ring = ring.map(([x, y]) => [x + dx * rate, y + dy * rate] as LngLat); // rigid slide
+	};
+
+	while (spacing >= opts.minSpacing && evals < maxEvals) {
+		const cur = await evalRing(ring);
+		if (!cur) break;
+		report(ring, cur);
+		let curMean = cur.mean;
+		let step = size * 0.25; // bold: reach across the area, not inch
+		const minStep = size * 0.01;
+		while (step >= minStep && evals < maxEvals) {
+			// Neighbours: slide N/S/E/W by the current step, and (within the bound)
+			// scale up/down. The first that improves fidelity is adopted; the search
+			// keeps hopping in whichever directions keep paying off.
+			const moves: [number, number, number][] = [
+				[step, 0, 1], [-step, 0, 1], [0, step, 1], [0, -step, 1],
+			];
+			if (maxScale > 0) {
+				const up = Math.min(1 + maxScale, scale * 1.05) / scale;
+				const dn = Math.max(1 - maxScale, scale * 0.95) / scale;
+				if (up > 1.0001) moves.push([0, 0, up]);
+				if (dn < 0.9999) moves.push([0, 0, dn]);
+			}
+			let improved = false;
+			for (const [dx, dy, sMul] of moves) {
+				if (evals >= maxEvals) break;
+				const trial = transform(ring, dx, dy, sMul, centroidOf(ring));
+				const e = await evalRing(trial);
+				if (e && e.mean < curMean - 1e-9) {
+					ring = trial;
+					curMean = e.mean;
+					scale *= sMul;
+					improved = true;
+					round++;
+					report(ring, e);
+				}
+			}
+			if (!improved) step *= 0.5; // nothing nearer helped — look closer
+		}
 		spacing *= shrink;
-		round++;
 	}
-	if (!best) throw new Error('Could not route the outline at any spacing.');
-	best.rounds = round;
-	return best;
+	if (!found.best) throw new Error('Could not route the outline at any spacing.');
+	found.best.rounds = round;
+	return found.best;
 }
 
 /** A GPX track from a list of [lng, lat] points, ready to import into
@@ -594,7 +657,7 @@ async function brouterLeg(waypoints: LngLat[], profile: Profile): Promise<{ coor
  * stitched whole: first removeBacktracks (out-and-back spurs), then removeLoops
  * (the block-circling lassoes), so an excursion straddling a seam is still cut.
  */
-export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Promise<RoutedPath> {
+export async function routeWaypoints(waypoints: LngLat[], profile: Profile, cleanup = true): Promise<RoutedPath> {
 	if (waypoints.length < 2) throw new Error('Need at least two waypoints to route.');
 	if (waypoints.length > MAX_WAYPOINTS) {
 		throw new Error(`${waypoints.length} waypoints exceeds the ${MAX_WAYPOINTS} limit — widen the spacing.`);
@@ -609,10 +672,16 @@ export async function routeWaypoints(waypoints: LngLat[], profile: Profile): Pro
 		// seam waypoint the previous leg already ended on.
 		coords = coords.length ? coords.concat(leg.coords.slice(1)) : leg.coords;
 	}
-	coords = removeBacktracks(coords);
-	// Spare the outline's own thin features (peninsulas) from the lasso cleanup —
-	// they carry a run of waypoints; a router artifact between waypoints doesn't.
-	coords = removeLoops(coords, 70, 250, 6000, anchorKeySet(coords, waypoints));
-	coords = removeBacktracks(coords); // a spliced loop can leave a small new spur
+	// A country outline is a simple loop, so any out-and-back or lasso is a router
+	// artifact to strip. A line drawing's route *plans* its backtracking (the
+	// Chinese-postman doubling), so cleanup would delete required coverage — the
+	// caller turns it off for that mode.
+	if (cleanup) {
+		coords = removeBacktracks(coords);
+		// Spare the outline's own thin features (peninsulas) from the lasso cleanup —
+		// they carry a run of waypoints; a router artifact between waypoints doesn't.
+		coords = removeLoops(coords, 70, 250, 6000, anchorKeySet(coords, waypoints));
+		coords = removeBacktracks(coords); // a spliced loop can leave a small new spur
+	}
 	return { coords, length: pathLength(coords), ascend, retraced: retracedFraction(coords) };
 }

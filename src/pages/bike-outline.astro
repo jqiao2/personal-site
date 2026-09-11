@@ -36,6 +36,16 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 				<button id="bo-loadgeo" type="button">Load shape</button>
 			</details>
 
+			<details class="bo__geo">
+				<summary>…or trace a line drawing</summary>
+				<input id="bo-image" type="file" accept="image/*" />
+				<div class="bo__field bo__field--inline">
+					<label for="bo-threshold">Ink threshold</label>
+					<input id="bo-threshold" type="number" min="20" max="250" step="5" value="128" />
+				</div>
+				<p class="bo__hint">A clean black-on-white sketch traces best. Its strokes ride as one route, backtracking where the drawing forces it.</p>
+			</details>
+
 			<div class="bo__field bo__field--inline">
 				<label for="bo-direction">Direction</label>
 				<select id="bo-direction">
@@ -57,8 +67,8 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			</div>
 
 			<div class="bo__field bo__field--inline">
-				<label for="bo-rate">Shift rate</label>
-				<input id="bo-rate" type="number" min="0.05" max="1" step="0.05" value="0.2" />
+				<label for="bo-maxscale">Max scale (%)</label>
+				<input id="bo-maxscale" type="number" min="0" max="50" step="5" value="15" />
 			</div>
 
 			<div class="bo__field bo__field--inline">
@@ -118,6 +128,9 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		type LngLat,
 		type Profile,
 	} from '../lib/bike-route';
+	import { imageToGraph } from '../lib/line-art';
+	import { eulerRoute, type Graph, type Pt } from '../lib/postman';
+	import TraceSkeleton from 'skeleton-tracing-wasm';
 
 	const cfg = JSON.parse(document.getElementById('bo-config')!.textContent || '{}') as { key: string };
 	const SVGNS = 'http://www.w3.org/2000/svg';
@@ -127,10 +140,12 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 	const placeIn = $<HTMLInputElement>('bo-place');
 	const geojsonIn = $<HTMLTextAreaElement>('bo-geojson');
+	const imageIn = $<HTMLInputElement>('bo-image');
+	const thresholdIn = $<HTMLInputElement>('bo-threshold');
 	const directionIn = $<HTMLSelectElement>('bo-direction');
 	const spacingIn = $<HTMLInputElement>('bo-spacing');
 	const profileIn = $<HTMLSelectElement>('bo-profile');
-	const rateIn = $<HTMLInputElement>('bo-rate');
+	const scaleIn = $<HTMLInputElement>('bo-maxscale');
 	const shrinkIn = $<HTMLInputElement>('bo-shrink');
 	const genBtn = $<HTMLButtonElement>('bo-generate');
 	const optBtn = $<HTMLButtonElement>('bo-optimize');
@@ -140,8 +155,13 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	const mapEl = $<HTMLElement>('bo-map');
 	const stencilEl = document.getElementById('bo-stencil') as unknown as SVGSVGElement;
 
-	// The loaded shape, normalized to a centred unit box (null until one loads).
-	let shapeNorm: [number, number][] | null = null;
+	// The loaded shape as one or more normalized paths (a country is a single
+	// closed ring; a line drawing is many strokes). Null until a shape loads.
+	let shapePaths: Pt[][] | null = null;
+	// For a line drawing, its graph in normalized coords — the strokes and how they
+	// join — which the route inspector orders into one rideable trail. Null for a
+	// country (a country is already a single loop, so it needs no ordering).
+	let lineGraph: Graph | null = null;
 	let name = 'outline';
 	let routeCoords: LngLat[] = [];
 
@@ -176,30 +196,39 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	// --- the fixed-screen stencil -------------------------------------------
 
-	/** The stencil's vertices in map-container pixels, at the current size. The
-	 *  overlay and generate both read this, so what you see is what gets placed. */
-	function stencilPixels(): [number, number][] {
-		if (!shapeNorm) return [];
+	/** A normalized point → map-container pixel at the current stencil size. */
+	function normToPx([nx, ny]: Pt): [number, number] {
 		const w = mapEl.clientWidth, h = mapEl.clientHeight;
 		const scale = STENCIL_FRACTION * Math.min(w, h);
-		return shapeNorm.map(([nx, ny]) => [w / 2 + nx * scale, h / 2 + ny * scale]);
+		return [w / 2 + nx * scale, h / 2 + ny * scale];
+	}
+
+	/** Every stencil path in map-container pixels. The overlay and generate both
+	 *  read this, so what you see is what gets placed. */
+	function stencilPaths(): [number, number][][] {
+		return shapePaths ? shapePaths.map((path) => path.map(normToPx)) : [];
 	}
 
 	function drawStencil() {
 		stencilEl.replaceChildren();
-		if (!shapeNorm) return;
-		const px = stencilPixels();
-		const poly = document.createElementNS(SVGNS, 'polygon');
-		poly.setAttribute('points', px.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '));
-		poly.setAttribute('class', 'bo__stencil-shape');
-		stencilEl.appendChild(poly);
-		// A dot at the first vertex — where the ride starts.
-		const dot = document.createElementNS(SVGNS, 'circle');
-		dot.setAttribute('cx', px[0][0].toFixed(1));
-		dot.setAttribute('cy', px[0][1].toFixed(1));
-		dot.setAttribute('r', '5');
-		dot.setAttribute('class', 'bo__stencil-start');
-		stencilEl.appendChild(dot);
+		if (!shapePaths) return;
+		const paths = stencilPaths();
+		for (const px of paths) {
+			const poly = document.createElementNS(SVGNS, 'polyline');
+			poly.setAttribute('points', px.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '));
+			poly.setAttribute('class', 'bo__stencil-shape');
+			stencilEl.appendChild(poly);
+		}
+		// A dot at the first vertex of the first path — where the ride starts.
+		const first = paths[0]?.[0];
+		if (first) {
+			const dot = document.createElementNS(SVGNS, 'circle');
+			dot.setAttribute('cx', first[0].toFixed(1));
+			dot.setAttribute('cy', first[1].toFixed(1));
+			dot.setAttribute('r', '5');
+			dot.setAttribute('class', 'bo__stencil-start');
+			stencilEl.appendChild(dot);
+		}
 	}
 
 	// Keep the stencil the same screen size and centred as the map resizes.
@@ -249,14 +278,32 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		}
 	}
 
-	// The stencil, unprojected to where it now sits on the map and wound in the
-	// chosen direction — the geographic outline both Generate and Optimize start from.
-	function placedRing(): LngLat[] {
-		const placed = stencilPixels().map((p) => {
+	/** A normalized point unprojected to where it now sits on the map. */
+	function normToLngLat(p: Pt): LngLat {
+		const ll = map.unproject(normToPx(p) as maplibregl.PointLike);
+		return [ll.lng, ll.lat];
+	}
+
+	// The ordered geographic path both Generate and Optimize start from, for the
+	// shape at its current placement. A country: the single ring, wound cw/ccw. A
+	// line drawing: its strokes unprojected into a graph, then ordered by the route
+	// inspector into one trail that covers every stroke with the least backtracking.
+	// `close` says whether the path loops (a country) or runs end to end (a trail);
+	// `doubled` is the trail's planned backtracking length, in degrees (0 for a ring).
+	function placedPath(): { path: LngLat[]; close: boolean; doubled: number } {
+		if (lineGraph) {
+			const g: Graph = {
+				nodes: lineGraph.nodes.map(normToLngLat),
+				edges: lineGraph.edges.map((e) => ({ a: e.a, b: e.b, pts: e.pts.map(normToLngLat) })),
+			};
+			const { path, doubled } = eulerRoute(g);
+			return { path, close: false, doubled };
+		}
+		const ring = orientRing(stencilPaths()[0].map((p) => {
 			const ll = map.unproject(p as maplibregl.PointLike);
 			return [ll.lng, ll.lat] as LngLat;
-		});
-		return orientRing(placed, directionIn.value === 'cw');
+		}), directionIn.value === 'cw');
+		return { path: ring, close: true, doubled: 0 };
 	}
 
 	// Fill the stats panel from a routed result against its waypoints.
@@ -272,8 +319,8 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	// --- load a shape --------------------------------------------------------
 
-	function loadRing(ring: LngLat[], label: string) {
-		shapeNorm = normalizeShape(ring);
+	// Common tail of loading any shape: draw it, enable the buttons, clear the map.
+	function afterLoad(label: string) {
 		name = label;
 		drawStencil();
 		genBtn.disabled = false;
@@ -286,6 +333,36 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			setOutline([]);
 		});
 		status('Pan and zoom the map to place the shape, then generate.');
+	}
+
+	function loadRing(ring: LngLat[], label: string) {
+		shapePaths = [normalizeShape(ring)];
+		lineGraph = null; // a country is a single loop — no ordering needed
+		afterLoad(label);
+	}
+
+	// A line drawing: sanitize and vectorize the image into a stroke graph, place
+	// it like a country. Heavy work (the WASM tracer) loads lazily on first use.
+	let tracerPromise: ReturnType<typeof TraceSkeleton.load> | null = null;
+	async function loadImage(file: File) {
+		const bitmap = await createImageBitmap(file);
+		// Cap the raster the tracer sees — skeleton tracing a huge image is slow and
+		// buys no detail a rideable route can use. Longest side to ~500px.
+		const cap = 500;
+		const s = Math.min(1, cap / Math.max(bitmap.width, bitmap.height));
+		const w = Math.max(1, Math.round(bitmap.width * s)), h = Math.max(1, Math.round(bitmap.height * s));
+		const canvas = document.createElement('canvas');
+		canvas.width = w; canvas.height = h;
+		const ctx = canvas.getContext('2d')!;
+		ctx.drawImage(bitmap, 0, 0, w, h);
+		const img = ctx.getImageData(0, 0, w, h);
+		const tracer = await (tracerPromise ??= TraceSkeleton.load());
+		const threshold = Math.min(250, Math.max(20, Number(thresholdIn.value) || 128));
+		const { graph, paths } = imageToGraph(img, tracer, { threshold });
+		shapePaths = paths;
+		lineGraph = graph;
+		afterLoad(file.name.replace(/\.[^.]+$/, '') || 'drawing');
+		status(`${graph.edges.length} strokes traced. Pan and zoom to place, then generate.`);
 	}
 
 	$<HTMLButtonElement>('bo-load').addEventListener('click', async () => {
@@ -311,19 +388,31 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		}
 	});
 
+	imageIn.addEventListener('change', async () => {
+		const file = imageIn.files?.[0];
+		if (!file) return;
+		status(`Tracing “${file.name}”…`, 'busy');
+		try {
+			await loadImage(file);
+		} catch (err) {
+			status(err instanceof Error ? err.message : 'Could not trace that image.', 'error');
+		}
+	});
+
 	// --- generate the route where the stencil sits ---------------------------
 
 	genBtn.addEventListener('click', async () => {
-		if (!shapeNorm) return;
-		const ring = placedRing();
+		if (!shapePaths) return;
+		const { path, close } = placedPath();
 		const spacingKm = Math.max(0.2, Number(spacingIn.value) || 3);
-		const waypoints = resample(ring, spacingKm * 1000);
+		const waypoints = resample(path, spacingKm * 1000, close);
 		status(`Routing ${waypoints.length} waypoints on real roads…`, 'busy');
 		genBtn.disabled = true;
 		optBtn.disabled = true;
 		setOutline([]); // this is a fresh manual placement, not a descent
 		try {
-			const routed = await routeWaypoints(waypoints, profileIn.value as Profile);
+			// A line drawing's route plans its backtracking, so don't strip retracing.
+			const routed = await routeWaypoints(waypoints, profileIn.value as Profile, close);
 			routeCoords = routed.coords;
 			setRoute(routeCoords);
 			showStats(waypoints, routed);
@@ -344,24 +433,27 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	const MIN_SPACING_KM = 0.5;
 
 	optBtn.addEventListener('click', async () => {
-		if (!shapeNorm) return;
-		const ring = placedRing();
+		if (!shapePaths) return;
+		const { path, close } = placedPath();
 		const startKm = Math.max(0.2, Number(spacingIn.value) || 3);
+		const maxScale = Math.min(0.5, Math.max(0, (Number(scaleIn.value) || 15) / 100));
 		genBtn.disabled = true;
 		optBtn.disabled = true;
 		try {
-			const best = await descend(ring, (wps) => routeWaypoints(wps, profileIn.value as Profile), {
+			const best = await descend(path, (wps) => routeWaypoints(wps, profileIn.value as Profile, close), {
 				startSpacing: startKm * 1000,
 				minSpacing: MIN_SPACING_KM * 1000,
-				rate: Math.min(1, Math.max(0.05, Number(rateIn.value) || 0.2)),
+				maxScale,
+				close,
 				shrink: Math.min(0.95, Math.max(0.5, Number(shrinkIn.value) || 0.85)),
 				onRound: (r) => {
-					// Draw each round as it lands so the descent is watchable.
+					// Draw each accepted move as it lands so the search is watchable.
 					setOutline(r.ring);
 					setRoute(r.routed.coords);
 					status(
 						`Round ${r.round + 1}: ${r.spacingKm.toFixed(1)} km spacing, ` +
-							`${r.waypoints} wps, deviation ${(r.meanDev / 1000).toFixed(2)} km avg…`,
+							`${r.waypoints} wps, scale ${(r.scale * 100).toFixed(0)}%, ` +
+							`deviation ${(r.meanDev / 1000).toFixed(2)} km avg…`,
 						'busy',
 					);
 				},
@@ -372,7 +464,10 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			showStats(best.waypoints, best.routed);
 			spacingIn.value = (best.spacing / 1000).toFixed(1);
 			exportBtn.disabled = false;
-			status(`Settled after ${best.rounds} rounds at ${(best.spacing / 1000).toFixed(1)} km spacing.`);
+			status(
+				`Settled after ${best.rounds} moves at ${(best.spacing / 1000).toFixed(1)} km spacing, ` +
+					`scale ${(best.scale * 100).toFixed(0)}%.`,
+			);
 		} catch (err) {
 			status(err instanceof Error ? err.message : 'Optimization failed.', 'error');
 		} finally {
@@ -546,10 +641,16 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		z-index: 2;
 	}
 	:global(.bo__stencil-shape) {
-		fill: rgba(140, 74, 47, 0.1);
+		fill: none;
 		stroke: #8c4a2f;
 		stroke-width: 2;
 		stroke-dasharray: 6 4;
+	}
+	.bo__hint {
+		margin: 0.5rem 0 0;
+		font-size: 0.78rem;
+		color: var(--ink-soft);
+		line-height: 1.4;
 	}
 	:global(.bo__stencil-start) {
 		fill: #8c4a2f;

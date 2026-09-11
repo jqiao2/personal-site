@@ -34,6 +34,8 @@
     "zones:test": "node --import ./scripts/ts-hook.mjs scripts/zones.test.mjs",
     "screening:test": "node --import ./scripts/ts-hook.mjs scripts/screening-calendar.test.mjs",
     "bike:test": "node --import ./scripts/ts-hook.mjs scripts/bike-route.test.mjs",
+    "postman:test": "node --import ./scripts/ts-hook.mjs scripts/postman.test.mjs",
+    "lineart:test": "node --import ./scripts/ts-hook.mjs scripts/line-art.test.mjs",
     "shot": "node --env-file=.env scripts/shot.mjs"
   },
   "dependencies": {
@@ -49,7 +51,8 @@
     "graphology-layout-forceatlas2": "^0.10.1",
     "html-to-image": "^1.11.13",
     "maplibre-gl": "^6.3.0",
-    "sigma": "^3.0.3"
+    "sigma": "^3.0.3",
+    "skeleton-tracing-wasm": "^1.0.3"
   },
   "allowScripts": {
     "esbuild@0.28.1": true

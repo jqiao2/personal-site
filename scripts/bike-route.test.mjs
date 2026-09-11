@@ -148,4 +148,36 @@ assert.deepEqual(removeLoops(bend), bend, 'a genuine bend is not cut');
 assert.ok(Math.abs(retracedFraction([[0, 0], [0.001, 0], [0, 0]]) - 0.5) < 1e-6, 'out-and-back is ~50% retraced');
 assert.equal(retracedFraction(square), 0, 'a shape that never repeats a segment is 0% retraced');
 
+// descend: the placement search moves the shape onto a better fit and respects
+// the scale bound. Synthetic "router" snaps each waypoint to an integer-degree
+// grid (stand-in for roads), so a shape sitting off-grid traces poorly and the
+// search should slide it onto the grid, lowering deviation.
+{
+	const { descend } = await import('../src/lib/bike-route.ts');
+	const gridRoute = async (wp) => {
+		const coords = wp.map(([x, y]) => [Math.round(x * 10) / 10, Math.round(y * 10) / 10]);
+		return { coords, length: pathLength(coords), ascend: 0, retraced: 0 };
+	};
+	// A ~0.7°-ish square dropped off the 0.1° grid.
+	const ring0 = [
+		[0.03, 0.03], [0.73, 0.03], [0.73, 0.73], [0.03, 0.73], [0.03, 0.03],
+	];
+	const initial = deviation((await gridRoute(resample(ring0, 20000))).coords, resample(ring0, 20000)).mean;
+	const res = await descend(ring0, gridRoute, {
+		startSpacing: 30000, minSpacing: 15000, maxScale: 0.15, maxEvals: 40,
+	});
+	assert.ok(res.rounds > 0, 'the search actually moved');
+	assert.ok(res.routed && deviation(res.routed.coords, res.waypoints).mean <= initial + 1e-9, 'fit did not get worse');
+	assert.ok(res.scale >= 1 - 0.15 - 1e-9 && res.scale <= 1 + 0.15 + 1e-9, 'scale stayed within the bound');
+}
+
+// descend with maxScale 0 never scales.
+{
+	const { descend } = await import('../src/lib/bike-route.ts');
+	const flat = async (wp) => ({ coords: wp.map(([x, y]) => [x + 0.001, y]), length: 0, ascend: 0, retraced: 0 });
+	const ring0 = [[0, 0], [0.5, 0], [0.5, 0.5], [0, 0.5], [0, 0]];
+	const res = await descend(ring0, flat, { startSpacing: 40000, minSpacing: 20000, maxScale: 0, maxEvals: 20 });
+	assert.equal(res.scale, 1, 'maxScale 0 pins the size');
+}
+
 console.log('bike-route: all checks passed');
