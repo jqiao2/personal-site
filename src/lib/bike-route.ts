@@ -459,6 +459,12 @@ export interface DescentOpts {
 	maxScale?: number; // max |scale − 1| allowed, e.g. 0.15; 0 pins the size (default 0.15)
 	maxEvals?: number; // hard cap on router calls the whole search may make (default 60)
 	close?: boolean; // closed ring (country) or open trail (line drawing) — default true
+	// Pull toward where you originally placed the shape. The search minimises
+	// meanDeviation + homePull·(metres drifted from the start), so it only slides
+	// away when the road fit improves by more than homePull metres per metre moved,
+	// and among near-equal fits it keeps your placement. 0 = pure road fit (wanders
+	// to any marginally-tighter spot); higher = stay put harder. Default 0.5.
+	homePull?: number;
 	onRound?: (r: DescentRound) => void;
 }
 
@@ -476,7 +482,9 @@ export async function descend(
 	const maxScale = opts.maxScale ?? 0.15;
 	const maxEvals = opts.maxEvals ?? 60;
 	const close = opts.close ?? true;
+	const homePull = opts.homePull ?? 0.5;
 	const size = ringSpan(ring0);
+	const c0 = centroidOf(ring0); // where you placed it — the search is pulled back here
 
 	let ring = ring0.slice();
 	let scale = 1; // cumulative scale vs ring0
@@ -485,14 +493,16 @@ export async function descend(
 	// A holder, not a bare `let`: `best` is only ever assigned inside the `report`
 	// closure, and TS won't narrow a closure-assigned local, so a property does it.
 	const found: { best: DescentResult | null } = { best: null };
-	let bestMean = Infinity;
+	let bestScore = Infinity;
 	let round = 0;
 
-	// Route the shape at the current spacing and score it. Null means "not a usable
-	// placement" — too many waypoints, budget spent, or the router refused it (a
-	// 400: the shape sits over water or a road-less patch). A refusal is not fatal:
-	// the search simply doesn't move there and keeps trying other directions, which
-	// is how it backs out of a step that wandered off the road network.
+	// Route the shape at the current spacing and score it. `mean`/`max` are the raw
+	// road deviation (what the stats show); `score` is what the search minimises —
+	// deviation plus a pull back toward the original placement, so it won't drift for
+	// a marginal fidelity gain. Null means "not a usable placement": too many
+	// waypoints, budget spent, or the router refused it (a 400 — the shape sits over
+	// water or a road-less patch). A refusal is not fatal: the search simply doesn't
+	// move there and keeps trying other directions, backing out of a bad step.
 	const evalRing = async (r: LngLat[]) => {
 		if (evals >= maxEvals) return null;
 		const wp = resample(r, spacing, close);
@@ -505,30 +515,41 @@ export async function descend(
 			return null; // infeasible placement — skip it, don't crash the search
 		}
 		const dev = deviation(routed.coords, wp);
-		return { wp, routed, mean: dev.mean, max: dev.max };
+		const drift = haversine(centroidOf(r), c0);
+		return { wp, routed, mean: dev.mean, max: dev.max, score: dev.mean + homePull * drift };
 	};
-	const report = (r: LngLat[], e: { wp: LngLat[]; routed: RoutedPath; mean: number; max: number }) => {
+	type Eval = NonNullable<Awaited<ReturnType<typeof evalRing>>>;
+	const report = (r: LngLat[], e: Eval) => {
 		opts.onRound?.({
 			round, spacingKm: spacing / 1000, waypoints: e.wp.length,
 			meanDev: e.mean, maxDev: e.max, scale, ring: r.slice(), routed: e.routed,
 		});
-		if (e.mean < bestMean) {
-			bestMean = e.mean;
+		if (e.score < bestScore) {
+			bestScore = e.score;
 			found.best = { ring: r.slice(), waypoints: e.wp, routed: e.routed, spacing, rounds: round + 1, scale };
 		}
 	};
 
+	// Share the eval budget across the spacing levels so the search actually
+	// reaches the fine ones. Without this, halving the step down to minStep at the
+	// coarsest spacing (a dozen-plus router calls that often improve nothing) can
+	// eat the whole budget before spacing ever tightens — the "it stopped shrinking
+	// the spacing" bug. Each level gets a fair slice; when it's spent, move finer.
+	const levelCount = Math.max(1, Math.ceil(Math.log(opts.minSpacing / opts.startSpacing) / Math.log(shrink)) + 1);
+	const perLevel = Math.max(5, Math.ceil(maxEvals / levelCount));
+
 	while (spacing >= opts.minSpacing && evals < maxEvals) {
+		const levelCeil = evals + perLevel; // this level's eval budget
 		const cur = await evalRing(ring);
 		if (!cur) break;
 		report(ring, cur);
-		let curMean = cur.mean;
+		let curScore = cur.score;
 		let step = size * 0.25; // bold: reach across the area, not inch
 		const minStep = size * 0.01;
-		while (step >= minStep && evals < maxEvals) {
+		while (step >= minStep && evals < maxEvals && evals < levelCeil) {
 			// Neighbours: slide N/S/E/W by the current step, and (within the bound)
-			// scale up/down. The first that improves fidelity is adopted; the search
-			// keeps hopping in whichever directions keep paying off.
+			// scale up/down. A move is adopted only when it improves the score — road
+			// fit net of the pull home — so drifting away has to earn its distance.
 			const moves: [number, number, number][] = [
 				[step, 0, 1], [-step, 0, 1], [0, step, 1], [0, -step, 1],
 			];
@@ -543,9 +564,9 @@ export async function descend(
 				if (evals >= maxEvals) break;
 				const trial = transform(ring, dx, dy, sMul, centroidOf(ring));
 				const e = await evalRing(trial);
-				if (e && e.mean < curMean - 1e-9) {
+				if (e && e.score < curScore - 1e-9) {
 					ring = trial;
-					curMean = e.mean;
+					curScore = e.score;
 					scale *= sMul;
 					improved = true;
 					round++;
