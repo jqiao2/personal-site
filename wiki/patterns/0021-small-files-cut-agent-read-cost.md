@@ -68,12 +68,26 @@ the flow, the boundary was wrong — cut along how tasks actually read, not alon
 tidy taxonomy. Verify behaviour is unchanged (build/screenshot), since a
 read-cost refactor should be behaviour-neutral.
 
-## Current hit-list (origin/main, Sep 2026), highest leverage first
+## STANDING TASK — split these when you touch them
 
-- `src/lib/films.ts` — 2860 / 58 exports. Types → `films.types.ts`; peel the
+This is a live checklist, not a suggestion. **When a task edits one of the files
+below, split it as part of that same change** (apply the tactics above), then
+strike it off this list in the same PR. Do it opportunistically — a task that
+only reads the file leaves it alone; a task that meaningfully edits it pays the
+split-tax while it's already in there. Keep changes behaviour-neutral and verify
+with a build/screenshot. When a new file crosses ~800 lines, add it here.
+
+Highest leverage first (line counts as of origin/main, Sep 2026):
+
+- [ ] `src/lib/films.ts` — 2860 / 58 exports. Types → `films.types.ts`; peel the
   credit-network section (~2592+) into `films-credits.ts`.
-- `src/lib/activities.ts` — 1400. Types → `activities.types.ts`; consider
+- [ ] `src/lib/activities.ts` — 1400. Types → `activities.types.ts`; consider
   `-queries` / `-stats` slices.
-- `src/pages/books/[id].astro` — 2411, and `src/pages/films/watched.astro` —
-  2128: frontmatter→lib, template→sub-components (0020).
-- `src/lib/restaurants.ts` (1148), `src/scripts/credit-network.js` (1127) next.
+- [ ] `src/pages/books/[id].astro` — 2411. Frontmatter→lib, template→sub-components (0020).
+- [ ] `src/pages/films/watched.astro` — 2128. Same treatment.
+- [ ] `src/components/EntryEditor.astro` — 1864, and `src/components/MealEditor.astro`
+  — 1811 (already partly split, #230/#231; the wiring `<script>` is the remaining bulk).
+- [ ] `src/pages/activities/all.astro` — 1740, `src/pages/activities/[id].astro` — 1596.
+- [ ] `src/pages/films/watchlist.astro` — 1591, `src/pages/films/movie/[tmdbId].astro` — 1352.
+- [ ] `src/components/PlaceEditor.astro` — 1235.
+- [ ] `src/lib/restaurants.ts` — 1148, `src/scripts/credit-network.js` — 1127.
