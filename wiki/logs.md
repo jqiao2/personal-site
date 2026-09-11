@@ -170,3 +170,10 @@ wiki across every iteration, even reverted ones).
   request to detangle CSS out of components; research showed externalising a
   scoped `<style>` makes it global, so the pattern reframes the detangle as
   component-splitting + custom-property theming + logic-to-lib, not CSS extraction.
+
+- 2026-09-11: Added pattern 0021 (keep files small to cut agent read-cost). User
+  reframed file-splitting as a token-bloat problem, not encapsulation: big files an
+  agent must read to make one change burn context. Covers ts/js/astro/html, prefers
+  small cohesive modules + a stable types module over barrels, with a repo hit-list
+  (films.ts 2860, activities.ts 1400, books/[id].astro 2411). 0020 recast as the
+  Astro-specific how.

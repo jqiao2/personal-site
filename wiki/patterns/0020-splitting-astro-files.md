@@ -5,6 +5,10 @@
 files carry a near-duplicate block), and you're editing it anyway — decide then
 whether to split it.
 
+**Why split at all:** to cut agent read-cost, not for encapsulation — see
+[[0021-small-files-cut-agent-read-cost]] for the governing rationale. This
+pattern is the Astro-specific *how*: doing it without breaking scoped styling.
+
 ## The instinct, and the correction
 
 The natural move — "pull the `<style>` out into a `.css` file so the component
