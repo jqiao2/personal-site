@@ -13,7 +13,13 @@ const projects = (await getCollection('projects')).sort(
 // content collection — they're pages, and they link straight to the thing itself.
 // Kept out of the collection deliberately: an entry with id "credit-network"
 // would collide with the real /projects/credit-network route.
-const interactive = [
+const interactive: {
+	href: string;
+	title: string;
+	tag: string;
+	description: string;
+	ownerOnly?: boolean;
+}[] = [
 	{
 		// The four logs and their combined calendar are one build, so they read as
 		// one project here rather than four rows plus a fifth for the calendar.
@@ -31,6 +37,7 @@ const interactive = [
 		href: '/projects/credit-network',
 		title: 'Credit Network',
 		tag: 'interactive',
+		ownerOnly: true,
 		description:
 			'A collaboration graph of actors, directors and composers drawn from ~36,000 TMDB films — ' +
 			'force-directed, filterable and draggable.',
@@ -47,6 +54,7 @@ const interactive = [
 		href: '/bike-outline',
 		title: 'Bike Outline Generator',
 		tag: 'interactive',
+		ownerOnly: true,
 		description:
 			'I ride the routes shaped like countries. Load a silhouette, float it over the map as a fixed-size ' +
 			'stencil, pan and zoom to drop it on roads you want to ride, and it routes the shape there — ' +
@@ -60,7 +68,7 @@ const interactive = [
 	<ul>
 		{
 			interactive.map((project) => (
-				<li>
+				<li data-owner-only-nav={project.ownerOnly ? '' : undefined}>
 					<a href={project.href}>{project.title}</a> <span class="tag">{project.tag}</span>
 					<p>{project.description}</p>
 				</li>

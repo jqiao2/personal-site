@@ -26,9 +26,24 @@ smaller public surface is what a visitor sees.
 - **Home + journal** (`/`, `/month`) — a public cross-section feed and an RSS
   feed (`/rss.xml`) combining the shareable entries.
 - **Subway map** (`/subway`) — a hand-built SVG side project.
+- **Credit network** (`/projects/credit-network`, `/projects/film-credit-network`)
+  — owner-only collaboration graphs: one over ~36,000 TMDB films, one scoped to
+  the films you've actually watched.
+- **Bike outline generator** (`/bike-outline`) — owner-only. Float a country
+  silhouette over the map as a fixed-size stencil, drop it on roads, and it
+  routes the shape on real roads and exports a GPX.
 
 If you only want some of these, you can delete the pages you don't want; each
 lives under its own folder in `src/pages/`.
+
+### A few of the interactive pieces
+
+The graphs and the outline generator are owner-only, so a visitor never sees
+them — here's what they look like signed in:
+
+| Credit network | Film credit network | Bike outline generator |
+| :---: | :---: | :---: |
+| ![Credit network](docs/media/credit-network.gif) | ![Film credit network](docs/media/film-credit-network.gif) | ![Bike outline generator](docs/media/bike-outline.gif) |
 
 ## Stack
 

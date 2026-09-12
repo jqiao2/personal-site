@@ -9,11 +9,16 @@
 // client-side by src/scripts/credit-network.js from a static JSON built by
 // scripts/credit-graph/build.mjs.
 import SiteHeader from '../../components/SiteHeader.astro';
+import { requireOwner } from '../../lib/auth';
 
-// Static. The shell has no per-request data — the graph is a static JSON drawn
-// client-side — and the only thing that made it SSR was the header's owner
-// check, which is now handled client-side (see SiteHeader.astro). So it
-// prerenders to one CDN-served file with no function invocation.
+// Owner-only. The graph is a static JSON drawn client-side, but the feature is
+// admin-only, so the shell is server-rendered purely to bounce visitors to the
+// login before anything loads.
+export const prerender = false;
+
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
 ---
 
 <html lang="en">
