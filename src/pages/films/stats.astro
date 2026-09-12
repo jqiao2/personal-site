@@ -211,9 +211,12 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 				)
 			))}
 
-			<!-- Credit collaboration network, scoped to match this view -->
+			<!-- Credit collaboration network, scoped to match this view. Admin-only
+			     page, so the link is hidden from visitors client-side (same
+			     [data-owner-only-nav] trick as the header). -->
 			<a
 				class="network-link"
+				data-owner-only-nav
 				href={scopeYear != null ? `/projects/film-credit-network?year=${scopeYear}` : '/projects/film-credit-network'}
 			>
 				<span class="network-link__label">Explore the credit network →</span>

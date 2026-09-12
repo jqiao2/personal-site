@@ -9,9 +9,15 @@
 // links here.
 import SiteHeader from '../../components/SiteHeader.astro';
 import { getFilmCreditNetwork } from '../../lib/films';
+import { requireOwner } from '../../lib/auth';
 
-// Reflects the live watch log.
+// Reflects the live watch log. Owner-only — visitors are bounced to login
+// before the (expensive) graph rebuild runs.
 export const prerender = false;
+
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
 
 const yearParam = Astro.url.searchParams.get('year');
 const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
