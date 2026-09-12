@@ -38,12 +38,13 @@ lives under its own folder in `src/pages/`.
 
 ### A few of the interactive pieces
 
-The graphs and the outline generator are owner-only, so a visitor never sees
-them — here's what they look like signed in:
+The graphs are owner-only, so a visitor never sees them — here's what they look
+like signed in. The credit network re-settles its physics live; the film credit
+network is shown as a settled still.
 
-| Credit network | Film credit network | Bike outline generator |
-| :---: | :---: | :---: |
-| ![Credit network](docs/media/credit-network.gif) | ![Film credit network](docs/media/film-credit-network.gif) | ![Bike outline generator](docs/media/bike-outline.gif) |
+| Credit network | Film credit network |
+| :---: | :---: |
+| ![Credit network](docs/media/credit-network.gif) | ![Film credit network](docs/media/film-credit-network.png) |
 
 ## Stack
 
