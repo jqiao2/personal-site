@@ -10,3 +10,45 @@ Disallow: /projects/film-credit-network
 
 # JSON for the site's own pages. Never a search result.
 Disallow: /api/
+
+# AI crawlers. They walk every route and revisit constantly — a life log is
+# exactly the kind of text they want, and none of it needs to be in a model.
+# The Firewall's bot ruleset denies these at the edge, but a denied request is
+# still an edge request billed; the well-behaved ones honour this block and
+# stop asking at all, which the firewall can't get us. The rude ones ignore
+# both — that's what the firewall is left holding.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
