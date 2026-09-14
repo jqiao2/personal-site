@@ -243,6 +243,7 @@ const config = {
 			// the place clears carried answers and leaves typed ones alone.
 			borrowed: Boolean(!cfg.initial && cfg.place && (inherited || cfg.place.trip)),
 			tags: [...(cfg.initial?.tags ?? [])],
+			friends: [...(cfg.initial?.friends ?? [])],
 			photos: (cfg.photos ?? []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
 			// Taking a stored photograph out of the list is a decision, not yet a
 			// deletion: the file goes when the visit is saved, so Cancel leaves the
@@ -329,7 +330,7 @@ const config = {
 					value('[data-me-place]') ||
 					state.rating ||
 					state.verdictSet ||
-					value('[data-me-friends]') ||
+					state.friends.length ||
 					value('[data-me-notes]') ||
 					value('[data-me-private]') ||
 					state.tags.length ||
@@ -422,6 +423,7 @@ const config = {
 			}
 
 			renderChips($('[data-me-tags]')!, state.tags);
+			renderChips($('[data-me-friends-chips]')!, state.friends);
 			renderChips($('[data-me-why-chips]')!, state.whyTags);
 
 			const photos = $('[data-me-photos]')!;
@@ -814,10 +816,7 @@ const config = {
 		}
 
 		async function saveVisit() {
-			const friends = value('[data-me-friends]')
-				.split(',')
-				.map((s) => s.trim())
-				.filter(Boolean);
+			const friends = state.friends;
 			const payload = {
 				restaurantId: state.placeId ?? undefined,
 				place: state.placeId
@@ -1053,6 +1052,7 @@ const config = {
 			});
 		}
 		wireChipInput('[data-me-tag-input]', state.tags);
+		wireChipInput('[data-me-friend-input]', state.friends);
 		wireChipInput('[data-me-why-input]', state.whyTags);
 
 		$('[data-me-photo-input]')!.addEventListener('change', async (e) => {
@@ -1086,7 +1086,7 @@ const config = {
 
 		$('[data-me-save]')!.addEventListener('click', save);
 		$('[data-me-delete]')?.addEventListener('click', remove);
-		$$('[data-me-try-name], [data-me-notes], [data-me-friends]').forEach((el) =>
+		$$('[data-me-try-name], [data-me-notes]').forEach((el) =>
 			el.addEventListener('input', render),
 		);
 
@@ -1124,7 +1124,6 @@ const config = {
 			const priv = $('[data-me-private]') as HTMLTextAreaElement;
 			priv.value = cfg.initial.privateNote;
 			showPrivate(priv.value.length > 0);
-			($('[data-me-friends]') as HTMLInputElement).value = cfg.initial.friends.join(', ');
 		}
 		render();
 	}

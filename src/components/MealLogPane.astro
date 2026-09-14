@@ -108,14 +108,15 @@ const { friendOptions, tagOptions } = Astro.props;
 
 	<div class="me__field">
 		<label class="rl-label" for="me-friends">With</label>
+		<div class="me__tags" data-me-friends-chips></div>
 		<input
 			class="me__input"
 			id="me-friends"
-			data-me-friends
+			data-me-friend-input
 			type="text"
 			list="me-friend-options"
 			autocomplete="off"
-			placeholder="Priya, Dan"
+			placeholder="Enter to add"
 		/>
 		<datalist id="me-friend-options">
 			{friendOptions.map((f) => <option value={f} />)}
