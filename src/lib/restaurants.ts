@@ -779,7 +779,28 @@ async function distinctTextArray(column: 'tags' | 'friends'): Promise<string[]> 
 }
 
 export const listTags = () => distinctTextArray('tags');
-export const listFriends = () => distinctTextArray('friends');
+
+/**
+ * People I've eaten out with, most-tagged first — so the composer's "with"
+ * autocomplete offers the usual companions before the one-offs. Counts the
+ * visits each name appears on (once per visit); ties break alphabetically.
+ */
+export async function listFriends(): Promise<string[]> {
+	const { data, error } = await supabasePublic.from('restaurant_diary').select('friends');
+	if (error) throw new Error(error.message);
+	const count = new Map<string, number>();
+	const display = new Map<string, string>();
+	for (const row of (data ?? []) as { friends: string[] }[]) {
+		for (const f of new Set(row.friends ?? [])) {
+			const key = f.toLowerCase();
+			if (!display.has(key)) display.set(key, f);
+			count.set(key, (count.get(key) ?? 0) + 1);
+		}
+	}
+	return [...count.entries()]
+		.sort((a, b) => b[1] - a[1] || display.get(a[0])!.localeCompare(display.get(b[0])!, 'en'))
+		.map(([key]) => display.get(key)!);
+}
 
 /**
  * The people I've eaten out with, each with the number of DISTINCT places we've

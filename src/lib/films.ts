@@ -782,19 +782,22 @@ function isMissingRelation(err: { code?: string; message?: string } | null): boo
 }
 
 /**
- * Friend names, alphabetical — for the composer/editor "watched with" autocomplete.
- * Returns [] (not an error) before migration 0013 creates the table.
+ * Friend names, most-tagged first — for the composer/editor "watched with"
+ * autocomplete, so the usual company is offered before the one-offs. Counts the
+ * logs each name is on (ties break alphabetically). Returns [] (not an error)
+ * before migration 0013 creates the table.
  */
 export async function listFriends(): Promise<string[]> {
-	const { data, error } = await supabasePublic
-		.from('friends')
-		.select('name')
-		.order('name', { ascending: true });
+	const { data, error } = await supabasePublic.from('friends').select('name, log_friends(count)');
 	if (error) {
 		if (isMissingRelation(error)) return [];
 		throw new Error(`listFriends failed: ${error.message}`);
 	}
-	return ((data ?? []) as { name: string }[]).map((f) => f.name);
+	const rows = (data ?? []) as unknown as { name: string; log_friends: { count: number }[] }[];
+	return rows
+		.map((f) => ({ name: f.name, count: f.log_friends?.[0]?.count ?? 0 }))
+		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'))
+		.map((f) => f.name);
 }
 
 /**
