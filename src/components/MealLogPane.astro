@@ -108,7 +108,6 @@ const { friendOptions, tagOptions } = Astro.props;
 
 	<div class="me__field">
 		<label class="rl-label" for="me-friends">With</label>
-		<div class="me__tags" data-me-friends-chips></div>
 		<input
 			class="me__input"
 			id="me-friends"
@@ -121,6 +120,7 @@ const { friendOptions, tagOptions } = Astro.props;
 		<datalist id="me-friend-options">
 			{friendOptions.map((f) => <option value={f} />)}
 		</datalist>
+		<div class="me__tags" data-me-friends-chips></div>
 	</div>
 
 	{/*
@@ -173,7 +173,6 @@ const { friendOptions, tagOptions } = Astro.props;
 
 	<div class="me__field">
 		<label class="rl-label" for="me-tags">Tags</label>
-		<div class="me__tags" data-me-tags></div>
 		<input
 			class="me__input"
 			id="me-tags"
@@ -186,6 +185,7 @@ const { friendOptions, tagOptions } = Astro.props;
 		<datalist id="me-tag-options">
 			{tagOptions.map((t) => <option value={t} />)}
 		</datalist>
+		<div class="me__tags" data-me-tags></div>
 	</div>
 	</div>
 </div>
