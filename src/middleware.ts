@@ -33,10 +33,14 @@
 import { defineMiddleware } from 'astro:middleware';
 import { requireOwner } from './lib/auth';
 
-/** How long the CDN may serve a visitor's copy without re-rendering. An hour:
- *  long enough that a crawler's sweep costs one render per route, short enough
- *  that a link shared today is right by the time anyone follows it. */
-const FRESH = 3600;
+/** How long the CDN may serve a visitor's copy without re-rendering. Six hours:
+ *  the site has ~5,000 unique detail URLs (every movie, place and activity), so a
+ *  crawler that slips the bot filter costs one Supabase render per URL per window
+ *  — the wider the window, the fewer of those cold pulls, which is what blew the
+ *  egress budget. The owner holds the cookie and is never cached, so this
+ *  staleness is only ever visible to a visitor, for whom six-hour-old data is
+ *  fine. Shorten it if a shared link needs to be fresher than that. */
+const FRESH = 21_600;
 /** How long past that it may keep serving the old copy while it refreshes in
  *  the background — so a slow week doesn't turn every visit into a cold render. */
 const STALE = 86_400;
