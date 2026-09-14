@@ -96,6 +96,7 @@ const config = {
 	photos,
 	tagOptions,
 	friendOptions,
+	whyOptions,
 	verdicts: VERDICTS.map((v) => ({ label: v.label, gloss: v.gloss, ink: v.ink })),
 };
 ---
@@ -120,8 +121,8 @@ const config = {
 			</div>
 		</div>
 
-		<MealLogPane friendOptions={friendOptions} tagOptions={tagOptions} />
-		<MealTryPane whyOptions={whyOptions} />
+		<MealLogPane />
+		<MealTryPane />
 
 		<div class="me__foot">
 			<span class="me__summary" data-me-summary></span>
@@ -143,6 +144,7 @@ const config = {
 	import { localDay } from '../lib/day';
 	import { wireStarPicker } from '../lib/star-picker';
 	import { preparePhoto, type PreparedPhoto } from '../lib/photo';
+	import { wireChips, type ChipField } from '../lib/chips-field';
 
 	interface VerdictSpec {
 		label: string;
@@ -192,6 +194,7 @@ const config = {
 		photos: { id: number; url: string }[];
 		tagOptions: string[];
 		friendOptions: string[];
+		whyOptions: string[];
 		verdicts: VerdictSpec[];
 	}
 
@@ -242,8 +245,6 @@ const config = {
 			// Whether those answers were carried over rather than given. Changing
 			// the place clears carried answers and leaves typed ones alone.
 			borrowed: Boolean(!cfg.initial && cfg.place && (inherited || cfg.place.trip)),
-			tags: [...(cfg.initial?.tags ?? [])],
-			friends: [...(cfg.initial?.friends ?? [])],
 			photos: (cfg.photos ?? []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
 			// Taking a stored photograph out of the list is a decision, not yet a
 			// deletion: the file goes when the visit is saved, so Cancel leaves the
@@ -257,7 +258,6 @@ const config = {
 			// un-mark somewhere already marked.
 			trip: cfg.place?.trip ?? false,
 			tryTrip: false,
-			whyTags: [] as string[],
 			/** A confirmed point from the geocoder, or null for an unplaced entry. */
 			geo: null as GeoHit | null,
 			saving: false,
@@ -286,11 +286,10 @@ const config = {
 			if (pane === 'try') {
 				state.tryLocked = false;
 				state.tryTrip = false;
-				// Emptied in place, not replaced: the chip-input handler closes over
-				// this array reference.
-				state.whyTags.length = 0;
+				whyField.set([]);
+				whyField.hideSuggest();
 				($('[data-me-try-name]') as HTMLInputElement).value = '';
-				($('[data-me-why-input]') as HTMLInputElement).value = '';
+				($('#me-why-input') as HTMLInputElement).value = '';
 				$('[data-me-geo]')!.hidden = true;
 			}
 			root.hidden = false;
@@ -319,9 +318,9 @@ const config = {
 			if (state.pane === 'try') {
 				return Boolean(
 					value('[data-me-try-name]') ||
-						value('[data-me-why-input]') ||
+						value('#me-why-input') ||
 						state.tryTrip ||
-						state.whyTags.length,
+						whyField.get().length,
 				);
 			}
 			if (cfg.visitId) return true;
@@ -330,10 +329,10 @@ const config = {
 					value('[data-me-place]') ||
 					state.rating ||
 					state.verdictSet ||
-					state.friends.length ||
+					friendField.get().length ||
 					value('[data-me-notes]') ||
 					value('[data-me-private]') ||
-					state.tags.length ||
+					tagField.get().length ||
 					state.photos.length,
 			);
 		}
@@ -347,29 +346,23 @@ const config = {
 			return ($(sel) as HTMLInputElement | HTMLTextAreaElement | null)?.value.trim() ?? '';
 		}
 
-		// -- rendering --------------------------------------------------------
-		// Removable chips over a string array — the visit tags and the to-try
-		// why-tags are the same interaction, so they share this.
-		function renderChips(box: HTMLElement, list: string[]) {
-			box.replaceChildren(
-				...list.map((name, i) => {
-					const chip = document.createElement('span');
-					chip.className = 'me__tag';
-					chip.textContent = name;
-					const x = document.createElement('button');
-					x.type = 'button';
-					x.className = 'me__tag-x';
-					x.textContent = '×';
-					x.setAttribute('aria-label', `Remove ${name}`);
-					x.addEventListener('click', () => {
-						list.splice(i, 1);
-						render();
-					});
-					chip.append(x);
-					return chip;
-				}),
+		// -- chip fields ------------------------------------------------------
+		// "With", tags and the to-try "why" are the same interaction as the film
+		// editor's, so they share ChipsField.astro + lib/chips-field. Each owns its
+		// own values; dirty() and the save payloads read them on demand.
+		const chip = (base: string, opts: string[]): ChipField =>
+			wireChips(
+				$(`#${base}-input`) as HTMLInputElement,
+				$(`#${base}-suggest`) as HTMLUListElement,
+				$(`#${base}-chips`) as HTMLDivElement,
+				opts,
+				(v) => `Remove ${v}`,
 			);
-		}
+		const friendField = chip('me-friend', cfg.friendOptions);
+		const tagField = chip('me-tag', cfg.tagOptions);
+		const whyField = chip('me-why', cfg.whyOptions);
+		friendField.set(cfg.initial?.friends ?? []);
+		tagField.set(cfg.initial?.tags ?? []);
 
 		function render() {
 			const locked = state.locked;
@@ -422,9 +415,6 @@ const config = {
 					: 'new place · no point on the map';
 			}
 
-			renderChips($('[data-me-tags]')!, state.tags);
-			renderChips($('[data-me-friends-chips]')!, state.friends);
-			renderChips($('[data-me-why-chips]')!, state.whyTags);
 
 			const photos = $('[data-me-photos]')!;
 			photos.replaceChildren(
@@ -795,7 +785,7 @@ const config = {
 				cuisines: g?.cuisines ?? [],
 				trip: state.tryTrip,
 				// Free-form now: the "why" is just tags, no separate prose reason.
-				toTryTags: state.whyTags,
+				toTryTags: whyField.get(),
 				neighborhood: g?.neighborhood ?? null,
 				city: g?.city ?? null,
 				stateRegion: g?.stateRegion ?? null,
@@ -816,7 +806,7 @@ const config = {
 		}
 
 		async function saveVisit() {
-			const friends = state.friends;
+			const friends = friendField.get();
 			const payload = {
 				restaurantId: state.placeId ?? undefined,
 				place: state.placeId
@@ -846,7 +836,7 @@ const config = {
 				friends,
 				review: value('[data-me-notes]'),
 				privateNote: value('[data-me-private]'),
-				tags: state.tags,
+				tags: tagField.get(),
 			};
 
 			const url = cfg.visitId ? `/api/restaurants/visits/${cfg.visitId}` : '/api/restaurants/visits';
@@ -1038,23 +1028,6 @@ const config = {
 				render();
 			}),
 		);
-		// Enter adds a chip. Same interaction for the visit's tags and the to-try
-		// why-tags — only which list they land in differs.
-		function wireChipInput(sel: string, list: string[]) {
-			$(sel)!.addEventListener('keydown', (e) => {
-				const input = e.target as HTMLInputElement;
-				if (e.key !== 'Enter' || !input.value.trim()) return;
-				e.preventDefault();
-				const tag = input.value.trim();
-				if (!list.some((t) => t.toLowerCase() === tag.toLowerCase())) list.push(tag);
-				input.value = '';
-				render();
-			});
-		}
-		wireChipInput('[data-me-tag-input]', state.tags);
-		wireChipInput('[data-me-friend-input]', state.friends);
-		wireChipInput('[data-me-why-input]', state.whyTags);
-
 		$('[data-me-photo-input]')!.addEventListener('change', async (e) => {
 			const input = e.target as HTMLInputElement;
 			for (const file of Array.from(input.files ?? [])) {
@@ -1144,6 +1117,24 @@ const config = {
 		justify-content: center;
 		padding: clamp(12px, 4vh, 44px) 14px;
 		overflow: auto;
+		/* Theme the shared ChipsField (defaults are the film editor's) to the
+		   restaurant palette. These inherit down into the component's chips. */
+		--cf-label: var(--ink-3);
+		--cf-input-bg: var(--ground);
+		--cf-input-border: var(--rule);
+		--cf-input-fg: var(--ink);
+		--cf-input-focus: var(--ink);
+		--cf-font: var(--ui);
+		--cf-suggest-bg: var(--panel);
+		--cf-suggest-border: var(--rule);
+		--cf-suggest-fg: var(--ink);
+		--cf-suggest-rule: var(--rule-3);
+		--cf-suggest-hover: var(--sunk);
+		--cf-chip-bg: var(--sunk);
+		--cf-chip-border: var(--rule);
+		--cf-chip-fg: var(--ink-soft);
+		--cf-chip-x: var(--ink-3);
+		--cf-chip-x-hover: var(--ink);
 	}
 	.me[hidden] {
 		display: none;
@@ -1553,15 +1544,6 @@ const config = {
 		color: var(--terracotta-deep);
 	}
 
-	.me__tags {
-		display: flex;
-		gap: 6px;
-		flex-wrap: wrap;
-	}
-	.me__tags:empty {
-		display: none;
-	}
-
 	.me__foot {
 		display: flex;
 		align-items: center;
@@ -1701,26 +1683,6 @@ const config = {
 	}
 	.me__sug--none:hover {
 		background: none;
-	}
-
-	.me__tag {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		border: 1px solid var(--rule);
-		background: var(--sunk);
-		font-size: 12px;
-		color: var(--ink-soft);
-		padding: 4px 9px;
-	}
-	.me__tag-x {
-		border: none;
-		background: none;
-		color: var(--ink-3);
-		font-size: 12px;
-		line-height: 1;
-		cursor: pointer;
-		padding: 0;
 	}
 
 	.me__photo {

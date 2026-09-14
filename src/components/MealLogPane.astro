@@ -6,13 +6,8 @@
 // scoped block never would — see wiki 0020). Split out purely to shrink the
 // composer file; it is not independently mounted anywhere.
 import StarPicker from './StarPicker.astro';
+import ChipsField from './ChipsField.astro';
 import { verdictRotation } from '../lib/verdict';
-
-interface Props {
-	friendOptions: string[];
-	tagOptions: string[];
-}
-const { friendOptions, tagOptions } = Astro.props;
 ---
 
 <!-- ------------------------------------------------ log a meal -->
@@ -107,20 +102,7 @@ const { friendOptions, tagOptions } = Astro.props;
 	</div>
 
 	<div class="me__field">
-		<label class="rl-label" for="me-friends">With</label>
-		<div class="me__tags" data-me-friends-chips></div>
-		<input
-			class="me__input"
-			id="me-friends"
-			data-me-friend-input
-			type="text"
-			list="me-friend-options"
-			autocomplete="off"
-			placeholder="Enter to add"
-		/>
-		<datalist id="me-friend-options">
-			{friendOptions.map((f) => <option value={f} />)}
-		</datalist>
+		<ChipsField id="me-friend" label="With" placeholder="Enter to add" shape="square" />
 	</div>
 
 	{/*
@@ -172,20 +154,7 @@ const { friendOptions, tagOptions } = Astro.props;
 	</div>
 
 	<div class="me__field">
-		<label class="rl-label" for="me-tags">Tags</label>
-		<div class="me__tags" data-me-tags></div>
-		<input
-			class="me__input"
-			id="me-tags"
-			data-me-tag-input
-			type="text"
-			list="me-tag-options"
-			autocomplete="off"
-			placeholder="Enter to add"
-		/>
-		<datalist id="me-tag-options">
-			{tagOptions.map((t) => <option value={t} />)}
-		</datalist>
+		<ChipsField id="me-tag" label="Tags" placeholder="Enter to add" shape="square" />
 	</div>
 	</div>
 </div>

@@ -13,6 +13,7 @@
 // opens the modal. Server data reaches the client through the JSON config tag.
 import type { EntryEditorFilm, EntryEditorInitial } from '../lib/entry-editor';
 import StarPicker from './StarPicker.astro';
+import ChipsField from './ChipsField.astro';
 
 interface Props {
 	mode: 'select' | 'log' | 'edit';
@@ -221,17 +222,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 					</div>
 				</div>
 
-				<div class="chips-field">
-					<label class="lbl" for="ee-friend-input">Watched with</label>
-					<input
-						type="text"
-						id="ee-friend-input"
-						placeholder="Tag a friend, press Enter…"
-						autocomplete="off"
-					/>
-					<ul class="chips-suggest" id="ee-friend-suggest" hidden></ul>
-					<div class="chips-box" id="ee-friend-chips" hidden></div>
-				</div>
+				<ChipsField id="ee-friend" label="Watched with" placeholder="Tag a friend, press Enter…" />
 
 				<div>
 					<label class="lbl" for="ee-review">Review</label>
@@ -251,12 +242,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 					<textarea id="ee-private" class="privnote__box" rows="3" hidden></textarea>
 				</div>
 
-				<div class="chips-field">
-					<label class="lbl" for="ee-tag-input">Tags</label>
-					<input type="text" id="ee-tag-input" placeholder="Type a tag, press Enter…" autocomplete="off" />
-					<ul class="chips-suggest" id="ee-tag-suggest" hidden></ul>
-					<div class="chips-box" id="ee-tag-chips" hidden></div>
-				</div>
+				<ChipsField id="ee-tag" label="Tags" placeholder="Type a tag, press Enter…" />
 			</div>
 		</div>
 
@@ -412,9 +398,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	#ee-private,
 	#ee-venue,
 	#ee-format,
-	#ee-other,
-	#ee-tag-input,
-	#ee-friend-input {
+	#ee-other {
 		width: 100%;
 		background: #1c0d0e;
 		border: 1px solid #4a2529;
@@ -430,9 +414,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	#ee-private:focus,
 	#ee-venue:focus,
 	#ee-format:focus,
-	#ee-other:focus,
-	#ee-tag-input:focus,
-	#ee-friend-input:focus {
+	#ee-other:focus {
 		border-color: #d9b45a;
 	}
 	#ee-review,
@@ -825,77 +807,6 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	}
 
 	/* Chip fields (tags, watched-with): input + autocomplete (opens upward) + chips */
-	.chips-field {
-		position: relative;
-	}
-	.chips-suggest {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		position: absolute;
-		bottom: 100%;
-		left: 0;
-		right: 0;
-		margin-bottom: 6px;
-		z-index: 10;
-		max-height: 200px;
-		overflow-y: auto;
-		background: #241012;
-		border: 1px solid #4a2529;
-		border-radius: 8px;
-		box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
-	}
-	.chips-suggest[hidden] {
-		display: none;
-	}
-	.chips-suggest :global(li) {
-		padding: 9px 13px;
-		cursor: pointer;
-		font-size: 14px;
-		color: #f2e5cd;
-		border-bottom: 1px solid #351a1d;
-	}
-	.chips-suggest :global(li:last-child) {
-		border-bottom: none;
-	}
-	.chips-suggest :global(li:hover),
-	.chips-suggest :global(li.active) {
-		background: #331619;
-	}
-	.chips-box {
-		display: flex;
-		gap: 7px;
-		flex-wrap: wrap;
-		margin-top: 10px;
-	}
-	.chips-box[hidden] {
-		display: none;
-	}
-	.chips-box :global(.chip) {
-		display: inline-flex;
-		align-items: center;
-		gap: 7px;
-		font-size: 12px;
-		color: #ddc9b4;
-		border: 1px solid #4a2529;
-		border-radius: 20px;
-		padding: 4px 8px 4px 12px;
-		background: #241012;
-	}
-	.chips-box :global(.chip button) {
-		background: none;
-		border: none;
-		cursor: pointer;
-		color: #a2857a;
-		font-size: 13px;
-		line-height: 1;
-		padding: 0;
-		font-family: var(--font-archivo);
-	}
-	.chips-box :global(.chip button:hover) {
-		color: #f4e8d1;
-	}
-
 	/* Footer */
 	.modal__foot {
 		display: flex;
@@ -1078,6 +989,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 <script>
 	import { localDay } from '../lib/day';
 	import { wireStarPicker } from '../lib/star-picker';
+	import { wireChips } from '../lib/chips-field';
 
 	// Owner-only. Astro always hoists this script; bail out when the modal isn't
 	// in the DOM (a non-owner viewing the page).
@@ -1501,116 +1413,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		wireSuggest(venueInput, venueSuggest, cfg.venueOptions);
 		wireSuggest(formatInput, formatSuggest, cfg.formatOptions);
 
-		// ---- Chip fields: free-text values as removable chips, with autocomplete over
-		// the names already in the database. Tags and "watched with" are the same
-		// interaction, so they share one implementation.
-		interface ChipField {
-			get(): string[];
-			set(values: string[]): void;
-			hideSuggest(): void;
-		}
-		function wireChips(
-			input: HTMLInputElement,
-			suggest: HTMLUListElement,
-			chipsBox: HTMLDivElement,
-			options: string[],
-			removeLabel: (name: string) => string,
-		): ChipField {
-			let values: string[] = [];
-			let active = -1;
-
-			function renderChips() {
-				chipsBox.textContent = '';
-				values.forEach((v, i) => {
-					const chip = document.createElement('span');
-					chip.className = 'chip';
-					chip.append(v);
-					const x = document.createElement('button');
-					x.type = 'button';
-					x.setAttribute('aria-label', removeLabel(v));
-					x.textContent = '✕';
-					x.addEventListener('click', () => remove(i));
-					chip.appendChild(x);
-					chipsBox.appendChild(chip);
-				});
-				chipsBox.hidden = values.length === 0;
-			}
-			function remove(i: number) {
-				values.splice(i, 1);
-				renderChips();
-				renderSuggest();
-			}
-			function commit(raw: string) {
-				const name = raw.trim();
-				if (name && !values.some((v) => v.toLowerCase() === name.toLowerCase())) values.push(name);
-				input.value = '';
-				renderChips();
-				renderSuggest();
-			}
-			function candidates(): string[] {
-				const token = input.value.trim().toLowerCase();
-				const used = new Set(values.map((v) => v.toLowerCase()));
-				return options
-					.filter((o) => !used.has(o.toLowerCase()))
-					.filter((o) => !token || o.toLowerCase().includes(token))
-					.slice(0, 6);
-			}
-			function renderSuggest() {
-				const items = candidates();
-				suggest.textContent = '';
-				active = -1;
-				if (!items.length) {
-					suggest.hidden = true;
-					return;
-				}
-				for (const o of items) {
-					const li = document.createElement('li');
-					li.textContent = o;
-					li.addEventListener('mousedown', (e) => {
-						e.preventDefault();
-						commit(o);
-					});
-					suggest.appendChild(li);
-				}
-				suggest.hidden = false;
-			}
-
-			input.addEventListener('input', renderSuggest);
-			input.addEventListener('focus', renderSuggest);
-			input.addEventListener('blur', () => {
-				suggest.hidden = true;
-			});
-			input.addEventListener('keydown', (e) => {
-				const lis = Array.from(suggest.querySelectorAll('li'));
-				if (e.key === 'Enter') {
-					e.preventDefault();
-					if (active >= 0 && lis[active]) commit(lis[active].textContent || '');
-					else commit(input.value);
-				} else if (e.key === 'ArrowDown' && lis.length) {
-					e.preventDefault();
-					active = (active + 1) % lis.length;
-					lis.forEach((li, i) => li.classList.toggle('active', i === active));
-				} else if (e.key === 'ArrowUp' && lis.length) {
-					e.preventDefault();
-					active = (active - 1 + lis.length) % lis.length;
-					lis.forEach((li, i) => li.classList.toggle('active', i === active));
-				} else if (e.key === 'Backspace' && !input.value && values.length) {
-					remove(values.length - 1);
-				}
-			});
-
-			return {
-				get: () => values,
-				set: (next) => {
-					values = [...next];
-					renderChips();
-				},
-				hideSuggest: () => {
-					suggest.hidden = true;
-				},
-			};
-		}
-
+		// Chip fields: tags and "watched with", the same interaction (lib/chips-field).
 		const tagField = wireChips(tagInput, tagSuggest, tagChipsBox, cfg.tagOptions, (t) => `Remove ${t}`);
 		const friendField = wireChips(
 			friendInput,
