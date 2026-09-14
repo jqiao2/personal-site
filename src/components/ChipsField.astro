@@ -1,0 +1,121 @@
+---
+// A label + input + suggestion dropdown + removable-chip row. The behaviour is
+// wireChips() in lib/chips-field.ts, keyed off the ids below: `${id}-input`,
+// `${id}-suggest`, `${id}-chips`. Colours come from --cf-* custom properties so
+// each editor themes it; the defaults here are the film editor's, which is the
+// ground truth this was extracted from.
+interface Props {
+	id: string;
+	label: string;
+	placeholder?: string;
+}
+const { id, label, placeholder } = Astro.props;
+---
+
+<div class="chips-field">
+	<label class="chips-label" for={`${id}-input`}>{label}</label>
+	<input
+		class="chips-input"
+		id={`${id}-input`}
+		type="text"
+		placeholder={placeholder}
+		autocomplete="off"
+	/>
+	<ul class="chips-suggest" id={`${id}-suggest`} hidden></ul>
+	<div class="chips-box" id={`${id}-chips`} hidden></div>
+</div>
+
+<style>
+	.chips-field {
+		position: relative;
+	}
+	.chips-label {
+		display: block;
+		font-size: 11px;
+		text-transform: uppercase;
+		letter-spacing: 1.4px;
+		color: var(--cf-label, #8a6f63);
+		margin-bottom: 7px;
+	}
+	.chips-input {
+		width: 100%;
+		background: var(--cf-input-bg, #1c0d0e);
+		border: 1px solid var(--cf-input-border, #4a2529);
+		border-radius: 8px;
+		color: var(--cf-input-fg, #f4e8d1);
+		font-family: var(--cf-font, var(--font-archivo));
+		font-size: 14px;
+		padding: 11px 13px;
+		outline: none;
+	}
+	.chips-input:focus {
+		border-color: var(--cf-input-focus, #d9b45a);
+	}
+	.chips-suggest {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		position: absolute;
+		bottom: 100%;
+		left: 0;
+		right: 0;
+		margin-bottom: 6px;
+		z-index: 10;
+		max-height: 200px;
+		overflow-y: auto;
+		background: var(--cf-suggest-bg, #241012);
+		border: 1px solid var(--cf-suggest-border, #4a2529);
+		border-radius: 8px;
+		box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
+	}
+	.chips-suggest[hidden] {
+		display: none;
+	}
+	.chips-suggest :global(li) {
+		padding: 9px 13px;
+		cursor: pointer;
+		font-size: 14px;
+		color: var(--cf-suggest-fg, #f2e5cd);
+		border-bottom: 1px solid var(--cf-suggest-rule, #351a1d);
+	}
+	.chips-suggest :global(li:last-child) {
+		border-bottom: none;
+	}
+	.chips-suggest :global(li:hover),
+	.chips-suggest :global(li.active) {
+		background: var(--cf-suggest-hover, #331619);
+	}
+	.chips-box {
+		display: flex;
+		gap: 7px;
+		flex-wrap: wrap;
+		margin-top: 10px;
+	}
+	.chips-box[hidden] {
+		display: none;
+	}
+	.chips-box :global(.chip) {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		font-size: 12px;
+		color: var(--cf-chip-fg, #ddc9b4);
+		border: 1px solid var(--cf-chip-border, #4a2529);
+		border-radius: 20px;
+		padding: 4px 8px 4px 12px;
+		background: var(--cf-chip-bg, #241012);
+	}
+	.chips-box :global(.chip button) {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: var(--cf-chip-x, #a2857a);
+		font-size: 13px;
+		line-height: 1;
+		padding: 0;
+		font-family: var(--cf-font, var(--font-archivo));
+	}
+	.chips-box :global(.chip button:hover) {
+		color: var(--cf-chip-x-hover, #f4e8d1);
+	}
+</style>
