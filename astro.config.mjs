@@ -27,6 +27,10 @@ export default defineConfig({
 	// Absolute base for anything that emits full URLs (the RSS feed, chiefly).
 	site: 'https://jqiao.vercel.app',
 	adapter: vercel({
+		// Enable Vercel Web Analytics
+		webAnalytics: {
+			enabled: true,
+		},
 		// Enables `/_vercel/image` for the photo bucket. Deliberately NOT
 		// `imageService: true`: that would also swap Astro's own image service
 		// site-wide, which is a change to how every other page's images are
