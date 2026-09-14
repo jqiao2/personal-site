@@ -8,11 +8,7 @@
 // worth-the-trip and the why-tags — appear. A place you mean to try is a name,
 // roughly where it is, and one line about why; where/cuisine/price are the
 // restaurant's own facts, edited on its page, not asked when jotting it down.
-interface Props {
-	/** Existing why-tags, for the free-form "why" field's autocomplete. */
-	whyOptions: string[];
-}
-const { whyOptions } = Astro.props;
+import ChipsField from './ChipsField.astro';
 ---
 
 <!-- ----------------------------------------------- add to-try -->
@@ -52,20 +48,7 @@ const { whyOptions } = Astro.props;
 			the list stays consistent without a fixed vocabulary to pick from.
 		*/}
 		<div class="me__field">
-			<label class="rl-label" for="me-try-why">Why</label>
-			<div class="me__tags" data-me-why-chips></div>
-			<input
-				class="me__input"
-				id="me-try-why"
-				data-me-why-input
-				type="text"
-				list="me-why-options"
-				autocomplete="off"
-				placeholder="a dish, a recommendation… (Enter to add)"
-			/>
-			<datalist id="me-why-options">
-				{whyOptions.map((t) => <option value={t} />)}
-			</datalist>
+			<ChipsField id="me-why" label="Why" placeholder="a dish, a recommendation… (Enter to add)" />
 		</div>
 	</div>
 </div>
