@@ -8,6 +8,17 @@ export interface ChipField {
 	hideSuggest(): void;
 }
 
+/** Nearest scrolling ancestor, whose edges bound where the dropdown can open. */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+	let p = el.parentElement;
+	while (p) {
+		const oy = getComputedStyle(p).overflowY;
+		if (oy === 'auto' || oy === 'scroll') return p;
+		p = p.parentElement;
+	}
+	return null;
+}
+
 export function wireChips(
 	input: HTMLInputElement,
 	suggest: HTMLUListElement,
@@ -72,6 +83,21 @@ export function wireChips(
 			suggest.appendChild(li);
 		}
 		suggest.hidden = false;
+		placeSuggest();
+	}
+	// Open below the input, or above it when the space below within the scroll
+	// body can't hold the list. Measured each time it's shown, so scrolling the
+	// body toward either edge flips it.
+	function placeSuggest() {
+		const box = scrollParent(input);
+		const bounds = box
+			? box.getBoundingClientRect()
+			: { top: 0, bottom: window.innerHeight };
+		const rect = input.getBoundingClientRect();
+		const need = Math.min(suggest.scrollHeight || 200, 200) + 6;
+		const below = bounds.bottom - rect.bottom;
+		const above = rect.top - bounds.top;
+		suggest.classList.toggle('chips-suggest--up', below < need && above > below);
 	}
 
 	input.addEventListener('input', renderSuggest);

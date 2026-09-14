@@ -8,11 +8,13 @@ interface Props {
 	id: string;
 	label: string;
 	placeholder?: string;
+	/** Pill (film) or hard-cornered (matches the restaurant inputs). */
+	shape?: 'round' | 'square';
 }
-const { id, label, placeholder } = Astro.props;
+const { id, label, placeholder, shape = 'round' } = Astro.props;
 ---
 
-<div class="chips-field">
+<div class:list={['chips-field', { 'chips-field--square': shape === 'square' }]}>
 	<label class="chips-label" for={`${id}-input`}>{label}</label>
 	<input
 		class="chips-input"
@@ -56,20 +58,36 @@ const { id, label, placeholder } = Astro.props;
 		margin: 0;
 		padding: 0;
 		position: absolute;
-		bottom: 100%;
 		left: 0;
 		right: 0;
-		margin-bottom: 6px;
 		z-index: 10;
 		max-height: 200px;
 		overflow-y: auto;
 		background: var(--cf-suggest-bg, #241012);
 		border: 1px solid var(--cf-suggest-border, #4a2529);
 		border-radius: 8px;
+	}
+	/* Opens below the input by default; wireChips flips it to --up when there
+	   isn't room below within the scroll body. The shadow points the way it opens. */
+	.chips-suggest {
+		top: 100%;
+		margin-top: 6px;
+		box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.7);
+	}
+	.chips-suggest.chips-suggest--up {
+		top: auto;
+		bottom: 100%;
+		margin-top: 0;
+		margin-bottom: 6px;
 		box-shadow: 0 -18px 40px -14px rgba(0, 0, 0, 0.7);
 	}
 	.chips-suggest[hidden] {
 		display: none;
+	}
+	.chips-field--square .chips-input,
+	.chips-field--square .chips-suggest,
+	.chips-field--square .chips-box :global(.chip) {
+		border-radius: 0;
 	}
 	.chips-suggest :global(li) {
 		padding: 9px 13px;
