@@ -1525,8 +1525,10 @@ const config = {
 		gap: 8px;
 		flex-wrap: wrap;
 	}
-	.me__photos:empty {
-		display: none;
+	/* The thumbnails live in their own element so the script can replace them
+	   wholesale; `contents` keeps them in the same wrapping row as the + tile. */
+	.me__photos-list {
+		display: contents;
 	}
 	.me__addphoto {
 		width: 74px;

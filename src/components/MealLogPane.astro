@@ -146,11 +146,13 @@ import { verdictRotation } from '../lib/verdict';
 
 	<div class="me__field">
 		<span class="rl-label">Photos</span>
-		<div class="me__photos" data-me-photos></div>
-		<label class="me__addphoto">
-			+
-			<input type="file" accept="image/*" multiple data-me-photo-input hidden />
-		</label>
+		<div class="me__photos">
+			<span class="me__photos-list" data-me-photos></span>
+			<label class="me__addphoto">
+				+
+				<input type="file" accept="image/*" multiple data-me-photo-input hidden />
+			</label>
+		</div>
 	</div>
 
 	<div class="me__field">
