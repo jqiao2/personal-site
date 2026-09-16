@@ -19,9 +19,11 @@ export const prerender = false;
 // after the fields it fills.
 export const GET: APIRoute = async ({ url }) => {
 	const q = url.searchParams.get('q') ?? '';
+
 	try {
 		const places = await searchPlaces(q);
 		const previous = await previousVisits(places.map((p) => p.id));
+
 		return json({ places: places.map((p) => ({ ...p, previous: previous.get(p.id) ?? null })) });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'search failed', 500);
@@ -37,6 +39,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: Record<string, unknown>;
+
 	try {
 		body = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -44,7 +47,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const name = typeof body.name === 'string' ? body.name.trim() : '';
+
 	if (!name) return apiError('name is required', 400);
+
 	if (body.priceBand != null && !isPriceBand(body.priceBand)) {
 		return apiError('priceBand must be $, $$, $$$ or $$$$', 400);
 	}
@@ -69,6 +74,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			toTryTags: Array.isArray(body.toTryTags) ? body.toTryTags.map(String) : [],
 			toTry: Boolean(body.toTry),
 		});
+
 		return json({ place }, 201);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to add the place', 500);
@@ -78,11 +84,13 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 function text(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t === '' ? null : t;
 }
 
 function num(v: unknown): number | null {
 	if (v == null || v === '') return null;
 	const n = Number(v);
+
 	return Number.isFinite(n) ? n : null;
 }

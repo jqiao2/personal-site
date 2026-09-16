@@ -3,7 +3,9 @@
 export function formatWatchedDate(date: string | null): string | null {
 	if (!date) return null;
 	const [y, m, d] = date.split('-').map(Number);
+
 	if (!y || !m || !d) return date;
+
 	return new Date(y, m - 1, d).toLocaleDateString('en-US', {
 		year: 'numeric',
 		month: 'short',
@@ -16,7 +18,9 @@ export function formatWatchedDate(date: string | null): string | null {
 export function excerpt(text: string | null): string | null {
 	if (!text) return null;
 	const line = text.replace(/\s+/g, ' ').trim();
+
 	if (!line) return null;
+
 	return line.length > 150 ? `${line.slice(0, 149).trimEnd()}…` : line;
 }
 
@@ -37,6 +41,7 @@ const MEDIUM_LABELS: Record<string, string> = {
  */
 export function starText(rating: number | null | undefined): string | null {
 	if (!rating) return null;
+
 	return '★'.repeat(Math.floor(rating)) + (rating % 1 >= 0.5 ? '½' : '');
 }
 
@@ -44,7 +49,9 @@ export function starText(rating: number | null | undefined): string | null {
 export function mediumLabel(medium: string | null | undefined): string | null {
 	if (!medium) return null;
 	const key = medium.trim().toLowerCase();
+
 	if (!key) return null;
+
 	return MEDIUM_LABELS[key] ?? key.charAt(0).toUpperCase() + key.slice(1);
 }
 
@@ -55,5 +62,6 @@ export function mediumLabel(medium: string | null | undefined): string | null {
  * download link in /films/movie/[tmdbId]. */
 export function ytsUrl(title: string, year: number | null): string {
 	const query = year ? `${title} ${year}` : title;
+
 	return `https://yts.gg/browse-movies/${encodeURIComponent(query.toLowerCase())}/all/all/0/latest/0/all`;
 }

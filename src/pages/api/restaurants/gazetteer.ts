@@ -19,6 +19,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	const q = url.searchParams.get('q') ?? '';
+
 	if (q.trim().length < 2) return json({ hits: [] });
 
 	// Number(null) is 0, and 0,0 is a real place in the Gulf of Guinea — so the

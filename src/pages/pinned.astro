@@ -11,6 +11,7 @@ import { formatWatchedDate } from '../lib/format';
 export const prerender = false;
 
 const isOwner = await requireOwner(Astro.cookies);
+
 const items = await listPinnedItems({ isOwner });
 
 // The pin's ref id is the first segment of a JournalItem key (book keys are just

@@ -60,38 +60,49 @@ const ORDER: StatKey[] = [
  */
 export function detailRows(sport: string, row: StatRow, skiActive: boolean): DetailRow[] {
 	const meta = sportMeta(sport);
+
 	// A sport reads its pace in exactly one unit; the other two renderings of the
 	// same speed column are suppressed (see the PACE_KEYS note in the detail page).
 	const paceKey: StatKey | null =
 		meta.paceStyle === 'per_km' ? 'avg_pace' : meta.paceStyle === 'per_100m' ? 'pace_100m' : meta.paceStyle === 'speed' ? 'avg_speed' : null;
+
 	const speedShown = paceKey === 'avg_speed';
 
 	const eligible = ORDER.filter((k) => {
 		if (HEADLINE.includes(k)) return false;
+
 		// Speed avg/max belong to speed-paced sports; a runner sees Pace, not a
 		// lone "Max speed" with no average beside it.
 		if ((k === 'avg_speed' || k === 'max_speed') && !speedShown) return false;
+
 		// Only the sport's own pace unit, never all three at once.
 		if ((k === 'avg_pace' || k === 'pace_100m') && k !== paceKey) return false;
+
 		if (skiActive && k === 'moving_time') return false;
+
 		if (!isStatRelevant(sport, k)) return false;
+
 		return formatStat(k, row).value !== '—';
 	});
 
 	const eligibleSet = new Set(eligible);
 	const used = new Set<StatKey>();
 	const rows: DetailRow[] = [];
+
 	for (const k of eligible) {
 		if (used.has(k)) continue;
 		const pair = PAIRS.find((p) => p.avg === k);
+
 		if (pair && eligibleSet.has(pair.max)) {
 			used.add(pair.avg);
 			used.add(pair.max);
 			rows.push({ label: pair.label, avg: formatStat(pair.avg, row).value, max: formatStat(pair.max, row).value });
 			continue;
 		}
+
 		const f = formatStat(k, row);
 		rows.push({ label: f.label, avg: f.value });
 	}
+
 	return rows;
 }

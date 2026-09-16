@@ -22,36 +22,49 @@ const small = buildGraphData({
 		[40.4, -74.4],
 	],
 });
+
 assert.ok(small, 'a normal activity produces a graph');
+
 assert.equal(small.n, 4);
+
 // Axes read from zero.
 assert.deepEqual(small.t, [0, 1, 2, 3]);
+
 assert.deepEqual(small.d, [0, 5, 12, 20]);
+
 // Only the three present series, no power.
 assert.deepEqual(
 	small.series.map((s) => s.key),
 	['elevation', 'heartrate', 'speed'],
 );
+
 // Every parallel array is the same length — the scrub invariant.
 for (const arr of [small.t, small.d, small.lat, small.lng, ...small.series.map((s) => s.values)]) {
 	assert.equal(arr.length, small.n, 'all sampled arrays share the index count');
 }
+
 // Elevation converted metres→feet and rounded.
 assert.equal(small.series[0].values[0], Math.round(100 * 3.28084));
+
 // Speed converted m/s→mph, one decimal.
 assert.equal(small.series.find((s) => s.key === 'speed').values[0], Number((5 * 2.236936).toFixed(1)));
 
 // Downsampling keeps endpoints and the shared index count.
 const n = GRAPH_N * 3;
+
 const big = buildGraphData({
 	time_s: Array.from({ length: n }, (_, i) => i),
 	distance_m: Array.from({ length: n }, (_, i) => i * 2),
 	altitude_m: Array.from({ length: n }, (_, i) => 100 + i),
 	latlng: Array.from({ length: n }, (_, i) => [40 + i / n, -74 - i / n]),
 });
+
 assert.equal(big.n, GRAPH_N, 'downsampled to GRAPH_N');
+
 assert.equal(big.t[0], 0);
+
 assert.equal(big.t[big.n - 1], n - 1, 'last sample is the real end, not a stride short');
+
 assert.equal(big.d[big.n - 1], (n - 1) * 2);
 
 // Missing samples become null (line breaks), not zeros, and don't shift indices.
@@ -59,7 +72,9 @@ const gappy = buildGraphData({
 	time_s: [0, 1, 2, 3],
 	heartrate: [120, NaN, null, 150],
 });
+
 assert.deepEqual(gappy.series[0].values, [120, null, null, 150]);
+
 assert.equal(gappy.lat, null, 'no latlng → no marker coordinates');
 
 // A null coordinate in an otherwise-present pair (a GPS gap — and index 0, the
@@ -74,7 +89,9 @@ const gpsGap = buildGraphData({
 		[40.4, -74.4],
 	],
 });
+
 assert.deepEqual(gpsGap.lat, [null, 40.2, 40.3, 40.4]);
+
 assert.deepEqual(gpsGap.lng, [null, -74.2, null, -74.4]);
 
 // Lap boundaries: cumulative offsets at the end of each lap except the last
@@ -87,28 +104,36 @@ const withLaps = buildGraphData(
 		{ elapsed_seconds: 30, distance_m: 200 },
 	],
 );
+
 assert.deepEqual(withLaps.laps, [
 	{ t: 60, d: 400 },
 	{ t: 150, d: 900 },
 ]);
+
 // A null on one axis stops that axis at the gap but keeps the other going.
 const gapLap = buildGraphData({ time_s: [0, 1, 2], altitude_m: [1, 2, 3] }, [
 	{ elapsed_seconds: 60, distance_m: null },
 	{ elapsed_seconds: 90, distance_m: 500 },
 	{ elapsed_seconds: 30, distance_m: 200 },
 ]);
+
 assert.deepEqual(gapLap.laps, [
 	{ t: 60, d: null },
 	{ t: 150, d: null },
 ]);
+
 // Fewer than two laps has no internal divider.
 assert.equal(buildGraphData({ time_s: [0, 1], altitude_m: [1, 2] }, [{ elapsed_seconds: 60, distance_m: 400 }]).laps, undefined);
+
 assert.equal(small.laps, undefined, 'no laps passed → no boundaries');
 
 // Rejections: nothing plottable, or no axis at all.
 assert.equal(buildGraphData(null), null);
+
 assert.equal(buildGraphData({ time_s: [1, 2, 3] }), null, 'axis but no series → null');
+
 assert.equal(buildGraphData({ altitude_m: [1, 2, 3] }), null, 'series but no axis → null');
+
 assert.equal(buildGraphData({ time_s: [1], altitude_m: [5] }), null, 'a single sample is not a line');
 
 console.log('activity-graph: all assertions passed');

@@ -52,15 +52,20 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = Astro.params.month ?? '';
+
 const parsed = parseMonthKey(key);
+
 // Anything that isn't a YYYY-MM lands on the current month rather than 404ing.
 if (!parsed) return Astro.redirect(`/books/month/${siteDay().slice(0, 7)}`, 302);
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+
 // Both bands default on; only their absence rides in the URL, so the plain link
 // stays clean and an old link keeps meaning what it meant.
 const summaryOn = Astro.url.searchParams.get('summary') !== '0';
+
 const hoursOn = Astro.url.searchParams.get('hours') !== '0';
+
 const query = monthQuery(aspect, { summary: summaryOn, hours: hoursOn });
 
 const [month, counts, monthHours] = await Promise.all([
@@ -70,11 +75,14 @@ const [month, counts, monthHours] = await Promise.all([
 ]);
 
 const books = new Map<number, MonthBook>(month.books.map((b) => [b.id, b]));
+
 // Which day each finished book's seal belongs on — the date it was marked, else
 // the last day it holds a cell on. Books that aren't finished aren't in here.
 const finished = new Map<number, string>();
+
 for (const book of month.books) {
 	const day = finishDay(book);
+
 	if (day) finished.set(book.id, day);
 }
 
@@ -83,23 +91,32 @@ for (const book of month.books) {
 // marked finished this month join them: those can have no page turns at all, so
 // they never appear in the grid but did finish in the month.
 const finishedThisMonth = new Set<number>(month.markedFinished);
+
 for (const [id, day] of finished) if (monthOf(day) === key) finishedThisMonth.add(id);
 
 const rows = weekRows(key);
+
 // Three occupied hours is the same threshold the histogram itself applies. It
 // is asked here as well because the band's absence changes the artboard, and
 // the geometry has to be settled before anything is drawn.
 const hoursAvailable = monthHours.filter((pages) => pages > 0).length >= MIN_OCCUPIED_HOURS;
+
 const geometry = geometries(rows, hoursAvailable);
+
 const initial = geometry[geometryKey(aspect.id, summaryOn, hoursOn)];
+
 const cells = buildCells(key, month.days, books, finished);
+
 const figures = summarise(key, month.days, finishedThisMonth.size);
+
 const label = monthLabel(key);
+
 const isEmpty = month.days.length === 0;
 
 const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	const id = monthKey(parsed.year, i + 1);
 	const count = counts[id] ?? 0;
+
 	return {
 		abbr,
 		key: id,
@@ -841,6 +858,7 @@ const clientData = JSON.stringify({
 		figures: boolean;
 		hours: boolean;
 	}
+
 	interface MonthData {
 		key: string;
 		width: number;
@@ -854,8 +872,11 @@ const clientData = JSON.stringify({
 	}
 
 	const dataEl = document.querySelector('[data-month-data]');
+
 	const card = document.querySelector<HTMLElement>('[data-card]');
+
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+
 	if (dataEl?.textContent && card && viewport) {
 		const data = JSON.parse(dataEl.textContent) as MonthData;
 		const aspectIds = Object.keys(data.slugs);
@@ -874,9 +895,13 @@ const clientData = JSON.stringify({
 		// link stays clean. The bands ride here too — flipping one is part of the card.
 		function query(): string {
 			const parts: string[] = [];
+
 			if (data.slugs[aspect] !== defaultSlug) parts.push(`fmt=${data.slugs[aspect]}`);
+
 			if (!hoursOn) parts.push('hours=0');
+
 			if (!summaryOn) parts.push('summary=0');
+
 			return parts.length ? `?${parts.join('&')}` : '';
 		}
 
@@ -904,6 +929,7 @@ const clientData = JSON.stringify({
 
 		function paintCard(): void {
 			const geometry = geometryFor();
+
 			if (!geometry) return;
 			card!.style.setProperty('--cell', `${geometry.cell}px`);
 			card!.style.setProperty('--card-h', `${geometry.height}px`);
@@ -912,7 +938,9 @@ const clientData = JSON.stringify({
 			// The grid has already been sized for whichever bands are drawn.
 			card!.classList.toggle('card--figures', geometry.figures);
 			card!.classList.toggle('card--hours', geometry.hours);
+
 			if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${aspect}`;
+
 			// Neither band fits anywhere but Story, so the switches go away rather
 			// than sit there inert.
 			if (switches) switches.hidden = aspect !== '9:16';
@@ -922,8 +950,10 @@ const clientData = JSON.stringify({
 		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
 			button.addEventListener('click', () => {
 				const id = button.dataset.aspect;
+
 				if (!id || !data.slugs[id]) return;
 				aspect = id;
+
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
 				paintCard();
@@ -933,6 +963,7 @@ const clientData = JSON.stringify({
 		for (const button of document.querySelectorAll<HTMLElement>('[data-switch]')) {
 			button.addEventListener('click', () => {
 				const which = button.dataset.switch;
+
 				if (which === 'hours') hoursOn = !hoursOn;
 				else if (which === 'summary') summaryOn = !summaryOn;
 				else return;
@@ -949,6 +980,7 @@ const clientData = JSON.stringify({
 			if (img.naturalWidth > 2) return;
 			img.closest('.print')?.classList.add('print--blank');
 		}
+
 		for (const img of document.querySelectorAll<HTMLImageElement>('img.cover')) {
 			if (img.complete) audit(img);
 			else {
@@ -970,6 +1002,7 @@ const clientData = JSON.stringify({
 				const count = data.counts[id] ?? 0;
 				tile.classList.toggle('is-on', current);
 				const countEl = tile.querySelector('.picker__count');
+
 				if (countEl)
 					countEl.textContent = count ? `${count} ${count === 1 ? 'book' : 'books'}` : '—';
 			},

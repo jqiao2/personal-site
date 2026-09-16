@@ -16,7 +16,9 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const visits = await listDiary();
+
 const months = groupByMonth(visits);
+
 const years = [...new Set(months.map((m) => m.key.slice(0, 4)))];
 ---
 

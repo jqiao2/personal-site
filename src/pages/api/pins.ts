@@ -17,17 +17,21 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: { track?: unknown; refId?: unknown };
+
 	try {
 		body = await request.json();
 	} catch {
 		return apiError('expected JSON body', 400);
 	}
+
 	if (!isTrack(body.track)) return apiError('track must be one of film, book, meal, move', 400);
 	const refId = Number(body.refId);
+
 	if (!Number.isInteger(refId) || refId <= 0) return apiError('refId is required', 400);
 
 	try {
 		await pin(body.track, refId);
+
 		return json({ ok: true }, 201);
 	} catch (e) {
 		if (e instanceof PinsFullError) {
@@ -39,8 +43,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 				day: p.day,
 				image: p.image,
 			}));
+
 			return json({ error: 'pin limit reached', pins }, 409);
 		}
+
 		return apiError(e instanceof Error ? e.message : 'failed to pin', 500);
 	}
 };
@@ -48,12 +54,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 export const DELETE: APIRoute = async ({ url, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	const track = url.searchParams.get('track');
+
 	if (!isTrack(track)) return apiError('track must be one of film, book, meal, move', 400);
 	const refId = Number.parseInt(url.searchParams.get('refId') ?? '', 10);
+
 	if (!Number.isInteger(refId) || refId <= 0) return apiError('refId is required', 400);
 
 	try {
 		await unpin(track, refId);
+
 		return json({ ok: true });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to unpin', 500);

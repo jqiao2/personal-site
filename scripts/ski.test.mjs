@@ -17,6 +17,7 @@ function buildDay() {
 	let t = 0;
 	let d = 0;
 	let alt = 2000;
+
 	const push = (a, dist) => {
 		time.push(t);
 		altitude.push(a);
@@ -24,42 +25,56 @@ function buildDay() {
 		t += 5;
 		d += dist;
 	};
+
 	for (let lap = 0; lap < 3; lap++) {
 		// Lift: +300m over 300s (60 samples), ~2.5 m/s along, jittered.
 		for (let i = 0; i < 60; i++) {
 			alt += 5;
 			push(alt + (i % 2 ? 3 : -3), 12);
 		}
+
 		// Run: -300m over 100s (20 samples), fast (~15 m/s along).
 		for (let i = 0; i < 20; i++) {
 			alt -= 15;
 			push(alt, 75);
 		}
 	}
+
 	return { time_s: time, altitude_m: altitude, distance_m: distance };
 }
 
 const day = buildDay();
+
 const segs = detectSkiSegments(day);
+
 const sum = summarizeSki(segs);
 
 assert.equal(sum.runCount, 3, 'three runs found');
+
 assert.equal(sum.liftCount, 3, 'three lifts found');
+
 // Each run drops ~300m; total ~900m, within noise/hysteresis slack.
 assert.ok(Math.abs(sum.verticalM - 900) < 60, `vertical ~900m, got ${sum.verticalM}`);
+
 // Run time is 3×100s = 300s, not the 3×300 lift or the 1200s elapsed.
 assert.ok(Math.abs(sum.runSeconds - 300) < 40, `run time ~300s, got ${sum.runSeconds}`);
+
 assert.ok(sum.liftSeconds > sum.runSeconds, 'a day is more lift than run');
 
 // A run's average speed is well above a lift's — the segments are labelled right.
 const run1 = segs.find((s) => s.type === 'run');
+
 const lift1 = segs.find((s) => s.type === 'lift');
+
 assert.ok(run1.avgSpeedMs > lift1.avgSpeedMs, 'runs are faster than lifts');
 
 // skiActive returns only the run time, and a mask that is true on runs.
 const active = skiActive(day);
+
 assert.ok(Math.abs(active.activeSeconds - 300) < 40, 'active seconds ≈ run time');
+
 assert.equal(active.runCount, 3);
+
 assert.equal(active.activeMask.length, day.altitude_m.length, 'mask parallels the stream');
 
 // Exertion: alpine_ski is scored on active descent, not the 1200s elapsed. A MET
@@ -78,8 +93,11 @@ const ex = computeExertion(
 	},
 	{ ftp_w: null, lthr_bpm: null, max_hr: null, rest_hr: null, threshold_pace_s_per_km: null, css_pace_s_per_100m: null, weight_kg: null },
 );
+
 assert.equal(ex.method, 'ski', 'scored via the ski rung');
+
 assert.equal(ex.confidence, 'estimated');
+
 // 300s active = 5min × (7-1) active MET → 30 MET-min → /12/60*100 ≈ 4.2. The
 // point is that it's scored off the 5min of skiing, not the 20min elapsed (which
 // at the old whole-day MET of 6 would score ~15 — 3.5× higher).
@@ -90,33 +108,48 @@ const hike = computeExertion(
 	{ sport: 'hike', moving_seconds: 1200, elapsed_seconds: 1200, distance_m: 3000, elevation_gain_m: 100, avg_hr: null, avg_power_w: null, streams: day },
 	{ ftp_w: null, lthr_bpm: null, max_hr: null, rest_hr: null, threshold_pace_s_per_km: null, css_pace_s_per_100m: null, weight_kg: null },
 );
+
 assert.equal(hike.method, 'met', 'a hike still hits the MET floor, not the ski rung');
 
 // No altitude → no segments, and the caller keeps its own moving time.
 assert.deepEqual(detectSkiSegments({ time_s: [0, 1, 2] }), []);
+
 assert.equal(skiActive({ time_s: [0, 1, 2] }), null);
 
 // --- Edit / override path -------------------------------------------------
 const thresholds = { ftp_w: null, lthr_bpm: null, max_hr: null, rest_hr: null, threshold_pace_s_per_km: null, css_pace_s_per_100m: null, weight_kg: null };
+
 const auto = detectSkiSegments(day);
+
 const override = toOverride(auto);
+
 // Round-trips: feeding the auto partition straight back reproduces it.
 const roundTrip = resolveSkiSegments(day, override);
+
 assert.equal(roundTrip.length, auto.length, 'override round-trips to the same segment count');
+
 assert.deepEqual(roundTrip.map((s) => s.type), auto.map((s) => s.type), 'types survive the round-trip');
 
 // Reclassify the first LIFT as a run: skiActive should now count it, so active
 // time and the exertion score both rise. This is the "I hiked that lift" edit.
 const firstLift = override.findIndex((s) => s.type === 'lift');
+
 assert.ok(firstLift >= 0, 'there is a lift to reclassify');
+
 const edited = override.map((s, i) => (i === firstLift ? { ...s, type: 'run' } : s));
+
 const activeBefore = skiActive(day).activeSeconds;
+
 const activeAfter = skiActive(day, edited).activeSeconds;
+
 assert.ok(activeAfter > activeBefore, 'reclassifying a lift as a run adds active descent time');
 
 const exBefore = computeExertion({ sport: 'alpine_ski', moving_seconds: 1200, elapsed_seconds: 1200, distance_m: null, elevation_gain_m: null, avg_hr: null, avg_power_w: null, streams: day }, thresholds);
+
 const exAfter = computeExertion({ sport: 'alpine_ski', moving_seconds: 1200, elapsed_seconds: 1200, distance_m: null, elevation_gain_m: null, avg_hr: null, avg_power_w: null, streams: day, ski_segments: edited }, thresholds);
+
 assert.ok(exAfter.score > exBefore.score, 'the edit raises the exertion score');
+
 assert.equal(exAfter.method, 'ski');
 
 // Coalescing: after relabelling the idle between two runs AS a run, the three
@@ -126,8 +159,11 @@ const three = [
 	{ t0: 100, t1: 130, type: 'run' },
 	{ t0: 130, t1: 230, type: 'run' },
 ];
+
 const merged = resolveSkiSegments(day, three);
+
 assert.equal(merged.length, 1, 'adjacent same-type segments coalesce into one');
+
 assert.equal(merged[0].type, 'run');
 
 console.log('ski.test.mjs OK');

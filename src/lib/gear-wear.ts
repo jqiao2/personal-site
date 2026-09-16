@@ -10,6 +10,7 @@ import type { GearKind } from './activities';
 import { sportMeta } from './sports';
 
 const METERS_PER_MILE = 1609.344;
+
 /** Mean Gregorian month. The intervals below are "about three months", not
  * "about ninety days", and a fixed 30 would drift a fortnight over two years. */
 const DAYS_PER_MONTH = 30.44;
@@ -160,6 +161,7 @@ export interface GearRide {
  */
 export function isIndoorRide(row: { sport?: string | null; sub_sport?: string | null }): boolean {
 	if (row.sub_sport === 'indoor') return true;
+
 	return !!row.sport && sportMeta(row.sport).indoor;
 }
 
@@ -179,16 +181,21 @@ const EMPTY_USE: GearUse = {
  */
 export function sumRides(rides: GearRide[], from?: string | null, to?: string | null): GearUse {
 	const use: GearUse = { ...EMPTY_USE };
+
 	for (const r of rides) {
 		if (from && r.local_date < from) continue;
+
 		if (to && r.local_date > to) continue;
 		use.activityCount++;
 		use.distanceM += r.distance_m;
 		use.movingSeconds += r.moving_seconds;
 		use.elevationGainM += r.elevation_gain_m;
+
 		if (use.firstDate == null || r.local_date < use.firstDate) use.firstDate = r.local_date;
+
 		if (use.lastDate == null || r.local_date > use.lastDate) use.lastDate = r.local_date;
 	}
+
 	return use;
 }
 
@@ -228,7 +235,9 @@ export interface ComponentWear {
  */
 export function effectiveMeta(component: GearComponent): ComponentMeta {
 	const base = COMPONENT_KINDS[component.kind] ?? COMPONENT_KINDS.other;
+
 	if (!component.life_miles && !component.life_months) return base;
+
 	return {
 		...base,
 		lifeMiles: component.life_miles ?? base.lifeMiles,
@@ -250,19 +259,24 @@ export function wearOf(component: GearComponent, rides: GearRide[], today = isoT
 	const eligible = meta.outdoorOnly ? rides.filter((r) => !r.indoor) : rides;
 	const use = sumRides(eligible, component.installed_on, end);
 	const miles = (use.distanceM + component.baseline_distance_m) / METERS_PER_MILE;
+
 	const excludedIndoorMiles = meta.outdoorOnly
 		? (sumRides(rides, component.installed_on, end).distanceM - use.distanceM) / METERS_PER_MILE
 		: 0;
+
 	const days = Math.max(0, daysBetween(component.installed_on, end));
 
 	// Each axis reports a fraction of its own far end; the part is as worn as
 	// its worst axis. Bar tape at 18 months is due whatever the odometer says.
 	const axes: number[] = [];
+
 	if (meta.lifeMiles) axes.push(miles / meta.lifeMiles[1]);
+
 	if (meta.lifeMonths) axes.push(days / DAYS_PER_MONTH / meta.lifeMonths[1]);
 	const fraction = axes.length ? Math.max(...axes) : null;
 
 	let status: ComponentWear['status'];
+
 	if (component.removed_on) status = 'retired';
 	else if (fraction == null) status = 'monitor';
 	else if (fraction >= 1) status = 'overdue';
@@ -275,7 +289,9 @@ export function wearOf(component: GearComponent, rides: GearRide[], today = isoT
 /** Past the near end of the window on any axis — "start thinking about it". */
 function dueStarted(meta: ComponentMeta, miles: number, days: number): boolean {
 	if (meta.lifeMiles && miles >= meta.lifeMiles[0]) return true;
+
 	if (meta.lifeMonths && days / DAYS_PER_MONTH >= meta.lifeMonths[0]) return true;
+
 	return false;
 }
 
@@ -287,6 +303,7 @@ function dueStarted(meta: ComponentMeta, miles: number, days: number): boolean {
 /** Today, 'YYYY-MM-DD', in the reader's local reckoning rather than UTC's. */
 export function isoToday(): string {
 	const now = new Date();
+
 	return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 }
 
@@ -318,14 +335,18 @@ export function hoursText(seconds: number): string {
 export function ageText(days: number): string {
 	if (days < 60) return `${days} ${days === 1 ? 'day' : 'days'}`;
 	const months = Math.round(days / DAYS_PER_MONTH);
+
 	if (months < 24) return `${months} mo`;
+
 	return `${(days / 365.25).toFixed(1)} yr`;
 }
 
 /** "2,000–4,000 mi", "3–6 months", or '' for the condition-only parts. */
 export function intervalText(meta: ComponentMeta): string {
 	if (meta.lifeMiles) return `${meta.lifeMiles[0].toLocaleString()}–${meta.lifeMiles[1].toLocaleString()} mi`;
+
 	if (meta.lifeMonths) return `${meta.lifeMonths[0]}–${meta.lifeMonths[1]} months`;
+
 	return '';
 }
 
@@ -346,11 +367,14 @@ export function parseInterval(
 	input: string,
 ): { axis: 'miles' | 'months'; window: [number, number] } | null {
 	const m = /^\s*(\d+)\s*[-–—]\s*(\d+)\s*(mi|mile|miles|mo|month|months)\s*$/i.exec(input);
+
 	if (!m) return null;
 	const lo = Number(m[1]);
 	const hi = Number(m[2]);
+
 	// Same rule the DB check enforces: both ends positive and in order.
 	if (!(lo > 0 && hi >= lo)) return null;
+
 	return { axis: /^mi/i.test(m[3]) ? 'miles' : 'months', window: [lo, hi] };
 }
 

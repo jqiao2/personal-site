@@ -41,6 +41,7 @@ interface Props {
 const { title, sport, polyline } = Astro.props;
 
 const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
+
 const hasKey = Boolean(key);
 
 const config = {
@@ -81,11 +82,15 @@ const config = {
 	// or every tile silently fails to decode while the rest of the map looks
 	// like it loaded.
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
 	import { alpineBasemap, bareAlpineGround, polylineToGeoJSON, routeGapsGeoJSON, startFinish, routeBoundsLngLat } from '../lib/activity-map';
 
 	const tag = document.getElementById('activity-map-config');
+
 	const host = document.querySelector<HTMLElement>('[data-activity-map]');
+
 	if (tag && host) {
 		const cfg = JSON.parse(tag.textContent || '{}') as {
 			key: string;
@@ -110,6 +115,7 @@ const config = {
 			dragRotate: false,
 			touchPitch: false,
 		});
+
 		map.touchZoomRotate.disableRotation();
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
@@ -201,8 +207,10 @@ const config = {
 				// has that case, and re-fitting twice on load is just a flicker.
 				if (first) {
 					first = false;
+
 					return;
 				}
+
 				frame();
 			}).observe(host);
 		}
@@ -219,8 +227,10 @@ const config = {
 		let scrubOn = false;
 		document.addEventListener('activity:scrub', (e) => {
 			const d = (e as CustomEvent).detail as { lat?: number; lng?: number };
+
 			if (typeof d?.lng !== 'number' || typeof d?.lat !== 'number') return;
 			scrubMarker.setLngLat([d.lng, d.lat]);
+
 			if (!scrubOn) {
 				scrubMarker.addTo(map);
 				scrubOn = true;

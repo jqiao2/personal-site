@@ -35,7 +35,9 @@ export const prerender = false;
 // Same bargain as the activities landing page: a database we failed to reach
 // is not a shed with nothing in it, and the page must not say it is.
 let gear: GearWithUse[] = [];
+
 let unreachable = false;
+
 try {
 	gear = await listGearWithUse();
 } catch (err) {
@@ -44,11 +46,13 @@ try {
 }
 
 const active = gear.filter((g) => !g.retired_at);
+
 const retired = gear.filter((g) => g.retired_at);
 
 // Kind groups, in the order gear actually accumulates: bikes first because
 // they're the only ones with a page behind them.
 const KIND_ORDER: GearKind[] = ['bike', 'shoes', 'skis', 'board', 'other'];
+
 const groups = KIND_ORDER.map((kind) => ({
 	kind,
 	label: GEAR_KIND_LABELS[kind],
@@ -79,7 +83,9 @@ function displayName(g: GearWithUse): string {
 function subtitle(g: GearWithUse): string {
 	const catalog = [g.brand, g.model].filter(Boolean).join(' ');
 	const title = displayName(g);
+
 	if (catalog && !sameText(catalog, title)) return catalog;
+
 	return g.nickname && !sameText(g.name, title) ? g.name : '';
 }
 
@@ -88,6 +94,7 @@ function subtitle(g: GearWithUse): string {
 function sameText(a: string, b: string): boolean {
 	const norm = (v: string) =>
 		v.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
 	return norm(a) === norm(b);
 }
 
@@ -97,8 +104,10 @@ function sameText(a: string, b: string): boolean {
 function servedText(g: GearWithUse): string {
 	const start = g.first_used_on ?? g.use.firstDate;
 	const end = retiredDate(g);
+
 	if (!start) return end ? `retired ${end}` : '';
 	const since = g.first_used_on ? start : `${start} at the latest`;
+
 	return end ? `${start} – ${end}` : `since ${since}`;
 }
 ---

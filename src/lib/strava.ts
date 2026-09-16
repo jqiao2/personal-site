@@ -19,6 +19,7 @@
 import { supabaseAdmin } from './supabase';
 
 const AUTH_BASE = 'https://www.strava.com/oauth';
+
 const API_BASE = 'https://www.strava.com/api/v3';
 
 // read: the athlete profile (gear names). activity:read_all: private
@@ -27,12 +28,17 @@ export const STRAVA_SCOPE = 'read,activity:read_all';
 
 function clientId(): string {
 	const v = import.meta.env.STRAVA_CLIENT_ID;
+
 	if (!v) throw new Error('STRAVA_CLIENT_ID is not set');
+
 	return v;
 }
+
 function clientSecret(): string {
 	const v = import.meta.env.STRAVA_CLIENT_SECRET;
+
 	if (!v) throw new Error('STRAVA_CLIENT_SECRET is not set');
+
 	return v;
 }
 
@@ -63,7 +69,9 @@ async function readRow(): Promise<AuthRow | null> {
 		.select('athlete_id, access_token, refresh_token, expires_at, scope, last_sync_at')
 		.eq('id', 1)
 		.maybeSingle();
+
 	if (error) throw new Error(`read strava_auth: ${error.message}`);
+
 	return (data as AuthRow | null) ?? null;
 }
 
@@ -77,10 +85,13 @@ async function writeTokens(t: TokenResponse, scope: string | null): Promise<void
 		scope: scope ?? undefined,
 		updated_at: new Date().toISOString(),
 	};
+
 	// Drop the "keep existing" keys so upsert doesn't null them on a refresh.
 	if (row.athlete_id === undefined) delete (row as Record<string, unknown>).athlete_id;
+
 	if (row.scope === undefined) delete (row as Record<string, unknown>).scope;
 	const { error } = await supabaseAdmin.from('strava_auth').upsert(row);
+
 	if (error) throw new Error(`write strava_auth: ${error.message}`);
 }
 
@@ -98,6 +109,7 @@ export function authorizeUrl(redirectUri: string): string {
 		approval_prompt: 'auto',
 		scope: STRAVA_SCOPE,
 	});
+
 	return `${AUTH_BASE}/authorize?${p}`;
 }
 
@@ -107,7 +119,9 @@ async function tokenExchange(body: Record<string, string>): Promise<TokenRespons
 		headers: { 'content-type': 'application/x-www-form-urlencoded' },
 		body: new URLSearchParams({ client_id: clientId(), client_secret: clientSecret(), ...body }),
 	});
+
 	if (!res.ok) throw new Error(`strava token ${res.status}: ${await res.text()}`);
+
 	return (await res.json()) as TokenResponse;
 }
 
@@ -132,11 +146,14 @@ export async function exchangeCode(code: string): Promise<void> {
  */
 export async function getAccessToken(): Promise<string> {
 	const row = await readRow();
+
 	if (!row) throw new Error('Strava is not connected — visit /activities/settings to connect.');
+
 	if (Date.parse(row.expires_at) - Date.now() > 60_000) return row.access_token;
 
 	const t = await tokenExchange({ refresh_token: row.refresh_token, grant_type: 'refresh_token' });
 	await writeTokens(t, null);
+
 	return t.access_token;
 }
 
@@ -152,18 +169,22 @@ export async function getAccessToken(): Promise<string> {
  */
 export async function stravaGet(path: string, params?: Record<string, string | number>): Promise<unknown> {
 	const url = new URL(`${API_BASE}${path}`);
+
 	for (const [k, v] of Object.entries(params ?? {})) url.searchParams.set(k, String(v));
 
 	const call = async (token: string) =>
 		fetch(url, { headers: { authorization: `Bearer ${token}` } });
 
 	let res = await call(await getAccessToken());
+
 	if (res.status === 401) {
 		// Force a refresh by expiring the row, then retry once.
 		await supabaseAdmin.from('strava_auth').update({ expires_at: new Date(0).toISOString() }).eq('id', 1);
 		res = await call(await getAccessToken());
 	}
+
 	if (!res.ok) throw new Error(`strava GET ${path} ${res.status}: ${await res.text()}`);
+
 	return res.json();
 }
 
@@ -180,7 +201,9 @@ export interface StravaConnection {
 
 export async function getConnection(): Promise<StravaConnection | null> {
 	const row = await readRow();
+
 	if (!row) return null;
+
 	return {
 		athleteId: row.athlete_id,
 		scope: row.scope,

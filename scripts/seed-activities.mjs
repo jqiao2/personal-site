@@ -33,21 +33,27 @@ import { createClient } from '@supabase/supabase-js';
 
 // --- CLI -------------------------------------------------------------------
 const args = process.argv.slice(2);
+
 const RESET = args.includes('--reset');
+
 const SQL_ONLY = args.includes('--sql');
+
 const DRY = args.includes('--dry');
 
 const SEED_MARKER = 'seed-activities.mjs';
 
 let db = null;
+
 if (!SQL_ONLY && !DRY) {
 	const url = process.env.SUPABASE_URL;
 	const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 	if (!url || !key) {
 		console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (node --env-file=.env ...).');
 		console.error('No .env available? Run with --sql instead and apply the output through the SQL editor / execute_sql.');
 		process.exit(1);
 	}
+
 	db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
@@ -56,18 +62,25 @@ if (!SQL_ONLY && !DRY) {
 // a new one each time — makes the output reviewable and the summary stable.
 function mulberry32(seed) {
 	let a = seed >>> 0;
+
 	return function rand() {
 		a |= 0;
 		a = (a + 0x6d2b79f5) | 0;
 		let t = Math.imul(a ^ (a >>> 15), 1 | a);
 		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 	};
 }
+
 const rand = mulberry32(0x5eed_ac71);
+
 const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+
 const between = (lo, hi) => lo + rand() * (hi - lo);
+
 const betweenInt = (lo, hi) => Math.round(between(lo, hi));
+
 const chance = (p) => rand() < p;
 
 // ---------------------------------------------------------------------------
@@ -77,6 +90,7 @@ const chance = (p) => rand() < p;
 // ---------------------------------------------------------------------------
 
 const R_EARTH_M = 6371000;
+
 const toRad = (d) => (d * Math.PI) / 180;
 
 function haversineM(a, b) {
@@ -85,6 +99,7 @@ function haversineM(a, b) {
 	const la1 = toRad(a.lat);
 	const la2 = toRad(b.lat);
 	const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+
 	return 2 * R_EARTH_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -93,15 +108,18 @@ function haversineM(a, b) {
  * right, which this preserves. */
 function mercatorProject({ lat, lng }) {
 	const y = (Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360)) * 180) / Math.PI;
+
 	return { x: lng, y };
 }
 
 function perpendicularDistance(pt, a, b) {
 	const dx = b.x - a.x;
 	const dy = b.y - a.y;
+
 	if (dx === 0 && dy === 0) return Math.hypot(pt.x - a.x, pt.y - a.y);
 	const t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / (dx * dx + dy * dy);
 	const proj = { x: a.x + t * dx, y: a.y + t * dy };
+
 	return Math.hypot(pt.x - proj.x, pt.y - proj.y);
 }
 
@@ -109,18 +127,23 @@ function rdpSimplify(points, epsilon) {
 	if (points.length < 3) return points;
 	let maxDist = 0;
 	let maxIdx = 0;
+
 	for (let i = 1; i < points.length - 1; i++) {
 		const d = perpendicularDistance(points[i], points[0], points[points.length - 1]);
+
 		if (d > maxDist) {
 			maxDist = d;
 			maxIdx = i;
 		}
 	}
+
 	if (maxDist > epsilon) {
 		const left = rdpSimplify(points.slice(0, maxIdx + 1), epsilon);
 		const right = rdpSimplify(points.slice(maxIdx), epsilon);
+
 		return left.slice(0, -1).concat(right);
 	}
+
 	return [points[0], points[points.length - 1]];
 }
 
@@ -130,15 +153,19 @@ function simplifyToLimit(points, limit = 200) {
 	if (points.length <= limit) return points;
 	let epsilon = 0.00002;
 	let out = points;
+
 	for (let i = 0; i < 30; i++) {
 		out = rdpSimplify(points, epsilon);
+
 		if (out.length <= limit) return out;
 		epsilon *= 1.6;
 	}
+
 	// Fallback: even sampling if RDP still hasn't converged (shouldn't happen
 	// for these tracks, but a route_path over the cap is worse than a slightly
 	// coarser one).
 	const stride = Math.ceil(points.length / limit);
+
 	return points.filter((_, i) => i % stride === 0);
 }
 
@@ -171,8 +198,10 @@ function buildRoutePath(latlngs) {
 		// SVG y grows downward; mercator y grows northward — flip so north is up.
 		const x = offX + (p.x - minX) * scale;
 		const y = offY + (maxY - p.y) * scale;
+
 		return `${x.toFixed(1)} ${y.toFixed(1)}`;
 	};
+
 	return `M ${toXY(simplified[0])} ` + simplified.slice(1).map((p) => `L ${toXY(p)}`).join(' ');
 }
 
@@ -181,16 +210,21 @@ function encodePolyline(latlngs) {
 	let out = '';
 	let prevLat = 0;
 	let prevLng = 0;
+
 	const encodeValue = (v) => {
 		let value = v < 0 ? ~(v << 1) : v << 1;
 		let chunk = '';
+
 		while (value >= 0x20) {
 			chunk += String.fromCharCode((0x20 | (value & 0x1f)) + 63);
 			value >>= 5;
 		}
+
 		chunk += String.fromCharCode(value + 63);
+
 		return chunk;
 	};
+
 	for (const { lat, lng } of latlngs) {
 		const lat5 = Math.round(lat * 1e5);
 		const lng5 = Math.round(lng * 1e5);
@@ -198,6 +232,7 @@ function encodePolyline(latlngs) {
 		prevLat = lat5;
 		prevLng = lng5;
 	}
+
 	return out;
 }
 
@@ -215,15 +250,19 @@ function walkTrack(start, steps, stepM, headingJitterDeg, startHeadingDeg) {
 	const pts = [start];
 	let heading = startHeadingDeg;
 	let cur = start;
+
 	for (let i = 0; i < steps; i++) {
 		heading += between(-headingJitterDeg, headingJitterDeg);
 		const rad = toRad(heading);
 		const dLat = ((stepM * Math.cos(rad)) / R_EARTH_M) * (180 / Math.PI);
+
 		const dLng =
 			((stepM * Math.sin(rad)) / (R_EARTH_M * Math.cos(toRad(cur.lat)))) * (180 / Math.PI);
+
 		cur = { lat: cur.lat + dLat, lng: cur.lng + dLng };
 		pts.push(cur);
 	}
+
 	return pts;
 }
 
@@ -240,10 +279,13 @@ function outAndBackTrack(start, { distanceM, elevGainM, hilliness = 0.5 }) {
 	const far = out[out.length - 1];
 	const back = [far];
 	let cur = far;
+
 	for (let i = 0; i < steps; i++) {
 		const remaining = steps - i;
+
 		const headingToStart =
 			(Math.atan2(start.lng - cur.lng, start.lat - cur.lat) * 180) / Math.PI;
+
 		const heading = headingToStart + between(-20, 20);
 		const rad = toRad(heading);
 		const d = i === steps - 1 ? haversineM(cur, start) : stepM;
@@ -252,21 +294,26 @@ function outAndBackTrack(start, { distanceM, elevGainM, hilliness = 0.5 }) {
 		cur = remaining === 1 ? start : { lat: cur.lat + dLat, lng: cur.lng + dLng };
 		back.push(cur);
 	}
+
 	const points = out.concat(back.slice(1));
 
 	// Elevation: a random walk biased so the round trip returns to ~base,
 	// scaled so its total climbing matches elevGainM.
 	const base = between(20, 120);
 	const raw = [0];
+
 	for (let i = 1; i < points.length; i++) {
 		const towardTurn = i <= steps ? 1 : -1; // climb out, descend back — roughly
 		raw.push(raw[i - 1] + towardTurn * Math.abs(between(-1, 1)) * hilliness + between(-0.4, 0.4));
 	}
+
 	const maxRaw = Math.max(...raw.map(Math.abs), 1e-6);
 	const elevations = raw.map((v) => base + (v / maxRaw) * (elevGainM / 1.6));
 
 	let trackDistanceM = 0;
+
 	for (let i = 1; i < points.length; i++) trackDistanceM += haversineM(points[i - 1], points[i]);
+
 	return { points, elevations, distanceM: trackDistanceM };
 }
 
@@ -279,24 +326,30 @@ function downhillTrack(top, elevLossM, runDistanceM) {
 	const points = walkTrack(top, steps, stepM, 15, heading);
 	const elevations = points.map((_, i) => -1 * (i / steps) * elevLossM + between(-3, 3));
 	let distanceM = 0;
+
 	for (let i = 1; i < points.length; i++) distanceM += haversineM(points[i - 1], points[i]);
+
 	return { points, elevations: elevations.map((e) => e + 1600), distanceM };
 }
 
 function elevationStats(elevations) {
 	let gain = 0;
 	let loss = 0;
+
 	for (let i = 1; i < elevations.length; i++) {
 		const d = elevations[i] - elevations[i - 1];
+
 		if (d > 0) gain += d;
 		else loss += -d;
 	}
+
 	return { gain, loss, high: Math.max(...elevations), low: Math.min(...elevations) };
 }
 
 function bboxOf(points) {
 	const lats = points.map((p) => p.lat);
 	const lngs = points.map((p) => p.lng);
+
 	return { w: Math.min(...lngs), e: Math.max(...lngs), s: Math.min(...lats), n: Math.max(...lats) };
 }
 
@@ -307,7 +360,9 @@ function resample(arr, targetCount) {
 	if (arr.length <= targetCount) return arr;
 	const stride = arr.length / targetCount;
 	const out = [];
+
 	for (let i = 0; i < targetCount; i++) out.push(arr[Math.floor(i * stride)]);
+
 	return out;
 }
 
@@ -322,31 +377,37 @@ const RIDE_STARTS = [
 	{ name: 'Mercer Island, WA', lat: 47.5707, lng: -122.2221 },
 	{ name: 'Sammamish River Trail, Bothell, WA', lat: 47.7601, lng: -122.2054 },
 ];
+
 const LONG_RIDE_STARTS = [
 	{ name: 'Snoqualmie Valley Trail, Duvall, WA', lat: 47.7423, lng: -121.9857 },
 	{ name: 'Snoqualmie Falls, WA', lat: 47.5417, lng: -121.8377 },
 	{ name: 'Snoqualmie Pass, WA', lat: 47.4247, lng: -121.4131 },
 	{ name: 'Issaquah, WA', lat: 47.5301, lng: -122.0326 },
 ];
+
 const GRAVEL_STARTS = [
 	{ name: 'Tiger Mountain State Forest, WA', lat: 47.514, lng: -121.976 },
 	{ name: 'Snoqualmie Valley Trail, Carnation, WA', lat: 47.6465, lng: -121.9165 },
 ];
+
 const MTB_STARTS = [
 	{ name: 'Duthie Hill Park, Issaquah, WA', lat: 47.539, lng: -121.9847 },
 	{ name: 'Tiger Mountain State Forest, WA', lat: 47.514, lng: -121.976 },
 ];
+
 const RUN_STARTS = [
 	{ name: 'Green Lake, Seattle, WA', lat: 47.6805, lng: -122.3287 },
 	{ name: 'Alki Beach, Seattle, WA', lat: 47.5765, lng: -122.4141 },
 	{ name: 'Discovery Park, Seattle, WA', lat: 47.6613, lng: -122.415 },
 	{ name: 'Capitol Hill, Seattle, WA', lat: 47.6231, lng: -122.3126 },
 ];
+
 const TRAIL_RUN_STARTS = [
 	{ name: 'Cougar Mountain Regional Wildland Park, WA', lat: 47.5387, lng: -122.1235 },
 	{ name: 'Squak Mountain State Park, WA', lat: 47.5253, lng: -122.0234 },
 	{ name: 'Tiger Mountain State Forest, WA', lat: 47.514, lng: -121.976 },
 ];
+
 const HIKE_TRAILHEADS = [
 	{ name: 'Mount Si Trailhead, North Bend, WA', lat: 47.4852, lng: -121.7331 },
 	{ name: 'Rattlesnake Ledge Trailhead, North Bend, WA', lat: 47.4327, lng: -121.7692 },
@@ -355,19 +416,23 @@ const HIKE_TRAILHEADS = [
 	{ name: 'Twin Falls Trailhead, North Bend, WA', lat: 47.4402, lng: -121.7275 },
 	{ name: 'Granite Mountain Trailhead, Snoqualmie Pass, WA', lat: 47.4407, lng: -121.5942 },
 ];
+
 const SKI_RESORTS = [
 	{ name: 'The Summit at Snoqualmie, WA', lat: 47.4237, lng: -121.4131 },
 	{ name: 'Stevens Pass, WA', lat: 47.7448, lng: -121.089 },
 	{ name: 'Crystal Mountain, WA', lat: 46.9366, lng: -121.4747 },
 ];
+
 const POOLS = [
 	{ name: 'Green Lake Community Center Pool, Seattle, WA', lat: 47.6785, lng: -122.3255 },
 	{ name: 'Weyerhaeuser King County Aquatic Center, Federal Way, WA', lat: 47.3327, lng: -122.3123 },
 ];
+
 const TRI_VENUES = [
 	{ name: 'Lake Sammamish State Park, Issaquah, WA', lat: 47.5698, lng: -122.0731 },
 	{ name: 'Lake Meridian Park, Kent, WA', lat: 47.3763, lng: -122.1838 },
 ];
+
 const HOME_GYM = 'Capitol Hill, Seattle, WA';
 
 const DEVICES = ['Garmin Edge 830', 'Garmin Fenix 7', 'Wahoo ELEMNT Bolt', 'Garmin Forerunner 955'];
@@ -391,21 +456,28 @@ const GEAR = [
 // Generation window
 // ---------------------------------------------------------------------------
 const today = new Date();
+
 const startDate = new Date(today);
+
 startDate.setMonth(startDate.getMonth() - 14);
 
 function fmtDate(d) {
 	return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
 function addDays(d, n) {
 	const out = new Date(d);
 	out.setDate(out.getDate() + n);
+
 	return out;
 }
+
 function monthOf(d) {
 	return d.getMonth() + 1; // 1-12
 }
+
 const isWinter = (d) => [12, 1, 2, 3].includes(monthOf(d));
+
 const isSummer = (d) => [6, 7, 8, 9].includes(monthOf(d));
 
 const THRESHOLD_ROWS = [
@@ -432,9 +504,12 @@ const THRESHOLD_ROWS = [
 		weight_kg: 71.8,
 	},
 ];
+
 function thresholdsFor(dateStr) {
 	let best = THRESHOLD_ROWS[0];
+
 	for (const t of THRESHOLD_ROWS) if (t.effective_from <= dateStr) best = t;
+
 	return best;
 }
 
@@ -442,14 +517,18 @@ function thresholdsFor(dateStr) {
 // the range's first full summer, one ~8 weeks later.
 function findTriathlonDates() {
 	const summerSaturdays = [];
+
 	for (let d = new Date(startDate); d <= today; d = addDays(d, 1)) {
 		if (d.getDay() === 6 && isSummer(d)) summerSaturdays.push(new Date(d));
 	}
+
 	if (summerSaturdays.length < 2) return [];
 	const first = summerSaturdays[Math.floor(summerSaturdays.length * 0.3)];
 	const second = summerSaturdays[Math.floor(summerSaturdays.length * 0.75)];
+
 	return [first, second].filter(Boolean);
 }
+
 const triathlonDates = new Set(findTriathlonDates().map(fmtDate));
 
 // ---------------------------------------------------------------------------
@@ -462,48 +541,61 @@ const triathlonDates = new Set(findTriathlonDates().map(fmtDate));
 function computeExertion({ movingSeconds, hasPowerStream, avgPower, hasHrStream, avgHr, sport, distanceM, dateStr }) {
 	const th = thresholdsFor(dateStr);
 	const hours = movingSeconds / 3600;
+
 	if (hasPowerStream && avgPower && th.ftp_w) {
 		// Normalized power approximated as ~5% above average for these synthetic
 		// rides (a steady-ish effort, not a crit).
 		const np = avgPower * 1.05;
 		const IF = np / th.ftp_w;
 		const exertion = (movingSeconds * np * IF) / (th.ftp_w * 3600) * 100;
+
 		return { exertion: round1(exertion), method: 'tss', confidence: 'measured', intensityFactor: round2(IF) };
 	}
+
 	if (hasHrStream && avgHr && th.lthr_bpm && th.rest_hr) {
 		const hrr = (avgHr - th.rest_hr) / (th.lthr_bpm - th.rest_hr);
 		const trimp = movingSeconds / 60 * hrr * 0.64 * Math.exp(1.92 * hrr);
 		// Rescale so an hour at threshold (hrr=1) reads ~100.
 		const hourAtThreshold = 60 * 1 * 0.64 * Math.exp(1.92);
 		const exertion = (trimp / hourAtThreshold) * 100;
+
 		return { exertion: round1(exertion), method: 'hrtss', confidence: 'measured', intensityFactor: round2(hrr) };
 	}
+
 	if (avgHr && th.lthr_bpm && th.rest_hr) {
 		const hrr = (avgHr - th.rest_hr) / (th.lthr_bpm - th.rest_hr);
 		const trimp = movingSeconds / 60 * hrr * 0.64 * Math.exp(1.92 * hrr);
 		const hourAtThreshold = 60 * 1 * 0.64 * Math.exp(1.92);
 		const exertion = (trimp / hourAtThreshold) * 100;
+
 		return { exertion: round1(exertion), method: 'avghr', confidence: 'estimated', intensityFactor: round2(hrr) };
 	}
+
 	if ((sport === 'run' || sport === 'trail_run' || sport === 'treadmill_run') && distanceM && th.threshold_pace_s_per_km) {
 		const paceSPerKm = movingSeconds / (distanceM / 1000);
 		const IF = th.threshold_pace_s_per_km / paceSPerKm; // faster than threshold pace -> IF > 1
 		const exertion = hours * IF * IF * 100;
+
 		return { exertion: round1(exertion), method: 'ptss', confidence: 'estimated', intensityFactor: round2(IF) };
 	}
+
 	if ((sport === 'swim' || sport === 'open_water_swim') && distanceM && th.css_pace_s_per_100m) {
 		const paceS100 = movingSeconds / (distanceM / 100);
 		const IF = th.css_pace_s_per_100m / paceS100;
 		const exertion = hours * IF * IF * 100;
+
 		return { exertion: round1(exertion), method: 'ptss', confidence: 'estimated', intensityFactor: round2(IF) };
 	}
+
 	// Floor: MET-minutes, scaled to sit in roughly the same 0-500 range as the
 	// other methods. sportMet is a small local table, not src/lib/sports.ts's
 	// (this script intentionally doesn't import from src/ — see the header).
 	const met = sportMet(sport);
 	const exertion = met * hours * 12;
+
 	return { exertion: round1(exertion), method: 'met', confidence: 'assumed', intensityFactor: null };
 }
+
 function sportMet(sport) {
 	const table = {
 		ride: 8, gravel_ride: 8.5, mountain_bike: 8.5, virtual_ride: 8,
@@ -513,9 +605,12 @@ function sportMet(sport) {
 		alpine_ski: 6, backcountry_ski: 9, nordic_ski: 9.5, snowboard: 5.5,
 		strength: 5, yoga: 3, rowing: 7, transition: 4, other: 5,
 	};
+
 	return table[sport] ?? 5;
 }
+
 const round1 = (n) => Math.round(n * 10) / 10;
+
 const round2 = (n) => Math.round(n * 100) / 100;
 
 // ---------------------------------------------------------------------------
@@ -523,9 +618,13 @@ const round2 = (n) => Math.round(n * 100) / 100;
 // commit paths (live insert / SQL emit) can resolve real ids their own way.
 // ---------------------------------------------------------------------------
 let nextActivityKey = 1;
+
 const activities = []; // { key, ...columns, gearKey, parentKey }
+
 const streamsByKey = new Map();
+
 const lapsByKey = new Map();
+
 const sourceByKey = new Map();
 
 function newKey() {
@@ -555,10 +654,12 @@ function buildStreams({ points, elevations, movingSeconds, avgHr, maxHr, avgPowe
 	// keeping each row small matters more than sample density here.
 	const targetSamples = Math.max(12, Math.min(50, Math.round(movingSeconds / 90)));
 	const n = points.length;
+
 	const idx = resample(
 		Array.from({ length: n }, (_, i) => i),
 		targetSamples,
 	);
+
 	const sampleCount = idx.length;
 	const time_s = idx.map((_, i) => Math.round((i / (sampleCount - 1 || 1)) * movingSeconds));
 	const round5 = (v) => Math.round(v * 1e5) / 1e5; // ~1.1m — plenty for a stream sample
@@ -566,11 +667,14 @@ function buildStreams({ points, elevations, movingSeconds, avgHr, maxHr, avgPowe
 	const altitude_m = idx.map((i) => round1(elevations[i]));
 	let cum = 0;
 	const distArr = [];
+
 	for (let i = 0; i < idx.length; i++) {
 		if (i > 0) cum += haversineM(points[idx[i - 1]], points[idx[i]]);
 		distArr.push(Math.round(cum));
 	}
+
 	const wobble = (base, spread) => idx.map(() => Math.round(base + between(-spread, spread)));
+
 	return {
 		sample_count: sampleCount,
 		time_s,
@@ -609,6 +713,7 @@ function pushActivity({
 
 	let start_lat = null, start_lng = null, end_lat = null, end_lng = null;
 	let bbox = null, polyline = null, route_path = null;
+
 	if (track) {
 		const { points } = track;
 		start_lat = points[0].lat;
@@ -625,6 +730,7 @@ function pushActivity({
 
 	const hasPowerStream = track != null && avgPower != null;
 	const hasHrStream = track != null && avgHr != null;
+
 	const { exertion, method, confidence, intensityFactor } = sport === 'transition'
 		? { exertion: null, method: null, confidence: null, intensityFactor: null }
 		: computeExertion({
@@ -671,7 +777,9 @@ function pushActivity({
 			}),
 		);
 	}
+
 	addSource(key);
+
 	return key;
 }
 
@@ -695,35 +803,50 @@ function generateRideOrRun(d) {
 
 	if (weekend) {
 		const r = rand();
+
 		if (winter && chance(0.4)) return generateSkiDay(startedAt, temp);
+
 		if (summer && r < 0.32) return generateHike(startedAt, temp);
+
 		if (r < 0.62) return generateLongRide(startedAt, temp);
+
 		if (r < 0.74) return generateTrailRunOrWalk(startedAt, temp);
+
 		if (r < 0.85) return generatePoolSwim(startedAt);
+
 		return null; // rest day
 	}
+
 	// weekday
 	const r = rand();
+
 	if (r < 0.34) return generateTrainerRide(startedAt, temp);
+
 	if (r < 0.55) return generateWeekdayRun(startedAt, temp);
+
 	if (r < 0.65) return generatePoolSwim(startedAt);
+
 	if (r < 0.72) return generateStrengthOrYoga(startedAt);
+
 	return null; // rest day
 }
 
 function withHour(d, h, m = 0) {
 	const out = new Date(d);
 	out.setHours(h, m, 0, 0);
+
 	return out.toISOString();
 }
 
 function generateLongRide(d, temp) {
 	const sportRoll = rand();
 	const sport = sportRoll < 0.55 ? 'ride' : sportRoll < 0.8 ? 'gravel_ride' : 'mountain_bike';
+
 	const start =
 		sport === 'gravel_ride' ? pick(GRAVEL_STARTS) :
 		sport === 'mountain_bike' ? pick(MTB_STARTS) :
 		chance(0.6) ? pick(LONG_RIDE_STARTS) : pick(RIDE_STARTS);
+
 	const distanceM = sport === 'mountain_bike' ? between(18000, 38000) : between(48000, 118000);
 	const elevGainM = sport === 'mountain_bike' ? between(350, 850) : between(350, 1700);
 	const movingSeconds = distanceM / (sport === 'mountain_bike' ? between(3.3, 4.6) : between(6.5, 8.4));
@@ -731,6 +854,7 @@ function generateLongRide(d, temp) {
 	const stats = elevationStats(track.elevations);
 	const avgPower = Math.round(between(140, 235));
 	const avgHr = Math.round(between(122, 152));
+
 	return pushActivity({
 		sport, subSport: sport === 'ride' ? (chance(0.3) ? 'road' : null) : null,
 		title: `${sport === 'mountain_bike' ? 'MTB' : sport === 'gravel_ride' ? 'Gravel ride' : 'Ride'} — ${start.name.split(',')[0]}`,
@@ -751,6 +875,7 @@ function generateTrainerRide(d, temp) {
 	const movingSeconds = between(2700, 5400);
 	const avgPower = Math.round(between(155, 220));
 	const avgHr = Math.round(between(128, 155));
+
 	return pushActivity({
 		sport: 'virtual_ride', subSport: 'indoor',
 		title: pick(['Zwift — endurance', 'Zwift — sweet spot intervals', 'Trainer — threshold set', 'Zwift group ride']),
@@ -772,6 +897,7 @@ function generateWeekdayRun(d, temp) {
 	const paceSPerKm = between(285, 360);
 	const movingSeconds = (distanceM / 1000) * paceSPerKm;
 	const avgHr = Math.round(between(138, 165));
+
 	if (!outdoor) {
 		return pushActivity({
 			sport: 'treadmill_run',
@@ -784,12 +910,14 @@ function generateWeekdayRun(d, temp) {
 			avgTempC: 21, gearKey: 'road_shoes', track: null, placeName: null,
 		});
 	}
+
 	const start = pick(RUN_STARTS);
 	const track = outAndBackTrack(start, { distanceM, elevGainM: between(15, 90), hilliness: 0.25 });
 	const stats = elevationStats(track.elevations);
 	// Occasionally forgot the chest strap: GPS + pace but no HR at all — the
 	// exertion cascade's ptss branch (pace + threshold pace) rather than hrtss.
 	const strapless = chance(0.28);
+
 	return pushActivity({
 		sport: 'run',
 		title: `Run — ${start.name.split(',')[0]}`,
@@ -812,6 +940,7 @@ function generateTrailRunOrWalk(d, temp) {
 		const track = outAndBackTrack(start, { distanceM, elevGainM, hilliness: 0.9 });
 		const stats = elevationStats(track.elevations);
 		const avgHr = Math.round(between(140, 162));
+
 		return pushActivity({
 			sport: 'trail_run', title: `Trail run — ${start.name.split(',')[0]}`,
 			startedAt: withHour(d, betweenInt(7, 9)),
@@ -823,10 +952,12 @@ function generateTrailRunOrWalk(d, temp) {
 			avgTempC: round1(temp), gearKey: 'trail_shoes', track, placeName: start.name,
 		});
 	}
+
 	const start = pick(RUN_STARTS);
 	const distanceM = between(3200, 6000);
 	const movingSeconds = distanceM / between(1.1, 1.4);
 	const track = outAndBackTrack(start, { distanceM, elevGainM: between(10, 40), hilliness: 0.15 });
+
 	return pushActivity({
 		sport: 'walk', title: `Walk — ${start.name.split(',')[0]}`,
 		startedAt: withHour(d, betweenInt(9, 17)),
@@ -843,6 +974,7 @@ function generatePoolSwim(d) {
 	const paceS100 = between(88, 115);
 	const movingSeconds = (distanceM / 100) * paceS100;
 	const avgHr = Math.round(between(118, 140));
+
 	return pushActivity({
 		sport: 'swim', subSport: 'pool',
 		title: 'Pool swim',
@@ -861,6 +993,7 @@ function generatePoolSwim(d) {
 function generateStrengthOrYoga(d) {
 	const yoga = chance(0.4);
 	const movingSeconds = between(1800, 3600);
+
 	return pushActivity({
 		sport: yoga ? 'yoga' : 'strength',
 		title: yoga ? 'Yoga' : 'Strength — full body',
@@ -887,6 +1020,7 @@ function generateHike(d, temp) {
 	// ACTIVITIES.md §3 describes for the MET floor: "works for everything,
 	// including a hike with a dead watch".
 	const deadWatch = chance(0.35);
+
 	return pushActivity({
 		sport: 'hike', title: `Hike — ${start.name.split(',')[0]}`,
 		startedAt: withHour(d, betweenInt(7, 9)),
@@ -910,10 +1044,12 @@ function generateSkiDay(d, temp) {
 	const key = newKey(); // parent-less standalone; reserve key first for laps
 	const laps = [];
 	let lapStart = new Date(startedAt);
+
 	for (let i = 0; i < runCount; i++) {
 		const runDistanceM = between(900, 2400);
 		const runSeconds = runDistanceM / between(9, 15);
 		const track = downhillTrack(resort, elevLossPerRun, runDistanceM);
+
 		if (!firstTrack) firstTrack = track;
 		const runMaxSpeed = between(14, 24);
 		maxSpeed = Math.max(maxSpeed, runMaxSpeed);
@@ -929,6 +1065,7 @@ function generateSkiDay(d, temp) {
 		lapStart = addDays(lapStart, 0);
 		lapStart = new Date(lapStart.getTime() + (runSeconds + between(400, 900)) * 1000); // + lift ride
 	}
+
 	const elapsedSeconds = totalMoving + runCount * between(500, 850); // lift queues/rides
 	const avgHr = Math.round(between(115, 138));
 	lapsByKey.set(key, laps);
@@ -959,10 +1096,13 @@ function generateSkiDay(d, temp) {
 		device_name: pick(DEVICES),
 	});
 	addSource(key);
+
 	return key;
 }
+
 function computeExertionFields(args) {
 	const r = computeExertion({ hasPowerStream: false, hasHrStream: true, avgPower: null, distanceM: null, ...args });
+
 	return { exertion: r.exertion, exertion_method: r.method, exertion_confidence: r.confidence, intensity_factor: r.intensityFactor };
 }
 
@@ -976,6 +1116,7 @@ function generateTriathlon(d) {
 	const swimSeconds = swimDistanceM * between(0.028, 0.034);
 	const swimAvgHr = Math.round(between(140, 158));
 	const swimTrack = outAndBackTrack(venue, { distanceM: swimDistanceM, elevGainM: 0, hilliness: 0 });
+
 	const swimKey = pushActivity({
 		sport: 'open_water_swim', parentKey, leg: 1, title: 'Triathlon — swim leg',
 		startedAt, movingSeconds: swimSeconds, distanceM: swimDistanceM,
@@ -986,6 +1127,7 @@ function generateTriathlon(d) {
 
 	const t1Start = new Date(new Date(startedAt).getTime() + swimSeconds * 1000).toISOString();
 	const t1Seconds = between(120, 240);
+
 	const t1Key = pushActivity({
 		sport: 'transition', parentKey, leg: 2, title: 'T1 — swim to bike',
 		startedAt: t1Start, movingSeconds: t1Seconds, track: null, placeName: venue.name,
@@ -998,6 +1140,7 @@ function generateTriathlon(d) {
 	const bikeTrack = outAndBackTrack(venue, { distanceM: bikeDistanceM, elevGainM: between(250, 500), hilliness: 0.4 });
 	const bikeStats = elevationStats(bikeTrack.elevations);
 	const bikeAvgHr = Math.round(between(150, 168));
+
 	const bikeKey = pushActivity({
 		sport: 'ride', subSport: 'road', parentKey, leg: 3, title: 'Triathlon — bike leg',
 		startedAt: bikeStart, movingSeconds: bikeSeconds, distanceM: bikeTrack.distanceM,
@@ -1011,6 +1154,7 @@ function generateTriathlon(d) {
 
 	const t2Start = new Date(new Date(bikeStart).getTime() + bikeSeconds * 1000).toISOString();
 	const t2Seconds = between(90, 180);
+
 	const t2Key = pushActivity({
 		sport: 'transition', parentKey, leg: 4, title: 'T2 — bike to run',
 		startedAt: t2Start, movingSeconds: t2Seconds, track: null, placeName: venue.name,
@@ -1022,6 +1166,7 @@ function generateTriathlon(d) {
 	const runTrack = outAndBackTrack(venue, { distanceM: runDistanceM, elevGainM: between(40, 110), hilliness: 0.3 });
 	const runStats = elevationStats(runTrack.elevations);
 	const runAvgHr = Math.round(between(158, 174));
+
 	const runKey = pushActivity({
 		sport: 'run', parentKey, leg: 5, title: 'Triathlon — run leg',
 		startedAt: runStart, movingSeconds: runSeconds, distanceM: runTrack.distanceM,
@@ -1036,6 +1181,7 @@ function generateTriathlon(d) {
 	const totalMoving = swimSeconds + t1Seconds + bikeSeconds + t2Seconds + runSeconds;
 	const totalElapsed = totalMoving; // chip time ~ sum of the legs for this synthetic race
 	const totalDistance = swimDistanceM + bikeTrack.distanceM + runTrack.distanceM;
+
 	const parentExertion =
 		computeExertion({ movingSeconds: bikeSeconds, hasPowerStream: true, avgPower: bikeAvgPower, sport: 'ride', dateStr: startedAt.slice(0, 10) }).exertion +
 		computeExertion({ movingSeconds: swimSeconds, hasHrStream: true, avgHr: swimAvgHr, sport: 'open_water_swim', distanceM: swimDistanceM, dateStr: startedAt.slice(0, 10) }).exertion +
@@ -1084,12 +1230,15 @@ function generateTriathlon(d) {
 
 // --- walk the calendar ---
 const triathlonParents = [];
+
 for (let d = new Date(startDate); d <= today; d = addDays(d, 1)) {
 	const dateStr = fmtDate(d);
+
 	if (triathlonDates.has(dateStr)) {
 		triathlonParents.push(generateTriathlon(new Date(d)));
 		continue;
 	}
+
 	generateRideOrRun(new Date(d));
 }
 
@@ -1118,20 +1267,28 @@ for (let d = new Date(startDate); d <= today; d = addDays(d, 1)) {
 	const STREAM_CAP = 30;
 	const keys = [...streamsByKey.keys()];
 	const byKey = new Map(activities.map((a) => [a.key, a]));
+
 	const priority = (k) => {
 		const a = byKey.get(k);
+
 		if (a?.favorite_rank) return 0;
+
 		if (a?.sub_sport === 'triathlon' || (a?.parentKey && byKey.get(a.parentKey)?.sub_sport === 'triathlon')) return 1;
+
 		return 2;
 	};
+
 	const ordered = keys
 		.map((k, i) => ({ k, i }))
 		.sort((a, b) => priority(a.k) - priority(b.k) || a.i - b.i);
+
 	const keep = new Set(ordered.slice(0, STREAM_CAP).map((o) => o.k));
+
 	for (const k of keys) {
 		if (!keep.has(k)) {
 			streamsByKey.delete(k);
 			const a = byKey.get(k);
+
 			if (a) a.has_streams = false;
 		}
 	}
@@ -1140,6 +1297,7 @@ for (let d = new Date(startDate); d <= today; d = addDays(d, 1)) {
 // --- gear distance totals (denormalised column, kept in sync here as the
 // "on write" the schema comment describes) ---
 const gearDistance = new Map();
+
 for (const a of activities) {
 	if (a.gearKey && a.distance_m) gearDistance.set(a.gearKey, (gearDistance.get(a.gearKey) ?? 0) + a.distance_m);
 }
@@ -1149,6 +1307,7 @@ for (const a of activities) {
 // ---------------------------------------------------------------------------
 function printSummary() {
 	const bySport = new Map();
+
 	for (const a of activities) bySport.set(a.sport, (bySport.get(a.sport) ?? 0) + 1);
 	const withGps = activities.filter((a) => a.route_path).length;
 	const noGps = activities.length - withGps;
@@ -1164,11 +1323,14 @@ function printSummary() {
 	console.error(`favorites set: ${favorites}`);
 	console.error(`gear: ${GEAR.length}  ·  thresholds: ${THRESHOLD_ROWS.length}`);
 	console.error('by sport:');
+
 	for (const [sport, n] of [...bySport.entries()].sort((a, b) => b[1] - a[1])) {
 		console.error(`  ${sport.padEnd(16)} ${n}`);
 	}
 }
+
 printSummary();
+
 if (DRY) process.exit(0);
 
 // ---------------------------------------------------------------------------
@@ -1176,10 +1338,14 @@ if (DRY) process.exit(0);
 // ---------------------------------------------------------------------------
 function lit(v) {
 	if (v == null) return 'null';
+
 	if (typeof v === 'number') return Number.isFinite(v) ? String(v) : 'null';
+
 	if (typeof v === 'boolean') return v ? 'true' : 'false';
+
 	return `'${String(v).replace(/'/g, "''")}'`;
 }
+
 function jsonLit(v) {
 	return v == null ? 'null' : `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
 }
@@ -1225,6 +1391,7 @@ function buildSql() {
 	// --- activities (parents/standalone first, then children — parent_id FK) ---
 	const parents = activities.filter((a) => !a.parentKey);
 	const children = activities.filter((a) => a.parentKey);
+
 	const cols = [
 		'id', 'sport', 'sub_sport', 'parent_id', 'leg', 'title', 'notes', 'private_notes',
 		'started_at', 'local_date', 'utc_offset_minutes', 'timezone', 'elapsed_seconds', 'moving_seconds',
@@ -1235,33 +1402,42 @@ function buildSql() {
 		'start_lat', 'start_lng', 'end_lat', 'end_lng', 'bbox_w', 'bbox_s', 'bbox_e', 'bbox_n', 'start_place',
 		'gear_id', 'favorite_rank', 'has_streams', 'device_name',
 	];
+
 	const rowSql = (a) => {
 		const vals = {
 			...a, id: a.key, parent_id: a.parentKey ?? null, gear_id: a.gearKey ? gearId.get(a.gearKey) : null,
 		};
+
 		return `\t(${cols.map((c) => lit(vals[c])).join(', ')})`;
 	};
+
 	out.push('-- activities: standalone + multisport parents');
+
 	for (let i = 0; i < parents.length; i += 8) {
 		const batch = parents.slice(i, i + 8);
 		out.push(`insert into public.activities (${cols.join(', ')}) overriding system value values`);
 		out.push(batch.map(rowSql).join(',\n') + ';');
 	}
+
 	if (children.length) {
 		out.push('-- activities: multisport legs (parent_id now resolvable)');
+
 		for (let i = 0; i < children.length; i += 8) {
 			const batch = children.slice(i, i + 8);
 			out.push(`insert into public.activities (${cols.join(', ')}) overriding system value values`);
 			out.push(batch.map(rowSql).join(',\n') + ';');
 		}
 	}
+
 	out.push(`select setval(pg_get_serial_sequence('public.activities', 'id'), (select max(id) from public.activities));\n`);
 
 	// --- streams ---
 	const streamRows = [...streamsByKey.entries()];
+
 	if (streamRows.length) {
 		out.push('-- activity_streams');
 		const scols = ['activity_id', 'sample_count', 'time_s', 'latlng', 'altitude_m', 'distance_m', 'heartrate', 'cadence', 'power_w', 'speed_ms', 'temp_c', 'grade', 'moving'];
+
 		for (let i = 0; i < streamRows.length; i += 4) {
 			const batch = streamRows.slice(i, i + 4);
 			out.push(`insert into public.activity_streams (${scols.join(', ')}) values`);
@@ -1274,19 +1450,23 @@ function buildSql() {
 					.join(',\n') + ';',
 			);
 		}
+
 		out.push('');
 	}
 
 	// --- laps ---
 	const lapRows = [...lapsByKey.entries()].flatMap(([key, laps]) => laps.map((l) => ({ ...l, activity_id: key })));
+
 	if (lapRows.length) {
 		out.push('-- activity_laps');
 		const lcols = ['activity_id', 'lap_index', 'name', 'start_time', 'elapsed_seconds', 'moving_seconds', 'distance_m', 'avg_hr', 'max_hr', 'avg_power_w', 'avg_speed_ms', 'elevation_gain_m', 'lap_type'];
+
 		for (let i = 0; i < lapRows.length; i += 20) {
 			const batch = lapRows.slice(i, i + 20);
 			out.push(`insert into public.activity_laps (${lcols.join(', ')}) values`);
 			out.push(batch.map((l) => `\t(${lcols.map((c) => lit(l[c])).join(', ')})`).join(',\n') + ';');
 		}
+
 		out.push('');
 	}
 
@@ -1294,6 +1474,7 @@ function buildSql() {
 	const sourceRows = [...sourceByKey.entries()];
 	out.push('-- activity_sources — the idempotency marker every seeded activity carries');
 	const srccols = ['activity_id', 'provider', 'external_id', 'external_url', 'file_name', 'file_checksum', 'fidelity', 'raw', 'imported_at'];
+
 	for (let i = 0; i < sourceRows.length; i += 20) {
 		const batch = sourceRows.slice(i, i + 20);
 		out.push(`insert into public.activity_sources (${srccols.join(', ')}) values`);
@@ -1320,24 +1501,31 @@ if (SQL_ONLY) {
 // ---------------------------------------------------------------------------
 async function insertOne(table, row) {
 	const { data, error } = await db.from(table).insert(row).select('id').single();
+
 	if (error) throw new Error(`insert ${table} failed: ${error.message}`);
+
 	return data.id;
 }
 
 async function commitLive() {
 	if (RESET) {
 		console.error('resetting previously seeded rows...');
+
 		const { data: toDelete, error: findErr } = await db
 			.from('activity_sources')
 			.select('activity_id')
 			.eq('provider', 'manual')
 			.eq('file_name', SEED_MARKER);
+
 		if (findErr) throw new Error(`reset lookup failed: ${findErr.message}`);
 		const ids = [...new Set((toDelete ?? []).map((r) => r.activity_id))];
+
 		if (ids.length) {
 			const { error } = await db.from('activities').delete().in('id', ids);
+
 			if (error) throw new Error(`reset delete activities failed: ${error.message}`);
 		}
+
 		await db.from('activity_gear').delete().eq('external_ids->>seed_marker', SEED_MARKER);
 		await db.from('athlete_thresholds').delete().neq('id', -1);
 		console.error(`  removed ${ids.length} activities and their gear/thresholds.`);
@@ -1345,16 +1533,19 @@ async function commitLive() {
 
 	console.error('inserting gear...');
 	const gearRealId = new Map();
+
 	for (const g of GEAR) {
 		const id = await insertOne('activity_gear', {
 			kind: g.kind, name: g.name, brand: g.brand, model: g.model, nickname: g.nickname,
 			distance_m: round1(gearDistance.get(g.key) ?? 0),
 			external_ids: { seed_marker: SEED_MARKER },
 		});
+
 		gearRealId.set(g.key, id);
 	}
 
 	console.error('inserting thresholds...');
+
 	for (const t of THRESHOLD_ROWS) {
 		await db.from('athlete_thresholds').insert({
 			effective_from: t.effective_from, ftp_w: t.ftp_w, lthr_bpm: t.lthr_bpm, max_hr: t.max_hr,
@@ -1368,34 +1559,47 @@ async function commitLive() {
 	const parents = activities.filter((a) => !a.parentKey);
 	const children = activities.filter((a) => a.parentKey);
 	const { key: _k1, gearKey: _g1, parentKey: _p1, ...cols0 } = parents[0] ?? {};
+
 	const activityCols = (a) => {
 		const { key, gearKey, parentKey, ...rest } = a;
+
 		return { ...rest, gear_id: gearKey ? gearRealId.get(gearKey) : null, parent_id: null };
 	};
+
 	let n = 0;
+
 	for (const a of parents) {
 		const id = await insertOne('activities', activityCols(a));
 		realId.set(a.key, id);
+
 		if (++n % 25 === 0) console.error(`  ${n}/${activities.length}`);
 	}
+
 	for (const a of children) {
 		const row = { ...activityCols(a), parent_id: realId.get(a.parentKey) };
 		const id = await insertOne('activities', row);
 		realId.set(a.key, id);
+
 		if (++n % 25 === 0) console.error(`  ${n}/${activities.length}`);
 	}
 
 	console.error('inserting streams/laps/sources...');
+
 	for (const [key, s] of streamsByKey) {
 		const { error } = await db.from('activity_streams').insert({ activity_id: realId.get(key), ...s });
+
 		if (error) throw new Error(`insert activity_streams failed: ${error.message}`);
 	}
+
 	for (const [key, laps] of lapsByKey) {
 		const { error } = await db.from('activity_laps').insert(laps.map((l) => ({ ...l, activity_id: realId.get(key) })));
+
 		if (error) throw new Error(`insert activity_laps failed: ${error.message}`);
 	}
+
 	for (const [key, s] of sourceByKey) {
 		const { error } = await db.from('activity_sources').insert({ ...s, activity_id: realId.get(key) });
+
 		if (error) throw new Error(`insert activity_sources failed: ${error.message}`);
 	}
 

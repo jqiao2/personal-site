@@ -646,6 +646,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 	import { wireStarPicker } from '../lib/star-picker';
 
 	const modal = document.getElementById('br-modal');
+
 	if (modal) {
 		type Seed = {
 			id: number | null;
@@ -661,6 +662,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			moods: string[];
 			tones: string[];
 		};
+
 		type Read = { from: string; to: string; label: string };
 
 		const config = JSON.parse(modal.dataset.config || '{}') as {
@@ -731,6 +733,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 		});
 
 		const same = (a: string[], b: string[]) => a.join('|') === b.join('|');
+
 		const dirty = () =>
 			state.rating !== seed.rating ||
 			state.text !== seed.text ||
@@ -766,6 +769,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			const showAttach = mode === 'write' && config.priorReads > 0 && !!config.latestRead;
 			rereadBtn.hidden = !showAttach;
 			attach.hidden = !showAttach;
+
 			if (showAttach) {
 				attach.classList.toggle('attach--on', reread);
 				attachLabel.textContent = reread ? 'New read' : 'Attaching to';
@@ -854,11 +858,13 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			saved = false;
 			render();
 		});
+
 		const toggleReread = () => {
 			reread = !reread;
 			saved = false;
 			render();
 		};
+
 		rereadBtn.addEventListener('click', toggleReread);
 		attachAction.addEventListener('click', toggleReread);
 
@@ -873,12 +879,15 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			privateArea.hidden = !on;
 			privateToggle.setAttribute('aria-expanded', String(on));
 		}
+
 		privateToggle.addEventListener('click', () => {
 			if (privateArea.hidden) {
 				showPrivate(true);
 				privateArea.focus();
+
 				return;
 			}
+
 			if (privateArea.value.trim() && !window.confirm('Discard the private note?')) return;
 			privateArea.value = '';
 			state.privateNote = '';
@@ -902,6 +911,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 				});
 			});
 		};
+
 		single('br-pacing', 'pacing');
 		single('br-focus', 'focus');
 
@@ -910,6 +920,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 				b.addEventListener('click', () => {
 					const value = b.dataset.value || '';
 					const at = state[key].indexOf(value);
+
 					if (at >= 0) state[key].splice(at, 1);
 					else state[key].push(value);
 					saved = false;
@@ -917,6 +928,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 				});
 			});
 		};
+
 		multi('br-moods', 'moods');
 		multi('br-tones', 'tones');
 
@@ -933,16 +945,21 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 
 		leftBtn.addEventListener('click', async () => {
 			if (mode !== 'edit') return attemptClose();
+
 			if (seed.id == null) return close();
 			msg.textContent = 'Deleting…';
+
 			const res = await fetch(
 				`/api/books/review?bookId=${config.bookId}&id=${seed.id}`,
 				{ method: 'DELETE' },
 			);
+
 			if (!res.ok) {
 				msg.textContent = 'Delete failed';
+
 				return;
 			}
+
 			location.reload();
 		});
 
@@ -953,6 +970,7 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 			const target = mode === 'edit' ? { from: seed.readFrom, to: seed.readTo } : reread || !config.latestRead ? { from: config.newRead.from, to: config.newRead.to } : { from: config.latestRead.from, to: config.latestRead.to };
 
 			msg.textContent = 'Saving…';
+
 			const res = await fetch('/api/books/review', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
@@ -971,11 +989,14 @@ const config = JSON.stringify({ bookId, newRead, latestRead, priorReads, attachO
 					tones: state.tones,
 				}),
 			});
+
 			if (!res.ok) {
 				const body = (await res.json().catch(() => ({}))) as { error?: string };
 				msg.textContent = body.error || 'Save failed';
+
 				return;
 			}
+
 			saved = true;
 			location.reload();
 		});

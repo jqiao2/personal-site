@@ -32,6 +32,7 @@ export function dayKey(d: Date): string {
 /** Parse "YYYY-MM-DD" as a local date (`new Date(str)` would read it as UTC). */
 export function parseDay(s: string): Date {
 	const [y, m, d] = s.split('-').map(Number);
+
 	return new Date(y, m - 1, d);
 }
 
@@ -40,6 +41,7 @@ export function firstMonday(month: string): string {
 	const [y, m] = month.split('-').map(Number);
 	const d = new Date(y, m - 1, 1);
 	d.setDate(1 - ((d.getDay() + 6) % 7)); // Mon-first column of the 1st
+
 	return dayKey(d);
 }
 
@@ -47,6 +49,7 @@ export function firstMonday(month: string): string {
 export function addWeeks(monday: string, weeks: number): string {
 	const d = parseDay(monday);
 	d.setDate(d.getDate() + weeks * 7);
+
 	return dayKey(d);
 }
 
@@ -66,21 +69,26 @@ export function buildWeeks(opts: {
 	today: string;
 }): CalendarWeek[] {
 	const byDay = new Map<string, QueueEntry[]>();
+
 	for (const e of opts.queue) {
 		const list = byDay.get(e.scheduled_date);
+
 		if (list) list.push(e);
 		else byDay.set(e.scheduled_date, [e]);
 	}
 
 	const out: CalendarWeek[] = [];
 	const cursor = parseDay(opts.startMonday);
+
 	for (let w = 0; w < opts.weeks; w++) {
 		const dates: Date[] = [];
+
 		for (let i = 0; i < 7; i++) {
 			const d = new Date(cursor);
 			d.setDate(cursor.getDate() + i);
 			dates.push(d);
 		}
+
 		// Where the seam cuts this week, or -1 for a week wholly inside a month.
 		const cut = dates.findIndex((d) => d.getDate() === 1);
 
@@ -88,6 +96,7 @@ export function buildWeeks(opts: {
 			key: dayKey(dates[0]),
 			days: dates.map((d, i) => {
 				const date = dayKey(d);
+
 				return {
 					date,
 					day: d.getDate(),
@@ -102,6 +111,7 @@ export function buildWeeks(opts: {
 		});
 		cursor.setDate(cursor.getDate() + 7);
 	}
+
 	return out;
 }
 
@@ -113,9 +123,11 @@ export function runStartMonth(queue: QueueEntry[], today: string): string {
 	const current = today.slice(0, 7);
 	const [cy, cm] = current.split('-').map(Number);
 	const floor = dayKey(new Date(cy, cm - 4, 1)).slice(0, 7); // three months back
+
 	const earliest = queue.reduce(
 		(min, e) => (e.scheduled_date < min ? e.scheduled_date : min),
 		today,
 	).slice(0, 7);
+
 	return earliest < floor ? floor : earliest;
 }

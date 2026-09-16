@@ -9,6 +9,7 @@ export const prerender = false;
 
 export async function GET(context: APIContext) {
 	const items = await recentJournal(30);
+
 	return rss({
 		title: 'Jason Qiao',
 		description: 'Films, books, meals and activities — newest first.',

@@ -85,6 +85,7 @@ const config = {
 };
 
 const unplaced = points.length - placed.length;
+
 const hasKey = Boolean(config.key);
 ---
 
@@ -146,7 +147,9 @@ const hasKey = Boolean(config.key);
 	// setWorkerUrl takes. astro.config.mjs sets worker.format to 'es' so the
 	// emitted file is the module worker MapLibre asks for.
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
 	import { menuBasemap, MAP_TOKENS } from '../lib/map-style';
 
 	interface Pin {
@@ -177,7 +180,9 @@ const hasKey = Boolean(config.key);
 	];
 
 	const tag = document.getElementById('restaurant-map-config');
+
 	const host = document.querySelector<HTMLElement>('[data-map]');
+
 	if (tag && host) {
 		const cfg = JSON.parse(tag.textContent || '{}') as {
 			key: string;
@@ -212,6 +217,7 @@ const hasKey = Boolean(config.key);
 			dragRotate: false,
 			touchPitch: false,
 		});
+
 		// Pinch zooms, two fingers never rotate. `disableRotation` also stops the
 		// gesture from being read as a rotation at all, so a pinch that starts
 		// slightly twisted still zooms instead of doing nothing.
@@ -247,21 +253,29 @@ const hasKey = Boolean(config.key);
 				{ enableHighAccuracy: false, timeout: 8000, maximumAge: 300_000 },
 			);
 		}
+
 		goToUser();
 
 		/** Open on the densest city; the provisional view until geolocation answers. */
 		function frame() {
 			if (located || userTookOver) return;
+
 			const inCity = cfg.framedCity
 				? cfg.points.filter((p) => p.city === cfg.framedCity)
 				: cfg.points;
+
 			const use = inCity.length ? inCity : cfg.points;
+
 			if (use.length === 0) return;
+
 			if (use.length === 1) {
 				map.jumpTo({ center: [use[0].lng, use[0].lat], zoom: 14.5 });
+
 				return;
 			}
+
 			const b = new maplibregl.LngLatBounds();
+
 			for (const p of use) b.extend([p.lng, p.lat]);
 			map.fitBounds(b, { padding: 64, maxZoom: 15, animate: false });
 		}
@@ -276,12 +290,14 @@ const hasKey = Boolean(config.key);
 						fill="${p.trip ? MAP_TOKENS.pinRing : '#fdf7e8'}"
 						stroke="${MAP_TOKENS.pinRing}" stroke-width="1.6"></path>
 				</svg><span class="gl-pin__name">${escape(p.name)}</span>`;
+
 			return el;
 		}
 
 		function escape(s: string): string {
 			const d = document.createElement('span');
 			d.textContent = s;
+
 			return d.innerHTML;
 		}
 
@@ -344,6 +360,7 @@ const hasKey = Boolean(config.key);
 		 */
 		function addLabels() {
 			if (!cfg.key || cfg.points.length === 0) return;
+
 			if (map.getSource('place-labels')) return;
 
 			map.addSource('place-labels', {
@@ -398,6 +415,7 @@ const hasKey = Boolean(config.key);
 			const syncHover = () => {
 				map.getContainer().classList.toggle('map__gl--named', map.getZoom() >= LABEL_ZOOM);
 			};
+
 			syncHover();
 			map.on('zoom', syncHover);
 		}

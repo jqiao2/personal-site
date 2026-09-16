@@ -76,6 +76,7 @@ const RAW = import.meta.env?.DEV;
 export function photoSrc(url: string, width: number): string {
 	if (RAW) return url;
 	const rung = PHOTO_WIDTHS.find((w) => w >= width) ?? PHOTO_WIDTHS[PHOTO_WIDTHS.length - 1];
+
 	return `/_vercel/image?url=${encodeURIComponent(url)}&w=${rung}&q=${QUALITY}`;
 }
 
@@ -93,7 +94,9 @@ export function photoWidthsFor(cssWidth: number): number[] {
 	const target = cssWidth * 2;
 	const under = PHOTO_WIDTHS.filter((w) => w < target);
 	const first = PHOTO_WIDTHS.find((w) => w >= target);
+
 	if (first !== undefined) under.push(first);
+
 	// Painted wider than the largest rung: the ladder tops out at the stored
 	// size, which is all there ever was to give.
 	return under.length > 0 ? under : [PHOTO_WIDTHS[PHOTO_WIDTHS.length - 1]];
@@ -112,6 +115,8 @@ export function photoWidthsFor(cssWidth: number): number[] {
 export function photoSrcSet(url: string, widths: number[]): string | undefined {
 	if (RAW) return undefined;
 	const rungs = widths.filter((w) => PHOTO_WIDTHS.includes(w)).sort((a, b) => a - b);
+
 	if (rungs.length === 0) return undefined;
+
 	return rungs.map((w) => `${photoSrc(url, w)} ${w}w`).join(', ');
 }

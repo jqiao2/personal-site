@@ -8,35 +8,47 @@ import { eulerRoute } from '../src/lib/postman.ts';
 function g(nodes, pairs) {
 	return { nodes, edges: pairs.map(([a, b]) => ({ a, b, pts: [nodes[a], nodes[b]] })) };
 }
+
 // How much of the path retraces a stroke already ridden (undirected segments).
 function retraced(path) {
 	const key = (p, q) => {
 		const a = `${p[0]},${p[1]}`, b = `${q[0]},${q[1]}`;
+
 		return a < b ? `${a}|${b}` : `${b}|${a}`;
 	};
+
 	const seen = new Set();
 	let total = 0, reused = 0;
+
 	for (let i = 1; i < path.length; i++) {
 		const L = Math.hypot(path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]);
+
 		if (L === 0) continue;
 		total += L;
 		const k = key(path[i - 1], path[i]);
+
 		if (seen.has(k)) reused += L; else seen.add(k);
 	}
+
 	return { total, reused };
 }
+
 function covers(path, nodes, pairs) {
 	const { reused } = retraced(path);
 	const need = new Set(pairs.map(([a, b]) => (a < b ? `${a}|${b}` : `${b}|${a}`)));
 	const got = new Set();
 	// map path points back to node indices
 	const idx = (p) => nodes.findIndex((n) => n[0] === p[0] && n[1] === p[1]);
+
 	for (let i = 1; i < path.length; i++) {
 		const a = idx(path[i - 1]), b = idx(path[i]);
+
 		if (a < 0 || b < 0) continue;
 		got.add(a < b ? `${a}|${b}` : `${b}|${a}`);
 	}
+
 	for (const e of need) assert.ok(got.has(e), `edge ${e} not covered`);
+
 	return reused;
 }
 

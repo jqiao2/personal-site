@@ -36,9 +36,11 @@ function denyUnauthenticated(request: Request): Response | null {
 // the unique constraint doing its job, not an error.
 export const POST: APIRoute = async ({ request }) => {
 	const denied = denyUnauthenticated(request);
+
 	if (denied) return denied;
 
 	let body: unknown;
+
 	try {
 		body = await request.json();
 	} catch {
@@ -48,9 +50,11 @@ export const POST: APIRoute = async ({ request }) => {
 	try {
 		const payload = parseSyncPayload(body);
 		const result = await ingestSync(payload);
+
 		return json({ ok: true, ...result });
 	} catch (e) {
 		if (e instanceof SyncPayloadError) return apiError(e.message, e.status);
+
 		return apiError(e instanceof Error ? e.message : 'reading sync failed', 500);
 	}
 };
@@ -59,9 +63,11 @@ export const POST: APIRoute = async ({ request }) => {
 // send only what came after and skip re-uploading months of history.
 export const GET: APIRoute = async ({ request, url }) => {
 	const denied = denyUnauthenticated(request);
+
 	if (denied) return denied;
 
 	const device = url.searchParams.get('device')?.trim();
+
 	if (!device) return apiError('device is required', 400);
 
 	try {

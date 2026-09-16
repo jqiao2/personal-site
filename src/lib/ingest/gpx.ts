@@ -51,6 +51,7 @@ interface Point {
 // ---------------------------------------------------------------------------
 
 const TRKPT = /<trkpt\b[^>]*\blat="([-\d.]+)"[^>]*\blon="([-\d.]+)"[^>]*>([\s\S]*?)<\/trkpt>/g;
+
 // Self-closing trackpoints (position only, no children) appear in older files.
 const TRKPT_BARE = /<trkpt\b[^>]*\blat="([-\d.]+)"[^>]*\blon="([-\d.]+)"[^>]*\/>/g;
 
@@ -74,14 +75,17 @@ export function parseGpx(xml: string, opts: XmlParseOptions): CanonicalActivity 
 			speed: null,
 		});
 	}
+
 	if (points.length === 0) {
 		for (const m of xml.matchAll(TRKPT_BARE)) {
 			points.push({ lat: Number(m[1]), lng: Number(m[2]), time: null, ele: null, hr: null, cad: null, power: null, dist: null, speed: null });
 		}
 	}
+
 	if (points.length === 0) return null;
 
 	const name = firstTag(xml, 'name');
+
 	return fromPoints(points, opts.sport ?? xmlSport(firstTag(xml, 'type')), name);
 }
 
@@ -118,6 +122,7 @@ export function parseTcx(xml: string, opts: XmlParseOptions): CanonicalActivity 
 			speed: tagNum(body, 'Speed'),
 		});
 	}
+
 	if (points.length === 0) return null;
 
 	return fromPoints(points, opts.sport ?? xmlSport(sportAttr(xml)), null);
@@ -142,6 +147,7 @@ function fromPoints(points: Point[], sport: Sport, name: string | null): Canonic
 	const tEnd = timed.length ? timed[timed.length - 1].time! : null;
 
 	const startedAt = t0 !== null ? new Date(t0).toISOString() : null;
+
 	if (!startedAt) return null; // no clock at all — nothing here can be filed on a day
 
 	const elapsed = tEnd !== null && t0 !== null ? Math.round((tEnd - t0) / 1000) : 0;
@@ -150,17 +156,21 @@ function fromPoints(points: Point[], sport: Sport, name: string | null): Canonic
 	// TCX often states it; GPX never does, so walk the track.
 	let distance: number | null = null;
 	const statedDist = points.map((p) => p.dist).filter((d): d is number => d !== null);
+
 	if (statedDist.length) {
 		distance = Math.max(...statedDist);
 	} else {
 		let sum = 0;
 		let prev: [number, number] | null = null;
+
 		for (const p of points) {
 			if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) continue;
 			const cur: [number, number] = [p.lat, p.lng];
+
 			if (prev) sum += haversine(prev, cur);
 			prev = cur;
 		}
+
 		distance = sum > 0 ? sum : null;
 	}
 
@@ -170,15 +180,21 @@ function fromPoints(points: Point[], sport: Sport, name: string | null): Canonic
 	let high = -Infinity;
 	let low = Infinity;
 	let anchor: number | null = null;
+
 	for (const p of points) {
 		if (p.ele === null || !Number.isFinite(p.ele)) continue;
+
 		if (p.ele > high) high = p.ele;
+
 		if (p.ele < low) low = p.ele;
+
 		if (anchor === null) {
 			anchor = p.ele;
 			continue;
 		}
+
 		const delta = p.ele - anchor;
+
 		if (delta >= 3) {
 			gain += delta;
 			anchor = p.ele;
@@ -187,6 +203,7 @@ function fromPoints(points: Point[], sport: Sport, name: string | null): Canonic
 			anchor = p.ele;
 		}
 	}
+
 	const hasEle = Number.isFinite(high);
 
 	// --- moving time -------------------------------------------------------
@@ -196,34 +213,47 @@ function fromPoints(points: Point[], sport: Sport, name: string | null): Canonic
 	let moving = 0;
 	let prevMoving: Point | null = null;
 	const movingFlags: boolean[] = [];
+
 	for (const p of points) {
 		if (!prevMoving || p.time === null || prevMoving.time === null) {
 			movingFlags.push(true);
 			prevMoving = p;
 			continue;
 		}
+
 		const dt = (p.time - prevMoving.time) / 1000;
+
 		const dm =
 			Number.isFinite(p.lat) && Number.isFinite(prevMoving.lat)
 				? haversine([prevMoving.lat, prevMoving.lng], [p.lat, p.lng])
 				: 0;
+
 		const isMoving = dt > 0 && dm / dt > 0.3;
 		movingFlags.push(isMoving);
+
 		if (isMoving && dt < 60) moving += dt;
 		prevMoving = p;
 	}
 
 	// --- streams -----------------------------------------------------------
 	const streams: CanonicalStreams = {};
+
 	if (t0 !== null) streams.time_s = points.map((p) => (p.time === null ? 0 : Math.round((p.time - t0) / 1000)));
+
 	if (points.some((p) => Number.isFinite(p.lat))) {
 		streams.latlng = points.map((p) => [nullable(p.lat), nullable(p.lng)] as unknown as [number, number]);
 	}
+
 	if (hasEle) streams.altitude_m = points.map((p) => p.ele) as number[];
+
 	if (points.some((p) => p.hr !== null)) streams.heartrate = points.map((p) => p.hr) as number[];
+
 	if (points.some((p) => p.cad !== null)) streams.cadence = points.map((p) => p.cad) as number[];
+
 	if (points.some((p) => p.power !== null)) streams.power_w = points.map((p) => p.power) as number[];
+
 	if (points.some((p) => p.speed !== null)) streams.speed_ms = points.map((p) => p.speed) as number[];
+
 	if (statedDist.length) streams.distance_m = points.map((p) => p.dist) as number[];
 	streams.moving = movingFlags;
 
@@ -264,20 +294,25 @@ function tagRe(local: string): RegExp {
  *  known parent rather than out of the whole trackpoint. */
 function block(xml: string, local: string): string | null {
 	const m = new RegExp(`<(?:\\w+:)?${local}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:\\w+:)?${local}>`).exec(xml);
+
 	return m ? m[1] : null;
 }
 
 function tagNum(xml: string, local: string): number | null {
 	const m = tagRe(local).exec(xml);
+
 	if (!m) return null;
 	const v = Number(m[1].trim());
+
 	return Number.isFinite(v) ? v : null;
 }
 
 function tagTime(xml: string, local: string): number | null {
 	const m = tagRe(local).exec(xml);
+
 	if (!m) return null;
 	const t = Date.parse(m[1].trim());
+
 	return Number.isFinite(t) ? t : null;
 }
 
@@ -294,13 +329,16 @@ function sportAttr(xml: string): string | null {
  */
 function xmlSport(type: string | null): Sport {
 	const slug = sportFromXmlType(type);
+
 	if (!slug) throw new UnknownSportError(type ?? '(no type in the file)');
+
 	return slug;
 }
 
 function firstTag(xml: string, local: string): string | null {
 	const m = tagRe(local).exec(xml);
 	const v = m?.[1]?.trim();
+
 	return v ? decodeEntities(v) : null;
 }
 
@@ -318,11 +356,14 @@ const nullable = (v: number): number | null => (Number.isFinite(v) ? v : null);
 
 function average(values: (number | null)[]): number | null {
 	const nums = values.filter((v): v is number => v !== null && Number.isFinite(v));
+
 	if (!nums.length) return null;
+
 	return Math.round(nums.reduce((a, b) => a + b, 0) / nums.length);
 }
 
 function maximum(values: (number | null)[]): number | null {
 	const nums = values.filter((v): v is number => v !== null && Number.isFinite(v));
+
 	return nums.length ? Math.max(...nums) : null;
 }

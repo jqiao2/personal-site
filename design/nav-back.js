@@ -16,22 +16,27 @@ const LABELS = {
 export function resolveBack(fallbackHref, fallbackLabel) {
   try {
     const ref = document.referrer;
+
     if (ref) {
       const file = decodeURIComponent(new URL(ref).pathname.split("/").pop() || "");
       const here = decodeURIComponent(location.pathname.split("/").pop() || "");
+
       if (file && file !== here && LABELS[file]) {
         return { href: file, label: LABELS[file] };
       }
     }
   } catch (e) {}
+
   return { href: fallbackHref, label: fallbackLabel };
 }
 
 export function loadStore(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
+
     if (raw != null) return JSON.parse(raw);
   } catch (e) {}
+
   return fallback;
 }
 
@@ -43,6 +48,7 @@ export function saveStore(key, value) {
 
 export function handleBack(e) {
   e.preventDefault();
+
   if (document.referrer && history.length > 1) history.back();
   else window.location.href = e.currentTarget.getAttribute("href");
 }

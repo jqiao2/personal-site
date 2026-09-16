@@ -24,6 +24,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
+
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
 	auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -32,27 +33,33 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 async function all(table, cols, tweak = (q) => q) {
 	const out = [];
 	const PAGE = 1000;
+
 	for (let from = 0; ; from += PAGE) {
 		const { data, error } = await tweak(sb.from(table).select(cols)).range(from, from + PAGE - 1);
+
 		if (error) throw error;
 		out.push(...data);
+
 		if (data.length < PAGE) return out;
 	}
 }
 
 async function main() {
 	const watched = await all('watched', 'movie_id, rating, liked, movies(title)');
+
 	const logs = await all('logs', 'movie_id, rating, liked, watched_date, id', (q) =>
 		q.is('deleted_at', null),
 	);
 
 	const byMovie = new Map();
+
 	for (const l of logs) {
 		if (!byMovie.has(l.movie_id)) byMovie.set(l.movie_id, []);
 		byMovie.get(l.movie_id).push(l);
 	}
 
 	const fixes = [];
+
 	for (const w of watched) {
 		const ls = byMovie.get(w.movie_id) ?? [];
 		const patch = {};
@@ -66,8 +73,10 @@ async function main() {
 					(a, b) =>
 						String(b.watched_date ?? '').localeCompare(String(a.watched_date ?? '')) || b.id - a.id,
 				)[0];
+
 			if (newest) patch.rating = newest.rating;
 		}
+
 		// Liking any viewing means liking the film; never the reverse.
 		if (!w.liked && ls.some((l) => l.liked)) patch.liked = true;
 
@@ -79,15 +88,19 @@ async function main() {
 	console.log(`watched films:   ${watched.length}`);
 	console.log(`live logs:       ${logs.length}`);
 	console.log(`films to fix:    ${fixes.length}${DRY_RUN ? '  (dry run — nothing written)' : ''}\n`);
+
 	for (const f of fixes) {
 		console.log(`  ${f.title}: ${JSON.stringify(f.patch)}`);
 	}
+
 	if (DRY_RUN || fixes.length === 0) return;
 
 	for (const f of fixes) {
 		const { error } = await sb.from('watched').update(f.patch).eq('movie_id', f.movieId);
+
 		if (error) throw new Error(`${f.title}: ${error.message}`);
 	}
+
 	console.log(`\nupdated ${fixes.length} film-level rows.`);
 }
 

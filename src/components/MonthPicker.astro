@@ -29,7 +29,9 @@ interface Props {
 }
 
 const { basePath, monthKey, label, year, query, tiles } = Astro.props;
+
 const prev = shiftMonth(monthKey, -1);
+
 const next = shiftMonth(monthKey, 1);
 ---
 

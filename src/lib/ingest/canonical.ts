@@ -172,7 +172,9 @@ export class UnknownSportError extends Error {
 
 export function sportFromStrava(providerType: string): Sport {
 	const slug = STRAVA_SPORTS[providerType.trim()];
+
 	if (!slug) throw new UnknownSportError(providerType);
+
 	return slug;
 }
 
@@ -246,6 +248,7 @@ export function sportFromFit(fitSport?: string, fitSubSport?: string): Sport | n
 export function sportFromXmlType(type: string | null | undefined): Sport | null {
 	if (!type) return null;
 	const key = type.toLowerCase().replace(/[^a-z]/g, '');
+
 	return STRAVA_SPORTS_SQUASHED[key] ?? TCX_SPORTS[key] ?? sportFromFit(type.trim()) ?? null;
 }
 
@@ -266,10 +269,15 @@ export function refineSport(sport: Sport, fitSport?: string, fitSubSport?: strin
 	if (sport === 'ride' && (fitSubSport === 'indoorCycling' || fitSubSport === 'virtualActivity')) {
 		return { sport: 'virtual_ride', sub_sport: 'indoor' };
 	}
+
 	if (sport === 'ride' && fitSubSport === 'gravelCycling') return { sport: 'gravel_ride', sub_sport: sub };
+
 	if (sport === 'ride' && fitSubSport === 'mountain') return { sport: 'mountain_bike', sub_sport: sub };
+
 	if (sport === 'run' && fitSubSport === 'treadmill') return { sport: 'treadmill_run', sub_sport: 'indoor' };
+
 	if (sport === 'run' && fitSubSport === 'trail') return { sport: 'trail_run', sub_sport: sub };
+
 	if (sport === 'swim' && fitSubSport === 'openWater') return { sport: 'open_water_swim', sub_sport: 'open_water' };
 
 	return { sport, sub_sport: sub };
@@ -291,11 +299,15 @@ export function refineSport(sport: Sport, fitSport?: string, fitSubSport?: strin
  */
 export function virtualizeGpslessRide(a: CanonicalActivity): CanonicalActivity {
 	const roadBike = a.sport === 'ride' || a.sport === 'gravel_ride' || a.sport === 'mountain_bike';
+
 	if (!roadBike) return a;
+
 	const hasTrack = (a.streams?.latlng ?? []).some(
 		(p) => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && !(p[0] === 0 && p[1] === 0),
 	);
+
 	if (hasTrack) return a;
+
 	return { ...a, sport: 'virtual_ride', sub_sport: a.sub_sport ?? 'indoor' };
 }
 
@@ -332,8 +344,11 @@ export function offsetMinutesInZone(instant: Date, timeZone: string): number {
 		minute: '2-digit',
 		second: '2-digit',
 	});
+
 	const p: Record<string, string> = {};
+
 	for (const { type, value } of fmt.formatToParts(instant)) p[type] = value;
+
 	const asUtc = Date.UTC(
 		Number(p.year),
 		Number(p.month) - 1,
@@ -342,12 +357,14 @@ export function offsetMinutesInZone(instant: Date, timeZone: string): number {
 		Number(p.minute),
 		Number(p.second),
 	);
+
 	return Math.round((asUtc - instant.getTime()) / 60000);
 }
 
 /** `YYYY-MM-DD` of the instant as read on a clock `offsetMinutes` east of UTC. */
 export function localDate(startedAt: string, offsetMinutes: number): string {
 	const shifted = new Date(new Date(startedAt).getTime() + offsetMinutes * 60000);
+
 	return shifted.toISOString().slice(0, 10);
 }
 
@@ -390,6 +407,7 @@ const STREAM_PRECISION: Record<string, number> = {
 	grade: 2,
 	temp_c: 1,
 };
+
 const LATLNG_DP = 6;
 
 function trimFloatNoise(s: CanonicalStreams): CanonicalStreams {
@@ -397,15 +415,19 @@ function trimFloatNoise(s: CanonicalStreams): CanonicalStreams {
 		typeof v === 'number' && Number.isFinite(v) ? Number(v.toFixed(dp)) : v;
 
 	const out: CanonicalStreams = { ...s };
+
 	if (out.latlng) {
 		out.latlng = out.latlng.map((p) =>
 			Array.isArray(p) ? ([round(p[0], LATLNG_DP), round(p[1], LATLNG_DP)] as [number, number]) : p,
 		);
 	}
+
 	for (const [key, dp] of Object.entries(STREAM_PRECISION)) {
 		const arr = (out as Record<string, unknown>)[key];
+
 		if (Array.isArray(arr)) (out as Record<string, unknown>)[key] = arr.map((v) => round(v, dp));
 	}
+
 	return out;
 }
 
@@ -422,6 +444,7 @@ const int = (v: number | null | undefined): number | null =>
  */
 export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRowSet {
 	const startedAt = new Date(a.started_at);
+
 	const offset =
 		a.utc_offset_minutes ?? offsetMinutesInZone(startedAt, a.timezone ?? HOME_TZ);
 
@@ -432,6 +455,7 @@ export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRo
 		(p): p is [number, number] =>
 			Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]) && !(p[0] === 0 && p[1] === 0),
 	);
+
 	const bb = track.length ? bounds(track) : null;
 
 	// --- exertion (§3) -----------------------------------------------------
@@ -561,7 +585,9 @@ export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRo
 
 function streamLength(s: CanonicalStreams): number {
 	let n = 0;
+
 	for (const arr of Object.values(s)) if (Array.isArray(arr)) n = Math.max(n, arr.length);
+
 	return n;
 }
 
@@ -573,5 +599,6 @@ function defaultTitle(a: CanonicalActivity): string {
 	const hour = new Date(a.started_at).getUTCHours() + (a.utc_offset_minutes ?? 0) / 60;
 	const h = ((hour % 24) + 24) % 24;
 	const part = h < 5 ? 'Night' : h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : h < 21 ? 'Evening' : 'Night';
+
 	return `${part} ${label}`;
 }

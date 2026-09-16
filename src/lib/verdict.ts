@@ -86,12 +86,14 @@ export const VERDICT_STEP_DEGREES = 36;
 /** The verdict at `rank`, or null for null/out-of-range. */
 export function verdictAt(rank: number | null | undefined): Verdict | null {
 	if (rank == null || !Number.isInteger(rank)) return null;
+
 	return VERDICTS[rank] ?? null;
 }
 
 /** The verdict with this slug, or null. Used to parse filter params. */
 export function verdictBySlug(slug: string | null | undefined): Verdict | null {
 	if (!slug) return null;
+
 	return VERDICTS.find((v) => v.slug === slug) ?? null;
 }
 
@@ -112,6 +114,8 @@ export function atLeast(rank: number): (verdict: number | null) => boolean {
 /** Label for a "rung or better" threshold, e.g. "Worth returning or better". */
 export function thresholdLabel(rank: number): string {
 	const v = verdictAt(rank);
+
 	if (!v) return 'Any verdict';
+
 	return v.rank === 0 ? v.label : `${v.label} or better`;
 }

@@ -69,12 +69,15 @@ const num = (v: unknown): number | null =>
 function ianaZone(tz: string | undefined): string | null {
 	if (!tz) return null;
 	const sp = tz.indexOf(' ');
+
 	return sp >= 0 ? tz.slice(sp + 1).trim() : tz.trim();
 }
 
 function numberArray(s: StravaStreams, key: string): number[] | undefined {
 	const data = s[key]?.data;
+
 	if (!Array.isArray(data) || !data.length) return undefined;
+
 	return data.map((v) => (typeof v === 'number' ? v : NaN));
 }
 
@@ -92,22 +95,27 @@ function mapStreams(s: StravaStreams | null | undefined): CanonicalStreams | und
 	out.grade = numberArray(s, 'grade_smooth');
 
 	const latlng = s.latlng?.data;
+
 	if (Array.isArray(latlng) && latlng.length) {
 		out.latlng = latlng.map((p) =>
 			Array.isArray(p) && p.length >= 2 ? ([Number(p[0]), Number(p[1])] as [number, number]) : [NaN, NaN],
 		);
 	}
+
 	const moving = s.moving?.data;
+
 	if (Array.isArray(moving) && moving.length) out.moving = moving.map((v) => Boolean(v));
 
 	// Drop the keys that came back empty so `toRows` sees the same "absent means
 	// the sensor wasn't there" shape the file parsers produce.
 	for (const k of Object.keys(out) as (keyof CanonicalStreams)[]) if (out[k] === undefined) delete out[k];
+
 	return Object.keys(out).length ? out : undefined;
 }
 
 function mapLaps(laps: StravaLap[] | null | undefined): CanonicalLap[] | undefined {
 	if (!laps?.length) return undefined;
+
 	return laps.map((l, i) => ({
 		lap_index: l.lap_index ?? i + 1,
 		name: l.name ?? null,
@@ -137,6 +145,7 @@ function mapLaps(laps: StravaLap[] | null | undefined): CanonicalLap[] | undefin
 export function activityToCanonical(a: StravaActivity, streams?: StravaStreams | null): CanonicalActivity {
 	const typeStr = a.sport_type ?? a.type;
 	const sport = sportFromXmlType(typeStr);
+
 	if (!sport) throw new UnknownSportError(typeStr ?? '(none)');
 
 	return {

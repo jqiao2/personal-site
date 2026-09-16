@@ -28,29 +28,42 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
 const CACHE_DIR = join(__dirname, '.cache');
+
 const RESOLUTION_CACHE = join(CACHE_DIR, 'resolution.json');
+
 const MOVIES_CACHE = join(CACHE_DIR, 'movies.json');
+
 const REPORT_FILE = join(CACHE_DIR, 'backfill-report.json');
 
 const args = new Set(process.argv.slice(2));
+
 const getArg = (name) => {
 	const hit = [...args].find((a) => a.startsWith(`--${name}=`));
+
 	return hit ? hit.slice(name.length + 3) : undefined;
 };
+
 const RESOLVE_ONLY = args.has('--resolve-only');
+
 const DRY_RUN = args.has('--dry-run') || RESOLVE_ONLY;
+
 const RETRY_UNRESOLVED = args.has('--retry-unresolved');
+
 const DIR =
 	getArg('dir') ||
 	process.env.LETTERBOXD_DIR ||
 	'C:/Users/jqiao/Downloads/letterboxd-jasonqiao-2026-07-10-15-40-utc';
 
 const TMDB_KEY = process.env.TMDB_API_KEY;
+
 const SB_URL = process.env.SUPABASE_URL;
+
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const CONCURRENCY = 8;
+
 const CHUNK = 500;
 
 // Manual TMDB-id corrections for real films the fuzzy search can't get right
@@ -78,28 +91,40 @@ const BLOCKLIST = new Set([
 
 // --- tiny utils ---------------------------------------------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 const filmKey = (name, year) => `${name}||${year}`;
+
 const norm = (s) =>
 	(s || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, ' ').trim();
+
 const deThe = (s) => norm(s).replace(/^the /, ''); // ignore a leading "The" when comparing titles
+
 const chunk = (arr, n) => {
 	const out = [];
+
 	for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+
 	return out;
 };
+
 async function mapLimit(items, limit, fn) {
 	const results = new Array(items.length);
 	let i = 0;
+
 	async function worker() {
 		while (i < items.length) {
 			const idx = i++;
 			results[idx] = await fn(items[idx], idx);
 		}
 	}
+
 	await Promise.all(Array.from({ length: Math.min(limit, items.length || 1) }, worker));
+
 	return results;
 }
+
 const readJson = (p, fallback) => (existsSync(p) ? JSON.parse(readFileSync(p, 'utf8')) : fallback);
+
 const writeJson = (p, obj) => {
 	mkdirSync(dirname(p), { recursive: true });
 	writeFileSync(p, JSON.stringify(obj, null, 2));
@@ -108,11 +133,14 @@ const writeJson = (p, obj) => {
 // --- CSV (RFC-4180: quoted fields, embedded commas + newlines, "" escapes) -----
 function parseCsv(text) {
 	const rows = [];
+
 	let row = [],
 		field = '',
 		inQuotes = false;
+
 	for (let i = 0; i < text.length; i++) {
 		const c = text[i];
+
 		if (inQuotes) {
 			if (c === '"') {
 				if (text[i + 1] === '"') {
@@ -133,37 +161,50 @@ function parseCsv(text) {
 			field = '';
 		} else field += c;
 	}
+
 	if (field.length || row.length) {
 		row.push(field);
 		rows.push(row);
 	}
+
 	return rows;
 }
+
 function loadCsv(name) {
 	const path = join(DIR, name);
+
 	if (!existsSync(path)) return [];
+
 	const rows = parseCsv(readFileSync(path, 'utf8')).filter(
 		(r) => r.length > 1 || (r.length === 1 && r[0] !== ''),
 	);
+
 	const header = rows[0];
+
 	return rows.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ''])));
 }
 
 function parseRating(s) {
 	if (!s) return null;
 	const n = Number(s);
+
 	if (!Number.isFinite(n) || n < 0.5 || n > 5 || !Number.isInteger(n * 2)) return null;
+
 	return n;
 }
+
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 
 // --- TMDB ---------------------------------------------------------------------
 async function tmdbGet(path, params = {}) {
 	const url = new URL(`https://api.themoviedb.org/3${path}`);
 	url.searchParams.set('api_key', TMDB_KEY);
+
 	for (const [k, v] of Object.entries(params)) if (v != null && v !== '') url.searchParams.set(k, String(v));
+
 	for (let attempt = 0; ; attempt++) {
 		let res;
+
 		try {
 			res = await fetch(url, { headers: { accept: 'application/json' } });
 		} catch (e) {
@@ -171,13 +212,16 @@ async function tmdbGet(path, params = {}) {
 			await sleep(2 ** attempt * 500);
 			continue;
 		}
+
 		if (res.status === 429 || res.status >= 500) {
 			if (attempt >= 6) throw new Error(`TMDB ${path} ${res.status}`);
 			const ra = Number(res.headers.get('retry-after')) || 2 ** attempt;
 			await sleep(ra * 1000);
 			continue;
 		}
+
 		if (!res.ok) throw new Error(`TMDB ${path} ${res.status}`);
+
 		return res.json();
 	}
 }
@@ -193,20 +237,26 @@ function pickBest(results, name, year) {
 	const n = deThe(name);
 	const y = year ? Number(year) : null;
 	const isPrefix = (t) => t.startsWith(`${n} `); // word-boundary prefix (subtitle)
+
 	let best = null,
 		bestScore = -1;
+
 	results.forEach((r, i) => {
 		const rt = deThe(r.title),
 			ort = deThe(r.original_title);
+
 		const ry = r.release_date ? Number(r.release_date.slice(0, 4)) : null;
 		const exact = rt === n || ort === n;
 		const prefix = isPrefix(rt) || isPrefix(ort);
 		let score = 0;
+
 		if (exact) score += 4;
 		else if (prefix) score += 2;
+
 		if (y && ry === y) score += 3;
 		else if (y && ry && Math.abs(ry - y) <= 3) score += 1;
 		score -= i * 0.02; // popularity tiebreak (results are popularity-ordered)
+
 		if (score > bestScore) {
 			bestScore = score;
 			best = { r, ry, exact, prefix };
@@ -214,21 +264,27 @@ function pickBest(results, name, year) {
 	});
 	const { r, ry, exact, prefix } = best;
 	const yearOk = y == null || ry == null || Math.abs(ry - y) <= 3;
+
 	if (!yearOk || (!exact && !prefix)) return null; // untrustworthy → leave unresolved
 	const confidence = exact && ry === y ? 'exact' : exact ? 'title' : 'subtitle';
+
 	return { id: r.id, title: r.title, matchedYear: ry, confidence };
 }
 
 async function resolveFilm(key, name, year) {
 	if (BLOCKLIST.has(key)) return null; // known TV series → leave unresolved
+
 	if (OVERRIDES.has(key)) return { id: OVERRIDES.get(key), title: null, matchedYear: null, confidence: 'override' };
 	let picked = pickBest((await tmdbGet('/search/movie', { query: name, year })).results, name, year);
+
 	if (!picked) picked = pickBest((await tmdbGet('/search/movie', { query: name })).results, name, year);
+
 	return picked; // {id,title,matchedYear,confidence} | null
 }
 
 async function tmdbMovieRow(id) {
 	const d = await tmdbGet(`/movie/${id}`);
+
 	return {
 		tmdb_id: d.id,
 		title: d.title,
@@ -243,7 +299,9 @@ async function tmdbMovieRow(id) {
 // --- main ---------------------------------------------------------------------
 async function main() {
 	if (!TMDB_KEY) throw new Error('TMDB_API_KEY not set');
+
 	if (!DRY_RUN && (!SB_URL || !SB_KEY)) throw new Error('SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set');
+
 	if (!existsSync(DIR)) throw new Error(`Letterboxd export dir not found: ${DIR}`);
 	console.log(`export dir : ${DIR}`);
 	console.log(`mode       : ${RESOLVE_ONLY ? 'resolve-only' : DRY_RUN ? 'dry-run' : 'WRITE'}\n`);
@@ -265,8 +323,10 @@ async function main() {
 
 	// Every unique film across the export (watched is the superset; diary ⊆ watched).
 	const films = new Map(); // key -> { name, year, tmdbUrl }
+
 	for (const r of watched)
 		films.set(filmKey(r.Name, r.Year), { name: r.Name, year: r.Year, tmdbUrl: r['Letterboxd URI'] });
+
 	for (const r of diary)
 		if (!films.has(filmKey(r.Name, r.Year)))
 			films.set(filmKey(r.Name, r.Year), { name: r.Name, year: r.Year, tmdbUrl: null });
@@ -274,11 +334,15 @@ async function main() {
 
 	// --- Phase 1: resolve each film to a TMDB id (cached) ---
 	const resolution = readJson(RESOLUTION_CACHE, {}); // key -> {name,year,tmdbId,matchedTitle,matchedYear,confidence}
+
 	const toResolve = [...films.entries()].filter(([key]) => {
 		const cached = resolution[key];
+
 		if (!cached) return true;
+
 		return RETRY_UNRESOLVED && cached.tmdbId == null;
 	});
+
 	console.log(`\nPhase 1 — resolving ${toResolve.length} films to TMDB (${films.size - toResolve.length} cached)`);
 	let done = 0;
 	await mapLimit(toResolve, CONCURRENCY, async ([key, f]) => {
@@ -295,11 +359,13 @@ async function main() {
 		} catch (e) {
 			resolution[key] = { name: f.name, year: f.year, tmdbId: null, confidence: 'error', error: String(e) };
 		}
+
 		if (++done % 50 === 0 || done === toResolve.length) {
 			process.stdout.write(`\r  resolved ${done}/${toResolve.length}`);
 			writeJson(RESOLUTION_CACHE, resolution); // checkpoint
 		}
 	});
+
 	if (toResolve.length) process.stdout.write('\n');
 	writeJson(RESOLUTION_CACHE, resolution);
 
@@ -321,11 +387,13 @@ async function main() {
 		} catch (e) {
 			movieCache[id] = { tmdb_id: id, _error: String(e) };
 		}
+
 		if (++done % 50 === 0 || done === missingDetails.length) {
 			process.stdout.write(`\r  fetched ${done}/${missingDetails.length}`);
 			writeJson(MOVIES_CACHE, movieCache);
 		}
 	});
+
 	if (missingDetails.length) process.stdout.write('\n');
 	writeJson(MOVIES_CACHE, movieCache);
 
@@ -333,6 +401,7 @@ async function main() {
 	const lowConfidence = resolvedEntries
 		.filter((r) => r.tmdbId != null && r.confidence !== 'exact')
 		.map((r) => ({ name: r.name, year: r.year, matched: `${r.matchedTitle} (${r.matchedYear})`, confidence: r.confidence }));
+
 	writeJson(REPORT_FILE, {
 		generatedFor: DIR,
 		counts: { films: films.size, ...byConfidence },
@@ -341,10 +410,12 @@ async function main() {
 	});
 	console.log(`\nreport     : ${REPORT_FILE}`);
 	console.log(`  low-confidence matches (non-exact): ${lowConfidence.length}`);
+
 	if (unresolved.length) console.log(`  unresolved: ${unresolved.map((r) => `${r.name} (${r.year})`).join(', ')}`);
 
 	if (RESOLVE_ONLY) {
 		console.log('\n--resolve-only: skipping DB writes.');
+
 		return;
 	}
 
@@ -356,6 +427,7 @@ async function main() {
 
 	// Preflight: watched.rating/liked must exist (migration 0003).
 	const { error: colErr } = DRY_RUN ? {} : await sb.from('watched').select('rating, liked').limit(1);
+
 	if (colErr) {
 		console.error(
 			`\n✗ watched.rating/liked columns are missing — apply migration 0003 first:\n` +
@@ -370,27 +442,35 @@ async function main() {
 		...m,
 		last_synced_at: new Date().toISOString(),
 	}));
+
 	console.log(`\nPhase 3 — upserting ${movieRows.length} movies`);
+
 	if (!DRY_RUN) {
 		for (const c of chunk(movieRows, CHUNK)) {
 			const { error } = await sb.from('movies').upsert(c, { onConflict: 'tmdb_id' });
+
 			if (error) throw new Error(`movies upsert: ${error.message}`);
 		}
 	}
 
 	// Map tmdb_id -> movies.id (dry-run has no DB rows, so use tmdb_id as a stand-in).
 	const idMap = new Map();
+
 	if (DRY_RUN) {
 		for (const id of tmdbIds) idMap.set(id, id);
 	} else {
 		for (const c of chunk(tmdbIds, CHUNK)) {
 			const { data, error } = await sb.from('movies').select('id, tmdb_id').in('tmdb_id', c);
+
 			if (error) throw new Error(`movies select: ${error.message}`);
+
 			for (const row of data) idMap.set(row.tmdb_id, row.id);
 		}
 	}
+
 	const movieIdFor = (key) => {
 		const t = tmdbIdFor(key);
+
 		return t != null ? idMap.get(t) ?? null : null;
 	};
 
@@ -407,30 +487,42 @@ async function main() {
 	// candidates on the addWatched call below (leaving diary dates as the only
 	// source) or re-apply 0012 afterwards.
 	const watchedAgg = new Map(); // movie_id -> { first, rating, liked, tmdb_url }
+
 	const addWatched = (key, dateCandidates, tmdbUrl) => {
 		const mid = movieIdFor(key);
+
 		if (mid == null) return;
 		const dates = dateCandidates.filter(isDate).sort();
 		const first = dates[0] || null;
 		const cur = watchedAgg.get(mid) || { first: null, rating: null, liked: false, tmdb_url: null };
+
 		if (first && (!cur.first || first < cur.first)) cur.first = first;
 		const rating = ratingByFilm.get(key);
+
 		if (rating != null) cur.rating = rating;
+
 		if (likedFilms.has(key)) cur.liked = true;
+
 		if (tmdbUrl && !cur.tmdb_url) cur.tmdb_url = tmdbUrl;
 		watchedAgg.set(mid, cur);
 	};
+
 	// diary viewing dates per film
 	const diaryDatesByFilm = new Map();
+
 	for (const r of diary) {
 		const k = filmKey(r.Name, r.Year);
+
 		if (!diaryDatesByFilm.has(k)) diaryDatesByFilm.set(k, []);
+
 		if (isDate(r['Watched Date'])) diaryDatesByFilm.get(k).push(r['Watched Date']);
 	}
+
 	for (const r of watched) {
 		const k = filmKey(r.Name, r.Year);
 		addWatched(k, [r.Date, ...(diaryDatesByFilm.get(k) || [])], r['Letterboxd URI']);
 	}
+
 	// diary-only films (not in watched.csv) still need a watched row
 	for (const [k, dates] of diaryDatesByFilm) if (!films.get(k)?.tmdbUrl) addWatched(k, dates, null);
 
@@ -441,10 +533,13 @@ async function main() {
 		liked: w.liked,
 		tmdb_url: w.tmdb_url,
 	}));
+
 	console.log(`Phase 4 — upserting ${watchedRows.length} watched rows`);
+
 	if (!DRY_RUN) {
 		for (const c of chunk(watchedRows, CHUNK)) {
 			const { error } = await sb.from('watched').upsert(c, { onConflict: 'movie_id' });
+
 			if (error) throw new Error(`watched upsert: ${error.message}`);
 		}
 	}
@@ -452,17 +547,21 @@ async function main() {
 	// --- Phase 5: logs (one per diary entry) + tags ---
 	const logInputs = []; // { row, movie_id, tags[] }
 	let skippedLogs = 0;
+
 	for (const r of diary) {
 		const key = filmKey(r.Name, r.Year);
 		const mid = movieIdFor(key);
+
 		if (mid == null) {
 			skippedLogs++;
 			continue;
 		}
+
 		const tags = (r.Tags || '')
 			.split(',')
 			.map((t) => t.trim().toLowerCase())
 			.filter(Boolean);
+
 		logInputs.push({
 			movie_id: mid,
 			watched_date: isDate(r['Watched Date']) ? r['Watched Date'] : null,
@@ -474,19 +573,23 @@ async function main() {
 			tags: [...new Set(tags)],
 		});
 	}
+
 	console.log(`Phase 5 — inserting ${logInputs.length} logs (${skippedLogs} skipped: unresolved film)`);
 
 	if (!DRY_RUN) {
 		// Idempotent: clear existing logs (log_tags cascade) before re-inserting.
 		const { error: delErr } = await sb.from('logs').delete().gte('id', 0);
+
 		if (delErr) throw new Error(`logs delete: ${delErr.message}`);
 
 		// Insert logs chunk-by-chunk; bulk insert returns rows in input order, so we
 		// align returned ids back to their source rows to attach tags.
 		const withTags = []; // { logId, tags[] }
+
 		for (const c of chunk(logInputs, CHUNK)) {
 			const payload = c.map(({ tags, ...row }) => row);
 			const { data, error } = await sb.from('logs').insert(payload).select('id');
+
 			if (error) throw new Error(`logs insert: ${error.message}`);
 			data.forEach((row, i) => {
 				if (c[i].tags.length) withTags.push({ logId: row.id, tags: c[i].tags });
@@ -496,20 +599,27 @@ async function main() {
 		// Upsert the tag dictionary, then link.
 		const tagNames = [...new Set(withTags.flatMap((w) => w.tags))];
 		const tagId = new Map();
+
 		if (tagNames.length) {
 			for (const c of chunk(tagNames, CHUNK)) {
 				const { data, error } = await sb
 					.from('tags')
 					.upsert(c.map((name) => ({ name })), { onConflict: 'name' })
 					.select('id, name');
+
 				if (error) throw new Error(`tags upsert: ${error.message}`);
+
 				for (const t of data) tagId.set(t.name, t.id);
 			}
+
 			const links = withTags.flatMap((w) => w.tags.map((t) => ({ log_id: w.logId, tag_id: tagId.get(t) })));
+
 			for (const c of chunk(links, CHUNK)) {
 				const { error } = await sb.from('log_tags').insert(c);
+
 				if (error) throw new Error(`log_tags insert: ${error.message}`);
 			}
+
 			console.log(`  tags: ${tagNames.length} distinct, ${links.length} links`);
 		}
 	}

@@ -26,6 +26,7 @@ const [pileRaw, recent] = await Promise.all([
 ]);
 
 const pile = buildPile(pileRaw);
+
 const suggestions = isOwner ? suggestMerges(pileRaw, recent) : new Map();
 
 const countLabel = pile.length === 0 ? 'empty' : `${pile.length} book${pile.length === 1 ? '' : 's'}`;
@@ -313,7 +314,9 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 		};
 
 		const pile = document.querySelector<HTMLElement>('[data-pile]');
+
 		const countEl = document.querySelector<HTMLElement>('[data-count]');
+
 		const rows = () => [...document.querySelectorAll<HTMLElement>('[data-row]')];
 
 		/** The count is the pile, not the filter: rows resolved on this page are gone. */
@@ -329,6 +332,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
 			});
+
 			return res.ok;
 		}
 
@@ -370,6 +374,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 
 					button.disabled = false;
 					button.textContent = label;
+
 					if (!ok) return;
 
 					if (act === 'start') resolve('start', 'now reading', true);
@@ -381,6 +386,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 			undo.addEventListener('click', async () => {
 				const kind = row.dataset.resolvedAs;
 				undo.disabled = true;
+
 				// Both undos are the inverse of one column: `to-read` toggles added_at
 				// back on, `unstart` clears the hand-set start.
 				const ok = await patch(
@@ -390,7 +396,9 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 						// the day it actually went on the pile.
 						: { id, action: 'to-read', addedAt: row.dataset.addedAt },
 				);
+
 				undo.disabled = false;
+
 				if (!ok) return;
 
 				delete row.dataset.resolvedAs;
@@ -411,43 +419,56 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 
 		// ---- filter and sort ---------------------------------------------------
 		const filterInput = document.querySelector<HTMLInputElement>('[data-filter]');
+
 		const emptyFiltered = document.querySelector<HTMLElement>('[data-empty-filtered]');
 
 		function applyFilter() {
 			const q = (filterInput?.value ?? '').trim().toLowerCase();
 			let shown = 0;
+
 			for (const row of rows()) {
 				const match = !q || (row.dataset.text ?? '').includes(q);
 				row.hidden = !match;
+
 				if (match) shown++;
 			}
+
 			if (emptyFiltered) emptyFiltered.hidden = shown > 0 || rows().length === 0;
 		}
 
 		filterInput?.addEventListener('input', applyFilter);
 
 		const sortButtons = document.querySelectorAll<HTMLButtonElement>('[data-sort]');
+
 		for (const button of sortButtons) {
 			button.addEventListener('click', () => {
 				const key = button.dataset.sort;
+
 				const sorted = rows().sort((a, b) => {
 					if (key === 'author') return (a.dataset.author ?? '').localeCompare(b.dataset.author ?? '');
+
 					if (key === 'pages') return Number(b.dataset.pages) - Number(a.dataset.pages);
+
 					if (key === 'kind') {
 						const byKind = Number(a.dataset.kind) - Number(b.dataset.kind);
+
 						if (byKind !== 0) return byKind;
 					}
+
 					// Added is the default and the tiebreak: within a kind, the newest
 					// intention is the one still worth acting on.
 					return (b.dataset.added ?? '').localeCompare(a.dataset.added ?? '');
 				});
+
 				for (const row of sorted) pile?.appendChild(row);
+
 				for (const other of sortButtons) other.classList.toggle('pill--on', other === button);
 			});
 		}
 
 		// ---- the composer ------------------------------------------------------
 		const composer = document.querySelector<HTMLElement>('[data-composer]');
+
 		if (composer) {
 			const modeSearch = composer.querySelector<HTMLElement>('[data-mode="search"]')!;
 			const modeManual = composer.querySelector<HTMLElement>('[data-mode="manual"]')!;
@@ -478,14 +499,17 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 			for (const button of document.querySelectorAll<HTMLButtonElement>('[data-composer-open]')) {
 				button.addEventListener('click', open);
 			}
+
 			composer
 				.querySelector<HTMLButtonElement>('[data-composer-close]')!
 				.addEventListener('click', () => {
 					composer.hidden = true;
 				});
+
 			for (const button of composer.querySelectorAll<HTMLButtonElement>('[data-to-manual]')) {
 				button.addEventListener('click', () => setMode(true));
 			}
+
 			composer
 				.querySelector<HTMLButtonElement>('[data-to-search]')!
 				.addEventListener('click', () => setMode(false));
@@ -494,16 +518,20 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 				const label = button.textContent;
 				button.disabled = true;
 				button.textContent = '…';
+
 				const res = await fetch('/api/books/to-read', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify(body),
 				});
+
 				if (!res.ok) {
 					button.disabled = false;
 					button.textContent = label;
+
 					return;
 				}
+
 				// Reload rather than splice a row in: the server decides how a book on
 				// the pile reads, and half these fields (the blurb, the subjects, the
 				// publication year) are fetched after the insert.
@@ -512,16 +540,19 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 
 			function render(list: Result[]) {
 				results.replaceChildren();
+
 				for (const r of list) {
 					const node = template.content.firstElementChild!.cloneNode(true) as HTMLElement;
 					const cover = node.querySelector<HTMLImageElement>('.result__cover')!;
 					const nocover = node.querySelector<HTMLElement>('.result__nocover')!;
+
 					if (r.coverUrl) {
 						cover.src = r.coverUrl;
 						cover.hidden = false;
 					} else {
 						nocover.hidden = false;
 					}
+
 					node.querySelector<HTMLElement>('.result__title')!.textContent = r.title;
 					node.querySelector<HTMLElement>('.result__author')!.textContent = r.author;
 					node.querySelector<HTMLElement>('.result__meta')!.textContent = [
@@ -552,13 +583,16 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 			q.addEventListener('input', () => {
 				clearTimeout(timer);
 				const text = q.value.trim();
+
 				if (text.length < 2) {
 					searching.hidden = true;
 					none.hidden = true;
 					results.replaceChildren();
 					idleLink.hidden = false;
+
 					return;
 				}
+
 				searching.hidden = false;
 				none.hidden = true;
 				idleLink.hidden = true;
@@ -567,9 +601,11 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 				// of it is ours to be polite with.
 				timer = setTimeout(async () => {
 					const mine = ++sequence;
+
 					const res = await fetch(`/api/books/openlibrary?q=${encodeURIComponent(text)}`).catch(
 						() => null,
 					);
+
 					// A slow first request must not overwrite a fast second one.
 					if (mine !== sequence) return;
 					searching.hidden = true;
@@ -581,6 +617,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 						render([]);
 						none.hidden = false;
 						noneLine.textContent = 'Open Library is not answering.';
+
 						return;
 					}
 
@@ -594,9 +631,11 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 
 			const manualReady = () =>
 				manualTitle.value.trim().length > 0 && manualAuthor.value.trim().length > 0;
+
 			const syncManual = () => {
 				manualAdd.disabled = !manualReady();
 			};
+
 			manualTitle.addEventListener('input', syncManual);
 			manualAuthor.addEventListener('input', syncManual);
 			manualAdd.addEventListener('click', () => {

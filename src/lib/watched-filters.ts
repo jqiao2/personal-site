@@ -50,7 +50,9 @@ export interface SentencePart {
  * any/all toggles can read "or" vs "and". */
 export function andList(items: string[], conj = 'and'): string {
 	if (items.length <= 1) return items.join('');
+
 	if (items.length === 2) return `${items[0]} ${conj} ${items[1]}`;
+
 	return `${items.slice(0, -1).join(', ')}, ${conj} ${items[items.length - 1]}`;
 }
 
@@ -79,6 +81,7 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 
 	const venuePhrase = (v: string) => {
 		const label = s.venueLabels?.get(v) ?? v;
+
 		// Names that already lead with "The" don't want a second article.
 		return /^the\s/i.test(label) ? `at ${label}` : `at the ${label}`;
 	};
@@ -86,24 +89,29 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 	lit(s.rewatched ? 'You have rewatched ' : 'You have watched ');
 	em(s.total.toLocaleString('en-US'));
 	lit(s.total === 1 ? ' film' : ' films');
+
 	if (s.tags.length) {
 		lit(' tagged ');
 		em(andList(s.tags));
 	}
+
 	if (s.directors.length) {
 		lit(' directed by ');
 		em(andList(s.directors));
 	}
+
 	if (s.actors.length) {
 		lit(' starring ');
 		em(andList(s.actors));
 	}
+
 	if (s.unrated) {
 		lit(' that are ');
 		em('unrated');
 	} else if (s.ratingMin != null || s.ratingMax != null) {
 		const lo = s.ratingMin ?? 0.5;
 		const hi = s.ratingMax ?? 5;
+
 		if (lo === hi) {
 			lit(' rated ');
 			em(starText(lo)!);
@@ -112,13 +120,16 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 			em(`${starText(lo)} and ${starText(hi)}`);
 		}
 	}
+
 	if (s.liked) {
 		lit(' that you ');
 		em('liked');
 	}
+
 	if (s.releaseYearMin != null || s.releaseYearMax != null) {
 		const lo = s.releaseYearMin ?? s.releaseYearMax!;
 		const hi = s.releaseYearMax ?? s.releaseYearMin!;
+
 		if (lo === hi) {
 			lit(' released in ');
 			em(String(lo));
@@ -127,26 +138,32 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 			em(`${lo} and ${hi}`);
 		}
 	}
+
 	if (s.releaseYears.length) {
 		lit(' released in ');
 		em(andList([...s.releaseYears].sort((a, b) => a - b).map(String), 'or'));
 	}
+
 	if (s.genres.length) {
 		lit(' in the ');
 		em(andList(s.genres));
 		lit(s.genres.length === 1 ? ' genre' : ' genres');
 	}
+
 	if (s.languages.length) {
 		lit(' in ');
 		em(andList(s.languages));
 	}
+
 	if (s.countries.length) {
 		lit(' from ');
 		em(andList(s.countries));
 	}
+
 	if (s.diaryYearMin != null || s.diaryYearMax != null) {
 		const lo = s.diaryYearMin ?? s.diaryYearMax!;
 		const hi = s.diaryYearMax ?? s.diaryYearMin!;
+
 		if (lo === hi) {
 			lit(' logged in ');
 			em(String(lo));
@@ -155,10 +172,12 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 			em(`${lo} and ${hi}`);
 		}
 	}
+
 	if (s.friends.length) {
 		lit(' with ');
 		em(andList(s.friends, s.friendMode === 'all' ? 'and' : 'or'));
 	}
+
 	// Medium, theater and format each carry their own preposition and are
 	// emphasized on their own; the phrases simply stack ("at the Metrograph in
 	// IMAX 70mm"), no lead-in or connector. A named theater or a format both
@@ -168,15 +187,18 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 		s.venues.length > 0 || s.formats.length > 0
 			? s.mediums.filter((m) => m !== 'theater')
 			: s.mediums;
+
 	const whereItems = [
 		...s.venues.map(venuePhrase),
 		...s.formats.map((f) => `in ${f}`),
 		...mediums.map((m) => MEDIUM_PHRASE[m] ?? `on ${mediumLabel(m)}`),
 	];
+
 	for (const item of whereItems) {
 		lit(' ');
 		em(item);
 	}
+
 	lit('.');
 
 	return parts;

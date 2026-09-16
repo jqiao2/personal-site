@@ -27,18 +27,26 @@ import { ALPINE } from '../../lib/activity-tokens';
 export const prerender = false;
 
 const WEEKS_TO_SHOW = 12;
+
 const DAYS_FETCH_LIMIT = 100;
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 const isOwner = await requireOwner(Astro.cookies);
+
 const isPartial = Astro.url.searchParams.get('partial') === '1';
+
 const beforeParam = Astro.url.searchParams.get('before');
+
 const before = beforeParam && DATE_RE.test(beforeParam) ? beforeParam : null;
 
 let weeks: ActivityWeek[] = [];
+
 let unreachable = false;
+
 try {
 	let days: ActivityDayWithActivities[];
+
 	if (isPartial) {
 		// A partial with no valid cursor has no window to draw — return nothing,
 		// which the client reads as "stop".
@@ -64,6 +72,7 @@ try {
 }
 
 const calendarIsEmpty = weeks.every((w) => w.totals.activityCount === 0);
+
 // The day before the oldest Monday shown — the client's first paging cursor.
 const initialCursor = weeks.length ? addDays(weeks[weeks.length - 1].mondayDate, -1) : null;
 
@@ -151,17 +160,21 @@ const scopeDummy: ActivityCardRow = {
 			// the newly-oldest Monday. A window with no activity at all — or a
 			// failed fetch — stops the observer cleanly.
 			const weeksEl = document.getElementById('weeks');
+
 			const sentinel = document.getElementById('sentinel');
+
 			if (weeksEl && sentinel) {
 				let cursor = sentinel.dataset.cursor || '';
 				let loading = false;
 				let done = !cursor;
 
 				const pad = (n: number) => String(n).padStart(2, '0');
+
 				function addDays(date: string, n: number): string {
 					const [y, m, d] = date.split('-').map(Number);
 					const dt = new Date(y, (m || 1) - 1, d || 1);
 					dt.setDate(dt.getDate() + n);
+
 					return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 				}
 
@@ -174,26 +187,34 @@ const scopeDummy: ActivityCardRow = {
 				async function loadMore() {
 					if (loading || done || !cursor) return;
 					loading = true;
+
 					try {
 						const res = await fetch(`/activities/training?partial=1&before=${cursor}`);
+
 						if (!res.ok) throw new Error(`HTTP ${res.status}`);
 						const html = await res.text();
 						const tpl = document.createElement('template');
 						tpl.innerHTML = html;
 						const newWeeks = Array.from(tpl.content.querySelectorAll('.week'));
+
 						// No weeks means the server found nothing older at all. An
 						// empty-but-present window (a long training gap) still carries
 						// its 12 blank weeks, so we keep paging back to bridge it.
 						if (newWeeks.length === 0) {
 							stop();
+
 							return;
 						}
+
 						for (const w of newWeeks) weeksEl!.appendChild(w);
 						const lastMonday = (newWeeks[newWeeks.length - 1] as HTMLElement).dataset.monday;
+
 						if (!lastMonday) {
 							stop();
+
 							return;
 						}
+
 						cursor = addDays(lastMonday, -1);
 					} catch (err) {
 						console.error('training calendar: could not load older weeks —', err);
@@ -209,6 +230,7 @@ const scopeDummy: ActivityCardRow = {
 					},
 					{ rootMargin: '600px' },
 				);
+
 				if (!done) observer.observe(sentinel);
 			}
 		</script>

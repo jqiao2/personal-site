@@ -41,16 +41,23 @@ import { toRows, localDate, UnknownSportError, virtualizeGpslessRide } from '../
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
+
 const has = (name) => args.includes(name);
+
 const flag = (name, fallback) => {
 	const i = args.indexOf(name);
+
 	return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 };
 
 const DRY = has('--dry');
+
 const KEEP = has('--keep');
+
 const SPORT = flag('--sport', null);
+
 const GEAR = flag('--gear', null);
+
 const NO_GEAR = has('--no-gear');
 
 /**
@@ -84,7 +91,9 @@ const DEFAULT_GEAR = {
 };
 
 const DEFAULT_DIR = process.env.ACTIVITY_DROP ?? join(homedir(), 'Desktop', 'activities');
+
 const VALUE_FLAGS = new Set(['--sport', '--gear']);
+
 const target = args.find((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(args[i - 1])) ?? DEFAULT_DIR;
 
 const log = (...a) => console.error(...a);
@@ -96,7 +105,9 @@ if (!existsSync(target)) {
 }
 
 const PARSEABLE = /\.(fit|gpx|tcx)(\.gz)?$/i;
+
 const isDir = statSync(target).isDirectory();
+
 const files = isDir
 	? readdirSync(target)
 			.filter((f) => PARSEABLE.test(f))
@@ -113,11 +124,14 @@ if (!files.length) {
 // exertion score, and a dry run that reported every ride on the MET floor
 // because it never read them would be reassuring and wrong.
 const url = process.env.SUPABASE_URL;
+
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!DRY && (!url || !key)) {
 	log('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (node --env-file=.env ...). Or run with --dry.');
 	process.exit(1);
 }
+
 const db = url && key ? createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 
 // ---------------------------------------------------------------------------
@@ -128,13 +142,16 @@ const db = url && key ? createClient(url, key, { auth: { persistSession: false, 
 // this reads it rather than re-deriving anything, so a file added today is
 // scored against the same numbers the rest of the table was.
 let thresholdRows = [];
+
 if (db) {
 	const { data, error } = await db
 		.from('athlete_thresholds')
 		.select('effective_from, ftp_w, lthr_bpm, max_hr, rest_hr, threshold_pace_s_per_km, css_pace_s_per_100m, weight_kg')
 		.order('effective_from', { ascending: true });
+
 	if (error) throw new Error(`read athlete_thresholds: ${error.message}`);
 	thresholdRows = data ?? [];
+
 	if (!thresholdRows.length) log('WARNING: athlete_thresholds is empty — everything will score on the MET floor.');
 }
 
@@ -143,8 +160,10 @@ if (db) {
 // ---------------------------------------------------------------------------
 
 let gearRows = [];
+
 if (db && !NO_GEAR) {
 	const { data, error } = await db.from('activity_gear').select('id, name, first_used_on, retired_at');
+
 	if (error) throw new Error(`read activity_gear: ${error.message}`);
 	gearRows = data ?? [];
 }
@@ -153,16 +172,20 @@ if (db && !NO_GEAR) {
  *  are written in. Exactly one match or nothing. */
 function gearNamed(name) {
 	const hits = gearRows.filter((g) => g.name.toLowerCase() === name.toLowerCase());
+
 	return hits.length === 1 ? hits[0] : null;
 }
 
 let forced = null;
+
 if (GEAR && db && !NO_GEAR) {
 	forced = gearNamed(GEAR);
+
 	if (!forced) {
 		log(`no single piece of gear named ${JSON.stringify(GEAR)} — see /activities/gear for the names in use.`);
 		process.exit(1);
 	}
+
 	log(`tagging everything to ${forced.name}`);
 }
 
@@ -170,6 +193,7 @@ if (GEAR && db && !NO_GEAR) {
 // nothing, forever. Checked once, at startup, out loud.
 if (db && !NO_GEAR && !forced) {
 	const missing = [...new Set(Object.values(DEFAULT_GEAR))].filter((n) => !gearNamed(n));
+
 	if (missing.length) {
 		log(`DEFAULT_GEAR names gear that is not in activity_gear: ${missing.join(', ')}`);
 		log('Fix the table in this script (or the names on /activities/gear) — a default that matches nothing tags nothing.');
@@ -188,23 +212,30 @@ if (db && !NO_GEAR && !forced) {
  */
 function gearFor(sport, date) {
 	if (NO_GEAR) return null;
+
 	if (forced) return forced;
 
 	const name = DEFAULT_GEAR[sport];
+
 	if (!name) return null;
 	const g = gearNamed(name);
+
 	if (g.first_used_on && date < g.first_used_on) return { out: `${g.name} was not in service on ${date}` };
+
 	if (g.retired_at && date >= g.retired_at.slice(0, 10)) return { out: `${g.name} was retired by ${date}` };
+
 	return g;
 }
 
 /** The row in force on a date — §5's rule, the same one the app applies. */
 function thresholdsOn(date) {
 	let inForce = null;
+
 	for (const r of thresholdRows) {
 		if (r.effective_from <= date) inForce = r;
 		else break;
 	}
+
 	return {
 		ftp_w: inForce?.ftp_w ?? null,
 		lthr_bpm: inForce?.lthr_bpm ?? null,
@@ -230,17 +261,22 @@ function parseFile(path) {
 
 	if (kind === '.fit') {
 		const sessions = parseFitSessions(buf, opts);
+
 		if (!sessions.length) return { skip: 'not a FIT file, or no session in it' };
+
 		// ponytail: a multisport recording needs the parent/leg structure the
 		// archive importer builds (§5's parent_id), and one dropped triathlon
 		// is not worth a second copy of it. Use activities:import for those.
 		if (sessions.length > 1) return { skip: `${sessions.length} sessions (multisport) — use activities:import` };
+
 		return { canonical: sessions[0] };
 	}
 
 	const xml = buf.toString('utf8');
 	const canonical = kind === '.gpx' ? parseGpx(xml, opts) : parseTcx(xml, opts);
+
 	if (!canonical) return { skip: 'no trackpoints with a clock' };
+
 	return { canonical };
 }
 
@@ -258,17 +294,22 @@ async function alreadyStored(checksum, canonical) {
 		.select('activity_id')
 		.eq('file_checksum', checksum)
 		.maybeSingle();
+
 	if (e1) throw new Error(`read activity_sources: ${e1.message}`);
+
 	if (bySum) return `this exact file is activity ${bySum.activity_id}`;
 
 	const t = Date.parse(canonical.started_at);
+
 	const { data: near, error: e2 } = await db
 		.from('activities')
 		.select('id, sport, started_at')
 		.gte('started_at', new Date(t - FIVE_MINUTES).toISOString())
 		.lte('started_at', new Date(t + FIVE_MINUTES).toISOString());
+
 	if (e2) throw new Error(`read activities: ${e2.message}`);
 	const match = (near ?? []).find((a) => a.sport === canonical.sport);
+
 	return match ? `activity ${match.id} already starts at ${match.started_at}` : null;
 }
 
@@ -278,6 +319,7 @@ async function alreadyStored(checksum, canonical) {
 
 async function insertActivity(built) {
 	const { data, error } = await db.from('activities').insert(built.activity).select('id').single();
+
 	if (error) throw new Error(`insert activities: ${error.message}`);
 	const id = data.id;
 
@@ -285,19 +327,25 @@ async function insertActivity(built) {
 	// row is invisible to the dedupe above, so the next run would add it twice.
 	try {
 		const { error: e } = await db.from('activity_sources').insert({ ...built.source, activity_id: id });
+
 		if (e) throw new Error(`insert activity_sources: ${e.message}`);
+
 		if (built.streams) {
 			const { error: es } = await db.from('activity_streams').insert({ activity_id: id, ...built.streams });
+
 			if (es) throw new Error(`insert activity_streams: ${es.message}`);
 		}
+
 		if (built.laps?.length) {
 			const { error: el } = await db.from('activity_laps').insert(built.laps.map((l) => ({ ...l, activity_id: id })));
+
 			if (el) throw new Error(`insert activity_laps: ${el.message}`);
 		}
 	} catch (err) {
 		await db.from('activities').delete().eq('id', id);
 		throw err;
 	}
+
 	return id;
 }
 
@@ -317,6 +365,7 @@ const stats = { added: 0, duplicate: 0, skipped: 0, failed: 0 };
 for (const path of files) {
 	const name = basename(path);
 	let parsed;
+
 	try {
 		parsed = parseFile(path);
 	} catch (err) {
@@ -338,6 +387,7 @@ for (const path of files) {
 	const summary = `${canonical.sport} ${date} ${((canonical.distance_m ?? 0) / 1000).toFixed(1)}km`;
 	const { activity, streams, laps } = toRows(canonical, thresholdsOn(date));
 	const gear = gearFor(canonical.sport, date);
+
 	const scored =
 		`exertion ${activity.exertion ?? '-'} (${activity.exertion_method ?? 'none'})` +
 		(gear?.name ? `, on ${gear.name}` : gear?.out ? `, no gear: ${gear.out}` : '');
@@ -349,9 +399,11 @@ for (const path of files) {
 	}
 
 	const dup = await alreadyStored(checksum, canonical);
+
 	if (dup) {
 		stats.duplicate++;
 		log(`= ${name}: ${dup}`);
+
 		if (!KEEP) move(path);
 		continue;
 	}
@@ -370,8 +422,10 @@ for (const path of files) {
 				fidelity: 90,
 			},
 		});
+
 		stats.added++;
 		log(`+ ${name}: ${summary} -> activity ${id}, ${scored}`);
+
 		if (!KEEP) move(path);
 	} catch (err) {
 		stats.failed++;
@@ -380,10 +434,12 @@ for (const path of files) {
 }
 
 log('');
+
 log(
 	`${DRY ? 'would add' : 'added'} ${stats.added}` +
 		(stats.duplicate ? `, ${stats.duplicate} already stored` : '') +
 		(stats.skipped ? `, ${stats.skipped} skipped` : '') +
 		(stats.failed ? `, ${stats.failed} failed` : ''),
 );
+
 if (stats.failed) process.exitCode = 1;

@@ -18,10 +18,13 @@ interface Props {
 const { view, editHref = null, edited = false } = Astro.props;
 
 const W = 64;
+
 const H = 24;
+
 /** Sparkline points → an SVG polyline over the shared day-altitude scale. */
 function sparkPath(spark: number[]): string {
 	if (spark.length < 2) return '';
+
 	return spark
 		.map((p, i) => `${((i / (spark.length - 1)) * W).toFixed(1)},${((1 - p) * (H - 2) + 1).toFixed(1)}`)
 		.join(' ');

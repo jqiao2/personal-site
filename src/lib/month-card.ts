@@ -25,10 +25,12 @@ export function fitScaler(
 	{ width = 1080, min = 0.2, max = 0.62 }: { width?: number; min?: number; max?: number } = {},
 ): void {
 	const stage = viewport.parentElement;
+
 	const fit = (): void => {
 		const w = stage?.clientWidth ?? width;
 		viewport.style.setProperty('--s', String(Math.max(min, Math.min(max, w / width))));
 	};
+
 	if (stage && 'ResizeObserver' in window) new ResizeObserver(fit).observe(stage);
 	else window.addEventListener('resize', fit);
 	fit();
@@ -37,6 +39,7 @@ export function fitScaler(
 /** A transient status line at the foot of the screen. */
 export function makeToast(el: HTMLElement | null): (message: string) => void {
 	let timer: ReturnType<typeof setTimeout> | undefined;
+
 	return (message: string) => {
 		if (!el) return;
 		el.textContent = message;
@@ -73,8 +76,10 @@ export function wireHistoryReplace(getQuery: () => string = () => ''): void {
 /** Rewrite every month link's href to carry the card's live settings. */
 export function syncMonthLinks(getQuery: () => string): void {
 	const q = getQuery();
+
 	for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-month-link]'))
 		link.href = `${link.dataset.monthLink}${q}`;
+
 	for (const tile of document.querySelectorAll<HTMLAnchorElement>('[data-picker-month]'))
 		tile.href = `${tile.pathname}${q}`;
 	history.replaceState(null, '', `${location.pathname}${q}`);
@@ -120,11 +125,13 @@ export function wirePicker({ basePath, monthKey, getQuery, paintTile }: PickerCo
 	document.querySelector('[data-picker-toggle]')?.addEventListener('click', () => {
 		if (!panel) return;
 		panel.hidden = !panel.hidden;
+
 		if (!panel.hidden) {
 			year = Number(monthKey.slice(0, 4));
 			paint();
 		}
 	});
+
 	for (const button of document.querySelectorAll<HTMLElement>('[data-picker-year]')) {
 		button.addEventListener('click', (event) => {
 			event.stopPropagation();
@@ -132,8 +139,10 @@ export function wirePicker({ basePath, monthKey, getQuery, paintTile }: PickerCo
 			paint();
 		});
 	}
+
 	document.addEventListener('mousedown', (event) => {
 		if (!panel || panel.hidden) return;
+
 		if (!picker?.contains(event.target as Node)) panel.hidden = true;
 	});
 }
@@ -145,6 +154,7 @@ export function wireCopy(
 ): void {
 	button?.addEventListener('click', () => {
 		const link = url();
+
 		if (navigator.clipboard)
 			navigator.clipboard.writeText(link).then(
 				() => toast(`Link copied · ${link}`),
@@ -192,6 +202,7 @@ const isWebkit = (): boolean =>
 /** Rasterise the card to a PNG blob via html-to-image. */
 export async function renderCard(cfg: RenderConfig): Promise<Blob | null> {
 	const { toBlob } = await import('html-to-image');
+
 	const options = {
 		width: cfg.card.offsetWidth || 1080,
 		height: cfg.height ?? cfg.card.offsetHeight,
@@ -202,7 +213,9 @@ export async function renderCard(cfg: RenderConfig): Promise<Blob | null> {
 		...(cfg.cacheBust ? { cacheBust: true } : {}),
 		...(cfg.includeQueryParams ? { includeQueryParams: true } : {}),
 	};
+
 	const first = await toBlob(cfg.card, options);
+
 	return cfg.webkitDouble && isWebkit() ? await toBlob(cfg.card, options) : first;
 }
 
@@ -230,8 +243,10 @@ export interface SaveConfig {
  */
 export function wireSave(cfg: SaveConfig): void {
 	const { button, toast } = cfg;
+
 	if (!button) return;
 	const share = canShareFile();
+
 	if (share && button.dataset.shareLabel) button.textContent = button.dataset.shareLabel;
 
 	let kept: { state: string; file: File } | null = null;
@@ -247,26 +262,32 @@ export function wireSave(cfg: SaveConfig): void {
 			} catch (error) {
 				if ((error as DOMException)?.name !== 'AbortError') toast('Could not open the share sheet');
 			}
+
 			return;
 		}
 
 		const rc = cfg.render();
 		toast(rendering(rc.card.offsetWidth || 1080, rc.height ?? rc.card.offsetHeight));
+
 		try {
 			await cfg.beforeRender?.();
 			const blob = await renderCard(rc);
+
 			if (!blob) throw new Error('nothing was rendered');
 
 			if (share) {
 				const file = new File([blob], name, { type: 'image/png' });
 				kept = { state: cfg.state(), file };
+
 				try {
 					await navigator.share({ files: [file] });
 				} catch (error) {
 					const kind = (error as DOMException)?.name;
+
 					if (kind === 'NotAllowedError') toast('Ready. Tap again to save.');
 					else if (kind !== 'AbortError') toast('Could not open the share sheet');
 				}
+
 				return;
 			}
 

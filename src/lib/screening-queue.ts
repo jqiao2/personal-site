@@ -58,7 +58,9 @@ export async function listQueue(): Promise<QueueEntry[]> {
 		.from('screening_queue')
 		.select(SELECT)
 		.order('scheduled_date', { ascending: true });
+
 	if (error) throw new Error(`listQueue failed: ${error.message}`);
+
 	return ((data ?? []) as unknown as QueueRow[]).map(toEntry);
 }
 
@@ -71,7 +73,9 @@ export async function listUpcomingQueue(limit = 5): Promise<QueueEntry[]> {
 		.gte('scheduled_date', siteDay())
 		.order('scheduled_date', { ascending: true })
 		.limit(limit);
+
 	if (error) throw new Error(`listUpcomingQueue failed: ${error.message}`);
+
 	return ((data ?? []) as unknown as QueueRow[]).map(toEntry);
 }
 
@@ -88,6 +92,7 @@ async function ensureOnWatchlist(movieId: number): Promise<void> {
 	const { error } = await supabaseAdmin
 		.from('watchlist')
 		.upsert({ movie_id: movieId }, { onConflict: 'movie_id' });
+
 	if (error) throw new Error(`ensureOnWatchlist failed: ${error.message}`);
 }
 
@@ -119,6 +124,7 @@ export async function addToQueue(input: {
 		.maybeSingle();
 
 	let eventId = input.googleEventId ?? null;
+
 	// A manual add (no event handed in) mirrors to Google when configured.
 	if (!eventId && source === 'manual' && gcal.isConfigured()) {
 		if (existing?.google_event_id) await safeDeleteEvent(existing.google_event_id);
@@ -135,6 +141,7 @@ export async function addToQueue(input: {
 		},
 		{ onConflict: 'movie_id' },
 	);
+
 	if (error) throw new Error(`addToQueue failed: ${error.message}`);
 }
 
@@ -146,7 +153,9 @@ export async function removeFromQueue(tmdbId: number): Promise<boolean> {
 		.select('id')
 		.eq('tmdb_id', tmdbId)
 		.maybeSingle();
+
 	if (mErr) throw new Error(`removeFromQueue lookup failed: ${mErr.message}`);
+
 	if (!movie) return false;
 
 	const { data: row, error } = await supabaseAdmin
@@ -155,9 +164,13 @@ export async function removeFromQueue(tmdbId: number): Promise<boolean> {
 		.eq('movie_id', movie.id)
 		.select('google_event_id')
 		.maybeSingle();
+
 	if (error) throw new Error(`removeFromQueue failed: ${error.message}`);
+
 	if (!row) return false;
+
 	if (row.google_event_id) await safeDeleteEvent(row.google_event_id);
+
 	return true;
 }
 
@@ -165,6 +178,7 @@ export async function removeFromQueue(tmdbId: number): Promise<boolean> {
  *  that's the source of truth. */
 async function safeDeleteEvent(eventId: string): Promise<void> {
 	if (!gcal.isConfigured()) return;
+
 	try {
 		await gcal.deleteEvent(eventId);
 	} catch (err) {
@@ -179,7 +193,9 @@ async function safeDeleteEvent(eventId: string): Promise<void> {
  */
 export function parseEventSummary(summary: string): { title: string; venue: string | null } {
 	const m = /^(.+?)\s+at\s+(AMC\b.+)$/i.exec(summary.trim());
+
 	if (m) return { title: m[1].trim(), venue: m[2].trim() };
+
 	return { title: summary.trim(), venue: null };
 }
 
@@ -209,26 +225,33 @@ export async function syncFromCalendar(): Promise<SyncResult> {
 		.from('screening_queue')
 		.select('google_event_id')
 		.not('google_event_id', 'is', null);
+
 	if (error) throw new Error(`syncFromCalendar read failed: ${error.message}`);
 	const seen = new Set((known ?? []).map((r) => r.google_event_id as string));
 
 	const result: SyncResult = { added: 0, skipped: 0, unresolved: [] };
+
 	for (const ev of events) {
 		if (seen.has(ev.id)) {
 			result.skipped++;
 			continue;
 		}
+
 		const day = gcal.eventDay(ev);
+
 		if (!day) {
 			result.skipped++;
 			continue;
 		}
+
 		const { title, venue } = parseEventSummary(ev.summary);
 		const tmdbId = await resolveTitle(title);
+
 		if (!tmdbId) {
 			result.unresolved.push(title);
 			continue;
 		}
+
 		await addToQueue({
 			tmdbId,
 			scheduledDate: day,
@@ -238,6 +261,7 @@ export async function syncFromCalendar(): Promise<SyncResult> {
 		});
 		result.added++;
 	}
+
 	return result;
 }
 
@@ -245,9 +269,11 @@ export async function syncFromCalendar(): Promise<SyncResult> {
 async function resolveTitle(title: string): Promise<number | null> {
 	try {
 		const res = await searchMovies(title);
+
 		return res.results[0]?.id ?? null;
 	} catch (err) {
 		console.error(`screening-queue: TMDB search failed for "${title}" —`, err);
+
 		return null;
 	}
 }

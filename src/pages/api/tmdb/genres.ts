@@ -8,9 +8,11 @@ export const prerender = false;
 export const GET: APIRoute = async () => {
 	try {
 		const genres = await getGenres();
+
 		return json(genres, 200, { 'cache-control': 'public, max-age=86400' });
 	} catch (e) {
 		if (e instanceof TmdbError) return apiError(e.message, 502);
+
 		return apiError('genres failed', 500);
 	}
 };

@@ -25,16 +25,22 @@
 import { readFileSync } from 'node:fs';
 
 const SUPA = process.env.SUPABASE_URL;
+
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!SUPA || !KEY) {
 	console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (try: node --env-file=.env …)');
 	process.exit(1);
 }
 
 const argv = process.argv.slice(2);
+
 const apply = argv.includes('--apply');
+
 const verbose = argv.includes('--verbose');
+
 const csvPath = argv.find((a) => !a.startsWith('--'));
+
 if (!csvPath) {
 	console.error('usage: node --env-file=.env scripts/import-storygraph.mjs <export.csv> [--apply]');
 	process.exit(1);
@@ -67,25 +73,30 @@ const MOOD_MAP = {
 const MOODS = new Set(['Cozy', 'Inspiring', 'Emotional', 'Funny', 'Dark', 'Tense', 'Mysterious', 'Sad', 'Magical', 'Nostalgic', 'Bittersweet']);
 
 const PACE_MAP = { fast: 'Fast', medium: 'Moderate', slow: 'Slow' };
+
 const FOCUS_MAP = { Character: 'Character-Driven', 'A mix': 'A bit of both', Plot: 'Plot-Driven' };
 
 // ---------------------------------------------------------------------------
 // Parse
 // ---------------------------------------------------------------------------
 const rows = parseCsv(readFileSync(csvPath, 'utf8'));
+
 if (!rows.length) {
 	console.error('no rows in CSV');
 	process.exit(1);
 }
 
 const existing = await rest('books?select=id,md5,title,display_title,added_at,finished_at,gave_up_at,isbn,contributors&order=id');
+
 const byKey = new Map(existing.map((b) => [titleKey(b.display_title ?? b.title), b]));
 
 const notes = [];
+
 const plan = { insert: [], patch: [], reviews: [] };
 
 for (const row of rows) {
 	const title = (row.Title ?? '').trim();
+
 	if (!title) continue;
 
 	const status = row['Read Status'];
@@ -133,11 +144,15 @@ for (const row of rows) {
 		// by the Kindle, and StoryGraph's copy of their state is the stale one —
 		// The Power Broker is filed there as "to-read" and is being read right now.
 		const patch = {};
+
 		if (wanted.added_at && !match.added_at) patch.added_at = wanted.added_at;
+
 		if (wanted.isbn && !match.isbn) patch.isbn = wanted.isbn;
+
 		if (wanted.contributors.length && !(match.contributors ?? []).length) {
 			patch.contributors = wanted.contributors;
 		}
+
 		// finished_at is deliberately NOT patched onto a tracked book: progress
 		// already decides that one, and writing it here would flip the automatic
 		// finish into a hand-set one for no gain.
@@ -147,12 +162,14 @@ for (const row of rows) {
 
 	// --- the review -------------------------------------------------------------
 	const review = buildReview(row, dates, finishedAt);
+
 	if (review) plan.reviews.push({ title, review, existingId: match?.id ?? null });
 
 	// A re-read is two rows in book_reviews, keyed on their date ranges — and the
 	// export gives one range no matter how many times a book was read, so the
 	// second read cannot be reconstructed from it.
 	const count = Number(row['Read Count']);
+
 	if (count > 1) {
 		notes.push(
 			`${title}: Read Count is ${count} but the export carries only one date range, so it imports as a single read. The second review row has to be added by hand.`,
@@ -166,18 +183,22 @@ for (const row of rows) {
 console.log(`\n${rows.length} rows · ${existing.length} books already here\n`);
 
 console.log(`── ${plan.insert.length} new books ──`);
+
 for (const { wanted } of plan.insert) {
 	const shelf = wanted.finished_at ? 'finished' : wanted.added_at ? 'to-read' : 'unfiled';
 	console.log(`  + ${pad(shelf, 9)} ${wanted.title}${wanted.authors ? ` — ${wanted.authors}` : ''}`);
 }
 
 console.log(`\n── ${plan.patch.length} existing books patched ──`);
+
 for (const { match, patch } of plan.patch) {
 	console.log(`  ~ ${match.display_title ?? match.title}: ${JSON.stringify(patch)}`);
 }
 
 const withText = plan.reviews.filter((r) => r.review.review_text).length;
+
 console.log(`\n── ${plan.reviews.length} reviews (${withText} with written text) ──`);
+
 for (const { title, review } of plan.reviews) {
 	const bits = [
 		review.rating != null ? `${review.rating}★` : 'unrated',
@@ -186,12 +207,15 @@ for (const { title, review } of plan.reviews) {
 		review.focus,
 		[...review.moods, ...review.tones].join('/') || null,
 	].filter(Boolean);
+
 	console.log(`  · ${pad(title.slice(0, 42), 44)} ${bits.join('  ')}`);
+
 	if (review.review_text) console.log(`      “${review.review_text}”`);
 }
 
 if (notes.length) {
 	console.log(`\n── ${notes.length} things worth knowing ──`);
+
 	for (const n of notes) console.log(`  ! ${n}`);
 }
 
@@ -230,22 +254,28 @@ for (const { wanted } of plan.insert) {
 			finished_by_hand: wanted.finished_by_hand,
 		}),
 	});
+
 	idByTitle.set(titleKey(wanted.title), created[0].id);
 }
+
 console.log(`\ninserted ${plan.insert.length} books`);
 
 for (const { match, patch } of plan.patch) {
 	await rest(`books?id=eq.${match.id}`, { method: 'PATCH', body: JSON.stringify(patch) });
 }
+
 console.log(`patched ${plan.patch.length} books`);
 
 let saved = 0;
+
 for (const { title, review } of plan.reviews) {
 	const bookId = idByTitle.get(titleKey(title));
+
 	if (!bookId) {
 		console.error(`  ! no book id for ${title} — review skipped`);
 		continue;
 	}
+
 	await rest('book_reviews?on_conflict=book_id,read_from', {
 		method: 'POST',
 		headers: { prefer: 'resolution=merge-duplicates' },
@@ -253,6 +283,7 @@ for (const { title, review } of plan.reviews) {
 	});
 	saved++;
 }
+
 console.log(`saved ${saved} reviews\n`);
 }
 
@@ -270,10 +301,12 @@ function buildReview(row, dates, finishedAt) {
 	// something in it. A to-read book with no opinion attached is a book, not a
 	// blank review.
 	if (row['Read Status'] !== 'read') return null;
+
 	if (rating == null && !text && !moods.length && !pacing && !focus) return null;
 
 	const from = dates ? dates.from : finishedAt?.slice(0, 10);
 	const to = dates ? dates.to : finishedAt?.slice(0, 10);
+
 	if (!from || !to) return null;
 
 	return {
@@ -293,12 +326,15 @@ function buildReview(row, dates, finishedAt) {
 /** StoryGraph's comma-separated mood list, translated and de-duplicated. */
 function mapMoods(raw) {
 	const seen = [];
+
 	for (const term of String(raw ?? '').split(',')) {
 		const mapped = MOOD_MAP[term.trim().toLowerCase()];
+
 		// "hopeful" and "inspiring" both land on Inspiring, and several books carry
 		// both — the Set keeps the review from listing it twice.
 		if (mapped && !seen.includes(mapped)) seen.push(mapped);
 	}
+
 	return seen;
 }
 
@@ -309,17 +345,21 @@ function mapMoods(raw) {
  */
 function readDates(row) {
 	const raw = String(row['Dates Read'] ?? '').trim();
+
 	if (!raw) return null;
 	const parts = raw.split('-').map((p) => p.trim()).filter(Boolean);
 	const from = isoDay(parts[0]);
 	const to = isoDay(parts[1] ?? parts[0]);
+
 	if (!from || !to) return null;
+
 	return to < from ? { from: to, to: from } : { from, to };
 }
 
 /** "2025/03/27" → "2025-03-27". */
 function isoDay(v) {
 	const m = String(v ?? '').match(/^(\d{4})\/(\d{2})\/(\d{2})$/);
+
 	return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
 }
 
@@ -332,13 +372,16 @@ function isoDay(v) {
  */
 function stamp(v) {
 	const day = isoDay(v) ?? (/^\d{4}-\d{2}-\d{2}$/.test(String(v ?? '')) ? String(v) : null);
+
 	return day ? `${day}T12:00:00-05:00` : null;
 }
 
 /** The review column is a fragment of HTML. The stored value is plain text. */
 function stripHtml(raw) {
 	const s = String(raw ?? '').trim();
+
 	if (!s) return null;
+
 	const text = s
 		.replace(/<br\s*\/?>/gi, '\n')
 		.replace(/<\/(?:div|p)>/gi, '\n')
@@ -351,13 +394,16 @@ function stripHtml(raw) {
 		.replace(/&#39;/g, "'")
 		.replace(/\n{3,}/g, '\n\n')
 		.trim();
+
 	return text || null;
 }
 
 /** "Ken Liu (Translator), Maureen Freely (Translator)" → one element each. */
 function splitContributors(raw) {
 	const s = String(raw ?? '').trim();
+
 	if (!s) return [];
+
 	// Split on commas that are not inside the role brackets.
 	return s
 		.split(/,(?![^(]*\))/)
@@ -367,6 +413,7 @@ function splitContributors(raw) {
 
 function digits(raw) {
 	const s = String(raw ?? '').replace(/[^0-9Xx]/g, '');
+
 	return s.length >= 10 ? s.toUpperCase() : null;
 }
 
@@ -396,8 +443,10 @@ function parseCsv(text) {
 	let quoted = false;
 
 	const src = text.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+
 	for (let i = 0; i < src.length; i++) {
 		const c = src[i];
+
 		if (quoted) {
 			if (c === '"') {
 				if (src[i + 1] === '"') { field += '"'; i++; }
@@ -408,9 +457,11 @@ function parseCsv(text) {
 		else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
 		else field += c;
 	}
+
 	if (field || row.length) { row.push(field); rows.push(row); }
 
 	const header = rows.shift().map((h) => h.trim());
+
 	return rows
 		.filter((r) => r.some((v) => v.trim()))
 		.map((r) => Object.fromEntries(header.map((h, i) => [h, (r[i] ?? '').trim()])));
@@ -423,13 +474,16 @@ async function rest(path, init = {}) {
 			apikey: KEY,
 			authorization: `Bearer ${KEY}`,
 			'content-type': 'application/json',
-			...(init.headers ?? {}),
+			...init.headers,
 		},
 	});
+
 	const text = await res.text();
+
 	if (!res.ok) {
 		console.error(`${res.status} ${path}: ${text}`);
 		process.exit(1);
 	}
+
 	return text ? JSON.parse(text) : null;
 }

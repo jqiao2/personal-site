@@ -63,6 +63,7 @@ const [stats, currentRaw, asideRaw, finishedRaw, offlineRaw, manualRaw, pileRaw]
 const heatmapDays = stats.first_day ? await getHeatmap(stats.first_day, todayDay) : [];
 
 const days = readDays(heatmapDays);
+
 const maxPages = Math.max(1, ...days.map((d) => d.pages));
 
 const { current, setAside, finished } = buildShelf(
@@ -78,12 +79,15 @@ const { current, setAside, finished } = buildShelf(
 // sortable, filterable version; this is the whole pile as an object, and running
 // out of board is the honest way to show how far behind it is.
 const toRead = toReadShelf(buildPile(pileRaw, todayDay));
+
 const pileLabel = `${pileRaw.length} book${pileRaw.length === 1 ? '' : 's'} →`;
 
 // Which books a spell covers is answered from every public book, not just the
 // ones in flight — a spell three years ago was spent on something long finished.
 const shelf = [...current, ...setAside, ...finished].filter((b) => b.tracked);
+
 const spells = buildSpells(days, shelf, maxPages);
+
 const heatmap = buildHeatmap(days, maxPages, todayDay);
 
 // The data picks the instrument. A year of near-daily reading is what a calendar
@@ -92,6 +96,7 @@ const defaultView = days.length && prefersHeatmap(days, todayDay) ? 'heatmap' : 
 
 // Everything read, newest finish at the left.
 const done = finishedShelf(finished);
+
 const doneSpan = shelfSpan(finished);
 
 const bookHref = (b: BookView) => `/books/${b.id}`;
@@ -101,6 +106,7 @@ const hasActivity = days.length > 0;
 // Sidebar counts, from data already loaded: books finished this calendar year,
 // and the size of the pile.
 const thisYear = Number(todayDay.slice(0, 4));
+
 const finishedThisYear = finished.filter((b) => b.finishedYear === thisYear).length;
 
 const num = (n: number) => n.toLocaleString('en-US');
@@ -394,12 +400,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 	// sends both activity views, so switching is instant and the page still
 	// reads correctly with JavaScript off, showing whichever view fits the data.
 	const panels = document.querySelectorAll<HTMLElement>('[data-panel]');
+
 	const viewButtons = document.querySelectorAll<HTMLButtonElement>('[data-view]');
 
 	for (const button of viewButtons) {
 		button.addEventListener('click', () => {
 			const wanted = button.dataset.view;
+
 			for (const panel of panels) panel.hidden = panel.dataset.panel !== wanted;
+
 			for (const other of viewButtons) other.classList.toggle('pill--on', other === button);
 		});
 	}
@@ -415,13 +424,18 @@ const num = (n: number) => n.toLocaleString('en-US');
 	//
 	// Both numbers are also in the stylesheet, in .heat's min-width.
 	const CELL_MIN = 11;
+
 	const CELL_GAP = 3;
+
 	/** The day-label column plus the gap after it. */
 	const GUTTER = 26;
 
 	const heatScroll = document.querySelector<HTMLElement>('[data-heat-scroll]');
+
 	const heat = document.querySelector<HTMLElement>('[data-heat]');
+
 	const heatCols = document.querySelectorAll<HTMLElement>('[data-heat-col]');
+
 	const heatLabels = document.querySelectorAll<HTMLElement>('[data-heat-label]');
 
 	if (heatScroll && heat && heatCols.length) {
@@ -430,6 +444,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			// opened on the spells view. Measuring then would crop the grid to
 			// its floor of eight weeks and leave it there.
 			const available = heatScroll.clientWidth - GUTTER;
+
 			if (available <= 0) return;
 
 			const fits = Math.floor((available + CELL_GAP) / (CELL_MIN + CELL_GAP));

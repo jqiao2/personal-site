@@ -138,6 +138,7 @@ export interface ExertionInput {
 }
 
 export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met' | 'ski';
+
 export type ExertionConfidence = 'measured' | 'estimated' | 'assumed';
 
 export interface ExertionResult {
@@ -193,16 +194,19 @@ export function normalizedPower(powerStream: number[], timeStream: number[]): nu
 	for (let i = 0; i < powerStream.length; i++) {
 		windowSum += powerStream[i];
 		windowCount++;
+
 		while (timeStream[i] - timeStream[windowStart] > windowSeconds) {
 			windowSum -= powerStream[windowStart];
 			windowCount--;
 			windowStart++;
 		}
+
 		rolling.push(windowSum / windowCount);
 	}
 
 	if (rolling.length === 0) return null;
 	const meanFourth = rolling.reduce((sum, w) => sum + w ** 4, 0) / rolling.length;
+
 	return meanFourth ** 0.25;
 }
 
@@ -223,6 +227,7 @@ export interface TssInput {
 export function tss({ seconds, np, ftp }: TssInput): number {
 	if (ftp <= 0) return 0;
 	const intensityFactor = np / ftp;
+
 	return (seconds * np * intensityFactor) / (ftp * 3600) * 100;
 }
 
@@ -258,10 +263,12 @@ export interface TrimpInput {
  *  the same formula once to the whole duration at that flat average. */
 export function banisterTrimp({ hrStream, avgHr, seconds, restHr, maxHr }: TrimpInput): number | null {
 	const reserve = maxHr - restHr;
+
 	if (reserve <= 0) return null;
 
 	const weight = (hr: number) => {
 		const hrr = clamp01((hr - restHr) / reserve);
+
 		return hrr * 0.64 * Math.exp(1.92 * hrr);
 	};
 
@@ -272,7 +279,9 @@ export function banisterTrimp({ hrStream, avgHr, seconds, restHr, maxHr }: Trimp
 		// activity's moving time.
 		const secondsPerSample = seconds / hrStream.length;
 		let total = 0;
+
 		for (const hr of hrStream) total += weight(hr) * (secondsPerSample / 60);
+
 		return total;
 	}
 
@@ -299,10 +308,13 @@ function clamp01(x: number): number {
  */
 export function trimpToTss(trimp: number, lthrBpm: number, restHr: number, maxHr: number): number | null {
 	const reserve = maxHr - restHr;
+
 	if (reserve <= 0) return null;
 	const lthrHrr = clamp01((lthrBpm - restHr) / reserve);
 	const referenceTrimpPerHour = 60 * lthrHrr * 0.64 * Math.exp(1.92 * lthrHrr);
+
 	if (referenceTrimpPerHour <= 0) return null;
+
 	return (trimp / referenceTrimpPerHour) * 100;
 }
 
@@ -327,8 +339,10 @@ export function trimpToTss(trimp: number, lthrBpm: number, restHr: number, maxHr
  */
 export function gradeCostMultiplier(grade: number): number {
 	const g = clamp(grade, -0.45, 0.45); // outside Minetti's measured range; clamp rather than extrapolate
+
 	const cr =
 		155.4 * g ** 5 - 30.4 * g ** 4 - 43.3 * g ** 3 + 46.3 * g ** 2 + 19.5 * g + 3.6;
+
 	return cr / 3.6;
 }
 
@@ -363,6 +377,7 @@ export interface RunningTssInput {
 export function runningTss({ seconds, gradeAdjustedPaceSPerKm, thresholdPaceSPerKm }: RunningTssInput): number {
 	if (gradeAdjustedPaceSPerKm <= 0 || thresholdPaceSPerKm <= 0) return 0;
 	const intensityFactor = thresholdPaceSPerKm / gradeAdjustedPaceSPerKm;
+
 	return (seconds * intensityFactor ** 2) / 3600 * 100;
 }
 
@@ -381,6 +396,7 @@ export interface SwimTssInput {
 export function swimTss({ seconds, avgPaceSPer100m, cssPaceSPer100m }: SwimTssInput): number {
 	if (avgPaceSPer100m <= 0 || cssPaceSPer100m <= 0) return 0;
 	const intensityFactor = cssPaceSPer100m / avgPaceSPer100m;
+
 	return (seconds * intensityFactor ** 2) / 3600 * 100;
 }
 
@@ -423,6 +439,7 @@ export function metMinutes({ sport, seconds, distance_m, elevation_gain_m }: Met
 	// that same step using a measured climb rate, since that's the variable
 	// the Compendium itself keys off.
 	const family = sportMeta(sport).family;
+
 	if ((family === 'foot' || sport === 'backcountry_ski') && distance_m && elevation_gain_m && seconds > 0) {
 		const hours = seconds / 3600;
 		const climbRateMPerHour = elevation_gain_m / hours;
@@ -455,6 +472,7 @@ export function metToTss(metMinutesValue: number, minutes: number): number {
 	const THRESHOLD_MET = 12; // see comment above — this file's own anchor, not a published constant
 	const REST_MET = 1;
 	const activeMetMinutes = metMinutesValue - REST_MET * minutes;
+
 	return Math.max(0, (activeMetMinutes / THRESHOLD_MET / 60) * 100);
 }
 
@@ -464,16 +482,21 @@ export function metToTss(metMinutesValue: number, minutes: number): number {
 
 function filterMoving<T>(values: T[] | undefined, moving: boolean[] | undefined): T[] | undefined {
 	if (!values) return undefined;
+
 	if (!moving || moving.length !== values.length) return values;
 	const out: T[] = [];
+
 	for (let i = 0; i < values.length; i++) if (moving[i]) out.push(values[i]);
+
 	return out;
 }
 
 function formatDurationShort(seconds: number): string {
 	const h = Math.floor(seconds / 3600);
 	const m = Math.round((seconds % 3600) / 60);
+
 	if (h > 0) return `${h}h${m > 0 ? `${m}m` : ''}`;
+
 	return `${m}m`;
 }
 
@@ -496,6 +519,7 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	// and not the chairlift. Null (no altitude, or no run detected) falls back to
 	// the file's own moving time, exactly as every other sport uses it.
 	let ski = LIFT_SERVED.has(input.sport) && streams ? skiActive(streams, input.ski_segments) : null;
+
 	if (ski && ski.activeSeconds <= 0) ski = null;
 	const movingSeconds = ski ? ski.activeSeconds : input.moving_seconds ?? input.elapsed_seconds ?? 0;
 	const movingMask = ski ? ski.activeMask : streams?.moving;
@@ -516,11 +540,14 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	if (sportMeta(input.sport).family === 'bike' && streams?.power_w && streams.time_s && thresholds.ftp_w) {
 		const power = filterMoving(streams.power_w, movingMask) ?? streams.power_w;
 		const time = filterMoving(streams.time_s, movingMask) ?? streams.time_s;
+
 		if (power.length >= 20 && power.length === time.length) {
 			const np = normalizedPower(power, time);
+
 			if (np != null) {
 				const score = tss({ seconds: movingSeconds, np, ftp: thresholds.ftp_w });
 				const intensityFactor = np / thresholds.ftp_w;
+
 				return {
 					score,
 					method: 'tss',
@@ -549,16 +576,20 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 		thresholds.lthr_bpm != null
 	) {
 		const hr = filterMoving(streams.heartrate, movingMask) ?? streams.heartrate;
+
 		const trimp = banisterTrimp({
 			hrStream: hr,
 			seconds: movingSeconds,
 			restHr: thresholds.rest_hr,
 			maxHr: thresholds.max_hr,
 		});
+
 		if (trimp != null) {
 			const score = trimpToTss(trimp, thresholds.lthr_bpm, thresholds.rest_hr, thresholds.max_hr);
+
 			if (score != null) {
 				const avgOfStream = hr.reduce((s, v) => s + v, 0) / hr.length;
+
 				return {
 					score,
 					method: 'hrtss',
@@ -584,8 +615,10 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 			restHr: thresholds.rest_hr,
 			maxHr: thresholds.max_hr,
 		});
+
 		if (trimp != null) {
 			const score = trimpToTss(trimp, thresholds.lthr_bpm, thresholds.rest_hr, thresholds.max_hr);
+
 			if (score != null) {
 				return {
 					score,
@@ -607,14 +640,17 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	// answer: there is no hiking-pace threshold in `Thresholds` to compare it
 	// against.
 	const meta = sportMeta(input.sport);
+
 	if (movingSeconds > 0 && input.distance_m && input.distance_m > 0) {
 		if (meta.family === 'swim' && thresholds.css_pace_s_per_100m) {
 			const avgPaceSPer100m = (movingSeconds / input.distance_m) * 100;
+
 			const score = swimTss({
 				seconds: movingSeconds,
 				avgPaceSPer100m,
 				cssPaceSPer100m: thresholds.css_pace_s_per_100m,
 			});
+
 			return {
 				score,
 				method: 'ptss',
@@ -623,6 +659,7 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 				detail: `${formatDurationShort(movingSeconds)} averaging ${formatPace(avgPaceSPer100m)}/100m against a CSS of ${formatPace(thresholds.css_pace_s_per_100m)}/100m`,
 			};
 		}
+
 		if (meta.family === 'run' && thresholds.threshold_pace_s_per_km) {
 			const avgSpeedMs = input.distance_m / movingSeconds;
 			// Grade-adjust only when there's elevation to adjust for; an
@@ -630,16 +667,20 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 			// comparison for a flat run, just not for a hilly one — and
 			// without elevation data there is no adjustment to make anyway.
 			const distanceKm = input.distance_m / 1000;
+
 			const grade =
 				input.elevation_gain_m && distanceKm > 0 ? input.elevation_gain_m / (distanceKm * 1000) : 0;
+
 			const adjustedSpeedMs = grade ? gradeAdjustedPace(avgSpeedMs, grade) : avgSpeedMs;
 			const adjustedPaceSPerKm = adjustedSpeedMs > 0 ? 1000 / adjustedSpeedMs : 0;
+
 			if (adjustedPaceSPerKm > 0) {
 				const score = runningTss({
 					seconds: movingSeconds,
 					gradeAdjustedPaceSPerKm: adjustedPaceSPerKm,
 					thresholdPaceSPerKm: thresholds.threshold_pace_s_per_km,
 				});
+
 				return {
 					score,
 					method: 'ptss',
@@ -665,6 +706,7 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 		const skiMinutes = ski.activeSeconds / 60;
 		const met = ACTIVE_SKI_MET[input.sport] ?? 7;
 		const runs = ski.runCount;
+
 		return {
 			score: metToTss(met * skiMinutes, skiMinutes),
 			method: 'ski',
@@ -682,13 +724,16 @@ export function computeExertion(input: ExertionInput, thresholds: Thresholds): E
 	// this rung never fails to return, which is the point of calling it the
 	// floor.
 	const minutes = movingSeconds / 60;
+
 	const rawMetMinutes = metMinutes({
 		sport: input.sport,
 		seconds: movingSeconds,
 		distance_m: input.distance_m,
 		elevation_gain_m: input.elevation_gain_m,
 	});
+
 	const score = metToTss(rawMetMinutes, minutes);
+
 	return {
 		score,
 		method: 'met',
@@ -704,5 +749,6 @@ function formatPace(secPerUnit: number): string {
 	const s = Math.round(secPerUnit);
 	const m = Math.floor(s / 60);
 	const ss = String(s % 60).padStart(2, '0');
+
 	return `${m}:${ss}`;
 }

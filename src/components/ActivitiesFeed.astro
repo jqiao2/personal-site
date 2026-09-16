@@ -25,6 +25,7 @@ const { pathname } = Astro.props as { pathname: string };
 const FEED_LIMIT = 25;
 
 let rows: ActivityListRow[] = [];
+
 let stats: Awaited<ReturnType<typeof getActivityStats>> = {
 	activitiesThisYear: 0,
 	totalDistanceM: 0,
@@ -33,15 +34,18 @@ let stats: Awaited<ReturnType<typeof getActivityStats>> = {
 	totalExertion: 0,
 	bySportFamily: {},
 };
+
 /** Set when the query layer could not be reached at all — see the catch below. */
 let unreachable = false;
 
 const isOwner = await requireOwner(Astro.cookies);
+
 try {
 	const [page, s] = await Promise.all([
 		fetchActivityPage(activityQueryFromParams(new URLSearchParams()), { limit: FEED_LIMIT, offset: 0 }, isOwner),
 		getActivityStats(isOwner),
 	]);
+
 	rows = page.rows;
 	stats = s;
 } catch (err) {
@@ -58,12 +62,15 @@ const totalActivities = Object.values(stats.bySportFamily).reduce((a, b) => a + 
 
 /** 'YYYY-MM-DD' → "Aug 11, 2026" — a plain string parse, no UTC-shifting Date. */
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 function fmtDate(date: string): string {
 	const [y, m, d] = date.split('-').map(Number);
+
 	return `${MONTH_ABBR[(m || 1) - 1]} ${d}, ${y}`;
 }
 
 const STAT_KEYS: StatKey[] = ['distance', 'moving_time', 'elevation_gain'];
+
 function statLine(a: ActivityListRow): string[] {
 	return STAT_KEYS.map((k) => formatStat(k, a).value).filter((v) => v !== '—');
 }
@@ -71,6 +78,7 @@ function statLine(a: ActivityListRow): string[] {
 /** The start point of an "M x y L…" route path, for the thumb's start dot. */
 function routeStart(path: string): { x: number; y: number } | null {
 	const m = path.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+
 	return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
 }
 ---

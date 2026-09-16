@@ -12,6 +12,7 @@ export interface SubwayService {
 	trunk: string;
 	color: string;
 }
+
 export declare const SERVICES: SubwayService[];
 
 /** One station complex, at its schematic position, with the services that stop there. */
@@ -22,6 +23,7 @@ export interface SubwayStation {
 	y: number;
 	svcs: string[];
 }
+
 export declare const STATIONS: SubwayStation[];
 
 /**
@@ -41,4 +43,5 @@ export interface SubwaySegment {
 	pts: number[][];
 	_n: number[][];
 }
+
 export declare const SEGMENTS: SubwaySegment[];

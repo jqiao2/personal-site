@@ -20,14 +20,17 @@ import { photoSrc } from '../src/lib/photo-src.ts';
 
 // ---- 1. the collision is real -------------------------------------------
 const a = photoSrc('https://photos.example.r2.dev/1/aaa.jpg', 320);
+
 const b = photoSrc('https://photos.example.r2.dev/2/bbb.jpg', 320);
 
 // Outside Vite `import.meta.env` is undefined, so photo-src takes its
 // production branch — which is the branch that has this problem.
 assert.ok(a.startsWith('/_vercel/image?'), `expected an optimised URL, got ${a}`);
+
 assert.notEqual(a, b, 'two photographs must have two URLs');
 
 const strip = (url) => url.replace(/\?.*/, '');
+
 assert.equal(
 	strip(a),
 	strip(b),

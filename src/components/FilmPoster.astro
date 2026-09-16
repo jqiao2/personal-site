@@ -1,12 +1,15 @@
 ---
 import { imageUrl, type ImageSize } from '../lib/tmdb';
+
 // A movie poster with a text placeholder when TMDB has no poster_path.
 interface Props {
 	posterPath: string | null;
 	title: string;
 	size?: ImageSize;
 }
+
 const { posterPath, title, size = 'w342' } = Astro.props;
+
 const src = imageUrl(posterPath, size);
 ---
 

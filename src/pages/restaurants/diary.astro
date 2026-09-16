@@ -35,6 +35,7 @@ export const prerender = false;
 // serving the stored 1600px frame here meant a few hundred kilobytes each for
 // a picture the width of a fingernail.
 const THUMB = 38;
+
 const THUMB_WIDTHS = photoWidthsFor(THUMB);
 
 const params = Astro.url.searchParams;
@@ -44,12 +45,14 @@ const [visits, stats, isOwner] = await Promise.all([
 	getRestaurantStats(),
 	requireOwner(Astro.cookies),
 ]);
+
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 
 // Up to three thumbnails a row. Fetched in one query for the whole page rather
 // than per visit — the diary is the one page where a per-row round trip would
 // actually be felt.
 const thumbs = new Map<number, string[]>();
+
 if (visits.length > 0) {
 	const { data } = await supabasePublic
 		.from('restaurant_photos')
@@ -59,8 +62,10 @@ if (visits.length > 0) {
 			visits.map((v) => v.id),
 		)
 		.order('position');
+
 	for (const row of (data ?? []) as { visit_id: number; storage_path: string }[]) {
 		const list = thumbs.get(row.visit_id) ?? [];
+
 		if (list.length < 3) list.push(photoUrl(row.storage_path));
 		thumbs.set(row.visit_id, list);
 	}
@@ -70,12 +75,15 @@ if (visits.length > 0) {
 // name and where it was. Filtered before grouping, so a month with no match
 // simply doesn't appear.
 const q = params.get('q') ?? '';
+
 const terms = searchTerms(q);
+
 const matched = terms.length
 	? visits.filter((v) =>
 			matchesSearch([v.restaurant_name, v.neighborhood, v.city, v.state_region, v.country], terms),
 		)
 	: visits;
+
 const months = groupByMonth(matched);
 ---
 

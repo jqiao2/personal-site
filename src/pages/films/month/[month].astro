@@ -44,7 +44,9 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = Astro.params.month ?? '';
+
 const parsed = parseMonthKey(key);
+
 // Anything that isn't a YYYY-MM lands on the current month rather than 404ing:
 // /films/month is a reasonable thing to type, and so is a half-remembered date.
 if (!parsed) return Astro.redirect(`/films/month/${siteDay().slice(0, 7)}`, 302);
@@ -52,23 +54,33 @@ if (!parsed) return Astro.redirect(`/films/month/${siteDay().slice(0, 7)}`, 302)
 // The card's settings ride in the URL rather than in memory, so stepping to the
 // next month keeps them and a copied link opens the same card.
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+
 const showLikes = Astro.url.searchParams.get('likes') !== '0';
+
 const showTheaters = Astro.url.searchParams.get('theaters') !== '0';
+
 const query = monthQuery(aspect, showLikes, showTheaters);
 
 const [watches, counts] = await Promise.all([listMonthWatches(key), countWatchesByMonth()]);
 
 const rows = weekRows(key);
+
 const geometry = geometries(rows);
+
 const initial = geometry[aspect.id];
+
 const cells = buildCells(key, watches);
+
 const summary = summarise(key, watches);
+
 const label = monthLabel(key);
+
 const isEmpty = watches.length === 0;
 
 const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	const monthId = monthKey(parsed.year, i + 1);
 	const count = counts[monthId] ?? 0;
+
 	return {
 		abbr,
 		key: monthId,
@@ -793,6 +805,7 @@ const clientData = JSON.stringify({
 		grid: number;
 		figures: boolean;
 	}
+
 	interface MonthData {
 		key: string;
 		width: number;
@@ -807,8 +820,11 @@ const clientData = JSON.stringify({
 	}
 
 	const dataEl = document.querySelector('[data-month-data]');
+
 	const card = document.querySelector<HTMLElement>('[data-card]');
+
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+
 	if (dataEl?.textContent && card && viewport) {
 		const data = JSON.parse(dataEl.textContent) as MonthData;
 		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
@@ -820,9 +836,13 @@ const clientData = JSON.stringify({
 		// and a copied link reopens the same card. Mirrors monthQuery() in month-view.ts.
 		function query(): string {
 			const parts: string[] = [];
+
 			if (data.slugs[aspect] !== defaultSlug) parts.push(`fmt=${data.slugs[aspect]}`);
+
 			if (!showLikes) parts.push('likes=0');
+
 			if (!showTheaters) parts.push('theaters=0');
+
 			return parts.length ? `?${parts.join('&')}` : '';
 		}
 
@@ -832,10 +852,12 @@ const clientData = JSON.stringify({
 
 		// ---- aspect (client-side geometry swap) ----
 		const dims = document.querySelector<HTMLElement>('[data-dims]');
+
 		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
 			button.addEventListener('click', () => {
 				const id = button.dataset.aspect;
 				const geometry = id ? data.geometry[id] : undefined;
+
 				if (!id || !geometry) return;
 				aspect = id;
 				card.style.setProperty('--cell', `${geometry.cell}px`);
@@ -843,12 +865,15 @@ const clientData = JSON.stringify({
 				card.style.setProperty('--grid-w', `${geometry.grid}px`);
 				viewport.style.setProperty('--card-h', `${geometry.height}px`);
 				card.classList.toggle('card--figures', geometry.figures);
+
 				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
+
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
 				syncMonthLinks(query);
 			});
 		}
+
 		// The viewport sizes itself from --card-h too; seed it from the card's own.
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 
@@ -877,6 +902,7 @@ const clientData = JSON.stringify({
 				const count = data.counts[id] ?? 0;
 				tile.classList.toggle('is-on', current);
 				const countEl = tile.querySelector('.picker__count');
+
 				if (countEl)
 					countEl.textContent = count ? `${count} ${count === 1 ? 'film' : 'films'}` : '—';
 			},

@@ -50,26 +50,43 @@ const c = activityToCanonical(activity, streams);
 
 // Sport comes from sport_type (the finer field), not type=Ride.
 assert.equal(c.sport, 'gravel_ride', 'sport_type GravelRide → gravel_ride');
+
 assert.equal(c.title, 'Cutthroat shakedown');
+
 assert.equal(c.notes, 'first ride on the new tyres');
+
 assert.equal(c.utc_offset_minutes, -420, 'utc_offset seconds → minutes');
+
 assert.equal(c.timezone, 'America/Los_Angeles', 'IANA name pulled out of Strava tz string');
+
 assert.equal(c.elapsed_seconds, 3900);
+
 assert.equal(c.moving_seconds, 3600);
+
 assert.equal(c.distance_m, 30000);
+
 assert.equal(c.normalized_power_w, 210, 'weighted_average_watts → normalized_power_w');
+
 assert.equal(c.device_name, 'Wahoo ELEMNT');
+
 assert.equal(c.laps?.length, 1);
+
 assert.deepEqual(c.streams?.latlng?.[0], [47.6, -122.3]);
+
 assert.equal(c.streams?.power_w?.[2], 220, 'watts stream → power_w');
+
 assert.equal(c.streams?.speed_ms?.[1], 8.3, 'velocity_smooth → speed_ms');
+
 assert.ok(!('grade' in (c.streams ?? {})), 'absent stream key is dropped, not left empty');
 
 // toRows derives local_date from the offset: 15:00Z at -7h is 08:00 local, so
 // the ride lands on the 20th, not the 21st.
 const { activity: row } = toRows(c, NO_TH);
+
 assert.equal(row.local_date, '2026-08-20', 'local_date uses the utc_offset, not UTC midnight');
+
 assert.equal(row.sport, 'gravel_ride');
+
 assert.ok(row.route_path, 'a GPS track produces a route_path');
 
 // An indoor ride with no GPS maps with no geometry — a normal reading.
@@ -77,9 +94,13 @@ const indoor = activityToCanonical(
 	{ id: 1, type: 'VirtualRide', sport_type: 'VirtualRide', start_date: '2026-08-20T02:00:00Z', elapsed_time: 3600 },
 	{ time: { data: [0, 1] }, watts: { data: [200, 210] } },
 );
+
 assert.equal(indoor.sport, 'virtual_ride');
+
 assert.equal(indoor.streams?.latlng, undefined, 'no latlng stream on a trainer ride');
+
 const { activity: indoorRow } = toRows(indoor, NO_TH);
+
 assert.equal(indoorRow.route_path, null, 'no route without a track');
 
 // A ride Strava labels a plain "Ride" but that recorded no GPS is a trainer
@@ -90,13 +111,19 @@ const labelledRide = activityToCanonical(
 	{ id: 3, type: 'Ride', sport_type: 'Ride', start_date: '2026-08-20T02:00:00Z', elapsed_time: 3600 },
 	{ time: { data: [0, 1] }, watts: { data: [200, 210] } },
 );
+
 assert.equal(labelledRide.sport, 'ride', 'Strava label alone gives ride, GPS or not');
+
 assert.equal(virtualizeGpslessRide(labelledRide).sport, 'virtual_ride', 'a GPS-less ride is reclassified to virtual_ride');
+
 assert.equal(virtualizeGpslessRide(labelledRide).sub_sport, 'indoor');
+
 // A ride WITH a track is left alone.
 assert.equal(virtualizeGpslessRide(c).sport, 'gravel_ride', 'a ride with a GPS track keeps its sport');
+
 // A non-bike sport with no GPS (a treadmill run) is never touched.
 const treadmill = activityToCanonical({ id: 4, sport_type: 'VirtualRun', start_date: '2026-08-20T02:00:00Z', elapsed_time: 600 });
+
 assert.equal(virtualizeGpslessRide(treadmill).sport, 'treadmill_run', 'only bike sports are virtualized');
 
 // An unmapped sport throws rather than filing as "other".

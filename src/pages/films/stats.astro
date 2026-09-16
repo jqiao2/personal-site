@@ -10,7 +10,9 @@ export const prerender = false;
 // Timespan comes from ?year=… (a calendar year or "all"); anything else falls
 // back to all-time inside getFilmStats.
 const yearParam = Astro.url.searchParams.get('year');
+
 const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
+
 const stats = await getFilmStats(scope);
 
 const href = (key: number | 'all') => (key === 'all' ? '/films/stats' : `/films/stats?year=${key}`);
@@ -19,22 +21,31 @@ const href = (key: number | 'all') => (key === 'all' ? '/films/stats' : `/films/
 // When a calendar year is in scope, carry it as a diary-date bound so the grid is
 // narrowed to films watched that year — mirroring what the stat was counted over.
 const scopeYear = typeof stats.scope === 'number' ? stats.scope : null;
+
 const watchedHref = (params: Record<string, string | number>) => {
 	const p = new URLSearchParams();
+
 	for (const [k, v] of Object.entries(params)) p.set(k, String(v));
+
 	if (scopeYear != null) {
 		p.set('dymin', String(scopeYear));
 		p.set('dymax', String(scopeYear));
 	}
+
 	return `/films/watched?${p.toString()}`;
 };
 
 // Bar-chart maxima (for relative heights/widths).
 const weekMax = Math.max(1, ...stats.weeks.map((w) => w.count));
+
 const byYearMax = Math.max(1, ...stats.byYear.map((d) => d.count));
+
 const ratingMax = Math.max(1, ...stats.ratings);
+
 const genreMax = Math.max(1, ...stats.genres.map((g) => g.count));
+
 const langMax = Math.max(1, ...stats.languages.map((g) => g.count));
+
 const countryMax = Math.max(1, ...stats.countries.map((g) => g.count));
 
 const ratingLabels = Array.from({ length: 10 }, (_, i) => starText((i + 1) * 0.5) ?? '');
@@ -44,6 +55,7 @@ const columns: { title: string; items: typeof stats.genres; max: number; param: 
 	{ title: 'Languages', items: stats.languages, max: langMax, param: 'language' },
 	{ title: 'Countries', items: stats.countries, max: countryMax, param: 'country' },
 ];
+
 const people: { title: string; items: typeof stats.directors; param: string }[] = [
 	{ title: 'Top directors', items: stats.directors, param: 'director' },
 	{ title: 'Top actors', items: stats.actors, param: 'actor' },
@@ -647,6 +659,7 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 		// Close the year picker when clicking outside it (native <details> only
 		// toggles on the summary).
 		const picker = document.querySelector('.picker');
+
 		if (picker) {
 			document.addEventListener('mousedown', (e) => {
 				if (picker.hasAttribute('open') && !picker.contains(e.target as Node)) {

@@ -31,9 +31,12 @@ const [venueOptions, tagOptions, friendOptions] = isOwner
 function parseDate(date: string | null): Date | null {
 	if (!date) return null;
 	const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+
 	if (!y || !m || !d) return null;
+
 	return new Date(y, m - 1, d);
 }
+
 interface Row {
 	logId: number;
 	day: number;
@@ -50,17 +53,22 @@ interface Row {
 
 // Group logs into months, preserving the (newest-first) order.
 const months: { label: string; items: Row[] }[] = [];
+
 const byLabel = new Map<string, Row[]>();
+
 for (const log of logs) {
 	const dt = parseDate(log.watched_date) ?? parseDate(log.created_at);
+
 	const label = dt
 		? dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 		: 'Undated';
+
 	if (!byLabel.has(label)) {
 		const items: Row[] = [];
 		byLabel.set(label, items);
 		months.push({ label, items });
 	}
+
 	byLabel.get(label)!.push({
 		logId: log.id,
 		day: dt ? dt.getDate() : 0,
@@ -75,6 +83,7 @@ for (const log of logs) {
 		rewatched: log.rewatched,
 	});
 }
+
 const num = (n: number) => n.toLocaleString('en-US');
 ---
 
@@ -442,6 +451,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 
 		const sentinel = document.getElementById('sentinel');
+
 		const months = document.getElementById('months');
 
 		if (sentinel && months) {
@@ -458,9 +468,12 @@ const num = (n: number) => n.toLocaleString('en-US');
 			function parseDate(date: string | null): Date | null {
 				if (!date) return null;
 				const [y, m, d] = date.slice(0, 10).split('-').map(Number);
+
 				if (!y || !m || !d) return null;
+
 				return new Date(y, m - 1, d);
 			}
+
 			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
 			// so every node we build has to carry it or it renders unstyled. Read the
 			// name off a server-rendered element rather than hard-coding the hash, which
@@ -471,9 +484,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 			function el(tag: string, className?: string, text?: string): HTMLElement {
 				const node = document.createElement(tag);
+
 				if (scopeAttr) node.setAttribute(scopeAttr, '');
+
 				if (className) node.className = className;
+
 				if (text != null) node.textContent = text;
+
 				return node;
 			}
 
@@ -490,6 +507,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				);
 
 				const poster = el('div', 'row__poster');
+
 				if (log.poster_path) {
 					const img = el('img') as HTMLImageElement;
 					// Deferred like the server-rendered rows: the URL sits in data-poster
@@ -504,14 +522,18 @@ const num = (n: number) => n.toLocaleString('en-US');
 				const title = el('div', 'row__title', `${log.title} `);
 				title.append(el('span', 'row__year', log.release_year == null ? '' : String(log.release_year)));
 				body.append(title);
+
 				if (log.review_text) body.append(el('div', 'row__review', log.review_text));
 
 				const meta = el('div', 'row__meta');
 				meta.append(el('span', 'row__stars', starText(log.rating) ?? ''));
+
 				if (log.liked) meta.append(el('span', 'row__like', '♥'));
+
 				if (log.rewatched) meta.append(el('span', 'row__rewatch', '↻'));
 
 				row.append(date, poster, body, meta);
+
 				return row;
 			}
 
@@ -519,19 +541,23 @@ const num = (n: number) => n.toLocaleString('en-US');
 			function render(logs: DiaryLog[]) {
 				for (const log of logs) {
 					const dt = parseDate(log.watched_date) ?? parseDate(log.created_at);
+
 					const label = dt
 						? dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
 						: 'Undated';
 
 					let section = months!.lastElementChild as HTMLElement | null;
+
 					if (!section || section.dataset.month !== label) {
 						section = el('section', 'month');
 						section.dataset.month = label;
 						section.append(el('div', 'month__label', label));
 						months!.append(section);
 					}
+
 					section.append(buildRow(log));
 				}
+
 				// The new rows carry their posters in data-poster like the server-rendered
 				// ones, so hand them to the loader; it skips anything already in flight.
 				window.observePosters?.(months!);
@@ -547,12 +573,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 				if (loading || done) return;
 				loading = true;
 				errorBox.hidden = true;
+
 				try {
 					const res = await fetch(`/api/films/logs?limit=${BATCH}&offset=${offset}`);
+
 					if (!res.ok) throw new Error(`HTTP ${res.status}`);
 					const { logs } = (await res.json()) as { logs: DiaryLog[] };
 					render(logs);
 					offset += logs.length;
+
 					// A short batch is the last one.
 					if (logs.length < BATCH) {
 						finish();
@@ -579,6 +608,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 				},
 				{ rootMargin: '600px' },
 			);
+
 			observer.observe(sentinel);
 			retry.addEventListener('click', loadMore);
 		}

@@ -11,9 +11,12 @@ export const prerender = false;
 export const DELETE: APIRoute = async ({ params, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	const id = Number(params.id);
+
 	if (!Number.isInteger(id) || id <= 0) return apiError('bad id', 400);
+
 	try {
 		await deletePhoto(id);
+
 		return json({ ok: true });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to delete the photograph', 500);

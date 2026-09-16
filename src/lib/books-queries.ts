@@ -149,7 +149,9 @@ export async function getHeatmap(from: string, to: string): Promise<HeatmapDay[]
 		p_from: from,
 		p_to: to,
 	});
+
 	if (error) throw new Error(`heatmap query failed: ${error.message}`);
+
 	return (data ?? []) as HeatmapDay[];
 }
 
@@ -195,7 +197,9 @@ export async function getReadingMonth(key: string): Promise<{
 			.gte('finished_at', from)
 			.lt('finished_at', to),
 	]);
+
 	if (dayRows.error) throw new Error(`reading month query failed: ${dayRows.error.message}`);
+
 	if (marked.error) throw new Error(`finished books query failed: ${marked.error.message}`);
 	const markedFinished = ((marked.data ?? []) as { id: number }[]).map((row) => Number(row.id));
 
@@ -205,19 +209,23 @@ export async function getReadingMonth(key: string): Promise<{
 		pages: Number(row.pages),
 		seconds: Number(row.seconds),
 	}));
+
 	if (days.length === 0) return { days, books: [], markedFinished };
 
 	const ids = [...new Set(days.map((d) => d.book_id))];
+
 	const { data, error } = await supabaseAdmin
 		.from('book_detail')
 		.select(
 			'id, title, authors, cover_url, total_pages, furthest_page, finished_at, is_public, last_counted_day',
 		)
 		.in('id', ids);
+
 	if (error) throw new Error(`month books query failed: ${error.message}`);
 
 	const books = ((data ?? []) as Record<string, unknown>[]).map((row) => {
 		const isPublic = row.is_public === true;
+
 		return {
 			id: Number(row.id),
 			title: isPublic ? String(row.title ?? '') : '',
@@ -251,15 +259,19 @@ export async function getReadingMonthHours(key: string): Promise<number[]> {
 		.select('hour, pages')
 		.gte('day', `${key}-01`)
 		.lt('day', `${shiftMonth(key, 1)}-01`);
+
 	if (error) throw new Error(`reading month hours query failed: ${error.message}`);
 
 	// A day-and-hour grid, so one hour arrives once per day it was read in.
 	const hours = new Array<number>(24).fill(0);
+
 	for (const row of data ?? []) {
 		const hour = Number(row.hour);
+
 		if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
 		hours[hour] += Number(row.pages);
 	}
+
 	return hours;
 }
 
@@ -271,18 +283,22 @@ export async function getReadingMonthHours(key: string): Promise<number[]> {
 export async function countReadingByMonth(): Promise<Record<string, number>> {
 	const PAGE = 1000;
 	const seen: Record<string, Set<number>> = {};
+
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabaseAdmin
 			.from('book_days')
 			.select('book_id, day')
 			.order('day', { ascending: true })
 			.range(offset, offset + PAGE - 1);
+
 		if (error) throw new Error(`countReadingByMonth failed: ${error.message}`);
 		const rows = (data ?? []) as { book_id: number; day: string }[];
+
 		for (const row of rows) {
 			const month = monthOf(String(row.day));
 			(seen[month] ??= new Set()).add(Number(row.book_id));
 		}
+
 		if (rows.length < PAGE) {
 			return Object.fromEntries(Object.entries(seen).map(([month, ids]) => [month, ids.size]));
 		}
@@ -299,16 +315,20 @@ export async function countReadingByMonth(): Promise<Record<string, number>> {
  */
 export async function getCurrentlyReading(includePrivate = false): Promise<BookProgress[]> {
 	const cutoff = new Date(Date.now() - CURRENTLY_READING_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
 	let q = supabaseAdmin
 		.from('book_progress')
 		.select('*')
 		.is('finished_at', null)
 		.gt('last_read_at', cutoff)
 		.order('last_read_at', { ascending: false });
+
 	if (!includePrivate) q = q.eq('is_public', true);
 
 	const { data, error } = await q;
+
 	if (error) throw new Error(`currently-reading query failed: ${error.message}`);
+
 	return (data ?? []) as BookProgress[];
 }
 
@@ -322,16 +342,20 @@ export async function getCurrentlyReading(includePrivate = false): Promise<BookP
  */
 export async function getSetAside(includePrivate = false): Promise<BookProgress[]> {
 	const cutoff = new Date(Date.now() - CURRENTLY_READING_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
 	let q = supabaseAdmin
 		.from('book_progress')
 		.select('*')
 		.is('finished_at', null)
 		.lte('last_read_at', cutoff)
 		.order('last_read_at', { ascending: false });
+
 	if (!includePrivate) q = q.eq('is_public', true);
 
 	const { data, error } = await q;
+
 	if (error) throw new Error(`set-aside query failed: ${error.message}`);
+
 	return (data ?? []) as BookProgress[];
 }
 
@@ -345,13 +369,17 @@ export async function getFinished(year?: number, includePrivate = false): Promis
 		.select('*')
 		.not('finished_at', 'is', null)
 		.order('finished_at', { ascending: false });
+
 	if (!includePrivate) q = q.eq('is_public', true);
+
 	if (year != null) {
 		q = q.gte('finished_at', `${year}-01-01`).lt('finished_at', `${year + 1}-01-01`);
 	}
 
 	const { data, error } = await q;
+
 	if (error) throw new Error(`finished-books query failed: ${error.message}`);
+
 	return (data ?? []) as BookProgress[];
 }
 
@@ -374,13 +402,17 @@ export async function getOfflineReads(
 		.from('book_offline_reads')
 		.select('*')
 		.order('finished_at', { ascending: false });
+
 	if (!includePrivate) q = q.eq('is_public', true);
+
 	if (year != null) {
 		q = q.gte('finished_at', `${year}-01-01`).lt('finished_at', `${year + 1}-01-01`);
 	}
 
 	const { data, error } = await q;
+
 	if (error) throw new Error(`offline-reads query failed: ${error.message}`);
+
 	return (data ?? []).map((r) => ({
 		...(r as unknown as OfflineRead),
 		rating: r.rating == null ? null : Number(r.rating),
@@ -397,10 +429,13 @@ export async function getOfflineReads(
  */
 export async function getToRead(includePrivate = false): Promise<PileBook[]> {
 	let q = supabaseAdmin.from('book_pile').select('*').order('added_at', { ascending: false });
+
 	if (!includePrivate) q = q.eq('is_public', true);
 
 	const { data, error } = await q;
+
 	if (error) throw new Error(`to-read query failed: ${error.message}`);
+
 	return (data ?? []) as PileBook[];
 }
 
@@ -410,10 +445,13 @@ export async function getManualReads(includePrivate = false): Promise<ManualRead
 		.from('book_manual_reads')
 		.select('*')
 		.order('started_at', { ascending: false });
+
 	if (!includePrivate) q = q.eq('is_public', true);
 
 	const { data, error } = await q;
+
 	if (error) throw new Error(`manual-reads query failed: ${error.message}`);
+
 	return (data ?? []) as ManualRead[];
 }
 
@@ -426,9 +464,11 @@ export async function getManualReads(includePrivate = false): Promise<ManualRead
  */
 export async function getStats(): Promise<ReadingStats> {
 	const { data, error } = await supabaseAdmin.rpc('reading_stats');
+
 	if (error) throw new Error(`reading stats query failed: ${error.message}`);
 
 	const row = (Array.isArray(data) ? data[0] : data) as ReadingStats | undefined;
+
 	return {
 		current_streak: Number(row?.current_streak ?? 0),
 		longest_streak: Number(row?.longest_streak ?? 0),

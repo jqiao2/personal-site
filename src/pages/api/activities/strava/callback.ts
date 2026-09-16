@@ -16,18 +16,22 @@ export const GET: APIRoute = async ({ request, cookies }) => {
 	const url = new URL(request.url);
 
 	const error = url.searchParams.get('error');
+
 	if (error) return back(`error=${encodeURIComponent(error)}`);
 
 	const code = url.searchParams.get('code');
+
 	if (!code) return back('error=no_code');
 
 	// activity:read_all is required to read private rides; a partial grant is
 	// worse than none because the sync would then silently miss most of them.
 	const scope = url.searchParams.get('scope') ?? '';
+
 	if (!scope.includes('activity:read_all')) return back('error=missing_scope');
 
 	try {
 		await exchangeCode(code);
+
 		return back('connected=1');
 	} catch (e) {
 		return back(`error=${encodeURIComponent(e instanceof Error ? e.message : 'exchange_failed')}`);

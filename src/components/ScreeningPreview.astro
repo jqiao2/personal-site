@@ -14,8 +14,11 @@ interface Props {
 	/** How many slots the shelf shows (filled then empty). */
 	slots?: number;
 }
+
 const { entries, slots = 5 } = Astro.props;
+
 const shown = entries.slice(0, slots);
+
 const empties = Math.max(0, slots - shown.length);
 
 const dateLabel = (iso: string) =>

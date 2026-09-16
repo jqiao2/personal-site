@@ -22,8 +22,10 @@ export const prerender = false;
 // must not be able to hand one reader's answer to the next one.
 export const GET: APIRoute = async ({ cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
+
 	try {
 		const facets = await fetchActivityFacets(true);
+
 		return json(facets, 200, { 'cache-control': 'private, no-store' });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to list activity filters', 500);

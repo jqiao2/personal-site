@@ -8,5 +8,6 @@ export const prerender = false;
 export const POST: APIRoute = async ({ cookies }) => {
 	cookies.delete(COOKIE_NAME, { path: '/' });
 	cookies.delete(OWNER_HINT_COOKIE, { path: '/' });
+
 	return json({ ok: true });
 };

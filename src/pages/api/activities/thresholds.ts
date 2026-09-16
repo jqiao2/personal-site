@@ -43,6 +43,7 @@ export const PUT: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let b: Record<string, unknown>;
+
 	try {
 		b = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -50,23 +51,30 @@ export const PUT: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const effective_from = b.effectiveFrom;
+
 	if (typeof effective_from !== 'string' || !DATE_RE.test(effective_from)) {
 		return apiError('effectiveFrom must be YYYY-MM-DD', 400);
 	}
 
 	const row: Record<string, unknown> = { effective_from };
+
 	for (const [key, range] of Object.entries(FIELDS) as [Field, (typeof FIELDS)[Field]][]) {
 		if (!(key in b)) continue;
 		const raw = b[key];
+
 		if (raw == null || raw === '') {
 			row[key] = null;
 			continue;
 		}
+
 		const n = Number(raw);
+
 		if (!Number.isFinite(n)) return apiError(`${key} must be a number`, 400);
+
 		if (n < range.min || n > range.max) {
 			return apiError(`${key} must be between ${range.min} and ${range.max}`, 400);
 		}
+
 		row[key] = range.int ? Math.round(n) : n;
 	}
 
@@ -75,7 +83,9 @@ export const PUT: APIRoute = async ({ request, cookies }) => {
 	const { error } = await supabaseAdmin
 		.from('athlete_thresholds')
 		.upsert(row, { onConflict: 'effective_from' });
+
 	if (error) return apiError(`could not save: ${error.message}`, 500);
+
 	return json({ ok: true });
 };
 
@@ -84,6 +94,7 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let b: Record<string, unknown>;
+
 	try {
 		b = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -91,9 +102,12 @@ export const DELETE: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const id = Number(b.id);
+
 	if (!Number.isInteger(id) || id <= 0) return apiError('bad id', 400);
 
 	const { error } = await supabaseAdmin.from('athlete_thresholds').delete().eq('id', id);
+
 	if (error) return apiError(`could not delete: ${error.message}`, 500);
+
 	return json({ ok: true });
 };

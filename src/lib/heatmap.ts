@@ -31,8 +31,11 @@ export const TILE_FEET = 150;
 export const REF_LAT = 40.7;
 
 const METERS_PER_FOOT = 0.3048;
+
 const TILE_M = TILE_FEET * METERS_PER_FOOT; // 45.72 m on the ground at REF_LAT
+
 const EARTH_RADIUS_M = 6378137; // WGS84 equatorial radius — matches EPSG:3857
+
 const MAX_LAT = 85.05112878; // mercator's own cutoff
 
 /** The cell's side in Web Mercator metres. Mercator stretches by 1/cos(lat),
@@ -42,6 +45,7 @@ const CELL = TILE_M / Math.cos((REF_LAT * Math.PI) / 180);
 
 function toMercator(lat: number, lng: number): [number, number] {
 	const clamped = Math.max(-MAX_LAT, Math.min(MAX_LAT, lat));
+
 	return [
 		(lng * Math.PI * EARTH_RADIUS_M) / 180,
 		EARTH_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + (clamped * Math.PI) / 360)),
@@ -59,6 +63,7 @@ function fromMercator(x: number, y: number): [number, number] {
  * grid, so the same ground always yields the same key. */
 export function tileKey(lat: number, lng: number): string {
 	const [x, y] = toMercator(lat, lng);
+
 	return `${Math.floor(x / CELL)}:${Math.floor(y / CELL)}`;
 }
 
@@ -69,6 +74,7 @@ export function tileBounds(key: string): [[number, number], [number, number]] {
 	const [col, row] = key.split(':').map(Number);
 	const [s, w] = fromMercator(col * CELL, row * CELL);
 	const [n, e] = fromMercator((col + 1) * CELL, (row + 1) * CELL);
+
 	return [
 		[w, s],
 		[e, n],
@@ -95,10 +101,12 @@ const M_PER_DEG_LAT = 111_320;
  */
 export function addTrackTiles(points: [number, number][], counts: Map<string, number>): void {
 	const seen = new Set<string>();
+
 	for (let i = 0; i < points.length; i++) {
 		const [lat, lng] = points[i];
 		seen.add(tileKey(lat, lng));
 		const next = points[i + 1];
+
 		if (!next) continue;
 		const [lat2, lng2] = next;
 		// Metres between the two points, flat-earth over a segment this short.
@@ -110,11 +118,13 @@ export function addTrackTiles(points: [number, number][], counts: Map<string, nu
 		// squares up north.
 		const step = Math.max(1, tileGroundMeters(lat) / 2);
 		const steps = Math.floor(Math.hypot(dx, dy) / step);
+
 		for (let s = 1; s < steps; s++) {
 			const t = s / steps;
 			seen.add(tileKey(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
 		}
 	}
+
 	for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
@@ -155,11 +165,15 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
 export function tilesToGeoJSON(counts: Map<string, number>): TileCollection {
 	/** One MultiPolygon's worth of rectangles per bucket. */
 	type MultiPolygon = TileCollection['features'][number]['geometry']['coordinates'];
+
 	const byBucket: MultiPolygon[] = TILE_BUCKETS.map(() => []);
+
 	for (const [key, count] of counts) {
 		let bucket = 0;
+
 		while (bucket + 1 < TILE_BUCKETS.length && count >= TILE_BUCKETS[bucket + 1]) bucket++;
 		const [[w, s], [e, n]] = tileBounds(key);
+
 		const ring: [number, number][] = [
 			[round(w), round(s)],
 			[round(e), round(s)],
@@ -167,8 +181,10 @@ export function tilesToGeoJSON(counts: Map<string, number>): TileCollection {
 			[round(w), round(n)],
 			[round(w), round(s)],
 		];
+
 		byBucket[bucket].push([ring]);
 	}
+
 	return {
 		type: 'FeatureCollection',
 		features: byBucket.map((polygons, bucket) => ({
@@ -197,6 +213,7 @@ export function tilesToGeoJSON(counts: Map<string, number>): TileCollection {
 
 /** Circumradius of a hex whose area equals CELL². area = (3√3/2)R². */
 const HEX_R = CELL / Math.sqrt((3 * Math.sqrt(3)) / 2);
+
 const SQRT3 = Math.sqrt(3);
 
 /** Axial rounding — the cube-round from redblobgames, in axial terms. */
@@ -208,8 +225,10 @@ function axialRound(q: number, r: number): [number, number] {
 	const dq = Math.abs(rq - q);
 	const dr = Math.abs(rr - r);
 	const ds = Math.abs(rs - s);
+
 	if (dq > dr && dq > ds) rq = -rr - rs;
 	else if (dr > ds) rr = -rq - rs;
+
 	return [rq, rr];
 }
 
@@ -217,6 +236,7 @@ function axialRound(q: number, r: number): [number, number] {
 export function hexKey(lat: number, lng: number): string {
 	const [x, y] = toMercator(lat, lng);
 	const [q, r] = axialRound(((SQRT3 / 3) * x - y / 3) / HEX_R, (2 / 3) * y / HEX_R);
+
 	return `${q}:${r}`;
 }
 
@@ -226,12 +246,15 @@ export function hexRing(key: string): [number, number][] {
 	const cx = HEX_R * SQRT3 * (q + r / 2);
 	const cy = HEX_R * (3 / 2) * r;
 	const ring: [number, number][] = [];
+
 	for (let i = 0; i < 6; i++) {
 		const a = (Math.PI / 180) * (60 * i - 30);
 		const [lat, lng] = fromMercator(cx + HEX_R * Math.cos(a), cy + HEX_R * Math.sin(a));
 		ring.push([round(lng), round(lat)]);
 	}
+
 	ring.push(ring[0]);
+
 	return ring;
 }
 
@@ -239,10 +262,12 @@ export function hexRing(key: string): [number, number][] {
  *  half-a-cell sampling so a GPS gap doesn't leave a hole in a ridden road. */
 export function addTrackHexes(points: [number, number][], counts: Map<string, number>): void {
 	const seen = new Set<string>();
+
 	for (let i = 0; i < points.length; i++) {
 		const [lat, lng] = points[i];
 		seen.add(hexKey(lat, lng));
 		const next = points[i + 1];
+
 		if (!next) continue;
 		const [lat2, lng2] = next;
 		const cosLat = Math.cos((lat * Math.PI) / 180);
@@ -250,11 +275,13 @@ export function addTrackHexes(points: [number, number][], counts: Map<string, nu
 		const dx = (lng2 - lng) * M_PER_DEG_LAT * cosLat;
 		const step = Math.max(1, tileGroundMeters(lat) / 2);
 		const steps = Math.floor(Math.hypot(dx, dy) / step);
+
 		for (let s = 1; s < steps; s++) {
 			const t = s / steps;
 			seen.add(hexKey(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
 		}
 	}
+
 	for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
@@ -262,12 +289,16 @@ export function addTrackHexes(points: [number, number][], counts: Map<string, nu
  *  for the same reason (185k features is a source MapLibre chokes on). */
 export function hexesToGeoJSON(counts: Map<string, number>): TileCollection {
 	type MultiPolygon = TileCollection['features'][number]['geometry']['coordinates'];
+
 	const byBucket: MultiPolygon[] = TILE_BUCKETS.map(() => []);
+
 	for (const [key, count] of counts) {
 		let bucket = 0;
+
 		while (bucket + 1 < TILE_BUCKETS.length && count >= TILE_BUCKETS[bucket + 1]) bucket++;
 		byBucket[bucket].push([hexRing(key)]);
 	}
+
 	return {
 		type: 'FeatureCollection',
 		features: byBucket.map((polygons, bucket) => ({

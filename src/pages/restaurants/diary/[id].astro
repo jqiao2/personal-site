@@ -23,19 +23,27 @@ import { isPinned } from '../../../lib/pins';
 export const prerender = false;
 
 const id = Number(Astro.params.id);
+
 if (!Number.isInteger(id) || id <= 0) return Astro.redirect('/restaurants/diary');
 
 // Owner first: it decides whether getVisit fetches the private note off the base
 // table at all, so a visitor's `visit` never carries the text.
 const isOwner = await requireOwner(Astro.cookies);
+
 const visit = await getVisit(id, isOwner);
+
 if (!visit) return new Response('Not found', { status: 404 });
+
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
+
 const pinned = isOwner ? await isPinned('meal', visit.id) : false;
 
 const verdict = verdictAt(visit.verdict);
+
 const stars = starText(visit.rating);
+
 const photos = layoutPhotos(visit.photos);
+
 const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
 ---
 

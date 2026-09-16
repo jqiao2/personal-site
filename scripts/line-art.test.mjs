@@ -7,21 +7,26 @@ import { imageToMask, buildGraph, normalizeGraph, imageToGraph } from '../src/li
 // Fake ImageData: a horizontal 1px line plus one stray speck.
 function makeImg(w, h, dark) {
 	const data = new Uint8ClampedArray(w * h * 4).fill(255); // white, opaque
+
 	for (let i = 0; i < w * h; i++) data[i * 4 + 3] = 255;
+
 	for (const [x, y] of dark) {
 		const i = (y * w + x) * 4;
 		data[i] = data[i + 1] = data[i + 2] = 0; // black
 	}
+
 	return { width: w, height: h, data };
 }
 
 // 1. imageToMask thresholds dark pixels and despeckles tiny blobs.
 {
 	const line = [];
+
 	for (let x = 1; x < 9; x++) line.push([x, 5]); // an 8px stroke
 	const speck = [[0, 0]]; // a lone pixel — should be despeckled
 	const mask = imageToMask(makeImg(10, 10, [...line, ...speck]), 128, 3);
 	let ink = 0;
+
 	for (const v of mask.ink) ink += v;
 	assert.equal(ink, 8, 'the stroke survives, the 1px speck is removed');
 	assert.equal(mask.ink[5 * 10 + 5], 1);
@@ -32,19 +37,23 @@ function makeImg(w, h, dark) {
 //    strokes crossing at the centre, given as four polylines meeting there.
 {
 	const c = [5, 5];
+
 	const polylines = [
 		[[5, 0], [5, 5]], // north spoke -> centre
 		[[5, 5], [5, 9]], // centre -> south
 		[[0, 5], [5, 5]], // west -> centre
 		[[5, 5], [9, 5]], // centre -> east
 	];
+
 	const g = buildGraph(polylines, 2, 0.5);
 	// 5 nodes: centre + 4 tips.
 	assert.equal(g.nodes.length, 5);
 	assert.equal(g.edges.length, 4);
 	// The centre node has degree 4.
 	const deg = g.nodes.map(() => 0);
+
 	for (const e of g.edges) { deg[e.a]++; deg[e.b]++; }
+
 	assert.equal(Math.max(...deg), 4, 'the crossing is one degree-4 node');
 	assert.equal(deg.filter((d) => d === 1).length, 4, 'four leaf tips');
 }

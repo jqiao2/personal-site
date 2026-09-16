@@ -42,10 +42,13 @@ const $ = (sel) => document.querySelector(sel);
  * to a mass of dots and hides the lines behind them. Prominence still reads,
  * but as a subtle weighting rather than the dominant visual. */
 const MIN_R = 1.3;
+
 const MAX_R = 6;
+
 /** Edge thickness from collaboration count, flattened and capped. Kept near
  * hairline so dense regions stay legible as strands. */
 const edgeSize = (weight) => Math.min(0.22 + Math.log2(weight) * 0.3, 1.8);
+
 /** How many nodes to show by default. Smaller nodes mean more fit legibly. */
 const DEFAULT_TOP_N = 1600;
 
@@ -57,7 +60,9 @@ const THEME = {
 	dark: { node: '#3c3c3c', edge: 'rgba(120,120,120,0.07)', idle: 'rgba(150,160,175,0.22)', halo: '#111' },
 	light: { node: '#dcdcdc', edge: 'rgba(90,90,90,0.05)', idle: 'rgba(70,80,95,0.20)', halo: '#fff' },
 };
+
 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+
 let theme = prefersDark.matches ? THEME.dark : THEME.light;
 
 /** Draw a node's name with a halo in the page background colour.
@@ -98,13 +103,16 @@ async function main() {
 	// static JSON (the 36k-film corpus).
 	const inline = document.getElementById('graph-data');
 	let payload;
+
 	if (inline) {
 		payload = JSON.parse(inline.textContent);
 	} else {
 		const res = await fetch('/data/credit-network.json');
+
 		if (!res.ok) throw new Error(`could not load graph data (${res.status})`);
 		payload = await res.json();
 	}
+
 	const { roles, metrics, colorModes, nodes, edges, meta } = payload;
 
 	// A page can pin the renderer's light/dark colours (the film-log network is
@@ -118,17 +126,20 @@ async function main() {
 	const iId = at('tmdbId'), iName = at('name'), iX = at('x'), iY = at('y');
 	const iFilms = at('films'), iMask = at('roleMask'), iGrossFilms = at('grossFilms');
 	const bucketAt = Object.fromEntries(colorModes.filter((m) => m.field).map((m) => [m.key, at(m.field)]));
+
 	// A dimension can colour by one field and filter on another: country paints
 	// the dominant one but matches on every country the person has worked in.
 	const memberAt = Object.fromEntries(
 		colorModes.filter((m) => m.filterField).map((m) => [m.key, at(m.filterField)]),
 	);
+
 	const roleAt = roles.map((r) => at(`n_${r.role}`));
 	const metricAt = Object.fromEntries(metrics.map((m) => [m.key, at(m.key)]));
 
 	const graph = new Graph({ type: 'undirected' });
 	nodes.forEach((n, i) => {
 		const held = roles.map((_r, ri) => Boolean(n[iMask] & (1 << ri)));
+
 		const attrs = {
 			label: n[iName],
 			tmdbId: n[iId],
@@ -144,6 +155,7 @@ async function main() {
 			type: 'piechart',
 			color: roles[held.findIndex(Boolean)].color,
 		};
+
 		roles.forEach((r, ri) => {
 			// s_* is the slice's share (equal wedges for every role shown);
 			// c_* is its colour, filled in by applyColors below.
@@ -152,6 +164,7 @@ async function main() {
 		});
 		graph.addNode(String(i), attrs);
 	});
+
 	for (const [s, t, weight] of edges) {
 		graph.addUndirectedEdge(String(s), String(t), { weight, size: edgeSize(weight) });
 	}
@@ -161,10 +174,12 @@ async function main() {
 	// size 0..0.9), so map onto the radius range by position within the metric's
 	// own span. sqrt keeps the long tail from swamping everything.
 	const metricRange = {};
+
 	for (const m of metrics) {
 		const vals = graph.mapNodes((_k, a) => a.metricValues[m.key]);
 		metricRange[m.key] = { min: Math.min(...vals), max: Math.max(...vals) };
 	}
+
 	function applySizes(metricKey) {
 		const { min, max } = metricRange[metricKey];
 		const span = max - min || 1;
@@ -182,14 +197,17 @@ async function main() {
 	 * single-valued, so every slice gets the same colour and the node renders as
 	 * a plain disc — no separate node program needed. */
 	const isDark = () => theme === THEME.dark;
+
 	function applyColors() {
 		const mode = colorModes.find((m) => m.key === state.colorBy) ?? colorModes[0];
 		graph.forEachNode((key, a) => {
 			if (mode.key === 'role') {
 				roles.forEach((r) => graph.setNodeAttribute(key, `c_${r.role}`, r.color));
 				graph.setNodeAttribute(key, 'color', roles[a.held.findIndex(Boolean)].color);
+
 				return;
 			}
+
 			const entry = mode.legend[a.buckets[mode.key]] ?? mode.legend[mode.legend.length - 1];
 			const hex = isDark() ? entry.dark : entry.light;
 			roles.forEach((r) => graph.setNodeAttribute(key, `c_${r.role}`, hex));
@@ -210,6 +228,7 @@ async function main() {
 				const dominant = attrs.buckets[m.key];
 				const rest = bucketsOf(attrs, m).filter((b) => b !== dominant);
 				const names = [dominant, ...rest].map((i) => m.legend[i]?.label).filter(Boolean);
+
 				return names.length ? `${m.label}: ${names.join(', ')}` : null;
 			})
 			.filter(Boolean);
@@ -217,6 +236,7 @@ async function main() {
 
 	/** Node keys ranked by the current metric, best first. Drives "Show top N". */
 	let ranked = [];
+
 	function applyRanking(metricKey) {
 		ranked = graph
 			.nodes()
@@ -320,7 +340,9 @@ async function main() {
 	/** Two collections as one array, without duplicates. */
 	function merged(a, b) {
 		const all = new Set(a);
+
 		for (const key of b) all.add(key);
+
 		return [...all];
 	}
 
@@ -329,6 +351,7 @@ async function main() {
 	 * single bucket each. */
 	function bucketsOf(attrs, mode) {
 		if (mode.key === 'role') return attrs.held.flatMap((h, i) => (h ? [i] : []));
+
 		return attrs.members[mode.key] ?? [attrs.buckets[mode.key]];
 	}
 
@@ -339,7 +362,9 @@ async function main() {
 	 * US actors specifically. */
 	function passesNodeFilters(key, attrs, topSet) {
 		if (!topSet.has(key)) return false;
+
 		if (attrs.films < state.minFilms) return false;
+
 		return colorModes.every((m) => bucketsOf(attrs, m).some((b) => state.enabled[m.key].has(b)));
 	}
 
@@ -365,6 +390,7 @@ async function main() {
 			visibleNodes.add(t);
 		});
 		visibleEdgeSet = new Set(visibleEdges);
+
 		// A selected node stays on screen even if the filters would drop it, so
 		// clicking a search result never shows an empty canvas.
 		if (state.selected) visibleNodes.add(state.selected);
@@ -387,13 +413,19 @@ async function main() {
 	function frameVisible() {
 		if (!visibleNodes.size) return;
 		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
 		for (const key of visibleNodes) {
 			const { x, y } = graph.getNodeAttributes(key);
+
 			if (x < minX) minX = x;
+
 			if (x > maxX) maxX = x;
+
 			if (y < minY) minY = y;
+
 			if (y > maxY) maxY = y;
 		}
+
 		// A little padding so nodes at the extremes aren't clipped by their radius.
 		const padX = (maxX - minX) * 0.04 || 1;
 		const padY = (maxY - minY) * 0.04 || 1;
@@ -403,14 +435,19 @@ async function main() {
 	renderer.setSetting('nodeReducer', (key, attrs) => {
 		if (!visibleNodes.has(key)) return { ...attrs, hidden: true };
 		const focus = state.hovered ?? state.selected;
+
 		if (focus && key !== focus && !state.neighbors?.has(key)) {
 			// Recolour every slice to the theme's dim grey, leaving wedge geometry
 			// alone, so an unrelated node fades back without changing shape.
 			const dimmed = { ...attrs, color: theme.node, label: '', zIndex: 0 };
+
 			for (const r of roles) dimmed[`c_${r.role}`] = theme.node;
+
 			return dimmed;
 		}
+
 		if (focus) return { ...attrs, zIndex: 2, forceLabel: true };
+
 		return attrs;
 	});
 
@@ -420,7 +457,9 @@ async function main() {
 	// measurably the most expensive thing on the hover path.
 	renderer.setSetting('edgeReducer', (key, attrs) => {
 		if (!visibleEdgeSet.has(key)) return { ...attrs, hidden: true };
+
 		if (!focusEdgeSet) return attrs;
+
 		return focusEdgeSet.has(key)
 			? { ...attrs, color: theme.node === THEME.dark.node ? '#9aa7b4' : '#4a5560', zIndex: 1, size: attrs.size + 0.5 }
 			: { ...attrs, color: theme.edge, zIndex: 0 };
@@ -449,6 +488,7 @@ async function main() {
 		isDragging = true;
 		dragged = node;
 		graph.setNodeAttribute(node, 'highlighted', true);
+
 		// Pin it in the simulation so the layout can't drag it back out from
 		// under the cursor while the user is holding it.
 		if (pinned?.hasNode(node)) pinned.setNodeAttribute(node, 'fixed', true);
@@ -458,20 +498,25 @@ async function main() {
 		const pos = renderer.viewportToGraph(event);
 		graph.setNodeAttribute(dragged, 'x', pos.x);
 		graph.setNodeAttribute(dragged, 'y', pos.y);
+
 		// Feed the drag back into the simulation so neighbours follow along.
 		if (pinned?.hasNode(dragged)) pinned.mergeNodeAttributes(dragged, { x: pos.x, y: pos.y });
 		event.preventSigmaDefault();
 		event.original.preventDefault();
 		event.original.stopPropagation();
 	});
+
 	const endDrag = () => {
 		if (dragged) {
 			graph.removeNodeAttribute(dragged, 'highlighted');
+
 			if (pinned?.hasNode(dragged)) pinned.removeNodeAttribute(dragged, 'fixed');
 		}
+
 		dragged = null;
 		isDragging = false;
 	};
+
 	renderer.on('upNode', endDrag);
 	renderer.on('upStage', endDrag);
 
@@ -495,10 +540,13 @@ async function main() {
 	 * the narrow path is tens of elements against 126,660. */
 	function moveFocus(previous, next) {
 		setFocus(next);
+
 		if (!previous || !next) {
 			repaint();
+
 			return;
 		}
+
 		renderer.refresh({
 			partialGraph: {
 				nodes: [previous, next, ...graph.neighbors(previous), ...graph.neighbors(next)],
@@ -549,14 +597,19 @@ async function main() {
 		// otherwise exclude them — enough to make them visible without discarding
 		// the rest of the filter.
 		let regroup = false;
+
 		for (const m of colorModes) {
 			const mine = bucketsOf(a, m);
+
 			if (mine.some((b) => state.enabled[m.key].has(b))) continue;
+
 			for (const b of mine) state.enabled[m.key].add(b);
 			regroup = true;
 			changes.push(`re-enabled ${m.label.toLowerCase()}`);
 		}
+
 		if (regroup) renderGroups();
+
 		if (a.films < state.minFilms) {
 			state.minFilms = a.films;
 			const el = $('#min-films');
@@ -564,7 +617,9 @@ async function main() {
 			$('#min-films-out').textContent = state.minFilms;
 			changes.push(`lowered the film floor to ${a.films}`);
 		}
+
 		const rank = ranked.indexOf(key) + 1;
+
 		if (rank > state.topN) {
 			state.topN = Math.min(nodes.length, Math.ceil(rank / 100) * 100);
 			const el = $('#top-n');
@@ -572,8 +627,10 @@ async function main() {
 			$('#top-n-out').textContent = state.topN.toLocaleString();
 			changes.push(`widened to the top ${state.topN.toLocaleString()}`);
 		}
+
 		const weights = graph.edges(key).map((e) => graph.getEdgeAttribute(e, 'weight'));
 		const best = weights.length ? Math.max(...weights) : 0;
+
 		if (best && best < state.minWeight) {
 			state.minWeight = best;
 			const el = $('#min-weight');
@@ -581,6 +638,7 @@ async function main() {
 			$('#min-weight-out').textContent = best;
 			changes.push(`lowered shared films to ${best}`);
 		}
+
 		return changes;
 	}
 
@@ -594,15 +652,19 @@ async function main() {
 	function personHref(a) {
 		if (!meta.personHref) return `https://www.themoviedb.org/person/${a.tmdbId}`;
 		const role = roles[a.held.findIndex(Boolean)].role;
+
 		return meta.personHref.replace('{role}', role).replace('{name}', encodeURIComponent(a.label));
 	}
 
 	function renderDetails(node) {
 		if (!node) {
 			details.innerHTML = '<p class="muted small">Click a node, or search, to see someone\'s collaborators.</p>';
+
 			return;
 		}
+
 		const a = graph.getNodeAttributes(node);
+
 		const chips = roles
 			.map((r, ri) =>
 				a.held[ri]
@@ -610,6 +672,7 @@ async function main() {
 					: '',
 			)
 			.join('');
+
 		// Roles they work in but aren't drawn as — the share floor at work.
 		const minor = roles
 			.map((r, ri) => (!a.held[ri] && a.counts[ri] > 0 ? `${a.counts[ri]} ${r.label.toLowerCase()}` : ''))
@@ -667,32 +730,43 @@ async function main() {
 
 	function runSearch() {
 		const q = foldName(search.value);
+
 		if (!q) {
 			results.innerHTML = '';
 			results.hidden = true;
+
 			return;
 		}
+
 		const starts = [];
 		const contains = [];
+
 		for (const e of index) {
 			if (e.fold.startsWith(q)) starts.push(e);
 			else if (e.fold.includes(q)) contains.push(e);
+
 			if (starts.length >= 12) break;
 		}
+
 		const hits = [...starts, ...contains].slice(0, 12);
 		results.hidden = false;
+
 		if (!hits.length) {
 			results.innerHTML =
 				'<li class="empty">No one by that name is in the graph — they may not clear the role thresholds.</li>';
+
 			return;
 		}
+
 		results.innerHTML = hits
 			.map((h) => {
 				const a = graph.getNodeAttributes(h.key);
 				const tags = roles.filter((_r, ri) => a.held[ri]).map((r) => r.label).join(' / ');
+
 				return `<li><button data-node="${h.key}"><span>${escapeHtml(h.name)}</span><em>${tags} · ${a.films} films</em></button></li>`;
 			})
 			.join('');
+
 		for (const b of results.querySelectorAll('button[data-node]')) {
 			b.addEventListener('click', () => {
 				search.value = graph.getNodeAttribute(b.dataset.node, 'label');
@@ -707,6 +781,7 @@ async function main() {
 	search.addEventListener('keydown', (e) => {
 		if (e.key === 'Enter') {
 			const first = results.querySelector('button[data-node]');
+
 			if (first) first.click();
 		} else if (e.key === 'Escape') {
 			results.hidden = true;
@@ -731,11 +806,13 @@ async function main() {
 	// on every tick would thrash.
 	let filterFrame = null;
 	let resettleTimer = null;
+
 	const applyFilters = () => {
 		if (filterFrame !== null) return;
 		filterFrame = requestAnimationFrame(() => {
 			filterFrame = null;
 			recomputeVisible();
+
 			if (state.selected) renderDetails(state.selected);
 
 			if (!resettleBox?.checked) return;
@@ -748,9 +825,11 @@ async function main() {
 	const metricSel = $('#metric');
 	metricSel.innerHTML = metrics.map((m) => `<option value="${m.key}">${m.label}</option>`).join('');
 	const metricNote = $('#metric-note');
+
 	const showMetricNote = () => {
 		metricNote.textContent = metrics.find((m) => m.key === state.metric).note;
 	};
+
 	metricSel.value = state.metric;
 	showMetricNote();
 	metricSel.addEventListener('change', () => {
@@ -800,11 +879,13 @@ async function main() {
 	// only the active one shows swatches, since a coloured key next to a
 	// dimension the nodes aren't painted by would just contradict the canvas.
 	const groupsEl = $('#filter-groups');
+
 	function renderGroups() {
 		const swatch = (m, l) =>
 			m.key === state.colorBy
 				? `<span class="swatch" style="background:${isDark() ? l.dark : l.light}"></span>`
 				: '';
+
 		groupsEl.innerHTML = colorModes
 			.map(
 				(m) => `<div class="group" data-dim="${m.key}">
@@ -829,11 +910,13 @@ async function main() {
 			cb.addEventListener('change', () => {
 				const set = state.enabled[cb.dataset.dim];
 				const bucket = Number(cb.dataset.bucket);
+
 				if (cb.checked) set.add(bucket);
 				else set.delete(bucket);
 				applyFilters();
 			});
 		}
+
 		for (const b of groupsEl.querySelectorAll('button[data-all]')) {
 			b.addEventListener('click', () => {
 				const key = b.dataset.all;
@@ -843,6 +926,7 @@ async function main() {
 				applyFilters();
 			});
 		}
+
 		for (const b of groupsEl.querySelectorAll('button[data-only]')) {
 			b.addEventListener('click', () => {
 				state.enabled[b.dataset.only].clear();
@@ -850,6 +934,7 @@ async function main() {
 				applyFilters();
 			});
 		}
+
 		colorNote.textContent = colorModes.find((m) => m.key === state.colorBy).note;
 	}
 
@@ -857,6 +942,7 @@ async function main() {
 		state.colorBy = colorSel.value;
 		applyColors();
 		renderGroups();
+
 		if (state.selected) renderDetails(state.selected);
 		repaint();
 	});
@@ -963,21 +1049,29 @@ async function main() {
 	function normalizedPositions(source, keys) {
 		let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 		const raw = new Float64Array(keys.length * 2);
+
 		for (let i = 0; i < keys.length; i++) {
 			const { x, y } = source.getNodeAttributes(keys[i]);
 			raw[i * 2] = x;
 			raw[i * 2 + 1] = y;
+
 			if (x < minX) minX = x;
+
 			if (x > maxX) maxX = x;
+
 			if (y < minY) minY = y;
+
 			if (y > maxY) maxY = y;
 		}
+
 		const w = maxX - minX || 1;
 		const h = maxY - minY || 1;
+
 		for (let i = 0; i < raw.length; i += 2) {
 			raw[i] = (raw[i] - minX) / w;
 			raw[i + 1] = (raw[i + 1] - minY) / h;
 		}
+
 		return raw;
 	}
 
@@ -985,7 +1079,9 @@ async function main() {
 	function meanShift(a, b) {
 		if (!a.length) return 0;
 		let sum = 0;
+
 		for (let i = 0; i < a.length; i += 2) sum += Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1]);
+
 		return sum / (a.length / 2);
 	}
 
@@ -1022,6 +1118,7 @@ async function main() {
 		clearTimeout(syncTimer);
 		settleTimer = null;
 		syncTimer = null;
+
 		if (layout) {
 			// A last sync, so the graph lands on the positions the simulation actually
 			// finished at rather than up to one interval behind them.
@@ -1029,6 +1126,7 @@ async function main() {
 			layout.kill();
 			layout = null;
 		}
+
 		layoutBtn.textContent = '▶ Re-settle';
 		layoutBtn.classList.remove('running');
 	}
@@ -1039,23 +1137,30 @@ async function main() {
 	function simulationGraph() {
 		if (!pinned || pinnedGeneration !== visibilityGeneration) {
 			pinned = new Graph({ type: 'undirected' });
+
 			for (const key of visibleNodes) pinned.addNode(key, {});
+
 			for (const key of visibleEdges) {
 				const [s, t] = graph.extremities(key);
 				pinned.addUndirectedEdge(s, t, { weight: graph.getEdgeAttribute(key, 'weight') });
 			}
+
 			pinnedGeneration = visibilityGeneration;
 		}
+
 		pinned.updateEachNodeAttributes((key) => {
 			const { x, y, size } = graph.getNodeAttributes(key);
+
 			return { x, y, size };
 		});
+
 		return pinned;
 	}
 
 	/** Run FA2 over the visible subgraph. `burst` auto-stops once it comes to rest. */
 	function startPhysics({ burst }) {
 		stopPhysics();
+
 		if (visibleNodes.size < 2) return;
 
 		const sub = simulationGraph();
@@ -1069,6 +1174,7 @@ async function main() {
 			},
 			getEdgeWeight: 'weight',
 		});
+
 		// Keep a node the user is dragging where they put it.
 		if (dragged && sub.hasNode(dragged)) sub.setNodeAttribute(dragged, 'fixed', true);
 
@@ -1076,6 +1182,7 @@ async function main() {
 		scheduleSync();
 		layoutBtn.textContent = '■ Stop';
 		layoutBtn.classList.add('running');
+
 		if (burst) {
 			const sample = [...visibleNodes].slice(0, SETTLE_SAMPLE);
 			let previous = normalizedPositions(sub, sample);
@@ -1085,6 +1192,7 @@ async function main() {
 				const current = normalizedPositions(sub, sample);
 				quiet = meanShift(previous, current) < SETTLE_EPS ? quiet + 1 : 0;
 				previous = current;
+
 				if (quiet < SETTLE_QUIET_POLLS && Date.now() - started < SETTLE_MAX_MS) return;
 				stopPhysics();
 				frameVisible();
@@ -1111,6 +1219,7 @@ async function main() {
 	renderGroups();
 	recomputeVisible();
 	renderDetails(null);
+
 	// A payload seeded on a circle (the per-year film-log network) settles from
 	// there on load; the pre-laid-out corpus does not.
 	if (meta.settleOnLoad) startPhysics({ burst: true });
@@ -1123,5 +1232,6 @@ async function main() {
 main().catch((e) => {
 	console.error(e);
 	const el = document.querySelector('#loading');
+
 	if (el) el.textContent = `Failed to load the network: ${e.message}`;
 });

@@ -14,6 +14,7 @@ const { data: fmt, error: fErr } = await sb
 	.upsert({ name: 'Digital' }, { onConflict: 'name' })
 	.select('id')
 	.single();
+
 if (fErr) throw fErr;
 
 const { data, error } = await sb
@@ -22,6 +23,7 @@ const { data, error } = await sb
 	.eq('medium', 'theater')
 	.is('format_id', null)
 	.select('id');
+
 if (error) throw error;
 
 console.log(`✓ set ${data.length} theater logs to Digital.`);

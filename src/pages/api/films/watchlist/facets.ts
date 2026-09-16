@@ -17,6 +17,7 @@ export const prerender = false;
 export const GET: APIRoute = async () => {
 	try {
 		const rows = await listWatchlistFacets();
+
 		return json(rows, 200, {
 			'cache-control': 'public, max-age=0, s-maxage=60, stale-while-revalidate=600',
 		});

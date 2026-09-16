@@ -39,6 +39,7 @@ export const MAP_TOKENS = {
 } as const;
 
 const TILES = 'https://api.maptiler.com/tiles/v3/tiles.json';
+
 const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
 
 /**
@@ -56,6 +57,7 @@ const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
  */
 export function menuBasemap(key: string) {
 	const t = MAP_TOKENS;
+
 	return {
 		version: 8 as const,
 		name: "Jason's restaurant log",

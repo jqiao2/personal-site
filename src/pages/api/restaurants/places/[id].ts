@@ -19,9 +19,11 @@ export const prerender = false;
 export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	const id = Number(params.id);
+
 	if (!Number.isInteger(id) || id <= 0) return apiError('bad id', 400);
 
 	let body: Record<string, unknown>;
+
 	try {
 		body = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -42,6 +44,7 @@ export const PATCH: APIRoute = async ({ params, request, cookies }) => {
 			if (body.priceBand != null && !isPriceBand(body.priceBand)) {
 				return apiError('priceBand must be $, $$, $$$ or $$$$', 400);
 			}
+
 			await updatePlace(id, {
 				// Absent means "leave the name alone", which is what a body
 				// carrying only a location means.
@@ -87,17 +90,20 @@ function hasPlaceEdit(body: Record<string, unknown>): boolean {
 		'trip',
 		'toTryTags',
 	];
+
 	return keys.some((k) => k in body);
 }
 
 function text(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t === '' ? null : t;
 }
 
 function num(v: unknown): number | null {
 	if (v == null || v === '') return null;
 	const n = Number(v);
+
 	return Number.isFinite(n) ? n : null;
 }

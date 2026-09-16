@@ -13,15 +13,19 @@ export const prerender = false;
 
 function isCron(request: Request): boolean {
 	const secret = import.meta.env.CRON_SECRET;
+
 	if (!secret) return false;
 	const header = request.headers.get('authorization');
+
 	return header === `Bearer ${secret}`;
 }
 
 async function run(request: Request, cookies: Parameters<APIRoute>[0]['cookies']): Promise<Response> {
 	if (!isCron(request) && !(await requireOwner(cookies))) return apiError('unauthorized', 401);
+
 	try {
 		const result = await syncStrava();
+
 		return json(result);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'sync failed', 500);
@@ -29,4 +33,5 @@ async function run(request: Request, cookies: Parameters<APIRoute>[0]['cookies']
 }
 
 export const GET: APIRoute = ({ request, cookies }) => run(request, cookies);
+
 export const POST: APIRoute = ({ request, cookies }) => run(request, cookies);

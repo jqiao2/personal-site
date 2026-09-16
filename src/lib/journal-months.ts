@@ -20,7 +20,9 @@ async function activityMonths(): Promise<string[]> {
 	const { data, error } = await supabasePublic
 		.from('activity_months')
 		.select('month_key, activity_count');
+
 	if (error) return [];
+
 	return (data ?? [])
 		.filter((row) => (row.activity_count as number) > 0)
 		.map((row) => row.month_key as string);
@@ -40,20 +42,24 @@ export async function listJournalMonths(): Promise<JournalMonth[]> {
 		listMonthKeys(),
 		activityMonths(),
 	]);
+
 	const mealSet = new Set(meals);
 	const moveSet = new Set(moves);
+
 	const has: Record<Track, (key: string) => boolean> = {
 		film: (key) => (films[key] ?? 0) > 0,
 		book: (key) => (books[key] ?? 0) > 0,
 		meal: (key) => mealSet.has(key),
 		move: (key) => moveSet.has(key),
 	};
+
 	const keys = new Set<string>([
 		...Object.keys(films).filter(has.film),
 		...Object.keys(books).filter(has.book),
 		...meals,
 		...moves,
 	]);
+
 	return [...keys]
 		.sort()
 		.reverse()

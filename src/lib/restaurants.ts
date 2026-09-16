@@ -9,6 +9,7 @@ import { monthLabel } from './share-card';
 
 /** The four price bands, in order. Four steps, no half steps. */
 export const PRICE_BANDS = ['$', '$$', '$$$', '$$$$'] as const;
+
 export type PriceBand = (typeof PRICE_BANDS)[number];
 
 export function isPriceBand(v: unknown): v is PriceBand {
@@ -36,6 +37,7 @@ export const WHY_TAGS = [
 	'cheap eats',
 	'late night',
 ] as const;
+
 export type WhyTag = (typeof WHY_TAGS)[number];
 
 export function isWhyTag(v: unknown): v is WhyTag {
@@ -174,19 +176,24 @@ function withUrl(row: Omit<Photo, 'url'>): Photo {
 
 async function photosForVisits(visitIds: number[]): Promise<Map<number, Photo[]>> {
 	const byVisit = new Map<number, Photo[]>();
+
 	if (visitIds.length === 0) return byVisit;
+
 	const { data, error } = await supabasePublic
 		.from('restaurant_photos')
 		.select('*')
 		.in('visit_id', visitIds)
 		.order('position')
 		.order('id');
+
 	if (error) throw new Error(error.message);
+
 	for (const row of (data ?? []) as Omit<Photo, 'url'>[]) {
 		const list = byVisit.get(row.visit_id) ?? [];
 		list.push(withUrl(row));
 		byVisit.set(row.visit_id, list);
 	}
+
 	return byVisit;
 }
 
@@ -208,6 +215,7 @@ export interface RestaurantStats {
 
 export async function getRestaurantStats(): Promise<RestaurantStats> {
 	const year = siteYear();
+
 	const [places, visits, toTry] = await Promise.all([
 		supabasePublic.from('restaurant_places').select('id,name,visit_count').gt('visit_count', 0),
 		supabasePublic
@@ -216,11 +224,14 @@ export async function getRestaurantStats(): Promise<RestaurantStats> {
 			.order('visited_on', { ascending: false }),
 		supabasePublic.from('restaurant_places').select('id', { count: 'exact', head: true }).eq('on_to_try', true),
 	]);
+
 	if (places.error) throw new Error(places.error.message);
+
 	if (visits.error) throw new Error(visits.error.message);
 
 	const placeRows = (places.data ?? []) as { id: number; name: string; visit_count: number }[];
 	const visitRows = (visits.data ?? []) as { restaurant_id: number; visited_on: string }[];
+
 	const top = placeRows.reduce<(typeof placeRows)[number] | null>(
 		(best, r) => (best == null || r.visit_count > best.visit_count ? r : best),
 		null,
@@ -249,9 +260,11 @@ export async function listRecentVisits(limit = 4): Promise<VisitDetail[]> {
 		.order('visited_on', { ascending: false })
 		.order('id', { ascending: false })
 		.limit(limit);
+
 	if (error) throw new Error(error.message);
 	const visits = (data ?? []) as DiaryVisit[];
 	const photos = await photosForVisits(visits.map((v) => v.id));
+
 	return visits.map((v) => ({ ...v, photos: photos.get(v.id) ?? [] }));
 }
 
@@ -262,9 +275,12 @@ export async function listToTry(limit?: number): Promise<Place[]> {
 		.select(PLACE_COLUMNS)
 		.eq('on_to_try', true)
 		.order('to_try_added_at', { ascending: false });
+
 	if (limit != null) q = q.limit(limit);
 	const { data, error } = await q;
+
 	if (error) throw new Error(error.message);
+
 	return (data ?? []) as Place[];
 }
 
@@ -320,6 +336,7 @@ export function searchTerms(query: string): string[] {
 export function matchesSearch(fields: (string | null | undefined)[], terms: string[]): boolean {
 	if (terms.length === 0) return true;
 	const hay = fields.filter(Boolean).join(' ').toLowerCase();
+
 	return terms.every((t) => hay.includes(t));
 }
 
@@ -350,10 +367,12 @@ export interface PlaceQuery {
  */
 export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 	const scope = query.scope ?? 'visited';
+
 	const { data, error } = await inScope(
 		supabasePublic.from('restaurant_places').select(PLACE_COLUMNS),
 		scope,
 	);
+
 	if (error) throw new Error(error.message);
 	let rows = (data ?? []) as Place[];
 
@@ -363,27 +382,34 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
 			matchesSearch([r.name, r.neighborhood, r.city, r.state_region, r.country], terms),
 		);
 	}
+
 	if (query.cuisines?.length) {
 		const want = new Set(query.cuisines.map((c) => c.toLowerCase()));
 		rows = rows.filter((r) => cuisineTerms(r.cuisines).some((c) => want.has(c.toLowerCase())));
 	}
+
 	if (query.prices?.length) {
 		const want = new Set<string>(query.prices);
 		rows = rows.filter((r) => r.price_band != null && want.has(r.price_band));
 	}
+
 	if (query.verdictAtLeast != null && query.verdictAtLeast < 5) {
 		const max = query.verdictAtLeast;
 		rows = rows.filter((r) => r.latest_verdict != null && r.latest_verdict <= max);
 	}
+
 	if (query.trip) rows = rows.filter((r) => (query.trip === 'trip' ? r.trip : !r.trip));
+
 	if (query.onMap) {
 		const placed = (r: Place) => r.lat != null && r.lng != null;
 		rows = rows.filter((r) => (query.onMap === 'on' ? placed(r) : !placed(r)));
 	}
+
 	if (query.tags?.length) {
 		const want = new Set(query.tags);
 		rows = rows.filter((r) => r.to_try_tags.some((t) => want.has(t)));
 	}
+
 	if (query.friends?.length) {
 		// Friends live on the visits, not the place, so map the names back to the
 		// places they were eaten at and keep only those.
@@ -403,12 +429,14 @@ export async function listPlaces(query: PlaceQuery = {}): Promise<Place[]> {
  */
 function inScope<T>(query: T, scope: PlaceScope): T {
 	const q = query as { eq: (c: string, v: unknown) => T; gt: (c: string, v: unknown) => T };
+
 	return scope === 'to-try' ? q.eq('on_to_try', true) : q.gt('visit_count', 0);
 }
 
 function sortPlaces(rows: Place[], sort: PlaceSort): Place[] {
 	const byName = (a: Place, b: Place) => a.name.localeCompare(b.name, 'en');
 	const copy = [...rows];
+
 	switch (sort) {
 		case 'added':
 			return copy.sort(
@@ -466,13 +494,16 @@ export async function listCuisineFacets(scope: PlaceScope = 'visited'): Promise<
 		supabasePublic.from('restaurant_places').select('cuisines'),
 		scope,
 	);
+
 	if (error) throw new Error(error.message);
 	const counts = new Map<string, number>();
+
 	for (const row of (data ?? []) as { cuisines: string[] }[]) {
 		// De-duplicated per place: a row storing "Pizza" and "Pizza, Pasta" must
 		// not count Pizza twice.
 		for (const c of new Set(cuisineTerms(row.cuisines))) counts.set(c, (counts.get(c) ?? 0) + 1);
 	}
+
 	return [...counts.entries()]
 		.map(([name, count]) => ({ name, count }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
@@ -507,7 +538,9 @@ export async function getPlace(id: number): Promise<PlaceDetail | null> {
 		.select(PLACE_COLUMNS)
 		.eq('id', id)
 		.maybeSingle();
+
 	if (error) throw new Error(error.message);
+
 	if (!data) return null;
 
 	const { data: visitRows, error: visitError } = await supabasePublic
@@ -516,10 +549,12 @@ export async function getPlace(id: number): Promise<PlaceDetail | null> {
 		.eq('restaurant_id', id)
 		.order('visited_on', { ascending: false })
 		.order('id', { ascending: false });
+
 	if (visitError) throw new Error(visitError.message);
 
 	const visits = (visitRows ?? []) as DiaryVisit[];
 	const photos = await photosForVisits(visits.map((v) => v.id));
+
 	return {
 		place: data as Place,
 		visits: visits.map((v) => ({ ...v, photos: photos.get(v.id) ?? [] })),
@@ -532,13 +567,16 @@ export async function getVisit(id: number, includePrivate = false): Promise<Visi
 		.select('*')
 		.eq('id', id)
 		.maybeSingle();
+
 	if (error) throw new Error(error.message);
+
 	if (!data) return null;
 	// The private note lives on the base table, never in the anon-readable
 	// restaurant_diary view — so a visitor's DiaryVisit can't carry it. Fetch it
 	// with the service role only once the caller has proved it is the owner.
 	const privateNote = includePrivate ? await getVisitPrivateNote(id) : null;
 	const photos = await photosForVisits([id]);
+
 	return { ...(data as DiaryVisit), private_note: privateNote, photos: photos.get(id) ?? [] };
 }
 
@@ -550,7 +588,9 @@ async function getVisitPrivateNote(id: number): Promise<string | null> {
 		.select('private_note')
 		.eq('id', id)
 		.maybeSingle();
+
 	if (error) return null;
+
 	return (data as { private_note?: string | null } | null)?.private_note ?? null;
 }
 
@@ -573,16 +613,20 @@ export async function listDiary(limit = 400): Promise<DiaryVisit[]> {
 		.order('visited_on', { ascending: false })
 		.order('id', { ascending: false })
 		.limit(limit);
+
 	if (error) throw new Error(error.message);
+
 	return (data ?? []) as DiaryVisit[];
 }
 
 export function groupByMonth(visits: DiaryVisit[]): DiaryMonth[] {
 	const months = new Map<string, DiaryVisit[]>();
+
 	for (const v of visits) {
 		const key = v.visited_on.slice(0, 7);
 		months.set(key, [...(months.get(key) ?? []), v]);
 	}
+
 	return [...months.entries()]
 		.sort((a, b) => b[0].localeCompare(a[0]))
 		.map(([key, rows]) => ({
@@ -596,9 +640,11 @@ export function groupByMonth(visits: DiaryVisit[]): DiaryMonth[] {
 /** Visits in one "YYYY-MM", oldest first — the month card reads forwards. */
 export async function listMonthVisits(key: string): Promise<VisitDetail[]> {
 	const [y, m] = key.split('-').map(Number);
+
 	if (!y || !m) return [];
 	const start = `${key}-01`;
 	const end = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+
 	const { data, error } = await supabasePublic
 		.from('restaurant_diary')
 		.select('*')
@@ -606,9 +652,11 @@ export async function listMonthVisits(key: string): Promise<VisitDetail[]> {
 		.lt('visited_on', end)
 		.order('visited_on')
 		.order('id');
+
 	if (error) throw new Error(error.message);
 	const visits = (data ?? []) as DiaryVisit[];
 	const photos = await photosForVisits(visits.map((v) => v.id));
+
 	return visits.map((v) => ({ ...v, photos: photos.get(v.id) ?? [] }));
 }
 
@@ -618,20 +666,25 @@ export async function listMonthKeys(): Promise<string[]> {
 		.from('restaurant_diary')
 		.select('visited_on')
 		.order('visited_on', { ascending: false });
+
 	if (error) throw new Error(error.message);
 	const keys = new Set((data ?? []).map((r: { visited_on: string }) => r.visited_on.slice(0, 7)));
+
 	return [...keys];
 }
 
 /** Meals per month, "YYYY-MM" → count — the month picker's tile figures. */
 export async function countVisitsByMonth(): Promise<Record<string, number>> {
 	const { data, error } = await supabasePublic.from('restaurant_diary').select('visited_on');
+
 	if (error) throw new Error(error.message);
 	const counts: Record<string, number> = {};
+
 	for (const r of (data ?? []) as { visited_on: string }[]) {
 		const key = r.visited_on.slice(0, 7);
 		counts[key] = (counts[key] ?? 0) + 1;
 	}
+
 	return counts;
 }
 
@@ -658,18 +711,23 @@ export async function placesForMonth(
 	key: string,
 ): Promise<Map<number, MonthPlace>> {
 	const ids = [...new Set(placeIds)].filter((id) => Number.isInteger(id) && id > 0);
+
 	if (ids.length === 0) return new Map();
+
 	const { data, error } = await supabasePublic
 		.from('restaurant_places')
 		.select('id,first_visit,lat,lng')
 		.in('id', ids);
+
 	if (error) throw new Error(error.message);
+
 	const rows = (data ?? []) as {
 		id: number;
 		first_visit: string | null;
 		lat: number | null;
 		lng: number | null;
 	}[];
+
 	return new Map(
 		rows.map((r) => [
 			r.id,
@@ -701,13 +759,18 @@ export async function searchPlaces(query: string, limit = 6): Promise<Place[]> {
 		.split(/\s+/)
 		.filter(Boolean)
 		.slice(0, 5);
+
 	if (terms.length === 0) return [];
 	let sel = supabasePublic.from('restaurant_places').select(PLACE_COLUMNS);
+
 	for (const t of terms) {
 		sel = sel.or(`name.ilike.*${t}*,neighborhood.ilike.*${t}*,city.ilike.*${t}*`);
 	}
+
 	const { data, error } = await sel.order('visit_count', { ascending: false }).limit(limit);
+
 	if (error) throw new Error(error.message);
+
 	return (data ?? []) as Place[];
 }
 
@@ -737,17 +800,21 @@ export interface PreviousVisit {
  */
 export async function previousVisits(placeIds: number[]): Promise<Map<number, PreviousVisit>> {
 	const ids = [...new Set(placeIds)].filter((id) => Number.isInteger(id) && id > 0);
+
 	if (ids.length === 0) return new Map();
+
 	const { data, error } = await supabasePublic
 		.from('restaurant_diary')
 		.select('restaurant_id, visited_on, rating, verdict, hearted')
 		.in('restaurant_id', ids)
 		.order('visited_on', { ascending: false })
 		.order('id', { ascending: false });
+
 	if (error) throw new Error(error.message);
 
 	// Sorted newest first, so the first row seen for a place is its last visit.
 	const latest = new Map<number, PreviousVisit>();
+
 	for (const row of (data ?? []) as {
 		restaurant_id: number;
 		visited_on: string;
@@ -762,19 +829,24 @@ export async function previousVisits(placeIds: number[]): Promise<Map<number, Pr
 			hearted: row.hearted,
 		});
 	}
+
 	return latest;
 }
 
 async function distinctTextArray(column: 'tags' | 'friends'): Promise<string[]> {
 	const { data, error } = await supabasePublic.from('restaurant_diary').select(column);
+
 	if (error) throw new Error(error.message);
 	const seen = new Map<string, string>();
+
 	for (const row of (data ?? []) as Record<string, string[]>[]) {
 		for (const value of row[column] ?? []) {
 			const key = value.toLowerCase();
+
 			if (!seen.has(key)) seen.set(key, value);
 		}
 	}
+
 	return [...seen.values()].sort((a, b) => a.localeCompare(b, 'en'));
 }
 
@@ -787,16 +859,20 @@ export const listTags = () => distinctTextArray('tags');
  */
 export async function listFriends(): Promise<string[]> {
 	const { data, error } = await supabasePublic.from('restaurant_diary').select('friends');
+
 	if (error) throw new Error(error.message);
 	const count = new Map<string, number>();
 	const display = new Map<string, string>();
+
 	for (const row of (data ?? []) as { friends: string[] }[]) {
 		for (const f of new Set(row.friends ?? [])) {
 			const key = f.toLowerCase();
+
 			if (!display.has(key)) display.set(key, f);
 			count.set(key, (count.get(key) ?? 0) + 1);
 		}
 	}
+
 	return [...count.entries()]
 		.sort((a, b) => b[1] - a[1] || display.get(a[0])!.localeCompare(display.get(b[0])!, 'en'))
 		.map(([key]) => display.get(key)!);
@@ -811,16 +887,20 @@ export async function listFriendFacets(): Promise<CuisineFacet[]> {
 	const { data, error } = await supabasePublic
 		.from('restaurant_diary')
 		.select('restaurant_id, friends');
+
 	if (error) throw new Error(error.message);
 	const places = new Map<string, Set<number>>();
 	const display = new Map<string, string>();
+
 	for (const row of (data ?? []) as { restaurant_id: number; friends: string[] }[]) {
 		for (const f of new Set(row.friends ?? [])) {
 			const key = f.toLowerCase();
+
 			if (!display.has(key)) display.set(key, f);
 			(places.get(key) ?? places.set(key, new Set()).get(key)!).add(row.restaurant_id);
 		}
 	}
+
 	return [...places.entries()]
 		.map(([key, ids]) => ({ name: display.get(key) as string, count: ids.size }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
@@ -829,25 +909,32 @@ export async function listFriendFacets(): Promise<CuisineFacet[]> {
 /** Restaurant ids with at least one visit tagged with any of these people. */
 async function placeIdsForFriends(friends: string[]): Promise<Set<number>> {
 	const want = new Set(friends.map((f) => f.toLowerCase()));
+
 	const { data, error } = await supabasePublic
 		.from('restaurant_diary')
 		.select('restaurant_id, friends');
+
 	if (error) throw new Error(error.message);
 	const ids = new Set<number>();
+
 	for (const row of (data ?? []) as { restaurant_id: number; friends: string[] }[]) {
 		if ((row.friends ?? []).some((f) => want.has(f.toLowerCase()))) ids.add(row.restaurant_id);
 	}
+
 	return ids;
 }
 
 /** Cuisines already in use, for the composer's controlled list. */
 export async function listCuisines(): Promise<string[]> {
 	const { data, error } = await supabasePublic.from('restaurants').select('cuisines');
+
 	if (error) throw new Error(error.message);
 	const seen = new Map<string, string>();
+
 	for (const row of (data ?? []) as { cuisines: string[] }[]) {
 		for (const c of row.cuisines) if (!seen.has(c.toLowerCase())) seen.set(c.toLowerCase(), c);
 	}
+
 	return [...seen.values()].sort((a, b) => a.localeCompare(b, 'en'));
 }
 
@@ -861,11 +948,14 @@ export async function listWhyTagFacets(scope: PlaceScope = 'to-try'): Promise<Cu
 		supabasePublic.from('restaurant_places').select('to_try_tags'),
 		scope,
 	);
+
 	if (error) throw new Error(error.message);
 	const counts = new Map<string, number>();
+
 	for (const row of (data ?? []) as { to_try_tags: string[] }[]) {
 		for (const t of new Set(row.to_try_tags)) counts.set(t, (counts.get(t) ?? 0) + 1);
 	}
+
 	return [...counts.entries()]
 		.map(([name, count]) => ({ name, count }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'));
@@ -877,14 +967,18 @@ export async function listToTryTags(): Promise<string[]> {
 		.from('restaurant_places')
 		.select('to_try_tags')
 		.eq('on_to_try', true);
+
 	if (error) throw new Error(error.message);
 	const seen = new Map<string, string>();
+
 	for (const row of (data ?? []) as { to_try_tags: string[] }[]) {
 		for (const t of row.to_try_tags ?? []) {
 			const key = t.toLowerCase();
+
 			if (!seen.has(key)) seen.set(key, t);
 		}
 	}
+
 	return [...seen.values()].sort((a, b) => a.localeCompare(b, 'en'));
 }
 
@@ -924,51 +1018,76 @@ export interface PlaceInput {
 
 function placePayload(input: PlaceInput): Record<string, unknown> {
 	const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
 	if (input.name !== undefined) payload.name = input.name.trim();
+
 	if (input.cuisines !== undefined) payload.cuisines = input.cuisines.map((c) => c.trim()).filter(Boolean);
+
 	if (input.priceBand !== undefined) payload.price_band = input.priceBand;
+
 	if (input.neighborhood !== undefined) payload.neighborhood = emptyToNull(input.neighborhood);
+
 	// City and country have a NOT NULL floor; only overwrite them when given.
 	if (input.city) payload.city = input.city.trim();
+
 	if (input.stateRegion !== undefined) payload.state_region = emptyToNull(input.stateRegion);
+
 	if (input.country) payload.country = input.country.trim();
+
 	if (input.lat !== undefined) payload.lat = input.lat;
+
 	if (input.lng !== undefined) payload.lng = input.lng;
+
 	if (input.googlePlaceId !== undefined) payload.google_place_id = emptyToNull(input.googlePlaceId);
+
 	if (input.websiteUrl !== undefined) payload.website_url = emptyToNull(input.websiteUrl);
+
 	if (input.yelpUrl !== undefined) payload.yelp_url = emptyToNull(input.yelpUrl);
+
 	if (input.beliUrl !== undefined) payload.beli_url = emptyToNull(input.beliUrl);
+
 	if (input.toTryReason !== undefined) payload.to_try_reason = emptyToNull(input.toTryReason);
+
 	if (input.trip !== undefined) payload.trip = input.trip;
+
 	// Free-form now — the composer's "why" is a tag field autocompleting off the
 	// tags already in use, not a fixed vocabulary. cleanList trims and de-dupes.
 	if (input.toTryTags !== undefined) payload.to_try_tags = cleanList(input.toTryTags);
+
 	if (input.toTry) payload.to_try_added_at = new Date().toISOString();
+
 	return payload;
 }
 
 function emptyToNull(v: string | null | undefined): string | null {
 	if (v == null) return null;
 	const trimmed = v.trim();
+
 	return trimmed === '' ? null : trimmed;
 }
 
 export async function createPlace(input: PlaceInput & { name: string }): Promise<Place> {
 	const payload = placePayload(input);
+
 	// City is NOT NULL and the composer's fast path ("a name and nothing else")
 	// has to stay open, so an unplaced new place lands in the owner's own city
 	// rather than failing the insert. Editing the place fixes it later.
 	if (!payload.city) payload.city = 'New York';
+
 	if (!payload.country) payload.country = 'US';
 	const { data, error } = await supabaseAdmin.from('restaurants').insert(payload).select('id').single();
+
 	if (error) throw new Error(error.message);
 	const place = await getPlaceRow(data.id as number);
+
 	if (!place) throw new Error('created place could not be read back');
+
 	return place;
 }
 
 export async function updatePlace(id: number, input: PlaceInput): Promise<void> {
 	const { error } = await supabaseAdmin.from('restaurants').update(placePayload(input)).eq('id', id);
+
 	if (error) throw new Error(error.message);
 }
 
@@ -978,7 +1097,9 @@ async function getPlaceRow(id: number): Promise<Place | null> {
 		.select(PLACE_COLUMNS)
 		.eq('id', id)
 		.maybeSingle();
+
 	if (error) throw new Error(error.message);
+
 	return (data as Place) ?? null;
 }
 
@@ -1012,22 +1133,34 @@ export async function createVisit(input: VisitInput): Promise<number> {
 		})
 		.select('id')
 		.single();
+
 	if (error) throw new Error(error.message);
+
 	return data.id as number;
 }
 
 export async function updateVisit(id: number, input: Omit<VisitInput, 'restaurantId'>): Promise<void> {
 	const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
 	if (input.visitedOn) payload.visited_on = input.visitedOn;
+
 	if (input.rating !== undefined) payload.rating = input.rating;
+
 	if (input.verdict !== undefined) payload.verdict = input.verdict;
+
 	if (input.hearted !== undefined) payload.hearted = input.hearted;
+
 	if (input.revisit !== undefined) payload.revisit = input.revisit;
+
 	if (input.friends !== undefined) payload.friends = cleanList(input.friends);
+
 	if (input.review !== undefined) payload.review = emptyToNull(input.review);
+
 	if (input.privateNote !== undefined) payload.private_note = emptyToNull(input.privateNote);
+
 	if (input.tags !== undefined) payload.tags = cleanList(input.tags);
 	const { error } = await supabaseAdmin.from('restaurant_visits').update(payload).eq('id', id);
+
 	if (error) throw new Error(error.message);
 }
 
@@ -1037,16 +1170,20 @@ export async function deleteVisit(id: number): Promise<void> {
 		.from('restaurant_visits')
 		.update({ deleted_at: new Date().toISOString() })
 		.eq('id', id);
+
 	if (error) throw new Error(error.message);
 }
 
 function cleanList(values: string[] | undefined): string[] {
 	if (!values) return [];
 	const seen = new Map<string, string>();
+
 	for (const v of values) {
 		const trimmed = v.trim();
+
 		if (trimmed && !seen.has(trimmed.toLowerCase())) seen.set(trimmed.toLowerCase(), trimmed);
 	}
+
 	return [...seen.values()];
 }
 
@@ -1065,9 +1202,12 @@ export async function setPlaceHearted(id: number, hearted: boolean): Promise<voi
 			.from('restaurant_visits')
 			.update({ hearted: false })
 			.eq('restaurant_id', id);
+
 		if (error) throw new Error(error.message);
+
 		return;
 	}
+
 	const { data, error: findError } = await supabaseAdmin
 		.from('restaurant_visits')
 		.select('id')
@@ -1077,12 +1217,16 @@ export async function setPlaceHearted(id: number, hearted: boolean): Promise<voi
 		.order('id', { ascending: false })
 		.limit(1)
 		.maybeSingle();
+
 	if (findError) throw new Error(findError.message);
+
 	if (!data) throw new Error('cannot heart a place with no visits');
+
 	const { error } = await supabaseAdmin
 		.from('restaurant_visits')
 		.update({ hearted: true })
 		.eq('id', data.id);
+
 	if (error) throw new Error(error.message);
 }
 
@@ -1109,11 +1253,14 @@ export async function removeFromToTry(id: number): Promise<'deleted' | 'unlisted
 		.from('restaurant_visits')
 		.select('id', { count: 'exact', head: true })
 		.eq('restaurant_id', id);
+
 	if (countError) throw new Error(countError.message);
 
 	if ((count ?? 0) === 0) {
 		const { error } = await supabaseAdmin.from('restaurants').delete().eq('id', id);
+
 		if (error) throw new Error(error.message);
+
 		return 'deleted';
 	}
 
@@ -1121,7 +1268,9 @@ export async function removeFromToTry(id: number): Promise<'deleted' | 'unlisted
 		.from('restaurants')
 		.update({ to_try_added_at: null, to_try_reason: null })
 		.eq('id', id);
+
 	if (error) throw new Error(error.message);
+
 	return 'unlisted';
 }
 
@@ -1140,6 +1289,7 @@ export async function removeFromToTry(id: number): Promise<'deleted' | 'unlisted
  */
 export async function mergePlaces(keepId: number, dropIds: number[]): Promise<void> {
 	const drops = [...new Set(dropIds)].filter((id) => id !== keepId);
+
 	if (drops.length === 0) throw new Error('nothing to merge into the kept place');
 
 	// Every id must exist and none may already be merged — merging a merged row
@@ -1148,13 +1298,18 @@ export async function mergePlaces(keepId: number, dropIds: number[]): Promise<vo
 		.from('restaurants')
 		.select('*')
 		.in('id', [keepId, ...drops]);
+
 	if (readError) throw new Error(readError.message);
 	const byId = new Map((rows ?? []).map((r: Record<string, unknown>) => [r.id as number, r]));
+
 	for (const id of [keepId, ...drops]) {
 		const row = byId.get(id);
+
 		if (!row) throw new Error(`place ${id} does not exist`);
+
 		if (row.merged_into != null) throw new Error(`place ${id} is already merged`);
 	}
+
 	const keep = byId.get(keepId) as Record<string, unknown>;
 	const dropRows = drops.map((id) => byId.get(id) as Record<string, unknown>);
 
@@ -1163,15 +1318,19 @@ export async function mergePlaces(keepId: number, dropIds: number[]): Promise<vo
 		.from('restaurant_visits')
 		.update({ restaurant_id: keepId })
 		.in('restaurant_id', drops);
+
 	if (repoint.error) throw new Error(repoint.error.message);
 
 	// 2. Fill onto keep only what it is MISSING — never overwrite its own values.
 	const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
 	const fillScalar = (col: string) => {
 		if (keep[col] != null) return;
 		const from = dropRows.find((d) => d[col] != null);
+
 		if (from) payload[col] = from[col];
 	};
+
 	for (const col of [
 		'lat', 'lng', 'neighborhood', 'borough', 'city', 'state_region', 'country',
 		'price_band', 'website_url', 'yelp_url', 'beli_url', 'google_place_id',
@@ -1179,20 +1338,28 @@ export async function mergePlaces(keepId: number, dropIds: number[]): Promise<vo
 	]) {
 		fillScalar(col);
 	}
+
 	// Arrays union; a place worth going out of the way for on any row is worth it.
 	const union = (col: string) => {
 		const seen = new Set<string>();
+
 		for (const row of [keep, ...dropRows]) for (const v of (row[col] as string[] | null) ?? []) seen.add(v);
+
 		return [...seen];
 	};
+
 	const cuisines = union('cuisines');
+
 	if (cuisines.length > (keep.cuisines as string[] ?? []).length) payload.cuisines = cuisines;
 	const toTryTags = union('to_try_tags');
+
 	if (toTryTags.length > (keep.to_try_tags as string[] ?? []).length) payload.to_try_tags = toTryTags;
+
 	if (!keep.trip && dropRows.some((d) => d.trip)) payload.trip = true;
 
 	if (Object.keys(payload).length > 1) {
 		const fill = await supabaseAdmin.from('restaurants').update(payload).eq('id', keepId);
+
 		if (fill.error) throw new Error(fill.error.message);
 	}
 
@@ -1202,6 +1369,7 @@ export async function mergePlaces(keepId: number, dropIds: number[]): Promise<vo
 		.from('restaurants')
 		.update({ merged_into: keepId, to_try_added_at: null, updated_at: new Date().toISOString() })
 		.in('id', drops);
+
 	if (mark.error) throw new Error(mark.error.message);
 }
 
@@ -1215,6 +1383,7 @@ export interface PhotoInput {
 /** The ids of the rows just written, in the order they were given. */
 export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<number[]> {
 	if (photos.length === 0) return [];
+
 	const { data, error: maxError } = await supabaseAdmin
 		.from('restaurant_photos')
 		.select('position')
@@ -1222,8 +1391,10 @@ export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<
 		.order('position', { ascending: false })
 		.limit(1)
 		.maybeSingle();
+
 	if (maxError) throw new Error(maxError.message);
 	const start = (data?.position ?? -1) + 1;
+
 	const { data: rows, error } = await supabaseAdmin
 		.from('restaurant_photos')
 		.insert(
@@ -1239,7 +1410,9 @@ export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<
 		// Returned so the composer can put a just-uploaded photograph in the
 		// arrangement it was placed into, rather than only at the end.
 		.select('id, position');
+
 	if (error) throw new Error(error.message);
+
 	return ((rows ?? []) as { id: number; position: number }[])
 		.sort((a, b) => a.position - b.position)
 		.map((r) => r.id);
@@ -1253,13 +1426,16 @@ export async function addPhotos(visitId: number, photos: PhotoInput[]): Promise<
  */
 export async function reorderPhotos(visitId: number, ids: number[]): Promise<void> {
 	if (ids.length === 0) return;
+
 	const { data, error: readError } = await supabaseAdmin
 		.from('restaurant_photos')
 		.select('id')
 		.eq('visit_id', visitId);
+
 	if (readError) throw new Error(readError.message);
 	const mine = new Set(((data ?? []) as { id: number }[]).map((r) => r.id));
 	const stray = ids.find((id) => !mine.has(id));
+
 	if (stray != null) throw new Error(`photograph ${stray} does not belong to this visit`);
 
 	// One update per row: positions are a handful of small integers, and the
@@ -1269,6 +1445,7 @@ export async function reorderPhotos(visitId: number, ids: number[]): Promise<voi
 			.from('restaurant_photos')
 			.update({ position: i })
 			.eq('id', ids[i]);
+
 		if (error) throw new Error(error.message);
 	}
 }
@@ -1283,6 +1460,7 @@ export async function uploadPhoto(
 	const path = `${visitId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 	const bytes = new Uint8Array(await file.arrayBuffer());
 	await putPhoto(path, bytes, file instanceof File ? file.type || undefined : undefined);
+
 	return path;
 }
 
@@ -1292,9 +1470,12 @@ export async function deletePhoto(id: number): Promise<void> {
 		.select('storage_path')
 		.eq('id', id)
 		.maybeSingle();
+
 	if (readError) throw new Error(readError.message);
 	const { error } = await supabaseAdmin.from('restaurant_photos').delete().eq('id', id);
+
 	if (error) throw new Error(error.message);
+
 	if (data?.storage_path) {
 		await deletePhotoObject(data.storage_path as string);
 	}

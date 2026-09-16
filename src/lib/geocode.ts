@@ -32,10 +32,12 @@ const USER_AGENT = 'jasonqiao.com restaurant log (https://jasonqiao.com)';
 
 /** One request a second, shared by every caller in this process. */
 const MIN_INTERVAL_MS = 1100;
+
 let lastCallAt = 0;
 
 async function pace(): Promise<void> {
 	const wait = lastCallAt + MIN_INTERVAL_MS - Date.now();
+
 	if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 	lastCallAt = Date.now();
 }
@@ -106,6 +108,7 @@ function humanise(value: string): string {
 
 function titleCase(value: string): string {
 	const v = humanise(value);
+
 	return v ? v[0].toUpperCase() + v.slice(1) : v;
 }
 
@@ -117,6 +120,7 @@ function titleCase(value: string): string {
  */
 export async function geocode(query: string, limit = 5): Promise<GeocodeHit[]> {
 	const q = query.trim();
+
 	if (q.length < 3) return [];
 
 	const url = new URL(ENDPOINT);
@@ -131,8 +135,10 @@ export async function geocode(query: string, limit = 5): Promise<GeocodeHit[]> {
 	try {
 		await pace();
 		const res = await fetch(url, { headers: { 'user-agent': USER_AGENT, accept: 'application/json' } });
+
 		if (!res.ok) return [];
 		const rows = (await res.json()) as NominatimRow[];
+
 		// Exact points first. A neighbourhood that happens to share a name with
 		// the restaurant you meant should never be the first thing offered.
 		return rows
