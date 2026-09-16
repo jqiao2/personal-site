@@ -4,7 +4,9 @@
 // pins.ts re-exports all of this, so the public contract still lives on pins.ts.
 
 export type PinTrack = 'film' | 'book' | 'meal' | 'move';
+
 export const MAX_PINS = 10;
+
 export const PIN_TRACKS: readonly PinTrack[] = ['film', 'book', 'meal', 'move'];
 
 /** Whether adding this pin is blocked by the cap: already at MAX and this pair

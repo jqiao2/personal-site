@@ -37,6 +37,7 @@ for (const lat of [0.5, REF_LAT, 64.1]) {
 		`tileGroundMeters disagrees with the drawn tile at ${lat}°`,
 	);
 }
+
 {
 	const [[w, s], [e]] = tileBounds(tileKey(REF_LAT, -73.98));
 	const width = haversine([s, w], [s, e]);
@@ -84,6 +85,7 @@ for (const lat of [REF_LAT, 64.1]) {
 	const expected = Math.floor(1000 / tileGroundMeters(lat));
 	assert.ok(counts.size >= expected, `at ${lat}°: expected ~${expected} tiles, got ${counts.size}`);
 	const rows = [...counts.keys()].map((k) => Number(k.split(':')[1])).sort((a, b) => a - b);
+
 	for (let i = 1; i < rows.length; i++) assert.equal(rows[i] - rows[i - 1], 1, `hole in the track at ${lat}°`);
 }
 
@@ -94,6 +96,7 @@ for (const lat of [REF_LAT, 64.1]) {
 		[tileKey(REF_LAT + 0.01, -73.98), 3],
 		[tileKey(REF_LAT + 0.02, -73.98), 40],
 	]);
+
 	const fc = tilesToGeoJSON(counts);
 	assert.equal(fc.features.length, TILE_BUCKETS.length, 'one feature per bucket');
 	assert.deepEqual(
@@ -114,11 +117,14 @@ for (const lat of [REF_LAT, 64.1]) {
 	const ring = hexRing(hexKey(REF_LAT, -73.98));
 	// Shoelace on local metres, which is exact enough over 50 m.
 	const [lng0, lat0] = ring[0];
+
 	const xy = ring.map(([lng, lat]) => [
 		(lng - lng0) * 111_320 * Math.cos((lat0 * Math.PI) / 180),
 		(lat - lat0) * 111_320,
 	]);
+
 	let area = 0;
+
 	for (let i = 0; i < xy.length - 1; i++) area += xy[i][0] * xy[i + 1][1] - xy[i + 1][0] * xy[i][1];
 	area = Math.abs(area) / 2;
 	assert.ok(Math.abs(area - TILE_M ** 2) / TILE_M ** 2 < 0.03, `hex is ${area.toFixed(0)} m², want ${TILE_M ** 2}`);
@@ -130,13 +136,17 @@ for (const lat of [REF_LAT, 64.1]) {
 {
 	const inside = (ring, [lng, lat]) => {
 		let hit = false;
+
 		for (let i = 0, j = ring.length - 2; i < ring.length - 1; j = i++) {
 			const [xi, yi] = ring[i];
 			const [xj, yj] = ring[j];
+
 			if (yi > lat !== yj > lat && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) hit = !hit;
 		}
+
 		return hit;
 	};
+
 	for (let i = 0; i < 400; i++) {
 		const lat = REF_LAT + (i % 20) * 3e-4;
 		const lng = -73.98 + Math.floor(i / 20) * 3e-4;
@@ -163,6 +173,7 @@ for (const lat of [REF_LAT, 64.1]) {
 		],
 		sparse,
 	);
+
 	for (let m = 0; m <= 1000; m++) {
 		const key = hexKey(REF_LAT + (north * m) / 1000, -73.98);
 		assert.ok(sparse.has(key), `hole in the honeycomb at ${m} m`);
@@ -178,6 +189,7 @@ for (const lat of [REF_LAT, 64.1]) {
 			[hexKey(REF_LAT + 0.02, -73.98), 40],
 		]),
 	);
+
 	assert.deepEqual(
 		fc.features.map((f) => f.properties.tiles),
 		[1, 1, 0, 1],

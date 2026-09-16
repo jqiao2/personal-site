@@ -10,10 +10,12 @@ export const prerender = false;
 // data is already public on film pages, so this read is unauthenticated.
 export const GET: APIRoute = async ({ url }) => {
 	const tmdbId = Number(url.searchParams.get('tmdbId'));
+
 	if (!Number.isInteger(tmdbId) || tmdbId <= 0) return apiError('tmdbId is required', 400);
 
 	try {
 		const prior = await getPriorWatch(tmdbId);
+
 		return json(prior, 200, { 'cache-control': 'no-store' });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'prior-watch lookup failed', 500);

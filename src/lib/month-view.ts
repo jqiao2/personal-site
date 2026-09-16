@@ -66,13 +66,18 @@ export function sortDayWatches(watches: MonthWatch[]): MonthWatch[] {
 	return watches.slice().sort((a, b) => {
 		const at = a.medium === 'theater' ? 1 : 0;
 		const bt = b.medium === 'theater' ? 1 : 0;
+
 		if (at !== bt) return bt - at;
+
 		if (a.liked !== b.liked) return a.liked ? -1 : 1;
 		const ar = a.rating ?? -1;
 		const br = b.rating ?? -1;
+
 		if (ar !== br) return br - ar;
 		const titles = a.title.localeCompare(b.title);
+
 		if (titles !== 0) return titles;
+
 		return a.id - b.id;
 	});
 }
@@ -109,6 +114,7 @@ const TONES: readonly [string, string][] = [
  */
 export function ground(tmdbId: number): string {
 	const [a, b] = TONES[Math.abs(tmdbId) % TONES.length];
+
 	return `repeating-linear-gradient(135deg, ${a} 0 9px, ${b} 9px 18px)`;
 }
 
@@ -163,26 +169,32 @@ function toCellFilm(watch: MonthWatch, layer: number): CellFilm {
 /** The month's cells, in reading order, padded out to whole weeks. */
 export function buildCells(key: string, watches: MonthWatch[]): MonthCell[] {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return [];
 	const { year, month } = parsed;
 	const days = daysInMonth(year, month);
 	const first = firstWeekdayIndex(year, month);
 
 	const byDay = new Map<number, MonthWatch[]>();
+
 	for (const watch of watches) {
 		const day = Number(watch.watched_date.slice(8, 10));
 		const list = byDay.get(day);
+
 		if (list) list.push(watch);
 		else byDay.set(day, [watch]);
 	}
 
 	const cells: MonthCell[] = [];
+
 	for (let i = 0; i < weekRows(key) * 7; i++) {
 		const date = i - first + 1;
+
 		if (date < 1 || date > days) {
 			cells.push({ outside: true, date: 0, films: [], behind: [], count: 0, lines: [] });
 			continue;
 		}
+
 		const day = sortDayWatches(byDay.get(date) ?? []);
 		const films = day.map(toCellFilm);
 		cells.push({
@@ -195,6 +207,7 @@ export function buildCells(key: string, watches: MonthWatch[]): MonthCell[] {
 			lines: day.map((f) => `${f.title}${f.release_year ? ` (${f.release_year})` : ''}`),
 		});
 	}
+
 	return cells;
 }
 
@@ -205,6 +218,7 @@ export function buildCells(key: string, watches: MonthWatch[]): MonthCell[] {
  * band back to the grid, which is worth more than the numbers at those heights.
  */
 const CHROME_WITH_FIGURES = 470;
+
 const CHROME_BARE = 300;
 
 export interface FilmGeometry extends Geometry {
@@ -219,6 +233,7 @@ export function hasFigures(aspect: Aspect): boolean {
 /** Geometry for every aspect, keyed by id — the aspect toggle just swaps these in. */
 export function geometries(rows: number): Record<string, FilmGeometry> {
 	const out: Record<string, FilmGeometry> = {};
+
 	for (const aspect of ASPECTS) {
 		const figures = hasFigures(aspect);
 		out[aspect.id] = {
@@ -226,6 +241,7 @@ export function geometries(rows: number): Record<string, FilmGeometry> {
 			figures,
 		};
 	}
+
 	return out;
 }
 
@@ -257,6 +273,7 @@ export function summarise(key: string, watches: MonthWatch[]): SummaryStat[] {
 	const days = new Set(watches.map((w) => w.watched_date));
 	const minutes = watches.reduce((total, w) => total + (w.runtime ?? 0), 0);
 	const streak = longestStreak(key, watches);
+
 	return [
 		{ label: 'Films', value: String(distinct.size) },
 		{ label: 'Hours', value: `${Math.round(minutes / 60)}h` },

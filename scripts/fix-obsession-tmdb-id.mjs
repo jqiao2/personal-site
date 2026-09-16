@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const MOVIE_ID = 989; // movies.id for the mislinked "Obsession" row
+
 const CORRECT_TMDB_ID = 1339713;
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
@@ -17,7 +18,9 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 });
 
 const url = new URL(`https://api.themoviedb.org/3/movie/${CORRECT_TMDB_ID}`);
+
 url.searchParams.set('api_key', process.env.TMDB_API_KEY);
+
 const d = await (await fetch(url)).json();
 
 const { data, error } = await sb
@@ -36,4 +39,5 @@ const { data, error } = await sb
 	.select();
 
 if (error) throw error;
+
 console.log(JSON.stringify(data, null, 2));

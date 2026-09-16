@@ -16,6 +16,7 @@ export function watchedQueryFromParams(p: URLSearchParams): WatchedQuery {
 	const sort = p.get('sort');
 	const friendMode = p.get('friendmode');
 	const whereMode = p.get('wheremode');
+
 	return {
 		q: p.get('q')?.trim() ?? '',
 		sort: isWatchedSort(sort) ? sort : 'recent',
@@ -57,6 +58,7 @@ export function watchedFilterCount(q: WatchedQuery): number {
 		(q.liked ? 1 : 0) +
 		(q.rewatched ? 1 : 0) +
 		(q.releaseYears?.length ?? 0);
+
 	const lists = [
 		q.tags,
 		q.friends,
@@ -69,7 +71,9 @@ export function watchedFilterCount(q: WatchedQuery): number {
 		q.languages,
 		q.countries,
 	];
+
 	for (const list of lists) n += list?.length ?? 0;
+
 	return n;
 }
 
@@ -95,8 +99,10 @@ const RELEASE_FLOOR = 1870;
 function releaseBound(raw: string | null): number | undefined {
 	if (raw == null) return undefined;
 	const n = Number(raw);
+
 	if (!Number.isFinite(n)) return undefined;
 	const ceiling = siteYear() + 5;
+
 	return Math.min(ceiling, Math.max(RELEASE_FLOOR, Math.round(n)));
 }
 
@@ -104,6 +110,7 @@ function releaseBound(raw: string | null): number | undefined {
 function yearBound(raw: string | null): number | undefined {
 	if (raw == null) return undefined;
 	const n = Number.parseInt(raw, 10);
+
 	return Number.isFinite(n) ? n : undefined;
 }
 
@@ -115,6 +122,8 @@ function yearBound(raw: string | null): number | undefined {
 function starBound(raw: string | null): number | undefined {
 	if (raw == null) return undefined;
 	const n = Number.parseFloat(raw);
+
 	if (!Number.isFinite(n)) return undefined;
+
 	return Math.min(5, Math.max(0.5, Math.round(n * 2) / 2));
 }

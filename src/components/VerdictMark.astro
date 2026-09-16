@@ -26,7 +26,9 @@ interface Props {
 }
 
 const { verdict, size = 22, ring = true, title = null } = Astro.props;
+
 const v = verdictAt(verdict);
+
 const label = title ?? v?.label ?? 'No verdict recorded';
 ---
 

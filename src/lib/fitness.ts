@@ -43,6 +43,7 @@ export interface PmcPoint {
 
 /** EWMA time constants, in days. The PMC's canonical 42 / 7. */
 export const CTL_DAYS = 42;
+
 export const ATL_DAYS = 7;
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -54,6 +55,7 @@ export function addDay(date: string, n: number): string {
 	const [y, m, d] = date.split('-').map(Number);
 	const dt = new Date(y, (m || 1) - 1, d || 1);
 	dt.setDate(dt.getDate() + n);
+
 	return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 }
 
@@ -68,9 +70,11 @@ const round1 = (n: number) => Math.round(n * 10) / 10;
  */
 export function computePmc(loads: Load[], today: string): PmcPoint[] {
 	const byDate = new Map<string, number>();
+
 	for (const l of loads) {
 		if (l.date <= today) byDate.set(l.date, (byDate.get(l.date) ?? 0) + l.load);
 	}
+
 	if (byDate.size === 0) return [];
 
 	const start = [...byDate.keys()].reduce((a, b) => (a < b ? a : b));
@@ -82,6 +86,7 @@ export function computePmc(loads: Load[], today: string): PmcPoint[] {
 	const out: PmcPoint[] = [];
 	let ctl = 0;
 	let atl = 0;
+
 	for (let date = start; date <= today; date = addDay(date, 1)) {
 		// Form is measured BEFORE today's load lands — it's yesterday's balance.
 		const tsb = ctl - atl;
@@ -90,6 +95,7 @@ export function computePmc(loads: Load[], today: string): PmcPoint[] {
 		atl += aAtl * (load - atl);
 		out.push({ date, ctl: round1(ctl), atl: round1(atl), tsb: round1(tsb) });
 	}
+
 	return out;
 }
 
@@ -111,12 +117,14 @@ export const RANGES = [
 ] as const;
 
 export type RangeKey = (typeof RANGES)[number]['key'];
+
 export const DEFAULT_RANGE: RangeKey = '6m';
 
 /** The inclusive [from, to] a preset resolves to, ending `today`. `null` from =
  *  the whole series. */
 export function rangeDates(range: RangeKey, today: string): { from: string | null; to: string } {
 	const days = RANGES.find((r) => r.key === range)?.days ?? null;
+
 	return { from: days == null ? null : addDay(today, -days), to: today };
 }
 
@@ -131,10 +139,15 @@ export function windowPmc(points: PmcPoint[], from: string | null, to: string | 
 /** The plot box. Uniform-scaled to the card width — see the module note. The
  *  left/bottom padding leaves room for the y labels and the month axis. */
 export const PLOT_W = 720;
+
 export const PLOT_H = 240;
+
 const PAD_L = 30;
+
 const PAD_R = 6;
+
 const PAD_T = 12;
+
 const PAD_B = 18;
 
 /** One day's plotted position — the day's values and where each series sits in
@@ -182,6 +195,7 @@ function niceStep(target: number): number {
 	const pow = Math.pow(10, Math.floor(Math.log10(target)));
 	const n = target / pow;
 	const step = n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10;
+
 	return step * pow;
 }
 
@@ -197,10 +211,12 @@ export function plotPmc(points: PmcPoint[], height: number = PLOT_H): FitnessPlo
 
 	let hi = 0;
 	let lo = 0;
+
 	for (const p of points) {
 		hi = Math.max(hi, p.ctl, p.atl, p.tsb);
 		lo = Math.min(lo, p.tsb); // only Form goes negative
 	}
+
 	if (hi === lo) hi = lo + 1; // a dead-flat all-zero window still has an axis
 
 	const innerW = PLOT_W - PAD_L - PAD_R;
@@ -233,6 +249,7 @@ export function plotPmc(points: PmcPoint[], height: number = PLOT_H): FitnessPlo
 	const step = niceStep((hi - lo) / 4);
 	const yTicks: { y: number; value: number }[] = [];
 	const firstTick = Math.ceil(lo / step) * step;
+
 	for (let v = firstTick; v <= hi + 1e-9; v += step) {
 		yTicks.push({ y: y(v), value: Math.round(v) });
 	}
@@ -245,6 +262,7 @@ export function plotPmc(points: PmcPoint[], height: number = PLOT_H): FitnessPlo
 	let lastMonth = '';
 	points.forEach((p, i) => {
 		const month = p.date.slice(0, 7);
+
 		if (month !== lastMonth) {
 			lastMonth = month;
 			boundaries.push(i);
@@ -254,6 +272,7 @@ export function plotPmc(points: PmcPoint[], height: number = PLOT_H): FitnessPlo
 	const xTicks: { x: number; label: string }[] = [];
 	boundaries.forEach((i, idx) => {
 		const [yr, mo] = points[i].date.split('-').map(Number);
+
 		if (mo !== 1 && idx % k !== 0) return; // thin non-January ticks
 		xTicks.push({ x: x(i), label: mo === 1 ? String(yr) : MONTH_ABBR[mo - 1] });
 	});

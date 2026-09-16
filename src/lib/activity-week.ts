@@ -60,6 +60,7 @@ const pad2 = (n: number) => String(n).padStart(2, '0');
 /** 'YYYY-MM-DD' → a local (not UTC) `Date` at that day's midnight. */
 function parseLocal(date: string): Date {
 	const [y, m, d] = date.split('-').map(Number);
+
 	return new Date(y, (m || 1) - 1, d || 1);
 }
 
@@ -73,6 +74,7 @@ function toLocal(d: Date): string {
 export function addDays(date: string, n: number): string {
 	const d = parseLocal(date);
 	d.setDate(d.getDate() + n);
+
 	return toLocal(d);
 }
 
@@ -84,6 +86,7 @@ export function weekStart(localDate: string): string {
 	const d = parseLocal(localDate);
 	const mondayOffset = (d.getDay() + 6) % 7; // Mon→0, Tue→1, …, Sun→6
 	d.setDate(d.getDate() - mondayOffset);
+
 	return toLocal(d);
 }
 
@@ -99,6 +102,7 @@ export function weekLabel(monday: string, sunday: string): string {
 	const start = `${MONTH_ABBR[mm - 1]} ${md}`;
 	const end = mm === sm ? `${sd}` : `${MONTH_ABBR[sm - 1]} ${sd}`;
 	const base = `${start} – ${end}`;
+
 	return my === siteYear() && sy === siteYear() ? base : `${base}, ${sy}`;
 }
 
@@ -179,9 +183,11 @@ export function groupIntoWeeks(
 	const byDate = new Map(days.map((d) => [d.local_date, d]));
 
 	const weeks: ActivityWeek[] = [];
+
 	for (let w = 0; w < weekCount; w++) {
 		const monday = addDays(currentMonday, -7 * w);
 		const cells: DayCell[] = [];
+
 		for (let i = 0; i < 7; i++) {
 			const date = addDays(monday, i);
 			const row = byDate.get(date);
@@ -197,6 +203,7 @@ export function groupIntoWeeks(
 				exertion: row?.total_exertion ?? 0,
 			});
 		}
+
 		const sunday = cells[6].date;
 		weeks.push({
 			mondayDate: monday,
@@ -206,5 +213,6 @@ export function groupIntoWeeks(
 			totals: sumTotals(cells),
 		});
 	}
+
 	return weeks;
 }

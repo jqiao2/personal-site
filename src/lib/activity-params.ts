@@ -42,7 +42,9 @@ export interface ActivityFilterQuery extends ActivityQuery {
 }
 
 const METERS_PER_MILE = 1609.344;
+
 const METERS_PER_FOOT = 0.3048;
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Earliest local_date worth asking for — before this is a fat-fingered year. */
@@ -56,6 +58,7 @@ const DATE_FLOOR = '1990-01-01';
 export function activityQueryFromParams(p: URLSearchParams): ActivityFilterQuery {
 	const sort = p.get('sort');
 	const dir = p.get('dir');
+
 	return {
 		sort: isActivitySort(sort) ? sort : 'date',
 		sortDir: dir === 'asc' ? 'asc' : dir === 'desc' ? 'desc' : undefined,
@@ -116,6 +119,7 @@ export function isActivityFiltered(q: ActivityFilterQuery): boolean {
 function nonNegative(raw: string | null): number | null {
 	if (raw == null) return null;
 	const n = Number(raw);
+
 	return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
@@ -123,22 +127,27 @@ function nonNegative(raw: string | null): number | null {
 function dateBound(raw: string | null): string | undefined {
 	if (raw == null || !DATE_RE.test(raw)) return undefined;
 	const ceiling = `${siteYear() + 1}-12-31`;
+
 	if (raw < DATE_FLOOR || raw > ceiling) return undefined;
+
 	return raw;
 }
 
 function milesBound(raw: string | null): number | undefined {
 	const n = nonNegative(raw);
+
 	return n == null ? undefined : n * METERS_PER_MILE;
 }
 
 function minutesBound(raw: string | null): number | undefined {
 	const n = nonNegative(raw);
+
 	return n == null ? undefined : n * 60;
 }
 
 function feetBound(raw: string | null): number | undefined {
 	const n = nonNegative(raw);
+
 	return n == null ? undefined : n * METERS_PER_FOOT;
 }
 
@@ -150,7 +159,9 @@ function exertionBound(raw: string | null): number | undefined {
 
 function boolFlag(raw: string | null): boolean | undefined {
 	if (raw === '1') return true;
+
 	if (raw === '0') return false;
+
 	return undefined;
 }
 
@@ -172,11 +183,14 @@ export async function fetchActivityPage(
 	isOwner = false,
 ): Promise<{ rows: ActivityListRow[]; total: number }> {
 	const { measuredOnly, ...rest } = isOwner ? query : visitorQuery(query);
+
 	if (!measuredOnly) {
 		return listActivities({ ...rest, limit: page.limit, offset: page.offset }, isOwner);
 	}
+
 	const { rows: all } = await listActivities({ ...rest, limit: MEASURED_FETCH_CAP, offset: 0 }, isOwner);
 	const measured = all.filter((r) => r.exertion_confidence === 'measured');
+
 	return {
 		rows: measured.slice(page.offset, page.offset + page.limit),
 		total: measured.length,
@@ -237,9 +251,12 @@ async function columnBounds(column: string): Promise<ActivityBounds | null> {
 				.order(column, { ascending: false })
 				.limit(1),
 		]);
+
 		const min = (lo?.[0] as Record<string, number> | undefined)?.[column];
 		const max = (hi?.[0] as Record<string, number> | undefined)?.[column];
+
 		if (min == null || max == null) return null;
+
 		return { min, max };
 	} catch {
 		// Table/column not applied yet in this environment — an empty facets
@@ -253,6 +270,7 @@ export async function fetchActivityFacets(isOwner = false): Promise<ActivityFace
 	// longest ride, the biggest day of climbing. A visitor gets the empty
 	// payload, which draws as a panel with no chips and no sliders.
 	if (!isOwner) return EMPTY_FACETS;
+
 	const [facets, gear, distanceM, durationS, elevationM, exertion] = await Promise.all([
 		listActivityFacets(isOwner),
 		listGear(),
@@ -261,6 +279,7 @@ export async function fetchActivityFacets(isOwner = false): Promise<ActivityFace
 		columnBounds('elevation_gain_m'),
 		columnBounds('exertion'),
 	]);
+
 	return {
 		sports: facets.sports,
 		gear: gear.map((g) => ({ id: g.id, name: g.nickname || g.name, kind: g.kind })),
@@ -309,7 +328,9 @@ export interface SentencePart {
 /** Join names as "a", "a and b", "a, b, and c". */
 function andList(items: string[], conj = 'and'): string {
 	if (items.length <= 1) return items.join('');
+
 	if (items.length === 2) return `${items[0]} ${conj} ${items[1]}`;
+
 	return `${items.slice(0, -1).join(', ')}, ${conj} ${items[items.length - 1]}`;
 }
 
@@ -341,14 +362,18 @@ const SPORT_VERB: Record<string, string> = {
 
 function miTxt(m: number): string {
 	const mi = m / METERS_PER_MILE;
+
 	return `${mi % 1 === 0 ? mi.toFixed(0) : mi.toFixed(1)} mi`;
 }
+
 function ftTxt(m: number): string {
 	return `${Math.round(m / METERS_PER_FOOT).toLocaleString('en-US')} ft`;
 }
+
 function durTxt(s: number): string {
 	const h = Math.floor(s / 3600);
 	const m = Math.round((s % 3600) / 60);
+
 	return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
@@ -472,10 +497,12 @@ export function activityFilterSentence(s: ActivityFilterSummary): SentencePart[]
 		lit(' with ');
 		em('power data');
 	}
+
 	if (s.hasHr) {
 		lit(' with ');
 		em('heart-rate data');
 	}
+
 	if (s.measuredOnly) {
 		lit(' with ');
 		em('measured');
@@ -486,11 +513,13 @@ export function activityFilterSentence(s: ActivityFilterSummary): SentencePart[]
 		lit(' using ');
 		em(andList(s.gearNames));
 	}
+
 	if (s.place) {
 		lit(' starting near ');
 		em(`"${s.place}"`);
 	}
 
 	lit('.');
+
 	return parts;
 }

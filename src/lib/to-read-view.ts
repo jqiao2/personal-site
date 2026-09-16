@@ -19,6 +19,7 @@ import {
 
 /** Shorter than a card's cover on /books: these are a list, not an illustration. */
 export const PILE_COVER_HEIGHT = 84;
+
 export const PILE_COVER_WIDTH = coverWidth(PILE_COVER_HEIGHT);
 
 /**
@@ -29,11 +30,16 @@ export const PILE_COVER_WIDTH = coverWidth(PILE_COVER_HEIGHT);
 function ageLabel(days: number): string {
 	if (days >= 365) {
 		const years = Math.floor(days / 365);
+
 		return `${years} year${years === 1 ? '' : 's'} on the pile`;
 	}
+
 	if (days >= 180) return `${Math.round(days / 30.4)} months on the pile`;
+
 	if (days <= 0) return 'added today';
+
 	if (days === 1) return 'yesterday';
+
 	return `${days} days ago`;
 }
 
@@ -145,12 +151,15 @@ const MIN_TITLE_OVERLAP = 8;
 function looksLikeSameBook(pileTitle: string, candidate: string): boolean {
 	const a = normalizeTitle(pileTitle);
 	const b = normalizeTitle(candidate);
+
 	if (!a || !b) return false;
+
 	if (a === b) return true;
 	// Containment rather than equality: the candidate is usually the pile title
 	// plus an author, a series or an edition. Short titles are excluded because
 	// "Orbital" appears inside plenty of unrelated filenames.
 	const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+
 	return shorter.length >= MIN_TITLE_OVERLAP && longer.includes(shorter);
 }
 
@@ -185,6 +194,7 @@ export function suggestMerges(
 	const fresh = candidates.filter(
 		(c) => c.md5 && daysBetween(zonedDay(c.first_read_at), todayDay) <= SUGGEST_WITHIN_DAYS,
 	);
+
 	const out = new Map<number, MergeSuggestion>();
 
 	for (const book of pile) {
@@ -194,6 +204,7 @@ export function suggestMerges(
 		const hits = fresh.filter(
 			(c) => looksLikeSameBook(book.title, c.title) || looksLikeSameBook(book.title, c.source_title),
 		);
+
 		if (hits.length !== 1) continue;
 
 		const hit = hits[0];

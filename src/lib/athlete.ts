@@ -13,7 +13,9 @@
 import type { AthleteThresholds, WeighIn } from './activities';
 
 export const KM_PER_MILE = 1.609344;
+
 export const LB_PER_KG = 2.20462262;
+
 export const CM_PER_INCH = 2.54;
 
 /** How a value moves when training goes well. Paces and resting HR fall;
@@ -57,6 +59,7 @@ export interface Metric {
  *  the tenth and showing one implies it is. */
 export function formatPace(seconds: number): string {
 	const s = Math.round(seconds);
+
 	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
@@ -65,11 +68,15 @@ export function formatPace(seconds: number): string {
  *  `6.5` means six and a half minutes. Returns null on anything else. */
 export function parsePace(input: string): number | null {
 	const text = input.trim();
+
 	if (!text) return null;
 	const colon = text.match(/^(\d+):([0-5]?\d)$/);
+
 	if (colon) return Number(colon[1]) * 60 + Number(colon[2]);
 	const n = Number(text);
+
 	if (!Number.isFinite(n) || n <= 0) return null;
+
 	return n < 30 ? n * 60 : n; // "6.5" is minutes; "398" is already seconds
 }
 
@@ -210,13 +217,17 @@ export const OUTLIER_FRACTION = 0.1;
 export function parseWeighIns(items: WeighInInput[], today: string): { rows: WeighInRow[] } | { error: string } {
 	if (items.length === 0) return { error: 'no weigh-ins in the request' };
 	const byDay = new Map<string, WeighInRow>();
+
 	for (let i = 0; i < items.length; i++) {
 		const it = items[i];
 		const w = Number(it.weight);
+
 		if (!Number.isFinite(w) || w <= 0) return { error: `item ${i}: weight must be a positive number` };
 		const unit = it.unit ?? 'lb';
+
 		if (unit !== 'lb' && unit !== 'kg') return { error: `item ${i}: unit must be 'lb' or 'kg'` };
 		const weight_kg = unit === 'lb' ? w / LB_PER_KG : w;
+
 		// The scale can't read a person outside this band; anything here is a
 		// unit slip, and the DB's own check would reject it.
 		if (weight_kg < 20 || weight_kg > 300) return { error: `item ${i}: weight out of range — check the unit` };
@@ -224,6 +235,7 @@ export function parseWeighIns(items: WeighInInput[], today: string): { rows: Wei
 		// day; the Shortcut should format that in device-local time so a
 		// late-night weigh-in lands on the right date.
 		const measured_on = (it.date == null ? today : String(it.date).trim()).slice(0, 10);
+
 		if (!/^\d{4}-\d{2}-\d{2}$/.test(measured_on)) return { error: `item ${i}: date must be YYYY-MM-DD` };
 		byDay.set(measured_on, {
 			measured_on,
@@ -231,6 +243,7 @@ export function parseWeighIns(items: WeighInInput[], today: string): { rows: Wei
 			source: typeof it.source === 'string' ? it.source : 'apple_health',
 		});
 	}
+
 	return { rows: [...byDay.values()] };
 }
 
@@ -250,6 +263,7 @@ export function flagOutliers(
 	fraction: number = OUTLIER_FRACTION,
 ): (WeighInRow & { ignored: boolean })[] {
 	const incomingDates = new Set(incoming.map((r) => r.measured_on));
+
 	const stream = [
 		...accepted
 			.filter((a) => !incomingDates.has(a.measured_on))
@@ -259,15 +273,19 @@ export function flagOutliers(
 
 	let lastKg: number | null = null;
 	const out: (WeighInRow & { ignored: boolean })[] = [];
+
 	for (const pt of stream) {
 		if (!pt.row) {
 			lastKg = pt.kg; // an already-accepted baseline
 			continue;
 		}
+
 		const ignored = lastKg != null && Math.abs(pt.kg - lastKg) / lastKg > fraction;
 		out.push({ ...pt.row, ignored });
+
 		if (!ignored) lastKg = pt.kg;
 	}
+
 	return out;
 }
 
@@ -286,12 +304,16 @@ export interface Series {
 export function inForceNow(rows: AthleteThresholds[]): AthleteThresholds | null {
 	if (rows.length === 0) return null;
 	const merged = { ...rows[0] };
+
 	for (const m of METRICS) {
 		if (m.derived) continue;
+
 		if (merged[m.key as keyof AthleteThresholds] != null) continue;
 		const found = rows.find((r) => r[m.key as keyof AthleteThresholds] != null);
+
 		if (found) (merged as Record<string, unknown>)[m.key] = found[m.key as keyof AthleteThresholds];
 	}
+
 	return merged;
 }
 
@@ -301,6 +323,7 @@ export function seriesOf(metric: Metric, rows: AthleteThresholds[]): Series {
 		.filter((p): p is { date: string; value: number } => p.value != null)
 		.map((p) => ({ date: p.date, value: metric.toDisplay(p.value) }))
 		.sort((a, b) => a.date.localeCompare(b.date));
+
 	return { metric, points };
 }
 
@@ -310,6 +333,7 @@ const metricByKey = (key: string): Metric => METRICS.find((m) => m.key === key)!
  *  threshold rows. `weighIns` is oldest-first (listWeighIns's order). */
 export function weightSeries(weighIns: WeighIn[]): Series {
 	const metric = metricByKey('weight_kg');
+
 	return {
 		metric,
 		points: weighIns.map((w) => ({ date: w.measured_on, value: metric.toDisplay(w.weight_kg) })),
@@ -320,10 +344,12 @@ export function weightSeries(weighIns: WeighIn[]): Series {
  *  Null if the scale had recorded nothing yet. `weighIns` is oldest-first. */
 export function weightKgOn(date: string, weighIns: WeighIn[]): number | null {
 	let kg: number | null = null;
+
 	for (const w of weighIns) {
 		if (w.measured_on <= date) kg = w.weight_kg;
 		else break;
 	}
+
 	return kg;
 }
 
@@ -332,14 +358,17 @@ export function weightKgOn(date: string, weighIns: WeighIn[]): number | null {
  *  dates before the scale was syncing, so historical W/kg still resolves. */
 export function wPerKgSeries(rows: AthleteThresholds[], weighIns: WeighIn[]): Series {
 	const metric = metricByKey('w_per_kg');
+
 	const points = rows
 		.filter((r) => r.ftp_w != null)
 		.map((r) => {
 			const kg = weightKgOn(r.effective_from, weighIns) ?? r.weight_kg;
+
 			return kg ? { date: r.effective_from, value: r.ftp_w! / kg } : null;
 		})
 		.filter((p): p is { date: string; value: number } => p != null)
 		.sort((a, b) => a.date.localeCompare(b.date));
+
 	return { metric, points };
 }
 
@@ -353,6 +382,7 @@ export function wPerKgSeries(rows: AthleteThresholds[], weighIns: WeighIn[]): Se
  *  box to the card's width is what turned every dot into an oval. Uniform
  *  scaling keeps circles circular and costs only a fixed aspect ratio. */
 export const PLOT_W = 100;
+
 export const PLOT_H = 26;
 
 /** Timeframes, in the order they appear in the toggle. `months: null` is "all".
@@ -364,6 +394,7 @@ export const RANGES = [
 ] as const;
 
 export type RangeKey = (typeof RANGES)[number]['key'];
+
 export const DEFAULT_RANGE: RangeKey = '6m';
 
 /** Points inside a timeframe, oldest first. A window with nothing in it keeps
@@ -371,11 +402,13 @@ export const DEFAULT_RANGE: RangeKey = '6m';
  *  still the FTP in force, and a blank graph would read as missing data. */
 export function windowed(points: { date: string; value: number }[], range: RangeKey): { date: string; value: number }[] {
 	const months = RANGES.find((r) => r.key === range)?.months ?? null;
+
 	if (months == null) return points;
 	const cut = new Date();
 	cut.setMonth(cut.getMonth() - months);
 	const iso = cut.toLocaleDateString('en-CA');
 	const kept = points.filter((p) => p.date >= iso);
+
 	return kept.length ? kept : points.slice(-1);
 }
 
@@ -400,6 +433,7 @@ export function plot(points: { date: string; value: number }[]): Plot | null {
 	const t0 = times[0];
 	const tSpan = times[times.length - 1] - t0 || 1;
 	const pad = 2;
+
 	const dots = points.map((p, i) => ({
 		x: times.length === 1 ? PLOT_W / 2 : pad + ((times[i] - t0) / tSpan) * (PLOT_W - pad * 2),
 		// Inverted: SVG y grows downward, and a bigger number should sit higher.
@@ -408,6 +442,7 @@ export function plot(points: { date: string; value: number }[]): Plot | null {
 		// so it draws down the middle, which is what "unchanged" looks like.
 		y: flat ? PLOT_H / 2 : PLOT_H - pad - ((p.value - lo) / (hi - lo)) * (PLOT_H - pad * 2),
 	}));
+
 	return {
 		lo,
 		hi,
@@ -431,9 +466,12 @@ export function trend(
 ): { text: string; tone: 'good' | 'bad' | 'flat' } | null {
 	if (points.length < 2) return null;
 	const delta = points[points.length - 1].value - points[0].value;
+
 	if (delta === 0) return { text: 'no change', tone: 'flat' };
 	const rising = delta > 0;
+
 	const tone =
 		metric.better === 'none' ? 'flat' : rising === (metric.better === 'up') ? 'good' : 'bad';
+
 	return { text: `${rising ? '+' : '−'}${metric.format(Math.abs(delta))} ${metric.unit}`, tone };
 }

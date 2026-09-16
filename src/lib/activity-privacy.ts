@@ -34,6 +34,7 @@ import type { ActivityFilterQuery } from './activity-params';
  */
 export function redactActivities<T extends ActivityListRow>(rows: T[], isOwner: boolean): T[] {
 	if (isOwner) return rows;
+
 	return rows.map((row) => (row.private === false ? row : redactOne(row)));
 }
 
@@ -42,6 +43,7 @@ export function redactActivities<T extends ActivityListRow>(rows: T[], isOwner: 
  * is a list that goes stale the first time a column is added to the view. */
 function redactOne<T extends ActivityListRow>(row: T): T {
 	const blanked = Object.fromEntries(Object.keys(row).map((k) => [k, null]));
+
 	return {
 		...blanked,
 		id: row.id,
@@ -88,8 +90,11 @@ export function visitorQuery(query: ActivityFilterQuery): ActivityFilterQuery {
 
 /** Mon–Fri 09:00–17:00 local. Anything overlapping it stays private. */
 const WORK_DAYS = [1, 2, 3, 4, 5];
+
 const WORK_START_H = 9;
+
 const WORK_END_H = 17;
+
 /** An activity long enough to swallow a whole work window without either end
  *  landing in one (Mon 17:00 → Tue 09:00) stays private rather than being
  *  reasoned about. */
@@ -114,15 +119,19 @@ export function defaultPrivate(
 	elapsedSeconds: number,
 ): boolean {
 	const start = Date.parse(startedAt);
+
 	if (!Number.isFinite(start) || utcOffsetMinutes === null || utcOffsetMinutes === undefined) return true;
+
 	if (!(elapsedSeconds < TOO_LONG_S)) return true;
 
 	const localStart = start + utcOffsetMinutes * 60_000;
+
 	return [localStart, localStart + elapsedSeconds * 1000].some(inWorkHours);
 }
 
 function inWorkHours(ms: number): boolean {
 	const t = new Date(ms);
 	const hour = t.getUTCHours() + t.getUTCMinutes() / 60 + t.getUTCSeconds() / 3600;
+
 	return WORK_DAYS.includes(t.getUTCDay()) && hour >= WORK_START_H && hour < WORK_END_H;
 }

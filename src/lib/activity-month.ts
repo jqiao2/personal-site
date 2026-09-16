@@ -101,10 +101,13 @@ export function sortByExertion(activities: MonthActivity[]): MonthActivity[] {
 	return activities.slice().sort((a, b) => {
 		const ae = a.exertion ?? -1;
 		const be = b.exertion ?? -1;
+
 		if (ae !== be) return be - ae;
 		const am = a.moving_seconds ?? -1;
 		const bm = b.moving_seconds ?? -1;
+
 		if (am !== bm) return bm - am;
+
 		return a.id - b.id;
 	});
 }
@@ -113,6 +116,7 @@ export function sortByExertion(activities: MonthActivity[]): MonthActivity[] {
  *  there is only one. `null` for a day with nothing logged. */
 export function dominantActivity(activities: MonthActivity[]): MonthActivity | null {
 	if (activities.length === 0) return null;
+
 	return sortByExertion(activities)[0];
 }
 
@@ -148,12 +152,16 @@ const COMPUTABLE_STATS: ReadonlySet<StatKey> = new Set([
  */
 export function headlineStat(a: MonthActivity): { label: string; value: string } {
 	const meta = sportMeta(a.sport);
+
 	for (const key of meta.primaryStats) {
 		if (key === 'exertion' || !COMPUTABLE_STATS.has(key)) continue;
 		const stat = formatStat(key, a);
+
 		if (stat.value !== '—') return stat;
 	}
+
 	const moving = formatStat('moving_time', a);
+
 	return moving.value !== '—' ? moving : formatStat('elapsed_time', a);
 }
 
@@ -180,6 +188,7 @@ export function cellInk(a: MonthActivity | null): AlpineColor {
 function lineFor(a: MonthActivity): string {
 	const stat = headlineStat(a);
 	const exertion = a.exertion != null ? `${Math.round(a.exertion)} exertion` : sportMeta(a.sport).label;
+
 	return `${a.title} · ${stat.value} · ${exertion}`;
 }
 
@@ -200,26 +209,32 @@ export interface MonthCell {
  *  calendar day rather than per activity. */
 export function buildCells(key: string, activities: MonthActivity[]): MonthCell[] {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return [];
 	const { year, month } = parsed;
 	const days = daysInMonth(year, month);
 	const first = firstWeekdayIndex(year, month);
 
 	const byDay = new Map<number, MonthActivity[]>();
+
 	for (const a of activities) {
 		const day = Number(a.local_date.slice(8, 10));
 		const list = byDay.get(day);
+
 		if (list) list.push(a);
 		else byDay.set(day, [a]);
 	}
 
 	const cells: MonthCell[] = [];
+
 	for (let i = 0; i < weekRows(key) * 7; i++) {
 		const date = i - first + 1;
+
 		if (date < 1 || date > days) {
 			cells.push({ outside: true, date: 0, activity: null, count: 0, lines: [] });
 			continue;
 		}
+
 		const day = sortByExertion(byDay.get(date) ?? []);
 		cells.push({
 			outside: false,
@@ -229,6 +244,7 @@ export function buildCells(key: string, activities: MonthActivity[]): MonthCell[
 			lines: day.map(lineFor),
 		});
 	}
+
 	return cells;
 }
 
@@ -247,6 +263,7 @@ export function buildCells(key: string, activities: MonthActivity[]): MonthCell[
  * month-view.ts's and reading-month-view.ts's constants keep.
  */
 const CHROME_WITH_FIGURES = 460;
+
 const CHROME_BARE = 300;
 
 export interface ActivityGeometry extends Geometry {
@@ -261,6 +278,7 @@ export function hasFigures(aspect: Aspect): boolean {
 /** Geometry for every aspect, keyed by id — the aspect toggle just swaps these in. */
 export function geometries(rows: number): Record<string, ActivityGeometry> {
 	const out: Record<string, ActivityGeometry> = {};
+
 	for (const aspect of ASPECTS) {
 		const figures = hasFigures(aspect);
 		out[aspect.id] = {
@@ -268,6 +286,7 @@ export function geometries(rows: number): Record<string, ActivityGeometry> {
 			figures,
 		};
 	}
+
 	return out;
 }
 
@@ -303,6 +322,7 @@ export function summarise(key: string, activities: MonthActivity[]): SummaryStat
 	const elevationM = activities.reduce((total, a) => total + (a.elevation_gain_m ?? 0), 0);
 	const movingS = activities.reduce((total, a) => total + (a.moving_seconds ?? a.elapsed_seconds ?? 0), 0);
 	const exertion = activities.reduce((total, a) => total + (a.exertion ?? 0), 0);
+
 	return [
 		{ label: 'Distance', value: formatStat('distance', { distance_m: distanceM }).value },
 		{ label: 'Elevation', value: formatStat('elevation_gain', { elevation_gain_m: elevationM }).value },

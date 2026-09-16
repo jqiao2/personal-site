@@ -73,17 +73,23 @@ export function normalise(raw: string): string {
  * a source that already cases its names is never touched.
  */
 const MINOR = new Set(['a', 'an', 'and', 'at', 'de', 'del', 'el', 'for', 'in', 'la', 'las', 'le', 'los', 'of', 'on', 'or', 'the', 'to', 'vs', 'with', 'y']);
+
 /** Words a restaurant name keeps in capitals — an acronym is not a word. */
 const KEEP = new Set(['ABC', 'BBQ', 'KBBQ', 'BYOB', 'NYC', 'DJ', 'II', 'III', 'IV']);
+
 export function titleCaseName(raw: string): string {
 	const words = raw.trim().split(/\s+/);
+
 	return words
 		.map((w, i) => {
 			const upper = w.toUpperCase();
+
 			if (KEEP.has(upper)) return upper;
 			const lower = w.toLowerCase();
+
 			// Small words stay down, except as the first or last word of the name.
 			if (i > 0 && i < words.length - 1 && MINOR.has(lower)) return lower;
+
 			// Only the first letter is raised: "WU'S" → "Wu's", not "Wu'S".
 			return lower.replace(/[a-z]/, (c) => c.toUpperCase());
 		})
@@ -96,9 +102,11 @@ function metres(aLat: number, aLng: number, bLat: number, bLng: number): number 
 	const toRad = (d: number) => (d * Math.PI) / 180;
 	const dLat = toRad(bLat - aLat);
 	const dLng = toRad(bLng - aLng);
+
 	const h =
 		Math.sin(dLat / 2) ** 2 +
 		Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+
 	return 2 * EARTH_M * Math.asin(Math.sqrt(h));
 }
 
@@ -128,6 +136,7 @@ export interface GazetteerQuery {
  */
 export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerHit[]> {
 	const norm = normalise(query.q);
+
 	if (norm.length < 2) return [];
 	// Normalisation leaves only A-Z, 0-9 and spaces, so no term can carry a
 	// comma or a percent into the filter it is spliced into below.
@@ -138,8 +147,10 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 	let q = supabasePublic
 		.from('place_sources')
 		.select('id,source,name,lat,lng,address,locality,city,region,country,cuisines,phone,website');
+
 	for (const t of terms) q = q.or(`name_norm.ilike.*${t}*,address.ilike.*${t}*`);
 	const { data, error } = await q.limit(60);
+
 	if (error) throw new Error(error.message);
 
 	const rows = (data ?? []) as Omit<GazetteerHit, 'sourceLabel' | 'distance'>[];
@@ -148,8 +159,11 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 	/** How well the NAME alone answers the query — 0 is best. */
 	const rank = (name: string): number => {
 		const n = normalise(name);
+
 		if (n.startsWith(norm)) return 0;
+
 		if (n.includes(norm)) return 1;
+
 		return terms.every((t) => n.includes(t)) ? 2 : 3;
 	};
 
@@ -170,9 +184,11 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 			// whole query, then one holding all the words, then everything that
 			// needed the address to match at all.
 			if (rank(a.name) !== rank(b.name)) return rank(a.name) - rank(b.name);
+
 			if (a.distance != null && b.distance != null && a.distance !== b.distance) {
 				return a.distance - b.distance;
 			}
+
 			// Failing both, the shorter name is the more likely subject: it is
 			// the restaurant rather than the restaurant's third franchise.
 			return a.name.length - b.name.length || a.name.localeCompare(b.name, 'en');

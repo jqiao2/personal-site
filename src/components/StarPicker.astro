@@ -24,6 +24,7 @@ interface Props {
 	/** Palette/size overrides, as the custom properties listed above. */
 	style?: string;
 }
+
 const { id, clearable = false, label = true, emptyLabel = 'Not rated', style } = Astro.props;
 
 // 0.5 … 5.0. Ten hotspots, laid edge to edge across the five stars.

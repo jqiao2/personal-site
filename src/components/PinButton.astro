@@ -12,6 +12,7 @@ interface Props {
 	refId: number;
 	pinned: boolean;
 }
+
 const { track, refId, pinned } = Astro.props;
 ---
 
@@ -147,6 +148,7 @@ const { track, refId, pinned } = Astro.props;
 			body: JSON.stringify({ track, refId }),
 		});
 	}
+
 	function del(track: string, refId: number): Promise<Response> {
 		return fetch(`/api/pins?track=${encodeURIComponent(track)}&refId=${refId}`, { method: 'DELETE' });
 	}
@@ -154,11 +156,13 @@ const { track, refId, pinned } = Astro.props;
 	function setPinned(btn: HTMLElement, pinned: boolean): void {
 		btn.setAttribute('aria-pressed', String(pinned));
 		const label = btn.querySelector('.pin__label');
+
 		if (label) label.textContent = pinned ? 'Pinned' : 'Pin';
 	}
 
 	function showMsg(root: HTMLElement, text: string): void {
 		const msg = root.querySelector<HTMLElement>('[data-pin-msg]');
+
 		if (!msg) return;
 		msg.textContent = text;
 		msg.hidden = !text;
@@ -173,8 +177,10 @@ const { track, refId, pinned } = Astro.props;
 	function openFull(root: HTMLElement, btn: HTMLElement, track: string, refId: number, pins: PinInfo[]): void {
 		const dialog = root.querySelector<HTMLDialogElement>('[data-pin-dialog]');
 		const list = root.querySelector<HTMLUListElement>('[data-pin-list]');
+
 		if (!dialog || !list) return;
 		list.replaceChildren();
+
 		for (const p of pins) {
 			const li = document.createElement('li');
 			li.className = 'pin-full__row';
@@ -187,11 +193,15 @@ const { track, refId, pinned } = Astro.props;
 			remove.addEventListener('click', async () => {
 				remove.disabled = true;
 				const dResp = await del(p.track, p.refId);
+
 				if (!dResp.ok) {
 					showMsg(root, 'Could not remove that pin.');
+
 					return;
 				}
+
 				const pResp = await post(track, refId);
+
 				if (pResp.ok) {
 					setPinned(btn, true);
 					showMsg(root, '');
@@ -203,14 +213,17 @@ const { track, refId, pinned } = Astro.props;
 			li.append(name, remove);
 			list.append(li);
 		}
+
 		if (typeof dialog.showModal === 'function') dialog.showModal();
 		else dialog.setAttribute('open', '');
 	}
 
 	document.addEventListener('click', async (e) => {
 		const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-pin-toggle]');
+
 		if (!btn) return;
 		const root = btn.closest<HTMLElement>('.pin');
+
 		if (!root) return;
 		const track = btn.dataset.track ?? '';
 		const refId = Number(btn.dataset.refId);
@@ -219,21 +232,28 @@ const { track, refId, pinned } = Astro.props;
 
 		if (pinned) {
 			const resp = await del(track, refId);
+
 			if (resp.ok) setPinned(btn, false);
 			else showMsg(root, 'Could not unpin.');
+
 			return;
 		}
 
 		const resp = await post(track, refId);
+
 		if (resp.status === 201) {
 			setPinned(btn, true);
+
 			return;
 		}
+
 		if (resp.status === 409) {
 			const data = await resp.json().catch(() => ({ pins: [] }));
 			openFull(root, btn, track, refId, data.pins ?? []);
+
 			return;
 		}
+
 		showMsg(root, 'Could not pin.');
 	});
 </script>

@@ -41,6 +41,7 @@ const addedLabel = (iso: string) =>
 // yet) aren't badged — unknown isn't the same as future. The badge is baked into
 // the HTML, so there's no client to ask what day it is: the site's zone it is.
 const today = siteDay();
+
 const isUpcoming = (f: (typeof films)[number]) => f.release_date != null && f.release_date > today;
 
 // "Out Mar 6, 2026" — the opening date on an upcoming film's hover overlay, where a
@@ -61,8 +62,11 @@ const hasUpcoming = films.some(isUpcoming);
 const releaseYears = [
 	...new Set(films.map((f) => f.release_year).filter((y): y is number => y != null)),
 ].sort((a, b) => a - b);
+
 const relLo = releaseYears[0] ?? null;
+
 const relHi = releaseYears[releaseYears.length - 1] ?? null;
+
 const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 ---
 
@@ -996,6 +1000,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			const items: Item[] = Array.from(grid.querySelectorAll<HTMLElement>('.item')).map((el) => {
 				const year = el.dataset.year ? Number(el.dataset.year) : null;
 				const premiereDate = el.dataset.premiereDate ?? '';
+
 				return {
 					el,
 					tmdbId: Number(el.dataset.tmdbId),
@@ -1014,6 +1019,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			// --- Filter state ---
 			let sort = 'added';
 			let q = '';
+
 			// One set per chip group; director/cast join genre/language here so the
 			// filter loop, the URL and the active count all read them the same way.
 			const sets = {
@@ -1022,7 +1028,9 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				director: new Set<string>(),
 				actor: new Set<string>(),
 			};
+
 			type SetKey = keyof typeof sets;
+
 			// Genre is the one group with an any/all toggle, mirroring "All films".
 			let genreMode: 'any' | 'all' = 'any';
 			// Re-rolled on every press of Shuffle. Held so that re-filtering keeps the
@@ -1055,43 +1063,55 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			 * and each press of Shuffle deals a different order. */
 			function shuffleRank(item: Item): number {
 				let h = shuffleSeed;
+
 				for (const ch of item.title) h = (h * 31 + ch.charCodeAt(0)) % 100000;
+
 				return h;
 			}
 
 			function matches(item: Item): boolean {
 				if (q && !item.title.includes(q)) return false;
+
 				// Genre, language and the credits can only be judged once the facet
 				// payload has attached them. Until then a filter restored from the URL is
 				// held rather than matched: every tile's arrays are still empty, so
 				// applying it would empty the grid and claim nothing matched. applyFacets
 				// re-runs this the moment it can answer honestly.
 				if (facetsState !== 'done') return upcomingOk(item) && releaseOk(item);
+
 				// Genre honours the any/all toggle; the other groups are always "any of".
 				if (sets.genre.size) {
 					const has = (g: string) => item.genres.includes(g);
+
 					if (genreMode === 'all' ? ![...sets.genre].every(has) : !item.genres.some((g) => sets.genre.has(g))) {
 						return false;
 					}
 				}
+
 				if (sets.language.size && !sets.language.has(item.language)) return false;
+
 				if (sets.director.size && !item.directors.some((d) => sets.director.has(d))) return false;
+
 				if (sets.actor.size && !item.actors.some((a) => sets.actor.has(a))) return false;
+
 				return upcomingOk(item) && releaseOk(item);
 			}
 
 			/** The two filters that read only what a tile already carries, so they hold
 			 * before the facet payload lands as well as after. */
 			const upcomingOk = (item: Item) => includeUpcoming || !item.upcoming;
+
 			const releaseOk = (item: Item) =>
 				!releaseActive() || (item.year != null && item.year >= dMin && item.year <= dMax);
 
 			function apply() {
 				const visible = items.filter(matches);
 				const shownSet = new Set(visible);
+
 				for (const item of items) item.el.hidden = !shownSet.has(item);
 
 				const ordered = visible.slice();
+
 				if (sort === 'shuffle') ordered.sort((a, b) => shuffleRank(a) - shuffleRank(b));
 				// Newest release first, by the full premiere date (earliest release
 				// anywhere) — the widely-accepted release, not the US opening — so two
@@ -1103,7 +1123,9 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 						if (a.releaseKey == null || b.releaseKey == null) {
 							return (a.releaseKey == null ? 1 : 0) - (b.releaseKey == null ? 1 : 0);
 						}
+
 						if (a.releaseKey === b.releaseKey) return 0;
+
 						return a.releaseKey < b.releaseKey ? 1 : -1;
 					});
 				} else ordered.sort((a, b) => a.order - b.order);
@@ -1111,6 +1133,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				// One reflow rather than one per tile. Hidden tiles stay put; they're
 				// display:none, so where they sit doesn't matter until they're shown.
 				const frag = document.createDocumentFragment();
+
 				for (const item of ordered) frag.append(item.el);
 				grid!.prepend(frag);
 
@@ -1134,6 +1157,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				countBadge.textContent = n ? ` · ${n}` : '';
 				toggle.classList.toggle('pill--on', panel.hidden === false || n > 0);
 				clearAll.hidden = n === 0;
+
 				if (upcomingToggle) upcomingToggle.checked = includeUpcoming;
 
 				if (drange && drangeFill && dminLabel && dmaxLabel) {
@@ -1162,6 +1186,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				window.clearTimeout(debounce);
 				debounce = window.setTimeout(() => {
 					const next = search.value.trim().toLowerCase();
+
 					if (next === q) return;
 					q = next;
 					apply();
@@ -1174,7 +1199,9 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 					// pressing it again deals a new order.
 					if (pill.dataset.sort === sort && sort !== 'shuffle') return;
 					sort = pill.dataset.sort!;
+
 					if (sort === 'shuffle') shuffleSeed = 1 + Math.floor(Math.random() * 99998);
+
 					for (const p of pills) p.classList.toggle('pill--on', p === pill);
 					apply();
 				});
@@ -1184,12 +1211,16 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			// picked; only genre carries a toggle, but the wiring stays general.
 			for (const group of Array.from(panel.querySelectorAll<HTMLElement>('.modes'))) {
 				const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('.mode'));
+
 				for (const button of buttons) {
 					button.addEventListener('click', () => {
 						const value = button.dataset.value as 'any' | 'all';
+
 						if (genreMode === value) return;
 						genreMode = value;
+
 						for (const b of buttons) b.classList.toggle('mode--on', b === button);
+
 						if (sets.genre.size) apply();
 					});
 				}
@@ -1200,6 +1231,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			// by frequency and the search box reveals matches on demand. Picks live in
 			// sets.director / sets.actor, read the same as any other chip group.
 			type PeopleKind = 'director' | 'actor';
+
 			const PEOPLE_TOP_JS = 12; // quick chips per row before searching
 			const PEOPLE_MAX = 40; // most chips one search reveals
 			const peopleSection = document.getElementById('people-section')!;
@@ -1210,6 +1242,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				host: HTMLElement;
 				none: HTMLElement;
 			}
+
 			const peopleRows: PeopleRow[] = Array.from(
 				panel.querySelectorAll<HTMLElement>('.chips[data-people]'),
 			).map((host) => ({
@@ -1217,6 +1250,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				host,
 				none: host.querySelector<HTMLElement>('.people-none')!,
 			}));
+
 			let peopleQ = '';
 
 			// Astro scopes this page's CSS behind a generated data-astro-cid-* attribute,
@@ -1230,9 +1264,11 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			/** A `.chip` button carrying the page's style scope. */
 			function newChip(className = 'chip'): HTMLButtonElement {
 				const chip = document.createElement('button');
+
 				if (scopeAttr) chip.setAttribute(scopeAttr, '');
 				chip.className = className;
 				chip.type = 'button';
+
 				return chip;
 			}
 
@@ -1248,22 +1284,27 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 					chip.setAttribute('aria-pressed', String(sets[kind].has(name)));
 					apply();
 				});
+
 				return chip;
 			}
 
 			function renderPeopleRow(row: PeopleRow) {
 				const selected = sets[row.kind];
 				let names: string[];
+
 				if (peopleQ) {
 					names = peopleNames[row.kind]
 						.filter((n) => n.toLowerCase().includes(peopleQ))
 						.slice(0, PEOPLE_MAX);
+
 					// Keep picked names on screen even when they don't match the search.
 					for (const s of selected) if (!names.includes(s)) names.unshift(s);
 				} else {
 					names = peopleNames[row.kind].slice(0, PEOPLE_TOP_JS);
+
 					for (const s of selected) if (!names.includes(s)) names.push(s);
 				}
+
 				const chips = names.map((n) => makePeopleChip(row.kind, n));
 				row.host.replaceChildren(...chips, row.none);
 				row.none.hidden = !(peopleQ !== '' && chips.length === 0);
@@ -1294,11 +1335,13 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				chip.setAttribute('aria-pressed', String(sets[key].has(value)));
 				chip.addEventListener('click', () => {
 					const on = !sets[key].has(value);
+
 					if (on) sets[key].add(value);
 					else sets[key].delete(value);
 					chip.setAttribute('aria-pressed', String(on));
 					apply();
 				});
+
 				return chip;
 			}
 
@@ -1311,16 +1354,20 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 					for (const sibling of Array.from(more.parentElement!.children)) {
 						(sibling as HTMLElement).hidden = false;
 					}
+
 					more.remove();
 				});
+
 				return more;
 			}
 
 			function renderChipGroup(key: 'genre' | 'language', values: string[]) {
 				const host = panel.querySelector<HTMLElement>(`.chips[data-chips="${key}"]`);
+
 				if (!host) return;
 				const section = host.closest<HTMLElement>(`section[data-group="${key}"]`);
 				const none = section?.querySelector<HTMLElement>('[data-none]') ?? null;
+
 				// Genre keeps its section and says "No genres yet"; language just hides.
 				if (none) none.hidden = values.length > 0;
 				else if (section) section.hidden = values.length === 0;
@@ -1328,9 +1375,12 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				const chips = values.map((v, i) => {
 					const chip = makeFilterChip(key, v);
 					chip.hidden = i >= CHIP_LIMIT[key] && !sets[key].has(v);
+
 					return chip;
 				});
+
 				const hiddenCount = chips.filter((c) => c.hidden).length;
+
 				if (hiddenCount > 0) chips.push(makeMoreChip(hiddenCount));
 				host.replaceChildren(...chips);
 			}
@@ -1349,6 +1399,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 						// The thumbs share a track, so each one pushes rather than crosses.
 						const min = Number(dminInput.value);
 						const max = Number(dmaxInput.value);
+
 						if (input === dminInput) setReleaseRange(Math.min(min, max), max);
 						else setReleaseRange(min, Math.max(min, max));
 						apply();
@@ -1365,11 +1416,14 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 
 			clearAll.addEventListener('click', () => {
 				for (const s of Object.values(sets)) s.clear();
+
 				for (const chip of filterChips) chip.setAttribute('aria-pressed', 'false');
 				genreMode = 'any';
+
 				for (const b of Array.from(panel.querySelectorAll<HTMLButtonElement>('.mode'))) {
 					b.classList.toggle('mode--on', b.dataset.value === 'any');
 				}
+
 				if (dminInput && dmaxInput) setReleaseRange(REL_LO, REL_HI);
 				includeUpcoming = true;
 				// Deselecting the People chips lets their rows collapse back to the top few.
@@ -1385,50 +1439,65 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			// from. Mirrors the "All films" grid's param names.
 			function writeUrl() {
 				const p = new URLSearchParams();
+
 				if (q) p.set('q', q);
+
 				// The shuffle seed stays out: it's re-rolled on load anyway, and a link
 				// that promised one order but dealt another would be worse than neither.
 				if (sort !== 'added') p.set('sort', sort);
+
 				if (releaseActive()) {
 					p.set('dmin', String(dMin));
 					p.set('dmax', String(dMax));
 				}
+
 				// Set keys (genre/language/director/actor) double as the URL param names.
 				for (const [key, values] of Object.entries(sets)) {
 					for (const v of values) p.append(key, v);
 				}
+
 				if (sets.genre.size && genreMode === 'all') p.set('genremode', 'all');
+
 				if (!includeUpcoming) p.set('upcoming', '0');
 				const qs = p.toString();
 				const url = location.pathname + (qs ? `?${qs}` : '');
+
 				if (url !== location.pathname + location.search) history.replaceState(null, '', url);
 			}
 
 			const snap = (raw: string | null, lo: number, hi: number, step: number, fallback: number) => {
 				const n = Number(raw);
+
 				if (raw == null || !Number.isFinite(n)) return fallback;
+
 				return Math.min(hi, Math.max(lo, Math.round(n / step) * step));
 			};
 
 			/** Restore filters from the query string. Returns whether any were applied. */
 			function readUrl(): boolean {
 				const p = new URLSearchParams(location.search);
+
 				if ([...p.keys()].length === 0) return false;
 
 				q = p.get('q')?.trim().toLowerCase() ?? '';
 				search.value = q;
 				const urlSort = p.get('sort');
+
 				if (urlSort === 'added' || urlSort === 'year' || urlSort === 'shuffle') {
 					sort = urlSort;
+
 					if (sort === 'shuffle') shuffleSeed = 1 + Math.floor(Math.random() * 99998);
+
 					for (const pill of pills) pill.classList.toggle('pill--on', pill.dataset.sort === sort);
 				}
+
 				if (dminInput && dmaxInput) {
 					setReleaseRange(
 						snap(p.get('dmin'), REL_LO, REL_HI, 1, REL_LO),
 						snap(p.get('dmax'), REL_LO, REL_HI, 1, REL_HI),
 					);
 				}
+
 				if (upcomingToggle && p.get('upcoming') === '0') {
 					includeUpcoming = false;
 					upcomingToggle.checked = false;
@@ -1438,6 +1507,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				if (p.get('genremode') === 'all') {
 					genreMode = 'all';
 					const modeGroup = panel.querySelector<HTMLElement>('.modes[data-mode="genremode"]');
+
 					for (const b of Array.from(modeGroup?.querySelectorAll<HTMLButtonElement>('.mode') ?? [])) {
 						b.classList.toggle('mode--on', b.dataset.value === 'all');
 					}
@@ -1475,9 +1545,11 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			 * the chip order the "All films" filters use. */
 			function byFrequency(pick: (r: FacetRow) => Iterable<string>, rows: FacetRow[]): string[] {
 				const counts = new Map<string, number>();
+
 				for (const r of rows) {
 					for (const v of pick(r)) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
 				}
+
 				return [...counts.keys()].sort(
 					(a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b),
 				);
@@ -1485,8 +1557,10 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 
 			function applyFacets(rows: FacetRow[]) {
 				const byId = new Map(rows.map((r) => [r.tmdb_id, r]));
+
 				for (const item of items) {
 					const row = byId.get(item.tmdbId);
+
 					if (!row) continue;
 					item.genres = row.genres;
 					item.directors = row.directors;
@@ -1516,6 +1590,7 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 					director: new Set(peopleNames.director),
 					actor: new Set(peopleNames.actor),
 				};
+
 				for (const key of Object.keys(sets) as SetKey[]) {
 					for (const v of sets[key]) if (!offered[key].has(v)) sets[key].delete(v);
 				}
@@ -1533,8 +1608,10 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 				facetsState = 'loading';
 				facetsError.hidden = true;
 				facetsLoading.hidden = false;
+
 				try {
 					const res = await fetch('/api/films/watchlist/facets');
+
 					if (!res.ok) throw new Error(`HTTP ${res.status}`);
 					applyFacets((await res.json()) as FacetRow[]);
 				} catch (e) {
@@ -1550,32 +1627,41 @@ const hasReleaseRange = relLo != null && relHi != null && relHi > relLo;
 			// The server rendered the full list in added order, so a URL carrying
 			// filters has to re-apply before the grid matches what it claims to show.
 			const restored = readUrl();
+
 			if (restored) apply();
 			else syncChrome();
 
 			// Fetch the filters once the page has settled — or straight away if the panel
 			// is opened first, so it's never waiting on the load event to start.
 			toggle.addEventListener('click', loadFacets);
+
 			if (document.readyState === 'complete') loadFacets();
 			else window.addEventListener('load', loadFacets, { once: true });
 
 			// --- Remove a film from the watchlist (owner only) ---
 			grid.addEventListener('click', async (e) => {
 				const btn = (e.target as HTMLElement).closest('.remove') as HTMLButtonElement | null;
+
 				if (!btn) return;
 				const el = btn.closest('.item') as HTMLElement;
 				const tmdbId = el.dataset.tmdbId;
+
 				if (!tmdbId) return;
 				btn.disabled = true;
+
 				try {
 					const res = await fetch(`/api/films/watchlist?tmdbId=${tmdbId}`, { method: 'DELETE' });
+
 					if (res.status === 401) {
 						window.location.href = '/films/login?redirect=/films/watchlist';
+
 						return;
 					}
+
 					if (!res.ok) throw new Error();
 					el.remove();
 					const i = items.findIndex((item) => item.el === el);
+
 					if (i !== -1) items.splice(i, 1);
 					const countEl = document.getElementById('wl-count')!;
 					const nounEl = document.getElementById('wl-noun')!;

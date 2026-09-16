@@ -13,6 +13,7 @@ import { supabaseAdmin } from './supabase';
 
 /** Caps from the API contract. The plugin chunks; these bound one chunk. */
 export const MAX_BOOKS = 500;
+
 export const MAX_SESSIONS = 5000;
 
 /**
@@ -72,6 +73,7 @@ function isObject(v: unknown): v is Record<string, unknown> {
 function text(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t.length > 0 ? t : null;
 }
 
@@ -84,6 +86,7 @@ function text(v: unknown): string | null {
 function positiveIntOrNull(v: unknown): number | null {
 	if (v == null) return null;
 	const n = Number(v);
+
 	return Number.isInteger(n) && n > 0 ? n : null;
 }
 
@@ -100,18 +103,22 @@ export function parseSyncPayload(body: unknown): SyncPayload {
 	const device = text(body.device) ?? 'unknown';
 	const rawBooks = body.books ?? [];
 	const rawSessions = body.sessions ?? [];
+
 	if (!Array.isArray(rawBooks)) throw new SyncPayloadError('books must be an array');
+
 	if (!Array.isArray(rawSessions)) throw new SyncPayloadError('sessions must be an array');
 
 	if (rawBooks.length > MAX_BOOKS) {
 		throw new SyncPayloadError(`books exceeds the ${MAX_BOOKS}-item cap`, 413);
 	}
+
 	if (rawSessions.length > MAX_SESSIONS) {
 		throw new SyncPayloadError(`sessions exceeds the ${MAX_SESSIONS}-item cap`, 413);
 	}
 
 	const books = rawBooks.map((raw, i) => parseBook(raw, `books[${i}]`));
 	const sessions = rawSessions.map((raw, i) => parseSession(raw, `sessions[${i}]`, device));
+
 	return { device, books, sessions };
 }
 
@@ -120,6 +127,7 @@ function parseBook(raw: unknown, path: string): SyncBook {
 
 	const md5 = normaliseMd5(raw.md5, `${path}.md5`);
 	const title = text(raw.title);
+
 	if (!title) throw new SyncPayloadError(`${path}.title is required`);
 
 	return {
@@ -138,6 +146,7 @@ function parseSession(raw: unknown, path: string, fallbackDevice: string): SyncS
 	const bookMd5 = normaliseMd5(raw.book_md5, `${path}.book_md5`);
 
 	const page = Number(raw.page);
+
 	if (!Number.isInteger(page) || page <= 0) {
 		throw new SyncPayloadError(`${path}.page must be a positive integer`);
 	}
@@ -145,15 +154,19 @@ function parseSession(raw: unknown, path: string, fallbackDevice: string): SyncS
 	// KOReader's start_time is unix SECONDS. Reading it as milliseconds puts the
 	// whole library in 1970, which is the single easiest thing to get wrong here.
 	const startTime = Number(raw.start_time);
+
 	if (!Number.isFinite(startTime) || !Number.isInteger(startTime) || startTime <= 0) {
 		throw new SyncPayloadError(`${path}.start_time must be a positive unix timestamp in seconds`);
 	}
+
 	const nowSeconds = Math.floor(Date.now() / 1000);
+
 	if (startTime > nowSeconds + MAX_FUTURE_SECONDS) {
 		throw new SyncPayloadError(`${path}.start_time is more than 24h in the future`);
 	}
 
 	const duration = Number(raw.duration);
+
 	if (!Number.isInteger(duration) || duration < 0) {
 		throw new SyncPayloadError(`${path}.duration must be a non-negative integer`);
 	}
@@ -175,7 +188,9 @@ function parseSession(raw: unknown, path: string, fallbackDevice: string): SyncS
  */
 function normaliseMd5(v: unknown, path: string): string {
 	const s = text(v);
+
 	if (!s) throw new SyncPayloadError(`${path} is required`);
+
 	return s.toLowerCase();
 }
 
@@ -194,11 +209,14 @@ export async function ingestSync(payload: SyncPayload): Promise<SyncResult> {
 		p_books: payload.books,
 		p_sessions: payload.sessions,
 	});
+
 	if (error) throw new Error(`reading sync failed: ${error.message}`);
 
 	// `returns table` comes back as a one-row array.
 	const row = (Array.isArray(data) ? data[0] : data) as SyncResult | undefined;
+
 	if (!row) throw new Error('reading sync returned no result');
+
 	return {
 		books_upserted: Number(row.books_upserted ?? 0),
 		sessions_received: Number(row.sessions_received ?? 0),
@@ -224,6 +242,7 @@ export async function getSyncCursor(device: string): Promise<SyncCursor> {
 		.eq('device', device)
 		.order('started_at', { ascending: false })
 		.limit(1);
+
 	if (error) throw new Error(`sync cursor lookup failed: ${error.message}`);
 
 	return {

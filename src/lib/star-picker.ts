@@ -31,8 +31,10 @@ export function wireStarPicker(root: HTMLElement, options: StarPickerOptions = {
 	// writes down.
 	const labelFor = (v: number | null) =>
 		v == null ? emptyLabel : `${Math.floor(v) || ''}${v % 1 ? '½' : ''}★`;
+
 	const paint = (v: number | null) => {
 		fill.style.width = `${((v ?? 0) / 5) * 100}%`;
+
 		if (label) label.textContent = labelFor(v);
 	};
 
@@ -47,6 +49,7 @@ export function wireStarPicker(root: HTMLElement, options: StarPickerOptions = {
 			onChange?.(v);
 		});
 	}
+
 	hitsBox.addEventListener('mouseleave', () => paint(value));
 
 	clear?.addEventListener('click', () => {

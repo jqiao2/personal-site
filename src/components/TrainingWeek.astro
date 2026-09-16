@@ -14,6 +14,7 @@ interface Props {
 	week: ActivityWeek;
 	isOwner: boolean;
 }
+
 const { week, isOwner } = Astro.props;
 
 const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -30,6 +31,7 @@ const t = {
 	moving: formatStat('moving_time', { moving_seconds: week.totals.movingSeconds }).value,
 	exertion: Math.round(week.totals.exertion).toString(),
 };
+
 const weekHasActivity = week.totals.activityCount > 0;
 ---
 

@@ -18,17 +18,23 @@ interface Props {
 	 *  rather than travelled — for these, time is the honest default axis. */
 	preferTime?: boolean;
 }
+
 const { data, preferTime = false } = Astro.props;
+
 const bothAxes = Boolean(data.t && data.d);
+
 // Default to distance — the route reads more naturally against how far than how
 // long — except where distance is fabricated (a virtual ride's simulated km),
 // where time leads. Falls back to whichever axis actually exists.
 const defaultMode = preferTime && data.t ? 'time' : data.d ? 'dist' : 'time';
+
 // Only elevation shows on load — HR/power/speed are there to be switched on,
 // not read all at once (they crowd the same axis). Falls back to the first
 // available series when the activity has no elevation (a treadmill, say).
 const defaultKey = data.series.find((s) => s.key === 'elevation')?.key ?? data.series[0]?.key;
+
 const hasLaps = Boolean(data.laps && data.laps.length > 0);
+
 // A ski day ships run/lift bands; they start ON, since seeing the sawtooth AS
 // runs and lifts is the whole point on these activities.
 const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
@@ -91,6 +97,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 
 	for (const root of document.querySelectorAll<HTMLElement>('[data-graph]')) {
 		const tag = root.querySelector<HTMLElement>('[data-graph-config]');
+
 		if (!tag) continue;
 		// Non-null: all four are unconditionally in this component's template.
 		// The `!` (rather than a guard) is what lets TS keep them narrowed inside
@@ -121,30 +128,40 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		// Axis bounds per mode, captured so lap boundaries (raw axis values, not
 		// per-index) can be placed on the same 0..1 scale as the samples.
 		const xbounds: Record<Mode, { lo: number; hi: number } | null> = { time: null, dist: null };
+
 		function xnormFor(axis: (number | null)[] | null, m: Mode): number[] | null {
 			if (!axis) return null;
 			let lo = Infinity;
 			let hi = -Infinity;
+
 			for (const v of axis) if (v != null) {
 				if (v < lo) lo = v;
+
 				if (v > hi) hi = v;
 			}
+
 			xbounds[m] = { lo, hi };
 			const span = hi - lo || 1;
+
 			return axis.map((v, i) => (v == null ? i / (data.n - 1) : (v - lo) / span));
 		}
+
 		const xn: Record<Mode, number[] | null> = { time: xnormFor(data.t, 'time'), dist: xnormFor(data.d, 'dist') };
 
 		// y for each series: scaled to its own min/max, null preserved so the line
 		// breaks across a recording gap instead of diving to a false zero.
 		const ynorm = new Map<string, (number | null)[]>();
+
 		for (const s of data.series) {
 			let lo = Infinity;
 			let hi = -Infinity;
+
 			for (const v of s.values) if (v != null) {
 				if (v < lo) lo = v;
+
 				if (v > hi) hi = v;
 			}
+
 			const span = hi - lo || 1;
 			ynorm.set(
 				s.key,
@@ -161,30 +178,40 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 
 		function buildPaths() {
 			const xs = xn[mode];
+
 			if (!xs) return;
+
 			for (const s of data.series) {
 				const yn = ynorm.get(s.key)!;
 				let line = '';
 				let pen = false;
+
 				for (let i = 0; i < data.n; i++) {
 					const y = yn[i];
+
 					if (y == null) {
 						pen = false;
 						continue;
 					}
+
 					line += `${pen ? 'L' : 'M'}${xView(xs[i]).toFixed(1)} ${yView(y).toFixed(2)} `;
 					pen = true;
 				}
+
 				lineEls.get(s.key)!.setAttribute('d', line.trim());
+
 				// Elevation gets a filled silhouette to the baseline — terrain, not a
 				// line (ACTIVITIES.md §2). Assumes elevation has no gaps, which a GPS
 				// altitude stream doesn't; a gap just closes the fill early.
 				if (s.key === 'elevation' && elevArea) {
 					const first = xs[yn.findIndex((v) => v != null)];
+
 					const lastIdx = (() => {
 						for (let i = data.n - 1; i >= 0; i--) if (yn[i] != null) return i;
+
 						return 0;
 					})();
+
 					elevArea.setAttribute('d', `${line.trim()} L${xView(xs[lastIdx]).toFixed(1)} 100 L${xView(first).toFixed(1)} 100 Z`);
 				}
 			}
@@ -195,10 +222,12 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		const RUN_FILL = '#1c6e8c'; // lake — the run
 		const LIFT_FILL = '#6b7b88'; // graniteSoft — the lift ride
 		const skiRects: SVGRectElement[] = [];
+
 		for (const seg of data.skiSegments ?? []) {
 			const r = document.createElementNS(SVGNS, 'rect');
 			r.setAttribute('y', '0');
 			r.setAttribute('height', '100');
+
 			if (seg.type === 'run') {
 				r.setAttribute('fill', RUN_FILL);
 				r.setAttribute('fill-opacity', '0.14');
@@ -208,10 +237,12 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			} else {
 				r.setAttribute('fill', 'none');
 			}
+
 			r.style.display = 'none';
 			svg.appendChild(r);
 			skiRects.push(r);
 		}
+
 		// Bands span [start,end] on whichever axis is in force, scaled the same way
 		// the samples and lap rules are. Idle segments draw nothing.
 		function positionSki() {
@@ -220,10 +251,13 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 				const r = skiRects[i];
 				const a = mode === 'time' ? seg.t0 : seg.d0;
 				const z = mode === 'time' ? seg.t1 : seg.d1;
+
 				if (!b || a == null || z == null || !skiOn || seg.type === 'idle') {
 					r.style.display = 'none';
+
 					return;
 				}
+
 				const span = b.hi - b.lo || 1;
 				const x0 = ((a - b.lo) / span) * 1000;
 				const x1 = ((z - b.lo) / span) * 1000;
@@ -236,6 +270,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		// --- Lap dividers (vertical rules, appended first so they sit behind the
 		//     traces) -----------------------------------------------------------
 		const lapLines: SVGLineElement[] = [];
+
 		for (const _ of data.laps ?? []) {
 			const ln = document.createElementNS(SVGNS, 'line');
 			ln.setAttribute('stroke', '#6b7b88');
@@ -249,6 +284,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			svg.appendChild(ln);
 			lapLines.push(ln);
 		}
+
 		// Place each divider at its axis offset scaled the same way the samples
 		// are; a boundary the current axis didn't record (or when laps are off)
 		// simply isn't drawn.
@@ -257,10 +293,13 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			(data.laps ?? []).forEach((lp, i) => {
 				const ln = lapLines[i];
 				const v = mode === 'time' ? lp.t : lp.d;
+
 				if (!b || v == null || !lapsOn) {
 					ln.style.display = 'none';
+
 					return;
 				}
+
 				const x = (((v - b.lo) / (b.hi - b.lo || 1)) * 1000).toFixed(1);
 				ln.setAttribute('x1', x);
 				ln.setAttribute('x2', x);
@@ -278,6 +317,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 				svg.appendChild(elevArea);
 			}
 		}
+
 		for (const s of data.series) {
 			const p = document.createElementNS(SVGNS, 'path');
 			p.setAttribute('fill', 'none');
@@ -289,12 +329,14 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			svg.appendChild(p);
 			lineEls.set(s.key, p);
 		}
+
 		buildPaths();
 		positionLaps();
 		positionSki();
 
 		// --- Cursor dots (one per series, reused) -------------------------------
 		const dots = new Map<string, HTMLElement>();
+
 		for (const s of data.series) {
 			const dot = document.createElement('div');
 			dot.className = 'ag__dot';
@@ -308,10 +350,13 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			for (const s of data.series) {
 				const on = active.has(s.key);
 				lineEls.get(s.key)!.style.display = on ? '' : 'none';
+
 				if (s.key === 'elevation' && elevArea) elevArea.style.display = on ? '' : 'none';
+
 				if (!on) dots.get(s.key)!.hidden = true;
 			}
 		}
+
 		applyVisibility();
 
 		// --- Formatting ---------------------------------------------------------
@@ -322,26 +367,33 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			const ss = s % 60;
 			const mm = String(m).padStart(2, '0');
 			const sss = String(ss).padStart(2, '0');
+
 			return h ? `${h}:${mm}:${sss}` : `${m}:${sss}`;
 		}
+
 		const fmtDist = (m: number) => `${(m * 0.000621371).toFixed(2)} mi`;
 
 		// --- Nearest sample to a fraction of the width (monotonic x) -------------
 		function nearest(xs: number[], f: number): number {
 			let lo = 0;
 			let hi = data.n - 1;
+
 			while (lo < hi) {
 				const mid = (lo + hi) >> 1;
+
 				if (xs[mid] < f) lo = mid + 1;
 				else hi = mid;
 			}
+
 			if (lo > 0 && Math.abs(xs[lo - 1] - f) <= Math.abs(xs[lo] - f)) return lo - 1;
+
 			return lo;
 		}
 
 		// --- Scrub --------------------------------------------------------------
 		function scrubTo(clientX: number) {
 			const xs = xn[mode];
+
 			if (!xs) return;
 			const rect = plot.getBoundingClientRect();
 			const f = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
@@ -355,14 +407,18 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 				const dot = dots.get(s.key)!;
 				const yn = ynorm.get(s.key)![i];
 				const valEl = root.querySelector<HTMLElement>(`.ag__chip[data-key="${s.key}"] [data-val]`);
+
 				if (!active.has(s.key) || yn == null) {
 					dot.hidden = true;
+
 					if (valEl) valEl.textContent = '';
 					continue;
 				}
+
 				dot.hidden = false;
 				dot.style.left = `${leftPct}%`;
 				dot.style.top = `${yView(yn)}%`;
+
 				if (valEl) valEl.textContent = `${(s.values[i] as number).toFixed(s.decimals)} ${s.unit}`;
 			}
 
@@ -381,7 +437,9 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		function endScrub() {
 			cursor.hidden = true;
 			readout.hidden = true;
+
 			for (const dot of dots.values()) dot.hidden = true;
+
 			for (const el of root.querySelectorAll<HTMLElement>('[data-val]')) el.textContent = '';
 			document.dispatchEvent(new CustomEvent('activity:scrub-end'));
 		}
@@ -394,14 +452,17 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		for (const chip of root.querySelectorAll<HTMLButtonElement>('.ag__chip[data-key]')) {
 			chip.addEventListener('click', () => {
 				const key = chip.dataset.key!;
+
 				// Never let the reader turn everything off — the last one stays on.
 				if (active.has(key) && active.size === 1) return;
+
 				if (active.has(key)) active.delete(key);
 				else active.add(key);
 				chip.setAttribute('aria-pressed', String(active.has(key)));
 				applyVisibility();
 			});
 		}
+
 		const lapsChip = root.querySelector<HTMLButtonElement>('[data-laps]');
 		lapsChip?.addEventListener('click', () => {
 			lapsOn = !lapsOn;
@@ -414,11 +475,14 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			skiChip.setAttribute('aria-pressed', String(skiOn));
 			positionSki();
 		});
+
 		for (const btn of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) {
 			btn.addEventListener('click', () => {
 				const next = btn.dataset.mode as Mode;
+
 				if (next === mode || !xn[next]) return;
 				mode = next;
+
 				for (const b of root.querySelectorAll<HTMLButtonElement>('.ag__axis-btn')) b.setAttribute('aria-pressed', String(b.dataset.mode === mode));
 				buildPaths();
 				positionLaps();

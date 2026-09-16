@@ -31,18 +31,26 @@ import forceAtlas2 from 'graphology-layout-forceatlas2';
 import gexf from 'graphology-gexf';
 
 const args = process.argv.slice(2);
+
 const flag = (name) => args.includes(`--${name}`);
+
 const opt = (name, fallback) => {
 	const hit = args.find((a) => a.startsWith(`--${name}=`));
+
 	return hit ? hit.slice(name.length + 3) : fallback;
 };
+
 const num = (name, fallback) => Number.parseInt(opt(name, String(fallback)), 10);
 
 const FROM = opt('from', 'cache');
+
 const MIN_EDGE = num('min-edge', 2);
+
 /** Share of a person's credits a role needs before it colours their node. */
 const ROLE_SHARE_FLOOR = Number.parseFloat(opt('role-share', '0.25'));
+
 const ITERATIONS = num('iterations', 400);
+
 const KEEP_ISOLATES = flag('keep-isolates');
 
 /** Role presentation + thresholds. Mirrors the credit_roles seed rows in
@@ -55,6 +63,7 @@ const ROLES = [
 ];
 
 const CACHE_FILE = path.join('scripts', '.cache', 'credit-graph', 'films.ndjson');
+
 const OUT_DIR = path.join('public', 'data');
 
 // ---------------------------------------------------------------------------
@@ -68,14 +77,17 @@ async function loadFromCache() {
 	const films = [];
 	const rl = createInterface({ input: createReadStream(CACHE_FILE), crlfDelay: Infinity });
 	const seen = new Set();
+
 	for await (const line of rl) {
 		if (!line.trim()) continue;
 		let f;
+
 		try {
 			f = JSON.parse(line);
 		} catch {
 			continue;
 		}
+
 		if (seen.has(f.id)) continue;
 		seen.add(f.id);
 		films.push({
@@ -88,6 +100,7 @@ async function loadFromCache() {
 			credits: f.credits ?? [],
 		});
 	}
+
 	return { films, roles: ROLES };
 }
 
@@ -95,7 +108,9 @@ async function loadFromDb() {
 	const { createClient } = await import('@supabase/supabase-js');
 	const SB_URL = process.env.SUPABASE_URL;
 	const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 	if (!SB_URL || !SB_KEY) throw new Error('--from=db needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+
 	const supabase = createClient(SB_URL, SB_KEY, {
 		auth: { persistSession: false, autoRefreshToken: false },
 	});
@@ -104,18 +119,24 @@ async function loadFromDb() {
 	async function all(table, columns, order) {
 		const PAGE = 1000;
 		const out = [];
+
 		for (let offset = 0; ; offset += PAGE) {
 			const { data, error } = await supabase
 				.from(table)
 				.select(columns)
 				.order(order, { ascending: true })
 				.range(offset, offset + PAGE - 1);
+
 			if (error) throw new Error(`${table}: ${error.message}`);
 			out.push(...(data ?? []));
+
 			if ((data ?? []).length < PAGE) break;
+
 			if (offset % 50000 === 0 && offset) process.stdout.write(`\r  ${table}: ${out.length.toLocaleString()}…   `);
 		}
+
 		if (out.length > PAGE) process.stdout.write(`\r  ${table}: ${out.length.toLocaleString()}      \n`);
+
 		return out;
 	}
 
@@ -127,6 +148,7 @@ async function loadFromDb() {
 	]);
 
 	const nameById = new Map(peopleRows.map((p) => [p.tmdb_id, p.name]));
+
 	const byFilm = new Map(
 		filmRows.map((f) => [
 			f.tmdb_id,
@@ -141,6 +163,7 @@ async function loadFromDb() {
 			},
 		]),
 	);
+
 	for (const c of creditRows) {
 		byFilm.get(c.film_id)?.credits.push({
 			id: c.person_id,
@@ -154,8 +177,10 @@ async function loadFromDb() {
 	const merged = roles.map((r) => {
 		const override = ROLES.find((d) => d.role === r.role);
 		const flagGiven = args.some((a) => a.startsWith(`--min-${r.role}=`));
+
 		return { ...r, min_films: flagGiven && override ? override.min_films : r.min_films };
 	});
+
 	return { films: [...byFilm.values()], roles: merged.length ? merged : ROLES };
 }
 
@@ -259,9 +284,11 @@ const COUNTRIES = COUNTRY_LIST.map((c, i) => ({
 	...c,
 	color: c.code ? CYCLE[i % CYCLE.length] : NEUTRAL,
 }));
+
 const COUNTRY_OF = new Map(
 	COUNTRIES.flatMap((c, i) => (c.code ? [c.code, ...(c.also ?? [])].map((k) => [k, i]) : [])),
 );
+
 const OTHER_COUNTRY = COUNTRIES.findIndex((c) => !c.code);
 
 /** Films in a country before a person counts as having worked there.
@@ -311,17 +338,22 @@ const ERAS = [
  * co-productions, which is how Fellini ends up Italian rather than French. */
 function countryProfile(filmIds, filmById) {
 	const tally = new Map();
+
 	for (const id of filmIds) {
 		const codes = filmById.get(id)?.countries ?? [];
+
 		if (!codes.length) continue;
 		const share = 1 / codes.length;
+
 		for (const code of codes) tally.set(code, (tally.get(code) ?? 0) + share);
 	}
+
 	if (!tally.size) return { dominant: OTHER_COUNTRY, members: [OTHER_COUNTRY] };
 
 	// Fold codes onto their bucket first, so Russia and the USSR (or Germany and
 	// East Germany) are one country rather than competing with each other.
 	const byBucket = new Map();
+
 	for (const [code, n] of tally) {
 		const b = COUNTRY_OF.get(code) ?? OTHER_COUNTRY;
 		byBucket.set(b, (byBucket.get(b) ?? 0) + n);
@@ -330,15 +362,19 @@ function countryProfile(filmIds, filmById) {
 	let dominant = OTHER_COUNTRY;
 	let best = -1;
 	const members = [];
+
 	for (const [bucket, n] of byBucket) {
 		if (n > best) {
 			best = n;
 			dominant = bucket;
 		}
+
 		if (n >= COUNTRY_MIN_FILMS && bucket !== OTHER_COUNTRY) members.push(bucket);
 	}
+
 	// Everyone belongs somewhere, even if no single country clears the floor.
 	if (!members.includes(dominant)) members.push(dominant);
+
 	return { dominant, members: members.sort((a, b) => a - b) };
 }
 
@@ -349,8 +385,10 @@ function careerEra(filmIds, filmById) {
 		.map((id) => filmById.get(id)?.year)
 		.filter((y) => y)
 		.sort((a, b) => a - b);
+
 	if (!years.length) return ERAS.length - 1;
 	const median = years[Math.floor(years.length / 2)];
+
 	return ERAS.findIndex((e) => median <= e.until);
 }
 
@@ -375,6 +413,7 @@ function careerEra(filmIds, filmById) {
  * Returns per-film percentiles plus the corpus mean, used as a shrinkage prior.
  */
 const MIN_WINDOW = 30;
+
 /** Pseudo-observations pulling a thin sample toward the corpus mean. */
 const SHRINKAGE = 3;
 
@@ -383,60 +422,79 @@ function eraPercentiles(films, field, requirePositive) {
 	const usable = (f) => f.year && (!requirePositive || value(f) > 0);
 
 	const byYear = new Map();
+
 	for (const f of films) {
 		if (!usable(f)) continue;
+
 		if (!byYear.has(f.year)) byYear.set(f.year, []);
 		byYear.get(f.year).push(value(f));
 	}
+
 	for (const arr of byYear.values()) arr.sort((a, b) => a - b);
 
 	// Memoised comparison window per year: widen ±1 until it has enough films.
 	const windows = new Map();
+
 	const windowFor = (year) => {
 		let cached = windows.get(year);
+
 		if (cached) return cached;
 		let span = 2;
 		let merged = [];
+
 		for (;;) {
 			merged = [];
+
 			for (let y = year - span; y <= year + span; y++) {
 				const arr = byYear.get(y);
+
 				if (arr) merged.push(...arr);
 			}
+
 			if (merged.length >= MIN_WINDOW || span > 60) break;
 			span++;
 		}
+
 		merged.sort((a, b) => a - b);
 		windows.set(year, merged);
+
 		return merged;
 	};
 
 	const scores = new Map();
 	let total = 0;
 	let n = 0;
+
 	for (const f of films) {
 		if (!usable(f)) {
 			scores.set(f.id, null);
 			continue;
 		}
+
 		const w = windowFor(f.year);
+
 		if (w.length < 2) {
 			scores.set(f.id, null);
 			continue;
 		}
+
 		const v = value(f);
 		let lo = 0;
 		let hi = w.length;
+
 		while (lo < hi) {
 			const mid = (lo + hi) >> 1;
+
 			if (w[mid] < v) lo = mid + 1;
 			else hi = mid;
 		}
+
 		const p = lo / (w.length - 1);
 		scores.set(f.id, p);
 		total += p;
 		n++;
 	}
+
 	return { scores, prior: n ? total / n : 0.5 };
 }
 
@@ -463,19 +521,24 @@ async function main() {
 
 	// 1. Per-person film counts, per role and distinct.
 	const people = new Map(); // id -> { name, counts[], films:Set }
+
 	for (const f of films) {
 		for (const c of f.credits) {
 			const ri = roleIndex.get(c.role);
+
 			if (ri === undefined) continue; // a role we no longer graph
 			let p = people.get(c.id);
+
 			if (!p) {
 				p = { name: c.name, counts: new Array(roles.length).fill(0), films: new Set() };
 				people.set(c.id, p);
 			}
+
 			p.counts[ri]++;
 			p.films.add(f.id);
 		}
 	}
+
 	console.log(`  ${people.size.toLocaleString()} distinct people credited.`);
 
 	// 1b. Prominence metrics, summed over each person's distinct films. `votes`
@@ -495,20 +558,26 @@ async function main() {
 		let reachN = 0;
 		let grossSum = 0;
 		p.grossFilms = 0;
+
 		for (const id of p.films) {
 			const f = filmById.get(id);
+
 			if (!f) continue;
 			const rp = reachPct.scores.get(id);
+
 			if (rp != null) {
 				reachSum += rp;
 				reachN++;
 			}
+
 			const gp = grossPct.scores.get(id);
+
 			if (gp != null) {
 				grossSum += gp;
 				p.grossFilms++;
 			}
 		}
+
 		// reach: typical standing among contemporaries, scaled by filmography —
 		// the closest thing here to "how well known". Volume is part of fame, so
 		// its correlation with film count (~0.97) is the point, not a defect.
@@ -527,8 +596,10 @@ async function main() {
 	//    colouring are exactly the ones they cleared — a director with 40 acting
 	//    credits and 6 directing credits reads as both; one with 2 doesn't.
 	const qualified = new Map();
+
 	for (const [id, p] of people) {
 		const cleared = roles.map((r, i) => (p.counts[i] >= r.min_films ? i : -1)).filter((i) => i >= 0);
+
 		if (!cleared.length) continue;
 
 		// Clearing a threshold isn't enough to be *shown* as that role. An actor
@@ -539,11 +610,14 @@ async function main() {
 		// a colour.
 		const totalCredits = p.counts.reduce((a, b) => a + b, 0);
 		const major = cleared.filter((i) => p.counts[i] / totalCredits >= ROLE_SHARE_FLOOR);
+
 		const qroles = major.length
 			? major
 			: [cleared.reduce((best, i) => (p.counts[i] > p.counts[best] ? i : best), cleared[0])];
+
 		qualified.set(id, { ...p, qroles });
 	}
+
 	const perRole = roles.map((r, i) => `${[...qualified.values()].filter((p) => p.qroles.includes(i)).length.toLocaleString()} ${r.label.toLowerCase()}s`);
 	console.log(`  ${qualified.size.toLocaleString()} clear a threshold (${perRole.join(', ')}).`);
 
@@ -551,8 +625,10 @@ async function main() {
 	//    shares that film. Weight is the count of shared films, regardless of the
 	//    roles involved — that is what "collaboration count" means here.
 	const edges = new Map(); // "lo:hi" -> weight
+
 	for (const f of films) {
 		const on = [...new Set(f.credits.map((c) => c.id))].filter((id) => qualified.has(id));
+
 		for (let i = 0; i < on.length; i++) {
 			for (let j = i + 1; j < on.length; j++) {
 				const [lo, hi] = on[i] < on[j] ? [on[i], on[j]] : [on[j], on[i]];
@@ -561,10 +637,12 @@ async function main() {
 			}
 		}
 	}
+
 	console.log(`  ${edges.size.toLocaleString()} co-credit pairs; keeping those with >= ${MIN_EDGE}.`);
 
 	// 4. Build the graph from surviving edges.
 	const graph = new Graph({ type: 'undirected' });
+
 	const addNode = (id) => {
 		if (graph.hasNode(String(id))) return;
 		const p = qualified.get(id);
@@ -586,6 +664,7 @@ async function main() {
 			era: p.era,
 		});
 	};
+
 	for (const [key, weight] of edges) {
 		if (weight < MIN_EDGE) continue;
 		const [a, b] = key.split(':');
@@ -593,9 +672,11 @@ async function main() {
 		addNode(Number(b));
 		graph.addUndirectedEdge(String(a), String(b), { weight });
 	}
+
 	if (KEEP_ISOLATES) for (const id of qualified.keys()) addNode(id);
 
 	console.log(`  graph: ${graph.order.toLocaleString()} nodes, ${graph.size.toLocaleString()} edges.`);
+
 	if (graph.order === 0) {
 		console.error('Empty graph — thresholds too strict, or the cache is empty.');
 		process.exit(1);
@@ -612,6 +693,7 @@ async function main() {
 
 	console.log(`Running ForceAtlas2 (${ITERATIONS} iterations)…`);
 	const started = Date.now();
+
 	// Gravity and the Barnes-Hut angle are pinned rather than inferred, and have to
 	// match the values the page re-settles with (see GRAVITY and BARNES_HUT_THETA in
 	// src/scripts/credit-network.js) — otherwise pressing Re-settle would visibly
@@ -627,6 +709,7 @@ async function main() {
 		gravity: 0.25,
 		edgeWeightInfluence: 1,
 	};
+
 	forceAtlas2.assign(graph, { iterations: ITERATIONS, settings, getEdgeWeight: 'weight' });
 	console.log(`  settled in ${((Date.now() - started) / 1000).toFixed(1)}s.`);
 
@@ -705,6 +788,7 @@ async function main() {
 		edgeFields: ['source', 'target', 'weight'],
 		nodes: ids.map((id) => {
 			const a = graph.getNodeAttributes(id);
+
 			return [
 				Number(id), a.label, r2(a.x), r2(a.y),
 				a.films, a.reach, a.hit, a.grossFilms, a.roleMask, a.country, a.countryList, a.era,
@@ -722,8 +806,10 @@ async function main() {
 	// useful the moment it opens, rather than a grey hairball.
 	const colorOf = (a) => {
 		const mine = roles.filter((r) => a.roles.split('+').includes(r.role));
+
 		return (mine[0] ?? roles[0]).color;
 	};
+
 	const gexfGraph = graph.copy();
 	gexfGraph.forEachNode((n, a) => {
 		gexfGraph.mergeNodeAttributes(n, { color: colorOf(a), size: Math.sqrt(a.films) });
@@ -738,14 +824,17 @@ async function main() {
 	const iMask = at('roleMask');
 	const held = (n) => payload.roles.filter((_r, i) => n[iMask] & (1 << i));
 	const multi = payload.nodes.filter((n) => held(n).length > 1);
+
 	const cleared = payload.nodes.filter(
 		(n) => payload.roles.filter((r, i) => n[at(`n_${r.role}`)] >= r.minFilms).length > 1,
 	).length;
+
 	console.log(
 		`${multi.length.toLocaleString()} people are drawn split-colour ` +
 			`(${cleared.toLocaleString()} clear two thresholds, but only these hold ` +
 			`>=${(ROLE_SHARE_FLOOR * 100).toFixed(0)}% of their credits in each).`,
 	);
+
 	for (const n of multi.slice(0, 4)) {
 		console.log(`  e.g. ${n[1]} — ${held(n).map((r) => r.label.toLowerCase()).join(' + ')}`);
 	}

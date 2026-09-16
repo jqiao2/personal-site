@@ -22,11 +22,15 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const params = Astro.url.searchParams;
+
 const connectedFlash = params.get('connected') === '1';
+
 const errorFlash = params.get('error');
 
 let connection: StravaConnection | null = null;
+
 let unreachable = false;
+
 try {
 	connection = await getConnection();
 } catch (err) {
@@ -111,30 +115,42 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 <script>
 	// --- File upload ---------------------------------------------------------
 	const form = document.getElementById('upload') as HTMLFormElement | null;
+
 	const input = document.getElementById('files') as HTMLInputElement | null;
+
 	const pick = document.getElementById('pick');
+
 	const drop = document.getElementById('drop');
+
 	const picked = document.getElementById('picked');
+
 	const send = document.getElementById('send') as HTMLButtonElement | null;
+
 	const uout = document.getElementById('uout') as HTMLPreElement | null;
 
 	const showPicked = () => {
 		const n = input?.files?.length ?? 0;
+
 		if (send) send.disabled = n === 0;
+
 		if (picked) picked.textContent = n === 0 ? 'or drop .fit / .gpx / .tcx here' : `${n} file${n === 1 ? '' : 's'} ready`;
 	};
 
 	pick?.addEventListener('click', () => input?.click());
+
 	input?.addEventListener('change', showPicked);
 
 	drop?.addEventListener('dragover', (e) => {
 		e.preventDefault();
 		drop.classList.add('drop--over');
 	});
+
 	drop?.addEventListener('dragleave', () => drop.classList.remove('drop--over'));
+
 	drop?.addEventListener('drop', (e) => {
 		e.preventDefault();
 		drop.classList.remove('drop--over');
+
 		if (input && e.dataTransfer?.files.length) {
 			input.files = e.dataTransfer.files;
 			showPicked();
@@ -143,32 +159,40 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 
 	form?.addEventListener('submit', async (e) => {
 		e.preventDefault();
+
 		if (!input?.files?.length || !send) return;
 		send.disabled = true;
 		const label = send.textContent;
 		send.textContent = 'Importing…';
+
 		try {
 			const res = await fetch('/api/activities/upload', { method: 'POST', body: new FormData(form) });
 			const body = await res.json();
+
 			if (uout) {
 				uout.hidden = false;
+
 				if (!res.ok) {
 					uout.textContent = `error: ${body.error ?? res.status}`;
 				} else {
 					const lines = (body.results ?? []).map(
 						(r: { status: string; name: string; detail: string }) => {
 							const mark = { added: '+', duplicate: '=', skipped: '-', failed: 'x' }[r.status] ?? '?';
+
 							return `${mark} ${r.name}: ${r.detail}`;
 						},
 					);
+
 					const tally =
 						`added ${body.added}` +
 						(body.duplicate ? `, ${body.duplicate} already stored` : '') +
 						(body.skipped ? `, ${body.skipped} skipped` : '') +
 						(body.failed ? `, ${body.failed} failed` : '');
+
 					uout.textContent = [tally, ...lines].join('\n');
 				}
 			}
+
 			if (res.ok && body.added > 0) {
 				input.value = '';
 				showPicked();
@@ -187,14 +211,18 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 
 	// --- Strava sync ---------------------------------------------------------
 	const btn = document.getElementById('sync') as HTMLButtonElement | null;
+
 	const out = document.getElementById('out') as HTMLPreElement | null;
+
 	btn?.addEventListener('click', async () => {
 		btn.disabled = true;
 		const label = btn.textContent;
 		btn.textContent = 'Syncing…';
+
 		try {
 			const res = await fetch('/api/activities/strava/sync', { method: 'POST' });
 			const body = await res.json();
+
 			if (out) {
 				out.hidden = false;
 				out.textContent = res.ok
@@ -202,6 +230,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 						(body.unknownSports?.length ? `\nunknown sports: ${body.unknownSports.join(', ')}` : '')
 					: `error: ${body.error ?? res.status}`;
 			}
+
 			if (res.ok && body.added > 0) setTimeout(() => location.reload(), 1200);
 		} catch (e) {
 			if (out) {

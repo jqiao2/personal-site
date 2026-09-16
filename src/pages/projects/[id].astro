@@ -9,10 +9,12 @@ import Layout from '../../layouts/Layout.astro';
 // comes back, which also restores the natural 404 for an unknown id.
 export async function getStaticPaths() {
 	const projects = await getCollection('projects');
+
 	return projects.map((project) => ({ params: { id: project.id }, props: { project } }));
 }
 
 const { project } = Astro.props;
+
 const { Content } = await render(project);
 ---
 

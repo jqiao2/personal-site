@@ -16,6 +16,7 @@ interface Props {
 	pathname: string;
 	edited: boolean;
 }
+
 const { rows, pathname, edited } = Astro.props;
 
 const TYPES: { value: SkiEditRow['type']; label: string }[] = [

@@ -151,12 +151,14 @@ const config = {
 		gloss: string;
 		ink: string;
 	}
+
 	/** The last visit somewhere, as the composer inherits it. */
 	interface PreviousVisit {
 		rating: number | null;
 		verdict: number | null;
 		hearted: boolean;
 	}
+
 	interface PlaceSpec {
 		id: number;
 		name: string;
@@ -165,6 +167,7 @@ const config = {
 		trip?: boolean;
 		previous?: PreviousVisit | null;
 	}
+
 	/** A place already in the log, as the autocomplete route returns it. */
 	interface LoggedPlace {
 		id: number;
@@ -176,6 +179,7 @@ const config = {
 		trip: boolean;
 		previous: PreviousVisit | null;
 	}
+
 	interface Config {
 		redirect: string;
 		place: PlaceSpec | null;
@@ -199,7 +203,9 @@ const config = {
 	}
 
 	const configTag = document.getElementById('meal-editor-config');
+
 	const editor = document.getElementById('meal-editor');
+
 	if (configTag && editor) {
 		// Bound once so the narrowing survives into the callbacks below.
 		const root: HTMLElement = editor;
@@ -224,6 +230,7 @@ const config = {
 		const inherited = cfg.initial ? null : (cfg.place?.previous ?? null);
 
 		type Pane = 'log' | 'try';
+
 		// One list holds both kinds, because the arrangement is one arrangement:
 		// a photograph added today can belong between two taken last month, and
 		// two lists side by side could not say that.
@@ -282,6 +289,7 @@ const config = {
 			// A point belongs to the place you were naming, not to the dialog, so
 			// it does not survive being closed and reopened on something else.
 			state.geo = null;
+
 			// The to-try pane opens fresh every time: nothing picked, nothing typed.
 			if (pane === 'try') {
 				state.tryLocked = false;
@@ -292,6 +300,7 @@ const config = {
 				($('#me-why-input') as HTMLInputElement).value = '';
 				$('[data-me-geo]')!.hidden = true;
 			}
+
 			root.hidden = false;
 			document.body.style.overflow = 'hidden';
 			$('[data-me-pane="log"]')!.hidden = pane !== 'log';
@@ -323,7 +332,9 @@ const config = {
 						whyField.get().length,
 				);
 			}
+
 			if (cfg.visitId) return true;
+
 			return Boolean(
 				state.placeId ||
 					value('[data-me-place]') ||
@@ -358,6 +369,7 @@ const config = {
 				opts,
 				(v) => `Remove ${v}`,
 			);
+
 		const friendField = chip('me-friend', cfg.friendOptions);
 		const tagField = chip('me-tag', cfg.tagOptions);
 		const whyField = chip('me-why', cfg.whyOptions);
@@ -368,10 +380,12 @@ const config = {
 			const locked = state.locked;
 			$('[data-me-locked]')!.hidden = !locked;
 			($('[data-me-place]') as HTMLInputElement).hidden = Boolean(locked);
+
 			if (locked) {
 				$('[data-me-locked-name]')!.textContent = locked.name;
 				$('[data-me-locked-meta]')!.textContent = locked.meta;
 			}
+
 			// The rest of the log pane appears only once a place is picked — same
 			// reveal as the film composer.
 			$('[data-me-log-rest]')!.hidden = !locked;
@@ -408,6 +422,7 @@ const config = {
 			$('[data-me-try-locked]')!.hidden = !state.tryLocked;
 			($('[data-me-try-name]') as HTMLInputElement).hidden = state.tryLocked;
 			$('[data-me-try-rest]')!.hidden = !state.tryLocked;
+
 			if (state.tryLocked) {
 				$('[data-me-try-locked-name]')!.textContent = tName;
 				$('[data-me-try-locked-meta]')!.textContent = state.geo
@@ -442,6 +457,7 @@ const config = {
 					// under a finger.
 					const move = document.createElement('span');
 					move.className = 'me__photo-move';
+
 					for (const [glyph, to, label] of [
 						['‹', i - 1, 'Move photo earlier'],
 						['›', i + 1, 'Move photo later'],
@@ -459,32 +475,40 @@ const config = {
 						});
 						move.append(b);
 					}
+
 					cell.append(img, x, move);
+
 					return cell;
 				}),
 			);
 
 			const bits: string[] = [];
+
 			if (state.rating) bits.push(`${state.rating}★`);
+
 			if (state.photos.length) bits.push(`${state.photos.length} photo${state.photos.length === 1 ? '' : 's'}`);
 			$('[data-me-summary]')!.textContent = state.pane === 'try' ? '' : bits.join(' · ');
 
 			// What the geocoder pinned, in whichever pane is open.
 			const g = state.geo;
 			const where = g ? [g.neighborhood, g.city, g.stateRegion].filter(Boolean).join(', ') : '';
+
 			const pinnedText = !g
 				? ''
 				: g.precise
 					? `${where} · ${g.lat.toFixed(4)}, ${g.lng.toFixed(4)}`
 					: `${where} · area only. No point. It stays off the map`;
+
 			for (const [box, text] of [
 				['[data-me-pinned]', '[data-me-pinned-text]'],
 				['[data-me-log-pinned]', '[data-me-log-pinned-text]'],
 			]) {
 				const el = $(box);
+
 				if (!el) continue;
 				el.hidden = !g;
 				const label = $(text);
+
 				if (label) label.textContent = pinnedText;
 			}
 
@@ -528,6 +552,7 @@ const config = {
 
 		function canSave(): boolean {
 			if (state.pane === 'try') return state.tryLocked && Boolean(value('[data-me-try-name]'));
+
 			return Boolean(state.placeId || value('[data-me-place]'));
 		}
 
@@ -557,6 +582,7 @@ const config = {
 			geo: [] as GeoHit[],
 			looking: false,
 		};
+
 		/** Answers to a query that is no longer what's typed are dropped. */
 		let queryId = 0;
 		let placeTimer = 0;
@@ -571,21 +597,27 @@ const config = {
 			// Under three characters the geocode route answers nothing by design,
 			// so there is nothing to wait for and nothing to say about waiting.
 			suggest.looking = q.length >= 3;
+
 			if (!q) {
 				$('[data-me-suggest]')!.hidden = true;
+
 				return;
 			}
+
 			const mine = ++queryId;
 
 			placeTimer = window.setTimeout(async () => {
 				let places: LoggedPlace[] = [];
+
 				try {
 					const res = await fetch(`/api/restaurants/places?q=${encodeURIComponent(q)}`);
+
 					if (res.ok) places = (await res.json()).places ?? [];
 				} catch {
 					// A failed lookup must not block typing a new place; the rows
 					// below are offered regardless.
 				}
+
 				if (mine !== queryId) return;
 				suggest.places = places;
 				renderSuggest();
@@ -594,6 +626,7 @@ const config = {
 			if (suggest.looking) {
 				geoTimer = window.setTimeout(async () => {
 					const { hits } = await lookupPlaces(q);
+
 					if (mine !== queryId) return;
 					suggest.geo = hits;
 					suggest.looking = false;
@@ -605,12 +638,14 @@ const config = {
 		function renderSuggest() {
 			const box = $('[data-me-suggest]')!;
 			box.replaceChildren();
+
 			for (const p of suggest.places) box.append(loggedRow(p));
 
 			// A candidate that is already in the log is offered above with its
 			// visits on it; offering it again as new is how one restaurant ends
 			// up as two rows that can never be added back together.
 			const known = new Set(suggest.places.map((p) => p.name.toLowerCase()));
+
 			for (const hit of suggest.geo) {
 				if (!known.has(hit.name.toLowerCase())) box.append(geoRow(hit, () => pickNew(hit.name || suggest.q, hit)));
 			}
@@ -631,11 +666,13 @@ const config = {
 					sugRow(`“${suggest.q}”`, 'new place · no point on the map', 'add', () => pickNew(suggest.q, null)),
 				);
 			}
+
 			box.hidden = false;
 		}
 
 		function loggedRow(p: LoggedPlace): HTMLElement {
 			const meta = `${p.cuisines[0] ?? ''}${p.cuisines[0] ? ' · ' : ''}${p.neighborhood ? `${p.neighborhood}, ${p.city}` : p.city}`;
+
 			return sugRow(p.name, meta, `${p.visit_count} visit${p.visit_count === 1 ? '' : 's'}`, () => {
 				state.placeId = p.id;
 				state.locked = { id: p.id, name: p.name, meta, visits: p.visit_count };
@@ -662,11 +699,14 @@ const config = {
 			]
 				.filter(Boolean)
 				.join(' · ');
+
 			// WHO SAID SO, on every row. Two sources disagree about a Chinatown
 			// noodle shop more often than they agree, and the only way to choose
 			// between them is to know who is speaking.
 			const row = sugRow(hit.name || hit.display.split(',')[0], meta, hit.sourceLabel ?? 'OpenStreetMap', onPick);
+
 			if (!hit.precise) row.classList.add('me__sug--vague');
+
 			return row;
 		}
 
@@ -679,6 +719,7 @@ const config = {
 		function sugRow(name: string, meta: string, tail: string, onPick: () => void): HTMLElement {
 			const row = document.createElement('div');
 			row.className = 'me__sug';
+
 			for (const [part, text] of [
 				['name', name],
 				['meta', meta],
@@ -689,14 +730,17 @@ const config = {
 				span.textContent = text;
 				row.append(span);
 			}
+
 			row.addEventListener('mousedown', (e) => {
 				e.preventDefault();
 				// Whichever box this row was put in — the two panes have one each.
 				const box = row.parentElement as HTMLElement | null;
+
 				if (box) box.hidden = true;
 				onPick();
 				render();
 			});
+
 			return row;
 		}
 
@@ -727,19 +771,25 @@ const config = {
 		// Name a place, then pick it: a geocoder hit, or "add it anyway" for a
 		// place no map knows. Picking is what reveals the rest of the pane.
 		let tryTimer = 0;
+
 		function lookupPlace() {
 			window.clearTimeout(tryTimer);
 			const box = $('[data-me-geo]')!;
 			const name = value('[data-me-try-name]');
+
 			if (name.length < 3) {
 				box.hidden = true;
+
 				return;
 			}
+
 			tryTimer = window.setTimeout(async () => {
 				const { hits } = await lookupPlaces(name);
+
 				// The name may have moved on while the geocoder was answering.
 				if (value('[data-me-try-name]') !== name) return;
 				box.replaceChildren();
+
 				for (const hit of hits) box.append(geoRow(hit, () => pick(hit)));
 				// Always offer the place as typed, point or no point — the same
 				// "add it anyway" the log pane ends its list with.
@@ -752,6 +802,7 @@ const config = {
 		function pick(hit: GeoHit | null) {
 			state.geo = hit;
 			$('[data-me-geo]')!.hidden = true;
+
 			// A picked hit carries the proper spelling and accents — the half you
 			// can't type on a phone — so it becomes the name that gets saved.
 			if (hit?.name) ($('[data-me-try-name]') as HTMLInputElement).value = hit.name;
@@ -764,8 +815,10 @@ const config = {
 			if (!canSave() || state.saving) return;
 			state.saving = true;
 			render();
+
 			try {
 				if (state.pane === 'try') return await saveToTry();
+
 				return await saveVisit();
 			} catch (e) {
 				window.alert(e instanceof Error ? e.message : 'Something went wrong saving that.');
@@ -780,6 +833,7 @@ const config = {
 			// anyway has none, and the place page is where either gets corrected.
 			// Where/cuisine/price are facts about the restaurant, not asked here.
 			const g = state.geo;
+
 			const body = {
 				name: value('[data-me-try-name]'),
 				cuisines: g?.cuisines ?? [],
@@ -796,17 +850,20 @@ const config = {
 				lng: g?.precise ? g.lng : null,
 				toTry: true,
 			};
+
 			const res = await fetch('/api/restaurants/places', {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
 			});
+
 			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'could not add the place');
 			location.href = '/restaurants/to-try';
 		}
 
 		async function saveVisit() {
 			const friends = friendField.get();
+
 			const payload = {
 				restaurantId: state.placeId ?? undefined,
 				place: state.placeId
@@ -840,15 +897,19 @@ const config = {
 			};
 
 			const url = cfg.visitId ? `/api/restaurants/visits/${cfg.visitId}` : '/api/restaurants/visits';
+
 			const res = await fetch(url, {
 				method: cfg.visitId ? 'PATCH' : 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
+
 			if (res.status === 401) {
 				location.href = `/films/login?next=${encodeURIComponent(cfg.redirect)}`;
+
 				return;
 			}
+
 			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'could not log that visit');
 			const saved = await res.json();
 			const visitId = cfg.visitId ?? saved.id;
@@ -858,9 +919,11 @@ const config = {
 			// and a file deleted for a save that never happened is gone for
 			// nothing. The storage object goes with the row; there is no undo.
 			const failures: string[] = [];
+
 			for (const id of state.removed) {
 				try {
 					const res = await fetch(`/api/restaurants/photos/${id}`, { method: 'DELETE' });
+
 					if (!res.ok) failures.push('a photograph could not be deleted');
 				} catch {
 					failures.push('a photograph could not be deleted');
@@ -882,20 +945,25 @@ const config = {
 			// name every photograph in the list — the ones already there and the
 			// ones that arrived a moment ago alike.
 			const order: number[] = [];
+
 			for (const p of state.photos) {
 				if (p.kind === 'stored') {
 					order.push(p.id);
 					continue;
 				}
+
 				const form = new FormData();
 				form.append('photo', p.file, p.file.name);
 				form.append('width', String(p.width));
 				form.append('height', String(p.height));
 				form.append('caption', '');
+
 				try {
 					const up = await fetch(`/api/restaurants/visits/${visitId}/photos`, { method: 'POST', body: form });
+
 					if (up.ok) {
 						const added = await up.json().catch(() => null);
+
 						for (const id of added?.ids ?? []) order.push(Number(id));
 					} else {
 						// A 413 comes from the platform as HTML, not from the
@@ -917,10 +985,12 @@ const config = {
 			const seeded = cfg.photos ?? [];
 			const stored = new Set(seeded.map((p) => p.id));
 			const kept = new Set(order.filter((id) => stored.has(id)));
+
 			const appended = [
 				...seeded.map((p) => p.id).filter((id) => kept.has(id)),
 				...order.filter((id) => !stored.has(id)),
 			];
+
 			if (order.length > 1 && order.some((id, i) => id !== appended[i])) {
 				try {
 					const res = await fetch(`/api/restaurants/visits/${visitId}/photos`, {
@@ -928,6 +998,7 @@ const config = {
 						headers: { 'content-type': 'application/json' },
 						body: JSON.stringify({ order }),
 					});
+
 					if (!res.ok) failures.push('the photographs kept their old order');
 				} catch {
 					failures.push('the photographs kept their old order');
@@ -945,12 +1016,16 @@ const config = {
 
 		async function remove() {
 			if (!cfg.visitId) return;
+
 			if (!window.confirm('Delete this visit?')) return;
 			const res = await fetch(`/api/restaurants/visits/${cfg.visitId}`, { method: 'DELETE' });
+
 			if (!res.ok) {
 				window.alert('Could not delete that visit.');
+
 				return;
 			}
+
 			location.href = ($('[data-me-delete]') as HTMLElement).dataset.redirect ?? '/restaurants/diary';
 		}
 
@@ -1030,9 +1105,11 @@ const config = {
 		);
 		$('[data-me-photo-input]')!.addEventListener('change', async (e) => {
 			const input = e.target as HTMLInputElement;
+
 			for (const file of Array.from(input.files ?? [])) {
 				state.photos.push({ kind: 'new', ...(await preparePhoto(file)) });
 			}
+
 			input.value = '';
 			render();
 		});
@@ -1045,13 +1122,17 @@ const config = {
 			($('[data-me-private]') as HTMLTextAreaElement).hidden = !on;
 			$('[data-me-private-toggle]')!.setAttribute('aria-expanded', String(on));
 		}
+
 		$('[data-me-private-toggle]')!.addEventListener('click', () => {
 			const box = $('[data-me-private]') as HTMLTextAreaElement;
+
 			if (box.hidden) {
 				showPrivate(true);
 				box.focus();
+
 				return;
 			}
+
 			if (box.value.trim() && !window.confirm('Discard the private note?')) return;
 			box.value = '';
 			showPrivate(false);
@@ -1092,12 +1173,14 @@ const config = {
 		// the BROWSER's today, so the user's own midnight, not the UTC one a
 		// Vercel function would name from 8pm Eastern onwards.
 		dateField().value = cfg.initial?.visitedOn ?? localDay();
+
 		if (cfg.initial) {
 			($('[data-me-notes]') as HTMLTextAreaElement).value = cfg.initial.review;
 			const priv = $('[data-me-private]') as HTMLTextAreaElement;
 			priv.value = cfg.initial.privateNote;
 			showPrivate(priv.value.length > 0);
 		}
+
 		render();
 	}
 </script>

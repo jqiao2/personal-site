@@ -48,7 +48,9 @@ const {
 } = Astro.props;
 
 const full = size === 'full';
+
 const width = coverWidth(height);
+
 const cloth = bookCloth(id);
 
 const style = [
@@ -141,6 +143,7 @@ const Tag = href ? 'a' : 'div';
 			if (img.naturalWidth <= 2) retire(img);
 			continue;
 		}
+
 		img.addEventListener('load', () => img.naturalWidth <= 2 && retire(img), { once: true });
 		img.addEventListener('error', () => retire(img), { once: true });
 	}

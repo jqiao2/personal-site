@@ -20,17 +20,23 @@ import path from 'node:path';
 import { createClient } from '@supabase/supabase-js';
 
 const args = process.argv.slice(2);
+
 const flag = (name) => args.includes(`--${name}`);
+
 const opt = (name, fallback) => {
 	const hit = args.find((a) => a.startsWith(`--${name}=`));
+
 	return hit ? hit.slice(name.length + 3) : fallback;
 };
 
 const DRY_RUN = flag('dry-run');
+
 const LIMIT = opt('limit') ? Number.parseInt(opt('limit'), 10) : Infinity;
 
 const SB_URL = process.env.SUPABASE_URL;
+
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!DRY_RUN && (!SB_URL || !SB_KEY)) {
 	console.error('Missing env: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
 	console.error('Run with: node --env-file=.env scripts/credit-graph/load.mjs');
@@ -42,6 +48,7 @@ const FILMS_FILE = path.join('scripts', '.cache', 'credit-graph', 'films.ndjson'
 /** Rows per PostgREST request. Small columns, so a large batch is fine and keeps
  * the round-trip count (and total wall time) down. */
 const BATCH = 2000;
+
 /** Batches in flight at once. Supabase handles this comfortably. */
 const PARALLEL = 4;
 
@@ -59,15 +66,18 @@ async function readCache() {
 
 	const rl = createInterface({ input: createReadStream(FILMS_FILE), crlfDelay: Infinity });
 	let bad = 0;
+
 	for await (const line of rl) {
 		if (!line.trim()) continue;
 		let f;
+
 		try {
 			f = JSON.parse(line);
 		} catch {
 			bad++;
 			continue;
 		}
+
 		if (films.size >= LIMIT && !films.has(f.id)) continue;
 
 		films.set(f.id, {
@@ -80,6 +90,7 @@ async function readCache() {
 			revenue: f.revenue ?? 0,
 			countries: f.countries ?? [],
 		});
+
 		for (const c of f.credits ?? []) {
 			people.set(c.id, { tmdb_id: c.id, name: c.name });
 			credits.set(`${f.id}:${c.id}:${c.role}`, {
@@ -90,7 +101,9 @@ async function readCache() {
 			});
 		}
 	}
+
 	if (bad) console.log(`  (skipped ${bad} unparseable line(s) from an interrupted run)`);
+
 	return { films: [...films.values()], people: [...people.values()], credits: [...credits.values()] };
 }
 
@@ -108,11 +121,13 @@ const TRANSIENT = /fetch failed|network|timeout|ECONN|EAI_AGAIN|socket/i;
 
 async function upsertBatch(table, batch, conflict) {
 	let lastError;
+
 	for (let attempt = 0; attempt < 5; attempt++) {
 		try {
 			const { error } = await supabase
 				.from(table)
 				.upsert(batch, { onConflict: conflict, defaultToNull: false });
+
 			if (!error) return;
 			// PostgREST answered: the request is malformed, not unlucky.
 			throw new Error(`${table}: ${error.message}`);
@@ -120,8 +135,10 @@ async function upsertBatch(table, batch, conflict) {
 			if (!TRANSIENT.test(e.message ?? '')) throw e;
 			lastError = e;
 		}
+
 		await sleep(500 * 2 ** attempt);
 	}
+
 	throw new Error(`${table}: ${lastError?.message ?? 'unknown'} (after retries)`);
 }
 
@@ -130,19 +147,23 @@ async function upsertBatch(table, batch, conflict) {
 async function upsertAll(table, rows, conflict) {
 	if (rows.length === 0) return;
 	const batches = [];
+
 	for (let i = 0; i < rows.length; i += BATCH) batches.push(rows.slice(i, i + BATCH));
 
 	let done = 0;
 	const queue = batches.slice();
+
 	async function worker() {
 		for (;;) {
 			const batch = queue.shift();
+
 			if (!batch) return;
 			await upsertBatch(table, batch, conflict);
 			done += batch.length;
 			process.stdout.write(`\r  ${table}: ${done.toLocaleString()}/${rows.length.toLocaleString()}    `);
 		}
 	}
+
 	await Promise.all(Array.from({ length: PARALLEL }, worker));
 	process.stdout.write('\n');
 }
@@ -157,8 +178,10 @@ async function main() {
 			`${credits.length.toLocaleString()} credits ` +
 			`(${Object.entries(byRole).map(([r, n]) => `${n.toLocaleString()} ${r}`).join(', ')}).`,
 	);
+
 	if (DRY_RUN) {
 		console.log('Dry run — nothing written.');
+
 		return;
 	}
 
@@ -173,10 +196,12 @@ async function main() {
 
 main().catch((e) => {
 	console.error(`\n${e.message}`);
+
 	if (/relation .* does not exist|Could not find the table/i.test(e.message)) {
 		console.error('\nMigration 0015 has not been applied yet. Apply it with:');
 		console.error('  supabase db push');
 		console.error('or paste supabase/migrations/0015_credit_graph.sql into the Supabase SQL editor.');
 	}
+
 	process.exit(1);
 });

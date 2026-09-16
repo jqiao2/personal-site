@@ -70,6 +70,7 @@ const TIMEOUT_MS = 8000;
 
 async function getJson(url: string): Promise<unknown> {
 	let res: Response;
+
 	try {
 		res = await fetch(url, {
 			headers: { accept: 'application/json', 'user-agent': UA },
@@ -84,7 +85,9 @@ async function getJson(url: string): Promise<unknown> {
 				: 'Open Library could not be reached',
 		);
 	}
+
 	if (!res.ok) throw new Error(`Open Library returned ${res.status}`);
+
 	return res.json();
 }
 
@@ -101,6 +104,7 @@ export async function searchBooks(query: string, limit = 8): Promise<OpenLibrary
 		fields: 'key,title,author_name,first_publish_year,number_of_pages_median,cover_i',
 		limit: String(limit),
 	});
+
 	const data = (await getJson(`https://openlibrary.org/search.json?${params}`)) as {
 		docs?: Record<string, unknown>[];
 	};
@@ -123,7 +127,9 @@ export async function searchBooks(query: string, limit = 8): Promise<OpenLibrary
  */
 function paragraphs(raw: unknown): string[] {
 	const text = typeof raw === 'string' ? raw : typeof (raw as { value?: unknown })?.value === 'string' ? (raw as { value: string }).value : '';
+
 	if (!text) return [];
+
 	return text
 		.split(/-{4,}/)[0]
 		.split(/\r?\n\s*\r?\n/)
@@ -152,18 +158,25 @@ function subjects(raw: unknown): string[] {
 	if (!Array.isArray(raw)) return [];
 	const seen = new Set<string>();
 	const out: string[] = [];
+
 	for (const value of raw as unknown[]) {
 		if (typeof value !== 'string') continue;
 		const s = value.trim();
+
 		if (!s || s.length > 28) continue;
+
 		if (/[,()[\]/]|--|\d/.test(s)) continue;
+
 		if (/^(fiction|non-?fiction)$/i.test(s)) continue;
 		const key = s.toLowerCase();
+
 		if (seen.has(key)) continue;
 		seen.add(key);
 		out.push(s[0].toUpperCase() + s.slice(1));
+
 		if (out.length >= MAX_GENRES) break;
 	}
+
 	return out;
 }
 
@@ -178,7 +191,9 @@ function subjects(raw: unknown): string[] {
 function classify(raw: unknown): 'Fiction' | 'Nonfiction' | null {
 	if (!Array.isArray(raw)) return null;
 	const all = (raw as unknown[]).filter((s): s is string => typeof s === 'string').join(' | ').toLowerCase();
+
 	if (!all) return null;
+
 	// Order matters, and it is not the obvious one. A novel's catalogue subjects
 	// are full of nonfiction-looking words — Emma is shelved under "Historical
 	// Fiction" and "England, fiction", Foundation under "Psychohistory" — so a
@@ -186,8 +201,11 @@ function classify(raw: unknown): 'Fiction' | 'Nonfiction' | null {
 	// Only an explicit "nonfiction" outranks a fiction marker; the softer words
 	// decide nothing until no fiction marker is present at all.
 	if (/non-?fiction/.test(all)) return 'Nonfiction';
+
 	if (/fiction|novel|stories|poetry/.test(all)) return 'Fiction';
+
 	if (/biography|history|essays|memoir/.test(all)) return 'Nonfiction';
+
 	return null;
 }
 
@@ -199,6 +217,7 @@ export async function getWork(key: string): Promise<OpenLibraryWork> {
 	const published = data.first_publish_date;
 	const covers = Array.isArray(data.covers) ? (data.covers as unknown[]) : [];
 	const coverId = covers.find((c) => typeof c === 'number' && c > 0);
+
 	return {
 		description: paragraphs(data.description),
 		genres: subjects(data.subjects),
@@ -221,10 +240,12 @@ async function editionsMedian(workKey: string): Promise<number | null> {
 	const data = (await getJson(`https://openlibrary.org${workKey}/editions.json?limit=50`)) as {
 		entries?: { number_of_pages?: unknown }[];
 	};
+
 	const counts = (data.entries ?? [])
 		.map((e) => e.number_of_pages)
 		.filter((n): n is number => typeof n === 'number' && n > 0)
 		.sort((a, b) => a - b);
+
 	return counts.length ? counts[Math.floor(counts.length / 2)] : null;
 }
 
@@ -245,9 +266,11 @@ function normalizeIsbn(raw: string): string {
  */
 export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | null> {
 	const clean = normalizeIsbn(isbn);
+
 	if (clean.length !== 10 && clean.length !== 13) return null;
 
 	let edition: Record<string, unknown>;
+
 	try {
 		edition = (await getJson(`https://openlibrary.org/isbn/${clean}.json`)) as Record<string, unknown>;
 	} catch (e) {
@@ -260,6 +283,7 @@ export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | nul
 
 	const works = Array.isArray(edition.works) ? (edition.works as { key?: unknown }[]) : [];
 	const workKey = typeof works[0]?.key === 'string' ? (works[0].key as string) : null;
+
 	if (!workKey) return null;
 
 	let work: OpenLibraryWork = {
@@ -269,6 +293,7 @@ export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | nul
 		firstPublished: null,
 		coverId: null,
 	};
+
 	try {
 		work = await getWork(workKey);
 	} catch {
@@ -284,6 +309,7 @@ export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | nul
 	// The edition's own length first; the work's editions decide it when this
 	// record has none, which is the difference between drawing a spine and not.
 	let pages = typeof edition.number_of_pages === 'number' ? edition.number_of_pages : null;
+
 	if (!pages) {
 		try {
 			pages = await editionsMedian(workKey);
@@ -291,6 +317,7 @@ export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | nul
 			// A spine at the fallback width is a smaller loss than no match at all.
 		}
 	}
+
 	const published = edition.publish_date;
 
 	return {

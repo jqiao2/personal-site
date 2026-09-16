@@ -69,6 +69,7 @@ export function decodePolyline(encoded: string): [number, number][] {
 		lng += readSignedValue(encoded, cur);
 		points.push([lat / POLYLINE_PRECISION, lng / POLYLINE_PRECISION]);
 	}
+
 	return points;
 }
 
@@ -80,11 +81,13 @@ function readSignedValue(encoded: string, cur: Cursor): number {
 	let result = 0;
 	let shift = 0;
 	let byte: number;
+
 	do {
 		byte = encoded.charCodeAt(cur.i++) - 63;
 		result |= (byte & 0x1f) << shift;
 		shift += 5;
 	} while (byte >= 0x20);
+
 	// Zigzag decode: odd result means negative.
 	return result & 1 ? ~(result >> 1) : result >> 1;
 }
@@ -96,6 +99,7 @@ export function encodePolyline(points: [number, number][]): string {
 	let out = '';
 	let prevLat = 0;
 	let prevLng = 0;
+
 	for (const [lat, lng] of points) {
 		const lat5 = Math.round(lat * POLYLINE_PRECISION);
 		const lng5 = Math.round(lng * POLYLINE_PRECISION);
@@ -104,6 +108,7 @@ export function encodePolyline(points: [number, number][]): string {
 		prevLat = lat5;
 		prevLng = lng5;
 	}
+
 	return out;
 }
 
@@ -112,11 +117,14 @@ function encodeSignedValue(value: number): string {
 	// reader above, in reverse.
 	let v = value < 0 ? ~(value << 1) : value << 1;
 	let out = '';
+
 	while (v >= 0x20) {
 		out += String.fromCharCode((0x20 | (v & 0x1f)) + 63);
 		v >>= 5;
 	}
+
 	out += String.fromCharCode(v + 63);
+
 	return out;
 }
 
@@ -133,6 +141,7 @@ export function mercator(lat: number, lng: number): [number, number] {
 	const x = (lng * Math.PI * EARTH_RADIUS_M) / 180;
 	const clampedLat = Math.max(-85.05112878, Math.min(85.05112878, lat));
 	const y = EARTH_RADIUS_M * Math.log(Math.tan(Math.PI / 4 + (clampedLat * Math.PI) / 360));
+
 	return [x, y];
 }
 
@@ -147,15 +156,19 @@ function perpendicularDistanceSq(p: [number, number], a: [number, number], b: [n
 	const dx = bx - ax;
 	const dy = by - ay;
 	const lenSq = dx * dx + dy * dy;
+
 	if (lenSq === 0) {
 		const ddx = px - ax;
 		const ddy = py - ay;
+
 		return ddx * ddx + ddy * ddy;
 	}
+
 	// Distance from p to the infinite line through a,b via the cross product
 	// magnitude — cheaper than projecting onto the segment and doesn't need a
 	// square root since every caller only compares distances.
 	const cross = dx * (ay - py) - (ax - px) * dy;
+
 	return (cross * cross) / lenSq;
 }
 
@@ -169,6 +182,7 @@ function perpendicularDistanceSq(p: [number, number], a: [number, number], b: [n
  */
 export function simplify(points: [number, number][], tolerance: number): [number, number][] {
 	const n = points.length;
+
 	if (n < 3) return points.slice();
 
 	const toleranceSq = tolerance * tolerance;
@@ -177,18 +191,23 @@ export function simplify(points: [number, number][], tolerance: number): [number
 	keep[n - 1] = 1;
 
 	const stack: [number, number][] = [[0, n - 1]];
+
 	while (stack.length) {
 		const [start, end] = stack.pop()!;
+
 		if (end - start < 2) continue;
 		let maxDistSq = -1;
 		let maxIndex = -1;
+
 		for (let i = start + 1; i < end; i++) {
 			const d = perpendicularDistanceSq(points[i], points[start], points[end]);
+
 			if (d > maxDistSq) {
 				maxDistSq = d;
 				maxIndex = i;
 			}
 		}
+
 		if (maxDistSq > toleranceSq) {
 			keep[maxIndex] = 1;
 			stack.push([start, maxIndex], [maxIndex, end]);
@@ -196,7 +215,9 @@ export function simplify(points: [number, number][], tolerance: number): [number
 	}
 
 	const out: [number, number][] = [];
+
 	for (let i = 0; i < n; i++) if (keep[i]) out.push(points[i]);
+
 	return out;
 }
 
@@ -216,11 +237,14 @@ function simplifyToLimit(points: [number, number][], maxPoints: number): [number
 	if (points.length <= maxPoints) return points;
 	let tolerance = 0.5; // metres — a reasonable starting guess for GPS jitter
 	let result = points;
+
 	for (let i = 0; i < 20; i++) {
 		result = simplify(points, tolerance);
+
 		if (result.length <= maxPoints) return result;
 		tolerance *= 1.6;
 	}
+
 	return result;
 }
 
@@ -238,8 +262,10 @@ export function haversine(a: [number, number], b: [number, number]): number {
 	const toRad = Math.PI / 180;
 	const dLat = (lat2 - lat1) * toRad;
 	const dLng = (lng2 - lng1) * toRad;
+
 	const s =
 		Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLng / 2) ** 2;
+
 	return 2 * EARTH_RADIUS_M * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
@@ -247,7 +273,9 @@ export function haversine(a: [number, number], b: [number, number]): number {
  *  points. */
 export function pathLength(points: [number, number][]): number {
 	let total = 0;
+
 	for (let i = 1; i < points.length; i++) total += haversine(points[i - 1], points[i]);
+
 	return total;
 }
 
@@ -276,14 +304,18 @@ export function splitOnGaps(points: [number, number][], maxStepM = GPS_GAP_M): [
 	if (points.length === 0) return [];
 	const pieces: [number, number][][] = [];
 	let cur: [number, number][] = [points[0]];
+
 	for (let i = 1; i < points.length; i++) {
 		if (haversine(points[i - 1], points[i]) > maxStepM) {
 			pieces.push(cur);
 			cur = [];
 		}
+
 		cur.push(points[i]);
 	}
+
 	pieces.push(cur);
+
 	return pieces;
 }
 
@@ -306,12 +338,17 @@ export function bounds(points: [number, number][]): Bounds | null {
 	let s = Infinity;
 	let e = -Infinity;
 	let n = -Infinity;
+
 	for (const [lat, lng] of points) {
 		if (lng < w) w = lng;
+
 		if (lng > e) e = lng;
+
 		if (lat < s) s = lat;
+
 		if (lat > n) n = lat;
 	}
+
 	return { w, s, e, n };
 }
 
@@ -352,18 +389,24 @@ export function routePath(points: [number, number][], opts: RoutePathOptions = {
 
 	const projected = points.map(([lat, lng]) => mercator(lat, lng));
 	const simplified = simplifyToLimit(projected, maxPoints);
+
 	if (simplified.length < 2) return null;
 
 	let minX = Infinity;
 	let minY = Infinity;
 	let maxX = -Infinity;
 	let maxY = -Infinity;
+
 	for (const [x, y] of simplified) {
 		if (x < minX) minX = x;
+
 		if (x > maxX) maxX = x;
+
 		if (y < minY) minY = y;
+
 		if (y > maxY) maxY = y;
 	}
+
 	const spanX = maxX - minX;
 	const spanY = maxY - minY;
 
@@ -398,9 +441,11 @@ export function routePath(points: [number, number][], opts: RoutePathOptions = {
 	const svgPoints = simplified.map(toSvg);
 	const [startX, startY] = svgPoints[0];
 	let d = `M${startX.toFixed(1)} ${startY.toFixed(1)}`;
+
 	for (let i = 1; i < svgPoints.length; i++) {
 		const [x, y] = svgPoints[i];
 		d += ` L${x.toFixed(1)} ${y.toFixed(1)}`;
 	}
+
 	return d;
 }

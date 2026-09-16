@@ -74,6 +74,7 @@ const { spines, emptyLine } = Astro.props;
 	const PULLED = 'spine--pulled';
 
 	let pulled: HTMLElement | null = null;
+
 	// A pull can make the browser scroll the spine into view, and the scroll
 	// handler below would then immediately undo it. Ignore scrolls that arrive
 	// on the heels of a pull.
@@ -89,6 +90,7 @@ const { spines, emptyLine } = Astro.props;
 			// Otherwise the shelf's own handler treats this as a click on the
 			// background and releases the book we are in the middle of pulling.
 			event.stopPropagation();
+
 			if (spine === pulled) return;
 			event.preventDefault();
 			release();

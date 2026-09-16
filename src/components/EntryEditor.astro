@@ -70,11 +70,13 @@ const config = {
 	initial,
 	film,
 };
+
 // Escape "<" so a review containing "</script>" can't break out of the JSON tag.
 const configJson = JSON.stringify(config).replace(/</g, '\\u003c');
 
 // The picker only exists when the page didn't name the film.
 const hasPicker = !film;
+
 const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film' : 'What did you watch?';
 ---
 
@@ -994,6 +996,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 	// Owner-only. Astro always hoists this script; bail out when the modal isn't
 	// in the DOM (a non-owner viewing the page).
 	const modal = document.getElementById('ee-modal') as HTMLDivElement | null;
+
 	const configEl = document.getElementById('ee-config');
 
 	if (modal && configEl) {
@@ -1003,6 +1006,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			year: number | null;
 			poster: string | null;
 		}
+
 		interface Initial {
 			date: string;
 			rating: number | null;
@@ -1017,6 +1021,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			tags: string[];
 			friends: string[];
 		}
+
 		interface Config {
 			mode: 'select' | 'log' | 'edit';
 			logId: number | null;
@@ -1074,6 +1079,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		const privateToggle = $<HTMLButtonElement>('ee-private-toggle');
 		const likeBtn = $<HTMLButtonElement>('ee-like');
 		const rewatchBtn = $<HTMLButtonElement>('ee-rewatch');
+
 		// The shared half-star picker (see StarPicker.astro). It owns its own
 		// display; this editor only mirrors the committed value into `rating`.
 		const starPicker = wireStarPicker($<HTMLSpanElement>('ee-starpicker'), {
@@ -1081,6 +1087,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				rating = v;
 			},
 		});
+
 		const mediums = $<HTMLDivElement>('ee-mediums');
 		const theaterFields = $<HTMLDivElement>('ee-theater-fields');
 		const otherField = $<HTMLDivElement>('ee-other-field');
@@ -1121,37 +1128,47 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			'January', 'February', 'March', 'April', 'May', 'June',
 			'July', 'August', 'September', 'October', 'November', 'December',
 		];
+
 		const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 		let calY = 0;
 		let calM = 0;
 
 		const parseIso = (iso: string): [number, number, number] | null => {
 			const p = iso.split('-').map(Number);
+
 			return p.length === 3 && p.every(Number.isInteger) ? [p[0], p[1], p[2]] : null;
 		};
+
 		const toIso = (y: number, m: number, d: number) =>
 			`${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
 		function renderDateLabel() {
 			const p = parseIso(date);
+
 			if (!p) {
 				dateBtn.textContent = 'Select a date';
+
 				return;
 			}
+
 			const dt = new Date(p[0], p[1] - 1, p[2]);
 			dateBtn.textContent = `${WEEKDAYS[dt.getDay()]}, ${MONTHS[p[1] - 1].slice(0, 3)} ${p[2]}, ${p[0]}`;
 		}
+
 		function renderCal() {
 			calMonth.textContent = `${MONTHS[calM]} ${calY}`;
 			calGrid.textContent = '';
 			const lead = new Date(calY, calM, 1).getDay();
 			const days = new Date(calY, calM + 1, 0).getDate();
+
 			for (let i = 0; i < lead; i++) calGrid.appendChild(document.createElement('span'));
+
 			for (let d = 1; d <= days; d++) {
 				const iso = toIso(calY, calM, d);
 				const b = document.createElement('button');
 				b.type = 'button';
 				b.textContent = String(d);
+
 				if (iso === date) b.classList.add('on');
 				b.addEventListener('click', () => {
 					date = iso;
@@ -1161,6 +1178,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				calGrid.appendChild(b);
 			}
 		}
+
 		function openCal() {
 			const p = parseIso(date) ?? parseIso(localDay())!;
 			calY = p[0];
@@ -1168,15 +1186,18 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			renderCal();
 			cal.hidden = false;
 		}
+
 		function closeCal() {
 			cal.hidden = true;
 		}
+
 		dateBtn.addEventListener('click', () => (cal.hidden ? openCal() : closeCal()));
 		calPrev.addEventListener('click', () => {
 			if (--calM < 0) {
 				calM = 11;
 				calY--;
 			}
+
 			renderCal();
 		});
 		calNext.addEventListener('click', () => {
@@ -1184,10 +1205,12 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				calM = 0;
 				calY++;
 			}
+
 			renderCal();
 		});
 		document.addEventListener('click', (e) => {
 			const t = e.target as Node;
+
 			if (!cal.hidden && !cal.contains(t) && !dateBtn.contains(t)) closeCal();
 		});
 
@@ -1197,11 +1220,13 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			q.addEventListener('input', () => {
 				window.clearTimeout(timer);
 				const query = q.value.trim();
+
 				if (!query) return hideResults();
 				timer = window.setTimeout(() => runSearch(query), 300);
 			});
 			q.addEventListener('focus', () => {
 				const query = q.value.trim();
+
 				if (query) runSearch(query);
 			});
 			document.addEventListener('click', (e) => {
@@ -1217,9 +1242,11 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				q.focus();
 			});
 		}
+
 		async function runSearch(query: string) {
 			try {
 				const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+
 				if (!res.ok) return hideResults();
 				const data = await res.json();
 				renderResults(data.results ?? []);
@@ -1227,32 +1254,41 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				hideResults();
 			}
 		}
+
 		function renderResults(items: any[]) {
 			results.textContent = '';
+
 			if (!items.length) return hideResults();
+
 			for (const m of items.slice(0, 8)) {
 				const li = document.createElement('li');
 				const img = document.createElement('img');
+
 				if (m.poster_path) img.src = IMG + m.poster_path;
 				img.alt = '';
 				const label = document.createElement('span');
 				label.textContent = m.title;
+
 				if (m.release_date) {
 					const yr = document.createElement('span');
 					yr.className = 'r-year';
 					yr.textContent = m.release_date.slice(0, 4);
 					label.appendChild(yr);
 				}
+
 				li.append(img, label);
 				li.addEventListener('click', () => selectMovie(m));
 				results.appendChild(li);
 			}
+
 			results.hidden = false;
 		}
+
 		function hideResults() {
 			results.hidden = true;
 			results.textContent = '';
 		}
+
 		function selectMovie(m: any) {
 			tmdbId = m.id;
 			selTitle.textContent = m.title;
@@ -1262,6 +1298,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			// search resolves even though nothing has logged it yet.
 			selLink.href = `/films/movie/${m.id}`;
 			selLink.title = `Open ${m.title}`;
+
 			if (m.poster_path) {
 				selPoster.src = IMG + m.poster_path;
 				selPoster.hidden = false;
@@ -1269,20 +1306,24 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				selPoster.removeAttribute('src');
 				selPoster.hidden = true;
 			}
+
 			hideResults();
 			searchWrap.hidden = true;
 			selected.hidden = false;
 			save.disabled = false;
+
 			// Picking a film in `select` mode is what turns it into a log entry.
 			if (mode === 'select') {
 				mode = 'log';
 				renderMode();
 			}
+
 			// A film's rating/like/rewatch is film-specific — start each entry clean,
 			// then let the prior-watch lookup suggest a rewatch.
 			resetEntryFields();
 			loadPrior(m.id);
 		}
+
 		// Clear rating / like / rewatch / prior hint, keeping film + date + review.
 		function resetEntryFields() {
 			rating = null;
@@ -1293,29 +1334,36 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			rewatchBtn.classList.remove('on');
 			clearPriorHint();
 		}
+
 		function clearPriorHint() {
 			if (!priorHint) return;
 			priorHint.hidden = true;
 			priorHint.textContent = '';
 		}
+
 		// Look up whether this film was watched before; if so, suggest a rewatch and
 		// pre-fill the previous rating/like. Guarded against a stale response when
 		// the user switches films mid-request.
 		async function loadPrior(id: number) {
 			try {
 				const res = await fetch(`/api/films/prior-watch?tmdbId=${id}`);
+
 				if (!res.ok) return;
 				const prior = await res.json();
+
 				if (tmdbId !== id || !prior.watched) return;
 				rewatch = true;
 				rewatchBtn.classList.add('on');
+
 				if (prior.rating != null) {
 					const priorRating: number = prior.rating;
 					rating = priorRating;
 					starPicker.set(priorRating);
 				}
+
 				liked = Boolean(prior.liked);
 				likeBtn.classList.toggle('on', liked);
+
 				if (priorHint) {
 					const n = prior.logCount;
 					priorHint.textContent =
@@ -1349,6 +1397,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			theaterFields.hidden = medium !== 'theater';
 			otherField.hidden = medium !== 'other';
 		}
+
 		for (const b of mediumBtns) {
 			b.addEventListener('click', () => {
 				const m = b.dataset.medium ?? null;
@@ -1360,21 +1409,27 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		// ---- Free-text autocomplete shared by venue + format ----
 		function wireSuggest(input: HTMLInputElement, list: HTMLUListElement, options: string[]) {
 			let active = -1;
+
 			const candidates = () => {
 				const token = input.value.trim().toLowerCase();
+
 				return options
 					.filter((o) => o.toLowerCase() !== token)
 					.filter((o) => !token || o.toLowerCase().includes(token))
 					.slice(0, 6);
 			};
+
 			const render = () => {
 				const items = candidates();
 				list.textContent = '';
 				active = -1;
+
 				if (!items.length) {
 					list.hidden = true;
+
 					return;
 				}
+
 				for (const o of items) {
 					const li = document.createElement('li');
 					li.textContent = o;
@@ -1385,8 +1440,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 					});
 					list.appendChild(li);
 				}
+
 				list.hidden = false;
 			};
+
 			input.addEventListener('input', render);
 			input.addEventListener('focus', render);
 			input.addEventListener('blur', () => {
@@ -1394,7 +1451,9 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			});
 			input.addEventListener('keydown', (e) => {
 				const lis = Array.from(list.querySelectorAll('li'));
+
 				if (!lis.length) return;
+
 				if (e.key === 'Enter' && active >= 0) {
 					e.preventDefault();
 					input.value = lis[active].textContent || '';
@@ -1410,11 +1469,13 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				}
 			});
 		}
+
 		wireSuggest(venueInput, venueSuggest, cfg.venueOptions);
 		wireSuggest(formatInput, formatSuggest, cfg.formatOptions);
 
 		// Chip fields: tags and "watched with", the same interaction (lib/chips-field).
 		const tagField = wireChips(tagInput, tagSuggest, tagChipsBox, cfg.tagOptions, (t) => `Remove ${t}`);
+
 		const friendField = wireChips(
 			friendInput,
 			friendSuggest,
@@ -1432,12 +1493,15 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			privateInput.hidden = !on;
 			privateToggle.setAttribute('aria-expanded', String(on));
 		}
+
 		privateToggle.addEventListener('click', () => {
 			if (privateInput.hidden) {
 				showPrivate(true);
 				privateInput.focus();
+
 				return;
 			}
+
 			// Closing discards, so say so — the only destructive thing this button does.
 			if (privateInput.value.trim() && !window.confirm('Discard the private note?')) return;
 			privateInput.value = '';
@@ -1477,6 +1541,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				tags: [...tagField.get()].sort(),
 				friends: [...friendField.get()].sort(),
 			});
+
 		let cleanSnap = '';
 		// In log/select mode the film selection is intentionally excluded from the
 		// dirty check — picking a film alone isn't "work worth confirming"; a
@@ -1519,6 +1584,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			msg.textContent = '';
 
 			clearPriorHint();
+
 			if (hasPicker) {
 				tmdbId = null;
 				q.value = '';
@@ -1526,6 +1592,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 				searchWrap.hidden = false;
 				hideResults();
 			}
+
 			// A locked film is always answered; a picker starts with no film to save.
 			save.disabled = tmdbId == null;
 			cleanSnap = snap();
@@ -1535,6 +1602,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		const lockScroll = (on: boolean) => {
 			document.body.style.overflow = on ? 'hidden' : '';
 		};
+
 		// Every trigger opens whatever the page configured; a prior open may have
 		// promoted `select` to `log`, so reset before seeding the form.
 		const openModal = () => {
@@ -1545,16 +1613,20 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			discard.hidden = true;
 			modal.hidden = false;
 			lockScroll(true);
+
 			if (hasPicker) q.focus();
+
 			// A locked film never passes through the picker, so this is where its
 			// prior-watch prefill happens instead.
 			if (mode === 'log' && tmdbId != null) void loadPrior(tmdbId);
 		};
+
 		const closeModal = () => {
 			modal.hidden = true;
 			discard.hidden = true;
 			lockScroll(false);
 		};
+
 		const attemptClose = () => {
 			if (isDirty()) {
 				const edit = mode === 'edit';
@@ -1571,6 +1643,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		for (const el of document.querySelectorAll('[data-open-entry-editor]')) {
 			el.addEventListener('click', () => openModal());
 		}
+
 		closeBtn.addEventListener('click', attemptClose);
 		backdrop.addEventListener('click', attemptClose);
 		discardKeep.addEventListener('click', () => {
@@ -1579,6 +1652,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 		discardConfirm.addEventListener('click', closeModal);
 		document.addEventListener('keydown', (e) => {
 			if (e.key !== 'Escape' || modal.hidden) return;
+
 			if (!discard.hidden) discard.hidden = true;
 			else if (!cal.hidden) closeCal();
 			else attemptClose();
@@ -1602,6 +1676,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			venue: medium === 'theater' ? venueInput.value.trim() || null : null,
 			format: medium === 'theater' ? formatInput.value.trim() || null : null,
 		});
+
 		const loginRedirect = () => {
 			window.location.href = `/films/login?redirect=${encodeURIComponent(cfg.redirect)}`;
 		};
@@ -1611,6 +1686,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			save.disabled = true;
 			msg.className = 'save-msg';
 			msg.textContent = 'Saving…';
+
 			try {
 				const res =
 					mode === 'edit'
@@ -1624,8 +1700,10 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 								headers: { 'content-type': 'application/json' },
 								body: JSON.stringify({ tmdbId, ...payload() }),
 							});
+
 				if (res.status === 401) return loginRedirect();
 				const data = await res.json();
+
 				if (!res.ok) throw new Error(data.error || 'Save failed');
 				// The page renders from the DB, so a reload is the refresh.
 				window.location.reload();
@@ -1642,13 +1720,17 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 			save.disabled = true;
 			msg.className = 'save-msg';
 			msg.textContent = 'Deleting…';
+
 			try {
 				const res = await fetch(`/api/films/logs/${logId}`, { method: 'DELETE' });
+
 				if (res.status === 401) return loginRedirect();
+
 				if (!res.ok) {
 					const data = await res.json().catch(() => ({}));
 					throw new Error(data.error || 'Delete failed');
 				}
+
 				window.location.href = cfg.deleteRedirect;
 			} catch (err) {
 				msg.className = 'save-msg error';

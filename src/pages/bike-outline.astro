@@ -129,7 +129,9 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	import * as maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
 	import { alpineBasemap, bareAlpineGround } from '../lib/activity-map';
 	import {
 		outerRing,
@@ -149,37 +151,59 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	import TraceSkeleton from 'skeleton-tracing-wasm';
 
 	const cfg = JSON.parse(document.getElementById('bo-config')!.textContent || '{}') as { key: string };
+
 	const SVGNS = 'http://www.w3.org/2000/svg';
+
 	// The stencil's longer axis is this fraction of the map's shorter side.
 	const STENCIL_FRACTION = 0.55;
 
 	const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
 	const placeIn = $<HTMLInputElement>('bo-place');
+
 	const geojsonIn = $<HTMLTextAreaElement>('bo-geojson');
+
 	const imageIn = $<HTMLInputElement>('bo-image');
+
 	const thresholdIn = $<HTMLInputElement>('bo-threshold');
+
 	const directionIn = $<HTMLSelectElement>('bo-direction');
+
 	const spacingIn = $<HTMLInputElement>('bo-spacing');
+
 	const profileIn = $<HTMLSelectElement>('bo-profile');
+
 	const scaleIn = $<HTMLInputElement>('bo-maxscale');
+
 	const homePullIn = $<HTMLInputElement>('bo-homepull');
+
 	const shrinkIn = $<HTMLInputElement>('bo-shrink');
+
 	const genBtn = $<HTMLButtonElement>('bo-generate');
+
 	const optBtn = $<HTMLButtonElement>('bo-optimize');
+
 	const exportBtn = $<HTMLButtonElement>('bo-export');
+
 	const statusEl = $<HTMLParagraphElement>('bo-status');
+
 	const statsEl = $<HTMLElement>('bo-stats');
+
 	const mapEl = $<HTMLElement>('bo-map');
+
 	const stencilEl = document.getElementById('bo-stencil') as unknown as SVGSVGElement;
 
 	// The loaded shape as one or more normalized paths (a country is a single
 	// closed ring; a line drawing is many strokes). Null until a shape loads.
 	let shapePaths: Pt[][] | null = null;
+
 	// For a line drawing, its graph in normalized coords — the strokes and how they
 	// join — which the route inspector orders into one rideable trail. Null for a
 	// country (a country is already a single loop, so it needs no ordering).
 	let lineGraph: Graph | null = null;
+
 	let name = 'outline';
+
 	let routeCoords: LngLat[] = [];
 
 	function status(msg: string, kind: 'info' | 'error' | 'busy' = 'info') {
@@ -199,11 +223,15 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		pitchWithRotate: false,
 		touchPitch: false,
 	});
+
 	map.touchZoomRotate.disableRotation();
+
 	map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
 	// Dev-only handle so the page can be driven from a screenshot script; the
 	// `import.meta.env.DEV` guard dead-code-eliminates it from the production build.
 	if (import.meta.env.DEV) (window as any).__map = map;
+
 	map.on('error', (e) => console.warn('bike-outline map:', e.error?.message ?? 'tile/style request failed'));
 
 	function whenReady(fn: () => void) {
@@ -217,6 +245,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	function normToPx([nx, ny]: Pt): [number, number] {
 		const w = mapEl.clientWidth, h = mapEl.clientHeight;
 		const scale = STENCIL_FRACTION * Math.min(w, h);
+
 		return [w / 2 + nx * scale, h / 2 + ny * scale];
 	}
 
@@ -228,16 +257,20 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	function drawStencil() {
 		stencilEl.replaceChildren();
+
 		if (!shapePaths) return;
 		const paths = stencilPaths();
+
 		for (const px of paths) {
 			const poly = document.createElementNS(SVGNS, 'polyline');
 			poly.setAttribute('points', px.map((p) => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' '));
 			poly.setAttribute('class', 'bo__stencil-shape');
 			stencilEl.appendChild(poly);
 		}
+
 		// A dot at the first vertex of the first path — where the ride starts.
 		const first = paths[0]?.[0];
+
 		if (first) {
 			const dot = document.createElementNS(SVGNS, 'circle');
 			dot.setAttribute('cx', first[0].toFixed(1));
@@ -259,7 +292,9 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			geometry: { type: 'LineString' as const, coordinates: coords },
 			properties: {},
 		} as maplibregl.GeoJSONSourceSpecification['data'];
+
 		const src = map.getSource('route') as maplibregl.GeoJSONSource | undefined;
+
 		if (src) src.setData(data);
 		else {
 			map.addSource('route', { type: 'geojson', data });
@@ -281,7 +316,9 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			geometry: { type: 'LineString' as const, coordinates: coords },
 			properties: {},
 		} as maplibregl.GeoJSONSourceSpecification['data'];
+
 		const src = map.getSource('outline') as maplibregl.GeoJSONSource | undefined;
+
 		if (src) src.setData(data);
 		else {
 			map.addSource('outline', { type: 'geojson', data });
@@ -298,6 +335,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	/** A normalized point unprojected to where it now sits on the map. */
 	function normToLngLat(p: Pt): LngLat {
 		const ll = map.unproject(normToPx(p) as maplibregl.PointLike);
+
 		return [ll.lng, ll.lat];
 	}
 
@@ -313,13 +351,18 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 				nodes: lineGraph.nodes.map(normToLngLat),
 				edges: lineGraph.edges.map((e) => ({ a: e.a, b: e.b, pts: e.pts.map(normToLngLat) })),
 			};
+
 			const { path, doubled } = eulerRoute(g);
+
 			return { path, close: false, doubled };
 		}
+
 		const ring = orientRing(stencilPaths()[0].map((p) => {
 			const ll = map.unproject(p as maplibregl.PointLike);
+
 			return [ll.lng, ll.lat] as LngLat;
 		}), directionIn.value === 'cw');
+
 		return { path: ring, close: true, doubled: 0 };
 	}
 
@@ -361,6 +404,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 	// A line drawing: sanitize and vectorize the image into a stroke graph, place
 	// it like a country. Heavy work (the WASM tracer) loads lazily on first use.
 	let tracerPromise: ReturnType<typeof TraceSkeleton.load> | null = null;
+
 	async function loadImage(file: File) {
 		const bitmap = await createImageBitmap(file);
 		// Cap the raster the tracer sees — skeleton tracing a huge image is slow and
@@ -384,8 +428,10 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	$<HTMLButtonElement>('bo-load').addEventListener('click', async () => {
 		const q = placeIn.value.trim();
+
 		if (!q) return;
 		status(`Looking up “${q}”…`, 'busy');
+
 		try {
 			const outline = await fetchOutline(q);
 			loadRing(outline.ring, outline.name);
@@ -393,6 +439,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 			status(err instanceof Error ? err.message : 'Lookup failed.', 'error');
 		}
 	});
+
 	placeIn.addEventListener('keydown', (e) => {
 		if (e.key === 'Enter') $<HTMLButtonElement>('bo-load').click();
 	});
@@ -407,8 +454,10 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
 	imageIn.addEventListener('change', async () => {
 		const file = imageIn.files?.[0];
+
 		if (!file) return;
 		status(`Tracing “${file.name}”…`, 'busy');
+
 		try {
 			await loadImage(file);
 		} catch (err) {
@@ -427,6 +476,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		genBtn.disabled = true;
 		optBtn.disabled = true;
 		setOutline([]); // this is a fresh manual placement, not a descent
+
 		try {
 			// A line drawing's route plans its backtracking, so don't strip retracing.
 			const routed = await routeWaypoints(waypoints, profileIn.value as Profile, close);
@@ -457,6 +507,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		const homePull = Math.max(0, Number(homePullIn.value) || 0);
 		genBtn.disabled = true;
 		optBtn.disabled = true;
+
 		try {
 			const best = await descend(path, (wps) => routeWaypoints(wps, profileIn.value as Profile, close), {
 				startSpacing: startKm * 1000,
@@ -477,6 +528,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 					);
 				},
 			});
+
 			routeCoords = best.routed.coords;
 			setOutline(best.ring);
 			setRoute(routeCoords);

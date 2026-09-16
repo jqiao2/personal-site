@@ -42,6 +42,7 @@ const PAGE = 1000;
 function isDegraded(err: { code?: string; message?: string } | null): boolean {
 	if (!err) return false;
 	const msg = (err.message ?? '').toLowerCase();
+
 	return (
 		err.code === '42703' ||
 		err.code === 'PGRST204' ||
@@ -67,22 +68,27 @@ function isDegraded(err: { code?: string; message?: string } | null): boolean {
  */
 async function readRides(gearId?: number): Promise<Map<number, GearRide[]>> {
 	const byGear = new Map<number, GearRide[]>();
+
 	for (let offset = 0; ; offset += PAGE) {
 		let req = supabasePublic
 			.from('activity_list')
 			.select('gear_id, sport, sub_sport, local_date, distance_m, moving_seconds, elevation_gain_m')
 			.not('gear_id', 'is', null);
+
 		if (gearId != null) req = req.eq('gear_id', gearId);
 		const { data, error } = await req.range(offset, offset + PAGE - 1);
+
 		if (error) {
 			if (isDegraded(error)) return byGear;
 			throw new Error(`readRides failed: ${error.message}`);
 		}
+
 		const rows = (data ?? []) as (GearRide & {
 			gear_id: number | null;
 			sport: string | null;
 			sub_sport: string | null;
 		})[];
+
 		for (const row of rows) {
 			if (row.gear_id == null) continue;
 			const list = byGear.get(row.gear_id) ?? [];
@@ -96,8 +102,10 @@ async function readRides(gearId?: number): Promise<Map<number, GearRide[]>> {
 			});
 			byGear.set(row.gear_id, list);
 		}
+
 		if (rows.length < PAGE) break;
 	}
+
 	return byGear;
 }
 
@@ -109,6 +117,7 @@ export interface GearWithUse extends ActivityGear {
  * (that's listGearRows' order), each carrying what it has actually done. */
 export async function listGearWithUse(): Promise<GearWithUse[]> {
 	const [gear, rides] = await Promise.all([listGearRows(), readRides()]);
+
 	return gear.map((g) => ({ ...g, use: sumRides(rides.get(g.id) ?? []) }));
 }
 
@@ -122,10 +131,12 @@ async function listGearRows(): Promise<ActivityGear[]> {
 		.order('retired_at', { ascending: true, nullsFirst: true })
 		.order('kind', { ascending: true })
 		.order('name', { ascending: true });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listGearRows failed: ${error.message}`);
 	}
+
 	return (data ?? []) as ActivityGear[];
 }
 
@@ -155,7 +166,9 @@ export async function getGearDetail(id: number): Promise<GearDetail | null> {
 		if (isDegraded(gearRes.error)) return null;
 		throw new Error(`getGearDetail failed: ${gearRes.error.message}`);
 	}
+
 	if (!gearRes.data) return null;
+
 	// A missing gear_components table (0036 not applied) shows the bike with an
 	// empty parts list rather than a 500 — the totals above it are still true.
 	if (componentsRes.error && !isDegraded(componentsRes.error)) {
@@ -167,6 +180,7 @@ export async function getGearDetail(id: number): Promise<GearDetail | null> {
 	const components = ((componentsRes.data ?? []) as GearComponent[]).map((c) => wearOf(c, rides));
 
 	const rank = (c: ComponentWear) => COMPONENT_ORDER.indexOf(c.component.kind);
+
 	return {
 		gear,
 		use: sumRides(rides),
@@ -211,7 +225,9 @@ export async function createComponent(input: ComponentInput): Promise<number> {
 		})
 		.select('id')
 		.single();
+
 	if (error) throw new Error(`createComponent failed: ${error.message}`);
+
 	return (data as { id: number }).id;
 }
 
@@ -222,16 +238,26 @@ export async function updateComponent(
 	patch: Partial<Omit<ComponentInput, 'gearId'>>,
 ): Promise<void> {
 	const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
 	if ('kind' in patch) row.kind = patch.kind;
+
 	if ('label' in patch) row.label = patch.label ?? null;
+
 	if ('installedOn' in patch) row.installed_on = patch.installedOn;
+
 	if ('removedOn' in patch) row.removed_on = patch.removedOn ?? null;
+
 	if ('baselineMiles' in patch) row.baseline_distance_m = (patch.baselineMiles ?? 0) * METERS_PER_MILE;
+
 	if ('lifeMiles' in patch) row.life_miles = patch.lifeMiles ?? null;
+
 	if ('lifeMonths' in patch) row.life_months = patch.lifeMonths ?? null;
+
 	if ('condition' in patch) row.condition = patch.condition ?? null;
+
 	if ('notes' in patch) row.notes = patch.notes ?? null;
 	const { error } = await supabaseAdmin.from('gear_components').update(row).eq('id', id);
+
 	if (error) throw new Error(`updateComponent failed: ${error.message}`);
 }
 
@@ -239,6 +265,7 @@ export async function updateComponent(
  * updateComponent with removedOn, which is what keeps the history. */
 export async function deleteComponent(id: number): Promise<void> {
 	const { error } = await supabaseAdmin.from('gear_components').delete().eq('id', id);
+
 	if (error) throw new Error(`deleteComponent failed: ${error.message}`);
 }
 
@@ -259,7 +286,9 @@ export async function createGear(input: GearInput & { kind: GearKind; name: stri
 		.insert(gearRow(input))
 		.select('id')
 		.single();
+
 	if (error) throw new Error(`createGear failed: ${error.message}`);
+
 	return (data as { id: number }).id;
 }
 
@@ -268,20 +297,29 @@ export async function updateGear(id: number, patch: GearInput): Promise<void> {
 		.from('activity_gear')
 		.update({ ...gearRow(patch), updated_at: new Date().toISOString() })
 		.eq('id', id);
+
 	if (error) throw new Error(`updateGear failed: ${error.message}`);
 }
 
 function gearRow(input: GearInput): Record<string, unknown> {
 	const row: Record<string, unknown> = {};
+
 	if ('kind' in input) row.kind = input.kind;
+
 	if ('name' in input) row.name = input.name;
+
 	if ('brand' in input) row.brand = input.brand ?? null;
+
 	if ('model' in input) row.model = input.model ?? null;
+
 	if ('nickname' in input) row.nickname = input.nickname ?? null;
+
 	if ('firstUsedOn' in input) row.first_used_on = input.firstUsedOn ?? null;
+
 	// retired_at is a timestamptz from 0034 and a date everywhere it's said out
 	// loud, so a date in becomes midnight UTC — the only reading that survives
 	// the round trip back through retiredDate() unchanged.
 	if ('retiredOn' in input) row.retired_at = input.retiredOn ? `${input.retiredOn}T00:00:00Z` : null;
+
 	return row;
 }

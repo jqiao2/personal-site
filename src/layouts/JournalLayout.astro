@@ -19,6 +19,7 @@ import { Font } from 'astro:assets';
 interface Props {
 	title: string;
 }
+
 const { title } = Astro.props;
 ---
 
@@ -43,6 +44,7 @@ const { title } = Astro.props;
 				a.addEventListener('click', (e) => {
 					const ref = document.referrer;
 					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+
 					if (history.length > 1 && sameOrigin) {
 						e.preventDefault();
 						history.back();
@@ -56,15 +58,21 @@ const { title } = Astro.props;
 			// restaurant log's layout carries the long version of this note.
 			document.addEventListener('click', (e) => {
 				if (e.defaultPrevented) return;
+
 				if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 				const target = e.target;
+
 				if (!(target instanceof Element)) return;
 				const link = target.closest('a[href]');
+
 				if (!(link instanceof HTMLAnchorElement)) return;
+
 				if (link.target || link.hasAttribute('download')) return;
 				const url = new URL(link.href);
+
 				if (url.origin !== location.origin) return;
 				const restating = url.pathname === location.pathname && !url.hash;
+
 				if (!restating && !link.hasAttribute('data-replace')) return;
 				e.preventDefault();
 				location.replace(link.href);

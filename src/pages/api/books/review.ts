@@ -26,8 +26,10 @@ export const prerender = false;
 function parseRating(v: unknown): number | null {
 	if (v == null || v === 0 || v === '') return null;
 	const n = Number(v);
+
 	if (!Number.isFinite(n) || n < 0.5 || n > 5) return null;
 	const halved = Math.round(n * 2) / 2;
+
 	return halved >= 0.5 ? halved : null;
 }
 
@@ -45,6 +47,7 @@ function parseDay(v: unknown): string | null {
 function parseList(v: unknown, vocabulary: readonly string[]): string[] {
 	if (!Array.isArray(v)) return [];
 	const chosen = new Set(v.filter((x): x is string => typeof x === 'string'));
+
 	return vocabulary.filter((term) => chosen.has(term));
 }
 
@@ -56,6 +59,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: Record<string, unknown>;
+
 	try {
 		body = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -63,14 +67,18 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const bookId = Number(body.bookId);
+
 	if (!Number.isInteger(bookId) || bookId <= 0) return apiError('bookId is required', 400);
 
 	const readFrom = parseDay(body.readFrom);
 	const readTo = parseDay(body.readTo);
+
 	if (!readFrom || !readTo) return apiError('readFrom and readTo must be YYYY-MM-DD', 400);
+
 	if (readTo < readFrom) return apiError('readTo must not precede readFrom', 400);
 
 	const book = await getBook(bookId, true);
+
 	if (!book) return apiError('book not found', 404);
 
 	const text = typeof body.text === 'string' ? body.text.trim() : '';
@@ -102,12 +110,14 @@ export const DELETE: APIRoute = async ({ url, cookies }) => {
 
 	const bookId = Number.parseInt(url.searchParams.get('bookId') ?? '', 10);
 	const id = Number.parseInt(url.searchParams.get('id') ?? '', 10);
+
 	if (!Number.isInteger(bookId) || !Number.isInteger(id)) {
 		return apiError('bookId and id are required', 400);
 	}
 
 	try {
 		const removed = await deleteReview(bookId, id);
+
 		if (!removed) return apiError('review not found', 404);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'review delete failed', 500);

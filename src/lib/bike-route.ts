@@ -22,8 +22,10 @@ export type LngLat = [number, number];
 // BRouter's public service. `lonlats` is the ordered waypoint list; it routes
 // between consecutive pairs on rideable ways and returns one LineString.
 const BROUTER = 'https://brouter.de/brouter';
+
 // Nominatim gives us the outline of any named place as GeoJSON.
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+
 // Natural Earth's land-clipped country polygons (50m — ~1MB gzipped, CORS-open,
 // fetched once per session). We prefer these for countries because Nominatim's
 // admin boundary drags in territorial water, which bloats the coastline into
@@ -40,6 +42,7 @@ const NE_COUNTRIES =
 // sampling is what keeps the road route hugging the outline instead of taking
 // long detours between far-apart waypoints (a big source of retraced road).
 const BATCH = 100;
+
 // The overall ceiling across all chunks — enough for a very detailed trace,
 // while still bounding how many sequential requests we fire at the public server.
 export const MAX_WAYPOINTS = 600;
@@ -48,6 +51,7 @@ export const MAX_WAYPOINTS = 600;
 // bike default; `safety` favours quiet roads; `shortest` hugs the border
 // hardest (fewest detours), which is often what an outline ride wants.
 export const PROFILES = ['trekking', 'fastbike', 'safety', 'shortest'] as const;
+
 export type Profile = (typeof PROFILES)[number];
 
 // --- geometry -------------------------------------------------------------
@@ -61,6 +65,7 @@ export function haversine(a: LngLat, b: LngLat): number {
 	const la1 = a[1] * toRad;
 	const la2 = b[1] * toRad;
 	const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) ** 2;
+
 	return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -68,18 +73,22 @@ export function haversine(a: LngLat, b: LngLat): number {
  *  against each other, so the units don't matter, only the ordering. */
 function ringArea(ring: LngLat[]): number {
 	let s = 0;
+
 	for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
 		s += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
 	}
+
 	return Math.abs(s) / 2;
 }
 
 /** Total length of an open path, in degree² — used to rank linestrings. */
 function pathSpan(line: LngLat[]): number {
 	let s = 0;
+
 	for (let i = 1; i < line.length; i++) {
 		s += Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]);
 	}
+
 	return s;
 }
 
@@ -91,20 +100,26 @@ function pathSpan(line: LngLat[]): number {
  */
 export function outerRing(input: unknown): LngLat[] {
 	const geom = toGeometry(input);
+
 	if (!geom) throw new Error('No polygon or line found in that GeoJSON.');
+
 	switch (geom.type) {
 		case 'Polygon':
 			return geom.coordinates[0] as LngLat[];
 		case 'MultiPolygon': {
 			const rings: LngLat[][] = geom.coordinates.map((poly: LngLat[][]) => poly[0] as LngLat[]);
+
 			return rings.reduce((best: LngLat[], r: LngLat[]) => (ringArea(r) > ringArea(best) ? r : best));
 		}
+
 		case 'LineString':
 			return geom.coordinates as LngLat[];
 		case 'MultiLineString': {
 			const lines = geom.coordinates as LngLat[][];
+
 			return lines.reduce((best, l) => (pathSpan(l) > pathSpan(best) ? l : best));
 		}
+
 		default:
 			throw new Error(`Can't trace a ${geom.type}.`);
 	}
@@ -112,30 +127,39 @@ export function outerRing(input: unknown): LngLat[] {
 
 function toGeometry(input: any): any {
 	if (!input || typeof input !== 'object') return null;
+
 	if (input.type === 'FeatureCollection') {
 		// The feature with the largest outline wins, same reasoning as picking the
 		// mainland ring above.
 		let best: any = null;
 		let bestSize = -1;
+
 		for (const f of input.features ?? []) {
 			const g = toGeometry(f);
+
 			if (!g) continue;
 			const size = geomSize(g);
+
 			if (size > bestSize) {
 				bestSize = size;
 				best = g;
 			}
 		}
+
 		return best;
 	}
+
 	if (input.type === 'Feature') return input.geometry ?? null;
+
 	if (input.type && input.coordinates) return input;
+
 	return null;
 }
 
 function geomSize(geom: any): number {
 	try {
 		const ring = outerRing(geom);
+
 		return ring.length > 2 && geom.type.includes('Polygon') ? ringArea(ring) : pathSpan(ring);
 	} catch {
 		return -1;
@@ -153,12 +177,15 @@ export function resample(ring: LngLat[], spacing: number, close = true): LngLat[
 	if (ring.length < 2) return ring.slice();
 	const out: LngLat[] = [ring[0]];
 	let carried = 0; // distance walked since the last emitted point
+
 	for (let i = 1; i < ring.length; i++) {
 		const a = ring[i - 1];
 		const b = ring[i];
 		let segLen = haversine(a, b);
+
 		if (segLen === 0) continue;
 		let start = 0; // fraction of [a,b] already consumed
+
 		while (carried + (1 - start) * segLen >= spacing) {
 			const need = spacing - carried;
 			const t = start + need / segLen;
@@ -166,19 +193,24 @@ export function resample(ring: LngLat[], spacing: number, close = true): LngLat[
 			start = t;
 			carried = 0;
 		}
+
 		carried += (1 - start) * segLen;
 	}
+
 	// A country ring closes back to the start; an open trail (a line drawing, which
 	// already walks its own path end to end) keeps its final vertex as its end.
 	if (close && haversine(out[out.length - 1], ring[0]) > spacing / 4) out.push(ring[0]);
 	else if (!close && out[out.length - 1] !== ring[ring.length - 1]) out.push(ring[ring.length - 1]);
+
 	return out;
 }
 
 /** Length of a path in metres. */
 export function pathLength(coords: LngLat[]): number {
 	let s = 0;
+
 	for (let i = 1; i < coords.length; i++) s += haversine(coords[i - 1], coords[i]);
+
 	return s;
 }
 
@@ -198,15 +230,19 @@ export function pathLength(coords: LngLat[]): number {
 export function removeBacktracks(coords: LngLat[]): LngLat[] {
 	const key = (p: LngLat) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 	let cur = coords;
+
 	for (let pass = 0; pass < 8; pass++) {
 		const st: LngLat[] = [];
+
 		for (const p of cur) {
 			if (st.length >= 2 && key(st[st.length - 2]) === key(p)) st.pop();
 			else if (st.length === 0 || key(st[st.length - 1]) !== key(p)) st.push(p);
 		}
+
 		if (st.length === cur.length) return st; // stable
 		cur = st;
 	}
+
 	return cur;
 }
 
@@ -240,26 +276,34 @@ export function removeLoops(
 ): LngLat[] {
 	const key = (p: LngLat) => `${p[0].toFixed(5)},${p[1].toFixed(5)}`;
 	let cur = coords;
+
 	for (let pass = 0; pass < 6; pass++) {
 		const out: LngLat[] = [];
 		let i = 0;
+
 		while (i < cur.length) {
 			out.push(cur[i]);
 			let best = -1;
 			let path = 0;
 			let anchorsInside = 0;
+
 			for (let j = i + 1; j < cur.length && path <= maxLoop; j++) {
 				path += haversine(cur[j - 1], cur[j]);
+
 				if (anchorKeys?.has(key(cur[j - 1])) && j - 1 > i) anchorsInside++;
 				const chord = haversine(cur[i], cur[j]);
+
 				// Two-plus of the outline's own waypoints inside ⇒ intended feature, leave it.
 				if (path > minLoop && chord <= tol && path > 4 * chord && anchorsInside < 2) best = j;
 			}
+
 			i = best >= 0 ? best : i + 1;
 		}
+
 		if (out.length === cur.length) return out;
 		cur = out;
 	}
+
 	return cur;
 }
 
@@ -268,14 +312,19 @@ export function removeLoops(
  *  features (peninsulas) while still cutting router artifacts. */
 function anchorKeySet(coords: LngLat[], waypoints: LngLat[]): Set<string> {
 	const set = new Set<string>();
+
 	for (const w of waypoints) {
 		let bi = -1, bd = Infinity;
+
 		for (let i = 0; i < coords.length; i++) {
 			const d = (coords[i][0] - w[0]) ** 2 + (coords[i][1] - w[1]) ** 2;
+
 			if (d < bd) { bd = d; bi = i; }
 		}
+
 		if (bi >= 0) set.add(`${coords[bi][0].toFixed(5)},${coords[bi][1].toFixed(5)}`);
 	}
+
 	return set;
 }
 
@@ -286,18 +335,24 @@ export function retracedFraction(coords: LngLat[]): number {
 	const key = (a: LngLat, b: LngLat) => {
 		const ka = `${a[0].toFixed(5)},${a[1].toFixed(5)}`;
 		const kb = `${b[0].toFixed(5)},${b[1].toFixed(5)}`;
+
 		return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
 	};
+
 	const seen = new Set<string>();
 	let total = 0, reused = 0;
+
 	for (let i = 1; i < coords.length; i++) {
 		const L = haversine(coords[i - 1], coords[i]);
+
 		if (L === 0) continue;
 		total += L;
 		const k = key(coords[i - 1], coords[i]);
+
 		if (seen.has(k)) reused += L;
 		else seen.add(k);
 	}
+
 	return total ? reused / total : 0;
 }
 
@@ -315,14 +370,20 @@ export function normalizeShape(ring: LngLat[]): [number, number][] {
 	const k = Math.cos((meanLat * Math.PI) / 180);
 	const flat = ring.map(([lng, lat]) => [lng * k, -lat] as [number, number]);
 	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
 	for (const [x, y] of flat) {
 		if (x < minX) minX = x;
+
 		if (x > maxX) maxX = x;
+
 		if (y < minY) minY = y;
+
 		if (y > maxY) maxY = y;
 	}
+
 	const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
 	const span = Math.max(maxX - minX, maxY - minY) || 1;
+
 	return flat.map(([x, y]) => [(x - cx) / span, (y - cy) / span]);
 }
 
@@ -330,9 +391,11 @@ export function normalizeShape(ring: LngLat[]): [number, number][] {
  *  in a north-up frame. */
 function signedArea(ring: LngLat[]): number {
 	let s = 0;
+
 	for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
 		s += ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
 	}
+
 	return s / 2;
 }
 
@@ -340,6 +403,7 @@ function signedArea(ring: LngLat[]): number {
  *  already. `clockwise` here is as the rider sees it on a north-up map. */
 export function orientRing(ring: LngLat[], clockwise: boolean): LngLat[] {
 	const isClockwise = signedArea(ring) < 0;
+
 	return isClockwise === clockwise ? ring.slice() : ring.slice().reverse();
 }
 
@@ -356,6 +420,7 @@ function pointToSegment(p: LngLat, a: LngLat, b: LngLat): number {
 	const len2 = dx * dx + dy * dy;
 	let t = len2 ? ((px - ax) * dx + (py - ay) * dy) / len2 : 0;
 	t = Math.max(0, Math.min(1, t));
+
 	return Math.hypot(px - (ax + dx * t), py - (ay + dy * t));
 }
 
@@ -373,17 +438,23 @@ export interface Deviation {
 export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 	if (route.length === 0 || target.length < 2) return { mean: 0, p95: 0, max: 0 };
 	const dists: number[] = [];
+
 	for (const p of route) {
 		let min = Infinity;
+
 		for (let i = 1; i < target.length; i++) {
 			const d = pointToSegment(p, target[i - 1], target[i]);
+
 			if (d < min) min = d;
 		}
+
 		dists.push(min);
 	}
+
 	dists.sort((x, y) => x - y);
 	const mean = dists.reduce((a, b) => a + b, 0) / dists.length;
 	const p95 = dists[Math.min(dists.length - 1, Math.floor(dists.length * 0.95))];
+
 	return { mean, p95, max: dists[dists.length - 1] };
 }
 
@@ -411,7 +482,9 @@ export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 /** Centroid of a ring (mean of its vertices). */
 function centroidOf(ring: LngLat[]): LngLat {
 	let sx = 0, sy = 0;
+
 	for (const p of ring) { sx += p[0]; sy += p[1]; }
+
 	return [sx / ring.length, sy / ring.length];
 }
 
@@ -425,10 +498,17 @@ function transform(ring: LngLat[], dx: number, dy: number, sMul: number, c: LngL
  *  outline spans a city or a country. */
 function ringSpan(ring: LngLat[]): number {
 	let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+
 	for (const [x, y] of ring) {
-		if (x < minX) minX = x; if (x > maxX) maxX = x;
-		if (y < minY) minY = y; if (y > maxY) maxY = y;
+		if (x < minX) minX = x;
+
+ if (x > maxX) maxX = x;
+
+		if (y < minY) minY = y;
+
+ if (y > maxY) maxY = y;
 	}
+
 	return Math.hypot(maxX - minX, maxY - minY) || 1;
 }
 
@@ -506,24 +586,31 @@ export async function descend(
 	const evalRing = async (r: LngLat[]) => {
 		if (evals >= maxEvals) return null;
 		const wp = resample(r, spacing, close);
+
 		if (wp.length < 2 || wp.length > MAX_WAYPOINTS) return null;
 		evals++;
 		let routed: RoutedPath;
+
 		try {
 			routed = await route(wp);
 		} catch {
 			return null; // infeasible placement — skip it, don't crash the search
 		}
+
 		const dev = deviation(routed.coords, wp);
 		const drift = haversine(centroidOf(r), c0);
+
 		return { wp, routed, mean: dev.mean, max: dev.max, score: dev.mean + homePull * drift };
 	};
+
 	type Eval = NonNullable<Awaited<ReturnType<typeof evalRing>>>;
+
 	const report = (r: LngLat[], e: Eval) => {
 		opts.onRound?.({
 			round, spacingKm: spacing / 1000, waypoints: e.wp.length,
 			meanDev: e.mean, maxDev: e.max, scale, ring: r.slice(), routed: e.routed,
 		});
+
 		if (e.score < bestScore) {
 			bestScore = e.score;
 			found.best = { ring: r.slice(), waypoints: e.wp, routed: e.routed, spacing, rounds: round + 1, scale };
@@ -541,11 +628,13 @@ export async function descend(
 	while (spacing >= opts.minSpacing && evals < maxEvals) {
 		const levelCeil = evals + perLevel; // this level's eval budget
 		const cur = await evalRing(ring);
+
 		if (!cur) break;
 		report(ring, cur);
 		let curScore = cur.score;
 		let step = size * 0.25; // bold: reach across the area, not inch
 		const minStep = size * 0.01;
+
 		while (step >= minStep && evals < maxEvals && evals < levelCeil) {
 			// Neighbours: slide N/S/E/W by the current step, and (within the bound)
 			// scale up/down. A move is adopted only when it improves the score — road
@@ -553,17 +642,23 @@ export async function descend(
 			const moves: [number, number, number][] = [
 				[step, 0, 1], [-step, 0, 1], [0, step, 1], [0, -step, 1],
 			];
+
 			if (maxScale > 0) {
 				const up = Math.min(1 + maxScale, scale * 1.05) / scale;
 				const dn = Math.max(1 - maxScale, scale * 0.95) / scale;
+
 				if (up > 1.0001) moves.push([0, 0, up]);
+
 				if (dn < 0.9999) moves.push([0, 0, dn]);
 			}
+
 			let improved = false;
+
 			for (const [dx, dy, sMul] of moves) {
 				if (evals >= maxEvals) break;
 				const trial = transform(ring, dx, dy, sMul, centroidOf(ring));
 				const e = await evalRing(trial);
+
 				if (e && e.score < curScore - 1e-9) {
 					ring = trial;
 					curScore = e.score;
@@ -573,12 +668,16 @@ export async function descend(
 					report(ring, e);
 				}
 			}
+
 			if (!improved) step *= 0.5; // nothing nearer helped — look closer
 		}
+
 		spacing *= shrink;
 	}
+
 	if (!found.best) throw new Error('Could not route the outline at any spacing.');
 	found.best.rounds = round;
+
 	return found.best;
 }
 
@@ -588,7 +687,9 @@ export function toGPX(coords: LngLat[], name: string): string {
 	const pts = coords
 		.map(([lng, lat]) => `<trkpt lat="${lat.toFixed(6)}" lon="${lng.toFixed(6)}"></trkpt>`)
 		.join('\n');
+
 	const safe = name.replace(/[<&>]/g, '');
+
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <gpx version="1.1" creator="jqiao.vercel.app" xmlns="http://www.topografix.com/GPX/1/1">
 <trk><name>${safe}</name><trkseg>
@@ -607,13 +708,16 @@ export interface Outline {
 // The Natural Earth country set, fetched once and reused. Kept module-level so a
 // second lookup doesn't re-download the file.
 let neCache: Promise<any> | null = null;
+
 function naturalEarth(): Promise<any> {
 	if (!neCache) {
 		neCache = fetch(NE_COUNTRIES).then((r) => {
 			if (!r.ok) throw new Error(`Country data failed (${r.status}).`);
+
 			return r.json();
 		});
 	}
+
 	return neCache;
 }
 
@@ -622,6 +726,7 @@ function naturalEarth(): Promise<any> {
 function matchCountry(fc: any, query: string): any | null {
 	const q = query.trim().toLowerCase();
 	const fields = ['ADMIN', 'NAME', 'NAME_LONG', 'NAME_EN', 'BRK_NAME', 'ISO_A2', 'ISO_A3'];
+
 	return (
 		fc.features.find((f: any) => fields.some((k) => String(f.properties[k] ?? '').toLowerCase() === q)) ?? null
 	);
@@ -637,17 +742,23 @@ export async function fetchOutline(query: string): Promise<Outline> {
 	try {
 		const fc = await naturalEarth();
 		const hit = matchCountry(fc, query);
+
 		if (hit) return { name: hit.properties.ADMIN, ring: outerRing(hit.geometry) };
 	} catch {
 		// A country-data hiccup shouldn't sink the lookup — try Nominatim.
 	}
+
 	const url = `${NOMINATIM}?q=${encodeURIComponent(query)}&format=jsonv2&polygon_geojson=1&limit=1`;
 	const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+
 	if (!res.ok) throw new Error(`Place lookup failed (${res.status}).`);
 	const hits = await res.json();
+
 	if (!Array.isArray(hits) || hits.length === 0) throw new Error(`No place found for "${query}".`);
 	const hit = hits[0];
+
 	if (!hit.geojson) throw new Error(`"${hit.display_name}" has no outline to trace.`);
+
 	return { name: hit.display_name.split(',')[0], ring: outerRing(hit.geojson) };
 }
 
@@ -667,12 +778,15 @@ async function brouterLeg(waypoints: LngLat[], profile: Profile): Promise<{ coor
 	const lonlats = waypoints.map(([lng, lat]) => `${lng.toFixed(5)},${lat.toFixed(5)}`).join('|');
 	const url = `${BROUTER}?lonlats=${lonlats}&profile=${profile}&alternativeidx=0&format=geojson`;
 	const res = await fetch(url);
+
 	if (!res.ok) throw new Error(`Router failed (${res.status}). The shape may sit over water or a road-less area.`);
 	const fc = await res.json();
 	const feat = fc?.features?.[0];
+
 	if (!feat?.geometry?.coordinates?.length) throw new Error('Router returned no route.');
 	const coords: LngLat[] = feat.geometry.coordinates.map((c: number[]) => [c[0], c[1]]);
 	const ascend = feat.properties?.['filtered ascend'];
+
 	return { coords, ascend: ascend != null ? Number(ascend) : 0 };
 }
 
@@ -688,11 +802,14 @@ async function brouterLeg(waypoints: LngLat[], profile: Profile): Promise<{ coor
  */
 export async function routeWaypoints(waypoints: LngLat[], profile: Profile, cleanup = true): Promise<RoutedPath> {
 	if (waypoints.length < 2) throw new Error('Need at least two waypoints to route.');
+
 	if (waypoints.length > MAX_WAYPOINTS) {
 		throw new Error(`${waypoints.length} waypoints exceeds the ${MAX_WAYPOINTS} limit — widen the spacing.`);
 	}
+
 	let coords: LngLat[] = [];
 	let ascend = 0;
+
 	for (let start = 0; start < waypoints.length - 1; start += BATCH - 1) {
 		const batch = waypoints.slice(start, start + BATCH);
 		const leg = await brouterLeg(batch, profile);
@@ -701,6 +818,7 @@ export async function routeWaypoints(waypoints: LngLat[], profile: Profile, clea
 		// seam waypoint the previous leg already ended on.
 		coords = coords.length ? coords.concat(leg.coords.slice(1)) : leg.coords;
 	}
+
 	// A country outline is a simple loop, so any out-and-back or lasso is a router
 	// artifact to strip. A line drawing's route *plans* its backtracking (the
 	// Chinese-postman doubling), so cleanup would delete required coverage — the
@@ -712,5 +830,6 @@ export async function routeWaypoints(waypoints: LngLat[], profile: Profile, clea
 		coords = removeLoops(coords, 70, 250, 6000, anchorKeySet(coords, waypoints));
 		coords = removeBacktracks(coords); // a spliced loop can leave a small new spur
 	}
+
 	return { coords, length: pathLength(coords), ascend, retraced: retracedFraction(coords) };
 }

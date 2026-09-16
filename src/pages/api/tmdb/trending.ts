@@ -8,9 +8,11 @@ export const prerender = false;
 export const GET: APIRoute = async () => {
 	try {
 		const results = await getTrending();
+
 		return json(results, 200, { 'cache-control': 'public, max-age=3600' });
 	} catch (e) {
 		if (e instanceof TmdbError) return apiError(e.message, 502);
+
 		return apiError('trending failed', 500);
 	}
 };

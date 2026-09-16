@@ -33,6 +33,7 @@ export interface PreparedPhoto {
 
 /** Long edge, in pixels, of a stored photograph. */
 export const MAX_EDGE = 1600;
+
 /**
  * Re-encode anything above this, even when its dimensions are fine.
  *
@@ -43,6 +44,7 @@ export const MAX_EDGE = 1600;
  * kilobytes.
  */
 const REENCODE_OVER = 600 * 1024;
+
 /** Encoder quality, for either format. */
 const QUALITY = 0.82;
 
@@ -60,7 +62,9 @@ async function encode(canvas: HTMLCanvasElement): Promise<Blob | null> {
 	const webp = await new Promise<Blob | null>((resolve) =>
 		canvas.toBlob(resolve, 'image/webp', QUALITY),
 	);
+
 	if (webp?.type === 'image/webp') return webp;
+
 	return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', QUALITY));
 }
 
@@ -70,6 +74,7 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
 	// the EXIF rotation a phone records is applied to the pixels here, and canvas
 	// would otherwise drop it on re-encoding.
 	let bitmap: ImageBitmap | null = null;
+
 	try {
 		bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
 	} catch {
@@ -81,10 +86,12 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
 
 	const { width, height } = bitmap;
 	const scale = Math.min(1, MAX_EDGE / Math.max(width, height));
+
 	// Small enough already: keep the file the camera wrote rather than paying a
 	// second lossy encode for nothing.
 	if (scale === 1 && file.size <= REENCODE_OVER) {
 		bitmap.close();
+
 		return { file, url: URL.createObjectURL(file), width, height };
 	}
 
@@ -96,6 +103,7 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
 	canvas.getContext('2d')?.drawImage(bitmap, 0, 0, w, h);
 	bitmap.close();
 	const blob = await encode(canvas);
+
 	if (!blob) return { file, url: URL.createObjectURL(file), width, height };
 
 	// An image that was already within MAX_EDGE can come out of the encoder
@@ -114,5 +122,6 @@ export async function preparePhoto(file: File): Promise<PreparedPhoto> {
 	const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
 	const name = `${file.name.replace(/\.[^.]+$/, '') || 'photo'}.${ext}`;
 	const shrunk = new File([blob], name, { type: blob.type });
+
 	return { file: shrunk, url: URL.createObjectURL(shrunk), width: w, height: h };
 }

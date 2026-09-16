@@ -14,6 +14,7 @@ export const prerender = false;
 export const GET: APIRoute = async ({ url }) => {
 	const raw = Number.parseInt(url.searchParams.get('limit') ?? '20', 10);
 	const limit = Number.isFinite(raw) ? Math.min(100, Math.max(1, raw)) : 20;
+
 	try {
 		return json({ visits: await listRecentVisits(limit) });
 	} catch (e) {
@@ -35,6 +36,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: Record<string, unknown>;
+
 	try {
 		body = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -42,20 +44,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const rating = body.rating == null ? null : Number(body.rating);
+
 	if (rating != null && !isValidRating(rating)) {
 		return apiError('rating must be between 0.5 and 5.0 in half steps', 400);
 	}
+
 	const verdict = body.verdict == null ? null : Number(body.verdict);
+
 	if (verdict != null && !(Number.isInteger(verdict) && verdict >= 0 && verdict <= 5)) {
 		return apiError('verdict must be a rank between 0 and 5', 400);
 	}
+
 	const visitedOn = asDate(body.visitedOn);
+
 	if (body.visitedOn != null && visitedOn == null) {
 		return apiError('visitedOn must be YYYY-MM-DD', 400);
 	}
 
 	try {
 		const restaurantId = await resolveRestaurant(body);
+
 		if (restaurantId == null) return apiError('restaurantId or place.name is required', 400);
 
 		const id = await createVisit({
@@ -70,6 +78,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			privateNote: asText(body.privateNote),
 			tags: asList(body.tags),
 		});
+
 		return json({ id, restaurantId }, 201);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to log the visit', 500);
@@ -92,12 +101,16 @@ async function resolveRestaurant(body: Record<string, unknown>): Promise<number 
 		// The trip answer only. The composer is logging a meal at a place that
 		// already exists, and is not renaming or repricing it.
 		const edit = typeof place?.trip === 'boolean' ? { trip: place.trip } : {};
+
 		if (Object.keys(edit).length > 0) await updatePlace(existing, edit);
+
 		return existing;
 	}
 
 	const name = typeof place?.name === 'string' ? place.name.trim() : '';
+
 	if (!name) return null;
+
 	const created = await createPlace({
 		name,
 		cuisines: asList(place?.cuisines),
@@ -109,6 +122,7 @@ async function resolveRestaurant(body: Record<string, unknown>): Promise<number 
 		lng: asNumber(place?.lng),
 		trip: Boolean(place?.trip),
 	});
+
 	return created.id;
 }
 
@@ -123,6 +137,7 @@ function asDate(v: unknown): string | null {
 function asText(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t === '' ? null : t;
 }
 
@@ -133,5 +148,6 @@ function asList(v: unknown): string[] {
 function asNumber(v: unknown): number | null {
 	if (v == null || v === '') return null;
 	const n = Number(v);
+
 	return Number.isFinite(n) ? n : null;
 }

@@ -46,7 +46,9 @@ const { place, state, evidence } = Astro.props;
 // OSM, "Laser Wolf" + "Brooklyn" finds it. The split is a guess and both
 // fields stay editable, which is the whole reason it is safe to make one.
 const CITY_SUFFIXES = ['Brooklyn', 'Queens', 'Manhattan', 'Bronx', 'Staten Island', 'NYC', 'New York'];
+
 const suffix = CITY_SUFFIXES.find((c) => place.name.toLowerCase().endsWith(` ${c.toLowerCase()}`));
+
 const config = {
 	placeId: place.id,
 	state,
@@ -248,11 +250,14 @@ const config = {
 	}
 
 	const node = document.getElementById('place-editor');
+
 	const configNode = document.getElementById('place-editor-config');
+
 	if (node && configNode) {
 		const cfg = JSON.parse(configNode.textContent ?? '{}') as Config;
 
 		type Mode = 'search' | 'confirm' | 'none' | 'down' | 'hand';
+
 		const state = {
 			open: false,
 			mode: 'search' as Mode,
@@ -276,6 +281,7 @@ const config = {
 
 		const $ = <T extends HTMLElement>(sel: string) => node.querySelector<T>(sel)!;
 		const val = (sel: string) => ($(sel) as HTMLInputElement).value.trim();
+
 		const show = (sel: string, on: boolean) => {
 			$(sel).hidden = !on;
 		};
@@ -298,6 +304,7 @@ const config = {
 			node.hidden = false;
 			document.body.style.overflow = 'hidden';
 			render();
+
 			if (mode === 'search') {
 				lookup();
 				window.setTimeout(() => $('[data-pe-q]').focus(), 0);
@@ -314,6 +321,7 @@ const config = {
 		/** Anything typed that a close would throw away. */
 		function dirty(): boolean {
 			if (state.mode === 'confirm') return true;
+
 			return !!(val('[data-pe-hand-field]') || val('[data-pe-paste]'));
 		}
 
@@ -327,15 +335,19 @@ const config = {
 		// second, and searching NAMES rather than addresses — which is why the
 		// "where" field exists at all, to separate the two Ba Xuyêns.
 		let timer = 0;
+
 		function lookup() {
 			window.clearTimeout(timer);
 			const name = val('[data-pe-q]');
+
 			if (name.length < 3) {
 				state.hits = [];
 				state.searched = false;
 				render();
+
 				return;
 			}
+
 			const where = val('[data-pe-where]');
 			state.searching = true;
 			render();
@@ -349,6 +361,7 @@ const config = {
 				state.searching = false;
 				state.searched = true;
 				state.hits = hits;
+
 				// A geocoder that cannot be reached is not a geocoder that found
 				// nothing, and the two want different words. Retyping after either
 				// one has to be able to lead back to results, so the mode is
@@ -358,6 +371,7 @@ const config = {
 				if (state.mode !== 'hand') {
 					state.mode = !reachable ? 'down' : hits.length === 0 ? 'none' : 'search';
 				}
+
 				render();
 			}, 420);
 		}
@@ -382,33 +396,42 @@ const config = {
 				/[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/,
 				/^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/,
 			];
+
 			for (const re of patterns) {
 				const m = text.match(re);
+
 				if (!m) continue;
 				const lat = Number(m[1]);
 				const lng = Number(m[2]);
+
 				if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return { lat, lng };
 			}
+
 			return null;
 		}
 
 		let pasteTimer = 0;
+
 		function readPaste() {
 			window.clearTimeout(pasteTimer);
 			const text = val('[data-pe-paste]');
 			state.coords = null;
+
 			if (!text) {
 				state.pasteNote = '';
 				render();
+
 				return;
 			}
 
 			// A pair of numbers is already the answer.
 			const direct = coordsIn(text);
+
 			if (direct) {
 				state.coords = direct;
 				state.pasteNote = `Reads as ${direct.lat.toFixed(5)}, ${direct.lng.toFixed(5)}.`;
 				render();
+
 				return;
 			}
 
@@ -416,33 +439,43 @@ const config = {
 			// unless it is the short form, whose first four characters were
 			// dropped and only mean anything near the locality printed after it.
 			const plus = findPlusCode(text);
+
 			if (plus) {
 				if (isFullPlusCode(plus.code)) {
 					const point = decodePlusCode(plus.code);
+
 					if (point) {
 						state.coords = point;
 						state.pasteNote = `Plus code — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`;
 						render();
+
 						return;
 					}
 				}
+
 				const near = plus.locality || val('[data-pe-hand-field]') || val('[data-pe-where]') || cfg.current;
+
 				if (!near) {
 					state.pasteNote = 'A short plus code needs its town after it — “Q2MM+2C Brooklyn”.';
 					render();
+
 					return;
 				}
+
 				state.pasteNote = `Looking up ${near}…`;
 				render();
 				pasteTimer = window.setTimeout(() => resolveShortCode(plus.code, near), 400);
+
 				return;
 			}
 
 			if (!/^https?:\/\//i.test(text)) {
 				state.pasteNote = 'No coordinates, plus code or link in that yet.';
 				render();
+
 				return;
 			}
+
 			state.pasteNote = 'Following the link…';
 			render();
 			pasteTimer = window.setTimeout(() => resolveLink(text), 500);
@@ -451,26 +484,34 @@ const config = {
 		/** The locality gives the reference the dropped characters are relative to. */
 		async function resolveShortCode(code: string, near: string) {
 			let ref: GeoHit | undefined;
+
 			try {
 				const res = await fetch(`/api/restaurants/geocode?q=${encodeURIComponent(near)}`);
+
 				if (res.ok) ref = ((await res.json()).hits ?? [])[0] as GeoHit | undefined;
 			} catch {
 				// handled below, as "could not"
 			}
+
 			if (!ref) {
 				state.pasteNote = `Could not find ${near}. The short code cannot be placed. Paste the full code, or the pair of coordinates.`;
 				render();
+
 				return;
 			}
+
 			// An imprecise hit is the right kind of reference here: recovery only
 			// needs somewhere within half a degree, and a town centre is that.
 			const full = recoverPlusCode(code, ref.lat, ref.lng);
 			const point = full ? decodePlusCode(full) : null;
+
 			if (!point) {
 				state.pasteNote = 'That plus code could not be read.';
 				render();
+
 				return;
 			}
+
 			state.coords = point;
 			state.pasteNote = `${full} near ${near} — ${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}.`;
 			render();
@@ -480,6 +521,7 @@ const config = {
 			try {
 				const res = await fetch(`/api/restaurants/resolve-link?url=${encodeURIComponent(url)}`);
 				const body = await res.json();
+
 				if (res.ok && body.lat != null && body.lng != null) {
 					state.coords = { lat: body.lat, lng: body.lng };
 					state.pasteNote = `Reads as ${body.lat.toFixed(5)}, ${body.lng.toFixed(5)}.`;
@@ -495,6 +537,7 @@ const config = {
 			} catch {
 				state.pasteNote = 'Could not follow that link.';
 			}
+
 			render();
 		}
 
@@ -516,6 +559,7 @@ const config = {
 					: state.hits.length
 						? `${state.hits.length} results, from ${[...new Set(state.hits.map((h) => h.sourceLabel ?? 'OpenStreetMap'))].join(' and ')}. They search names. The where field is what separates the first two.`
 						: '';
+
 				$('[data-pe-result-meta]').textContent = meta;
 				renderHits();
 			}
@@ -548,6 +592,7 @@ const config = {
 			const save = $('[data-pe-save]') as HTMLButtonElement;
 			const showSave = m === 'confirm' || m === 'hand' || m === 'none';
 			save.hidden = !showSave;
+
 			if (m === 'confirm') {
 				const precise = !!state.picked?.precise;
 				save.textContent = precise ? 'Place it here' : 'Save the location';
@@ -570,6 +615,7 @@ const config = {
 		function renderHits() {
 			const box = $('[data-pe-hits]');
 			box.replaceChildren();
+
 			for (const hit of state.hits) {
 				const row = document.createElement('div');
 				row.className = 'pe__hit';
@@ -607,7 +653,9 @@ const config = {
 				body.neighborhood = rest.length ? first : null;
 				body.city = rest.length ? rest.join(', ') : first || h.city;
 				body.stateRegion = h.stateRegion;
+
 				if (h.country) body.country = h.country;
+
 				if (cuisine) body.cuisines = cuisine.split(',').map((c) => c.trim()).filter(Boolean);
 				// Only a point-precise hit contributes coordinates. An area's
 				// centroid is a pin floating in the middle of a neighbourhood.
@@ -615,11 +663,13 @@ const config = {
 				body.lng = h.precise ? h.lng : null;
 			} else {
 				const where = val('[data-pe-hand-field]');
+
 				if (where) {
 					const [first, ...rest] = where.split(',').map((s) => s.trim()).filter(Boolean);
 					body.neighborhood = rest.length ? first : null;
 					body.city = rest.length ? rest.join(', ') : first;
 				}
+
 				if (state.coords) {
 					body.lat = state.coords.lat;
 					body.lng = state.coords.lng;
@@ -628,15 +678,19 @@ const config = {
 
 			state.saving = true;
 			render();
+
 			const res = await fetch(`/api/restaurants/places/${cfg.placeId}`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
 			});
+
 			state.saving = false;
+
 			if (!res.ok) {
 				render();
 				window.alert('Could not save that location.');
+
 				return;
 			}
 
@@ -661,6 +715,7 @@ const config = {
 				open('search');
 			});
 		}
+
 		for (const b of document.querySelectorAll('[data-open-place-by-hand]')) {
 			b.addEventListener('click', (e) => {
 				e.preventDefault();

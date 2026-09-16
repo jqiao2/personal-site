@@ -39,7 +39,9 @@
 //   --force         re-fetch books that already have an ol_key
 
 const SUPA = process.env.SUPABASE_URL;
+
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!SUPA || !KEY) {
 	console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (try: node --env-file=.env …)');
 	process.exit(1);
@@ -49,19 +51,26 @@ const UA = 'jqiao-personal-site/1.0 (reading log; https://jqiao.vercel.app)';
 
 /** Open Library is volunteer-run and this is a bulk job. One book a second. */
 const DELAY_MS = 1000;
+
 /** Long enough for a slow answer, short enough not to hang the whole run. */
 const TIMEOUT_MS = 15_000;
 
 const args = process.argv.slice(2);
+
 const flag = (name) => args.includes(name);
+
 const value = (name) => {
 	const at = args.indexOf(name);
+
 	return at >= 0 ? args[at + 1] : null;
 };
 
 const apply = flag('--apply');
+
 const force = flag('--force');
+
 const onlyId = value('--id') ? Number(value('--id')) : null;
+
 const limit = value('--limit') ? Number(value('--limit')) : null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -73,10 +82,12 @@ async function db(path, init = {}) {
 			apikey: KEY,
 			authorization: `Bearer ${KEY}`,
 			'content-type': 'application/json',
-			...(init.headers ?? {}),
+			...init.headers,
 		},
 	});
+
 	if (!res.ok) throw new Error(`supabase ${res.status}: ${await res.text()}`);
+
 	return res.status === 204 ? null : res.json();
 }
 
@@ -85,8 +96,11 @@ async function ol(url) {
 		headers: { accept: 'application/json', 'user-agent': UA },
 		signal: AbortSignal.timeout(TIMEOUT_MS),
 	});
+
 	if (res.status === 404) return null;
+
 	if (!res.ok) throw new Error(`Open Library returned ${res.status}`);
+
 	return res.json();
 }
 
@@ -95,38 +109,52 @@ function subjects(raw) {
 	if (!Array.isArray(raw)) return [];
 	const seen = new Set();
 	const out = [];
+
 	for (const value of raw) {
 		if (typeof value !== 'string') continue;
 		const s = value.trim();
+
 		if (!s || s.length > 28) continue;
+
 		if (/[,()[\]/]|--|\d/.test(s)) continue;
+
 		if (/^(fiction|non-?fiction)$/i.test(s)) continue;
 		const key = s.toLowerCase();
+
 		if (seen.has(key)) continue;
 		seen.add(key);
 		out.push(s[0].toUpperCase() + s.slice(1));
+
 		if (out.length >= 4) break;
 	}
+
 	return out;
 }
 
 function classify(raw) {
 	if (!Array.isArray(raw)) return null;
 	const all = raw.filter((s) => typeof s === 'string').join(' | ').toLowerCase();
+
 	if (!all) return null;
+
 	// Mirrors src/lib/openlibrary.ts, including the order: an explicit
 	// "nonfiction" outranks everything, then fiction markers, then the softer
 	// history/biography words — otherwise Emma ("Historical Fiction") and
 	// Foundation ("Psychohistory") both come back as nonfiction.
 	if (/non-?fiction/.test(all)) return 'Nonfiction';
+
 	if (/fiction|novel|stories|poetry/.test(all)) return 'Fiction';
+
 	if (/biography|history|essays|memoir/.test(all)) return 'Nonfiction';
+
 	return null;
 }
 
 function paragraphs(raw) {
 	const text = typeof raw === 'string' ? raw : typeof raw?.value === 'string' ? raw.value : '';
+
 	if (!text) return [];
+
 	return text
 		.split(/-{4,}/)[0]
 		.split(/\r?\n\s*\r?\n/)
@@ -141,24 +169,30 @@ function paragraphs(raw) {
  */
 async function editionsMedian(workKey) {
 	const data = await ol(`https://openlibrary.org${workKey}/editions.json?limit=50`);
+
 	const counts = (data?.entries ?? [])
 		.map((e) => e.number_of_pages)
 		.filter((n) => typeof n === 'number' && n > 0)
 		.sort((a, b) => a - b);
+
 	return counts.length ? counts[Math.floor(counts.length / 2)] : null;
 }
 
 async function lookup(isbn) {
 	const clean = String(isbn).replace(/[^0-9Xx]/g, '').toUpperCase();
+
 	if (clean.length !== 10 && clean.length !== 13) return null;
 
 	const edition = await ol(`https://openlibrary.org/isbn/${clean}.json`);
+
 	if (!edition) return null;
 
 	const workKey = edition.works?.[0]?.key ?? null;
+
 	if (!workKey) return null;
 
 	let work = {};
+
 	try {
 		work = (await ol(`https://openlibrary.org${workKey}.json`)) ?? {};
 	} catch {
@@ -185,21 +219,27 @@ async function lookup(isbn) {
 }
 
 const select = 'id,title,isbn,ol_key,cover_url,total_pages,ol_pages,subtitle,first_published';
+
 // Two populations: books with an ISBN and no match at all, and books already
 // matched that have no printed length yet. The second needs only a work key, so
 // a Kindle book with no usable ISBN is still reachable.
 let query = `books?select=${select}&order=id`;
+
 if (!force) query += '&or=(and(isbn.not.is.null,ol_key.is.null),ol_pages.is.null)';
 else query += '&or=(isbn.not.is.null,ol_key.not.is.null)';
+
 if (onlyId) query += `&id=eq.${onlyId}`;
 
 const books = await db(query);
+
 const targets = limit ? books.slice(0, limit) : books;
 
 console.log(`${targets.length} book${targets.length === 1 ? '' : 's'} with an ISBN and no match${apply ? '' : '  (dry run — pass --apply to write)'}\n`);
 
 let matched = 0;
+
 let missing = 0;
+
 let failed = 0;
 
 for (const [i, book] of targets.entries()) {
@@ -209,6 +249,7 @@ for (const [i, book] of targets.entries()) {
 	// needed. This is the pass that fixes the Kindle's inflated widths.
 	if (book.ol_key && !book.ol_pages) {
 		let pages;
+
 		try {
 			pages = await editionsMedian(book.ol_key);
 		} catch (e) {
@@ -216,14 +257,17 @@ for (const [i, book] of targets.entries()) {
 			console.log(`  ✗ ${book.title} — ${e.message}`);
 			continue;
 		}
+
 		if (!pages) {
 			missing++;
 			console.log(`  – ${book.title} — Open Library lists no page count for any edition`);
 			continue;
 		}
+
 		matched++;
 		const was = book.total_pages ? ` (was ${book.total_pages} on the device)` : '';
 		console.log(`  ✓ ${book.title} — ${pages} printed pages${was}`);
+
 		if (apply) {
 			await db(`books?id=eq.${book.id}`, {
 				method: 'PATCH',
@@ -231,6 +275,7 @@ for (const [i, book] of targets.entries()) {
 				body: JSON.stringify({ ol_pages: pages, updated_at: new Date().toISOString() }),
 			});
 		}
+
 		continue;
 	}
 
@@ -241,6 +286,7 @@ for (const [i, book] of targets.entries()) {
 	}
 
 	let found;
+
 	try {
 		found = await lookup(book.isbn);
 	} catch (e) {
@@ -272,6 +318,7 @@ for (const [i, book] of targets.entries()) {
 	};
 
 	matched++;
+
 	const gained = [
 		patch.cover_url ? 'cover' : null,
 		patch.ol_pages ? `${patch.ol_pages}pp` : null,
@@ -280,6 +327,7 @@ for (const [i, book] of targets.entries()) {
 		patch.genres ? `${patch.genres.length} subjects` : null,
 		patch.description ? 'blurb' : null,
 	].filter(Boolean);
+
 	console.log(`  ✓ ${book.title} — ${found.key}${gained.length ? ` · ${gained.join(', ')}` : ' · nothing new'}`);
 
 	if (apply) {

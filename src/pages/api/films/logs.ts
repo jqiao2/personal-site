@@ -13,6 +13,7 @@ export const GET: APIRoute = async ({ url }) => {
 
 	try {
 		const logs = await listLogs(limit, offset);
+
 		return json({ logs });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to list logs', 500);
@@ -30,6 +31,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: Record<string, unknown>;
+
 	try {
 		body = await request.json();
 	} catch {
@@ -37,9 +39,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const tmdbId = Number(body.tmdbId);
+
 	if (!Number.isInteger(tmdbId) || tmdbId <= 0) return apiError('tmdbId is required', 400);
 
 	const rating = body.rating == null ? null : Number(body.rating);
+
 	if (rating != null && !isValidRating(rating)) {
 		return apiError('rating must be between 0.5 and 5.0 in 0.5 steps', 400);
 	}
@@ -60,6 +64,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			venue: asText(body.venue),
 			format: asText(body.format),
 		});
+
 		return json(result, 201);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to log film', 500);
@@ -68,6 +73,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
 function clamp(n: number, min: number, max: number, fallback: number): number {
 	if (!Number.isFinite(n)) return fallback;
+
 	return Math.min(max, Math.max(min, n));
 }
 
@@ -77,11 +83,13 @@ function isValidRating(r: number): boolean {
 
 function asDateString(v: unknown): string | null {
 	if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+
 	return v;
 }
 
 function asText(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t.length > 0 ? t : null;
 }

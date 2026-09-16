@@ -28,26 +28,36 @@ import { createReadStream } from 'node:fs';
 import path from 'node:path';
 
 const args = process.argv.slice(2);
+
 const flag = (name) => args.includes(`--${name}`);
+
 const opt = (name, fallback) => {
 	const hit = args.find((a) => a.startsWith(`--${name}=`));
+
 	return hit ? hit.slice(name.length + 3) : fallback;
 };
 
 const MIN_VOTES = Number.parseInt(opt('min-votes', '50'), 10);
+
 const TOP_CAST = Number.parseInt(opt('cast', '15'), 10);
+
 const LIMIT = opt('limit') ? Number.parseInt(opt('limit'), 10) : Infinity;
+
 const IDS_ONLY = flag('ids-only');
+
 const FORCE = flag('force');
 
 const TMDB_KEY = process.env.TMDB_API_KEY;
+
 if (!TMDB_KEY) {
 	console.error('Missing env: TMDB_API_KEY. Run with: node --env-file=.env scripts/credit-graph/fetch.mjs');
 	process.exit(1);
 }
 
 const CACHE_DIR = path.join('scripts', '.cache', 'credit-graph');
+
 const IDS_FILE = path.join(CACHE_DIR, 'film-ids.json');
+
 const FILMS_FILE = path.join(CACHE_DIR, 'films.ndjson');
 
 /** Parallel in-flight TMDB requests. TMDB suggests staying near 50 req/s; 16
@@ -67,13 +77,16 @@ const REQUEST_TIMEOUT_MS = 20_000;
  * the side effects. Used for both id enumeration and the per-film credit fetch. */
 async function pool(items, task, concurrency) {
 	const queue = items.slice();
+
 	async function worker() {
 		for (;;) {
 			const item = queue.shift();
+
 			if (item === undefined) return;
 			await task(item);
 		}
 	}
+
 	await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
 }
 
@@ -83,11 +96,14 @@ async function pool(items, task, concurrency) {
 async function tmdbGet(pathname, params = {}) {
 	const url = new URL(`https://api.themoviedb.org/3${pathname}`);
 	url.searchParams.set('api_key', TMDB_KEY);
+
 	for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
 	let lastError;
+
 	for (let attempt = 0; attempt < 6; attempt++) {
 		let res;
+
 		try {
 			res = await fetch(url, {
 				headers: { accept: 'application/json' },
@@ -99,22 +115,28 @@ async function tmdbGet(pathname, params = {}) {
 			await sleep(400 * 2 ** attempt);
 			continue;
 		}
+
 		if (res.status === 429) {
 			const retry = Number.parseInt(res.headers.get('retry-after') || '1', 10);
 			await sleep((Number.isFinite(retry) ? retry : 1) * 1000 + 250);
 			continue;
 		}
+
 		// 404 is a real answer: the id was withdrawn from TMDB after enumeration.
 		if (res.status === 404) return null;
+
 		if (!res.ok) {
 			const body = await res.text().catch(() => '');
 			lastError = new Error(`${res.status} ${body.slice(0, 160)}`);
+
 			if (res.status >= 500) {
 				await sleep(400 * 2 ** attempt);
 				continue;
 			}
+
 			throw lastError; // permanent — bad params, revoked key
 		}
+
 		try {
 			return await res.json();
 		} catch (e) {
@@ -122,6 +144,7 @@ async function tmdbGet(pathname, params = {}) {
 			await sleep(400 * 2 ** attempt);
 		}
 	}
+
 	throw new Error(`TMDB ${pathname} failed after retries: ${lastError?.message ?? 'unknown'}`);
 }
 
@@ -144,7 +167,9 @@ async function enumerateIds() {
 		include_adult: 'false',
 		sort_by: 'vote_count.desc',
 	};
+
 	const thisYear = new Date().getFullYear();
+
 	const slices = [
 		...Array.from({ length: thisYear - FIRST_YEAR + 1 }, (_, i) => ({
 			...base,
@@ -161,9 +186,12 @@ async function enumerateIds() {
 		slices,
 		async (params) => {
 			const first = await tmdbGet('/discover/movie', { ...params, page: '1' });
+
 			if (!first) return;
+
 			for (const m of first.results ?? []) ids.add(m.id);
 			const pages = Math.min(first.total_pages ?? 1, 500);
+
 			for (let page = 2; page <= pages; page++) rest.push({ ...params, page: String(page) });
 		},
 		DISCOVER_CONCURRENCY,
@@ -175,7 +203,9 @@ async function enumerateIds() {
 		rest,
 		async (params) => {
 			const d = await tmdbGet('/discover/movie', params);
+
 			for (const m of d?.results ?? []) ids.add(m.id);
+
 			if (++fetched % 100 === 0) {
 				process.stdout.write(`\r  page ${fetched}/${rest.length} — ${ids.size.toLocaleString()} ids      `);
 			}
@@ -207,9 +237,11 @@ const CREW_ROLES = {
 function extractFilm(d, tmdbId) {
 	const credits = [];
 	const seen = new Set();
+
 	const add = (person, role, billing) => {
 		const name = (person?.name ?? '').trim();
 		const key = `${person?.id}:${role}`;
+
 		if (!person?.id || !name || seen.has(key)) return;
 		seen.add(key);
 		credits.push({ id: person.id, name, role, billing });
@@ -218,11 +250,13 @@ function extractFilm(d, tmdbId) {
 	for (const [i, c] of (d.credits?.cast ?? []).slice(0, TOP_CAST).entries()) {
 		add(c, 'actor', i);
 	}
+
 	for (const [role, matches] of Object.entries(CREW_ROLES)) {
 		for (const c of d.credits?.crew ?? []) if (matches(c)) add(c, role, null);
 	}
 
 	const date = /^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null;
+
 	return {
 		id: tmdbId,
 		title: d.title ?? d.original_title ?? `#${tmdbId}`,
@@ -246,13 +280,16 @@ function extractFilm(d, tmdbId) {
  * Tolerates a truncated final line from an interrupted run. */
 async function cachedIds() {
 	const done = new Set();
+
 	try {
 		const rl = createInterface({
 			input: createReadStream(FILMS_FILE),
 			crlfDelay: Infinity,
 		});
+
 		for await (const line of rl) {
 			if (!line.trim()) continue;
+
 			try {
 				done.add(JSON.parse(line).id);
 			} catch {
@@ -262,6 +299,7 @@ async function cachedIds() {
 	} catch (e) {
 		if (e.code !== 'ENOENT') throw e;
 	}
+
 	return done;
 }
 
@@ -271,9 +309,11 @@ async function main() {
 	// Step 1: the id list. Cached separately — enumeration is ~1.2k requests and
 	// rarely needs redoing, so only --ids-only or a missing file rebuilds it.
 	let ids;
+
 	if (!IDS_ONLY) {
 		try {
 			const saved = JSON.parse(await readFile(IDS_FILE, 'utf8'));
+
 			if (saved.minVotes === MIN_VOTES) {
 				ids = saved.ids;
 				console.log(`Reusing cached id list: ${ids.length.toLocaleString()} films (votes >= ${MIN_VOTES}).`);
@@ -282,12 +322,14 @@ async function main() {
 			// No cached list yet, or it was written for a different floor.
 		}
 	}
+
 	if (!ids) {
 		console.log(`Enumerating films with vote_count >= ${MIN_VOTES}…`);
 		ids = await enumerateIds();
 		await writeFile(IDS_FILE, JSON.stringify({ minVotes: MIN_VOTES, ids }));
 		console.log(`Enumerated ${ids.length.toLocaleString()} films -> ${IDS_FILE}`);
 	}
+
 	if (IDS_ONLY) return;
 
 	// Step 2: credits per film, appended as we go so progress survives a Ctrl-C.
@@ -297,12 +339,15 @@ async function main() {
 		`${done.size.toLocaleString()} already cached; fetching credits for ${todo.length.toLocaleString()} films ` +
 			`(top ${TOP_CAST} cast + directors + composers).`,
 	);
+
 	if (todo.length === 0) {
 		console.log('Nothing to fetch — cache is complete.');
+
 		return;
 	}
 
 	const out = createWriteStream(FILMS_FILE, { flags: FORCE ? 'w' : 'a' });
+
 	/** Backpressure-aware append: a 23k-film run outruns the disk otherwise. */
 	const write = (line) =>
 		out.write(line) ? Promise.resolve() : new Promise((r) => out.once('drain', r));
@@ -318,6 +363,7 @@ async function main() {
 		async (id) => {
 			try {
 				const d = await tmdbGet(`/movie/${id}`, { append_to_response: 'credits' });
+
 				if (d === null) {
 					missing++;
 				} else {
@@ -326,9 +372,12 @@ async function main() {
 				}
 			} catch (e) {
 				failed++;
+
 				if (failures.length < 40) failures.push(`${id}: ${e.message}`);
 			}
+
 			const n = ok + missing + failed;
+
 			if (n % 100 === 0 || n === todo.length) {
 				const rate = n / ((Date.now() - started) / 1000);
 				const eta = Math.round((todo.length - n) / Math.max(rate, 0.1));
@@ -346,8 +395,10 @@ async function main() {
 
 	const mins = ((Date.now() - started) / 60000).toFixed(1);
 	console.log(`Done in ${mins}m. Cached ${ok.toLocaleString()} films, ${missing} withdrawn, ${failed} failed.`);
+
 	if (failures.length) {
 		console.log('First failures:');
+
 		for (const f of failures) console.log(`  ${f}`);
 		console.log('Re-run to retry them (the cache is resumable).');
 	}

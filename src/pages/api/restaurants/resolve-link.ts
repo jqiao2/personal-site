@@ -34,11 +34,14 @@ export const prerender = false;
 function addressIn(url: string): string | null {
 	try {
 		const q = new URL(url).searchParams.get('q');
+
 		if (!q) return null;
 		const text = q.trim();
+
 		// A `q` that is itself a coordinate pair is a point, not an address, and
 		// the caller has already read it as one.
 		if (/^-?\d+(\.\d+)?,\s*-?\d+(\.\d+)?$/.test(text)) return null;
+
 		return text.length > 200 ? null : text;
 	} catch {
 		return null;
@@ -57,13 +60,16 @@ const PATTERNS = [
 function coordsIn(text: string): { lat: number; lng: number } | null {
 	for (const re of PATTERNS) {
 		const m = text.match(re);
+
 		if (!m) continue;
 		const lat = Number(m[1]);
 		const lng = Number(m[2]);
+
 		if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) {
 			return { lat, lng };
 		}
 	}
+
 	return null;
 }
 
@@ -72,11 +78,13 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
 	const raw = url.searchParams.get('url') ?? '';
 	let target: URL;
+
 	try {
 		target = new URL(raw);
 	} catch {
 		return apiError('not a URL', 400);
 	}
+
 	if (target.protocol !== 'https:' && target.protocol !== 'http:') {
 		return apiError('only http(s) links can be followed', 400);
 	}
@@ -84,6 +92,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 	// The link as pasted may already carry the point, in which case there is no
 	// reason to fetch anything.
 	const direct = coordsIn(raw);
+
 	if (direct) return json({ ...direct, address: null });
 
 	try {
@@ -93,14 +102,19 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 6000);
 		let res: Response;
+
 		try {
 			res = await fetch(target, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
+
 			if (!res.ok) res = await fetch(target, { redirect: 'follow', signal: controller.signal });
 		} finally {
 			clearTimeout(timeout);
 		}
+
 		const found = coordsIn(res.url);
+
 		if (found) return json({ ...found, address: null });
+
 		return json({ lat: null, lng: null, address: addressIn(res.url) });
 	} catch {
 		// A link that cannot be followed is not an error worth a 500: the form

@@ -49,7 +49,9 @@ export function parseMonthKey(value: string | undefined): { year: number; month:
 	if (!value || !/^\d{4}-\d{2}$/.test(value)) return null;
 	const year = Number(value.slice(0, 4));
 	const month = Number(value.slice(5, 7));
+
 	if (month < 1 || month > 12) return null;
+
 	return { year, month };
 }
 
@@ -64,23 +66,29 @@ export function monthOf(day: string): string {
 
 export function monthLabel(key: string): string {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return key;
+
 	return `${MONTHS[parsed.month - 1]} ${parsed.year}`;
 }
 
 /** `key` moved `delta` months, wrapping the year. */
 export function shiftMonth(key: string, delta: number): string {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return key;
 	const total = parsed.year * 12 + (parsed.month - 1) + delta;
+
 	return monthKey(Math.floor(total / 12), (((total % 12) + 12) % 12) + 1);
 }
 
 export function daysInMonth(year: number, month: number): number {
 	if (month === 2) {
 		const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+
 		return leap ? 29 : 28;
 	}
+
 	return [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
 }
 
@@ -92,31 +100,40 @@ export function daysInMonth(year: number, month: number): number {
 export function firstWeekdayIndex(year: number, month: number): number {
 	const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
 	const y = month < 3 ? year - 1 : year;
+
 	const sunFirst =
 		(y + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) + t[month - 1] + 1) % 7;
+
 	return (sunFirst + 6) % 7;
 }
 
 /** Rows of the grid — 4, 5 or 6, depending on where the 1st lands. */
 export function weekRows(key: string): number {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return 5;
 	const { year, month } = parsed;
+
 	return Math.ceil((firstWeekdayIndex(year, month) + daysInMonth(year, month)) / 7);
 }
 
 /** The longest run of consecutive days in `days` that fall inside the month. */
 export function longestStreak(key: string, days: Iterable<string>): number {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return 0;
 	const seen = new Set<number>();
+
 	for (const day of days) if (monthOf(day) === key) seen.add(Number(day.slice(8, 10)));
 	let longest = 0;
 	let run = 0;
+
 	for (let day = 1; day <= daysInMonth(parsed.year, parsed.month); day++) {
 		run = seen.has(day) ? run + 1 : 0;
+
 		if (run > longest) longest = run;
 	}
+
 	return longest;
 }
 
@@ -149,13 +166,18 @@ export function aspectBySlug(slug: string | null): Aspect {
  */
 export function monthQuery(aspect: Aspect, extra: Record<string, string> = {}): string {
 	const parts: string[] = [];
+
 	if (aspect.slug !== ASPECTS[0].slug) parts.push(`fmt=${aspect.slug}`);
+
 	for (const [key, value] of Object.entries(extra)) parts.push(`${key}=${value}`);
+
 	return parts.length ? `?${parts.join('&')}` : '';
 }
 
 export const CARD_WIDTH = 1080;
+
 export const CARD_PAD = 46;
+
 export const CARD_GUTTER = 10;
 
 export interface Geometry {
@@ -174,5 +196,6 @@ export function geometry(rows: number, height: number, chrome: number): Geometry
 	const byWidth = (CARD_WIDTH - 2 * CARD_PAD - 6 * CARD_GUTTER) / 7;
 	const byHeight = (height - chrome - (rows - 1) * CARD_GUTTER) / rows / 1.5;
 	const cell = Math.min(byWidth, byHeight);
+
 	return { height, cell, grid: cell * 7 + CARD_GUTTER * 6 };
 }

@@ -53,7 +53,9 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = Astro.params.month ?? '';
+
 const parsed = parseMonthKey(key);
+
 if (!parsed) return Astro.redirect('/restaurants/month');
 
 const [visits, counts] = await Promise.all([listMonthVisits(key), countVisitsByMonth()]);
@@ -62,6 +64,7 @@ const [visits, counts] = await Promise.all([listMonthVisits(key), countVisitsByM
 const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	const id = monthKeyOf(parsed.year, i + 1);
 	const n = counts[id] ?? 0;
+
 	return { abbr, key: id, count: n ? `${n} ${n === 1 ? 'meal' : 'meals'}` : '—', current: id === key };
 });
 
@@ -74,9 +77,11 @@ const places = await placesForMonth(
 	visits.map((v) => v.restaurant_id),
 	key,
 );
+
 // Only places that were actually pinned, and only if there is a key to draw
 // them with — otherwise there is no map to be had and the cell keeps its paper.
 const mapKey = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
+
 const maps = new Map(
 	mapKey
 		? [...places].flatMap(([id, p]) =>
@@ -86,10 +91,13 @@ const maps = new Map(
 );
 
 const cells = monthCalendar(key, visits, { maps });
+
 const rows = Math.max(1, cells.length / 7);
+
 const usesMaps = cells.some((c) => c.covers.some((cover) => cover.kind === 'map'));
 
 const newIds = new Set([...places].filter(([, p]) => p.isNew).map(([id]) => id));
+
 const figures = monthFigures(visits, newIds);
 
 const query = monthQuery(aspect);
@@ -274,11 +282,15 @@ const query = monthQuery(aspect);
 	}
 
 	const card = document.querySelector<HTMLElement>('[data-card]');
+
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+
 	const dataEl = document.querySelector('[data-month-data]');
+
 	const data: MonthData = dataEl?.textContent
 		? JSON.parse(dataEl.textContent)
 		: { key: '', counts: {} };
+
 	const toast = makeToast(document.querySelector<HTMLElement>('[data-toast]'));
 
 	// Fit the 1080px artboard into the column; the export keeps its 1080 whatever
@@ -298,6 +310,7 @@ const query = monthQuery(aspect);
 			const n = data.counts[id] ?? 0;
 			tile.classList.toggle('is-on', current);
 			const countEl = tile.querySelector('.picker__count');
+
 			if (countEl) countEl.textContent = n ? `${n} ${n === 1 ? 'meal' : 'meals'}` : '—';
 		},
 	});
@@ -308,11 +321,13 @@ const query = monthQuery(aspect);
 	function abandon(plate: Element | null | undefined): void {
 		const cell = plate?.closest('.cell');
 		plate?.remove();
+
 		if (cell && !cell.querySelector('.plate')) cell.classList.remove('cell--plated', 'cell--stack');
 	}
 
 	for (const img of document.querySelectorAll<HTMLImageElement>('img[data-cover]')) {
 		const drop = () => abandon(img.closest('.plate'));
+
 		if (img.complete && img.naturalWidth === 0) drop();
 		else img.addEventListener('error', drop);
 	}
@@ -340,6 +355,7 @@ const query = monthQuery(aspect);
 	//
 	// The whole thing is lazy: no map covers on this month, no MapLibre.
 	const mapConfig = document.querySelector('[data-map-config]');
+
 	const slots = [...document.querySelectorAll<HTMLElement>('[data-place-map]')];
 
 	// Held so the export can wait for it: a card saved while the maps are still
@@ -362,6 +378,7 @@ const query = monthQuery(aspect);
 			import('maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'),
 			import('../../../lib/map-style'),
 		]);
+
 		maplibregl.setWorkerUrl(workerUrl);
 
 		// THE LABELS COME OFF. menuBasemap sets street and place names for a map
@@ -407,6 +424,7 @@ const query = monthQuery(aspect);
 					map.off(event, done);
 					resolve();
 				};
+
 				const timer = setTimeout(done, 6000);
 				map.on(event, done);
 			});
@@ -414,13 +432,16 @@ const query = monthQuery(aspect);
 		try {
 			await settled('load');
 			let drawn = 0;
+
 			for (const slot of slots) {
 				const lat = Number(slot.dataset.lat);
 				const lng = Number(slot.dataset.lng);
+
 				if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
 					abandon(slot.closest('.plate'));
 					continue;
 				}
+
 				map.jumpTo({ center: [lng, lat], zoom });
 				await settled('idle');
 				const shot = document.createElement('img');
@@ -430,6 +451,7 @@ const query = monthQuery(aspect);
 				slot.replaceWith(shot);
 				drawn++;
 			}
+
 			if (drawn === 0) document.querySelector('[data-map-credit]')?.remove();
 		} finally {
 			map.remove();

@@ -20,10 +20,13 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const yearParam = Astro.url.searchParams.get('year');
+
 const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
+
 const net = await getFilmCreditNetwork(scope);
 
 const href = (key: number | 'all') => (key === 'all' ? '/projects/film-credit-network' : `/projects/film-credit-network?year=${key}`);
+
 const graphJson = net.graph ? JSON.stringify(net.graph).replace(/</g, '\\u003c') : null;
 ---
 
@@ -602,6 +605,7 @@ const graphJson = net.graph ? JSON.stringify(net.graph).replace(/</g, '\\u003c')
 			// Close the year picker on an outside click (native <details> only toggles
 			// on its summary).
 			const picker = document.querySelector('.picker');
+
 			if (picker) {
 				document.addEventListener('mousedown', (e) => {
 					if (picker.hasAttribute('open') && !picker.contains(e.target as Node)) {

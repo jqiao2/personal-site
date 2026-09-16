@@ -66,6 +66,7 @@ interface MatchBody {
 function text(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t.length > 0 ? t : null;
 }
 
@@ -73,6 +74,7 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: Record<string, unknown>;
+
 	try {
 		body = (await request.json()) as Record<string, unknown>;
 	} catch {
@@ -80,13 +82,16 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const id = Number(body.id);
+
 	if (!Number.isInteger(id) || id <= 0) return apiError('id is required', 400);
 
 	const action = String(body.action ?? '') as Action;
+
 	if (!ACTIONS.includes(action)) return apiError(`action must be one of ${ACTIONS.join(', ')}`, 400);
 
 	// Owner view: a private book is still patchable by the person hiding it.
 	const book = await getBook(id, true);
+
 	if (!book) return apiError('book not found', 404);
 
 	const now = new Date().toISOString();
@@ -103,10 +108,12 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				// sort above everything and describe a decision not yet made.
 				const restore = text(body.addedAt);
 				const parsed = restore ? Date.parse(restore) : NaN;
+
 				const addedAt =
 					!book.added_at && Number.isFinite(parsed) && parsed <= Date.now()
 						? new Date(parsed).toISOString()
 						: now;
+
 				await updateBook(id, { added_at: book.added_at ? null : addedAt });
 				break;
 			}
@@ -148,15 +155,18 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 
 			case 'merge': {
 				const sourceId = Number(body.sourceId);
+
 				if (!Number.isInteger(sourceId) || sourceId <= 0) {
 					return apiError('sourceId is required', 400);
 				}
+
 				if (sourceId === id) return apiError('cannot merge a book into itself', 400);
 
 				// Owner view: the source is a row the sync created and may well be
 				// private. A missing one means the page is stale, not that anything is
 				// wrong with the request.
 				const source = await getBook(sourceId, true);
+
 				if (!source) return apiError('source book not found', 404);
 
 				await mergeBook(id, sourceId);
@@ -175,12 +185,15 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				// gesture as matching on it.
 				const supplied = text(body.isbn);
 				const isbn = supplied ? supplied.replace(/[^0-9Xx]/g, '').toUpperCase() : book.isbn;
+
 				if (!isbn) return apiError('no ISBN on file for this book', 400);
+
 				if (supplied && isbn.length !== 10 && isbn.length !== 13) {
 					return apiError('an ISBN is 10 or 13 digits', 400);
 				}
 
 				let edition;
+
 				try {
 					edition = await lookupIsbn(isbn);
 				} catch (e) {
@@ -193,6 +206,7 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 					// failed was the lookup, and the message says so rather than implying
 					// the ISBN was rejected.
 					if (supplied && isbn !== book.isbn) await updateBook(id, { isbn });
+
 					return apiError('Open Library has no record of that ISBN', 404);
 				}
 
@@ -221,6 +235,7 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 			case 'match': {
 				const m = body as MatchBody;
 				const olKey = text(m.olKey);
+
 				if (!olKey) return apiError('olKey is required', 400);
 
 				// The blurb and subjects need a second request — search returns
@@ -228,6 +243,7 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 				// match: cover, page count and year are already in hand, and the page
 				// renders the absences as omissions.
 				let work = { description: [] as string[], genres: [] as string[], kind: null as string | null, firstPublished: null as string | null };
+
 				try {
 					work = await getWork(olKey);
 				} catch {

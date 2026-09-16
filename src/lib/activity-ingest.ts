@@ -21,6 +21,7 @@ import type { AthleteThresholds } from './activities';
 import type { Thresholds } from './exertion';
 
 export const FIVE_MINUTES = 5 * 60 * 1000;
+
 // A device file (Garmin/Wahoo FIT, or a per-activity GPX export) is what the
 // device recorded — above strava_archive's 80 and strava_api's 80, so a FIT
 // dropped later still wins a dedupe against the same ride pulled from Strava.
@@ -34,10 +35,12 @@ const FILE_FIDELITY = 90;
  *  "last row whose effective_from is on or before the day" rule. */
 export function thresholdsFrom(rows: AthleteThresholds[], date: string): Thresholds {
 	let inForce: AthleteThresholds | null = null;
+
 	for (const r of rows) {
 		if (r.effective_from <= date) inForce = r;
 		else break;
 	}
+
 	return {
 		ftp_w: inForce?.ftp_w ?? null,
 		lthr_bpm: inForce?.lthr_bpm ?? null,
@@ -59,29 +62,38 @@ export async function insertActivity(
 	source: Record<string, unknown>,
 ): Promise<number> {
 	const { data, error } = await supabaseAdmin.from('activities').insert(activity).select('id').single();
+
 	if (error) throw new Error(`insert activities: ${error.message}`);
 	const id = data.id as number;
+
 	try {
 		const { error: es } = await supabaseAdmin.from('activity_sources').insert({ ...source, activity_id: id });
+
 		if (es) throw new Error(`insert activity_sources: ${es.message}`);
+
 		if (streams) {
 			const { error: e2 } = await supabaseAdmin.from('activity_streams').insert({ activity_id: id, ...streams });
+
 			if (e2) throw new Error(`insert activity_streams: ${e2.message}`);
 		}
+
 		if (laps.length) {
 			const { error: e3 } = await supabaseAdmin.from('activity_laps').insert(laps.map((l) => ({ ...l, activity_id: id })));
+
 			if (e3) throw new Error(`insert activity_laps: ${e3.message}`);
 		}
 	} catch (err) {
 		await supabaseAdmin.from('activities').delete().eq('id', id);
 		throw err;
 	}
+
 	return id;
 }
 
 export async function bumpGearDistance(gearId: number, distanceM: number | null | undefined): Promise<void> {
 	if (!distanceM) return;
 	const { data } = await supabaseAdmin.from('activity_gear').select('distance_m').eq('id', gearId).maybeSingle();
+
 	if (!data) return;
 	const next = Math.max(0, (data.distance_m ?? 0) + distanceM);
 	await supabaseAdmin.from('activity_gear').update({ distance_m: next, updated_at: new Date().toISOString() }).eq('id', gearId);
@@ -128,11 +140,16 @@ export interface GearRow {
  *  after a July shoe change is not credited to the pair that replaced them. */
 export function defaultGearFor(sport: Sport, date: string, gear: GearRow[]): GearRow | { out: string } | null {
 	const name = DEFAULT_GEAR[sport];
+
 	if (!name) return null;
 	const g = gear.find((r) => r.name.toLowerCase() === name.toLowerCase());
+
 	if (!g) return { out: `no gear named ${name}` };
+
 	if (g.first_used_on && date < g.first_used_on) return { out: `${g.name} was not in service on ${date}` };
+
 	if (g.retired_at && date >= g.retired_at.slice(0, 10)) return { out: `${g.name} was retired by ${date}` };
+
 	return g;
 }
 
@@ -150,6 +167,7 @@ export function isParseable(filename: string): boolean {
  *  auth.ts for the same choice). Vercel's runtime has DecompressionStream. */
 async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
 	const stream = new Response(new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip')));
+
 	return new Uint8Array(await stream.arrayBuffer());
 }
 
@@ -157,6 +175,7 @@ async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
  *  node's createHash, so a file imported both ways dedupes on one checksum. */
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
 	const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
+
 	return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
@@ -177,17 +196,22 @@ async function parseBuffer(
 
 	if (kind === 'fit') {
 		const sessions = parseFitSessions(buf, opts);
+
 		if (!sessions.length) return { skip: 'not a FIT file, or no session in it' };
+
 		// A multisport recording (a triathlon: swim/T1/bike/T2/run in one file)
 		// needs §5's parent_id/leg structure that only the archive importer
 		// builds. One uploaded triathlon is not worth a second copy of it.
 		if (sessions.length > 1) return { skip: `${sessions.length} sessions (multisport) — use the archive importer` };
+
 		return { canonical: sessions[0] };
 	}
 
 	const xml = new TextDecoder('utf-8').decode(buf);
 	const canonical = kind === 'gpx' ? parseGpx(xml, opts) : parseTcx(xml, opts);
+
 	if (!canonical) return { skip: 'no trackpoints with a clock' };
+
 	return { canonical };
 }
 
@@ -206,16 +230,20 @@ async function alreadyStored(checksum: string, canonical: CanonicalActivity): Pr
 		.eq('file_checksum', checksum)
 		.limit(1)
 		.maybeSingle();
+
 	if (bySum) return `this exact file is activity ${bySum.activity_id}`;
 
 	const t = Date.parse(canonical.started_at);
+
 	const { data: near } = await supabaseAdmin
 		.from('activities')
 		.select('id, sport, started_at')
 		.gte('started_at', new Date(t - FIVE_MINUTES).toISOString())
 		.lte('started_at', new Date(t + FIVE_MINUTES).toISOString())
 		.is('deleted_at', null);
+
 	const match = (near ?? []).find((a) => a.sport === canonical.sport);
+
 	return match ? `activity ${match.id} starts within 5 min` : null;
 }
 
@@ -272,16 +300,19 @@ export async function ingestFiles(files: UploadFile[], opts: UploadOptions = {})
 		.from('athlete_thresholds')
 		.select('*')
 		.order('effective_from', { ascending: true });
+
 	const thresholds = (thresholdRows ?? []) as AthleteThresholds[];
 
 	const { data: gearData } = opts.noGear
 		? { data: [] }
 		: await supabaseAdmin.from('activity_gear').select('id, name, first_used_on, retired_at');
+
 	const gear = (gearData ?? []) as GearRow[];
 
 	const forcedGear = opts.gearName
 		? gear.find((g) => g.name.toLowerCase() === opts.gearName!.toLowerCase()) ?? null
 		: null;
+
 	if (opts.gearName && !forcedGear) {
 		// A named gear that matches nothing is the owner's mistake, not a per-file
 		// one — fail the whole batch loudly rather than silently tag nothing.
@@ -295,6 +326,7 @@ export async function ingestFiles(files: UploadFile[], opts: UploadOptions = {})
 		};
 
 		let parsed: { canonical: CanonicalActivity } | { skip: string };
+
 		try {
 			parsed = await parseBuffer(file.bytes, file.name, opts.sport);
 		} catch (err) {
@@ -304,6 +336,7 @@ export async function ingestFiles(files: UploadFile[], opts: UploadOptions = {})
 			} else {
 				push('failed', err instanceof Error ? err.message : String(err));
 			}
+
 			continue;
 		}
 
@@ -313,9 +346,11 @@ export async function ingestFiles(files: UploadFile[], opts: UploadOptions = {})
 		}
 
 		const canonical = virtualizeGpslessRide(parsed.canonical);
+
 		try {
 			const checksum = await sha256Hex(file.bytes);
 			const dup = await alreadyStored(checksum, canonical);
+
 			if (dup) {
 				push('duplicate', dup);
 				continue;
@@ -325,8 +360,10 @@ export async function ingestFiles(files: UploadFile[], opts: UploadOptions = {})
 			const { activity, streams, laps } = toRows(canonical, thresholdsFrom(thresholds, date));
 
 			let gearNote = '';
+
 			if (!opts.noGear) {
 				const g = forcedGear ?? defaultGearFor(canonical.sport, date, gear);
+
 				if (g && 'id' in g) {
 					activity.gear_id = g.id;
 					gearNote = `, on ${g.name}`;
@@ -341,6 +378,7 @@ export async function ingestFiles(files: UploadFile[], opts: UploadOptions = {})
 				file_checksum: checksum,
 				fidelity: FILE_FIDELITY,
 			});
+
 			if (activity.gear_id) await bumpGearDistance(activity.gear_id as number, activity.distance_m as number);
 
 			const km = ((canonical.distance_m ?? 0) / 1000).toFixed(1);

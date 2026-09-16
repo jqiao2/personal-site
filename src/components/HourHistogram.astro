@@ -23,11 +23,13 @@ interface Props {
 const { hours, size, scale = 1, title = '', fallback } = Astro.props;
 
 const chart = buildHistogram({ hours, size, scale, fallback });
+
 const { geom } = chart;
 
 // Only a title puts a header on the chart. `mini` never has one: on the card the
 // band's own heading sits above it.
 const showHeader = size !== 'mini' && !!title;
+
 const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 ---
 
@@ -187,6 +189,7 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 		const plot = root.querySelector<HTMLElement>('[data-hours-plot]');
 		const tip = root.querySelector<HTMLElement>('[data-hours-tip]');
 		const cols = Array.from(root.querySelectorAll<HTMLElement>('.hours__col'));
+
 		if (!plot || !tip || cols.length === 0) return;
 
 		let shown = -1;
@@ -200,8 +203,10 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 
 		const move = (clientX: number) => {
 			const r = plot.getBoundingClientRect();
+
 			if (r.width === 0) return;
 			const i = Math.floor(((clientX - r.left) / r.width) * HOURS);
+
 			if (i < 0 || i >= HOURS || i === shown) return;
 			cols[shown]?.removeAttribute('data-on');
 			shown = i;

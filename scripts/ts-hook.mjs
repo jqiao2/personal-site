@@ -29,6 +29,7 @@ registerHooks({
 				// a genuinely missing import still reports itself as missing.
 			}
 		}
+
 		return nextResolve(specifier, context);
 	},
 });

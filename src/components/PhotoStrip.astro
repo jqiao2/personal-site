@@ -45,6 +45,7 @@ interface Props {
 }
 
 const { photos } = Astro.props;
+
 const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 
 // A shot is `--shot-h` tall and as wide as its ratio makes it, so the widest
@@ -53,7 +54,9 @@ const when = (p: StripPhoto) => `${shortDate(p.date)} ${p.date.slice(0, 4)}`;
 // sixth of the column, which puts the same photograph near a quarter of the
 // viewport.
 const CAP = 220;
+
 const WIDTHS = photoWidthsFor(CAP);
+
 const SIZES = `(max-width: 560px) 25vw, ${CAP}px`;
 ---
 

@@ -55,14 +55,17 @@ import { timeInZones, POWER_ZONES, HR_ZONES } from '../src/lib/zones.ts';
 	const ftp = 200;
 	const values = [];
 	const time = [];
+
 	for (let i = 0; i < 100; i++) {
 		values.push(ftp * 0.6);
 		time.push(i);
 	}
+
 	for (let i = 0; i < 100; i++) {
 		values.push(ftp * 0.6);
 		time.push(1300 + i); // the jump from 99 → 1300
 	}
+
 	const bins = timeInZones(values, time, ftp, POWER_ZONES);
 	const total = bins.reduce((s, b) => s + b.seconds, 0);
 	assert.ok(total < 250, `pause jump capped, total was ${total}s`);
@@ -70,7 +73,9 @@ import { timeInZones, POWER_ZONES, HR_ZONES } from '../src/lib/zones.ts';
 
 // --- guards: no threshold / empty stream → null ----------------------------
 assert.equal(timeInZones([100, 100], [0, 1], 0, POWER_ZONES), null, 'no threshold');
+
 assert.equal(timeInZones([], [], 250, POWER_ZONES), null, 'empty stream');
+
 assert.equal(timeInZones([null, undefined], [0, 1], 250, POWER_ZONES), null, 'all-missing stream');
 
 console.log('zones.test.mjs — all assertions passed');

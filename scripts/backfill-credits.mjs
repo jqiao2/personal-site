@@ -32,17 +32,25 @@
 import { createClient } from '@supabase/supabase-js';
 
 const args = new Set(process.argv.slice(2));
+
 const getArg = (name) => {
 	const hit = [...args].find((a) => a.startsWith(`--${name}=`));
+
 	return hit ? hit.slice(name.length + 3) : undefined;
 };
+
 const FORCE = args.has('--force');
+
 const DRY_RUN = args.has('--dry-run');
+
 const LIMIT = getArg('limit') ? Number.parseInt(getArg('limit'), 10) : Infinity;
 
 const TMDB_KEY = process.env.TMDB_API_KEY;
+
 const SB_URL = process.env.SUPABASE_URL;
+
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!TMDB_KEY || !SB_URL || !SB_KEY) {
 	console.error('Missing env: TMDB_API_KEY, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.');
 	console.error('Run with:  node --env-file=.env scripts/backfill-credits.mjs');
@@ -50,7 +58,9 @@ if (!TMDB_KEY || !SB_URL || !SB_KEY) {
 }
 
 const CONCURRENCY = 8;
+
 const TOP_CAST = 10;
+
 const supabase = createClient(SB_URL, SB_KEY, {
 	auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -62,19 +72,24 @@ async function fetchDetails(tmdbId) {
 	const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`);
 	url.searchParams.set('api_key', TMDB_KEY);
 	url.searchParams.set('append_to_response', 'credits,release_dates');
+
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const res = await fetch(url, { headers: { accept: 'application/json' } });
+
 		if (res.status === 429) {
 			const retry = Number.parseInt(res.headers.get('retry-after') || '1', 10);
 			await sleep((Number.isFinite(retry) ? retry : 1) * 1000 + 250);
 			continue;
 		}
+
 		if (!res.ok) {
 			const body = await res.text().catch(() => '');
 			throw new Error(`TMDB ${tmdbId} -> ${res.status} ${body.slice(0, 200)}`);
 		}
+
 		return res.json();
 	}
+
 	throw new Error(`TMDB ${tmdbId} rate-limited after retries`);
 }
 
@@ -82,13 +97,16 @@ async function fetchDetails(tmdbId) {
 function uniq(names) {
 	const seen = new Set();
 	const out = [];
+
 	for (const raw of names) {
 		const name = typeof raw === 'string' ? raw.trim() : '';
+
 		if (name && !seen.has(name)) {
 			seen.add(name);
 			out.push(name);
 		}
 	}
+
 	return out;
 }
 
@@ -105,19 +123,23 @@ const LANGUAGE_NAMES = {
 
 function originalLanguageName(d) {
 	const code = d.original_language;
+
 	if (!code) return null;
 	const spoken = (d.spoken_languages ?? []).find((l) => l.iso_639_1 === code);
+
 	return spoken?.english_name || spoken?.name || LANGUAGE_NAMES[code] || code.toUpperCase();
 }
 
 function usCertification(d) {
 	const us = (d.release_dates?.results ?? []).find((r) => r.iso_3166_1 === 'US');
 	const cert = (us?.release_dates ?? []).map((r) => (r.certification || '').trim()).find((c) => c);
+
 	return cert || null;
 }
 
 /** TMDB release_dates `type` codes (mirror of RELEASE_TYPE in src/lib/tmdb.ts). */
 const RELEASE_TYPE = { PREMIERE: 1, THEATRICAL_LIMITED: 2, THEATRICAL: 3, DIGITAL: 4 };
+
 /** Types that count as the film opening to the public, compared by date not rank. */
 const OPENING_TYPES = [RELEASE_TYPE.THEATRICAL, RELEASE_TYPE.THEATRICAL_LIMITED, RELEASE_TYPE.DIGITAL];
 
@@ -135,6 +157,7 @@ function releaseDatesDay(iso) {
  * reject so Postgres gets null. */
 function preferredReleaseDate(d) {
 	const results = d.release_dates?.results ?? [];
+
 	const earliestOfTypes = (entries, types) =>
 		entries
 			.filter((e) => types.includes(e.type))
@@ -144,6 +167,7 @@ function preferredReleaseDate(d) {
 
 	const us = results.find((r) => r.iso_3166_1 === 'US')?.release_dates ?? [];
 	const anywhere = results.flatMap((r) => r.release_dates);
+
 	return (
 		earliestOfTypes(us, OPENING_TYPES) ??
 		earliestOfTypes(us, [RELEASE_TYPE.PREMIERE]) ??
@@ -164,6 +188,7 @@ function premiereDate(d) {
 			.map((e) => releaseDatesDay(e.release_date))
 			.filter((x) => x != null)
 			.sort()[0] ?? null;
+
 	return day ?? (/^\d{4}-\d{2}-\d{2}$/.test(d.release_date ?? '') ? d.release_date : null);
 }
 
@@ -173,6 +198,7 @@ function premiereDate(d) {
  * because that's the year YTS files films under; see premiereDate() above. */
 function extractFacts(d) {
 	const releasedOn = preferredReleaseDate(d);
+
 	return {
 		release_date: releasedOn,
 		release_year: releasedOn ? Number.parseInt(releasedOn.slice(0, 4), 10) : null,
@@ -193,17 +219,21 @@ const COLUMNS = 'id, tmdb_id, title, credits_synced_at, release_date, premiere_d
 async function loadMoviesVia(table, orderBy) {
 	const PAGE = 1000;
 	const out = [];
+
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabase
 			.from(table)
 			.select(`movies!inner(${COLUMNS})`)
 			.order(orderBy, { ascending: false })
 			.range(offset, offset + PAGE - 1);
+
 		if (error) throw new Error(`load ${table} failed: ${error.message}`);
 		const rows = (data ?? []).map((r) => r.movies);
 		out.push(...rows);
+
 		if (rows.length < PAGE) break;
 	}
+
 	return out;
 }
 
@@ -214,8 +244,11 @@ async function loadMovies() {
 		loadMoviesVia('watched', 'first_watched'),
 		loadMoviesVia('watchlist', 'added_at'),
 	]);
+
 	const byId = new Map();
+
 	for (const m of [...watched, ...watchlist]) byId.set(m.id, m);
+
 	return { movies: [...byId.values()], watched: watched.length, watchlist: watchlist.length };
 }
 
@@ -234,17 +267,21 @@ function needsSync(m) {
 async function main() {
 	console.log(`Loading watched + watchlist films${DRY_RUN ? ' (dry run)' : ''}…`);
 	const { movies: all, watched, watchlist } = await loadMovies();
+
 	const todo = (FORCE ? all : all.filter(needsSync)).slice(
 		0,
 		Number.isFinite(LIMIT) ? LIMIT : all.length,
 	);
+
 	console.log(
 		`${all.length} films (${watched} watched, ${watchlist} watchlisted); ` +
 			`${todo.length} to sync${FORCE ? ' (forced)' : ''}` +
 			(Number.isFinite(LIMIT) ? ` (limited to ${LIMIT})` : ''),
 	);
+
 	if (todo.length === 0) {
 		console.log('Nothing to do — every film already has credits.');
+
 		return;
 	}
 
@@ -255,38 +292,50 @@ async function main() {
 
 	// Simple fixed-size worker pool over the todo queue.
 	const queue = todo.slice();
+
 	async function worker() {
 		for (;;) {
 			const movie = queue.shift();
+
 			if (!movie) return;
+
 			try {
 				const details = await fetchDetails(movie.tmdb_id);
 				const facts = extractFacts(details);
+
 				if (!DRY_RUN) {
 					const { error } = await supabase
 						.from('movies')
 						.update({ ...facts, credits_synced_at: now() })
 						.eq('id', movie.id);
+
 					if (error) throw new Error(error.message);
 				}
+
 				done++;
 			} catch (e) {
 				failed++;
 				failures.push({ tmdb_id: movie.tmdb_id, title: movie.title, error: String(e.message || e) });
 			}
+
 			const n = done + failed;
+
 			if (n % 25 === 0 || n === todo.length) {
 				process.stdout.write(`\r  ${n}/${todo.length} (${failed} failed)   `);
 			}
 		}
 	}
+
 	await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 	process.stdout.write('\n');
 
 	console.log(`Done. Synced ${done}, failed ${failed}.`);
+
 	if (failures.length) {
 		console.log('Failures:');
+
 		for (const f of failures.slice(0, 40)) console.log(`  ${f.tmdb_id} ${f.title}: ${f.error}`);
+
 		if (failures.length > 40) console.log(`  …and ${failures.length - 40} more`);
 	}
 }

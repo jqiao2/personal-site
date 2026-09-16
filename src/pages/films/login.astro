@@ -66,17 +66,21 @@ if (await requireOwner(Astro.cookies)) return Astro.redirect('/films/new');
 
 <script>
 	const form = document.getElementById('loginform') as HTMLFormElement;
+
 	const pw = document.getElementById('password') as HTMLInputElement;
+
 	const err = document.getElementById('err') as HTMLParagraphElement;
 
 	form.addEventListener('submit', async (e) => {
 		e.preventDefault();
 		err.hidden = true;
+
 		const res = await fetch('/api/auth/login', {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ password: pw.value }),
 		});
+
 		if (res.ok) {
 			const params = new URLSearchParams(window.location.search);
 			window.location.href = params.get('redirect') || '/films/new';

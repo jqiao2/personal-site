@@ -17,6 +17,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 const DRY_RUN = process.argv.includes('--dry-run');
+
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
 	auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -69,8 +70,11 @@ const STANDALONE_MEDIUMS = { plane: 'plane' };
 // Combine multiple format tags on one viewing into a single canonical format.
 function canonFormat(fmts) {
 	const set = new Set(fmts);
+
 	if (set.has('IMAX') && set.has('70mm')) return 'IMAX 70mm';
+
 	if (set.has('IMAX') && set.has('3D')) return 'IMAX 3D';
+
 	return fmts[0] ?? null;
 }
 
@@ -80,6 +84,7 @@ const venueKey = (t) => `${t.name}||${t.city ?? ''}`;
 async function loadLogs() {
 	const PAGE = 1000;
 	const out = [];
+
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await sb
 			.from('logs')
@@ -87,10 +92,13 @@ async function loadLogs() {
 			.is('deleted_at', null)
 			.order('id', { ascending: true })
 			.range(offset, offset + PAGE - 1);
+
 		if (error) throw error;
 		out.push(...data);
+
 		if (data.length < PAGE) break;
 	}
+
 	return out;
 }
 
@@ -111,10 +119,12 @@ async function main() {
 			alreadyDone++;
 			continue; // idempotent: skip already-backfilled logs
 		}
+
 		const tagEntries = (l.log_tags ?? []).map((lt) => ({
 			id: lt.tag_id,
 			name: lt.tags?.name ?? '',
 		}));
+
 		const names = tagEntries.map((t) => t.name);
 
 		const venueTags = tagEntries.filter((t) => THEATERS[t.name]);
@@ -128,16 +138,20 @@ async function main() {
 
 		if (isTheater) {
 			medium = 'theater';
+
 			if (venueTags.length > 1) multiVenue.push({ logId: l.id, venues: venueTags.map((t) => t.name) });
+
 			if (venueTags[0]) {
 				venue = THEATERS[venueTags[0].name];
 				usedTheaters.set(venueKey(venue), venue);
 			}
+
 			const fmts = formatTags.map((t) => FORMATS[t.name]);
 			// A theater screening with no special format tag defaults to "Digital"
 			// (a standard digital projection).
 			format = canonFormat(fmts) ?? 'Digital';
 			usedFormats.add(format);
+
 			// consume the "theater" tag + venue tags + format tags
 			for (const t of tagEntries) {
 				if (t.name === 'theater' || THEATERS[t.name] || FORMATS[t.name]) consume.push(t.id);
@@ -145,6 +159,7 @@ async function main() {
 		} else if (STANDALONE_MEDIUMS[names.find((n) => STANDALONE_MEDIUMS[n])]) {
 			const key = names.find((n) => STANDALONE_MEDIUMS[n]);
 			medium = STANDALONE_MEDIUMS[key];
+
 			for (const t of tagEntries) if (t.name === key) consume.push(t.id);
 		} else {
 			continue; // no medium info on this log
@@ -159,47 +174,61 @@ async function main() {
 	console.log(`  plane:   ${plans.filter((p) => p.medium === 'plane').length}`);
 	console.log(`  bike:    ${plans.filter((p) => p.medium === 'bike').length}`);
 	console.log(`distinct theaters: ${usedTheaters.size} | distinct formats: ${usedFormats.size}`);
+
 	if (multiVenue.length) {
 		console.log(`\n⚠ logs with >1 venue tag (used the first; review):`);
+
 		for (const m of multiVenue) console.log(`   log ${m.logId}: [${m.venues.join(', ')}]`);
 	}
 
 	if (DRY_RUN) {
 		console.log('\nSample plans:');
+
 		for (const p of plans.slice(0, 8)) console.log('  ', JSON.stringify(p));
 		console.log('\n--dry-run: no writes.');
+
 		return;
 	}
 
 	// --- seed theaters + formats, map to ids ---
 	const theaterRows = [...usedTheaters.values()];
+
 	if (theaterRows.length) {
 		const { error } = await sb.from('theaters').upsert(theaterRows, { onConflict: 'name,city' });
+
 		if (error) throw new Error(`theaters upsert: ${error.message}`);
 	}
+
 	const formatRows = [...usedFormats].map((name) => ({ name }));
+
 	if (formatRows.length) {
 		const { error } = await sb.from('formats').upsert(formatRows, { onConflict: 'name' });
+
 		if (error) throw new Error(`formats upsert: ${error.message}`);
 	}
 
 	const { data: thData, error: thErr } = await sb.from('theaters').select('id, name, city');
+
 	if (thErr) throw thErr;
 	const theaterId = new Map(thData.map((t) => [`${t.name}||${t.city ?? ''}`, t.id]));
 	const { data: fmData, error: fmErr } = await sb.from('formats').select('id, name');
+
 	if (fmErr) throw fmErr;
 	const formatId = new Map(fmData.map((f) => [f.name, f.id]));
 
 	// --- update logs + strip consumed tags ---
 	let updated = 0;
 	let linksRemoved = 0;
+
 	for (const p of plans) {
 		const patch = {
 			medium: p.medium,
 			theater_id: p.venue ? (theaterId.get(venueKey(p.venue)) ?? null) : null,
 			format_id: p.format ? (formatId.get(p.format) ?? null) : null,
 		};
+
 		const { error: uErr } = await sb.from('logs').update(patch).eq('id', p.logId);
+
 		if (uErr) throw new Error(`update log ${p.logId}: ${uErr.message}`);
 		updated++;
 
@@ -209,11 +238,14 @@ async function main() {
 				.delete({ count: 'exact' })
 				.eq('log_id', p.logId)
 				.in('tag_id', p.consumeTagIds);
+
 			if (dErr) throw new Error(`strip tags log ${p.logId}: ${dErr.message}`);
 			linksRemoved += count ?? 0;
 		}
+
 		if (updated % 100 === 0) process.stdout.write(`\r  updated ${updated}/${plans.length}`);
 	}
+
 	process.stdout.write(`\r  updated ${updated}/${plans.length}\n`);
 	console.log(`log_tags links removed: ${linksRemoved}`);
 
@@ -224,16 +256,21 @@ async function main() {
 		...Object.keys(THEATERS),
 		...Object.keys(FORMATS),
 	];
+
 	const { data: orphans, error: oErr } = await sb
 		.from('tags')
 		.select('id, name, log_tags(log_id)')
 		.in('name', consumedNames);
+
 	if (oErr) throw oErr;
 	const toDelete = orphans.filter((t) => (t.log_tags ?? []).length === 0).map((t) => t.id);
+
 	if (toDelete.length) {
 		const { error: delErr } = await sb.from('tags').delete().in('id', toDelete);
+
 		if (delErr) throw new Error(`delete orphan tags: ${delErr.message}`);
 	}
+
 	console.log(`orphan tags deleted: ${toDelete.length}`);
 
 	console.log(`\n✓ Backfill complete. logs updated=${updated}`);

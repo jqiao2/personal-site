@@ -58,12 +58,15 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = Astro.params.month ?? '';
+
 const parsed = parseMonthKey(key);
+
 // Anything that isn't a YYYY-MM lands on the current month rather than 404ing —
 // /activities/month is a reasonable thing to type, same convention as /films/month.
 if (!parsed) return Astro.redirect(`/activities/month/${siteDay().slice(0, 7)}`, 302);
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+
 const query = monthQuery(aspect);
 
 // activity_months is the same rollup view listActivitiesForMonth's sibling
@@ -73,27 +76,37 @@ const query = monthQuery(aspect);
 // throwing: a missing/un-migrated view must not 500 this page's picker.
 async function monthCounts(): Promise<Record<string, number>> {
 	const { data, error } = await supabasePublic.from('activity_months').select('month_key, activity_count');
+
 	if (error) return {};
 	const out: Record<string, number> = {};
+
 	for (const row of (data ?? []) as { month_key: string; activity_count: number }[]) {
 		out[row.month_key] = row.activity_count;
 	}
+
 	return out;
 }
 
 const [activities, counts] = await Promise.all([listActivitiesForMonth(key, true), monthCounts()]);
 
 const rows = weekRows(key);
+
 const geometry = geometries(rows);
+
 const initial = geometry[aspect.id];
+
 const cells = buildCells(key, activities);
+
 const summary = summarise(key, activities);
+
 const label = monthLabel(key);
+
 const isEmpty = activities.length === 0;
 
 const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	const monthId = monthKey(parsed.year, i + 1);
 	const count = counts[monthId] ?? 0;
+
 	return {
 		abbr,
 		key: monthId,
@@ -740,6 +753,7 @@ const clientData = JSON.stringify({
 		grid: number;
 		figures: boolean;
 	}
+
 	interface MonthData {
 		key: string;
 		width: number;
@@ -752,8 +766,11 @@ const clientData = JSON.stringify({
 	}
 
 	const dataEl = document.querySelector('[data-month-data]');
+
 	const card = document.querySelector<HTMLElement>('[data-card]');
+
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+
 	if (dataEl?.textContent && card && viewport) {
 		const data = JSON.parse(dataEl.textContent) as MonthData;
 		let aspect = Object.keys(data.geometry).find((id) => data.slugs[id] === data.aspect)!;
@@ -771,10 +788,12 @@ const clientData = JSON.stringify({
 
 		// ---- aspect (client-side geometry swap) ----
 		const dims = document.querySelector<HTMLElement>('[data-dims]');
+
 		for (const button of document.querySelectorAll<HTMLElement>('[data-aspect]')) {
 			button.addEventListener('click', () => {
 				const id = button.dataset.aspect;
 				const geometry = id ? data.geometry[id] : undefined;
+
 				if (!id || !geometry) return;
 				aspect = id;
 				card.style.setProperty('--cell', `${geometry.cell}px`);
@@ -782,12 +801,15 @@ const clientData = JSON.stringify({
 				card.style.setProperty('--grid-w', `${geometry.grid}px`);
 				viewport.style.setProperty('--card-h', `${geometry.height}px`);
 				card.classList.toggle('card--figures', geometry.figures);
+
 				if (dims) dims.textContent = `${data.width} × ${geometry.height} · ${id}`;
+
 				for (const other of document.querySelectorAll('[data-aspect]'))
 					other.classList.toggle('is-on', other === button);
 				syncMonthLinks(query);
 			});
 		}
+
 		// The viewport sizes itself from --card-h too; seed it from the card's own.
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 
@@ -800,6 +822,7 @@ const clientData = JSON.stringify({
 				const count = data.counts[id] ?? 0;
 				tile.classList.toggle('is-on', current);
 				const countEl = tile.querySelector('.picker__count');
+
 				if (countEl)
 					countEl.textContent = count
 						? `${count} ${count === 1 ? 'activity' : 'activities'}`
@@ -833,10 +856,12 @@ const clientData = JSON.stringify({
 		// element repositioned over whichever cell is under the pointer, entirely
 		// outside the artboard that gets rasterised.
 		const tip = document.querySelector<HTMLElement>('[data-tip]');
+
 		for (const cell of document.querySelectorAll<HTMLElement>('[data-lines]')) {
 			cell.addEventListener('mouseenter', () => {
 				if (!tip) return;
 				const lines = (cell.dataset.lines ?? '').split('\n').filter(Boolean);
+
 				if (lines.length < 2) return;
 				tip.innerHTML = lines.map((l) => `<div>${l.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>`).join('');
 				const rect = cell.getBoundingClientRect();

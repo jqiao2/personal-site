@@ -14,9 +14,11 @@ import { PHOTO_WIDTHS } from './src/lib/photo-src.ts';
 // Astro has populated `import.meta.env`, and it reads .env files and the real
 // environment both — which is what makes this work locally and on Vercel.
 const { R2_PUBLIC_URL } = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '');
+
 if (!R2_PUBLIC_URL) {
 	throw new Error('R2_PUBLIC_URL is not set — the image optimiser needs the photo bucket’s hostname');
 }
+
 const photoHost = new URL(R2_PUBLIC_URL).hostname;
 
 // The site is static by default; individual routes that need a server

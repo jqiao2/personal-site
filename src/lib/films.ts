@@ -38,6 +38,7 @@ export interface MovieRow {
 function isMissingCreditColumn(err: { code?: string; message?: string } | null): boolean {
 	if (!err) return false;
 	const msg = (err.message ?? '').toLowerCase();
+
 	return (
 		err.code === '42703' || // undefined_column
 		err.code === 'PGRST204' || // column not found in schema cache
@@ -58,6 +59,7 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const releasedOn = preferredReleaseDate(d);
 	const premieredOn = premiereDate(d);
 	const now = new Date().toISOString();
+
 	const base = {
 		tmdb_id: d.id,
 		title: d.title,
@@ -68,6 +70,7 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		runtime: d.runtime,
 		last_synced_at: now,
 	};
+
 	// Genre + credit facts for the Stats page (migration 0008), the full release
 	// date the Watchlist's upcoming badge needs (0014), and the premiere date the
 	// film page's YTS search is keyed on (0019). The backfill fills these in
@@ -87,19 +90,23 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		mpa_rating: facts.mpaRating,
 		credits_synced_at: now,
 	};
+
 	const upsert = (payload: typeof base | typeof withFacts) =>
 		supabaseAdmin.from('movies').upsert(payload, { onConflict: 'tmdb_id' }).select().single();
 
 	let { data, error } = await upsert(withFacts);
+
 	if (error && isMissingCreditColumn(error)) {
 		({ data, error } = await upsert(base));
 	}
+
 	if (error) throw new Error(`upsert movie ${tmdbId} failed: ${error.message}`);
 	// Fold this film into the credit graph (/projects/film-credit-network) using
 	// the credits already fetched above — free network-wise, and a no-op once the
 	// film is in the corpus. Never throws; a failure just leaves this one film out
 	// of the graph until the next full rebuild.
 	await syncFilmCredits(d);
+
 	return data as MovieRow;
 }
 
@@ -114,11 +121,14 @@ export async function ensureMovieCached(tmdbId: number, forceRefresh = false): P
 		.select('*')
 		.eq('tmdb_id', tmdbId)
 		.maybeSingle();
+
 	if (error) throw new Error(`lookup movie ${tmdbId} failed: ${error.message}`);
 
 	if (existing) {
 		const age = Date.now() - new Date(existing.last_synced_at).getTime();
+
 		if (!forceRefresh && age < STALE_AFTER_MS) return existing as MovieRow;
+
 		// Stale: refresh, but don't fail the whole request if TMDB is momentarily down.
 		try {
 			return await syncMovieFromTmdb(tmdbId);
@@ -126,6 +136,7 @@ export async function ensureMovieCached(tmdbId: number, forceRefresh = false): P
 			return existing as MovieRow;
 		}
 	}
+
 	return syncMovieFromTmdb(tmdbId);
 }
 
@@ -185,6 +196,7 @@ async function markWatched(movie: MovieRow, watchedDate: string | null, today: s
 	// Undated entries fall back to the day it is for the user, not the instant in
 	// UTC — `first_watched` is read as a calendar day (year buckets, "first seen").
 	const firstWatched = `${watchedDate ?? today}T00:00:00Z`;
+
 	const { error } = await supabaseAdmin.from('watched').upsert(
 		{
 			movie_id: movie.id,
@@ -193,6 +205,7 @@ async function markWatched(movie: MovieRow, watchedDate: string | null, today: s
 		},
 		{ onConflict: 'movie_id', ignoreDuplicates: true },
 	);
+
 	if (error) throw new Error(`mark watched failed: ${error.message}`);
 }
 
@@ -216,6 +229,7 @@ async function syncFilmRating(
 ): Promise<void> {
 	if (Object.keys(patch).length === 0) return;
 	const { error } = await supabaseAdmin.from('watched').update(patch).eq('movie_id', movieId);
+
 	if (error) throw new Error(`sync film rating failed: ${error.message}`);
 }
 
@@ -234,7 +248,9 @@ async function isNewestRatedLog(movieId: number, logId: number): Promise<boolean
 		.order('watched_date', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false })
 		.limit(1);
+
 	if (error) throw new Error(`newest rated log lookup failed: ${error.message}`);
+
 	return data?.[0]?.id === logId;
 }
 
@@ -242,6 +258,7 @@ async function isNewestRatedLog(movieId: number, logId: number): Promise<boolean
  * logging/watching a film drops it here so "watched" and "to watch" stay disjoint. */
 async function removeFromWatchlist(movieId: number): Promise<void> {
 	const { error } = await supabaseAdmin.from('watchlist').delete().eq('movie_id', movieId);
+
 	if (error) throw new Error(`remove from watchlist failed: ${error.message}`);
 }
 
@@ -264,35 +281,45 @@ function hasDiaryContent(input: CreateLogInput): boolean {
 export function parseVenue(venue: string): { name: string; city: string | null } {
 	const s = venue.trim();
 	const i = s.lastIndexOf(',');
+
 	if (i === -1) return { name: s, city: null };
 	const name = s.slice(0, i).trim();
 	const city = s.slice(i + 1).trim() || null;
+
 	return { name: name || s, city };
 }
 
 /** Upsert a theater by (name, city) and return its id. */
 async function resolveTheaterId(venue: string): Promise<number | null> {
 	const { name, city } = parseVenue(venue);
+
 	if (!name) return null;
+
 	const { data, error } = await supabaseAdmin
 		.from('theaters')
 		.upsert({ name, city }, { onConflict: 'name,city' })
 		.select('id')
 		.single();
+
 	if (error) throw new Error(`resolve theater failed: ${error.message}`);
+
 	return (data as { id: number }).id;
 }
 
 /** Upsert a format by name and return its id. */
 async function resolveFormatId(format: string): Promise<number | null> {
 	const name = format.trim();
+
 	if (!name) return null;
+
 	const { data, error } = await supabaseAdmin
 		.from('formats')
 		.upsert({ name }, { onConflict: 'name' })
 		.select('id')
 		.single();
+
 	if (error) throw new Error(`resolve format failed: ${error.message}`);
+
 	return (data as { id: number }).id;
 }
 
@@ -345,12 +372,15 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 		})
 		.select('id')
 		.single();
+
 	if (error) throw new Error(`insert log failed: ${error.message}`);
 
 	const tags = normalizeTags(input.tags);
+
 	if (tags.length > 0) await attachTags(log.id, tags);
 
 	const friends = normalizeFriends(input.friends);
+
 	if (friends.length > 0) await attachFriends(log.id, friends);
 
 	// A new entry is the newest opinion of the film, so it sets the film-level
@@ -366,10 +396,13 @@ export async function logFilm(input: CreateLogInput): Promise<LogFilmResult> {
 function normalizeTags(tags: string[] | undefined): string[] {
 	if (!tags) return [];
 	const seen = new Set<string>();
+
 	for (const raw of tags) {
 		const name = raw.trim().toLowerCase();
+
 		if (name) seen.add(name);
 	}
+
 	return [...seen];
 }
 
@@ -382,18 +415,22 @@ async function attachTags(logId: number, names: string[]): Promise<void> {
 			{ onConflict: 'name' },
 		)
 		.select('id');
+
 	if (tagErr) throw new Error(`upsert tags failed: ${tagErr.message}`);
 
 	const links = (tagRows as { id: number }[]).map((t) => ({ log_id: logId, tag_id: t.id }));
 	const { error: linkErr } = await supabaseAdmin.from('log_tags').insert(links);
+
 	if (linkErr) throw new Error(`link tags failed: ${linkErr.message}`);
 }
 
 /** Replace a log's entire tag set: drop the existing links, attach the new names. */
 async function replaceTags(logId: number, names: string[] | undefined): Promise<void> {
 	const { error } = await supabaseAdmin.from('log_tags').delete().eq('log_id', logId);
+
 	if (error) throw new Error(`clear tags failed: ${error.message}`);
 	const norm = normalizeTags(names);
+
 	if (norm.length > 0) await attachTags(logId, norm);
 }
 
@@ -405,10 +442,13 @@ async function replaceTags(logId: number, names: string[] | undefined): Promise<
 function normalizeFriends(friends: string[] | undefined): string[] {
 	if (!friends) return [];
 	const byKey = new Map<string, string>();
+
 	for (const raw of friends) {
 		const name = raw.trim();
+
 		if (name && !byKey.has(name.toLowerCase())) byKey.set(name.toLowerCase(), name);
 	}
+
 	return [...byKey.values()];
 }
 
@@ -420,20 +460,25 @@ function normalizeFriends(friends: string[] | undefined): string[] {
  */
 async function resolveFriendIds(names: string[]): Promise<number[]> {
 	const { data: existing, error: readErr } = await supabaseAdmin.from('friends').select('id, name');
+
 	if (readErr) throw new Error(`lookup friends failed: ${readErr.message}`);
 
 	const idByKey = new Map<string, number>();
+
 	for (const f of (existing ?? []) as { id: number; name: string }[]) {
 		idByKey.set(f.name.trim().toLowerCase(), f.id);
 	}
 
 	const missing = names.filter((n) => !idByKey.has(n.toLowerCase()));
+
 	if (missing.length > 0) {
 		const { data: inserted, error: insErr } = await supabaseAdmin
 			.from('friends')
 			.insert(missing.map((name) => ({ name })))
 			.select('id, name');
+
 		if (insErr) throw new Error(`create friends failed: ${insErr.message}`);
+
 		for (const f of (inserted ?? []) as { id: number; name: string }[]) {
 			idByKey.set(f.name.trim().toLowerCase(), f.id);
 		}
@@ -445,17 +490,21 @@ async function resolveFriendIds(names: string[]): Promise<number[]> {
 /** Link friend names to a log, creating any that don't exist yet. */
 async function attachFriends(logId: number, names: string[]): Promise<void> {
 	const ids = await resolveFriendIds(names);
+
 	if (ids.length === 0) return;
 	const links = ids.map((friend_id) => ({ log_id: logId, friend_id }));
 	const { error } = await supabaseAdmin.from('log_friends').insert(links);
+
 	if (error) throw new Error(`link friends failed: ${error.message}`);
 }
 
 /** Replace a log's entire friend set: drop the existing links, attach the new names. */
 async function replaceFriends(logId: number, names: string[] | undefined): Promise<void> {
 	const { error } = await supabaseAdmin.from('log_friends').delete().eq('log_id', logId);
+
 	if (error) throw new Error(`clear friends failed: ${error.message}`);
 	const norm = normalizeFriends(names);
+
 	if (norm.length > 0) await attachFriends(logId, norm);
 }
 
@@ -468,12 +517,19 @@ async function replaceFriends(logId: number, names: string[] | undefined): Promi
  */
 export async function updateLog(id: number, input: UpdateLogInput): Promise<boolean> {
 	const patch: Record<string, unknown> = {};
+
 	if ('rating' in input) patch.rating = input.rating ?? null;
+
 	if ('reviewText' in input) patch.review_text = input.reviewText ?? null;
+
 	if ('privateNote' in input) patch.private_note = input.privateNote ?? null;
+
 	if ('watchedDate' in input) patch.watched_date = input.watchedDate ?? null;
+
 	if ('rewatched' in input) patch.rewatched = input.rewatched ?? false;
+
 	if ('liked' in input) patch.liked = input.liked ?? false;
+
 	if ('medium' in input) {
 		const medium = input.medium?.trim() ? input.medium.trim().toLowerCase() : null;
 		const inTheater = medium === 'theater';
@@ -494,7 +550,9 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 			.is('deleted_at', null)
 			.select('id, movie_id')
 			.maybeSingle();
+
 		if (error) throw new Error(`updateLog failed: ${error.message}`);
+
 		if (!data) return false;
 
 		// Re-rating the film's latest viewing is re-rating the film. Guarded on the
@@ -503,6 +561,7 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 		if ('rating' in input && input.rating != null && (await isNewestRatedLog(data.movie_id, id))) {
 			await syncFilmRating(data.movie_id, { rating: input.rating });
 		}
+
 		if (input.liked) await syncFilmRating(data.movie_id, { liked: true });
 	} else if ('tags' in input || 'friends' in input) {
 		const { data, error } = await supabaseAdmin
@@ -511,12 +570,16 @@ export async function updateLog(id: number, input: UpdateLogInput): Promise<bool
 			.eq('id', id)
 			.is('deleted_at', null)
 			.maybeSingle();
+
 		if (error) throw new Error(`updateLog failed: ${error.message}`);
+
 		if (!data) return false;
 	}
 
 	if ('tags' in input) await replaceTags(id, input.tags);
+
 	if ('friends' in input) await replaceFriends(id, input.friends);
+
 	return true;
 }
 
@@ -592,7 +655,9 @@ export async function listLogs(limit = 1000, offset = 0): Promise<LogListItem[]>
 		.order('created_at', { ascending: false })
 		.order('id', { ascending: false })
 		.range(offset, offset + limit - 1);
+
 	if (error) throw new Error(`listLogs failed: ${error.message}`);
+
 	return (data ?? []) as unknown as LogListItem[];
 }
 
@@ -608,7 +673,9 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		.eq('id', id)
 		.is('deleted_at', null)
 		.maybeSingle();
+
 	if (error) throw new Error(`getLogById failed: ${error.message}`);
+
 	if (!data) return null;
 
 	const row = data as unknown as {
@@ -622,6 +689,7 @@ export async function getLogById(id: number): Promise<LogDetail | null> {
 		movies: LogDetail['movie'];
 		log_tags: { tags: { name: string } }[];
 	};
+
 	return {
 		id: row.id,
 		watched_date: row.watched_date,
@@ -657,6 +725,7 @@ export async function listMonthWatches(key: string): Promise<MonthWatch[]> {
 		.order('watched_date', { ascending: true })
 		.order('created_at', { ascending: true })
 		.order('id', { ascending: true });
+
 	if (error) throw new Error(`listMonthWatches failed: ${error.message}`);
 
 	const rows = (data ?? []) as unknown as {
@@ -709,6 +778,7 @@ export async function listMonthWatches(key: string): Promise<MonthWatch[]> {
 export async function countWatchesByMonth(): Promise<Record<string, number>> {
 	const PAGE = 1000;
 	const counts: Record<string, number> = {};
+
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabasePublic
 			.from('logs')
@@ -717,12 +787,15 @@ export async function countWatchesByMonth(): Promise<Record<string, number>> {
 			.is('deleted_at', null)
 			.order('watched_date', { ascending: true })
 			.range(offset, offset + PAGE - 1);
+
 		if (error) throw new Error(`countWatchesByMonth failed: ${error.message}`);
 		const rows = (data ?? []) as { watched_date: string }[];
+
 		for (const row of rows) {
 			const key = monthOf(row.watched_date);
 			counts[key] = (counts[key] ?? 0) + 1;
 		}
+
 		if (rows.length < PAGE) return counts;
 	}
 }
@@ -736,12 +809,15 @@ export async function listTheaterNames(): Promise<string[]> {
 		.from('theaters')
 		.select('name, city')
 		.order('name', { ascending: true });
+
 	if (error) {
 		if (isMissingCreditColumn(error)) return [];
+
 		// Missing table (relation does not exist) also degrades to empty.
 		if (error.code === '42P01' || (error.message ?? '').includes('does not exist')) return [];
 		throw new Error(`listTheaterNames failed: ${error.message}`);
 	}
+
 	return ((data ?? []) as { name: string; city: string | null }[]).map((t) =>
 		[t.name, t.city].filter(Boolean).join(', '),
 	);
@@ -756,10 +832,12 @@ export async function listTags(): Promise<string[]> {
 		.from('tags')
 		.select('name')
 		.order('name', { ascending: true });
+
 	if (error) {
 		if (isMissingRelation(error)) return [];
 		throw new Error(`listTags failed: ${error.message}`);
 	}
+
 	return ((data ?? []) as { name: string }[]).map((t) => t.name);
 }
 
@@ -771,6 +849,7 @@ export async function listTags(): Promise<string[]> {
 function isMissingRelation(err: { code?: string; message?: string } | null): boolean {
 	if (!err) return false;
 	const msg = (err.message ?? '').toLowerCase();
+
 	return (
 		err.code === '42P01' || // undefined_table
 		err.code === 'PGRST200' || // no such relationship in the schema cache
@@ -787,11 +866,14 @@ function isMissingRelation(err: { code?: string; message?: string } | null): boo
  */
 export async function listFriends(): Promise<string[]> {
 	const { data, error } = await supabasePublic.from('friends').select('name, log_friends(count)');
+
 	if (error) {
 		if (isMissingRelation(error)) return [];
 		throw new Error(`listFriends failed: ${error.message}`);
 	}
+
 	const rows = (data ?? []) as unknown as { name: string; log_friends: { count: number }[] }[];
+
 	return rows
 		.map((f) => ({ name: f.name, count: f.log_friends?.[0]?.count ?? 0 }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'en'))
@@ -807,26 +889,34 @@ export async function listFriends(): Promise<string[]> {
  */
 async function listFriendsForLogs(logIds: number[]): Promise<Map<number, string[]>> {
 	const byLog = new Map<number, string[]>();
+
 	if (logIds.length === 0) return byLog;
+
 	const { data, error } = await supabasePublic
 		.from('log_friends')
 		.select('log_id, friends(name)')
 		.in('log_id', logIds);
+
 	if (error) {
 		if (isMissingRelation(error)) return byLog;
 		throw new Error(`listFriendsForLogs failed: ${error.message}`);
 	}
+
 	for (const lf of (data ?? []) as unknown as {
 		log_id: number;
 		friends: { name: string } | null;
 	}[]) {
 		const name = lf.friends?.name;
+
 		if (!name) continue;
 		const names = byLog.get(lf.log_id);
+
 		if (names) names.push(name);
 		else byLog.set(lf.log_id, [name]);
 	}
+
 	for (const names of byLog.values()) names.sort((a, b) => a.localeCompare(b));
+
 	return byLog;
 }
 
@@ -893,9 +983,11 @@ export async function getDiaryEntry(
 		'id, watched_date, rating, review_text, rewatched, liked, created_at, ' +
 		(includePrivate ? 'private_note, ' : '') +
 		'log_tags(tags(name))';
+
 	const MOVIE_FULL = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path, directors)';
 	const MOVIE_BASE = 'movies(tmdb_id, title, release_year, poster_path, backdrop_path)';
 	const HOW = 'medium, theaters(name, city), formats(name)';
+
 	const tiers = [
 		`${BASE}, ${HOW}, ${MOVIE_FULL}`, // 0010 + 0008
 		`${BASE}, ${MOVIE_FULL}`, // 0008 only (no medium/theater/format)
@@ -904,6 +996,7 @@ export async function getDiaryEntry(
 
 	let data: unknown = null;
 	let lastError: { code?: string; message?: string } | null = null;
+
 	for (const cols of tiers) {
 		const res = await supabasePublic
 			.from('logs')
@@ -911,19 +1004,25 @@ export async function getDiaryEntry(
 			.eq('id', id)
 			.is('deleted_at', null)
 			.maybeSingle();
+
 		if (!res.error) {
 			data = res.data;
 			lastError = null;
 			break;
 		}
+
 		lastError = res.error;
+
 		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
 	}
+
 	// Same graceful step-down as the tiers above, for the newest column: a
 	// database that predates 0052 renders the page without the note rather than
 	// 500ing on it.
 	if (lastError && includePrivate && isMissingCreditColumn(lastError)) return getDiaryEntry(id, false);
+
 	if (lastError) throw new Error(`getDiaryEntry failed: ${lastError.message}`);
+
 	if (!data) return null;
 
 	const row = data as {
@@ -948,9 +1047,11 @@ export async function getDiaryEntry(
 		};
 		log_tags: { tags: { name: string } }[];
 	};
+
 	const theater = embedOne(row.theaters);
 	const format = embedOne(row.formats);
 	const friends = await listFriendsForLog(row.id);
+
 	return {
 		id: row.id,
 		watched_date: row.watched_date,
@@ -988,7 +1089,9 @@ export async function listLogsByMovie(movieId: number): Promise<MovieLog[]> {
 		.is('deleted_at', null)
 		.order('watched_date', { ascending: false, nullsFirst: false })
 		.order('created_at', { ascending: false });
+
 	if (error) throw new Error(`listLogsByMovie failed: ${error.message}`);
+
 	return (data ?? []) as MovieLog[];
 }
 
@@ -1019,11 +1122,13 @@ export interface MovieEntry extends MovieLog {
 export async function listMovieEntries(movieId: number): Promise<MovieEntry[]> {
 	const BASE =
 		'id, watched_date, rating, review_text, rewatched, liked, created_at, log_tags(tags(name))';
+
 	const HOW = 'medium, theaters(name, city), formats(name)';
 	const tiers = [`${BASE}, ${HOW}`, BASE];
 
 	let data: unknown = null;
 	let lastError: { code?: string; message?: string } | null = null;
+
 	for (const cols of tiers) {
 		const res = await supabasePublic
 			.from('logs')
@@ -1032,14 +1137,18 @@ export async function listMovieEntries(movieId: number): Promise<MovieEntry[]> {
 			.is('deleted_at', null)
 			.order('watched_date', { ascending: false, nullsFirst: false })
 			.order('created_at', { ascending: false });
+
 		if (!res.error) {
 			data = res.data;
 			lastError = null;
 			break;
 		}
+
 		lastError = res.error;
+
 		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
 	}
+
 	if (lastError) throw new Error(`listMovieEntries failed: ${lastError.message}`);
 
 	const rows = (data ?? []) as {
@@ -1057,9 +1166,11 @@ export async function listMovieEntries(movieId: number): Promise<MovieEntry[]> {
 	}[];
 
 	const friendsByLog = await listFriendsForLogs(rows.map((r) => r.id));
+
 	return rows.map((row) => {
 		const theater = embedOne(row.theaters);
 		const format = embedOne(row.formats);
+
 		return {
 			id: row.id,
 			watched_date: row.watched_date,
@@ -1100,18 +1211,22 @@ export async function getPriorWatch(tmdbId: number): Promise<PriorWatch> {
 		.select('id, watched(rating, liked, first_watched)')
 		.eq('tmdb_id', tmdbId)
 		.maybeSingle();
+
 	if (error) throw new Error(`getPriorWatch failed: ${error.message}`);
+
 	if (!movie) return NONE;
 
 	const row = movie as unknown as {
 		id: number;
 		watched: WatchedActivity[] | WatchedActivity | null;
 	};
+
 	const filmWatched = Array.isArray(row.watched) ? (row.watched[0] ?? null) : (row.watched ?? null);
 	const logs = await listLogsByMovie(row.id);
 	const mostRecent = logs[0] ?? null;
 
 	if (logs.length === 0 && !filmWatched) return NONE;
+
 	return {
 		watched: true,
 		logCount: logs.length,
@@ -1173,7 +1288,9 @@ export interface FilmByTmdb {
 export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null> {
 	const CORE =
 		'id, tmdb_id, title, release_year, release_date, poster_path, backdrop_path, overview, runtime';
+
 	const W = 'watched(rating, liked, first_watched)';
+
 	// Two independent migration dimensions: the premiere date (0019) and the credit
 	// columns (0008/0009). Walk the credit tiers with premiere_date, then walk them
 	// again without it, so a missing 0019 costs the premiere date rather than the
@@ -1186,17 +1303,23 @@ export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null
 
 	let data: unknown = null;
 	let lastError: { code?: string; message?: string } | null = null;
+
 	for (const cols of tiers) {
 		const res = await supabasePublic.from('movies').select(cols).eq('tmdb_id', tmdbId).maybeSingle();
+
 		if (!res.error) {
 			data = res.data;
 			lastError = null;
 			break;
 		}
+
 		lastError = res.error;
+
 		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
 	}
+
 	if (lastError) throw new Error(`getFilmByTmdbId failed: ${lastError.message}`);
+
 	if (!data) return null;
 
 	const {
@@ -1228,7 +1351,9 @@ export async function getFilmByTmdbId(tmdbId: number): Promise<FilmByTmdb | null
 		premiere_date?: string | null;
 		watched: WatchedActivity[] | WatchedActivity | null;
 	};
+
 	const w = Array.isArray(watched) ? (watched[0] ?? null) : (watched ?? null);
+
 	return {
 		movie: {
 			...rest,
@@ -1252,7 +1377,9 @@ export async function isOnWatchlist(movieId: number): Promise<boolean> {
 		.select('id')
 		.eq('movie_id', movieId)
 		.maybeSingle();
+
 	if (error) throw new Error(`isOnWatchlist failed: ${error.message}`);
+
 	return !!data;
 }
 
@@ -1278,9 +1405,11 @@ export async function listRelatedWatched(
 	limit = 4,
 ): Promise<RelatedFilm[]> {
 	const { tmdb_id, directors, genres } = film;
+
 	if (directors.length === 0 && genres.length === 0) return [];
 
 	const SELECT = 'rating, movies!inner(tmdb_id, title, release_year, poster_path, genres, directors)';
+
 	type Row = {
 		rating: number | null;
 		movies: WatchlistTile & { genres: string[] | null; directors: string[] | null };
@@ -1289,17 +1418,20 @@ export async function listRelatedWatched(
 	// Best-rated first, unrated last — the order both pools are drawn in.
 	const pool = async (column: 'directors' | 'genres', values: string[], take: number) => {
 		if (values.length === 0) return [] as Row[];
+
 		const res = await supabasePublic
 			.from('watched')
 			.select(SELECT)
 			.filter(`movies.${column}`, 'ov', pgTextArray(values))
 			.order('rating', { ascending: false, nullsFirst: false })
 			.limit(take);
+
 		// Pre-0008 there are no credit columns to match on — no related films, not an error.
 		if (res.error) {
 			if (isMissingCreditColumn(res.error)) return [] as Row[];
 			throw new Error(`listRelatedWatched failed: ${res.error.message}`);
 		}
+
 		return (res.data ?? []) as unknown as Row[];
 	};
 
@@ -1318,6 +1450,7 @@ export async function listRelatedWatched(
 
 	const out: RelatedFilm[] = [];
 	const seen = new Set<number>([tmdb_id]);
+
 	for (const [rows, isDirectorMatch] of [
 		[byDirector, true],
 		[ranked, false],
@@ -1325,6 +1458,7 @@ export async function listRelatedWatched(
 		for (const r of rows) {
 			if (out.length === limit) return out;
 			const m = r.movies;
+
 			if (seen.has(m.tmdb_id)) continue;
 			seen.add(m.tmdb_id);
 			out.push({
@@ -1338,6 +1472,7 @@ export async function listRelatedWatched(
 			});
 		}
 	}
+
 	return out;
 }
 
@@ -1363,6 +1498,7 @@ export interface FilmLogStats {
 export async function getFilmLogStats(): Promise<FilmLogStats> {
 	const year = siteYear();
 	const head = { count: 'exact' as const, head: true };
+
 	const [watched, diary, watchlist, liked, thisYear, ratings] = await Promise.all([
 		supabasePublic.from('watched').select('*', head),
 		supabasePublic.from('logs_with_movie').select('*', head),
@@ -1375,8 +1511,10 @@ export async function getFilmLogStats(): Promise<FilmLogStats> {
 	const histogram = new Array(10).fill(0);
 	let ratedTotal = 0;
 	let weighted = 0;
+
 	for (const row of (ratings.data ?? []) as { rating: number }[]) {
 		const idx = Math.round(row.rating * 2) - 1; // 0.5→0 … 5.0→9
+
 		if (idx >= 0 && idx < 10) {
 			histogram[idx]++;
 			ratedTotal++;
@@ -1411,7 +1549,9 @@ export async function listWatchlist(limit = 4): Promise<WatchlistTile[]> {
 		.select('added_at, movies(tmdb_id, title, release_year, poster_path)')
 		.order('added_at', { ascending: false })
 		.limit(limit);
+
 	if (error) throw new Error(`listWatchlist failed: ${error.message}`);
+
 	return ((data ?? []) as unknown as { movies: WatchlistTile }[]).map((r) => r.movies);
 }
 
@@ -1443,6 +1583,7 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 		.from('watchlist')
 		.select('added_at, movies(tmdb_id, title, release_year, release_date, premiere_date, poster_path)')
 		.order('added_at', { ascending: false });
+
 	if (error) throw new Error(`listAllWatchlist failed: ${error.message}`);
 
 	type Row = {
@@ -1456,6 +1597,7 @@ export async function listAllWatchlist(): Promise<WatchlistEntry[]> {
 			poster_path: string | null;
 		};
 	};
+
 	return ((data ?? []) as unknown as Row[]).map((r) => ({
 		tmdb_id: r.movies.tmdb_id,
 		title: r.movies.title,
@@ -1497,16 +1639,21 @@ export async function listWatchlistFacets(): Promise<WatchlistFacetRow[]> {
 
 	let data: unknown = null;
 	let lastError: PgError | null = null;
+
 	for (const select of tiers) {
 		const res = await supabasePublic.from('watchlist').select(select);
+
 		if (!res.error) {
 			data = res.data;
 			lastError = null;
 			break;
 		}
+
 		lastError = res.error;
+
 		if (!isMissingCreditColumn(res.error)) break; // a real error — stop stepping down
 	}
+
 	if (lastError) throw new Error(`listWatchlistFacets failed: ${lastError.message}`);
 
 	type Row = {
@@ -1518,6 +1665,7 @@ export async function listWatchlistFacets(): Promise<WatchlistFacetRow[]> {
 			original_language?: string | null;
 		};
 	};
+
 	return ((data ?? []) as unknown as Row[]).map((r) => ({
 		tmdb_id: r.movies.tmdb_id,
 		genres: r.movies.genres ?? [],
@@ -1666,6 +1814,7 @@ function emptyDims(): FilmLogDims {
  */
 async function loadFilmLogDims(): Promise<Map<number, FilmLogDims>> {
 	const byMovie = new Map<number, FilmLogDims>();
+
 	const { data, error } = await supabasePublic
 		.from('logs')
 		.select(
@@ -1673,6 +1822,7 @@ async function loadFilmLogDims(): Promise<Map<number, FilmLogDims>> {
 				'log_tags(tags(name)), log_friends(friends(name))',
 		)
 		.is('deleted_at', null);
+
 	if (error) {
 		if (isMissingRelation(error) || isMissingCreditColumn(error)) return byMovie;
 		throw new Error(`loadFilmLogDims failed: ${error.message}`);
@@ -1691,25 +1841,34 @@ async function loadFilmLogDims(): Promise<Map<number, FilmLogDims>> {
 		log_friends: { friends: { name: string } | null }[] | null;
 	}[]) {
 		let dims = byMovie.get(row.movie_id);
+
 		if (!dims) {
 			dims = emptyDims();
 			byMovie.set(row.movie_id, dims);
 		}
+
 		if (row.rewatched) dims.rewatched = true;
+
 		if (row.medium?.trim()) dims.mediums.add(row.medium.trim().toLowerCase());
 		const theater = one(row.theaters);
+
 		if (theater) dims.venues.add([theater.name, theater.city].filter(Boolean).join(', '));
 		const format = one(row.formats);
+
 		if (format) dims.formats.add(format.name);
+
 		for (const lt of row.log_tags ?? []) if (lt.tags) dims.tags.add(lt.tags.name);
+
 		for (const lf of row.log_friends ?? []) if (lf.friends) dims.friends.add(lf.friends.name);
 	}
+
 	return byMovie;
 }
 
 /** True when `selected` is satisfied by `have` under the given mode. Empty = no filter. */
 function matches(selected: string[], have: Set<string>, mode: MatchMode): boolean {
 	if (selected.length === 0) return true;
+
 	return mode === 'all' ? selected.every((v) => have.has(v)) : selected.some((v) => have.has(v));
 }
 
@@ -1737,18 +1896,23 @@ async function movieIdsMatchingLogFilters(q: WatchedQuery): Promise<number[] | n
 	const whereMode = q.whereMode ?? 'any';
 
 	const ids: number[] = [];
+
 	for (const [movieId, dims] of dimsByMovie) {
 		if (q.rewatched && !dims.rewatched) continue;
+
 		// Tags are always "any of these" — the design gives them no all/any toggle.
 		if (!matches(q.tags ?? [], dims.tags, 'any')) continue;
+
 		if (!matches(q.friends ?? [], dims.friends, friendMode)) continue;
 		// Medium, theater and format share one toggle and are matched as a single
 		// pool, mirroring the design's combined "Medium · theater · format" control.
 		const where = [...(q.mediums ?? []), ...(q.venues ?? []), ...(q.formats ?? [])];
 		const have = new Set([...dims.mediums, ...dims.venues, ...dims.formats]);
+
 		if (!matches(where, have, whereMode)) continue;
 		ids.push(movieId);
 	}
+
 	return ids;
 }
 
@@ -1803,6 +1967,7 @@ export async function listWatchedFacets(isOwner = false): Promise<WatchedFacets>
 	// End stops for the diary-date slider: the earliest and latest calendar year
 	// anything in the collection was watched, across every film's viewings.
 	const diaryYears = new Set<number>();
+
 	for (const set of diaryYearsByMovie.values()) for (const y of set) diaryYears.add(y);
 	const diaryYearsAsc = [...diaryYears].sort((a, b) => a - b);
 	const diaryYearLo = diaryYearsAsc[0] ?? null;
@@ -1813,9 +1978,11 @@ export async function listWatchedFacets(isOwner = false): Promise<WatchedFacets>
 	// tail rather than an arbitrary alphabetical slice.
 	const byFrequency = (pick: (d: FilmLogDims) => Set<string>): string[] => {
 		const counts = new Map<string, number>();
+
 		for (const dims of dimsByMovie.values()) {
 			for (const v of pick(dims)) counts.set(v, (counts.get(v) ?? 0) + 1);
 		}
+
 		return [...counts.keys()].sort(
 			(a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b),
 		);
@@ -1832,12 +1999,15 @@ export async function listWatchedFacets(isOwner = false): Promise<WatchedFacets>
 	// stored with their state ("New York, NY"), so the comma isn't a reliable seam.
 	const venueValues = byFrequency((d) => d.venues);
 	const nameCounts = new Map<string, number>();
+
 	for (const v of venueValues) {
 		const name = theaterNames.get(v) ?? v;
 		nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
 	}
+
 	const venues = venueValues.map((value) => {
 		const name = theaterNames.get(value) ?? value;
+
 		return { value, label: (nameCounts.get(name) ?? 0) > 1 ? value : name };
 	});
 
@@ -1891,6 +2061,7 @@ async function readAllPages<T>(
 	fetchPage: (from: number, to: number, wantCount: boolean) => PromiseLike<PageResult<T>>,
 ): Promise<{ rows: T[]; error: PgError | null }> {
 	const first = await fetchPage(0, PAGE - 1, true);
+
 	if (first.error) return { rows: [], error: first.error };
 
 	const rows = (first.data ?? []) as T[];
@@ -1898,14 +2069,18 @@ async function readAllPages<T>(
 	// the count is missing (a view that can't be counted) the short page is still
 	// the signal, and we simply stop here.
 	const total = first.count ?? rows.length;
+
 	if (rows.length < PAGE || total <= PAGE) return { rows, error: null };
 
 	const rest: PromiseLike<PageResult<T>>[] = [];
+
 	for (let from = PAGE; from < total; from += PAGE) rest.push(fetchPage(from, from + PAGE - 1, false));
+
 	for (const page of await Promise.all(rest)) {
 		if (page.error) return { rows: [], error: page.error };
 		rows.push(...((page.data ?? []) as T[]));
 	}
+
 	return { rows, error: null };
 }
 
@@ -1932,6 +2107,7 @@ async function watchedFilmFacetFrequency(): Promise<{
 		'movies!inner(directors, actors, genres, countries, original_language)', // 0009
 		'movies!inner(directors, actors, genres, countries)', // 0008
 	];
+
 	type Row = {
 		movies: {
 			directors: string[] | null;
@@ -1946,6 +2122,7 @@ async function watchedFilmFacetFrequency(): Promise<{
 	// isn't there yet. Each tier is a fresh whole-collection read, so nothing has to
 	// be un-counted on the way down.
 	let rows: Row[] = [];
+
 	for (const [i, cols] of tiers.entries()) {
 		const res = await readAllPages<Row>((from, to, wantCount) =>
 			supabasePublic
@@ -1953,14 +2130,18 @@ async function watchedFilmFacetFrequency(): Promise<{
 				.select(cols, wantCount ? { count: 'exact' } : undefined)
 				.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
 		);
+
 		if (!res.error) {
 			rows = res.rows;
 			break;
 		}
+
 		if (i < tiers.length - 1 && isMissingCreditColumn(res.error)) continue;
+
 		if (isMissingCreditColumn(res.error) || isMissingRelation(res.error)) {
 			return { directors: [], actors: [], genres: [], languages: [], countries: [] };
 		}
+
 		throw new Error(`watchedFilmFacetFrequency failed: ${res.error.message}`);
 	}
 
@@ -1969,19 +2150,25 @@ async function watchedFilmFacetFrequency(): Promise<{
 	const genreCounts = new Map<string, number>();
 	const langCounts = new Map<string, number>();
 	const countryCounts = new Map<string, number>();
+
 	const bump = (counts: Map<string, number>, v: string | null | undefined) => {
 		if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
 	};
+
 	for (const r of rows) {
 		for (const d of r.movies.directors ?? []) bump(dirCounts, d);
+
 		for (const a of r.movies.actors ?? []) bump(actCounts, a);
+
 		for (const g of r.movies.genres ?? []) bump(genreCounts, g);
+
 		for (const c of r.movies.countries ?? []) bump(countryCounts, c);
 		bump(langCounts, r.movies.original_language);
 	}
 
 	const rank = (counts: Map<string, number>): string[] =>
 		[...counts.keys()].sort((a, b) => counts.get(b)! - counts.get(a)! || a.localeCompare(b));
+
 	return {
 		directors: rank(dirCounts),
 		actors: rank(actCounts),
@@ -2004,15 +2191,19 @@ async function watchedFilmFacetFrequency(): Promise<{
  */
 async function loadDiaryYearsByMovie(): Promise<Map<number, Set<number>>> {
 	const byMovie = new Map<number, Set<number>>();
+
 	const add = (movieId: number, isoOrDate: string | null) => {
 		if (!isoOrDate) return;
 		const year = Number(isoOrDate.slice(0, 4));
+
 		if (!Number.isFinite(year)) return;
 		let set = byMovie.get(movieId);
+
 		if (!set) {
 			set = new Set();
 			byMovie.set(movieId, set);
 		}
+
 		set.add(year);
 	};
 
@@ -2020,7 +2211,9 @@ async function loadDiaryYearsByMovie(): Promise<Map<number, Set<number>>> {
 	// was logged in. Film-level first watches cover imported films that never got a
 	// dated diary row. The two are independent reads, so they go out together.
 	type LogRow = { movie_id: number; watched_date: string | null };
+
 	type WatchedRow = { movie_id: number; first_watched: string | null };
+
 	const [logs, watched] = await Promise.all([
 		readAllPages<LogRow>((from, to, wantCount) =>
 			supabasePublic
@@ -2043,6 +2236,7 @@ async function loadDiaryYearsByMovie(): Promise<Map<number, Set<number>>> {
 		if (isMissingRelation(logs.error)) return byMovie;
 		throw new Error(`loadDiaryYearsByMovie (logs) failed: ${logs.error.message}`);
 	}
+
 	for (const r of logs.rows) add(r.movie_id, r.watched_date);
 
 	// A missing `watched` table only costs the imported films their year; the diary
@@ -2050,7 +2244,9 @@ async function loadDiaryYearsByMovie(): Promise<Map<number, Set<number>>> {
 	if (watched.error && !isMissingRelation(watched.error)) {
 		throw new Error(`loadDiaryYearsByMovie (watched) failed: ${watched.error.message}`);
 	}
+
 	for (const r of watched.rows) add(r.movie_id, r.first_watched);
+
 	return byMovie;
 }
 
@@ -2065,6 +2261,7 @@ async function movieIdsMatchingDiaryYears(q: WatchedQuery): Promise<number[] | n
 	const hi = q.diaryYearMax ?? Number.POSITIVE_INFINITY;
 	const yearsByMovie = await loadDiaryYearsByMovie();
 	const ids: number[] = [];
+
 	for (const [movieId, years] of yearsByMovie) {
 		for (const y of years) {
 			if (y >= lo && y <= hi) {
@@ -2073,6 +2270,7 @@ async function movieIdsMatchingDiaryYears(q: WatchedQuery): Promise<number[] | n
 			}
 		}
 	}
+
 	return ids;
 }
 
@@ -2080,28 +2278,35 @@ async function movieIdsMatchingDiaryYears(q: WatchedQuery): Promise<number[] | n
 async function theaterNameByValue(): Promise<Map<string, string>> {
 	const out = new Map<string, string>();
 	const { data, error } = await supabasePublic.from('theaters').select('name, city');
+
 	if (error) {
 		if (isMissingRelation(error)) return out;
 		throw new Error(`theaterNameByValue failed: ${error.message}`);
 	}
+
 	for (const t of (data ?? []) as { name: string; city: string | null }[]) {
 		out.set([t.name, t.city].filter(Boolean).join(', '), t.name);
 	}
+
 	return out;
 }
 
 /** Release years of every watched film (with one), for the release-date slider. */
 async function listWatchedReleaseYears(): Promise<number[]> {
 	type Row = { movies: { release_year: number | null } };
+
 	const { rows, error } = await readAllPages<Row>((from, to, wantCount) =>
 		supabasePublic
 			.from('watched')
 			.select('movies!inner(release_year)', wantCount ? { count: 'exact' } : undefined)
 			.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
 	);
+
 	if (error) throw new Error(`listWatchedReleaseYears failed: ${error.message}`);
 	const out: number[] = [];
+
 	for (const r of rows) if (r.movies.release_year != null) out.push(r.movies.release_year);
+
 	return out;
 }
 
@@ -2113,6 +2318,7 @@ async function listWatchedReleaseYears(): Promise<number[]> {
  */
 function pgTextArray(values: string[]): string {
 	const escaped = values.map((v) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+
 	return `{${escaped.join(',')}}`;
 }
 
@@ -2126,7 +2332,9 @@ export async function countWatchedFilms(): Promise<number> {
 	const { count, error } = await supabasePublic
 		.from('watched')
 		.select('*', { count: 'exact', head: true });
+
 	if (error) throw new Error(`countWatchedFilms failed: ${error.message}`);
+
 	return count ?? 0;
 }
 
@@ -2158,11 +2366,14 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 		movieIdsMatchingLogFilters(query),
 		movieIdsMatchingDiaryYears(query),
 	]);
+
 	if (logMovieIds?.length === 0 || diaryYearIds?.length === 0) return { films: [], total: 0 };
 	let restrictIds: number[] | null;
+
 	if (logMovieIds && diaryYearIds) {
 		const keep = new Set(diaryYearIds);
 		restrictIds = logMovieIds.filter((id) => keep.has(id));
+
 		if (restrictIds.length === 0) return { films: [], total: 0 };
 	} else {
 		restrictIds = logMovieIds ?? diaryYearIds;
@@ -2177,6 +2388,7 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 	if (restrictIds) req = req.in('movie_id', restrictIds);
 
 	const term = q.trim();
+
 	// Escape the LIKE wildcards so a literal % or _ in a title search stays literal.
 	if (term) req = req.ilike('movies.title', `%${term.replace(/[%_]/g, '\\$&')}%`);
 
@@ -2186,14 +2398,17 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 		req = req.is('rating', null);
 	} else {
 		if (query.ratingMin != null) req = req.gte('rating', query.ratingMin);
+
 		if (query.ratingMax != null) req = req.lte('rating', query.ratingMax);
 	}
+
 	if (query.liked) req = req.eq('liked', true);
 
 	// Release-year bounds against the joined movie row. `!inner` above is what makes
 	// a filter on the embed exclude the parent watched row; a film with a null
 	// release_year fails either comparison, which is what drops the undated.
 	if (query.releaseYearMin != null) req = req.gte('movies.release_year', query.releaseYearMin);
+
 	if (query.releaseYearMax != null) req = req.lte('movies.release_year', query.releaseYearMax);
 
 	// Exact release years — picked years rather than a span (the Stats "Films by
@@ -2211,6 +2426,7 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 	if (query.directors?.length) {
 		req = req.filter('movies.directors', 'ov', pgTextArray(query.directors));
 	}
+
 	if (query.actors?.length) {
 		req = req.filter('movies.actors', 'ov', pgTextArray(query.actors));
 	}
@@ -2222,9 +2438,11 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 	if (query.genres?.length) {
 		req = req.filter('movies.genres', 'ov', pgTextArray(query.genres));
 	}
+
 	if (query.countries?.length) {
 		req = req.filter('movies.countries', 'ov', pgTextArray(query.countries));
 	}
+
 	if (query.languages?.length) {
 		req = req.in('movies.original_language', query.languages);
 	}
@@ -2238,11 +2456,13 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 	if (sort === 'year') {
 		req = req.order('movies(premiere_date)', { ascending: false, nullsFirst: false });
 	}
+
 	req = req
 		.order('first_watched', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false });
 
 	const { data, error, count } = await req.range(offset, offset + limit - 1);
+
 	if (error) throw new Error(`listWatchedPage failed: ${error.message}`);
 
 	const films = ((data ?? []) as unknown as {
@@ -2250,6 +2470,7 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 		rating: number | null;
 		movies: WatchlistTile;
 	}[]).map((r) => ({ ...r.movies, first_watched: r.first_watched, rating: r.rating }));
+
 	return { films, total: count ?? 0 };
 }
 
@@ -2349,6 +2570,7 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 		'movies!inner(tmdb_id, release_year, runtime, genres, countries, directors, actors)', // 0008
 		'movies!inner(tmdb_id, release_year, runtime)', // pre-0008
 	];
+
 	type Row = {
 		first_watched: string | null;
 		rating: number | null;
@@ -2367,6 +2589,7 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 	// Each tier is a fresh whole-collection read, so dropping to the next one never
 	// has to un-accumulate what the last attempt got.
 	let rows: Row[] = [];
+
 	for (const [i, cols] of tiers.entries()) {
 		const res = await readAllPages<Row>((from, to, wantCount) =>
 			supabasePublic
@@ -2375,10 +2598,12 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 				.order('first_watched', { ascending: false, nullsFirst: false })
 				.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
 		);
+
 		if (!res.error) {
 			rows = res.rows;
 			break;
 		}
+
 		// Columns not there yet: drop to the next tier.
 		if (i < tiers.length - 1 && isMissingCreditColumn(res.error)) continue;
 		throw new Error(`loadWatchedFacts failed: ${res.error.message}`);
@@ -2403,9 +2628,11 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 /** Tally a name→count map from each film's list, most-common first, top `limit`. */
 function rankCounts(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], limit = 7): RankedCount[] {
 	const counts = new Map<string, number>();
+
 	for (const r of rows) {
 		for (const name of pick(r)) counts.set(name, (counts.get(name) ?? 0) + 1);
 	}
+
 	return [...counts.entries()]
 		.map(([name, count]) => ({ name, count }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
@@ -2415,17 +2642,21 @@ function rankCounts(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], l
 /** Rank people by film count, carrying each person's average film rating. */
 function rankPeople(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], limit = 6): PersonStat[] {
 	const agg = new Map<string, { count: number; ratingSum: number; rated: number }>();
+
 	for (const r of rows) {
 		for (const name of pick(r)) {
 			const a = agg.get(name) ?? { count: 0, ratingSum: 0, rated: 0 };
 			a.count++;
+
 			if (r.rating != null) {
 				a.ratingSum += r.rating;
 				a.rated++;
 			}
+
 			agg.set(name, a);
 		}
 	}
+
 	return [...agg.entries()]
 		.map(([name, a]) => ({
 			name,
@@ -2454,14 +2685,18 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	// Picker options: years with a meaningful sample, newest first. Undated films
 	// (unknown first watch) belong to no year, so they only reach the 'all' scope.
 	const perYear = new Map<number, number>();
+
 	for (const r of all) {
 		const y = yearOf(r.first_watched);
+
 		if (y != null) perYear.set(y, (perYear.get(y) ?? 0) + 1);
 	}
+
 	const eligibleYears = [...perYear.entries()]
 		.filter(([, c]) => c > 10)
 		.map(([y]) => y)
 		.sort((a, b) => b - a);
+
 	const yearOptions: YearOption[] = [
 		{ key: 'all', label: 'All time', count: '' },
 		...eligibleYears.map((y) => ({ key: y, label: String(y), count: `${perYear.get(y)} films` })),
@@ -2480,6 +2715,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	const num = (n: number) => n.toLocaleString('en-US');
 	const thisYear = siteYear();
 	const thisYearCount = perYear.get(thisYear) ?? 0;
+
 	const metrics = isAll
 		? [
 				{ value: num(filmsWatched), label: 'Films watched' },
@@ -2499,30 +2735,37 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	let weekLabels: string[] = [];
 	let weekSpan = '';
 	let weekAvg = '0';
+
 	if (!isAll) {
 		const year = selected as number;
 		const yearStart = new Date(year, 0, 1);
 		const bins: number[] = [];
 		const ranges: { start: Date; end: Date }[] = [];
+
 		for (let d = new Date(yearStart); d.getFullYear() === year; d.setDate(d.getDate() + 7)) {
 			const start = new Date(d);
 			const end = new Date(d);
 			end.setDate(end.getDate() + 6);
+
 			if (end.getFullYear() > year) end.setTime(new Date(year, 11, 31).getTime());
 			ranges.push({ start, end });
 			bins.push(0);
 		}
+
 		for (const r of rows) {
 			if (!r.first_watched) continue; // year scope already excludes these; keeps the cast honest
 			const days = Math.floor((new Date(r.first_watched).getTime() - yearStart.getTime()) / 86400000);
 			const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(days / 7)));
 			bins[idx]++;
 		}
+
 		const fmtRange = (s: Date, e: Date) => {
 			const a = `${MONTHS[s.getMonth()]} ${s.getDate()}`;
 			const b = s.getMonth() === e.getMonth() ? `${e.getDate()}` : `${MONTHS[e.getMonth()]} ${e.getDate()}`;
+
 			return `${a}–${b}, ${e.getFullYear()}`;
 		};
+
 		weeks = bins.map((c, i) => ({
 			count: c,
 			title: `${fmtRange(ranges[i].start, ranges[i].end)} · ${c} ${c === 1 ? 'film' : 'films'}`,
@@ -2535,17 +2778,22 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	// Films by release year (all-time scope): one bar per year, earliest → now.
 	let byYear: HistBar[] = [];
 	let byYearLabels: string[] = [];
+
 	if (isAll) {
 		const releaseYears = rows.map((r) => r.release_year).filter((y): y is number => y != null);
+
 		if (releaseYears.length) {
 			const min = Math.min(...releaseYears);
 			const max = Math.max(...releaseYears, thisYear);
 			const perRelease = new Map<number, number>();
+
 			for (const y of releaseYears) perRelease.set(y, (perRelease.get(y) ?? 0) + 1);
+
 			for (let y = min; y <= max; y++) {
 				const c = perRelease.get(y) ?? 0;
 				byYear.push({ count: c, year: y, title: `${y} · ${c} ${c === 1 ? 'film' : 'films'}` });
 			}
+
 			// ~6 evenly spaced year labels across the span.
 			const span = max - min;
 			byYearLabels = Array.from({ length: 6 }, (_, i) => String(Math.round(min + (span * i) / 5)));
@@ -2556,14 +2804,17 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 	const ratings = new Array(10).fill(0);
 	let ratedTotal = 0;
 	let ratingWeighted = 0;
+
 	for (const r of rated) {
 		const idx = Math.round(r.rating * 2) - 1;
+
 		if (idx >= 0 && idx < 10) {
 			ratings[idx]++;
 			ratedTotal++;
 			ratingWeighted += r.rating;
 		}
 	}
+
 	const ratingAvg = ratedTotal ? (ratingWeighted / ratedTotal).toFixed(1) : '—';
 
 	return {

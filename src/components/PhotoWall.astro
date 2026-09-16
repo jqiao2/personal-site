@@ -36,6 +36,7 @@ interface Props {
 }
 
 const { photos, height = 190 } = Astro.props;
+
 // A lone photograph fills the width at its own ratio: it is the commonest
 // non-zero case and stranding it in a thumbnail slot wastes it.
 const single = photos.length === 1;
@@ -52,9 +53,13 @@ const single = photos.length === 1;
 // On a phone the wall stops being px-based: a lone photograph takes the column
 // and several share it four to a line.
 const cap = single ? 780 : Math.round(height * 2.4);
+
 const sizes = single ? `(max-width: 560px) 94vw, ${cap}px` : `(max-width: 560px) 45vw, ${cap}px`;
+
 const widths = photoWidthsFor(cap);
+
 const srcset = (url: string) => photoSrcSet(url, widths);
+
 // Captions on a phone: see the legend rule at the bottom of the stylesheet.
 const captions = photos.map((p) => p.caption).filter((c): c is string => !!c);
 ---

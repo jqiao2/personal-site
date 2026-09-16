@@ -12,7 +12,9 @@ import { supabaseAdmin } from './supabase';
 
 /** Vocabulary the review dialog offers. The API rejects anything outside it. */
 export const PACING = ['Slow', 'Moderate', 'Fast', 'Page-Turner'] as const;
+
 export const FOCUS = ['Character-Driven', 'A bit of both', 'Plot-Driven'] as const;
+
 export const MOODS = [
 	'Cozy',
 	'Inspiring',
@@ -26,6 +28,7 @@ export const MOODS = [
 	'Nostalgic',
 	'Bittersweet',
 ] as const;
+
 export const TONES = [
 	'Atmospheric',
 	'Immersive',
@@ -58,6 +61,7 @@ export const VOCABULARY: string[] = [...PACING, ...FOCUS, ...MOODS, ...TONES];
 function isMissingColumn(err: { code?: string; message?: string } | null): boolean {
 	if (!err) return false;
 	const msg = (err.message ?? '').toLowerCase();
+
 	return (
 		err.code === '42703' ||
 		err.code === 'PGRST204' ||
@@ -154,13 +158,17 @@ export interface HighlightRow {
  */
 export async function getBook(id: number, includePrivate = false): Promise<BookRow | null> {
 	let q = supabaseAdmin.from('book_detail').select('*').eq('id', id);
+
 	if (!includePrivate) q = q.eq('is_public', true);
 
 	const { data, error } = await q.maybeSingle();
+
 	if (error) throw new Error(`book lookup failed: ${error.message}`);
+
 	if (!data) return null;
 
 	const row = data as Record<string, unknown>;
+
 	return {
 		...(row as unknown as BookRow),
 		contributors: (row.contributors as string[]) ?? [],
@@ -187,6 +195,7 @@ export async function getBookDays(bookId: number): Promise<BookDay[]> {
 		.select('day, pages, seconds, counts')
 		.eq('book_id', bookId)
 		.order('day', { ascending: true });
+
 	if (error) throw new Error(`book days query failed: ${error.message}`);
 
 	return (data ?? []).map((d) => ({
@@ -217,14 +226,18 @@ export async function getBookHours(bookId: number): Promise<BookHours> {
 		.from('book_hours')
 		.select('hour, pages')
 		.eq('book_id', bookId);
+
 	if (error) throw new Error(`book hours query failed: ${error.message}`);
 
 	const hours = new Array<number>(24).fill(0);
+
 	for (const row of data ?? []) {
 		const hour = Number(row.hour);
+
 		if (!Number.isInteger(hour) || hour < 0 || hour > 23) continue;
 		hours[hour] = Number(row.pages);
 	}
+
 	return { hours };
 }
 
@@ -243,22 +256,26 @@ export async function getBookReviews(
 		'id, read_from, read_to, rating, loved, gave_up, review_text, ' +
 		(includePrivate ? 'private_note, ' : '') +
 		'pacing, focus, moods, tones';
+
 	const { data, error } = await supabaseAdmin
 		.from('book_reviews')
 		.select(columns)
 		.eq('book_id', bookId)
 		.order('read_to', { ascending: false });
+
 	// An environment behind on 0053 has no private_note column; degrade to the
 	// review without it rather than 500ing the whole page on the owner.
 	if (error && includePrivate && isMissingColumn(error)) {
 		return getBookReviews(bookId, false);
 	}
+
 	if (error) throw new Error(`book reviews query failed: ${error.message}`);
 
 	return (data ?? []).map((raw) => {
 		// The dynamic column string makes PostgREST's types give up, so pin the
 		// row shape once here rather than casting at every field.
 		const r = raw as unknown as ReviewRow;
+
 		return {
 			...r,
 			rating: r.rating == null ? null : Number(r.rating),
@@ -276,7 +293,9 @@ export async function getBookHighlights(bookId: number): Promise<HighlightRow[]>
 		.select('page, text')
 		.eq('book_id', bookId)
 		.order('page', { ascending: true });
+
 	if (error) throw new Error(`book highlights query failed: ${error.message}`);
+
 	return (data ?? []).map((h) => ({ page: Number(h.page), text: String(h.text) }));
 }
 
@@ -286,6 +305,7 @@ export async function updateBook(id: number, patch: Record<string, unknown>): Pr
 		.from('books')
 		.update({ ...patch, updated_at: new Date().toISOString() })
 		.eq('id', id);
+
 	if (error) throw new Error(`book update failed: ${error.message}`);
 }
 
@@ -300,6 +320,7 @@ export async function mergeBook(targetId: number, sourceId: number): Promise<voi
 		p_target: targetId,
 		p_source: sourceId,
 	});
+
 	if (error) throw new Error(`merge failed: ${error.message}`);
 }
 
@@ -329,6 +350,7 @@ export async function saveReview(bookId: number, input: ReviewInput): Promise<vo
 		{ book_id: bookId, ...input, updated_at: new Date().toISOString() },
 		{ onConflict: 'book_id,read_from' },
 	);
+
 	if (error) throw new Error(`review save failed: ${error.message}`);
 }
 
@@ -340,6 +362,8 @@ export async function deleteReview(bookId: number, reviewId: number): Promise<bo
 		.eq('book_id', bookId)
 		.select('id')
 		.maybeSingle();
+
 	if (error) throw new Error(`review delete failed: ${error.message}`);
+
 	return !!data;
 }

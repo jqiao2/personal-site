@@ -89,7 +89,9 @@ export const TRACKS: readonly { id: Track; label: string }[] = [
  * elapsed seconds, so there is nothing to guess.
  */
 export const FILM_MINUTES = 105;
+
 export const MEAL_MINUTES = 60;
+
 export const BOOK_BOOST = 1.3;
 
 /**
@@ -194,6 +196,7 @@ export function mealTier(fields: {
 	const haystack = [fields.restaurant_name ?? '', ...(fields.cuisines ?? []), ...(fields.tags ?? [])]
 		.join(' ')
 		.toLowerCase();
+
 	return (TIER_RE.find(({ re }) => re.test(haystack))?.tier ?? DEFAULT_TIER);
 }
 
@@ -216,7 +219,9 @@ export function mealTier(fields: {
  *   180 min → 113px  260+ min → 136px (capped)
  */
 export const MARK_K = 8.4;
+
 export const MARK_MIN = 34;
+
 export const MARK_MAX = 136;
 
 /** A mark's nominal side, in artboard px, for `minutes` spent on it. This is
@@ -224,6 +229,7 @@ export const MARK_MAX = 136;
  *  area at the mark's real aspect ratio. */
 export function markSize(minutes: number): number {
 	const side = MARK_K * Math.sqrt(Math.max(0, minutes));
+
 	return Math.round(Math.min(MARK_MAX, Math.max(MARK_MIN, side)));
 }
 
@@ -236,6 +242,7 @@ export function markSize(minutes: number): number {
  * an object stuck to a page. Posters (2:3) and covers sit well inside it.
  */
 export const ASPECT_MIN = 0.55;
+
 export const ASPECT_MAX = 1.8;
 
 /** TMDB posters are uniformly 2:3, and Open Library covers are near enough to
@@ -259,6 +266,7 @@ export interface MarkBox {
 export function markBox(size: number, aspect: number): MarkBox {
 	const a = Math.min(ASPECT_MAX, Math.max(ASPECT_MIN, aspect || 1));
 	const root = Math.sqrt(a);
+
 	return { w: Math.round(size * root), h: Math.round(size / root) };
 }
 
@@ -319,7 +327,9 @@ export interface JournalMark extends JournalItem {
 /** A stable small number from a string — the tilt's only input. */
 function hash(key: string): number {
 	let h = 0;
+
 	for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+
 	return Math.abs(h);
 }
 
@@ -329,6 +339,7 @@ export function toMark(item: JournalItem, scale = 1): JournalMark {
 	// as a layout, and the whole point of a cluster is that it isn't one.
 	const tilt = ((h % 8) - 4 + (h % 2 ? 0.5 : -0.5)) * 0.9;
 	const size = Math.round(markSize(item.minutes) * scale);
+
 	return { ...item, size, box: markBox(size, item.aspect), tilt, dx: 0, dy: 0 };
 }
 
@@ -376,6 +387,7 @@ interface DayRow {
 	day: string;
 	seconds: number;
 }
+
 /**
  * Open Library bakes the cover size into the URL, and what's on the row is
  * whichever the importer asked for, so the suffix is swapped rather than
@@ -406,9 +418,11 @@ interface BookRow {
  */
 export function bookItems(days: DayRow[], books: BookRow[]): JournalItem[] {
 	const byId = new Map(books.map((b) => [b.id, b]));
+
 	return days.map((d) => {
 		const book = byId.get(d.book_id);
 		const open = book?.is_public === true && !!book.title;
+
 		return {
 			track: 'book' as const,
 			key: `${d.book_id}:${d.day}`,
@@ -442,6 +456,7 @@ export function mealItems(visits: VisitRow[]): JournalItem[] {
 	return visits.map((v) => {
 		const tier = mealTier(v);
 		const photo = v.photos?.[0];
+
 		return {
 			track: 'meal' as const,
 			key: String(v.id),
@@ -518,10 +533,13 @@ export function activityItems(activities: ActivityRow[]): JournalItem[] {
  * activity-month.ts's chrome constants keep.
  */
 export const CARD_CHROME = 315;
+
 export const CELL_GAP = 6;
+
 /** Past this a cell stops growing, so the tall artboard doesn't stretch every
  *  pile into a column of air. Mirrors `.strip__grid`'s max-height. */
 export const CELL_MAX_H = 230;
+
 /** Constant at every aspect: only the height of a cell changes. */
 export const CELL_W = (1080 - 54 - 54 - 6 * CELL_GAP) / 7;
 
@@ -533,6 +551,7 @@ export interface CellBox {
 /** The size one day's square comes out at, for a card `cardHeight` tall. */
 export function cellBox(rows: number, cardHeight: number): CellBox {
 	const grid = cardHeight - CARD_CHROME;
+
 	return {
 		w: CELL_W,
 		h: Math.min(CELL_MAX_H, Math.max(60, (grid - (rows - 1) * CELL_GAP) / rows)),
@@ -662,13 +681,16 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  * they are.
  */
 export const MAX_COVER = 0.3;
+
 export const MIN_INSIDE = 0.5;
+
 export const AREA_BUDGET = 1.15;
 
 /** The ellipse's two axes, normalised so their mean is 1 — the pile stretches
  *  to the shape of the day it sits in without getting larger overall. */
 export function spreadOf(cell: CellBox): { x: number; y: number } {
 	const mean = (cell.w + cell.h) / 2;
+
 	return { x: cell.w / mean, y: cell.h / mean };
 }
 
@@ -686,6 +708,7 @@ interface Placed {
 function overlapArea(a: Placed, b: { dx: number; dy: number; w: number; h: number }): number {
 	const x = Math.min(a.dx + a.w / 2, b.dx + b.w / 2) - Math.max(a.dx - a.w / 2, b.dx - b.w / 2);
 	const y = Math.min(a.dy + a.h / 2, b.dy + b.h / 2) - Math.max(a.dy - a.h / 2, b.dy - b.h / 2);
+
 	return x > 0 && y > 0 ? x * y : 0;
 }
 
@@ -701,7 +724,9 @@ function overlapArea(a: Placed, b: { dx: number; dy: number; w: number; h: numbe
  */
 export function slack(size: number, cellSide: number): number {
 	const need = size * Math.SQRT1_2;
+
 	if (Math.min(size, cellSide) < need) return 0;
+
 	return Math.max(0, (size + cellSide) / 2 - need);
 }
 
@@ -709,8 +734,10 @@ export function slack(size: number, cellSide: number): number {
  *  so a reload draws the same pile it drew last time. */
 function rng(seed: number): () => number {
 	let state = (seed || 1) >>> 0;
+
 	return () => {
 		state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+
 		return state / 4294967296;
 	};
 }
@@ -744,10 +771,13 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 
 	const laid = marks.map((mark, i) => {
 		const { w, h } = mark.box;
+
 		if (i === 0) {
 			placed.push({ dx: 0, dy: 0, w, h, hidden: 0 });
+
 			return mark;
 		}
+
 		const mx = slack(w, cell.w);
 		const my = slack(h, cell.h);
 		const seed = hash(`${mark.track}:${mark.key}:place`);
@@ -759,11 +789,14 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 		const sin = Math.sin(angle) * spread.y;
 
 		const candidates: { dx: number; dy: number }[] = [];
+
 		for (let r = 0; r <= Math.max(mx, my); r += 6) candidates.push({ dx: r * cos, dy: r * sin });
+
 		for (let n = 0; n < 48; n++)
 			candidates.push({ dx: (random() * 2 - 1) * mx, dy: (random() * 2 - 1) * my });
 
 		let best = { dx: 0, dy: 0, score: Infinity, added: [] as number[] };
+
 		for (const candidate of candidates) {
 			const box = {
 				dx: Math.max(-mx, Math.min(mx, candidate.dx)),
@@ -771,8 +804,10 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 				w,
 				h,
 			};
+
 			const added = placed.map((other) => overlapArea(other, box));
 			let cost = 0;
+
 			for (const [j, other] of placed.entries()) {
 				// FRACTIONS, NOT PIXELS. Charging the excess in px² protects a snack
 				// and a poster equally per square pixel, which is not the same thing
@@ -782,18 +817,25 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 				// actually wanted is that EVERY print stays mostly visible, so the
 				// cost is the fraction of it hidden past MAX_COVER.
 				cost += Math.max(0, (other.hidden + added[j]) / (other.w * other.h) - MAX_COVER);
+
 				const onIt =
 					Math.abs(box.dx - other.dx) <= other.w / 2 && Math.abs(box.dy - other.dy) <= other.h / 2;
+
 				const underIt = Math.abs(box.dx - other.dx) <= w / 2 && Math.abs(box.dy - other.dy) <= h / 2;
+
 				if (onIt || underIt) cost += 0.25;
 			}
+
 			const score = cost * 10_000 + Math.hypot(box.dx, box.dy);
+
 			if (score < best.score) best = { dx: box.dx, dy: box.dy, score, added };
+
 			if (cost === 0) break;
 		}
 
 		for (const [j, other] of placed.entries()) other.hidden += best.added[j] ?? 0;
 		placed.push({ dx: best.dx, dy: best.dy, w, h, hidden: 0 });
+
 		return { ...mark, dx: Math.round(best.dx), dy: Math.round(best.dy) };
 	});
 
@@ -804,20 +846,25 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 	const right = Math.max(...placed.map((b) => b.dx + b.w / 2));
 	const top = Math.min(...placed.map((b) => b.dy - b.h / 2));
 	const bottom = Math.max(...placed.map((b) => b.dy + b.h / 2));
+
 	const room = (axis: 'dx' | 'dy', side: 'w' | 'h', cellSide: number) => {
 		let lo = -Infinity;
 		let hi = Infinity;
+
 		for (const box of placed) {
 			const limit = slack(box[side], cellSide);
 			lo = Math.max(lo, -limit - box[axis]);
 			hi = Math.min(hi, limit - box[axis]);
 		}
+
 		return { lo: Math.min(0, lo), hi: Math.max(0, hi) };
 	};
+
 	const x = room('dx', 'w', cell.w);
 	const y = room('dy', 'h', cell.h);
 	const ox = Math.round(Math.max(x.lo, Math.min(x.hi, (left + right) / 2)));
 	const oy = Math.round(Math.max(y.lo, Math.min(y.hi, (top + bottom) / 2)));
+
 	return laid.map((mark) => ({ ...mark, dx: mark.dx - ox, dy: mark.dy - oy }));
 }
 
@@ -876,16 +923,21 @@ export function dayLayer(date: number): number {
  */
 export function fitScale(day: JournalItem[], cell: CellBox, scale: number): number {
 	if (day.length < 2) return 1;
+
 	const area = day.reduce((total, item) => {
 		const box = markBox(Math.round(markSize(item.minutes) * scale), item.aspect);
+
 		return total + box.w * box.h;
 	}, 0);
+
 	const budget = AREA_BUDGET * cell.w * cell.h;
+
 	return area > budget ? Math.sqrt(budget / area) : 1;
 }
 
 export function buildCells(key: string, items: JournalItem[], cell?: CellBox): JournalCell[] {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return [];
 	const square = cell ?? cellBox(weekRows(key), 1350);
 	const scale = cellScale(square);
@@ -894,26 +946,32 @@ export function buildCells(key: string, items: JournalItem[], cell?: CellBox): J
 	const first = firstWeekdayIndex(year, month);
 
 	const byDay = new Map<number, JournalItem[]>();
+
 	for (const item of items) {
 		if (item.day.slice(0, 7) !== key) continue;
 		const day = Number(item.day.slice(8, 10));
 		const list = byDay.get(day);
+
 		if (list) list.push(item);
 		else byDay.set(day, [item]);
 	}
 
 	const cells: JournalCell[] = [];
+
 	for (let i = 0; i < weekRows(key) * 7; i++) {
 		const date = i - first + 1;
+
 		if (date < 1 || date > days) {
 			cells.push({ outside: true, date: 0, marks: [], minutes: 0, tracks: [], layer: 0 });
 			continue;
 		}
+
 		const day = (byDay.get(date) ?? [])
 			.slice()
 			// Biggest first, then by track so a tie between a film and a meal
 			// doesn't depend on which query came back first.
 			.sort((a, b) => b.minutes - a.minutes || a.track.localeCompare(b.track) || a.key.localeCompare(b.key));
+
 		const present = new Set(day.map((d) => d.track));
 		const marks = placeCluster(day.map((d) => toMark(d, scale * fitScale(day, square, scale))), square);
 		cells.push({
@@ -925,5 +983,6 @@ export function buildCells(key: string, items: JournalItem[], cell?: CellBox): J
 			tracks: TRACKS.filter((t) => present.has(t.id)).map((t) => t.id),
 		});
 	}
+
 	return cells;
 }

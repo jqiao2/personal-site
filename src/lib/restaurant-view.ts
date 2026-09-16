@@ -20,7 +20,9 @@ export function placeLine(place: {
 	country: string;
 }): string {
 	if (place.neighborhood) return `${place.neighborhood}, ${place.city}`;
+
 	if (place.state_region) return `${place.city}, ${place.state_region}`;
+
 	return place.city;
 }
 
@@ -67,7 +69,9 @@ export function locationState(place: {
 	lng: number | null;
 }): LocationState {
 	if (place.lat != null && place.lng != null) return 'placed';
+
 	if (place.neighborhood || place.state_region) return 'located';
+
 	return 'unplaced';
 }
 
@@ -84,6 +88,7 @@ export function placeEvidence(place: {
 	to_try_added_at: string | null;
 }): string {
 	const added = (place.to_try_added_at ?? place.created_at).slice(0, 10);
+
 	return `added ${shortDate(added)} ${added.slice(0, 4)} · added by name · “${place.name}”`;
 }
 
@@ -226,7 +231,9 @@ export function photoStrip(visits: VisitDetail[]): StripPhoto[] {
 /** "2026-08-08" → "8 Aug". Parsed as a local date so it can't slip a day. */
 export function shortDate(iso: string): string {
 	const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+
 	if (!y || !m || !d) return iso;
+
 	return new Date(y, m - 1, d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
@@ -239,16 +246,19 @@ export function shortDate(iso: string): string {
  */
 export function longDate(iso: string): string {
 	const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+
 	if (!y || !m || !d) return iso;
 	const date = new Date(y, m - 1, d);
 	const weekday = date.toLocaleDateString('en-GB', { weekday: 'long' });
 	const month = date.toLocaleDateString('en-GB', { month: 'long' });
+
 	return `${weekday} ${d} ${month} ${y}`;
 }
 
 /** "11 visits", "1 visit", "not been yet". */
 export function visitCountLabel(n: number): string {
 	if (n === 0) return 'not been yet';
+
 	return n === 1 ? '1 visit' : `${n} visits`;
 }
 
@@ -281,11 +291,13 @@ export interface MonthFigure {
 export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): MonthFigure[] {
 	const rated = visits.filter((v) => v.rating != null).map((v) => v.rating as number);
 	const avg = rated.length ? rated.reduce((a, b) => a + b, 0) / rated.length : null;
+
 	// Case-folded, and split on the commas some rows stored a whole line under,
 	// so "Thai" and "thai" are one cuisine and "Vietnamese, Sandwich" is two.
 	const cuisines = new Set(
 		visits.flatMap((v) => cuisineTerms(v.cuisines)).map((c) => c.toLowerCase()),
 	);
+
 	return [
 		{ value: String(newPlaceIds.size), label: newPlaceIds.size === 1 ? 'new place' : 'new places' },
 		{ value: String(cuisines.size), label: cuisines.size === 1 ? 'cuisine' : 'cuisines' },
@@ -319,7 +331,9 @@ export function monthFigures(visits: DiaryVisit[], newPlaceIds: Set<number>): Mo
  * because the picture is what the card is for.
  */
 export type Cover = { kind: 'photo'; url: string } & CoverMeta;
+
 export type MapCover = { kind: 'map'; at: MapPoint } & CoverMeta;
+
 export type AnyCover = Cover | MapCover;
 
 interface CoverMeta {
@@ -348,12 +362,16 @@ function byRank(a: VisitDetail, b: VisitDetail): number {
 	// prints the picture when there is one — a map is the fallback for a meal with
 	// no photo, not something that should sit on top of a meal that has one.
 	const photo = Number(b.photos.length > 0) - Number(a.photos.length > 0);
+
 	if (photo !== 0) return photo;
 	const rating = (b.rating ?? -1) - (a.rating ?? -1);
+
 	if (rating !== 0) return rating;
 	// Verdicts are ranks, 0 (definitely return) best — so this one sorts up.
 	const verdict = (a.verdict ?? Number.MAX_SAFE_INTEGER) - (b.verdict ?? Number.MAX_SAFE_INTEGER);
+
 	if (verdict !== 0) return verdict;
+
 	return a.visited_on < b.visited_on ? -1 : a.visited_on > b.visited_on ? 1 : a.id - b.id;
 }
 
@@ -370,19 +388,24 @@ export function monthCovers(
 	[...visits].sort(byRank).forEach((v, rank) => {
 		const photo = v.photos[0]?.url;
 		const map = maps?.get(v.restaurant_id);
+
 		if (!photo && !map) return;
+
 		const meta: CoverMeta = {
 			rank,
 			visitId: v.id,
 			restaurantId: v.restaurant_id,
 			restaurantName: v.restaurant_name,
 		};
+
 		const cover: AnyCover = photo
 			? { kind: 'photo', url: photo, ...meta }
 			: { kind: 'map', at: map as MapPoint, ...meta };
+
 		const day = Number(v.visited_on.slice(8, 10));
 		byDay.set(day, [...(byDay.get(day) ?? []), cover]);
 	});
+
 	return byDay;
 }
 
@@ -402,6 +425,7 @@ export function monthCalendar(
 	sources: CoverSources = {},
 ): CalendarCell[] {
 	const parsed = parseMonthKey(monthKey);
+
 	if (!parsed) return [];
 	const { year, month } = parsed;
 	// Arithmetic, not Dates — same rule the other two month cards follow, so a
@@ -412,19 +436,24 @@ export function monthCalendar(
 	const pad = (): CalendarCell => ({ day: null, verdict: null, visitId: null, covers: [] });
 
 	const byDay = new Map<number, VisitDetail[]>();
+
 	for (const v of visits) {
 		const day = Number(v.visited_on.slice(8, 10));
 		byDay.set(day, [...(byDay.get(day) ?? []), v]);
 	}
 
 	const cells: CalendarCell[] = [];
+
 	for (let i = 0; i < lead; i++) cells.push(pad());
+
 	for (let day = 1; day <= days; day++) {
 		const hits = byDay.get(day) ?? [];
+
 		const best = hits.reduce<number | null>(
 			(min, v) => (v.verdict != null && (min == null || v.verdict < min) ? v.verdict : min),
 			null,
 		);
+
 		cells.push({
 			day,
 			verdict: best,
@@ -432,6 +461,8 @@ export function monthCalendar(
 			covers: covers.get(day) ?? [],
 		});
 	}
+
 	while (cells.length % 7 !== 0) cells.push(pad());
+
 	return cells;
 }

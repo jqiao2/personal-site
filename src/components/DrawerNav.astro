@@ -41,8 +41,11 @@ const {
 	owner = false,
 	always = false,
 } = Astro.props;
+
 const nav = siteNav(pathname);
+
 const section = sectionLinks ? sectionNav(theme, pathname, owner) : [];
+
 const style = headerThemeStyle(theme);
 ---
 

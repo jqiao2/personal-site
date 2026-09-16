@@ -36,7 +36,8 @@
     "bike:test": "node --import ./scripts/ts-hook.mjs scripts/bike-route.test.mjs",
     "postman:test": "node --import ./scripts/ts-hook.mjs scripts/postman.test.mjs",
     "lineart:test": "node --import ./scripts/ts-hook.mjs scripts/line-art.test.mjs",
-    "shot": "node --env-file=.env scripts/shot.mjs"
+    "shot": "node --env-file=.env scripts/shot.mjs",
+    "lint": "oxlint"
   },
   "dependencies": {
     "@astrojs/rss": "^4.0.19",
@@ -61,6 +62,8 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "@duckdb/node-api": "^1.5.5-r.4",
+    "@oxlint/plugins": "1.83.0",
+    "oxlint": "1.83.0",
     "playwright": "^1.62.1",
     "typescript": "^6.0.3"
   }

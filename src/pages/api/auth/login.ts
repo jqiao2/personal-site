@@ -16,6 +16,7 @@ export const prerender = false;
 // once and the cookie sticks for 30 days.
 export const POST: APIRoute = async ({ request, cookies }) => {
 	let body: { password?: string };
+
 	try {
 		body = await request.json();
 	} catch {
@@ -28,5 +29,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	// The readable companion, set in lockstep so the header can hide the "Log in"
 	// button client-side on statically-served pages. Carries no authority.
 	cookies.set(OWNER_HINT_COOKIE, '1', ownerHintCookieOptions());
+
 	return json({ ok: true });
 };

@@ -26,6 +26,7 @@ import type { PileView } from './to-read-view';
  * like a different kind of object.
  */
 const SPINE_MIN_HEIGHT = 155;
+
 const SPINE_MAX_HEIGHT = 205;
 
 /** Interior height of the shelf, clearing the tallest spine with headroom. */
@@ -48,6 +49,7 @@ export const SHELF_PULL_HEADROOM = 54;
  */
 export function spineHeight(id: number | string): number {
 	const t = seed01(String(id), 'h');
+
 	return Math.round(SPINE_MIN_HEIGHT + t * (SPINE_MAX_HEIGHT - SPINE_MIN_HEIGHT));
 }
 
@@ -60,9 +62,11 @@ const PARTICLE = /^(le|la|de|del|della|da|van|von|du|den|der|ten|ter|di|st\.?|bi
 
 function surname(name: string): string {
 	const parts = name.trim().split(/\s+/);
+
 	if (parts.length === 1) return parts[0];
 	const last = parts[parts.length - 1];
 	const previous = parts[parts.length - 2];
+
 	return PARTICLE.test(previous) ? `${previous} ${last}` : last;
 }
 
@@ -72,9 +76,13 @@ function surname(name: string): string {
  */
 export function spineAuthor(authors: string | null): string {
 	const names = (authors ?? '').split(/\s*&\s*|\s*,\s*/).filter(Boolean);
+
 	if (!names.length) return '';
+
 	if (names.length === 1) return surname(names[0]);
+
 	if (names.length === 2) return `${surname(names[0])} & ${surname(names[1])}`;
+
 	return `${surname(names[0])} et al.`;
 }
 
@@ -90,6 +98,7 @@ interface SpineType {
 
 /** Space across the spine for one line of title, with a little air around it. */
 const LINE_PITCH = 1.25;
+
 /** Past three, a spine has stopped being lettered and is carrying a paragraph. */
 const MAX_TITLE_LINES = 3;
 
@@ -118,6 +127,7 @@ function spineType(width: number, height: number, title: string, author: string)
 	const run = runLength - authorRun - 6;
 
 	let titleLines = fitLines(width, titleSize);
+
 	if (title.length * titleSize * 0.46 > run * titleLines) {
 		titleSize = Math.max(9, titleSize - 1.5);
 		authorSize = Math.max(7.5, half(titleSize - 3.5));
@@ -137,12 +147,16 @@ function stripParentheticals(title: string): string {
 	// Innermost pairs first, repeatedly: one pass over a nested parenthetical
 	// would leave the outer pair behind as an empty "()".
 	let stripped = title;
+
 	for (;;) {
 		const next = stripped.replace(/\s*\([^()]*\)/g, '');
+
 		if (next === stripped) break;
 		stripped = next;
 	}
+
 	stripped = stripped.replace(/\s{2,}/g, ' ').trim();
+
 	// A title that is nothing but a parenthetical keeps what it had.
 	return stripped || title;
 }
@@ -252,5 +266,6 @@ export function shelfSpan(finished: BookView[]): string {
 	const years = finished.map((b) => b.finishedYear);
 	const from = Math.min(...years);
 	const to = Math.max(...years);
+
 	return from === to ? `${count} · ${from}` : `${count} · ${from} → ${to}`;
 }

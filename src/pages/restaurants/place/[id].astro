@@ -42,21 +42,27 @@ export const prerender = false;
 
 /** 58×44 in the stylesheet — one photograph standing in for a whole visit. */
 const VISIT_THUMB = 58;
+
 const VISIT_THUMB_WIDTHS = photoWidthsFor(VISIT_THUMB);
 
 const id = Number(Astro.params.id);
+
 if (!Number.isInteger(id) || id <= 0) return Astro.redirect('/restaurants/places');
 
 const detail = await getPlace(id);
+
 if (!detail) return new Response('Not found', { status: 404 });
 
 const { place, visits } = detail;
+
 const isOwner = await requireOwner(Astro.cookies);
+
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 
 const shots = photoStrip(visits);
 
 const latest = verdictAt(place.latest_verdict);
+
 const links = [
 	{
 		label: 'Google Maps',
@@ -87,13 +93,17 @@ const photoNote = shots.length === 1 ? '1 photograph' : `${shots.length} photogr
 // record, and offers both routes. On a page with a history the same fact is a
 // footnote, because eleven visits are the reason you came.
 const where = locationState(place);
+
 const isPlaced = where === 'placed';
+
 // Owner-only, both of them: an invitation is a control, and to a visitor it
 // would only be an apology for the state of somebody else's records. What a
 // visitor still sees is the header's admission and the sidecar's "not on it",
 // because those are statements about the record rather than things to do.
 const inviteLoud = isOwner && !isPlaced && visits.length <= 1;
+
 const inviteQuiet = isOwner && !isPlaced && visits.length > 1;
+
 const evidence = placeEvidence(place);
 
 const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when the place was added by name alone.`;
@@ -502,6 +512,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	// sentence about what was saved rides across the reload, since "the words but
 	// still no point" is the one outcome you cannot see at a glance.
 	const pending = sessionStorage.getItem('rl-toast');
+
 	if (pending) {
 		sessionStorage.removeItem('rl-toast');
 		const toast = document.createElement('div');
@@ -514,19 +525,25 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	// The two owner controls that are a single field each write straight through
 	// and re-read the page, rather than opening a form to change one value.
 	const heart = document.querySelector<HTMLButtonElement>('[data-heart]');
+
 	heart?.addEventListener('click', async () => {
 		const on = heart.dataset.hearted === '1';
 		heart.disabled = true;
+
 		const res = await fetch(`/api/restaurants/places/${heart.dataset.place}`, {
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ hearted: !on }),
 		});
+
 		heart.disabled = false;
+
 		if (!res.ok) {
 			window.alert('Could not change that.');
+
 			return;
 		}
+
 		heart.dataset.hearted = on ? '' : '1';
 		heart.classList.toggle('heartbtn--on', !on);
 		heart.querySelector('[data-heart-label]')!.textContent = on ? 'Love it' : 'Loved';
@@ -535,19 +552,25 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	// Two more single-field controls on the same pattern: write through, then
 	// show the new state. Neither reloads — nothing else on the page changes.
 	const trip = document.querySelector<HTMLButtonElement>('[data-trip]');
+
 	trip?.addEventListener('click', async () => {
 		const on = trip.dataset.on === '1';
 		trip.disabled = true;
+
 		const res = await fetch(`/api/restaurants/places/${trip.dataset.place}`, {
 			method: 'PATCH',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ trip: !on }),
 		});
+
 		trip.disabled = false;
+
 		if (!res.ok) {
 			window.alert('Could not change that.');
+
 			return;
 		}
+
 		trip.dataset.on = on ? '' : '1';
 		const label = trip.querySelector('[data-trip-label]')!;
 		label.textContent = on ? 'If I\u2019m nearby' : 'Worth the trip \u2020';
@@ -555,6 +578,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 	});
 
 	const tagBox = document.querySelector<HTMLElement>('[data-why-tags]');
+
 	for (const button of tagBox?.querySelectorAll<HTMLButtonElement>('[data-why-tag]') ?? []) {
 		button.addEventListener('click', async () => {
 			// The whole set goes up, not a delta: the column is an array and the
@@ -562,17 +586,23 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 			const wanted = [...tagBox!.querySelectorAll<HTMLButtonElement>('[data-why-tag]')]
 				.filter((b) => (b === button ? !b.classList.contains('totry__tag--on') : b.classList.contains('totry__tag--on')))
 				.map((b) => b.dataset.whyTag!);
+
 			button.disabled = true;
+
 			const res = await fetch(`/api/restaurants/places/${tagBox!.dataset.place}`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify({ toTryTags: wanted }),
 			});
+
 			button.disabled = false;
+
 			if (!res.ok) {
 				window.alert('Could not change that.');
+
 				return;
 			}
+
 			button.classList.toggle('totry__tag--on');
 		});
 	}

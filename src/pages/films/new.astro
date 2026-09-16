@@ -236,20 +236,33 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 	const IMG = 'https://image.tmdb.org/t/p/w92';
 
 	const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
 	const q = el<HTMLInputElement>('q');
+
 	const results = el<HTMLUListElement>('results');
+
 	const selected = el<HTMLDivElement>('selected');
+
 	const selLink = el<HTMLAnchorElement>('sel-link');
+
 	const selPoster = el<HTMLImageElement>('sel-poster');
+
 	const selTitle = el<HTMLSpanElement>('sel-title');
+
 	const searchWrap = el<HTMLDivElement>('search-wrap');
+
 	const clearRating = el<HTMLButtonElement>('clear-rating');
+
 	const like = el<HTMLButtonElement>('like');
+
 	const submit = el<HTMLButtonElement>('submit');
+
 	const msg = el<HTMLSpanElement>('msg');
 
 	let tmdbId: number | null = null;
+
 	let rating: number | null = null;
+
 	let liked = false;
 
 	// Today where the user is. Filled here rather than server-side, where "today"
@@ -258,9 +271,11 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 
 	// --- TMDB search (debounced) ---
 	let timer: number | undefined;
+
 	q.addEventListener('input', () => {
 		window.clearTimeout(timer);
 		const query = q.value.trim();
+
 		if (!query) return hideResults();
 		timer = window.setTimeout(() => runSearch(query), 300);
 	});
@@ -268,6 +283,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 	async function runSearch(query: string) {
 		try {
 			const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+
 			if (!res.ok) return hideResults();
 			const data = await res.json();
 			renderResults(data.results ?? []);
@@ -278,24 +294,30 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 
 	function renderResults(items: any[]) {
 		results.textContent = '';
+
 		if (!items.length) return hideResults();
+
 		for (const m of items.slice(0, 8)) {
 			const li = document.createElement('li');
 			const img = document.createElement('img');
+
 			if (m.poster_path) img.src = IMG + m.poster_path;
 			img.alt = '';
 			const label = document.createElement('span');
 			label.textContent = m.title;
+
 			if (m.release_date) {
 				const yr = document.createElement('span');
 				yr.className = 'r-year';
 				yr.textContent = m.release_date.slice(0, 4);
 				label.appendChild(yr);
 			}
+
 			li.append(img, label);
 			li.addEventListener('click', () => selectMovie(m));
 			results.appendChild(li);
 		}
+
 		results.hidden = false;
 	}
 
@@ -308,6 +330,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 		tmdbId = m.id;
 		selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
 		selLink.href = `/films/movie/${m.id}`;
+
 		if (m.poster_path) {
 			selPoster.src = IMG + m.poster_path;
 			selPoster.hidden = false;
@@ -315,6 +338,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 			selPoster.removeAttribute('src');
 			selPoster.hidden = true;
 		}
+
 		hideResults();
 		searchWrap.hidden = true;
 		selected.hidden = false;
@@ -344,6 +368,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 			clearRating.hidden = v == null;
 		},
 	});
+
 	clearRating.addEventListener('click', () => {
 		rating = null;
 		starPicker.set(null);
@@ -359,6 +384,7 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 	// --- Submit ---
 	el<HTMLFormElement>('logform').addEventListener('submit', async (e) => {
 		e.preventDefault();
+
 		if (!tmdbId) return;
 		submit.disabled = true;
 		msg.className = 'msg';
@@ -386,11 +412,15 @@ if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?re
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
+
 			if (res.status === 401) {
 				window.location.href = '/films/login?redirect=/films/new';
+
 				return;
 			}
+
 			const data = await res.json();
+
 			if (!res.ok) throw new Error(data.error || 'Save failed');
 			window.location.href = `/films/movie/${tmdbId}`;
 		} catch (err) {

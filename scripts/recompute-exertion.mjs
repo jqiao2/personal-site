@@ -45,24 +45,33 @@ import { computeExertion } from '../src/lib/exertion.ts';
 // ---------------------------------------------------------------------------
 
 const args = process.argv.slice(2);
+
 const has = (n) => args.includes(n);
+
 const flag = (n, d) => {
 	const i = args.indexOf(n);
+
 	return i >= 0 && args[i + 1] ? args[i + 1] : d;
 };
 
 const DRY = has('--dry');
+
 const SPORT = flag('--sport', null);
+
 const SINCE = flag('--since', null);
 
 /** "4:30" or a plain number of seconds. Paces are typed the way they're read. */
 function pace(value) {
 	if (!value) return null;
+
 	if (/^\d+:\d{2}$/.test(value)) {
 		const [m, s] = value.split(':').map(Number);
+
 		return m * 60 + s;
 	}
+
 	const n = Number(value);
+
 	return Number.isFinite(n) ? n : null;
 }
 
@@ -74,12 +83,16 @@ const SETS = {
 };
 
 const url = process.env.SUPABASE_URL;
+
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!url || !key) {
 	console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set (node --env-file=.env ...).');
 	process.exit(1);
 }
+
 const db = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+
 const log = (...a) => console.error(...a);
 
 // ---------------------------------------------------------------------------
@@ -87,12 +100,15 @@ const log = (...a) => console.error(...a);
 // ---------------------------------------------------------------------------
 
 const updates = Object.fromEntries(Object.entries(SETS).filter(([, v]) => v !== null && Number.isFinite(v)));
+
 if (Object.keys(updates).length) {
 	log(`updating every athlete_thresholds row: ${JSON.stringify(updates)}`);
+
 	if (!DRY) {
 		// Every row: these four are properties of the athlete rather than of a
 		// training block, and none of them is versioned in the source data.
 		const { error } = await db.from('athlete_thresholds').update(updates).gte('effective_from', '1900-01-01');
+
 		if (error) throw new Error(`update athlete_thresholds: ${error.message}`);
 	}
 }
@@ -101,20 +117,25 @@ const { data: thresholds, error: thErr } = await db
 	.from('athlete_thresholds')
 	.select('effective_from, ftp_w, lthr_bpm, max_hr, rest_hr, threshold_pace_s_per_km, css_pace_s_per_100m, weight_kg')
 	.order('effective_from');
+
 if (thErr) throw new Error(`read athlete_thresholds: ${thErr.message}`);
+
 if (!thresholds?.length) {
 	console.error('No athlete_thresholds rows — nothing to score against.');
 	process.exit(1);
 }
+
 log(`${thresholds.length} threshold periods, ${thresholds[0].effective_from} → ${thresholds[thresholds.length - 1].effective_from}`);
 
 /** The row in force on a date: the latest effective_from <= that date (§5). */
 function thresholdsOn(date) {
 	let inForce = null;
+
 	for (const t of thresholds) {
 		if (t.effective_from <= date) inForce = t;
 		else break;
 	}
+
 	return {
 		ftp_w: inForce?.ftp_w ?? null,
 		lthr_bpm: inForce?.lthr_bpm ?? null,
@@ -134,23 +155,31 @@ let query = db
 	.from('activities')
 	.select('id, sport, local_date, moving_seconds, elapsed_seconds, distance_m, elevation_gain_m, avg_hr, avg_power_w, exertion, exertion_method, exertion_confidence, ski_segments')
 	.order('id');
+
 if (SPORT) query = query.eq('sport', SPORT);
+
 if (SINCE) query = query.gte('local_date', SINCE);
 
 const activities = [];
+
 for (let from = 0; ; from += 1000) {
 	const { data, error } = await query.range(from, from + 999);
+
 	if (error) throw new Error(`read activities: ${error.message}`);
 	activities.push(...(data ?? []));
+
 	if (!data || data.length < 1000) break;
 }
+
 log(`${activities.length} activities to re-score`);
 
 const stats = { changed: 0, unchanged: 0, methodChanged: {}, failures: [] };
+
 let done = 0;
 
 for (const a of activities) {
 	done++;
+
 	if (done % 200 === 0) log(`  ${done}/${activities.length}`);
 
 	// Streams are fetched one activity at a time on purpose: at full device
@@ -161,12 +190,14 @@ for (const a of activities) {
 		.select('time_s, power_w, heartrate, altitude_m, distance_m, moving')
 		.eq('activity_id', a.id)
 		.maybeSingle();
+
 	if (sErr) {
 		stats.failures.push(`${a.id}: ${sErr.message}`);
 		continue;
 	}
 
 	let result;
+
 	try {
 		result = computeExertion(
 			{
@@ -199,10 +230,12 @@ for (const a of activities) {
 	}
 
 	const score = Number(result.score.toFixed(2));
+
 	const same =
 		Math.abs((a.exertion ?? -1) - score) < 0.01 &&
 		a.exertion_method === result.method &&
 		a.exertion_confidence === result.confidence;
+
 	if (same) {
 		stats.unchanged++;
 		continue;
@@ -222,6 +255,7 @@ for (const a of activities) {
 				intensity_factor: result.intensityFactor === null ? null : Number(result.intensityFactor.toFixed(3)),
 			})
 			.eq('id', a.id);
+
 		if (error) stats.failures.push(`${a.id}: ${error.message}`);
 	}
 }
@@ -231,16 +265,21 @@ for (const a of activities) {
 // ---------------------------------------------------------------------------
 
 log('');
+
 log(`${DRY ? 'would change' : 'changed'} ${stats.changed}, unchanged ${stats.unchanged}`);
+
 if (Object.keys(stats.methodChanged).length) {
 	log('');
 	log('method moves:');
+
 	for (const [move, n] of Object.entries(stats.methodChanged).sort((a, b) => b[1] - a[1])) {
 		log(`  ${move.padEnd(20)} ${n}`);
 	}
 }
+
 if (stats.failures.length) {
 	log('');
 	log(`${stats.failures.length} failures:`);
+
 	for (const f of stats.failures.slice(0, 20)) log(`  ${f}`);
 }

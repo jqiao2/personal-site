@@ -161,7 +161,9 @@ const { place } = Astro.props;
 	}
 
 	const node = document.getElementById('place-details');
+
 	const configNode = document.getElementById('place-details-config');
+
 	if (node && configNode) {
 		const cfg = JSON.parse(configNode.textContent ?? '{}') as Config;
 
@@ -169,6 +171,7 @@ const { place } = Astro.props;
 		// input to hold it. `saved` is what was loaded, which is what "changed"
 		// and "discard?" are both measured against.
 		const TEXT = ['name', 'cuisines', 'websiteUrl', 'yelpUrl', 'beliUrl', 'googlePlaceId', 'toTryReason'] as const;
+
 		type TextKey = (typeof TEXT)[number];
 
 		const saved: Record<TextKey, string> = {
@@ -180,6 +183,7 @@ const { place } = Astro.props;
 			googlePlaceId: cfg.googlePlaceId ?? '',
 			toTryReason: cfg.toTryReason ?? '',
 		};
+
 		let price = cfg.priceBand;
 		let saving = false;
 
@@ -198,6 +202,7 @@ const { place } = Astro.props;
 			for (const el of node!.querySelectorAll<HTMLElement>('[data-pd-price]')) {
 				el.classList.toggle('pd__price--on', el.dataset.pdPrice === price);
 			}
+
 			const save = node!.querySelector<HTMLButtonElement>('[data-pd-save]')!;
 			save.disabled = saving || !dirty() || !val('name');
 			const n = changed().length + (price !== cfg.priceBand ? 1 : 0);
@@ -208,8 +213,10 @@ const { place } = Astro.props;
 		function open() {
 			for (const k of TEXT) {
 				const el = field(k);
+
 				if (el) el.value = saved[k];
 			}
+
 			price = cfg.priceBand;
 			node!.hidden = false;
 			document.body.style.overflow = 'hidden';
@@ -235,24 +242,31 @@ const { place } = Astro.props;
 			// — and would overwrite anything changed elsewhere since the page
 			// loaded with what this dialog happened to have on screen.
 			const body: Record<string, unknown> = {};
+
 			for (const k of changed()) {
 				body[k] = k === 'cuisines' ? val(k).split(',').map((c) => c.trim()).filter(Boolean) : val(k);
 			}
+
 			if (price !== cfg.priceBand) body.priceBand = price;
 
 			saving = true;
 			render();
+
 			const res = await fetch(`/api/restaurants/places/${cfg.id}`, {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
 			});
+
 			saving = false;
+
 			if (!res.ok) {
 				render();
 				window.alert('Could not save that.');
+
 				return;
 			}
+
 			// Re-read: the name is in the header, the title and the breadcrumb, and
 			// the price and cuisines are in the facts line — all server-rendered.
 			sessionStorage.setItem('rl-toast', `Saved ${val('name')}`);
@@ -265,6 +279,7 @@ const { place } = Astro.props;
 				open();
 			});
 		}
+
 		node.querySelectorAll('[data-pd-close]').forEach((b) => b.addEventListener('click', askClose));
 		node.querySelector('[data-pd-keep]')!.addEventListener('click', () => {
 			node.querySelector<HTMLElement>('[data-pd-discard]')!.hidden = true;
@@ -274,12 +289,14 @@ const { place } = Astro.props;
 		document.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape' && !node.hidden) askClose();
 		});
+
 		for (const el of node.querySelectorAll<HTMLElement>('[data-pd-price]')) {
 			el.addEventListener('click', () => {
 				price = price === el.dataset.pdPrice ? null : (el.dataset.pdPrice ?? null);
 				render();
 			});
 		}
+
 		for (const k of TEXT) field(k)?.addEventListener('input', render);
 		// The location dialog is the other component's; opening it from here has
 		// to put this one away first, or two sheets stack on one backdrop.

@@ -20,7 +20,9 @@ import SiteHeader from '../../components/SiteHeader.astro';
 export const prerender = false;
 
 const id = Number(Astro.params.id);
+
 const isOwner = await requireOwner(Astro.cookies);
+
 const book = Number.isInteger(id) ? await getBook(id, isOwner) : null;
 
 // A private book does not exist to a visitor. Not a redacted page, not "you
@@ -69,7 +71,9 @@ const hasHours = bookHours.hours.some((pages) => pages > 0);
 // fixed seed rather than Math.random so the same book draws the same shelf on
 // every render instead of shuffling on each page load.
 let seed = 90_210;
+
 const random = () => ((seed = (seed * 9301 + 49_297) % 233_280), seed / 233_280);
+
 const spines = Array.from({ length: 18 }, () => ({
 	w: 8 + Math.round(random() * 20),
 	h: 46 + Math.round(random() * 30),
@@ -2157,7 +2161,9 @@ const spines = Array.from({ length: 18 }, () => ({
 
 	// Blurb: show the rest.
 	const blurb = document.querySelector('[data-blurb]');
+
 	const blurbToggle = document.querySelector<HTMLButtonElement>('[data-blurb-toggle]');
+
 	blurbToggle?.addEventListener('click', () => {
 		const open = blurbToggle.textContent === 'Less';
 		blurb?.querySelectorAll<HTMLElement>('.blurb__p').forEach((p, i) => {
@@ -2168,6 +2174,7 @@ const spines = Array.from({ length: 18 }, () => ({
 
 	// Highlights: 4, then all of them.
 	const highlightsToggle = document.querySelector<HTMLButtonElement>('[data-highlights-toggle]');
+
 	highlightsToggle?.addEventListener('click', () => {
 		const list = document.querySelector('[data-highlights]');
 		const all = Array.from(list?.querySelectorAll<HTMLElement>('.highlight') ?? []);
@@ -2196,7 +2203,9 @@ const spines = Array.from({ length: 18 }, () => ({
 	// Rail actions. Every one of these is a single-column patch, and the page is
 	// rendered from the database on every request, so a reload is the render.
 	const isbnInput = document.querySelector<HTMLInputElement>('[data-isbn-field]');
+
 	const isbnButton = document.querySelector<HTMLButtonElement>('[data-book-action="isbn"]');
+
 	isbnInput?.addEventListener('input', () => {
 		if (isbnButton) isbnButton.disabled = isbnInput.value.trim().length === 0;
 	});
@@ -2204,16 +2213,20 @@ const spines = Array.from({ length: 18 }, () => ({
 	document.querySelectorAll<HTMLButtonElement>('[data-book-action]').forEach((button) => {
 		button.addEventListener('click', async () => {
 			const action = button.dataset.bookAction;
+
 			const id = Number(
 				document.querySelector<HTMLElement>('#match-modal')?.dataset.bookId ??
 					location.pathname.split('/').pop(),
 			);
+
 			const label = button.textContent;
 			const isbnField = document.querySelector<HTMLInputElement>('[data-isbn-field]');
 			const isbnError = document.querySelector<HTMLElement>('[data-isbn-error]');
 			button.disabled = true;
 			button.textContent = '…';
+
 			if (isbnError) isbnError.hidden = true;
+
 			const res = await fetch('/api/books/book', {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
@@ -2225,9 +2238,11 @@ const spines = Array.from({ length: 18 }, () => ({
 					...(action === 'isbn' && isbnField ? { isbn: isbnField.value.trim() } : {}),
 				}),
 			});
+
 			if (!res.ok) {
 				button.disabled = false;
 				button.textContent = label;
+
 				// A failed ISBN lookup has a reason worth reading — the number is not
 				// in their catalogue, or it is not an ISBN at all — and without it the
 				// button just flickers back and looks broken.
@@ -2236,14 +2251,17 @@ const spines = Array.from({ length: 18 }, () => ({
 					isbnError.textContent = body.error ?? 'That did not work.';
 					isbnError.hidden = false;
 				}
+
 				return;
 			}
+
 			location.reload();
 		});
 	});
 
 	// Match panel: search Open Library, pick an edition, correct the title.
 	const matchModal = document.getElementById('match-modal');
+
 	if (matchModal) {
 		type Result = {
 			key: string;
@@ -2278,10 +2296,13 @@ const spines = Array.from({ length: 18 }, () => ({
 				img.className = 'thumb';
 				img.src = result.coverUrl;
 				img.alt = '';
+
 				return img;
 			}
+
 			const div = document.createElement('div');
 			div.className = 'thumb';
+
 			return div;
 		}
 
@@ -2312,17 +2333,23 @@ const spines = Array.from({ length: 18 }, () => ({
 
 		async function run() {
 			const q = input.value.trim();
+
 			if (q.length < 2) {
 				list.replaceChildren();
 				meta.textContent = '';
+
 				return;
 			}
+
 			meta.textContent = 'Searching Open Library…';
 			const res = await fetch(`/api/books/openlibrary?q=${encodeURIComponent(q)}`);
+
 			if (!res.ok) {
 				meta.textContent = 'Open Library is not answering. Try again in a minute.';
+
 				return;
 			}
+
 			const { results } = (await res.json()) as { results: Result[] };
 			list.replaceChildren();
 			meta.textContent = !results.length
@@ -2386,6 +2413,7 @@ const spines = Array.from({ length: 18 }, () => ({
 			if (!picked) return;
 			confirmBtn.disabled = true;
 			confirmBtn.textContent = 'Linking…';
+
 			const res = await fetch('/api/books/book', {
 				method: 'PATCH',
 				headers: { 'content-type': 'application/json' },
@@ -2400,11 +2428,14 @@ const spines = Array.from({ length: 18 }, () => ({
 					coverUrl: picked.coverUrl,
 				}),
 			});
+
 			if (!res.ok) {
 				confirmBtn.disabled = false;
 				confirmBtn.textContent = 'Link this edition';
+
 				return;
 			}
+
 			location.reload();
 		});
 	}

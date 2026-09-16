@@ -68,6 +68,7 @@ export async function recentJournal(limit = 15, isOwner = false): Promise<Journa
 	const months = await listJournalMonths();
 	const keys = months.slice(0, 2).map((m) => m.key);
 	const perMonth = await Promise.all(keys.map((k) => monthItemsPublic(k, isOwner)));
+
 	return perMonth
 		.flat()
 		// Reverse-chronological throughout: newest day first, and within a day the

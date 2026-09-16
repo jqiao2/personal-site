@@ -53,6 +53,7 @@ export function toEditorInitial(entry: StoredEntry): EntryEditorInitial {
 			? entry.medium
 			: 'other'
 		: null;
+
 	return {
 		date: entry.watched_date ?? '',
 		rating: entry.rating,

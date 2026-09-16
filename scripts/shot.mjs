@@ -32,20 +32,29 @@ import { dev } from 'astro';
 import { chromium } from 'playwright';
 
 const args = process.argv.slice(2);
+
 const flag = (name, fallback) => {
 	const at = args.indexOf(`--${name}`);
+
 	return at === -1 ? fallback : args[at + 1];
 };
+
 const positional = args.filter((a, i) => !a.startsWith('--') && !args[i - 1]?.startsWith('--'));
 
 const path = `/${(positional[0] ?? '').replace(/^\/+/, '')}`;
+
 const out = positional[1] ?? 'tmp/shot.png';
+
 const width = Number(flag('width', 1280));
+
 const height = Number(flag('height', 900));
+
 const el = flag('el', null);
+
 // Selectors to click before shooting, for interactive state. Repeat the flag to
 // walk a UI open a step at a time: --click "[data-open-editor]" --click "#toggle".
 const clicks = args.flatMap((a, i) => (a === '--click' && args[i + 1] ? [args[i + 1]] : []));
+
 const full = args.includes('--full');
 
 await mkdir(dirname(out), { recursive: true });
@@ -53,12 +62,17 @@ await mkdir(dirname(out), { recursive: true });
 // A port of our own, high and unlikely to be taken; astro walks upward from it
 // if it is, and tells us where it landed.
 const server = await dev({ root: process.cwd(), server: { port: 4380 }, logLevel: 'error' });
+
 const base = `http://localhost:${server.address.port}`;
 
 const browser = await chromium.launch();
+
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+
 const problems = [];
+
 page.on('pageerror', (error) => problems.push(`page error: ${error.message}`));
+
 page.on('response', (r) => r.status() >= 400 && problems.push(`${r.status()} ${r.url()}`));
 
 try {
@@ -67,10 +81,12 @@ try {
 	// Fonts and images decide the layout of everything here, so wait for them
 	// rather than for a timer.
 	await page.evaluate(() => document.fonts.ready);
+
 	for (const selector of clicks) await page.locator(selector).first().click();
 	const target = el ? page.locator(el).first() : page;
 	await target.screenshot({ path: out, fullPage: el ? undefined : full });
 	console.log(`wrote ${out}`);
+
 	// 404s on optimised photos are routine without the production bucket; they
 	// are worth printing and not worth failing over.
 	for (const problem of problems.slice(0, 10)) console.log(`  · ${problem}`);

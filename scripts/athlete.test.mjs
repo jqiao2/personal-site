@@ -21,21 +21,32 @@ import {
 
 // --- pace parsing ---------------------------------------------------------
 assert.equal(parsePace('6:38'), 398);
+
 assert.equal(parsePace('12:05'), 725);
+
 assert.equal(parsePace(' 6:38 '), 398);
+
 assert.equal(parsePace('6.5'), 390, 'a decimal under 30 is minutes');
+
 assert.equal(parsePace('398'), 398, 'a number over 30 is already seconds');
+
 assert.equal(parsePace(''), null);
+
 assert.equal(parsePace('nope'), null);
+
 assert.equal(parsePace('6:75'), null, 'no such second');
+
 assert.equal(formatPace(398), '6:38');
+
 assert.equal(formatPace(600), '10:00');
+
 assert.equal(formatPace(65), '1:05');
 
 // --- round trips ----------------------------------------------------------
 // Every editable metric must survive display → stored → display, or the edit
 // button silently rewrites a row it only meant to load.
 const byKey = Object.fromEntries(METRICS.map((m) => [m.key, m]));
+
 for (const m of METRICS.filter((x) => !x.derived)) {
 	const stored = m.read({
 		ftp_w: 265,
@@ -47,21 +58,29 @@ for (const m of METRICS.filter((x) => !x.derived)) {
 		weight_kg: 72.5,
 		height_cm: 178,
 	});
+
 	const back = m.toStored(m.toDisplay(stored));
 	assert.ok(Math.abs(back - stored) < 0.1, `${m.key} round trip: ${stored} → ${back}`);
 }
 
 // --- the conversions themselves, spot-checked against known values --------
 assert.equal(byKey.threshold_pace_s_per_km.format(byKey.threshold_pace_s_per_km.toDisplay(250)), '6:42');
+
 assert.equal(Math.round(250 * KM_PER_MILE), 402);
+
 assert.equal(byKey.weight_kg.toDisplay(72.5), Number((72.5 * LB_PER_KG).toFixed(1)));
+
 assert.equal(byKey.weight_kg.format(byKey.weight_kg.toDisplay(72.5)), '159.8');
+
 assert.equal(byKey.height_cm.format(byKey.height_cm.toDisplay(177.8)), '70.0');
+
 assert.equal(byKey.css_pace_s_per_100m.format(95), '1:35', 'swim pace is stored in its display unit');
 
 // --- derived + series -----------------------------------------------------
 assert.equal(byKey.w_per_kg.read({ ftp_w: 265, weight_kg: 72.5 }).toFixed(2), '3.66');
+
 assert.equal(byKey.w_per_kg.read({ ftp_w: 265, weight_kg: null }), null);
+
 assert.equal(byKey.w_per_kg.toStored, undefined, 'derived metrics are never written');
 
 const rows = [
@@ -69,7 +88,9 @@ const rows = [
 	{ effective_from: '2025-01-01', ftp_w: 250 },
 	{ effective_from: '2025-09-01', ftp_w: null },
 ];
+
 const s = seriesOf(byKey.ftp_w, rows);
+
 assert.deepEqual(
 	s.points.map((p) => [p.date, p.value]),
 	[
@@ -88,16 +109,24 @@ const weighIns = [
 	{ measured_on: '2026-02-14', weight_kg: 72.0 },
 	{ measured_on: '2026-03-20', weight_kg: 71.5 },
 ];
+
 const ws = weightSeries(weighIns);
+
 assert.equal(ws.metric.key, 'weight_kg');
+
 assert.equal(ws.points.length, 3);
+
 assert.equal(ws.points[0].value, Number((73.0 * LB_PER_KG).toFixed(1)), 'plotted in pounds');
+
 assert.equal(weightSeries([]).points.length, 0, 'no scale data → empty series, not a crash');
 
 // weightKgOn: the weigh-in in force on a date is the latest on or before it.
 assert.equal(weightKgOn('2026-02-14', weighIns), 72.0, 'exact day');
+
 assert.equal(weightKgOn('2026-03-01', weighIns), 72.0, 'between weigh-ins → the earlier one');
+
 assert.equal(weightKgOn('2027-01-01', weighIns), 71.5, 'after the last → the last');
+
 assert.equal(weightKgOn('2025-12-01', weighIns), null, 'before any weigh-in → null');
 
 // wPerKgSeries: each FTP change paired with the weight in force on its date —
@@ -110,6 +139,7 @@ const wpk = wPerKgSeries(
 	],
 	weighIns,
 );
+
 assert.deepEqual(
 	wpk.points.map((p) => [p.date, Number(p.value.toFixed(2))]),
 	[
@@ -158,6 +188,7 @@ assert.equal(
 		],
 		TODAY,
 	);
+
 	assert.ok('rows' in r);
 	assert.equal(r.rows.length, 2, 'two distinct days');
 	const aug2 = r.rows.find((x) => x.measured_on === '2026-08-02');
@@ -166,14 +197,20 @@ assert.equal(
 
 // Rejections stop the whole batch rather than drop a day silently.
 assert.ok('error' in parseWeighIns([], TODAY), 'empty batch is an error');
+
 assert.ok('error' in parseWeighIns([{ weight: 0, date: TODAY }], TODAY), 'non-positive weight');
+
 assert.ok('error' in parseWeighIns([{ weight: 165, unit: 'stone', date: TODAY }], TODAY), 'bad unit');
+
 assert.ok('error' in parseWeighIns([{ weight: 5, unit: 'kg', date: TODAY }], TODAY), 'below the range');
+
 assert.ok('error' in parseWeighIns([{ weight: 500, unit: 'kg', date: TODAY }], TODAY), 'above the range');
+
 assert.ok('error' in parseWeighIns([{ weight: 165, date: 'Sept 1' }], TODAY), 'unparseable date');
 
 // --- flagOutliers: the >10% scale-misread guard ---------------------------
 const kg = (lb) => lb / LB_PER_KG;
+
 const mk = (date, lb) => ({ measured_on: date, weight_kg: kg(lb), source: 'test' });
 
 // The first reading, with no accepted history, is always kept.
@@ -183,11 +220,13 @@ assert.equal(flagOutliers([], [mk('2026-01-01', 165)])[0].ignored, false, 'nothi
 // does NOT poison the baseline for the reading after it.
 {
 	const accepted = [{ measured_on: '2026-01-01', weight_kg: kg(165) }];
+
 	const flagged = flagOutliers(accepted, [
 		mk('2026-01-02', 167), // +1.2% → kept
 		mk('2026-01-03', 210), // +27% off 167 → ignored (bag on the scale)
 		mk('2026-01-04', 166), // judged vs 167 (last ACCEPTED), not 210 → kept
 	]);
+
 	assert.deepEqual(
 		flagged.map((r) => [r.measured_on, r.ignored]),
 		[
@@ -206,6 +245,7 @@ assert.equal(
 	false,
 	'10% exactly is kept',
 );
+
 assert.equal(
 	flagOutliers([{ measured_on: '2026-02-01', weight_kg: 100 }], [{ measured_on: '2026-02-02', weight_kg: 111, source: 't' }])[0]
 		.ignored,
@@ -220,6 +260,7 @@ assert.equal(
 		{ measured_on: '2026-03-01', weight_kg: kg(165) },
 		{ measured_on: '2026-03-02', weight_kg: kg(166) },
 	];
+
 	const flagged = flagOutliers(accepted, [mk('2026-03-02', 190)]); // vs 2026-03-01's 165 → +15% → ignored
 	assert.equal(flagged[0].ignored, true, 're-measure judged against the prior day');
 }
@@ -231,9 +272,11 @@ console.log('athlete.test.mjs: ok');
 	const { plot, trend, windowed, PLOT_W, PLOT_H } = await import('../src/lib/athlete.ts');
 	const m = METRICS.find((x) => x.key === 'ftp_w');
 	const iso = (d) => d.toLocaleDateString('en-CA');
+
 	const monthsAgo = (n) => {
 		const d = new Date();
 		d.setMonth(d.getMonth() - n);
+
 		return iso(d);
 	};
 
@@ -243,6 +286,7 @@ console.log('athlete.test.mjs: ok');
 		{ date: monthsAgo(3), value: 250 },
 		{ date: monthsAgo(1), value: 257 },
 	];
+
 	assert.equal(windowed(pts, '6m').length, 2, '6M drops the two-year-old reading');
 	assert.equal(windowed(pts, 'all').length, 3, 'All keeps everything');
 	assert.deepEqual(
@@ -256,9 +300,11 @@ console.log('athlete.test.mjs: ok');
 	assert.equal(p.dots.length, 2);
 	assert.ok(p.dots[0].x < p.dots[1].x, 'time runs left to right');
 	assert.ok(p.dots[1].y < p.dots[0].y, 'the bigger number sits higher');
+
 	for (const d of p.dots) {
 		assert.ok(d.x >= 0 && d.x <= PLOT_W && d.y >= 0 && d.y <= PLOT_H, 'dots stay inside the box');
 	}
+
 	assert.equal(plot([]), null, 'no points, no plot');
 
 	// A metric that never moved draws down the middle instead of on the floor.

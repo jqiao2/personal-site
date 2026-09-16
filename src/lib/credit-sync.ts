@@ -20,8 +20,11 @@ import { countryProfile, careerEra, shrunkMean, pctRank, MIN_WINDOW } from './cr
 import creditConfig from '../data/credit-config.json';
 
 const TOP_CAST = 15;
+
 const COMPOSER_JOBS = new Set(['Original Music Composer', 'Composer', 'Music']);
+
 const round3 = (v: number | null) => (v == null ? null : Math.round(v * 1000) / 1000);
+
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 /** vote_count and (positive) revenue of a film's contemporaries, widening the
@@ -32,6 +35,7 @@ async function windowValues(year: number): Promise<{ votes: number[]; revs: numb
 		// Page past PostgREST's 1000-row cap: a +/-2-year window in a busy decade
 		// holds thousands of films, and a truncated window skews the percentile.
 		const rows: { vote_count: number | null; revenue: number | null }[] = [];
+
 		for (let offset = 0; ; offset += 1000) {
 			const { data, error } = await supabaseAdmin
 				.from('credit_films')
@@ -40,13 +44,17 @@ async function windowValues(year: number): Promise<{ votes: number[]; revs: numb
 				.lte('release_year', year + span)
 				.order('tmdb_id', { ascending: true })
 				.range(offset, offset + 999);
+
 			if (error) throw new Error(`window read failed: ${error.message}`);
 			rows.push(...(data ?? []));
+
 			if ((data ?? []).length < 1000) break;
 		}
+
 		if (rows.length >= MIN_WINDOW || span > 60) {
 			const votes = rows.map((r) => r.vote_count ?? 0).sort((a, b) => a - b);
 			const revs = rows.map((r) => r.revenue ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+
 			return { votes, revs };
 		}
 	}
@@ -61,12 +69,15 @@ async function enrichPeople(ids: number[], names: Map<number, string>): Promise<
 	// Every credit for these people -> their film ids.
 	const filmsByPerson = new Map<number, Set<number>>(ids.map((id) => [id, new Set()]));
 	const allFilmIds = new Set<number>();
+
 	for (let i = 0; i < ids.length; i += 300) {
 		const { data, error } = await supabaseAdmin
 			.from('credits')
 			.select('person_id, film_id')
 			.in('person_id', ids.slice(i, i + 300));
+
 		if (error) throw new Error(`filmography read failed: ${error.message}`);
+
 		for (const r of data ?? []) {
 			filmsByPerson.get(r.person_id)?.add(r.film_id);
 			allFilmIds.add(r.film_id);
@@ -76,28 +87,38 @@ async function enrichPeople(ids: number[], names: Map<number, string>): Promise<
 	// Facts + stored percentiles for every film in those filmographies.
 	const factById = new Map<number, { year: number | null; countries: string[]; reach_pct: number | null; gross_pct: number | null }>();
 	const filmIdList = [...allFilmIds];
+
 	for (let i = 0; i < filmIdList.length; i += 400) {
 		const { data, error } = await supabaseAdmin
 			.from('credit_films')
 			.select('tmdb_id, release_year, countries, reach_pct, gross_pct')
 			.in('tmdb_id', filmIdList.slice(i, i + 400));
+
 		if (error) throw new Error(`film facts read failed: ${error.message}`);
+
 		for (const r of data ?? []) {
 			factById.set(r.tmdb_id, { year: r.release_year, countries: r.countries ?? [], reach_pct: r.reach_pct, gross_pct: r.gross_pct });
 		}
 	}
+
 	const filmForDerive = new Map([...factById].map(([id, f]) => [id, { year: f.year, countries: f.countries }]));
 
 	const now = new Date().toISOString();
+
 	const rows = ids.map((id) => {
 		const filmIds = filmsByPerson.get(id) ?? new Set<number>();
 		let reachSum = 0, reachN = 0, grossSum = 0, grossN = 0;
+
 		for (const fid of filmIds) {
 			const f = factById.get(fid);
+
 			if (f?.reach_pct != null) { reachSum += f.reach_pct; reachN++; }
+
 			if (f?.gross_pct != null) { grossSum += f.gross_pct; grossN++; }
 		}
+
 		const cp = countryProfile(filmIds, filmForDerive);
+
 		return {
 			tmdb_id: id,
 			name: names.get(id) ?? `#${id}`,
@@ -109,7 +130,9 @@ async function enrichPeople(ids: number[], names: Map<number, string>): Promise<
 			enriched_at: now,
 		};
 	});
+
 	const { error } = await supabaseAdmin.from('credit_people').upsert(rows, { onConflict: 'tmdb_id', defaultToNull: false });
+
 	if (error) throw new Error(`enrichment write failed: ${error.message}`);
 }
 
@@ -120,6 +143,7 @@ export async function syncFilmCredits(d: TmdbMovieDetails): Promise<void> {
 	try {
 		const filmId = d.id;
 		const { data: existing } = await supabaseAdmin.from('credit_films').select('tmdb_id').eq('tmdb_id', filmId).maybeSingle();
+
 		if (existing) return; // already in the corpus
 
 		const year = releaseYear(d.release_date);
@@ -130,9 +154,11 @@ export async function syncFilmCredits(d: TmdbMovieDetails): Promise<void> {
 		// Score the film against its contemporaries.
 		let reachPct: number | null = null;
 		let grossPct: number | null = null;
+
 		if (year != null) {
 			const { votes, revs } = await windowValues(year);
 			reachPct = pctRank(voteCount, votes);
+
 			if (revenue > 0) grossPct = pctRank(revenue, revs);
 		}
 
@@ -151,6 +177,7 @@ export async function syncFilmCredits(d: TmdbMovieDetails): Promise<void> {
 			},
 			{ onConflict: 'tmdb_id', defaultToNull: false },
 		);
+
 		if (filmErr) throw new Error(`credit_films write failed: ${filmErr.message}`);
 
 		// Top-billed cast + directors + composers, matching the corpus convention.
@@ -158,25 +185,34 @@ export async function syncFilmCredits(d: TmdbMovieDetails): Promise<void> {
 		(d.credits?.cast ?? []).slice(0, TOP_CAST).forEach((c, i) => {
 			if (c.id && c.name?.trim()) credits.push({ id: c.id, name: c.name.trim(), role: 'actor', billing: i });
 		});
+
 		for (const c of d.credits?.crew ?? []) {
 			const role = c.job === 'Director' ? 'director' : COMPOSER_JOBS.has(c.job) ? 'composer' : null;
+
 			if (role && c.id && c.name?.trim()) credits.push({ id: c.id, name: c.name.trim(), role, billing: null });
 		}
 
 		const names = new Map<number, string>();
 		const people = new Map<number, { tmdb_id: number; name: string }>();
+
 		for (const c of credits) {
 			names.set(c.id, c.name);
 			people.set(c.id, { tmdb_id: c.id, name: c.name });
 		}
+
 		if (people.size) {
 			const { error } = await supabaseAdmin.from('credit_people').upsert([...people.values()], { onConflict: 'tmdb_id', defaultToNull: false });
+
 			if (error) throw new Error(`credit_people write failed: ${error.message}`);
 		}
+
 		const creditRows = new Map<string, { film_id: number; person_id: number; role: string; billing: number | null }>();
+
 		for (const c of credits) creditRows.set(`${c.id}:${c.role}`, { film_id: filmId, person_id: c.id, role: c.role, billing: c.billing });
+
 		if (creditRows.size) {
 			const { error } = await supabaseAdmin.from('credits').upsert([...creditRows.values()], { onConflict: 'film_id,person_id,role', defaultToNull: false });
+
 			if (error) throw new Error(`credits write failed: ${error.message}`);
 		}
 

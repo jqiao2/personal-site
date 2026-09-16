@@ -75,12 +75,14 @@ export const EXERTION_SCALE = [
 /** The visual weight for an exertion score: a colour from ALPINE. */
 export function exertionInk(score: number | null | undefined): AlpineColor {
 	const bucket = EXERTION_SCALE.find((b) => (score ?? 0) < b.max) ?? EXERTION_SCALE[EXERTION_SCALE.length - 1];
+
 	return ALPINE[bucket.ink];
 }
 
 /** The word for an exertion score: 'easy' | 'steady' | 'hard' | 'brutal'. */
 export function exertionLabel(score: number | null | undefined): 'easy' | 'steady' | 'hard' | 'brutal' {
 	const bucket = EXERTION_SCALE.find((b) => (score ?? 0) < b.max) ?? EXERTION_SCALE[EXERTION_SCALE.length - 1];
+
 	return bucket.label;
 }
 
@@ -128,7 +130,9 @@ function leadFigures(row: CardStatRow, count: number): string[] {
  */
 export function cardStats(row: CardStatRow, limit = 3): string[] {
 	const stats = leadFigures(row, 2);
+
 	if (stats.length === 2 && row.exertion != null) stats.push(exertionLabel(row.exertion));
+
 	return stats.slice(0, limit);
 }
 
