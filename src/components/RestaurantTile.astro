@@ -49,6 +49,7 @@ const {
 } = Astro.props;
 
 const stars = starText(rating);
+
 const cuisine = cuisines[0] ?? '';
 
 // The head is `object-fit: cover` across the full width of a grid cell, and
@@ -56,7 +57,9 @@ const cuisine = cuisines[0] ?? '';
 // over 198px on a desktop and, since two of them will not fit a phone's
 // column, close to the whole viewport on one.
 const CAP = 300;
+
 const WIDTHS = photoWidthsFor(CAP);
+
 const SIZES = `(max-width: 560px) 94vw, ${CAP}px`;
 ---
 

@@ -33,11 +33,15 @@ import type { ActivityListRow, ActivitySort } from '../../lib/activities';
 export const prerender = false;
 
 const BATCH = 30;
+
 const METERS_PER_MILE = 1609.344;
+
 const METERS_PER_FOOT = 0.3048;
 
 const mi = (m: number) => m / METERS_PER_MILE;
+
 const ft = (m: number) => m / METERS_PER_FOOT;
+
 const min = (s: number) => s / 60;
 
 // A visitor gets redacted rows (sport glyph, no link) and an empty facet set,
@@ -46,8 +50,11 @@ const min = (s: number) => s / 60;
 // left to draw themselves empty: with no chips, no gear, no places and no
 // slider bounds there is nothing in them to operate.
 const isOwner = await requireOwner(Astro.cookies);
+
 const query: ActivityFilterQuery = activityQueryFromParams(Astro.url.searchParams);
+
 const filterCount = activityFilterCount(query);
+
 // Visitors have no filters, because fetchActivityPage drops all but sport and
 // date for them — so the summary sentence and the badge would both be
 // describing a filter that wasn't applied.
@@ -58,7 +65,9 @@ const hasFilters = isOwner && filterCount > 0;
 // degrade gracefully the way a PostgREST "column doesn't exist" error does —
 // this page must still render its real empty state rather than 500.
 let rows: ActivityListRow[] = [];
+
 let total = 0;
+
 let facets: ActivityFacetsPayload = {
 	sports: [],
 	gear: [],
@@ -68,11 +77,13 @@ let facets: ActivityFacetsPayload = {
 	elevationM: null,
 	exertion: null,
 };
+
 try {
 	const [page, f] = await Promise.all([
 		fetchActivityPage(query, { limit: BATCH, offset: 0 }, isOwner),
 		fetchActivityFacets(isOwner),
 	]);
+
 	rows = page.rows;
 	total = page.total;
 	facets = f;
@@ -86,7 +97,9 @@ try {
 // visitor has no facets, and no filters either, so their `total` is already
 // the whole collection.
 const collectionTotal = isOwner ? facets.sports.reduce((sum, s) => sum + s.count, 0) : total;
+
 const hasMore = total > rows.length;
+
 const num = (n: number) => n.toLocaleString('en-US');
 
 const gearNames = query.gearIds?.length
@@ -123,6 +136,7 @@ const summary = hasFilters
 // all to draw; a family with a zero count still shows, dimmed, so the panel
 // reads as the whole taxonomy rather than only what happens to be logged.
 const sportCounts = new Map(facets.sports.map((s) => [s.sport, s.count]));
+
 const sportsByFamily = FAMILY_ORDER.map((family) => ({
 	family,
 	label: FAMILY_LABEL[family],
@@ -140,8 +154,11 @@ const SORT_LABEL: Record<ActivitySort, string> = {
 	hr: 'Avg heart rate',
 	calories: 'Calories',
 };
+
 const SORTS: ActivitySort[] = ['date', 'exertion', 'distance', 'duration', 'elevation', 'pace', 'power', 'hr', 'calories'];
+
 const currentSort: ActivitySort = query.sort ?? 'date';
+
 const currentDir: 'asc' | 'desc' = query.sortDir ?? 'desc';
 
 // Range bounds for the four sliders, rounded to friendly steps and only
@@ -151,31 +168,39 @@ const currentDir: 'asc' | 'desc' = query.sortDir ?? 'desc';
 function bounds(lo: number, hi: number, step: number, round: (n: number) => number) {
 	const lov = round(lo / step) * step;
 	const hiv = Math.max(lov + step, Math.ceil(hi / step) * step);
+
 	return { lo: lov, hi: hiv };
 }
+
 const distBounds = facets.distanceM
 	? bounds(mi(facets.distanceM.min), mi(facets.distanceM.max), 1, Math.floor)
 	: null;
+
 const durBounds = facets.durationS
 	? bounds(min(facets.durationS.min), min(facets.durationS.max), 5, Math.floor)
 	: null;
+
 const elevBounds = facets.elevationM
 	? bounds(ft(facets.elevationM.min), ft(facets.elevationM.max), 50, Math.floor)
 	: null;
+
 const exBounds = facets.exertion ? bounds(facets.exertion.min, facets.exertion.max, 5, Math.floor) : null;
 
 const distVal = {
 	min: query.distanceMinM != null ? mi(query.distanceMinM) : (distBounds?.lo ?? 0),
 	max: query.distanceMaxM != null ? mi(query.distanceMaxM) : (distBounds?.hi ?? 0),
 };
+
 const durVal = {
 	min: query.durationMinS != null ? min(query.durationMinS) : (durBounds?.lo ?? 0),
 	max: query.durationMaxS != null ? min(query.durationMaxS) : (durBounds?.hi ?? 0),
 };
+
 const elevVal = {
 	min: query.elevationMinM != null ? ft(query.elevationMinM) : (elevBounds?.lo ?? 0),
 	max: query.elevationMaxM != null ? ft(query.elevationMaxM) : (elevBounds?.hi ?? 0),
 };
+
 const exVal = {
 	min: query.exertionMin ?? exBounds?.lo ?? 0,
 	max: query.exertionMax ?? exBounds?.hi ?? 0,
@@ -945,6 +970,7 @@ const scopeDummy: ActivityCardRow = {
 		// runtime code (and, through it, supabase.ts) the way a value import
 		// would.
 		import type { ActivityListRow } from '../../lib/activities';
+
 		type ApiActivity = ActivityListRow;
 
 		interface SentencePart {
@@ -978,19 +1004,26 @@ const scopeDummy: ActivityCardRow = {
 
 		function andList(items: string[], conj = 'and'): string {
 			if (items.length <= 1) return items.join('');
+
 			if (items.length === 2) return `${items[0]} ${conj} ${items[1]}`;
+
 			return `${items.slice(0, -1).join(', ')}, ${conj} ${items[items.length - 1]}`;
 		}
+
 		function miTxt(m: number): string {
 			const val = m / 1609.344;
+
 			return `${val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)} mi`;
 		}
+
 		function ftTxt(m: number): string {
 			return `${Math.round(m / 0.3048).toLocaleString('en-US')} ft`;
 		}
+
 		function durTxt(s: number): string {
 			const h = Math.floor(s / 3600);
 			const m = Math.round((s % 3600) / 60);
+
 			return h > 0 ? `${h}h ${m}m` : `${m}m`;
 		}
 
@@ -1130,10 +1163,12 @@ const scopeDummy: ActivityCardRow = {
 				lit(' with ');
 				em('power data');
 			}
+
 			if (s.hasHr) {
 				lit(' with ');
 				em('heart-rate data');
 			}
+
 			if (s.measuredOnly) {
 				lit(' with ');
 				em('measured');
@@ -1144,67 +1179,92 @@ const scopeDummy: ActivityCardRow = {
 				lit(' using ');
 				em(andList(s.gearNames));
 			}
+
 			if (s.place) {
 				lit(' starting near ');
 				em(`"${s.place}"`);
 			}
 
 			lit('.');
+
 			return parts;
 		}
 
 		const grid = document.getElementById('grid');
+
 		const sentinel = document.getElementById('sentinel');
+
 		if (!grid || !sentinel) throw new Error('activities/all: missing #grid or #sentinel');
 
 		const shown = document.getElementById('shown')!;
+
 		const emptyUnfiltered = document.getElementById('empty-unfiltered')!;
+
 		const emptyFiltered = document.getElementById('empty-filtered')!;
+
 		const errorBox = document.getElementById('load-error')!;
+
 		const retry = document.getElementById('retry')!;
+
 		const BATCH = Number(sentinel.dataset.batch);
 
 		let offset = grid.childElementCount;
+
 		let loading = false;
+
 		let done = sentinel.hidden;
+
 		let seq = 0;
 
 		const fmt = (n: number) => n.toLocaleString('en-US');
 
 		// --- Filter state, mirroring activity-params.ts's units ------------
 		let sort = (document.getElementById('sort') as HTMLSelectElement).value;
+
 		let dir = (document.getElementById('dir-toggle') as HTMLButtonElement).dataset.dir as 'asc' | 'desc';
+
 		const sports = new Set<string>(
 			Array.from(document.querySelectorAll<HTMLButtonElement>('.chip[data-sport][aria-pressed="true"]')).map(
 				(c) => c.dataset.sport!,
 			),
 		);
+
 		const gear = new Set<number>(
 			Array.from(document.querySelectorAll<HTMLButtonElement>('.chip[data-gear][aria-pressed="true"]')).map((c) =>
 				Number(c.dataset.gear),
 			),
 		);
+
 		const flags = {
 			power: false,
 			hr: false,
 			measured: false,
 			pr: false,
 		};
+
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-flag]')) {
 			flags[chip.dataset.flag as keyof typeof flags] = chip.getAttribute('aria-pressed') === 'true';
 		}
+
 		let gps: boolean | null = null;
+
 		let indoor: boolean | null = null;
+
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-tri]')) {
 			if (chip.getAttribute('aria-pressed') !== 'true') continue;
 			const key = chip.dataset.tri as 'gps' | 'indoor';
 			const val = chip.dataset.value === '1';
+
 			if (key === 'gps') gps = val;
 			else indoor = val;
 		}
+
 		const dateFromInput = document.getElementById('datefrom') as HTMLInputElement;
+
 		const dateToInput = document.getElementById('dateto') as HTMLInputElement;
+
 		const placeInput = document.getElementById('place') as HTMLInputElement;
+
 		let place = placeInput.value.trim();
 
 		function activeCount(): number {
@@ -1223,6 +1283,7 @@ const scopeDummy: ActivityCardRow = {
 				(durRange && durRange.isActive() ? 1 : 0) +
 				(elevRange && elevRange.isActive() ? 1 : 0) +
 				(exRange && exRange.isActive() ? 1 : 0);
+
 			return n;
 		}
 
@@ -1241,6 +1302,7 @@ const scopeDummy: ActivityCardRow = {
 			const fill = document.getElementById(`${prefix}-fill`);
 			const minLabel = document.getElementById(`${prefix}-min-label`);
 			const maxLabel = document.getElementById(`${prefix}-max-label`);
+
 			if (!minInput || !maxInput || !fill || !minLabel || !maxLabel) return null;
 
 			let curMin = Number(minInput.value);
@@ -1271,11 +1333,13 @@ const scopeDummy: ActivityCardRow = {
 			maxInput.addEventListener('input', () => {
 				setValues(curMin, Number(maxInput.value));
 			});
+
 			for (const input of [minInput, maxInput]) {
 				input.addEventListener('change', () => applyFilters());
 			}
 
 			sync();
+
 			return {
 				get min() {
 					return curMin;
@@ -1295,18 +1359,21 @@ const scopeDummy: ActivityCardRow = {
 			Number((document.getElementById('dist-min') as HTMLInputElement | null)?.max ?? 0),
 			(v) => `${Math.round(v)} mi`,
 		);
+
 		const durRange = makeRange(
 			'dur',
 			Number((document.getElementById('dur-min') as HTMLInputElement | null)?.min ?? 0),
 			Number((document.getElementById('dur-min') as HTMLInputElement | null)?.max ?? 0),
 			(v) => `${Math.round(v)}m`,
 		);
+
 		const elevRange = makeRange(
 			'elev',
 			Number((document.getElementById('elev-min') as HTMLInputElement | null)?.min ?? 0),
 			Number((document.getElementById('elev-min') as HTMLInputElement | null)?.max ?? 0),
 			(v) => `${Math.round(v).toLocaleString('en-US')} ft`,
 		);
+
 		const exRange = makeRange(
 			'ex',
 			Number((document.getElementById('ex-min') as HTMLInputElement | null)?.min ?? 0),
@@ -1318,35 +1385,53 @@ const scopeDummy: ActivityCardRow = {
 			const p = new URLSearchParams();
 			p.set('limit', String(BATCH));
 			p.set('offset', String(from));
+
 			if (sort !== 'date') p.set('sort', sort);
+
 			if (dir !== 'desc') p.set('dir', dir);
+
 			for (const s of sports) p.append('sport', s);
+
 			if (dateFromInput.value) p.set('datefrom', dateFromInput.value);
+
 			if (dateToInput.value) p.set('dateto', dateToInput.value);
+
 			if (distRange?.isActive()) {
 				p.set('distmin', String(distRange.min));
 				p.set('distmax', String(distRange.max));
 			}
+
 			if (durRange?.isActive()) {
 				p.set('durmin', String(durRange.min));
 				p.set('durmax', String(durRange.max));
 			}
+
 			if (elevRange?.isActive()) {
 				p.set('elevmin', String(elevRange.min));
 				p.set('elevmax', String(elevRange.max));
 			}
+
 			if (exRange?.isActive()) {
 				p.set('exmin', String(exRange.min));
 				p.set('exmax', String(exRange.max));
 			}
+
 			if (gps != null) p.set('gps', gps ? '1' : '0');
+
 			if (indoor != null) p.set('indoor', indoor ? '1' : '0');
+
 			if (flags.power) p.set('power', '1');
+
 			if (flags.hr) p.set('hr', '1');
+
 			if (flags.measured) p.set('measured', '1');
+
 			if (flags.pr) p.set('pr', '1');
+
 			for (const id of gear) p.append('gear', String(id));
+
 			if (place) p.set('place', place);
+
 			return p.toString();
 		}
 
@@ -1357,6 +1442,7 @@ const scopeDummy: ActivityCardRow = {
 			p.delete('offset');
 			p.delete('limit');
 			const url = location.pathname + (p.toString() ? `?${p.toString()}` : '');
+
 			if (url !== location.pathname + location.search) history.replaceState(null, '', url);
 		}
 
@@ -1365,25 +1451,34 @@ const scopeDummy: ActivityCardRow = {
 		// see the scopeDummy comment in the frontmatter for why the hash has
 		// to be read off a real rendered instance rather than guessed.
 		const cardSample = document.querySelector('#scope-source .ac');
+
 		const cardScope = cardSample
 			? Array.from(cardSample.attributes)
 					.map((a) => a.name)
 					.find((n) => n.startsWith('data-astro-cid-'))
 			: undefined;
+
 		const pageScope = Array.from(grid.attributes)
 			.map((a) => a.name)
 			.find((n) => n.startsWith('data-astro-cid-'));
 
 		function el(tag: string, cls: string | undefined, scope: string | undefined, text?: string): HTMLElement {
 			const node = document.createElement(tag);
+
 			if (scope) node.setAttribute(scope, '');
+
 			if (cls) node.className = cls;
+
 			if (text != null) node.textContent = text;
+
 			return node;
 		}
+
 		function svgEl(tag: string, scope: string | undefined): SVGElement {
 			const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+
 			if (scope) node.setAttribute(scope, '');
+
 			return node;
 		}
 
@@ -1401,6 +1496,7 @@ const scopeDummy: ActivityCardRow = {
 
 		function buildRow(a: ApiActivity): HTMLElement {
 			const wrap = el('div', 'row-item', pageScope);
+
 			// Mirrors ActivityCard.astro's redacted branch — a private activity
 			// seen by a visitor is a sport glyph in a <div>, not a link to a page
 			// that would 404. The API has already emptied every other field; this
@@ -1424,13 +1520,16 @@ const scopeDummy: ActivityCardRow = {
 				rface.appendChild(rsvg as unknown as Node);
 				box.appendChild(rface);
 				wrap.appendChild(box);
+
 				return wrap;
 			}
+
 			const card = el('a', 'ac ac--row', cardScope) as HTMLAnchorElement;
 			card.href = `/activities/${a.id}`;
 			setAlpine(card);
 
 			const face = el('div', 'ac__face', cardScope);
+
 			if (a.route_path) {
 				const svg = svgEl('svg', cardScope) as unknown as SVGSVGElement;
 				svg.setAttribute('class', 'ac__route');
@@ -1447,6 +1546,7 @@ const scopeDummy: ActivityCardRow = {
 				path.setAttribute('vector-effect', 'non-scaling-stroke');
 				svg.appendChild(path);
 				const m = a.route_path.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+
 				if (m) {
 					const dot = svgEl('circle', cardScope);
 					dot.setAttribute('cx', m[1]);
@@ -1455,6 +1555,7 @@ const scopeDummy: ActivityCardRow = {
 					dot.setAttribute('fill', 'var(--lake)');
 					svg.appendChild(dot);
 				}
+
 				face.appendChild(svg as unknown as Node);
 			} else {
 				const nogps = el('div', 'ac__nogps', cardScope);
@@ -1465,6 +1566,7 @@ const scopeDummy: ActivityCardRow = {
 				});
 				face.appendChild(nogps);
 			}
+
 			card.appendChild(face);
 
 			const metaBox = el('div', 'ac__meta', cardScope);
@@ -1500,36 +1602,45 @@ const scopeDummy: ActivityCardRow = {
 					pageScope,
 					a.exertion_confidence === 'estimated' ? 'Est.' : 'Assumed',
 				);
+
 				badge.title = `Exertion ${a.exertion_confidence}. Via ${a.exertion_method ?? 'an unrecorded method'}. Not measured from a power or heart-rate stream. Treat it as a rough read rather than a precise one.`;
 				wrap.appendChild(badge);
 			}
+
 			return wrap;
 		}
 
 		function armSentinel() {
 			observer.unobserve(sentinel!);
 			sentinel!.hidden = done;
+
 			if (!done) observer.observe(sentinel!);
 		}
 
 		async function load(reset = false) {
 			if (!reset && (loading || done)) return;
+
 			if (reset) writeUrl();
 			const mySeq = ++seq;
 			loading = true;
 			errorBox.hidden = true;
 			const from = reset ? 0 : offset;
+
 			try {
 				const res = await fetch(`/api/activities/list?${buildQuery(from)}`);
+
 				if (!res.ok) throw new Error(`HTTP ${res.status}`);
 				const { activities, total } = (await res.json()) as { activities: ApiActivity[]; total: number };
+
 				if (mySeq !== seq) return;
 
 				if (reset) {
 					grid!.replaceChildren();
 					offset = 0;
 				}
+
 				const batch = document.createDocumentFragment();
+
 				for (const a of activities) batch.append(buildRow(a));
 				grid!.append(batch);
 				offset += activities.length;
@@ -1556,19 +1667,24 @@ const scopeDummy: ActivityCardRow = {
 			},
 			{ rootMargin: '600px' },
 		);
+
 		armSentinel();
+
 		retry.addEventListener('click', () => load(offset === 0));
 
 		// --- Filter summary sentence -----------------------------------------
 		const filterInfo = document.getElementById('filterinfo')!;
+
 		const filterInfoText = document.getElementById('filterinfo-text')!;
 
 		function metersFromMiles(v: number) {
 			return v * 1609.344;
 		}
+
 		function metersFromFeet(v: number) {
 			return v * 0.3048;
 		}
+
 		function secondsFromMinutes(v: number) {
 			return v * 60;
 		}
@@ -1576,7 +1692,9 @@ const scopeDummy: ActivityCardRow = {
 		function renderFilterInfo(total: number) {
 			const n = activeCount();
 			filterInfo.hidden = n === 0;
+
 			if (filterInfo.hidden) return;
+
 			const parts: SentencePart[] = activityFilterSentence({
 				total,
 				sports: [...sports],
@@ -1599,9 +1717,11 @@ const scopeDummy: ActivityCardRow = {
 				measuredOnly: flags.measured,
 				gearNames: Array.from(gear).map((id) => {
 					const chip = document.querySelector<HTMLButtonElement>(`.chip[data-gear="${id}"]`);
+
 					return chip?.textContent?.trim() ?? String(id);
 				}),
 			});
+
 			filterInfoText.replaceChildren(...parts.map((p) => el('span', p.em ? 'finfo__em' : undefined, undefined, p.t)));
 		}
 
@@ -1615,8 +1735,11 @@ const scopeDummy: ActivityCardRow = {
 
 		// --- Wiring ------------------------------------------------------------
 		const panel = document.getElementById('filters')!;
+
 		const toggle = document.getElementById('filters-toggle')!;
+
 		const countBadge = document.getElementById('filters-count')!;
+
 		const clearAll = document.getElementById('clear-all') as HTMLButtonElement;
 
 		toggle.addEventListener('click', () => {
@@ -1625,11 +1748,14 @@ const scopeDummy: ActivityCardRow = {
 		});
 
 		const sortSelect = document.getElementById('sort') as HTMLSelectElement;
+
 		sortSelect.addEventListener('change', () => {
 			sort = sortSelect.value;
 			applyFilters();
 		});
+
 		const dirToggle = document.getElementById('dir-toggle') as HTMLButtonElement;
+
 		dirToggle.addEventListener('click', () => {
 			dir = dir === 'asc' ? 'desc' : 'asc';
 			dirToggle.dataset.dir = dir;
@@ -1640,21 +1766,25 @@ const scopeDummy: ActivityCardRow = {
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-sport]')) {
 			chip.addEventListener('click', () => {
 				const slug = chip.dataset.sport!;
+
 				if (sports.has(slug)) sports.delete(slug);
 				else sports.add(slug);
 				chip.setAttribute('aria-pressed', String(sports.has(slug)));
 				applyFilters();
 			});
 		}
+
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-gear]')) {
 			chip.addEventListener('click', () => {
 				const id = Number(chip.dataset.gear);
+
 				if (gear.has(id)) gear.delete(id);
 				else gear.add(id);
 				chip.setAttribute('aria-pressed', String(gear.has(id)));
 				applyFilters();
 			});
 		}
+
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-flag]')) {
 			chip.addEventListener('click', () => {
 				const key = chip.dataset.flag as keyof typeof flags;
@@ -1663,44 +1793,57 @@ const scopeDummy: ActivityCardRow = {
 				applyFilters();
 			});
 		}
+
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-tri]')) {
 			chip.addEventListener('click', () => {
 				const key = chip.dataset.tri as 'gps' | 'indoor';
 				const val = chip.dataset.value === '1';
 				const current = key === 'gps' ? gps : indoor;
 				const next = current === val ? null : val;
+
 				if (key === 'gps') gps = next;
 				else indoor = next;
+
 				for (const sibling of document.querySelectorAll<HTMLButtonElement>(`.chip[data-tri="${key}"]`)) {
 					sibling.setAttribute('aria-pressed', String(sibling.dataset.value === '1' ? next === true : next === false));
 				}
+
 				applyFilters();
 			});
 		}
+
 		for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-place]')) {
 			chip.addEventListener('click', () => {
 				const value = chip.dataset.place!;
 				place = place === value ? '' : value;
 				placeInput.value = place;
+
 				for (const sibling of document.querySelectorAll<HTMLButtonElement>('.chip[data-place]')) {
 					sibling.setAttribute('aria-pressed', String(sibling.dataset.place === place && place !== ''));
 				}
+
 				applyFilters();
 			});
 		}
+
 		let placeDebounce = 0;
+
 		placeInput.addEventListener('input', () => {
 			window.clearTimeout(placeDebounce);
 			placeDebounce = window.setTimeout(() => {
 				const next = placeInput.value.trim();
+
 				if (next === place) return;
 				place = next;
+
 				for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[data-place]')) {
 					chip.setAttribute('aria-pressed', String(chip.dataset.place === place && place !== ''));
 				}
+
 				applyFilters();
 			}, 300);
 		});
+
 		for (const input of [dateFromInput, dateToInput]) {
 			input.addEventListener('change', applyFilters);
 		}
@@ -1719,9 +1862,11 @@ const scopeDummy: ActivityCardRow = {
 			durRange?.reset();
 			elevRange?.reset();
 			exRange?.reset();
+
 			for (const chip of document.querySelectorAll<HTMLButtonElement>('.chip[aria-pressed]')) {
 				chip.setAttribute('aria-pressed', 'false');
 			}
+
 			applyFilters();
 		});
 

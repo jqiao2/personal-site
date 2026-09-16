@@ -46,9 +46,11 @@ import { DatabaseSync } from 'node:sqlite';
 import { writeFileSync } from 'node:fs';
 
 const MAX_CHUNK = 5000; // the endpoint's cap
+
 const FUTURE_TOLERANCE_SECONDS = 24 * 60 * 60;
 
 const args = parseArgs(process.argv.slice(2));
+
 if (!args.db || args.db === true) {
 	console.error('--db <path to statistics.sqlite3> is required');
 	process.exit(1);
@@ -68,10 +70,14 @@ const opts = {
 const { books, sessions, skipped, counts } = readStats(opts.db);
 
 console.log(`read ${opts.db}`);
+
 console.log(`  books:    ${counts.books} (${books.length} usable)`);
+
 console.log(`  sessions: ${counts.sessions} (${sessions.length} usable)`);
+
 if (skipped.total > 0) {
 	console.log('  skipped:');
+
 	for (const [reason, n] of Object.entries(skipped.byReason)) {
 		console.log(`    ${String(n).padStart(6)}  ${reason}`);
 	}
@@ -81,16 +87,19 @@ let toSend = sessions;
 
 if (opts.since) {
 	const cutoff = Math.floor(Date.parse(`${opts.since}T00:00:00Z`) / 1000);
+
 	if (!Number.isFinite(cutoff)) {
 		console.error(`--since must be YYYY-MM-DD, got ${opts.since}`);
 		process.exit(1);
 	}
+
 	toSend = toSend.filter((s) => s.start_time >= cutoff);
 	console.log(`  --since ${opts.since}: ${toSend.length} sessions`);
 }
 
 if (!opts.all && !opts.dryRun) {
 	const cursor = await getCursor();
+
 	if (cursor?.latest_session_at) {
 		// Inclusive: a row landing on the same second as the cursor would
 		// otherwise be skipped forever. Resending it costs one discarded insert.
@@ -127,10 +136,13 @@ if (toSend.length === 0) {
 printRange(toSend);
 
 let received = 0;
+
 let inserted = 0;
+
 let latest = null;
 
 console.log();
+
 for (let i = 0; i < toSend.length; i += opts.chunk) {
 	const slice = toSend.slice(i, i + opts.chunk);
 	const n = Math.floor(i / opts.chunk) + 1;
@@ -146,6 +158,7 @@ for (let i = 0; i < toSend.length; i += opts.chunk) {
 }
 
 console.log(`\nsent ${received} sessions, ${inserted} new (${received - inserted} already stored)`);
+
 console.log(`cursor now ${latest}`);
 
 // ---------------------------------------------------------------------------
@@ -159,19 +172,24 @@ function readStats(path) {
 		.prepare(`select name from sqlite_master where name in ('page_stat_data', 'page_stat')`)
 		.all()
 		.map((r) => r.name);
+
 	const statsTable = tables.includes('page_stat_data') ? 'page_stat_data' : tables[0];
+
 	if (!statsTable) {
 		console.error(`${path} has no page_stat_data table — is this a KOReader statistics database?`);
 		process.exit(1);
 	}
 
 	const bookRows = db.prepare(`select id, title, authors, series, language, md5, pages from book`).all();
+
 	const sessionRows = db
 		.prepare(`select id_book, page, start_time, duration, total_pages from ${statsTable} order by start_time`)
 		.all();
+
 	db.close();
 
 	const skipped = { total: 0, byReason: {} };
+
 	const skip = (reason) => {
 		skipped.total++;
 		skipped.byReason[reason] = (skipped.byReason[reason] ?? 0) + 1;
@@ -180,12 +198,15 @@ function readStats(path) {
 	// id -> md5, the join the server can't do for us.
 	const md5ById = new Map();
 	const books = [];
+
 	for (const b of bookRows) {
 		const md5 = str(b.md5)?.toLowerCase();
+
 		if (!md5) {
 			skip('book has no md5');
 			continue;
 		}
+
 		md5ById.set(b.id, md5);
 		books.push({
 			md5,
@@ -201,31 +222,41 @@ function readStats(path) {
 
 	const now = Math.floor(Date.now() / 1000);
 	const sessions = [];
+
 	for (const s of sessionRows) {
 		const md5 = md5ById.get(s.id_book);
+
 		if (!md5) {
 			skip('session references an unknown book');
 			continue;
 		}
+
 		const page = Number(s.page);
+
 		if (!Number.isInteger(page) || page <= 0) {
 			skip('page is not a positive integer');
 			continue;
 		}
+
 		const startTime = Number(s.start_time);
+
 		if (!Number.isInteger(startTime) || startTime <= 0) {
 			skip('start_time is missing or zero');
 			continue;
 		}
+
 		if (startTime > now + FUTURE_TOLERANCE_SECONDS) {
 			skip('start_time is in the future (device clock)');
 			continue;
 		}
+
 		const duration = Number(s.duration);
+
 		if (!Number.isInteger(duration) || duration < 0) {
 			skip('duration is negative or not a number');
 			continue;
 		}
+
 		sessions.push({
 			book_md5: md5,
 			page,
@@ -247,6 +278,7 @@ function readStats(path) {
 /** Only the books a given slice of sessions actually mentions. */
 function booksFor(slice) {
 	const wanted = new Set(slice.map((s) => s.book_md5));
+
 	return books.filter((b) => wanted.has(b.md5));
 }
 
@@ -263,35 +295,43 @@ function printRange(list) {
 
 function token() {
 	const t = process.env.READING_SYNC_TOKEN;
+
 	if (!t) {
 		console.error('READING_SYNC_TOKEN is not set (try: node --env-file=.env …)');
 		process.exit(1);
 	}
+
 	return t;
 }
 
 async function getCursor() {
 	const url = new URL(`/api/books/sync?device=${encodeURIComponent(opts.device)}`, opts.url);
 	const res = await fetch(url, { headers: { authorization: `Bearer ${token()}` } });
+
 	if (!res.ok) {
 		console.error(`cursor lookup failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
 		process.exit(1);
 	}
+
 	return res.json();
 }
 
 async function post(payload) {
 	const url = new URL('/api/books/sync', opts.url);
+
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', authorization: `Bearer ${token()}` },
 		body: JSON.stringify(payload),
 	});
+
 	const text = await res.text();
+
 	if (!res.ok) {
 		console.error(`\nPOST failed: ${res.status} ${text.slice(0, 400)}`);
 		process.exit(1);
 	}
+
 	return JSON.parse(text);
 }
 
@@ -308,32 +348,40 @@ async function post(payload) {
 function str(v) {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	if (t.length === 0 || t.toUpperCase() === 'N/A') return null;
+
 	return t;
 }
 
 function posInt(v) {
 	const n = Number(v);
+
 	return Number.isInteger(n) && n > 0 ? n : null;
 }
 
 function parseArgs(argv) {
 	const out = {};
+
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
+
 		if (!a.startsWith('--')) continue;
 		const key = a.slice(2);
 		const next = argv[i + 1];
+
 		if (next === undefined || next.startsWith('--')) out[key] = true;
 		else {
 			out[key] = next;
 			i++;
 		}
 	}
+
 	return out;
 }
 
 function int(v, fallback) {
 	const n = Number.parseInt(String(v), 10);
+
 	return Number.isFinite(n) && n > 0 ? n : fallback;
 }

@@ -49,16 +49,20 @@ async function alreadyStored(a: StravaActivity, canonicalSport: string): Promise
 		.eq('external_id', String(a.id))
 		.limit(1)
 		.maybeSingle();
+
 	if (byId) return `external id ${a.id} is activity ${byId.activity_id}`;
 
 	const t = Date.parse(a.start_date);
+
 	const { data: near } = await supabaseAdmin
 		.from('activities')
 		.select('id, sport')
 		.gte('started_at', new Date(t - FIVE_MINUTES).toISOString())
 		.lte('started_at', new Date(t + FIVE_MINUTES).toISOString())
 		.is('deleted_at', null);
+
 	const match = (near ?? []).find((r) => r.sport === canonicalSport);
+
 	return match ? `activity ${match.id} starts within 5 min` : null;
 }
 
@@ -79,17 +83,22 @@ async function alreadyStored(a: StravaActivity, canonicalSport: string): Promise
 async function buildGearResolver(): Promise<(gearId: string | null | undefined) => Promise<number | null>> {
 	const { data } = await supabaseAdmin.from('activity_gear').select('id, name, nickname').is('retired_at', null);
 	const byName = new Map<string, number>();
+
 	for (const g of (data ?? []) as { id: number; name: string; nickname: string | null }[]) {
 		byName.set(g.name.toLowerCase(), g.id);
+
 		if (g.nickname) byName.set(g.nickname.toLowerCase(), g.id);
 	}
 
 	const cache = new Map<string, number | null>();
+
 	return async (gearId) => {
 		if (!gearId) return null;
 		const hit = cache.get(gearId);
+
 		if (hit !== undefined) return hit;
 		let id: number | null = null;
+
 		try {
 			const gear = (await stravaGet(`/gear/${gearId}`)) as { name?: string; nickname?: string };
 			const name = gear.nickname || gear.name;
@@ -99,7 +108,9 @@ async function buildGearResolver(): Promise<(gearId: string | null | undefined) 
 			// still editable — never fatal to the sync.
 			id = null;
 		}
+
 		cache.set(gearId, id);
+
 		return id;
 	};
 }
@@ -111,6 +122,7 @@ async function loadDefaultGear(): Promise<GearRow[]> {
 	const { data } = await supabaseAdmin
 		.from('activity_gear')
 		.select('id, name, first_used_on, retired_at');
+
 	return (data ?? []) as GearRow[];
 }
 
@@ -129,6 +141,7 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 		.from('athlete_thresholds')
 		.select('*')
 		.order('effective_from', { ascending: true });
+
 	const thresholds = (thresholdRows ?? []) as AthleteThresholds[];
 
 	const result: SyncResult = { fetched: 0, added: 0, duplicate: 0, failed: 0, unknownSports: [] };
@@ -142,8 +155,10 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 
 	for (let page = 1; ; page++) {
 		const params: Record<string, string | number> = { per_page: 100, page };
+
 		if (after) params.after = after;
 		const list = (await stravaGet('/athlete/activities', params)) as StravaActivity[];
+
 		if (!Array.isArray(list) || !list.length) break;
 		result.fetched += list.length;
 
@@ -152,11 +167,13 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 				reachedMax = true;
 				break;
 			}
+
 			try {
 				// The summary already carries sport_type; dedupe before spending two
 				// GETs on a ride we already have.
 				const sport = activityToCanonical(summary).sport;
 				const dup = await alreadyStored(summary, sport);
+
 				if (dup) {
 					result.duplicate++;
 					continue;
@@ -164,6 +181,7 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 
 				const detail = (await stravaGet(`/activities/${summary.id}`)) as StravaActivity;
 				let streams: StravaStreams | null = null;
+
 				try {
 					streams = (await stravaGet(`/activities/${summary.id}/streams`, {
 						keys: STREAM_KEYS,
@@ -186,11 +204,14 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 				if (detail.gear_id) {
 					if (!gearFor) gearFor = await buildGearResolver();
 					const gearId = await gearFor(detail.gear_id);
+
 					if (gearId) activity.gear_id = gearId;
 				}
+
 				if (activity.gear_id == null) {
 					if (!defaultGear) defaultGear = await loadDefaultGear();
 					const g = defaultGearFor(canonical.sport, date, defaultGear);
+
 					if (g && !('out' in g)) activity.gear_id = g.id;
 				}
 
@@ -201,6 +222,7 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 					fidelity: STRAVA_API_FIDELITY,
 					raw: { gear_id: detail.gear_id ?? null, sport_type: detail.sport_type ?? detail.type ?? null },
 				});
+
 				if (activity.gear_id) await bumpGearDistance(activity.gear_id as number, activity.distance_m as number);
 
 				result.added++;
@@ -208,6 +230,7 @@ export async function syncStrava({ max = 100 }: { max?: number } = {}): Promise<
 			} catch (err) {
 				if (err instanceof UnknownSportError) {
 					result.failed++;
+
 					if (!result.unknownSports.includes(err.providerType)) result.unknownSports.push(err.providerType);
 				} else {
 					result.failed++;

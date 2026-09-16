@@ -15,7 +15,9 @@ export const GET: APIRoute = async () => {
 		.from('watchlist')
 		.select('id, added_at, movies(tmdb_id, title, release_year, poster_path)')
 		.order('added_at', { ascending: false });
+
 	if (error) return apiError(error.message, 500);
+
 	return json({ watchlist: data });
 };
 
@@ -23,21 +25,27 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: { tmdbId?: unknown };
+
 	try {
 		body = await request.json();
 	} catch {
 		return apiError('expected JSON body', 400);
 	}
+
 	const tmdbId = Number(body.tmdbId);
+
 	if (!Number.isInteger(tmdbId) || tmdbId <= 0) return apiError('tmdbId is required', 400);
 
 	try {
 		const movie = await ensureMovieCached(tmdbId);
+
 		// Idempotent: movie_id is unique, so re-adding is a no-op.
 		const { error } = await supabaseAdmin
 			.from('watchlist')
 			.upsert({ movie_id: movie.id }, { onConflict: 'movie_id' });
+
 		if (error) return apiError(error.message, 500);
+
 		return json({ ok: true }, 201);
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to add', 500);
@@ -47,6 +55,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 export const DELETE: APIRoute = async ({ url, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	const tmdbId = Number.parseInt(url.searchParams.get('tmdbId') ?? '', 10);
+
 	if (!Number.isInteger(tmdbId) || tmdbId <= 0) return apiError('tmdbId is required', 400);
 
 	// Resolve the local movie id, then delete the watchlist row.
@@ -55,7 +64,9 @@ export const DELETE: APIRoute = async ({ url, cookies }) => {
 		.select('id')
 		.eq('tmdb_id', tmdbId)
 		.maybeSingle();
+
 	if (lookupErr) return apiError(lookupErr.message, 500);
+
 	if (!movie) return apiError('not on watchlist', 404);
 
 	const { data, error } = await supabaseAdmin
@@ -64,7 +75,10 @@ export const DELETE: APIRoute = async ({ url, cookies }) => {
 		.eq('movie_id', movie.id)
 		.select('id')
 		.maybeSingle();
+
 	if (error) return apiError(error.message, 500);
+
 	if (!data) return apiError('not on watchlist', 404);
+
 	return json({ ok: true });
 };

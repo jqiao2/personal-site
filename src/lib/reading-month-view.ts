@@ -74,7 +74,9 @@ export interface MonthBook {
  */
 export function isFinished(book: MonthBook): boolean {
 	if (book.finished_at) return true;
+
 	if (!book.total_pages) return false;
+
 	return book.furthest_page / book.total_pages >= FINISHED_PROGRESS;
 }
 
@@ -91,7 +93,9 @@ export function isFinished(book: MonthBook): boolean {
  */
 export function finishDay(book: MonthBook): string | null {
 	if (!isFinished(book)) return null;
+
 	if (book.finished_at) return siteDay(book.finished_at);
+
 	return book.last_day;
 }
 
@@ -108,6 +112,7 @@ export const COVER_SIZES = { top: 'M', behind: 'S' } as const;
  */
 export function coverUrl(book: MonthBook, size: 'S' | 'M' | 'L'): string | null {
 	if (!book.cover_url || !book.is_public) return null;
+
 	return book.cover_url.replace(/-(S|M|L)\.jpg$/i, `-${size}.jpg`);
 }
 
@@ -157,9 +162,13 @@ export function sortDayReading(rows: ReadingDay[], finished: Map<number, string>
 	return rows.slice().sort((a, b) => {
 		const aDone = finished.get(a.book_id) === a.day ? 1 : 0;
 		const bDone = finished.get(b.book_id) === b.day ? 1 : 0;
+
 		if (aDone !== bDone) return bDone - aDone;
+
 		if (a.pages !== b.pages) return b.pages - a.pages;
+
 		if (a.seconds !== b.seconds) return b.seconds - a.seconds;
+
 		return a.book_id - b.book_id;
 	});
 }
@@ -191,31 +200,38 @@ export function buildCells(
 	finished: Map<number, string>,
 ): ReadingCell[] {
 	const parsed = parseMonthKey(key);
+
 	if (!parsed) return [];
 	const { year, month } = parsed;
 	const days = daysInMonth(year, month);
 	const first = firstWeekdayIndex(year, month);
 
 	const byDay = new Map<number, ReadingDay[]>();
+
 	for (const row of rows) {
 		const date = Number(row.day.slice(8, 10));
 		const list = byDay.get(date);
+
 		if (list) list.push(row);
 		else byDay.set(date, [row]);
 	}
 
 	const cells: ReadingCell[] = [];
+
 	for (let i = 0; i < weekRows(key) * 7; i++) {
 		const date = i - first + 1;
+
 		if (date < 1 || date > days) {
 			cells.push({ outside: true, date: 0, prints: [], behind: [], count: 0, depth: 0, lines: [] });
 			continue;
 		}
+
 		const day = sortDayReading(byDay.get(date) ?? [], finished);
 		const prints: ReadingPrint[] = [];
 		const lines: ReadingCell['lines'] = [];
 		day.forEach((row, layer) => {
 			const book = books.get(row.book_id);
+
 			if (!book) return;
 			const done = finished.get(row.book_id) === row.day;
 			prints.push(toPrint(row, book, layer, done));
@@ -236,6 +252,7 @@ export function buildCells(
 			lines,
 		});
 	}
+
 	return cells;
 }
 
@@ -263,6 +280,7 @@ export function buildCells(
  * Archivo does not put the footer over the edge.
  */
 const CHROME_WITH_FIGURES = 480;
+
 const CHROME_BARE = 330;
 
 /** What the hour band costs the grid when it is drawn. */
@@ -310,14 +328,18 @@ export function geometryKey(aspectId: string, summary: boolean, hours: boolean):
  */
 export function geometries(rows: number, hoursAvailable: boolean): Record<string, ReadingGeometry> {
 	const out: Record<string, ReadingGeometry> = {};
+
 	for (const aspect of ASPECTS) {
 		const bands = hasBands(aspect);
+
 		for (const summary of [true, false]) {
 			for (const hours of [true, false]) {
 				const figures = bands && summary;
 				const band = bands && hours && hoursAvailable;
+
 				const chrome =
 					(figures ? CHROME_WITH_FIGURES : CHROME_BARE) + (band ? CHROME_HOURS : 0);
+
 				out[geometryKey(aspect.id, summary, hours)] = {
 					...cardGeometry(rows, aspect.height, chrome),
 					figures,
@@ -326,6 +348,7 @@ export function geometries(rows: number, hoursAvailable: boolean): Record<string
 			}
 		}
 	}
+
 	return out;
 }
 
@@ -341,8 +364,11 @@ export function monthQuery(
 	opts: { summary?: boolean; hours?: boolean } = {},
 ): string {
 	const extra: Record<string, string> = {};
+
 	if (opts.hours === false) extra.hours = '0';
+
 	if (opts.summary === false) extra.summary = '0';
+
 	return cardQuery(aspect, extra);
 }
 
@@ -363,10 +389,12 @@ export interface Figure {
 export function summarise(key: string, rows: ReadingDay[], finishedInMonth: number): Figure[] {
 	const books = new Set(rows.map((r) => r.book_id));
 	const pages = rows.reduce((total, r) => total + r.pages, 0);
+
 	const streak = longestStreak(
 		key,
 		rows.map((r) => r.day),
 	);
+
 	return [
 		{ label: 'Books', value: String(books.size) },
 		{ label: 'Pages', value: pages.toLocaleString('en-US') },

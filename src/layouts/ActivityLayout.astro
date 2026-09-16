@@ -29,6 +29,7 @@ import { Font } from 'astro:assets';
 interface Props {
 	title: string;
 }
+
 const { title } = Astro.props;
 ---
 
@@ -54,6 +55,7 @@ const { title } = Astro.props;
 				a.addEventListener('click', (e) => {
 					const ref = document.referrer;
 					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+
 					if (history.length > 1 && sameOrigin) {
 						e.preventDefault();
 						history.back();

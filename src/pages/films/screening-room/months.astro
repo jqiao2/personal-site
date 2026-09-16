@@ -10,15 +10,19 @@ import { buildWeeks } from '../../../lib/screening-calendar';
 import { siteDay } from '../../../lib/day';
 
 export const prerender = false;
+
 export const partial = true;
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 const from = Astro.url.searchParams.get('from') ?? '';
+
 const weeks = Math.min(26, Math.max(1, Number(Astro.url.searchParams.get('weeks')) || 8));
 
 if (!DAY_RE.test(from)) return new Response('bad from', { status: 400 });
 
 const [queue, isOwner] = await Promise.all([listQueue(), requireOwner(Astro.cookies)]);
+
 const rendered = buildWeeks({ startMonday: from, weeks, queue, today: siteDay() });
 ---
 

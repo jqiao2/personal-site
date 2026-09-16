@@ -14,10 +14,12 @@ import SiteHeader from '../../../components/SiteHeader.astro';
 export const prerender = false;
 
 const id = Number(Astro.params.id);
+
 // Owner first, and not in parallel with the entry: it is the argument that
 // decides whether the private note is selected at all. A visitor's `entry`
 // never holds the text, so no template below can leak it by forgetting.
 const isOwner = await requireOwner(Astro.cookies);
+
 const entry = Number.isInteger(id) ? await getDiaryEntry(id, isOwner) : null;
 
 if (!entry) {
@@ -25,15 +27,22 @@ if (!entry) {
 }
 
 const { movie } = entry;
+
 const poster = imageUrl(movie.poster_path, 'w342');
+
 const posterThumb = imageUrl(movie.poster_path, 'w92');
+
 const watched =
 	formatWatchedDate(entry.watched_date) ?? formatWatchedDate(entry.created_at.slice(0, 10));
+
 const medium = mediumLabel(entry.medium);
+
 const venue = entry.theater
 	? [entry.theater.name, entry.theater.city].filter(Boolean).join(', ')
 	: null;
+
 const inTheater = entry.medium === 'theater';
+
 const filmHref = `/films/movie/${movie.tmdb_id}`;
 
 // Every fact on the entry links to the "All films" grid pre-filtered by it, so a
@@ -50,13 +59,16 @@ const filterHref = (key: string, value: string, sort?: 'year') =>
 const [venueOptions, tagOptions, friendOptions] = isOwner
 	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
 	: [[], [], []];
+
 const editorFilm = {
 	tmdbId: movie.tmdb_id,
 	title: movie.title,
 	year: movie.release_year,
 	poster: posterThumb,
 };
+
 const editorInitial = toEditorInitial(entry);
+
 const pinned = isOwner ? await isPinned('film', entry.id) : false;
 ---
 

@@ -50,8 +50,11 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 let rows: Awaited<ReturnType<typeof listThresholds>> = [];
+
 let weighIns: Awaited<ReturnType<typeof listWeighIns>> = [];
+
 let unreachable = false;
+
 try {
 	[rows, weighIns] = await Promise.all([listThresholds(), listWeighIns()]);
 } catch (err) {
@@ -60,15 +63,18 @@ try {
 }
 
 const latest = rows[0] ?? null;
+
 // Each threshold metric in force now is its latest recorded value, taken field
 // by field: a blank on the newest row means "unchanged", so an FTP entered
 // alone still shows the earlier LTHR beside it. Weight and W/kg override this
 // below — they read the scale.
 const current = inForceNow(rows);
+
 // Weight comes from the smart scale (body_weight), so its graph and current
 // value read the daily weigh-ins, not the typed threshold rows; power-to-weight
 // pairs the FTP in force with the latest weigh-in.
 const latestKg = weighIns.length ? weighIns[weighIns.length - 1].weight_kg : (latest?.weight_kg ?? null);
+
 const series = METRICS.filter((m) => !m.noGraph)
 	.map((m) =>
 		m.key === 'weight_kg' ? weightSeries(weighIns) : m.key === 'w_per_kg' ? wPerKgSeries(rows, weighIns) : seriesOf(m, rows),
@@ -78,7 +84,9 @@ const series = METRICS.filter((m) => !m.noGraph)
 // FTP and power-to-weight ride in one card behind a switcher; everything else
 // gets its own. A card is a list of series — the first is the one shown.
 const PAIRED = ['ftp_w', 'w_per_kg'];
+
 const paired = PAIRED.map((k) => series.find((s) => s.metric.key === k)).filter((s): s is Series => !!s);
+
 const cards: Series[][] = [
 	...(paired.length ? [paired] : []),
 	...series.filter((s) => !PAIRED.includes(s.metric.key)).map((s) => [s]),
@@ -92,8 +100,10 @@ const seriesData = Object.fromEntries(series.map((s) => [s.metric.key, s.points]
  *  on the latest weigh-in; every other metric on its latest recorded value. */
 function nowDisplay(m: (typeof METRICS)[number]): number | null {
 	if (m.key === 'weight_kg') return latestKg == null ? null : m.toDisplay(latestKg);
+
 	if (m.key === 'w_per_kg') return current?.ftp_w && latestKg ? m.toDisplay(current.ftp_w / latestKg) : null;
 	const raw = current ? m.read(current) : null;
+
 	return raw == null ? null : m.toDisplay(raw);
 }
 
@@ -316,7 +326,9 @@ const today = new Date().toLocaleDateString('en-CA');
 	import { METRICS, parsePace, plot, trend, windowed, DEFAULT_RANGE, type RangeKey } from '../../lib/athlete';
 
 	const form = document.getElementById('thresholds') as HTMLFormElement | null;
+
 	const out = document.getElementById('out') as HTMLElement | null;
+
 	const editable = METRICS.filter((m) => !m.derived && !m.scaleFed);
 
 	const say = (text: string, ok: boolean) => {
@@ -332,34 +344,44 @@ const today = new Date().toLocaleDateString('en-CA');
 		if (!form) return 'no form';
 		const data = new FormData(form);
 		const body: Record<string, unknown> = { effectiveFrom: data.get('effectiveFrom') };
+
 		for (const m of editable) {
 			const raw = String(data.get(m.key) ?? '').trim();
+
 			if (raw === '') {
 				body[m.key] = null; // an explicit clear; the field is on screen and empty
 				continue;
 			}
+
 			const display = m.pace ? parsePace(raw) : Number(raw);
+
 			if (display == null || !Number.isFinite(display)) {
 				return `${m.label}: could not read “${raw}”${m.pace ? '. Try mm:ss' : ''}`;
 			}
+
 			body[m.key] = m.toStored!(display);
 		}
+
 		return body;
 	}
 
 	form?.addEventListener('submit', async (e) => {
 		e.preventDefault();
 		const body = collect();
+
 		if (typeof body === 'string') return say(body, false);
 		const btn = form.querySelector('button[type=submit]') as HTMLButtonElement;
 		btn.disabled = true;
+
 		try {
 			const res = await fetch('/api/activities/thresholds', {
 				method: 'PUT',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(body),
 			});
+
 			const json = await res.json();
+
 			if (!res.ok) return say(`error: ${json.error ?? res.status}`, false);
 			say('Saved.', true);
 			setTimeout(() => location.reload(), 500);
@@ -376,14 +398,17 @@ const today = new Date().toLocaleDateString('en-CA');
 	document.querySelectorAll<HTMLButtonElement>('[data-edit]').forEach((btn) => {
 		btn.addEventListener('click', () => {
 			const tr = btn.closest('tr');
+
 			if (!tr || !form) return;
 			const row = JSON.parse(tr.dataset.values!);
 			(form.elements.namedItem('effectiveFrom') as HTMLInputElement).value = row.effective_from;
+
 			for (const m of editable) {
 				const input = form.elements.namedItem(m.key) as HTMLInputElement;
 				const raw = row[m.key];
 				input.value = raw == null ? '' : m.format(m.toDisplay(raw));
 			}
+
 			document.getElementById('form-title')?.scrollIntoView({ block: 'center' });
 		});
 	});
@@ -391,21 +416,28 @@ const today = new Date().toLocaleDateString('en-CA');
 	document.querySelectorAll<HTMLButtonElement>('[data-delete]').forEach((btn) => {
 		btn.addEventListener('click', async () => {
 			const tr = btn.closest('tr');
+
 			if (!tr) return;
 			const date = tr.querySelector('.date')?.textContent ?? 'this row';
+
 			if (!confirm(`Delete the values effective ${date}? Activities scored against them keep their scores.`)) return;
 			btn.disabled = true;
+
 			try {
 				const res = await fetch('/api/activities/thresholds', {
 					method: 'DELETE',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ id: Number(tr.dataset.row) }),
 				});
+
 				const json = await res.json();
+
 				if (!res.ok) {
 					btn.disabled = false;
+
 					return say(`error: ${json.error ?? res.status}`, false);
 				}
+
 				location.reload();
 			} catch (err) {
 				btn.disabled = false;
@@ -418,6 +450,7 @@ const today = new Date().toLocaleDateString('en-CA');
 	// Redraws from the same pure helpers the server rendered with, so a toggle
 	// produces exactly the shape a fresh load would.
 	const dataEl = document.getElementById('series-data');
+
 	if (dataEl) {
 		const DATA: Record<string, { date: string; value: number }[]> = JSON.parse(dataEl.textContent ?? '{}');
 		const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -426,15 +459,18 @@ const today = new Date().toLocaleDateString('en-CA');
 		function drawCard(card: HTMLElement) {
 			const metric = METRICS.find((m) => m.key === card.dataset.key);
 			const points = metric && DATA[metric.key];
+
 			if (!metric || !points) return;
 			const pts = windowed(points, range);
 			const p = plot(pts);
+
 			if (!p) return;
 			const t = trend(metric, pts);
 
 			card.querySelector('[data-line]')!.setAttribute('points', p.line);
 			const dots = card.querySelector('[data-dots]')!;
 			dots.textContent = '';
+
 			for (const d of p.dots) {
 				const c = document.createElementNS(SVG_NS, 'circle');
 				c.setAttribute('class', 'spark__dot');
@@ -443,6 +479,7 @@ const today = new Date().toLocaleDateString('en-CA');
 				c.setAttribute('r', '1.1');
 				dots.appendChild(c);
 			}
+
 			const trendEl = card.querySelector('[data-trend]') as HTMLElement;
 			trendEl.textContent = t?.text ?? '';
 			trendEl.className = `spark__trend spark__trend--${t?.tone ?? 'flat'}`;
@@ -453,6 +490,7 @@ const today = new Date().toLocaleDateString('en-CA');
 		}
 
 		const cards = () => document.querySelectorAll<HTMLElement>('[data-card]');
+
 		const press = (group: Element, active: Element) =>
 			group.querySelectorAll('[aria-pressed]').forEach((b) => b.setAttribute('aria-pressed', String(b === active)));
 

@@ -41,7 +41,9 @@ const PACE_WINDOW_DAYS = 35;
 const PACE_MIN_SITTINGS = 4;
 
 const HIGHLIGHT_PREVIEW = 4;
+
 const CHIP_PREVIEW = 8;
+
 const MONTHS_LONG = [
 	'January',
 	'February',
@@ -70,6 +72,7 @@ function ordinal(n: number): string {
 /** "2026-03-12" → "12 March 2026". The long form, for the one date that earns it. */
 function formatDayLong(day: string): string {
 	const [y, m, d] = day.split('-').map(Number);
+
 	return `${d} ${MONTHS_LONG[m - 1]} ${y}`;
 }
 
@@ -79,17 +82,24 @@ function formatDayLong(day: string): string {
  */
 function formatPercent(pct: number): string {
 	if (pct >= 99.5) return '100%';
+
 	if (pct < 10) return `${pct.toFixed(1)}%`;
+
 	return `${Math.round(pct)}%`;
 }
 
 /** "3 days ago" / "4 months ago" — the vaguer the older, which is how it's remembered. */
 function ago(day: string, todayDay: string): string {
 	const n = daysBetween(day, todayDay);
+
 	if (n <= 0) return 'today';
+
 	if (n === 1) return 'yesterday';
+
 	if (n < 30) return `${n} days ago`;
+
 	if (n < 365) return `${Math.round(n / 30.4)} months ago`;
+
 	return `${(n / 365).toFixed(1).replace(/\.0$/, '')} years ago`;
 }
 
@@ -118,8 +128,11 @@ function bookHue(title: string): string {
 		'#5a4a2a',
 		'#43566b',
 	];
+
 	let hash = 0;
+
 	for (let i = 0; i < title.length; i++) hash = (hash * 31 + title.charCodeAt(i)) % 100_000;
+
 	return palette[hash % palette.length];
 }
 
@@ -332,23 +345,28 @@ export interface BookPageInput {
  */
 export function resolveShelf(book: BookRow, todayDay: string): Shelf {
 	const lastDay = book.last_read_at ? zonedDay(book.last_read_at) : null;
+
 	if (!lastDay) {
 		// No page turns is not the same as no reading. A book read without the
 		// tracking on has nothing but the two dates and the rating, and those are
 		// enough to say which shelf it is on — checked before the pile, because a
 		// book can be added to the pile, read and finished with nothing logging it.
 		if (book.finished_at) return 'finished';
+
 		if (book.gave_up_at) return 'gaveup';
+
 		// Started by hand, with nothing syncing pages for it. Checked after the
 		// endings and before the pile: it is the one state between them that no
 		// page turn will ever prove.
 		if (book.started_at) return 'reading';
+
 		return book.added_at ? 'toread' : 'none';
 	}
 
 	if (book.gave_up_at && zonedDay(book.gave_up_at) >= lastDay) return 'gaveup';
 
 	const progress = book.total_pages ? Math.min(1, book.furthest_page / book.total_pages) : null;
+
 	if (book.finished_at || (progress !== null && progress >= FINISHED_PROGRESS)) return 'finished';
 
 	return daysBetween(lastDay, todayDay) > SET_ASIDE_DAYS ? 'aside' : 'reading';
@@ -358,27 +376,34 @@ export function resolveShelf(book: BookRow, todayDay: string): Shelf {
 function clusters(days: BookDay[]): BookDay[][] {
 	if (!days.length) return [];
 	const out: BookDay[][] = [[days[0]]];
+
 	for (let i = 1; i < days.length; i++) {
 		if (daysBetween(days[i - 1].day, days[i].day) <= STRETCH_GAP_DAYS) out[out.length - 1].push(days[i]);
 		else out.push([days[i]]);
 	}
+
 	return out;
 }
 
 /** "2–13 Apr 2026", collapsing to one date or opening out across months. */
 function rangeLabel(from: string, to: string): string {
 	if (from === to) return formatDay(from);
+
 	if (from.slice(0, 7) === to.slice(0, 7)) return `${Number(from.slice(8))}–${formatDay(to)}`;
+
 	return `${formatDay(from)} → ${formatDay(to)}`;
 }
 
 /** The heading over a review: "April 2026", "Jan–Mar 2026", or two full dates. */
 function readDates(from: string, to: string): string {
 	const sameYear = from.slice(0, 4) === to.slice(0, 4);
+
 	if (sameYear && from.slice(5, 7) === to.slice(5, 7)) {
 		return `${MONTHS_LONG[Number(to.slice(5, 7)) - 1]} ${to.slice(0, 4)}`;
 	}
+
 	if (sameYear) return `${formatMonth(from).slice(0, 3)}–${formatMonth(to)}`;
+
 	return `${formatDay(from)} → ${formatDay(to)}`;
 }
 
@@ -397,14 +422,19 @@ function readDates(from: string, to: string): string {
  */
 function buildContributorLine(contributors: string[]): string | null {
 	const names: string[] = [];
+
 	for (const entry of contributors) {
 		const parsed = entry.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+
 		if (!parsed) continue;
+
 		if (parsed[2].trim().toLowerCase() !== 'translator') continue;
 		const name = parsed[1].trim();
+
 		// The export repeats the same person under a role more than once.
 		if (name && !names.includes(name)) names.push(name);
 	}
+
 	return names.length ? `Translated by ${names.join(' & ')}` : null;
 }
 
@@ -448,10 +478,12 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	const { main, sub } = splitTitle(book.title);
 	const title = main;
 	const subtitle = book.subtitle ?? sub;
+
 	const authors = (book.authors ?? '')
 		.split(/\s*(?:&|,| and )\s*/)
 		.map((a) => a.trim())
 		.filter(Boolean);
+
 	const matched = !!book.ol_key;
 	const lovedAny = reviews.some((r) => r.loved);
 
@@ -483,6 +515,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	let sessionsPerWeek = 0;
 	let averageMinutes = 0;
 	let weeksLeft = 0;
+
 	if (recent.length >= 2) {
 		const span = Math.max(1, daysBetween(recent[0].day, recent[recent.length - 1].day) + 1);
 		sessionsPerWeek = recent.length / (span / 7);
@@ -493,12 +526,14 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	}
 
 	const hasPace = shelf === 'reading' && knowsTotal && recent.length >= PACE_MIN_SITTINGS && pagesPerHour > 0;
+
 	const rhythm =
 		weeksLeft >= 2
 			? `about ${Math.round(weeksLeft)} weeks at your recent rhythm`
 			: `about ${Math.max(1, Math.round(weeksLeft * 7))} days at your recent rhythm`;
 
 	let noPaceLine: string | null = null;
+
 	if (inProgress && !hasPace) {
 		if (shelf === 'gaveup') {
 			noPaceLine = `No projection. You stopped on purpose at page ${formatNumber(furthest)} — the arithmetic stopped being interesting before the book did.`;
@@ -516,6 +551,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 
 	// ---- stats ---------------------------------------------------------------
 	const stats: Stat[] = [];
+
 	if (isFinished) {
 		stats.push({ value: formatDuration(totalSeconds), label: 'Time read' });
 		stats.push({ value: String(countingDays.length), label: 'Days read' });
@@ -547,6 +583,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		const from = cluster[0].day;
 		const to = cluster[cluster.length - 1].day;
 		const cells: ActivityCell[] = [];
+
 		for (let offset = 0; offset <= daysBetween(from, to); offset++) {
 			const day = addDays(from, offset);
 			const record = byDay.get(day);
@@ -589,6 +626,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		});
 
 		const older = ordered[i + 1];
+
 		if (older) {
 			const gap = daysBetween(older[older.length - 1].day, from);
 			stretches.push({
@@ -607,6 +645,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 		const readSeconds = inRead.reduce((sum, d) => sum + d.seconds, 0);
 		const readPages = inRead.reduce((sum, d) => sum + d.pages, 0);
 		const pph = readSeconds > 0 ? Math.round(readPages / (readSeconds / 3600)) : 0;
+
 		const attributes = VOCABULARY.filter(
 			(v) => v === r.pacing || v === r.focus || r.moods.includes(v) || r.tones.includes(v),
 		).map((label) => ({ label, scale: label === r.pacing || label === r.focus }));
@@ -653,13 +692,16 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 
 	// ---- rail ----------------------------------------------------------------
 	const railFacts: Fact[] = [];
+
 	if (noPageData) {
 		// The read's own dates are the only measurement there is. Where a tracked
 		// book reports how long it took, this reports when it happened.
 		const latestReview = reviews[0];
+
 		if (latestReview) {
 			railFacts.push({ k: 'Read', v: rangeLabel(latestReview.read_from, latestReview.read_to) });
 		}
+
 		if (reviews.length > 1) railFacts.push({ k: 'Reads', v: String(reviews.length) });
 	} else if (inProgress) {
 		railFacts.push({ k: 'Last read', v: lastDay ? ago(lastDay, todayDay) : '—' });
@@ -672,10 +714,12 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 			railFacts.push({ k: 'Time read', v: formatDuration(totalSeconds) });
 			railFacts.push({ k: 'Days read', v: plural(days.length, 'day') });
 		}
+
 		if (reviews.length > 1) railFacts.push({ k: 'Reads', v: String(reviews.length) });
 	}
 
 	const quietActions: QuietAction[] = [];
+
 	if (isOwner) {
 		if (shelf === 'reading' || shelf === 'aside') {
 			quietActions.push({
@@ -684,6 +728,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 				action: 'finish',
 			});
 			quietActions.push({ label: 'Give up on it', hint: 'An ending, not a failure', action: 'give-up' });
+
 			// Only for a start that was declared rather than measured. A book with
 			// page turns behind it cannot be un-started: the sessions happened.
 			if (book.started_at && days.length === 0) {
@@ -747,6 +792,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 	// KOReader's repagination of the file and belongs only where a position in it
 	// is being reported. See migration 0026.
 	const printedPages = book.ol_pages ?? total;
+
 	const metaBits = (
 		matched ? [printedPages ? `${formatNumber(printedPages)} pages` : null, book.first_published, book.language] : []
 	).filter(Boolean) as string[];

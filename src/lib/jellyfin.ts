@@ -45,9 +45,12 @@ export function jellyfinConfig(): JellyfinConfig | null {
 	const clean = (u: string | undefined) => u?.trim().replace(/\/+$/, '') || null;
 	const apiKey = import.meta.env.JELLYFIN_API_KEY?.trim();
 	const localUrl = clean(import.meta.env.JELLYFIN_LOCAL_URL);
+
 	const baseUrls = [clean(import.meta.env.JELLYFIN_URL), localUrl].filter(
 		(u): u is string => !!u,
 	);
+
 	if (!apiKey || baseUrls.length === 0) return null;
+
 	return { baseUrls, localUrl, apiKey };
 }

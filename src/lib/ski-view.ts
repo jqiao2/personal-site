@@ -11,8 +11,11 @@ import type { SkiSegment, SkiStreams } from './ski';
 import { summarizeSki } from './ski';
 
 const METERS_PER_FOOT = 0.3048;
+
 const METERS_PER_MILE = 1609.344;
+
 const MS_TO_MPH = 2.236936;
+
 const SPARK_POINTS = 24;
 
 function feet(m: number): number {
@@ -24,8 +27,11 @@ function dur(seconds: number): string {
 	const s = Math.round(seconds);
 	const h = Math.floor(s / 3600);
 	const m = Math.floor((s % 3600) / 60);
+
 	if (h > 0) return `${h}h ${m}m`;
+
 	if (m > 0) return `${m}m`;
+
 	return `${s % 60}s`;
 }
 
@@ -83,6 +89,7 @@ export interface SkiEditRow {
  *  the day max comes from the column and per-run speed is an average. */
 export function buildSkiView(segments: SkiSegment[], streams: SkiStreams, maxSpeedMs: number | null): SkiView | null {
 	const summary = summarizeSki(segments);
+
 	if (summary.runCount === 0) return null;
 
 	const alt = streams.altitude_m ?? [];
@@ -90,18 +97,24 @@ export function buildSkiView(segments: SkiSegment[], streams: SkiStreams, maxSpe
 	// blue run and a top-to-bottom black read at their true relative drop.
 	let lo = Infinity;
 	let hi = -Infinity;
+
 	for (const seg of segments) {
 		if (seg.type !== 'run') continue;
+
 		for (let i = seg.startIdx; i <= seg.endIdx; i++) {
 			const a = alt[i];
+
 			if (a < lo) lo = a;
+
 			if (a > hi) hi = a;
 		}
 	}
+
 	const span = hi - lo || 1;
 
 	let runIndex = 0;
 	const items: (SkiRunView | SkiLiftView)[] = [];
+
 	for (const seg of segments) {
 		if (seg.type === 'run') {
 			runIndex++;
@@ -138,8 +151,10 @@ export function buildSkiView(segments: SkiSegment[], streams: SkiStreams, maxSpe
 /** Every segment as an editable row (idle included), in day order. */
 export function buildSkiEditRows(segments: SkiSegment[]): SkiEditRow[] {
 	let runIndex = 0;
+
 	return segments.map((seg) => {
 		const runNo = seg.type === 'run' ? ++runIndex : null;
+
 		return {
 			t0: Math.round(seg.startTime),
 			t1: Math.round(seg.endTime),
@@ -157,12 +172,15 @@ export function buildSkiEditRows(segments: SkiSegment[]): SkiEditRow[] {
  *  shared [lo, lo+span] scale so 1 is the day's high and 0 its low. */
 function sparkline(alt: number[], a: number, b: number, lo: number, span: number): number[] {
 	const count = b - a;
+
 	if (count <= 0) return [];
 	const n = Math.min(SPARK_POINTS, count + 1);
 	const out: number[] = [];
+
 	for (let k = 0; k < n; k++) {
 		const idx = a + Math.round((k / (n - 1)) * count);
 		out.push((alt[idx] - lo) / span);
 	}
+
 	return out;
 }

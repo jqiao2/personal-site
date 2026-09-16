@@ -74,6 +74,7 @@ const { title, pathname, sidebar = false } = Astro.props;
 				a.addEventListener('click', (e) => {
 					const ref = document.referrer;
 					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+
 					if (history.length > 1 && sameOrigin) {
 						e.preventDefault();
 						history.back();
@@ -96,19 +97,25 @@ const { title, pathname, sidebar = false } = Astro.props;
 			// preventDefault — the map pin opening a popup — keeps its click.
 			document.addEventListener('click', (e) => {
 				if (e.defaultPrevented) return;
+
 				// Anything but a plain left click still means "open this somewhere else".
 				if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
 				const target = e.target;
+
 				if (!(target instanceof Element)) return;
 				const link = target.closest('a[href]');
+
 				if (!(link instanceof HTMLAnchorElement)) return;
+
 				if (link.target || link.hasAttribute('download')) return;
 
 				const url = new URL(link.href);
+
 				if (url.origin !== location.origin) return;
 				// Same page, different query — or explicitly marked as a step within one
 				// page, which is what the month card's prev/next are.
 				const restating = url.pathname === location.pathname && !url.hash;
+
 				if (!restating && !link.hasAttribute('data-rl-replace')) return;
 
 				e.preventDefault();

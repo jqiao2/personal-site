@@ -36,7 +36,9 @@ interface Props {
 }
 
 const { pathname, theme = 'root', max, sidebar = false } = Astro.props;
+
 const nav = siteNav(pathname);
+
 const style = headerThemeStyle(theme, max);
 
 // The brand mark: `jq` (the initials, and the JSON processor every backend runs
@@ -53,6 +55,7 @@ const FILTERS: Record<string, string> = {
 	activity: '.activities',
 	subway: '.subway',
 };
+
 const filter = FILTERS[theme] ?? FILTERS.root;
 
 // The admin sign-in lives here so every page with a header offers it. The "Log
@@ -229,11 +232,14 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	// this runs.
 	for (const logs of document.querySelectorAll<HTMLElement>('[data-logs]')) {
 		const toggle = logs.querySelector<HTMLButtonElement>('[data-logs-toggle]');
+
 		if (!toggle) continue;
+
 		const set = (open: boolean) => {
 			logs.toggleAttribute('data-open', open);
 			toggle.setAttribute('aria-expanded', String(open));
 		};
+
 		toggle.addEventListener('click', (e) => {
 			e.stopPropagation();
 			set(!logs.hasAttribute('data-open'));
@@ -252,40 +258,50 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	// sees no modal. POSTs the password to /api/auth/login, which sets the signed
 	// session cookie, then reloads so the server re-renders with owner controls.
 	const modal = document.querySelector<HTMLElement>('[data-login-modal]');
+
 	const openBtn = document.querySelector<HTMLButtonElement>('[data-login-open]');
+
 	if (modal && openBtn) {
 		const form = modal.querySelector<HTMLFormElement>('[data-login-form]')!;
 		const pw = modal.querySelector<HTMLInputElement>('[data-login-pw]')!;
 		const err = modal.querySelector<HTMLElement>('[data-login-err]')!;
+
 		const close = () => {
 			modal.hidden = true;
 			form.reset();
 			err.hidden = true;
 		};
+
 		openBtn.addEventListener('click', () => {
 			modal.hidden = false;
 			pw.focus();
 		});
+
 		for (const el of modal.querySelectorAll('[data-login-close]')) {
 			el.addEventListener('click', close);
 		}
+
 		document.addEventListener('keydown', (e) => {
 			if (e.key === 'Escape' && !modal.hidden) close();
 		});
 		form.addEventListener('submit', async (e) => {
 			e.preventDefault();
 			err.hidden = true;
+
 			try {
 				const res = await fetch('/api/auth/login', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ password: pw.value }),
 				});
+
 				if (!res.ok) {
 					err.hidden = false;
 					pw.select();
+
 					return;
 				}
+
 				window.location.reload();
 			} catch {
 				err.hidden = false;
@@ -301,13 +317,17 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	// toggles a class on <html> that shows it, plus a backdrop. Only wired
 	// when the page opted in with `sidebar` — the button and backdrop exist then.
 	const burger = document.querySelector<HTMLButtonElement>('[data-drawer-toggle]');
+
 	const backdrop = document.querySelector<HTMLElement>('[data-drawer-backdrop]');
+
 	if (burger) {
 		const set = (open: boolean) => {
 			document.documentElement.classList.toggle('sh-drawer-open', open);
 			burger.setAttribute('aria-expanded', String(open));
+
 			if (backdrop) backdrop.hidden = !open;
 		};
+
 		burger.addEventListener('click', () =>
 			set(!document.documentElement.classList.contains('sh-drawer-open')),
 		);

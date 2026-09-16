@@ -21,6 +21,7 @@ export const prerender = false;
 // shared or pre-warmed, it belongs behind the CDN or in a build step, not in a
 // bigger version of this.
 const TTL_MS = 10 * 60 * 1000;
+
 let cached: { at: number; body: string } | null = null;
 
 // OWNER ONLY, and the cache above is why the check has to be the first thing
@@ -30,10 +31,12 @@ let cached: { at: number; body: string } | null = null;
 // The header is private/no-store for the same reason, one layer out.
 export const GET: APIRoute = async ({ cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
+
 	try {
 		if (!cached || Date.now() - cached.at > TTL_MS) {
 			cached = { at: Date.now(), body: JSON.stringify({ routes: await listRoutePolylines(true) }) };
 		}
+
 		return new Response(cached.body, {
 			headers: {
 				'content-type': 'application/json; charset=utf-8',

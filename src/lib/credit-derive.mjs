@@ -52,10 +52,13 @@ export const COUNTRIES = COUNTRY_LIST.map((c, i) => ({
 	...c,
 	color: c.code ? CYCLE[i % CYCLE.length] : NEUTRAL,
 }));
+
 export const COUNTRY_OF = new Map(
 	COUNTRIES.flatMap((c, i) => (c.code ? [c.code, ...(c.also ?? [])].map((k) => [k, i]) : [])),
 );
+
 export const OTHER_COUNTRY = COUNTRIES.findIndex((c) => !c.code);
+
 export const COUNTRY_MIN_FILMS = 3;
 
 /** Dominant country bucket + every bucket with COUNTRY_MIN_FILMS+ films, each
@@ -63,15 +66,20 @@ export const COUNTRY_MIN_FILMS = 3;
  * into COUNTRIES. */
 export function countryProfile(filmIds, filmById) {
 	const tally = new Map();
+
 	for (const id of filmIds) {
 		const codes = filmById.get(id)?.countries ?? [];
+
 		if (!codes.length) continue;
 		const share = 1 / codes.length;
+
 		for (const code of codes) tally.set(code, (tally.get(code) ?? 0) + share);
 	}
+
 	if (!tally.size) return { dominant: OTHER_COUNTRY, members: [OTHER_COUNTRY] };
 
 	const byBucket = new Map();
+
 	for (const [code, n] of tally) {
 		const b = COUNTRY_OF.get(code) ?? OTHER_COUNTRY;
 		byBucket.set(b, (byBucket.get(b) ?? 0) + n);
@@ -80,14 +88,18 @@ export function countryProfile(filmIds, filmById) {
 	let dominant = OTHER_COUNTRY;
 	let best = -1;
 	const members = [];
+
 	for (const [bucket, n] of byBucket) {
 		if (n > best) {
 			best = n;
 			dominant = bucket;
 		}
+
 		if (n >= COUNTRY_MIN_FILMS && bucket !== OTHER_COUNTRY) members.push(bucket);
 	}
+
 	if (!members.includes(dominant)) members.push(dominant);
+
 	return { dominant, members: members.sort((a, b) => a - b) };
 }
 
@@ -109,8 +121,10 @@ export function careerEra(filmIds, filmById) {
 		.map((id) => filmById.get(id)?.year)
 		.filter((y) => y)
 		.sort((a, b) => a - b);
+
 	if (!years.length) return ERAS.length - 1;
 	const median = years[Math.floor(years.length / 2)];
+
 	return ERAS.findIndex((e) => median <= e.until);
 }
 
@@ -119,6 +133,7 @@ export function careerEra(filmIds, filmById) {
 // ---------------------------------------------------------------------------
 
 export const MIN_WINDOW = 30;
+
 const SHRINKAGE = 3;
 
 /** Percentile (0..1) of `value` within an ascending-sorted window, matching the
@@ -128,11 +143,14 @@ export function pctRank(value, sortedAsc) {
 	if (sortedAsc.length < 2) return null;
 	let lo = 0;
 	let hi = sortedAsc.length;
+
 	while (lo < hi) {
 		const mid = (lo + hi) >> 1;
+
 		if (sortedAsc[mid] < value) lo = mid + 1;
 		else hi = mid;
 	}
+
 	return lo / (sortedAsc.length - 1);
 }
 
@@ -143,59 +161,78 @@ export function eraPercentiles(films, field, requirePositive) {
 	const usable = (f) => f.year && (!requirePositive || value(f) > 0);
 
 	const byYear = new Map();
+
 	for (const f of films) {
 		if (!usable(f)) continue;
+
 		if (!byYear.has(f.year)) byYear.set(f.year, []);
 		byYear.get(f.year).push(value(f));
 	}
+
 	for (const arr of byYear.values()) arr.sort((a, b) => a - b);
 
 	const windows = new Map();
+
 	const windowFor = (year) => {
 		let cached = windows.get(year);
+
 		if (cached) return cached;
 		let span = 2;
 		let merged = [];
+
 		for (;;) {
 			merged = [];
+
 			for (let y = year - span; y <= year + span; y++) {
 				const arr = byYear.get(y);
+
 				if (arr) merged.push(...arr);
 			}
+
 			if (merged.length >= MIN_WINDOW || span > 60) break;
 			span++;
 		}
+
 		merged.sort((a, b) => a - b);
 		windows.set(year, merged);
+
 		return merged;
 	};
 
 	const scores = new Map();
 	let total = 0;
 	let n = 0;
+
 	for (const f of films) {
 		if (!usable(f)) {
 			scores.set(f.id, null);
 			continue;
 		}
+
 		const w = windowFor(f.year);
+
 		if (w.length < 2) {
 			scores.set(f.id, null);
 			continue;
 		}
+
 		const v = value(f);
 		let lo = 0;
 		let hi = w.length;
+
 		while (lo < hi) {
 			const mid = (lo + hi) >> 1;
+
 			if (w[mid] < v) lo = mid + 1;
 			else hi = mid;
 		}
+
 		const p = lo / (w.length - 1);
 		scores.set(f.id, p);
 		total += p;
 		n++;
 	}
+
 	return { scores, prior: n ? total / n : 0.5 };
 }
 
@@ -208,6 +245,7 @@ export function shrunkMean(sum, count, prior) {
 export function regionLegend() {
 	return COUNTRIES.map((c) => ({ label: c.label, light: c.color, dark: c.color }));
 }
+
 export function eraLegend() {
 	return ERAS.map((e) => ({ label: e.label, light: e.light, dark: e.dark }));
 }

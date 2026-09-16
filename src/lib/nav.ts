@@ -48,6 +48,7 @@ export interface NavItem extends NavLink {
  */
 export function siteNav(current?: string): NavItem[] {
 	const children = LOG_SECTIONS.map((link) => ({ ...link, active: isActive(link.href, current) }));
+
 	return [
 		...PRIMARY.map((link) => ({
 			...link,
@@ -117,6 +118,8 @@ export function sectionNav(theme: HeaderTheme, current?: string, owner = false):
 
 function isActive(href: string, current?: string): boolean {
 	if (!current) return false;
+
 	if (href === '/') return current === '/';
+
 	return current === href || current.startsWith(`${href}/`);
 }

@@ -21,6 +21,7 @@ import { haversine } from './route-shape';
 import type { SkiSegment, SkiSegmentType } from './ski';
 
 const M_TO_FT = 3.28084;
+
 const MS_TO_MPH = 2.236936;
 
 /** How many samples the client graph gets. Enough that a curve reads smooth at
@@ -77,6 +78,7 @@ export interface GraphLap {
 function pickIndices(len: number, n: number): number[] {
 	if (len <= n) return Array.from({ length: len }, (_, i) => i);
 	const step = (len - 1) / (n - 1);
+
 	return Array.from({ length: n }, (_, i) => Math.round(i * step));
 }
 
@@ -85,6 +87,7 @@ const finite = (v: unknown): v is number => typeof v === 'number' && Number.isFi
 /** Read `arr` at `idx`, transforming and rounding present values, null otherwise. */
 function sample(arr: (number | null)[] | null | undefined, idx: number[], f: (v: number) => number): (number | null)[] | null {
 	if (!arr) return null;
+
 	return idx.map((i) => (finite(arr[i]) ? f(arr[i] as number) : null));
 }
 
@@ -113,7 +116,9 @@ export function buildGraphData(
 	const lens = [streams.time_s, streams.distance_m, streams.altitude_m, streams.heartrate, streams.power_w, streams.speed_ms].map(
 		(a) => a?.length ?? 0,
 	);
+
 	const len = Math.max(...lens);
+
 	if (len < 2) return null;
 	const idx = pickIndices(len, n);
 
@@ -121,14 +126,17 @@ export function buildGraphData(
 	const offsetFromStart = (raw: (number | null)[] | null): (number | null)[] | null => {
 		if (!raw || !finite(raw[0])) return null;
 		const base = raw[0] as number;
+
 		return raw.map((v) => (v == null ? null : Math.round(v - base)));
 	};
+
 	const t = offsetFromStart(sample(streams.time_s, idx, (v) => v));
 	// Some GPS activities record a track but no distance channel (3757 is one).
 	// Cumulative haversine over the latlng gives an honest distance axis so the
 	// Time/Distance toggle — and the distance default — still work.
 	const distRaw = streams.distance_m ?? (streams.latlng ? cumulativeDistance(streams.latlng) : null);
 	const d = offsetFromStart(sample(distRaw, idx, (v) => v));
+
 	// A profile needs at least one axis to lay points on.
 	if (!t && !d) return null;
 
@@ -146,8 +154,10 @@ export function buildGraphData(
 		{ key: 'power', label: 'Power', color: ALPINE.larch, unit: 'W', decimals: 0, values: sample(streams.power_w, idx, (v) => Math.round(v)) ?? [] },
 		{ key: 'speed', label: 'Speed', color: ALPINE.lake, unit: 'mph', decimals: 1, values: sample(streams.speed_ms, idx, (v) => Number((v * MS_TO_MPH).toFixed(1))) ?? [] },
 	];
+
 	// Keep a series only if it has two real points to draw a line between.
 	const series = candidates.filter((s) => s.values.filter(finite).length >= 2);
+
 	if (series.length === 0) return null;
 
 	return { n: idx.length, t, d, lat, lng, series, laps: lapBoundaries(laps), skiSegments: skiBands(streams, skiSegments) };
@@ -160,13 +170,16 @@ export function buildGraphData(
 function cumulativeDistance(latlng: [number, number][]): (number | null)[] {
 	let acc = 0;
 	const out: (number | null)[] = new Array(latlng.length);
+
 	for (let i = 0; i < latlng.length; i++) {
 		const p = latlng[i];
 		const prev = latlng[i - 1];
 		const pOk = p && finite(p[0]) && finite(p[1]);
+
 		if (i > 0 && pOk && prev && finite(prev[0]) && finite(prev[1])) acc += haversine(prev, p);
 		out[i] = pOk ? acc : null;
 	}
+
 	return out;
 }
 
@@ -180,8 +193,10 @@ function skiBands(streams: GraphStreams, segments: SkiSegment[] | null | undefin
 	const dist = streams.distance_m ?? null;
 	const tBase = time && finite(time[0]) ? (time[0] as number) : null;
 	const dBase = dist && finite(dist[0]) ? (dist[0] as number) : null;
+
 	const at = (arr: (number | null)[] | null, base: number | null, i: number): number | null =>
 		arr && base != null && finite(arr[i]) ? Math.round((arr[i] as number) - base) : null;
+
 	return segments.map((s) => ({
 		t0: at(time, tBase, s.startIdx),
 		t1: at(time, tBase, s.endIdx),
@@ -202,12 +217,15 @@ function lapBoundaries(laps: GraphLap[] | null | undefined): GraphData['laps'] {
 	let dAcc = 0;
 	let tOk = true;
 	let dOk = true;
+
 	for (let i = 0; i < laps.length - 1; i++) {
 		if (finite(laps[i].elapsed_seconds)) tAcc += laps[i].elapsed_seconds as number;
 		else tOk = false;
+
 		if (finite(laps[i].distance_m)) dAcc += laps[i].distance_m as number;
 		else dOk = false;
 		out.push({ t: tOk ? Math.round(tAcc) : null, d: dOk ? Math.round(dAcc) : null });
 	}
+
 	return out.some((b) => b.t != null || b.d != null) ? out : undefined;
 }

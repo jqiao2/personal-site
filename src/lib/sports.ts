@@ -104,6 +104,7 @@ export const FAMILY_LABEL: Record<SportFamily, string> = {
 	other: 'Other',
 	transition: 'Transition',
 };
+
 export const FAMILY_ORDER: SportFamily[] = ['bike', 'run', 'swim', 'foot', 'snow', 'other', 'transition'];
 
 /** Every stat key any sport's `primaryStats` refers to (§6), plus a few every
@@ -475,8 +476,10 @@ const FAMILY_ONLY_STATS: Partial<Record<StatKey, readonly SportFamily[]>> = {
  */
 export function isStatRelevant(slug: string, key: StatKey): boolean {
 	const meta = sportMeta(slug);
+
 	if (meta.primaryStats.includes(key)) return true;
 	const families = FAMILY_ONLY_STATS[key];
+
 	return !families || families.includes(meta.family);
 }
 
@@ -519,7 +522,9 @@ export interface FormattedStat {
 }
 
 const METERS_PER_MILE = 1609.344;
+
 const METERS_PER_FOOT = 0.3048;
+
 const MS_TO_MPH = 2.236936;
 
 const MISSING: FormattedStat = { label: '', value: '—' };
@@ -543,8 +548,11 @@ function formatDuration(seconds: number | null | undefined): string {
 	const h = Math.floor(s / 3600);
 	const m = Math.floor((s % 3600) / 60);
 	const ss = s % 60;
+
 	if (h > 0) return `${h}h ${m}m`;
+
 	if (m > 0) return `${m}m`;
+
 	return `${ss}s`;
 }
 
@@ -554,6 +562,7 @@ function formatPaceSeconds(secPerUnit: number | null): string {
 	const s = Math.round(secPerUnit);
 	const m = Math.floor(s / 60);
 	const ss = String(s % 60).padStart(2, '0');
+
 	return `${m}:${ss}`;
 }
 
@@ -568,27 +577,35 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 	switch (key) {
 		case 'distance': {
 			const mi = miles(row.distance_m);
+
 			return withLabel('Distance', { value: mi == null ? '—' : `${mi.toFixed(mi < 10 ? 2 : 1)} mi` });
 		}
+
 		case 'moving_time':
 			return withLabel('Moving time', { value: formatDuration(row.moving_seconds) });
 		case 'elapsed_time':
 			return withLabel('Elapsed time', { value: formatDuration(row.elapsed_seconds) });
 		case 'elevation_gain': {
 			const ft = feet(row.elevation_gain_m);
+
 			return withLabel('Elevation gain', { value: ft == null ? '—' : `${Math.round(ft).toLocaleString()} ft` });
 		}
+
 		case 'elev_high': {
 			const ft = feet(row.elev_high_m);
+
 			return withLabel('Elev. high', { value: ft == null ? '—' : `${Math.round(ft).toLocaleString()} ft` });
 		}
+
 		case 'vertical_descent': {
 			// Alpine skiing has no meaningful "gain" — the day's story is descent,
 			// which we recover from elevation_loss_m (the lift itself is never
 			// recorded, so gain would just be a proxy for lift-served vertical).
 			const ft = feet(row.elevation_loss_m);
+
 			return withLabel('Vertical', { value: ft == null ? '—' : `${Math.round(ft).toLocaleString()} ft` });
 		}
+
 		case 'avg_power':
 			return withLabel('Avg power', { value: row.avg_power_w == null ? '—' : `${row.avg_power_w}W` });
 		case 'max_power':
@@ -597,26 +614,34 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 			return withLabel('NP', { value: row.normalized_power_w == null ? '—' : `${row.normalized_power_w}W` });
 		case 'avg_speed': {
 			const mph = row.avg_speed_ms == null ? null : row.avg_speed_ms * MS_TO_MPH;
+
 			return withLabel('Avg speed', { value: mph == null ? '—' : `${mph.toFixed(1)} mph` });
 		}
+
 		case 'max_speed': {
 			const mph = row.max_speed_ms == null ? null : row.max_speed_ms * MS_TO_MPH;
+
 			return withLabel('Max speed', { value: mph == null ? '—' : `${mph.toFixed(1)} mph` });
 		}
+
 		case 'avg_pace': {
 			// s/km stored implicitly via distance+time; recompute from speed so
 			// this stays correct even if avg_speed_ms is the only stream present.
 			if (row.avg_speed_ms == null || row.avg_speed_ms <= 0) return withLabel('Avg pace', MISSING);
 			const secPerMile = METERS_PER_MILE / row.avg_speed_ms;
+
 			return withLabel('Avg pace', { value: `${formatPaceSeconds(secPerMile)} /mi` });
 		}
+
 		case 'pace_100m': {
 			// Metric on purpose — see the header comment. Pools are measured in
 			// metres regardless of what unit the rest of the page is in.
 			if (row.avg_speed_ms == null || row.avg_speed_ms <= 0) return withLabel('Pace', MISSING);
 			const secPer100m = 100 / row.avg_speed_ms;
+
 			return withLabel('Pace', { value: `${formatPaceSeconds(secPer100m)} /100m` });
 		}
+
 		case 'avg_hr':
 			return withLabel('Avg HR', { value: row.avg_hr == null ? '—' : `${row.avg_hr} bpm` });
 		case 'max_hr':
@@ -625,11 +650,14 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 			return withLabel('SWOLF', { value: row.avg_swolf == null ? '—' : String(row.avg_swolf) });
 		case 'pool_length': {
 			const m = row.pool_length_m;
+
 			if (m == null) return withLabel('Pool length', MISSING);
+
 			// Pools are conventionally named by their nominal length, not their
 			// exact metreage (a "25" is 25 yards or 25 metres, not 22.86).
 			return withLabel('Pool length', { value: `${Math.round(m)}m` });
 		}
+
 		case 'work_kj':
 			return withLabel('Work', { value: row.work_kj == null ? '—' : `${Math.round(row.work_kj)} kJ` });
 		case 'exertion':

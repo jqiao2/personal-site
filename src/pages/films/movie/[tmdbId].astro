@@ -23,7 +23,9 @@ import SiteHeader from '../../../components/SiteHeader.astro';
 export const prerender = false;
 
 const tmdbId = Number(Astro.params.tmdbId);
+
 const isOwner = await requireOwner(Astro.cookies);
+
 let film = Number.isInteger(tmdbId) ? await getFilmByTmdbId(tmdbId) : null;
 
 // A film reached from the log composer's search results usually isn't cached yet —
@@ -64,6 +66,7 @@ const movieLogs = await listMovieEntries(movie.id);
 // watchlist and download actions, and the right column trades your reviews for
 // films you've already watched that it resembles.
 const seen = !!watched || movieLogs.length > 0;
+
 const [onWatchlist, related] = seen
 	? ([false, []] as [boolean, RelatedFilm[]])
 	: await Promise.all([isOnWatchlist(movie.id), listRelatedWatched(movie)]);
@@ -71,13 +74,20 @@ const [onWatchlist, related] = seen
 // Director / cast / genres / language / country / rating come from our cache row
 // (migrations 0008 + 0009), so the page renders without a live TMDB call.
 const directors = movie.directors;
+
 const cast = movie.actors.slice(0, 5);
+
 const crew = await crewPromise;
+
 const genres = movie.genres;
+
 const runtime = movie.runtime;
+
 // The film's primary production country for the meta row.
 const country = movie.countries[0] ?? null;
+
 const mpaRating = movie.mpa_rating;
+
 // The release date · runtime · country row, with only the facts we actually have.
 // The full date earns its place here because the title only carries the year;
 // original_language is still cached, it just isn't part of this row. Shown as the
@@ -90,8 +100,11 @@ const metaItems = [
 ].filter(Boolean) as string[];
 
 const backdrop = imageUrl(movie.backdrop_path, 'w780');
+
 const poster = imageUrl(movie.poster_path, 'w342');
+
 const tmdbUrl = `https://www.themoviedb.org/movie/${movie.tmdb_id}`;
+
 const filmHref = `/films/movie/${movie.tmdb_id}`;
 
 // The director, each cast member and each genre link to the "All films" grid
@@ -108,6 +121,7 @@ function formatRuntime(min: number | null): string | null {
 	if (!min || min <= 0) return null;
 	const h = Math.floor(min / 60);
 	const m = min % 60;
+
 	return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
 
@@ -129,9 +143,13 @@ function logDate(l: { watched_date: string | null; created_at: string }): string
 // from the Letterboxd import when there are no diary logs. Watched date stays the
 // first-watched stat, falling back to the latest log's date.
 const latestLog = movieLogs[0] ?? null;
+
 const activityRating = latestLog?.rating ?? watched?.rating ?? null;
+
 const activityLiked = latestLog?.liked ?? watched?.liked ?? false;
+
 const yourRating = starText(activityRating) ?? '';
+
 const yourWatched = watched?.first_watched
 	? formatWatchedDate(watched.first_watched.slice(0, 10))
 	: latestLog
@@ -144,12 +162,14 @@ const yourWatched = watched?.first_watched
 const [venueOptions, tagOptions, friendOptions] = isOwner
 	? await Promise.all([listTheaterNames(), listTags(), listFriends()])
 	: [[], [], []];
+
 const editorFilm = {
 	tmdbId: movie.tmdb_id,
 	title: movie.title,
 	year: movie.release_year,
 	poster: imageUrl(movie.poster_path, 'w92'),
 };
+
 // Rewatches and re-reviews are the norm once a film is already logged, so the
 // button says so rather than implying this would be the first entry.
 const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or review';
@@ -1085,6 +1105,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					for (const other of document.querySelectorAll<HTMLButtonElement>('.tab[data-tab]')) {
 						other.setAttribute('aria-selected', String(other === tab));
 					}
+
 					for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
 						panel.hidden = panel.dataset.panel !== tab.dataset.tab;
 					}
@@ -1098,6 +1119,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				a.addEventListener('click', (e) => {
 					const ref = document.referrer;
 					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
+
 					if (history.length > 1 && sameOrigin) {
 						e.preventDefault();
 						history.back();
@@ -1108,11 +1130,13 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 			// Watchlist toggle (unwatched films, owner only). Optimistic-free: the
 			// button waits for the write, so its state always matches the list.
 			const toggle = document.getElementById('watchlist-toggle');
+
 			if (toggle instanceof HTMLButtonElement) {
 				toggle.addEventListener('click', async () => {
 					const id = toggle.dataset.tmdbId;
 					const adding = !toggle.dataset.on;
 					toggle.disabled = true;
+
 					try {
 						const res = adding
 							? await fetch('/api/films/watchlist', {
@@ -1121,11 +1145,15 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 									body: JSON.stringify({ tmdbId: Number(id) }),
 								})
 							: await fetch(`/api/films/watchlist?tmdbId=${id}`, { method: 'DELETE' });
+
 						if (res.status === 401) {
 							window.location.href = `/films/login?redirect=${encodeURIComponent(location.pathname)}`;
+
 							return;
 						}
+
 						if (!res.ok) throw new Error(String(res.status));
+
 						if (adding) toggle.dataset.on = '1';
 						else delete toggle.dataset.on;
 						toggle.textContent = adding ? '✓ On watchlist' : '+ Add to watchlist';
@@ -1147,6 +1175,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 			// than no button, so the button only ever appears once we've confirmed
 			// both that the server answered and that the film is really in it.
 			const play = document.getElementById('jellyfin-play');
+
 			if (play instanceof HTMLButtonElement) {
 				const tmdbId = play.dataset.tmdb!;
 				const label = play.querySelector('[data-label]')!;
@@ -1164,24 +1193,31 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// Empty when JELLYFIN_LOCAL_URL isn't set, in which case no device ever
 				// counts as the host and every play goes to the web player.
 				const localUrl = play.dataset.local || null;
+
 				async function pickBase(): Promise<string | null> {
 					const cached = sessionStorage.getItem(BASE_KEY);
+
 					if (cached && bases.includes(cached)) return cached;
+
 					try {
 						const winner = await Promise.any(
 							bases.map(async (b) => {
 								const res = await fetch(`${b}/System/Info/Public`, {
 									signal: AbortSignal.timeout(5000),
 								});
+
 								if (!res.ok) throw new Error(String(res.status));
+
 								return b;
 							}),
 						);
+
 						try {
 							sessionStorage.setItem(BASE_KEY, winner);
 						} catch {
 							// Storage unavailable — we'll just probe again next page.
 						}
+
 						return winner;
 					} catch {
 						return null; // Every candidate failed: not on the tailnet, or it's asleep.
@@ -1192,6 +1228,7 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// True once we know this browser is running on the Jellyfin machine —
 				// localhost only resolves there, so the winning URL settles it.
 				let onHost = false;
+
 				// A sleeping or absent server should fail fast, not hang the button.
 				const jf = (path: string, init?: RequestInit) =>
 					fetch(`${base}${path}`, { ...init, headers: auth, signal: AbortSignal.timeout(6000) });
@@ -1212,8 +1249,10 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				async function moviesLibraryId(): Promise<string | null> {
 					try {
 						const res = await jf('/Library/VirtualFolders');
+
 						if (!res.ok) return null;
 						const lib = (await res.json()).find((v: any) => v.CollectionType === 'movies');
+
 						return lib?.ItemId ?? null;
 					} catch {
 						return null;
@@ -1223,29 +1262,37 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				async function libraryMap(): Promise<Record<string, string>> {
 					try {
 						const cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null');
+
 						if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.map;
 					} catch {
 						// Unparseable or storage disabled — just refetch.
 					}
+
 					// Unscoped only if the server has no movies library to scope to, in
 					// which case there's nothing better to ask for.
 					const libId = await moviesLibraryId();
+
 					const res = await jf(
 						`/Items?recursive=true&includeItemTypes=Movie&fields=ProviderIds` +
 							`${libId ? `&parentId=${libId}` : ''}` +
 							'&enableImages=false&enableTotalRecordCount=false',
 					);
+
 					if (!res.ok) throw new Error(String(res.status));
 					const map: Record<string, string> = {};
+
 					for (const item of (await res.json()).Items ?? []) {
 						const id = item.ProviderIds?.Tmdb;
+
 						if (id) map[String(id)] = item.Id;
 					}
+
 					try {
 						sessionStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), map }));
 					} catch {
 						// Private mode / quota — the map just won't survive this page.
 					}
+
 					return map;
 				}
 
@@ -1267,8 +1314,11 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				function deviceClient(): RegExp | null {
 					if (onHost) return /jellyfin media player/i;
 					const ua = navigator.userAgent;
+
 					if (/iPhone|iPad|iPod/.test(ua)) return /jellyfin ios|swiftfin/i;
+
 					if (/Android/.test(ua)) return /jellyfin android/i;
+
 					return null;
 				}
 
@@ -1276,13 +1326,18 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// open to receive it.
 				async function deviceSession(): Promise<string | null> {
 					const pattern = deviceClient();
+
 					if (!pattern) return null;
+
 					try {
 						const res = await jf('/Sessions');
+
 						if (!res.ok) return null;
+
 						const found = (await res.json()).find(
 							(s: any) => s.SupportsRemoteControl && pattern.test(s.Client ?? ''),
 						);
+
 						return found?.Id ?? null;
 					} catch {
 						return null;
@@ -1300,12 +1355,14 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				// isn't playing the film, so we show nothing instead.
 				(async () => {
 					const found = await pickBase();
+
 					if (!found) return; // Jellyfin isn't reachable from here — stay hidden.
 					base = found;
 					onHost = !!localUrl && base === localUrl;
 
 					let itemId: string | null = null;
 					let sessionId: string | null = null;
+
 					try {
 						[itemId, sessionId] = await Promise.all([
 							libraryMap().then((m) => m[tmdbId] ?? null),
@@ -1314,7 +1371,9 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					} catch {
 						return; // Unreachable server — leave the button hidden.
 					}
+
 					if (!itemId) return; // Not in the library — the YTS link is the answer.
+
 					if (!sessionId) return; // No Jellyfin client open here to play it in.
 
 					label.textContent = 'Play';
@@ -1324,18 +1383,23 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 						// Re-resolve rather than trusting the load-time answer: the client
 						// may have been closed since the page rendered.
 						const target = await deviceSession();
+
 						if (!target) {
 							play.hidden = true;
+
 							return;
 						}
+
 						play.disabled = true;
 						play.dataset.busy = '1';
 						label.textContent = 'Starting…';
+
 						try {
 							const res = await jf(
 								`/Sessions/${target}/Playing?playCommand=PlayNow&itemIds=${itemId}`,
 								{ method: 'POST' },
 							);
+
 							if (!res.ok) throw new Error(String(res.status));
 							label.textContent = 'Playing';
 						} catch {

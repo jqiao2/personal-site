@@ -21,8 +21,11 @@ import {
 } from '../../src/lib/credit-derive.mjs';
 
 const SB_URL = process.env.SUPABASE_URL;
+
 const SB_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!SB_URL || !SB_KEY) { console.error('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY'); process.exit(1); }
+
 const sb = createClient(SB_URL, SB_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 
 const ROLES = [
@@ -30,46 +33,65 @@ const ROLES = [
 	{ role: 'director', label: 'Director', color: '#4a8fd4' },
 	{ role: 'composer', label: 'Composer', color: '#3fa87a' },
 ];
+
 const ROLE_SHARE_FLOOR = 0.25;
+
 const CONFIG_OUT = path.join('src', 'data', 'credit-config.json');
 
 async function readAll(table, cols, order, filter) {
 	const PAGE = 1000, out = [];
+
 	for (let o = 0; ; o += PAGE) {
 		let q = sb.from(table).select(cols).order(order, { ascending: true }).range(o, o + PAGE - 1);
+
 		if (filter) q = filter(q);
 		const { data, error } = await q;
+
 		if (error) throw new Error(`${table}: ${error.message}`);
 		out.push(...(data ?? []));
+
 		if ((data ?? []).length < PAGE) break;
+
 		if (o && o % 20000 === 0) process.stdout.write(`\r  ${table}: ${out.length.toLocaleString()}...   `);
 	}
+
 	return out;
 }
 
 const BATCH = 2000, PARALLEL = 4;
+
 const TRANSIENT = /fetch failed|network|timeout|ECONN|EAI_AGAIN|socket/i;
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 async function upsertAll(table, rows, conflict) {
 	if (!rows.length) return;
 	const batches = [];
+
 	for (let i = 0; i < rows.length; i += BATCH) batches.push(rows.slice(i, i + BATCH));
 	const queue = batches.slice();
 	let done = 0;
+
 	const worker = async () => {
 		for (;;) {
 			const batch = queue.shift();
+
 			if (!batch) return;
+
 			for (let attempt = 0; ; attempt++) {
 				const { error } = await sb.from(table).upsert(batch, { onConflict: conflict, defaultToNull: false });
+
 				if (!error) break;
+
 				if (attempt >= 4 || !TRANSIENT.test(error.message ?? '')) throw new Error(`${table}: ${error.message}`);
 				await sleep(500 * 2 ** attempt);
 			}
+
 			done += batch.length;
 			process.stdout.write(`\r  ${table}: ${done.toLocaleString()}/${rows.length.toLocaleString()}    `);
 		}
 	};
+
 	await Promise.all(Array.from({ length: PARALLEL }, worker));
 	process.stdout.write('\n');
 }
@@ -79,9 +101,11 @@ async function main() {
 	console.log('Reading credit_films (full corpus)...');
 	const filmRows = await readAll('credit_films', 'tmdb_id, title, release_year, vote_count, revenue, countries', 'tmdb_id');
 	process.stdout.write('\n');
+
 	const films = filmRows.map((f) => ({
 		id: f.tmdb_id, title: f.title, year: f.release_year, vote_count: f.vote_count ?? 0, revenue: f.revenue ?? 0, countries: f.countries ?? [],
 	}));
+
 	const filmById = new Map(films.map((f) => [f.id, f]));
 	const reachPct = eraPercentiles(films, 'vote_count', false);
 	const grossPct = eraPercentiles(films, 'revenue', true);
@@ -103,40 +127,56 @@ async function main() {
 
 	console.log('Reading credits on watched films...');
 	const peopleIds = new Set();
+
 	for (let i = 0; i < watchedTmdb.length; i += 300) {
 		const rows = await readAll('credits', 'person_id', 'person_id', (q) => q.in('film_id', watchedTmdb.slice(i, i + 300)));
+
 		for (const r of rows) peopleIds.add(r.person_id);
 	}
+
 	const ids = [...peopleIds];
 	console.log(`  ${ids.length.toLocaleString()} distinct watched people.`);
 
 	console.log('Reading names + filmographies...');
 	const nameById = new Map();
+
 	for (let i = 0; i < ids.length; i += 500) {
 		const rows = await readAll('credit_people', 'tmdb_id, name', 'tmdb_id', (q) => q.in('tmdb_id', ids.slice(i, i + 500)));
+
 		for (const r of rows) nameById.set(r.tmdb_id, r.name);
 	}
+
 	const filmsByPerson = new Map(ids.map((id) => [id, new Set()]));
+
 	for (let i = 0; i < ids.length; i += 300) {
 		const rows = await readAll('credits', 'person_id, film_id', 'film_id', (q) => q.in('person_id', ids.slice(i, i + 300)));
+
 		for (const r of rows) filmsByPerson.get(r.person_id)?.add(r.film_id);
 		process.stdout.write(`\r  ${Math.min(i + 300, ids.length)}/${ids.length}   `);
 	}
+
 	process.stdout.write('\n');
 
 	console.log('Deriving region / era / prominence...');
 	const r2 = (v) => Math.round(v * 100) / 100;
 	const now = new Date().toISOString();
+
 	const rows = ids.map((id) => {
 		const filmIds = filmsByPerson.get(id) ?? new Set();
 		let reachSum = 0, reachN = 0, grossSum = 0, grossN = 0;
+
 		for (const fid of filmIds) {
 			const rp = reachPct.scores.get(fid);
+
 			if (rp != null) { reachSum += rp; reachN++; }
+
 			const gp = grossPct.scores.get(fid);
+
 			if (gp != null) { grossSum += gp; grossN++; }
 		}
+
 		const cp = countryProfile(filmIds, filmById);
+
 		return {
 			tmdb_id: id,
 			name: nameById.get(id) ?? `#${id}`,
@@ -148,6 +188,7 @@ async function main() {
 			enriched_at: now,
 		};
 	});
+
 	console.log('Writing per-person enrichment...');
 	await upsertAll('credit_people', rows, 'tmdb_id');
 
@@ -164,6 +205,7 @@ async function main() {
 			{ key: 'era', label: 'Era of their career', field: 'era', note: 'The era containing the median year of their whole filmography.', legend: eraLegend() },
 		],
 	};
+
 	await mkdir(path.dirname(CONFIG_OUT), { recursive: true });
 	await writeFile(CONFIG_OUT, `${JSON.stringify(config, null, '\t')}\n`);
 	console.log(`Wrote ${CONFIG_OUT}. Enriched ${rows.length.toLocaleString()} people; priors reach=${reachPct.prior.toFixed(3)} gross=${grossPct.prior.toFixed(3)}.`);

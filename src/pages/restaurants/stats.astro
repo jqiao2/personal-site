@@ -40,18 +40,22 @@ const [stats, cuisines, places, isOwner] = await Promise.all([
 	listPlaces(),
 	requireOwner(Astro.cookies),
 ]);
+
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 
 // The sketches are drawn from the real numbers where the real numbers are one
 // line away — a sketch of a lie would be worse than a sketch.
 const headCuisines = cuisines.slice(0, 5);
+
 const tailCount = cuisines.slice(5).reduce((n, c) => n + c.count, 0);
+
 const maxCuisine = Math.max(1, ...cuisines.map((c) => c.count));
 
 const priceCounts = (['$', '$$', '$$$', '$$$$'] as const).map((band) => ({
 	band,
 	n: places.filter((p) => p.price_band === band).length,
 }));
+
 const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 ---
 

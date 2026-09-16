@@ -11,11 +11,14 @@ export interface ChipField {
 /** Nearest scrolling ancestor, whose edges bound where the dropdown can open. */
 function scrollParent(el: HTMLElement): HTMLElement | null {
 	let p = el.parentElement;
+
 	while (p) {
 		const oy = getComputedStyle(p).overflowY;
+
 		if (oy === 'auto' || oy === 'scroll') return p;
 		p = p.parentElement;
 	}
+
 	return null;
 }
 
@@ -45,34 +48,43 @@ export function wireChips(
 		});
 		chipsBox.hidden = values.length === 0;
 	}
+
 	function remove(i: number) {
 		values.splice(i, 1);
 		renderChips();
 		renderSuggest();
 	}
+
 	function commit(raw: string) {
 		const name = raw.trim();
+
 		if (name && !values.some((v) => v.toLowerCase() === name.toLowerCase())) values.push(name);
 		input.value = '';
 		renderChips();
 		renderSuggest();
 	}
+
 	function candidates(): string[] {
 		const token = input.value.trim().toLowerCase();
 		const used = new Set(values.map((v) => v.toLowerCase()));
+
 		return options
 			.filter((o) => !used.has(o.toLowerCase()))
 			.filter((o) => !token || o.toLowerCase().includes(token))
 			.slice(0, 6);
 	}
+
 	function renderSuggest() {
 		const items = candidates();
 		suggest.textContent = '';
 		active = -1;
+
 		if (!items.length) {
 			suggest.hidden = true;
+
 			return;
 		}
+
 		for (const o of items) {
 			const li = document.createElement('li');
 			li.textContent = o;
@@ -82,17 +94,21 @@ export function wireChips(
 			});
 			suggest.appendChild(li);
 		}
+
 		suggest.hidden = false;
 		placeSuggest();
 	}
+
 	// Open below the input, or above it when the space below within the scroll
 	// body can't hold the list. Measured each time it's shown, so scrolling the
 	// body toward either edge flips it.
 	function placeSuggest() {
 		const box = scrollParent(input);
+
 		const bounds = box
 			? box.getBoundingClientRect()
 			: { top: 0, bottom: window.innerHeight };
+
 		const rect = input.getBoundingClientRect();
 		const need = Math.min(suggest.scrollHeight || 200, 200) + 6;
 		const below = bounds.bottom - rect.bottom;
@@ -107,8 +123,10 @@ export function wireChips(
 	});
 	input.addEventListener('keydown', (e) => {
 		const lis = Array.from(suggest.querySelectorAll('li'));
+
 		if (e.key === 'Enter') {
 			e.preventDefault();
+
 			if (active >= 0 && lis[active]) commit(lis[active].textContent || '');
 			else commit(input.value);
 		} else if (e.key === 'ArrowDown' && lis.length) {

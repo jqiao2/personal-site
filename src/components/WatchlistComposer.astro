@@ -239,6 +239,7 @@
 	// the DOM (a visitor viewing the page). Any element with `data-open-watchlist`
 	// opens it — the watchlist title button and the film log header both use that.
 	const triggers = Array.from(document.querySelectorAll<HTMLElement>('[data-open-watchlist]'));
+
 	const modal = document.getElementById('composer') as HTMLDivElement | null;
 
 	if (triggers.length && modal) {
@@ -264,12 +265,15 @@
 		q.addEventListener('input', () => {
 			window.clearTimeout(timer);
 			const query = q.value.trim();
+
 			if (!query) return hideResults();
 			timer = window.setTimeout(() => runSearch(query), 300);
 		});
+
 		async function runSearch(query: string) {
 			try {
 				const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+
 				if (!res.ok) return hideResults();
 				const data = await res.json();
 				renderResults(data.results ?? []);
@@ -277,35 +281,45 @@
 				hideResults();
 			}
 		}
+
 		function renderResults(items: any[]) {
 			results.textContent = '';
+
 			if (!items.length) return hideResults();
+
 			for (const m of items.slice(0, 8)) {
 				const li = document.createElement('li');
 				const img = document.createElement('img');
+
 				if (m.poster_path) img.src = IMG + m.poster_path;
 				img.alt = '';
 				const label = document.createElement('span');
 				label.textContent = m.title;
+
 				if (m.release_date) {
 					const yr = document.createElement('span');
 					yr.className = 'r-year';
 					yr.textContent = m.release_date.slice(0, 4);
 					label.appendChild(yr);
 				}
+
 				li.append(img, label);
 				li.addEventListener('click', () => selectMovie(m));
 				results.appendChild(li);
 			}
+
 			results.hidden = false;
 		}
+
 		function hideResults() {
 			results.hidden = true;
 			results.textContent = '';
 		}
+
 		function selectMovie(m: any) {
 			tmdbId = m.id;
 			selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+
 			if (m.poster_path) {
 				selPoster.src = IMG + m.poster_path;
 				selPoster.hidden = false;
@@ -313,6 +327,7 @@
 				selPoster.removeAttribute('src');
 				selPoster.hidden = true;
 			}
+
 			hideResults();
 			searchWrap.hidden = true;
 			selected.hidden = false;
@@ -320,6 +335,7 @@
 			msg.className = 'save-msg';
 			msg.textContent = '';
 		}
+
 		change.addEventListener('click', () => {
 			tmdbId = null;
 			selected.hidden = true;
@@ -335,10 +351,12 @@
 		const closeModal = () => {
 			modal.hidden = true;
 		};
+
 		const openModal = () => {
 			modal.hidden = false;
 			q.focus();
 		};
+
 		for (const trigger of triggers) trigger.addEventListener('click', openModal);
 		close.addEventListener('click', closeModal);
 		cancel.addEventListener('click', closeModal);
@@ -352,17 +370,22 @@
 			save.disabled = true;
 			msg.className = 'save-msg';
 			msg.textContent = 'Adding…';
+
 			try {
 				const res = await fetch('/api/films/watchlist', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ tmdbId }),
 				});
+
 				if (res.status === 401) {
 					window.location.href = '/films/login?redirect=/films/watchlist';
+
 					return;
 				}
+
 				const data = await res.json().catch(() => ({}));
+
 				if (!res.ok) throw new Error(data.error || 'Add failed');
 				// New entries sort to the top (added just now) — reload to show it.
 				window.location.reload();

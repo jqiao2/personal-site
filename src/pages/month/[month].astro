@@ -66,7 +66,9 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = Astro.params.month ?? '';
+
 const parsed = parseMonthKey(key);
+
 if (!parsed) return Astro.redirect('/month');
 
 // Four independent round trips; nothing here needs anything from the others.
@@ -93,6 +95,7 @@ const items = [
 ];
 
 const aspect = aspectBySlug(Astro.url.searchParams.get('fmt'));
+
 const rows = weekRows(key);
 
 // The pile is scattered around the middle of a day rather than fitted inside
@@ -109,10 +112,13 @@ const query = monthQuery(aspect);
 // hands the same map to the client so the year stepper can repaint the dots for
 // any year. Order follows TRACKS (film, book, meal, move).
 const trackOrder = TRACKS.map((t) => t.id);
+
 const tracksByMonth = Object.fromEntries(months.map((m) => [m.key, m.tracks]));
+
 const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	const id = monthKeyOf(parsed.year, i + 1);
 	const held = tracksByMonth[id] ?? [];
+
 	return { abbr, key: id, current: id === key, dots: trackOrder.map((t) => held.includes(t)) };
 });
 ---
@@ -249,11 +255,15 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	}
 
 	const card = document.querySelector<HTMLElement>('[data-card]');
+
 	const viewport = document.querySelector<HTMLElement>('[data-viewport]');
+
 	const dataEl = document.querySelector('[data-month-data]');
+
 	const data: MonthData = dataEl?.textContent
 		? JSON.parse(dataEl.textContent)
 		: { key: '', tracks: {}, order: [] };
+
 	const toast = makeToast(document.querySelector<HTMLElement>('[data-toast]'));
 
 	// The scatter is a touch taller here than on the section cards, so it takes a
@@ -288,6 +298,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 			img.remove();
 			mark?.classList.add('mark--bare');
 		};
+
 		if (img.complete && img.naturalWidth === 0) drop();
 		else img.addEventListener('error', drop);
 	}

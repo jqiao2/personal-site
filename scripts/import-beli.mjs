@@ -21,6 +21,7 @@ import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 
 const commit = process.argv.includes('--commit');
+
 const selfTest = process.argv.includes('--selftest');
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ function normalise(s) {
 export function splitCity(raw) {
 	const s = (raw ?? '').trim();
 	const m = s.match(/^(.*),\s*([A-Z]{2})$/); // a trailing 2-letter state/province code
+
 	return m ? { city: m[1].trim(), state: m[2] } : { city: s, state: null };
 }
 
@@ -53,6 +55,7 @@ export function priceBand(price) {
 export function starRating(score) {
 	if (score == null) return null;
 	const stars = Math.round(score) / 2; // score/2 to the nearest half star
+
 	return Math.min(5, Math.max(0.5, stars));
 }
 
@@ -61,14 +64,17 @@ const COUNTRY = {
 	Greece: 'GR', Australia: 'AU', Belize: 'BZ', Bermuda: 'BM', Qatar: 'QA', India: 'IN',
 	France: 'FR', Italy: 'IT', Germany: 'DE', Japan: 'JP', Portugal: 'PT', Ireland: 'IE',
 };
+
 export function countryCode(name) {
 	if (!name) return 'US';
+
 	return COUNTRY[name] ?? (name.length === 2 ? name.toUpperCase() : name);
 }
 
 /** The common columns both lists fill on a `restaurants` row. */
 function placeRow(p) {
 	const { city, state } = splitCity(p.city);
+
 	return {
 		name: p.name,
 		cuisines: p.cuisines ?? [],
@@ -87,9 +93,11 @@ function placeRow(p) {
 /** The key a place is deduplicated on: its Google id, or failing that name+city. */
 function dedupeKeys(p) {
 	const keys = [];
+
 	if (p.google_place_id) keys.push(`g:${p.google_place_id.toLowerCase()}`);
 	const { city } = splitCity(p.city);
 	keys.push(`n:${normalise(p.name)}|${normalise(city)}`);
+
 	return keys;
 }
 
@@ -115,46 +123,61 @@ if (selfTest) {
 // ---------------------------------------------------------------------------
 
 const { been = [], want = [] } = JSON.parse(readFileSync('tmp/beli.json', 'utf8'));
+
 console.log(`export: ${been.length} been, ${want.length} want to try`);
 
 const url = process.env.SUPABASE_URL;
+
 const key = commit ? process.env.SUPABASE_SERVICE_ROLE_KEY : (process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY);
+
 if (commit && (!url || !process.env.SUPABASE_SERVICE_ROLE_KEY)) {
 	console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set to --commit');
 	process.exit(1);
 }
+
 if (!url || !key) {
 	console.error('SUPABASE_URL and a key must be set (anon is enough for a dry run)');
 	process.exit(1);
 }
+
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 // What is already on record, so nothing here is added twice. Read whole — the
 // table is small and public — and index by every key a place could match on.
 const { data: existing, error: readErr } = await db.from('restaurants').select('name, city, google_place_id');
+
 if (readErr) {
 	console.error('could not read existing restaurants:', readErr.message);
 	process.exit(1);
 }
+
 const seen = new Set();
+
 for (const r of existing ?? []) {
 	if (r.google_place_id) seen.add(`g:${r.google_place_id.toLowerCase()}`);
 	seen.add(`n:${normalise(r.name)}|${normalise(r.city)}`);
 }
+
 console.log(`on record: ${existing?.length ?? 0} places`);
 
 /** True if the place is already known, by any of its keys. Records it as known. */
 function claim(p) {
 	const keys = dedupeKeys(p);
+
 	if (keys.some((k) => seen.has(k))) return false;
+
 	for (const k of keys) seen.add(k);
+
 	return true;
 }
 
 // been first, so a place that is both ranked and bookmarked lands as visited.
 const newBeen = been.filter(claim);
+
 const newWant = want.filter(claim);
+
 const skipped = been.length + want.length - newBeen.length - newWant.length;
+
 console.log(`to add: ${newBeen.length} been, ${newWant.length} want to try  (${skipped} already on record)`);
 
 const sample = (rows, kind) => {
@@ -164,7 +187,9 @@ const sample = (rows, kind) => {
 		console.log(`  ${p.name.slice(0, 32).padEnd(32)} ${[city, state].filter(Boolean).join(', ').padEnd(20)} ${extra}`);
 	}
 };
+
 sample(newBeen, 'been');
+
 sample(newWant, 'want');
 
 if (!commit) {
@@ -178,12 +203,15 @@ if (!commit) {
 async function insertPlaces(rows, extra) {
 	const out = [];
 	const CHUNK = 200;
+
 	for (let i = 0; i < rows.length; i += CHUNK) {
 		const slice = rows.slice(i, i + CHUNK).map(extra);
 		const { data, error } = await db.from('restaurants').insert(slice).select('id, google_place_id, name');
+
 		if (error) throw new Error(`restaurants insert failed at ${i}: ${error.message}`);
 		out.push(...data);
 	}
+
 	return out;
 }
 
@@ -198,23 +226,31 @@ if (newBeen.length) {
 	const placed = await insertPlaces(newBeen, (p) => ({ ...placeRow(p), beli_score: p.score == null ? null : Math.round(p.score * 100) / 100 }));
 	// Match the returned ids back to their source rows to build visits.
 	const idByKey = new Map();
+
 	for (const r of placed) {
 		if (r.google_place_id) idByKey.set(`g:${r.google_place_id.toLowerCase()}`, r.id);
 		idByKey.set(`n:${normalise(r.name)}`, r.id);
 	}
+
 	const visits = newBeen
 		.map((p) => {
 			const id = (p.google_place_id && idByKey.get(`g:${p.google_place_id.toLowerCase()}`)) ?? idByKey.get(`n:${normalise(p.name)}`);
+
 			if (!id) return null;
 			const visitedOn = p.visit_dates?.[0] ?? ((p.ranked_on ?? '').slice(0, 10) || null);
+
 			return { restaurant_id: id, visited_on: visitedOn, rating: starRating(p.score) };
 		})
 		.filter((v) => v && v.visited_on);
+
 	const CHUNK = 200;
+
 	for (let i = 0; i < visits.length; i += CHUNK) {
 		const { error } = await db.from('restaurant_visits').insert(visits.slice(i, i + CHUNK));
+
 		if (error) throw new Error(`visits insert failed at ${i}: ${error.message}`);
 	}
+
 	console.log(`added ${newBeen.length} visited places and ${visits.length} visits`);
 }
 

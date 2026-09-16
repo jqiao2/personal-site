@@ -52,6 +52,7 @@ if (!(await requireOwner(Astro.cookies))) {
 }
 
 const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
+
 const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 ---
 
@@ -107,15 +108,20 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	// See RestaurantMap.astro — MapLibre's tile-decoding worker has to go
 	// through Vite's worker build or every tile silently fails to decode.
 	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+
 	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
 	import { alpineBasemap, bareAlpineGround } from '../../lib/activity-map';
 	import { decodePolyline, bounds as trackBounds } from '../../lib/route-shape';
 	import { addTrackTiles, tilesToGeoJSON, addTrackHexes, hexesToGeoJSON } from '../../lib/heatmap';
 	import { FAMILY_LABEL, FAMILY_ORDER, type SportFamily } from '../../lib/sports';
 
 	const tag = document.getElementById('heatmap-config');
+
 	const host = document.querySelector<HTMLElement>('[data-heatmap]');
+
 	const status = document.querySelector<HTMLElement>('[data-status]');
+
 	const legend = document.querySelector<HTMLElement>('[data-legend]');
 
 	if (tag && host && status) {
@@ -133,6 +139,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			dragRotate: false,
 			touchPitch: false,
 		});
+
 		map.touchZoomRotate.disableRotation();
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 		map.on('error', (e) => console.warn('heatmap:', e.error?.message ?? 'tile or style request failed'));
@@ -158,24 +165,31 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 				{ enableHighAccuracy: false, timeout: 8000, maximumAge: 300_000 },
 			);
 		}
+
 		goToUser();
 		document.querySelector('[data-locate]')?.addEventListener('click', () => goToUser(true));
 
 		// --- data -------------------------------------------------------------
 		type Track = { family: SportFamily; points: [number, number][] };
+
 		let tracks: Track[] = [];
 		// Families that pass the filter. Empty until data lands; then every family
 		// present is switched on, so the default is the whole map.
 		const active = new Set<SportFamily>();
+
 		const activePoints = (): [number, number][][] =>
 			tracks.filter((t) => active.has(t.family)).map((t) => t.points);
+
 		const filterSig = () => FAMILY_ORDER.filter((f) => active.has(f)).join(',');
 		// Quantised grids, keyed by view *and* the active-family signature —
 		// quantising every track costs real time, so each filter combination is
 		// built once and kept if the reader flips back to it.
 		const cellData = new Map<string, ReturnType<typeof tilesToGeoJSON>>();
+
 		type CellView = 'tiles' | 'hexes';
+
 		type View = 'routes' | CellView;
+
 		let view: View = 'routes';
 		let heat = false;
 		const heatBtn = document.querySelector<HTMLButtonElement>('[data-heat]');
@@ -194,12 +208,15 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		function buildCells(kind: CellView) {
 			const key = `${kind}|${filterSig()}`;
 			const cached = cellData.get(key);
+
 			if (cached) return cached;
 			const counts = new Map<string, number>();
 			const add = kind === 'tiles' ? addTrackTiles : addTrackHexes;
+
 			for (const points of activePoints()) add(points, counts);
 			const geo = (kind === 'tiles' ? tilesToGeoJSON : hexesToGeoJSON)(counts);
 			cellData.set(key, geo);
+
 			return geo;
 		}
 
@@ -232,6 +249,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		// the same squares, shaded by how often they were crossed. One hue,
 		// four steps; a second colour would read as a second variable.
 		const TILE_SHADES = ['#a9dde3', '#63b8c9', '#1c6e8c', '#12495e'];
+
 		const tileFill = () =>
 			heat
 				? (['step', ['get', 'bucket'], ...TILE_SHADES.flatMap((c, i) => (i === 0 ? [c] : [i, c]))] as never)
@@ -250,30 +268,37 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 
 		function applyView() {
 			if (view !== 'routes') addCellLayer(view);
+
 			if (map.getLayer('routes-line')) {
 				map.setLayoutProperty('routes-line', 'visibility', view === 'routes' ? 'visible' : 'none');
 			}
+
 			for (const kind of ['tiles', 'hexes'] as CellView[]) {
 				if (!map.getLayer(`${kind}-fill`)) continue;
 				map.setLayoutProperty(`${kind}-fill`, 'visibility', view === kind ? 'visible' : 'none');
 				map.setPaintProperty(`${kind}-fill`, 'fill-color', tileFill());
 			}
+
 			// The route view is the heatmap by construction (stacked lines), so
 			// the toggle only has anything to say about the cell grids.
 			heatBtn?.toggleAttribute('disabled', view === 'routes');
+
 			if (legend) legend.hidden = view === 'routes' || !heat;
 		}
 
 		for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
 			btn.addEventListener('click', () => {
 				const next = btn.dataset.view as View;
+
 				if (next === view) return;
 				view = next;
+
 				for (const b of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
 					const on = b.dataset.view === view;
 					b.classList.toggle('seg__btn--on', on);
 					b.setAttribute('aria-pressed', String(on));
 				}
+
 				whenStyleReady(applyView);
 			});
 		}
@@ -290,6 +315,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		// visited, so both are optional here.
 		function refresh() {
 			(map.getSource('routes') as maplibregl.GeoJSONSource | undefined)?.setData(routeGeoJSON() as never);
+
 			for (const kind of ['tiles', 'hexes'] as CellView[]) {
 				(map.getSource(kind) as maplibregl.GeoJSONSource | undefined)?.setData(buildCells(kind) as never);
 			}
@@ -299,11 +325,15 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		// map). Built after data lands, so it lists only families actually
 		// recorded — and stays out entirely when there is only one to filter.
 		const filterHost = document.querySelector<HTMLElement>('[data-filters]');
+
 		function buildFilters() {
 			const present = FAMILY_ORDER.filter((f) => tracks.some((t) => t.family === f));
+
 			for (const fam of present) active.add(fam);
+
 			if (!filterHost || present.length < 2) return;
 			filterHost.hidden = false;
+
 			for (const fam of present) {
 				const btn = document.createElement('button');
 				btn.type = 'button';
@@ -329,17 +359,22 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 					.map((r) => ({ family: r.family, points: decodePolyline(r.polyline) }))
 					.filter((t) => t.points.length > 1);
 				buildFilters();
+
 				if (!tracks.length) {
 					status.textContent = 'No outdoor routes recorded yet.';
+
 					return;
 				}
+
 				status.hidden = true;
 
 				whenStyleReady(() => {
 					addRouteLayer();
 					applyView();
+
 					if (cameraSettled) return;
 					const all = trackBounds(tracks.flatMap((t) => t.points));
+
 					if (!all) return;
 					cameraSettled = true;
 					// RESIZE FIRST — fitBounds solves for the container's real size,

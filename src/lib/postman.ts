@@ -45,7 +45,9 @@ function dist(p: Pt, q: Pt): number {
 
 function polyLen(pts: Pt[]): number {
 	let s = 0;
+
 	for (let i = 1; i < pts.length; i++) s += dist(pts[i - 1], pts[i]);
+
 	return s;
 }
 
@@ -54,7 +56,9 @@ function polyLen(pts: Pt[]): number {
 function components(graph: Graph): number[] {
 	const parent = graph.nodes.map((_, i) => i);
 	const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
+
 	for (const e of graph.edges) parent[find(e.a)] = find(e.b);
+
 	return graph.nodes.map((_, i) => find(i));
 }
 
@@ -67,20 +71,25 @@ function bridgeComponents(graph: Graph): Edge[] {
 	const edges = graph.edges.slice();
 	let comp = components({ nodes: graph.nodes, edges });
 	let distinct = new Set(comp).size;
+
 	while (distinct > 1) {
 		let bu = -1, bv = -1, bd = Infinity;
+
 		for (let u = 0; u < graph.nodes.length; u++) {
 			for (let v = u + 1; v < graph.nodes.length; v++) {
 				if (comp[u] === comp[v]) continue;
 				const d = dist(graph.nodes[u], graph.nodes[v]);
+
 				if (d < bd) { bd = d; bu = u; bv = v; }
 			}
 		}
+
 		if (bu < 0) break; // no cross-component pair (isolated node with no edges)
 		edges.push({ a: bu, b: bv, pts: [graph.nodes[bu], graph.nodes[bv]] });
 		comp = components({ nodes: graph.nodes, edges });
 		distinct = new Set(comp).size;
 	}
+
 	return edges;
 }
 
@@ -101,15 +110,19 @@ function shortestPaths(nodes: Pt[], edges: Edge[]): ShortestPaths {
 	const cost = Array.from({ length: n }, () => Array(n).fill(Infinity));
 	const next = Array.from({ length: n }, () => Array(n).fill(-1));
 	const edgeVia: (number | null)[][] = Array.from({ length: n }, () => Array(n).fill(null));
+
 	for (let i = 0; i < n; i++) { cost[i][i] = 0; next[i][i] = i; }
+
 	edges.forEach((e, idx) => {
 		const w = polyLen(e.pts);
+
 		if (w < cost[e.a][e.b]) {
 			cost[e.a][e.b] = cost[e.b][e.a] = w;
 			next[e.a][e.b] = e.b; next[e.b][e.a] = e.a;
 			edgeVia[e.a][e.b] = edgeVia[e.b][e.a] = idx;
 		}
 	});
+
 	for (let k = 0; k < n; k++)
 		for (let i = 0; i < n; i++)
 			for (let j = 0; j < n; j++)
@@ -117,6 +130,7 @@ function shortestPaths(nodes: Pt[], edges: Edge[]): ShortestPaths {
 					cost[i][j] = cost[i][k] + cost[k][j];
 					next[i][j] = next[i][k];
 				}
+
 	return { cost, next, edgeVia };
 }
 
@@ -124,13 +138,17 @@ function shortestPaths(nodes: Pt[], edges: Edge[]): ShortestPaths {
 function pathEdges(sp: ShortestPaths, i: number, j: number): number[] {
 	const out: number[] = [];
 	let cur = i;
+
 	while (cur !== j) {
 		const nx = sp.next[cur][j];
+
 		if (nx < 0) break;
 		const via = sp.edgeVia[cur][nx];
+
 		if (via != null) out.push(via);
 		cur = nx;
 	}
+
 	return out;
 }
 
@@ -148,30 +166,40 @@ function pathEdges(sp: ShortestPaths, i: number, j: number): number[] {
 function matchOdd(odd: number[], cost: number[][]): [number, number][] {
 	const m = odd.length;
 	const memo = new Map<string, { c: number; pairs: [number, number][] }>();
+
 	function solve(mask: number, skips: number): { c: number; pairs: [number, number][] } {
 		if (mask === 0) return { c: 0, pairs: [] };
 		const key = `${mask},${skips}`;
 		const hit = memo.get(key);
+
 		if (hit) return hit;
 		let i = 0;
+
 		while (!(mask & (1 << i))) i++;
 		const rest = mask & ~(1 << i);
 		let best: { c: number; pairs: [number, number][] } = { c: Infinity, pairs: [] };
+
 		// leave i as a trail end (free), if we still may
 		if (skips > 0) {
 			const sub = solve(rest, skips - 1);
+
 			if (sub.c < best.c) best = sub;
 		}
+
 		// or pair i with some j
 		for (let j = i + 1; j < m; j++) {
 			if (!(mask & (1 << j))) continue;
 			const sub = solve(rest & ~(1 << j), skips);
 			const c = cost[odd[i]][odd[j]] + sub.c;
+
 			if (c < best.c) best = { c, pairs: [[odd[i], odd[j]], ...sub.pairs] };
 		}
+
 		memo.set(key, best);
+
 		return best;
 	}
+
 	return solve((1 << m) - 1, 2).pairs;
 }
 
@@ -193,10 +221,13 @@ function eulerTrail(nodes: Pt[], edges: Edge[], start: number): Pt[] {
 	const nodeStack: number[] = [start];
 	const edgeStack: (HalfEdge | null)[] = [null];
 	const trail: HalfEdge[] = [];
+
 	while (nodeStack.length) {
 		const v = nodeStack[nodeStack.length - 1];
 		let he: HalfEdge | undefined;
+
 		while ((he = adj[v].pop()) && used[he.id]) { /* skip spent half-edge */ }
+
 		if (he && !used[he.id]) {
 			used[he.id] = true;
 			nodeStack.push(he.to);
@@ -204,14 +235,19 @@ function eulerTrail(nodes: Pt[], edges: Edge[], start: number): Pt[] {
 		} else {
 			nodeStack.pop();
 			const done = edgeStack.pop();
+
 			if (done) trail.push(done);
 		}
 	}
+
 	trail.reverse();
+
 	// Stitch the oriented polylines, dropping each shared join point.
 	if (trail.length === 0) return [nodes[start]];
 	const out: Pt[] = trail[0].pts.slice();
+
 	for (let i = 1; i < trail.length; i++) out.push(...trail[i].pts.slice(1));
+
 	return out;
 }
 
@@ -237,10 +273,13 @@ export function eulerRoute(graph: Graph): EulerResult {
 	const bridged = edges.length - graph.edges.length;
 	// 2–3. odd nodes → matching that leaves two ends free.
 	const deg = graph.nodes.map(() => 0);
+
 	for (const e of edges) { deg[e.a]++; deg[e.b]++; }
+
 	const odd = graph.nodes.map((_, i) => i).filter((i) => deg[i] % 2 === 1);
 	const sp = shortestPaths(graph.nodes, edges);
 	let doubled = 0;
+
 	if (odd.length > 2) {
 		for (const [u, v] of matchOdd(odd, sp.cost)) {
 			for (const idx of pathEdges(sp, u, v)) {
@@ -249,13 +288,17 @@ export function eulerRoute(graph: Graph): EulerResult {
 			}
 		}
 	}
+
 	// bridges are ridden out-and-back, so count their length as doubled too.
 	for (let i = graph.edges.length; i < graph.edges.length + bridged; i++) doubled += polyLen(edges[i].pts);
 	// 5. start at an odd node if the trail is open, else anywhere.
 	const finalDeg = graph.nodes.map(() => 0);
+
 	for (const e of edges) { finalDeg[e.a]++; finalDeg[e.b]++; }
+
 	const startOdd = graph.nodes.findIndex((_, i) => finalDeg[i] % 2 === 1);
 	const start = startOdd >= 0 ? startOdd : edges[0].a;
+
 	return { path: eulerRoute0(graph.nodes, edges, start), doubled };
 }
 

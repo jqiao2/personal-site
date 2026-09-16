@@ -4,6 +4,7 @@ export interface FilmFacts {
 	year?: number | null;
 	countries?: string[];
 }
+
 export interface LegendEntry {
 	label: string;
 	light: string;
@@ -11,12 +12,19 @@ export interface LegendEntry {
 }
 
 export const NEUTRAL: string;
+
 export const CYCLE: string[];
+
 export const COUNTRIES: { code: string | null; label: string; color: string; also?: string[] }[];
+
 export const COUNTRY_OF: Map<string, number>;
+
 export const OTHER_COUNTRY: number;
+
 export const COUNTRY_MIN_FILMS: number;
+
 export const ERAS: { key: string; label: string; until: number; light: string; dark: string }[];
+
 export const MIN_WINDOW: number;
 
 /** Dominant country bucket + every bucket with COUNTRY_MIN_FILMS+ films. */

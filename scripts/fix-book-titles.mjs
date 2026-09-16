@@ -31,19 +31,24 @@
 //   --authors "…"      set the authors by hand (with --md5)
 
 const SUPA = process.env.SUPABASE_URL;
+
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!SUPA || !KEY) {
 	console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required (try: node --env-file=.env …)');
 	process.exit(1);
 }
 
 const args = parseArgs(process.argv.slice(2));
+
 const apply = !!args.apply;
+
 const only = typeof args.md5 === 'string' ? args.md5.toLowerCase() : null;
 
 const books = await rest(
 	`books?select=md5,title,authors,display_title,display_authors${only ? `&md5=eq.${only}` : ''}&order=id`,
 );
+
 if (books.length === 0) {
 	console.log(only ? `no book with md5 ${only}` : 'no books');
 	process.exit(0);
@@ -55,16 +60,21 @@ if (typeof args.title === 'string' || typeof args.authors === 'string') {
 		console.error('--title/--authors need --md5 to say which book');
 		process.exit(1);
 	}
+
 	const patch = {};
+
 	if (typeof args.title === 'string') patch.display_title = args.title || null;
+
 	if (typeof args.authors === 'string') patch.display_authors = args.authors || null;
 	show(books[0], { ...books[0], ...patch });
+
 	if (apply) {
 		await rest(`books?md5=eq.${only}`, { method: 'PATCH', body: JSON.stringify(patch) });
 		console.log('\napplied');
 	} else {
 		console.log('\ndry run — pass --apply to write');
 	}
+
 	process.exit(0);
 }
 
@@ -73,6 +83,7 @@ if (args.reset) {
 	for (const b of books) {
 		if (b.display_title || b.display_authors) {
 			console.log(`clearing override on ${JSON.stringify(b.title)}`);
+
 			if (apply) {
 				await rest(`books?md5=eq.${b.md5}`, {
 					method: 'PATCH',
@@ -81,14 +92,17 @@ if (args.reset) {
 			}
 		}
 	}
+
 	console.log(apply ? '\napplied' : '\ndry run — pass --apply to write');
 	process.exit(0);
 }
 
 // --- the heuristic ----------------------------------------------------------
 let changed = 0;
+
 for (const b of books) {
 	const suggestion = clean(b.title, b.authors);
+
 	const next = {
 		display_title: suggestion.title === b.title ? null : suggestion.title,
 		display_authors: suggestion.authors,
@@ -98,8 +112,10 @@ for (const b of books) {
 		console.log(`  unchanged  ${JSON.stringify(b.title)}`);
 		continue;
 	}
+
 	changed++;
 	show(b, { ...b, ...next });
+
 	if (apply) {
 		await rest(`books?md5=eq.${b.md5}`, { method: 'PATCH', body: JSON.stringify(next) });
 	}
@@ -127,9 +143,11 @@ function clean(rawTitle, existingAuthors) {
 	//    a real title can contain " - ", and existing metadata outranks a guess.
 	if (!existingAuthors) {
 		const at = title.lastIndexOf(' - ');
+
 		if (at > 0) {
 			const head = title.slice(0, at).trim();
 			const tail = title.slice(at + 3).trim();
+
 			if (head.length > 0 && looksLikeAuthors(tail)) {
 				title = head;
 				authors = tail;
@@ -144,6 +162,7 @@ function clean(rawTitle, existingAuthors) {
 	// 3. Trailing article, from library sort order: "Martian: A Novel, The".
 	//    The article belongs at the very front, before the colon clause.
 	const article = title.match(/^(.*?),\s+(The|A|An)$/i);
+
 	if (article) {
 		title = `${capitalise(article[2])} ${article[1].trim()}`;
 	}
@@ -158,8 +177,11 @@ function clean(rawTitle, existingAuthors) {
  */
 function looksLikeAuthors(s) {
 	if (s.length === 0 || s.length > 70) return false;
+
 	if (/[:_\d]/.test(s)) return false;
+
 	if (!/^\p{Lu}/u.test(s)) return false;
+
 	return /^[\p{L}.'’\-\s]+(?:\s*(?:&|and|,)\s*[\p{L}.'’\-\s]+)*$/u.test(s);
 }
 
@@ -185,29 +207,36 @@ async function rest(path, init = {}) {
 			apikey: KEY,
 			authorization: `Bearer ${KEY}`,
 			'content-type': 'application/json',
-			...(init.headers ?? {}),
+			...init.headers,
 		},
 	});
+
 	const text = await res.text();
+
 	if (!res.ok) {
 		console.error(`${res.status} ${path}: ${text}`);
 		process.exit(1);
 	}
+
 	return text ? JSON.parse(text) : null;
 }
 
 function parseArgs(argv) {
 	const out = {};
+
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
+
 		if (!a.startsWith('--')) continue;
 		const key = a.slice(2);
 		const next = argv[i + 1];
+
 		if (next === undefined || next.startsWith('--')) out[key] = true;
 		else {
 			out[key] = next;
 			i++;
 		}
 	}
+
 	return out;
 }

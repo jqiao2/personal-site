@@ -3,6 +3,7 @@
 // key can't be scraped from the client.
 
 const BASE = 'https://api.themoviedb.org/3';
+
 const IMAGE_BASE = 'https://image.tmdb.org/t/p';
 
 /** Poster/backdrop sizes TMDB offers. Use w342/w500 for cards, original for hero backdrops. */
@@ -21,12 +22,15 @@ export type ImageSize =
  */
 export function imageUrl(path: string | null | undefined, size: ImageSize = 'w342'): string | null {
 	if (!path) return null;
+
 	return `${IMAGE_BASE}/${size}${path}`;
 }
 
 function apiKey(): string {
 	const key = import.meta.env.TMDB_API_KEY;
+
 	if (!key) throw new Error('TMDB_API_KEY is not set');
+
 	return key;
 }
 
@@ -34,13 +38,16 @@ function apiKey(): string {
 async function tmdbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
 	const url = new URL(`${BASE}${path}`);
 	url.searchParams.set('api_key', apiKey());
+
 	for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
 
 	const res = await fetch(url, { headers: { accept: 'application/json' } });
+
 	if (!res.ok) {
 		const body = await res.text().catch(() => '');
 		throw new TmdbError(res.status, `TMDB ${path} failed: ${res.status} ${body}`);
 	}
+
 	return (await res.json()) as T;
 }
 
@@ -131,9 +138,11 @@ const LANGUAGE_NAMES: Record<string, string> = {
  * spoken_languages first (most accurate) and a common-language fallback map. */
 function originalLanguageName(d: TmdbMovieDetails): string | null {
 	const code = d.original_language;
+
 	if (!code) return null;
 	const spoken = (d.spoken_languages ?? []).find((l) => l.iso_639_1 === code);
 	const name = spoken?.english_name || spoken?.name || LANGUAGE_NAMES[code];
+
 	return name ?? code.toUpperCase();
 }
 
@@ -141,6 +150,7 @@ function originalLanguageName(d: TmdbMovieDetails): string | null {
 function usCertification(d: TmdbMovieDetails): string | null {
 	const us = (d.release_dates?.results ?? []).find((r) => r.iso_3166_1 === 'US');
 	const cert = (us?.release_dates ?? []).map((r) => r.certification?.trim()).find((c) => c);
+
 	return cert || null;
 }
 
@@ -154,15 +164,19 @@ export function extractCreditFacts(d: TmdbMovieDetails): MovieCreditFacts {
 	const uniq = (names: (string | null | undefined)[]): string[] => {
 		const seen = new Set<string>();
 		const out: string[] = [];
+
 		for (const raw of names) {
 			const name = raw?.trim();
+
 			if (name && !seen.has(name)) {
 				seen.add(name);
 				out.push(name);
 			}
 		}
+
 		return out;
 	};
+
 	return {
 		genres: uniq((d.genres ?? []).map((g) => g.name)),
 		languages: uniq((d.spoken_languages ?? []).map((l) => l.english_name || l.name)),
@@ -221,12 +235,15 @@ const CREW_ROLES: [role: string, jobs: string[]][] = [
 export function extractCrew(d: TmdbMovieDetails): CrewGroup[] {
 	const crew = d.credits?.crew ?? [];
 	const groups: CrewGroup[] = [];
+
 	for (const [role, jobs] of CREW_ROLES) {
 		const names = [
 			...new Set(crew.filter((c) => jobs.includes(c.job)).map((c) => c.name.trim()).filter(Boolean)),
 		];
+
 		if (names.length > 0) groups.push({ role, names });
 	}
+
 	return groups;
 }
 
@@ -272,6 +289,7 @@ export function getGenres() {
 export function releaseYear(releaseDate: string | null | undefined): number | null {
 	if (!releaseDate) return null;
 	const year = Number.parseInt(releaseDate.slice(0, 4), 10);
+
 	return Number.isNaN(year) ? null : year;
 }
 
@@ -332,6 +350,7 @@ function releaseDatesDay(iso: string | null | undefined): string | null {
  */
 export function preferredReleaseDate(d: TmdbMovieDetails): string | null {
 	const results = d.release_dates?.results ?? [];
+
 	const earliestOfTypes = (
 		entries: { release_date: string; type: number }[],
 		types: number[],
@@ -341,11 +360,13 @@ export function preferredReleaseDate(d: TmdbMovieDetails): string | null {
 			.map((e) => releaseDatesDay(e.release_date))
 			.filter((day): day is string => day != null)
 			.sort();
+
 		return days[0] ?? null;
 	};
 
 	const us = results.find((r) => r.iso_3166_1 === 'US')?.release_dates ?? [];
 	const anywhere = results.flatMap((r) => r.release_dates);
+
 	return (
 		earliestOfTypes(us, OPENING_TYPES) ??
 		earliestOfTypes(us, [RELEASE_TYPE.PREMIERE]) ??
@@ -374,5 +395,6 @@ export function premiereDate(d: TmdbMovieDetails): string | null {
 		.map((e) => releaseDatesDay(e.release_date))
 		.filter((day): day is string => day != null)
 		.sort();
+
 	return days[0] ?? releaseDate(d.release_date);
 }

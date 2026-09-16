@@ -28,6 +28,7 @@ import {
 // The pure logic lives in pins-logic.ts (DB-free, so the test can import it);
 // re-exported here so the whole contract reads off pins.ts.
 export { MAX_PINS, PIN_TRACKS, capCheck, bookVisibleToVisitor, activityVisibleToVisitor };
+
 export type { PinTrack };
 
 export interface PinRow {
@@ -58,7 +59,9 @@ export async function listPinRows(): Promise<PinRow[]> {
 		.from('journal_pins')
 		.select('track, ref_id, pinned_at')
 		.order('pinned_at', { ascending: false });
+
 	if (error) throw new Error(`listPinRows failed: ${error.message}`);
+
 	return ((data ?? []) as { track: PinTrack; ref_id: number; pinned_at: string }[]).map((r) => ({
 		track: r.track,
 		refId: Number(r.ref_id),
@@ -73,21 +76,26 @@ export async function isPinned(track: PinTrack, refId: number): Promise<boolean>
 		.eq('track', track)
 		.eq('ref_id', refId)
 		.maybeSingle();
+
 	if (error) throw new Error(`isPinned failed: ${error.message}`);
+
 	return data != null;
 }
 
 export async function pin(track: PinTrack, refId: number): Promise<void> {
 	const rows = await listPinRows();
 	const already = rows.some((r) => r.track === track && r.refId === refId);
+
 	if (capCheck(rows.length, already)) {
 		throw new PinsFullError(await listPinnedItems({ isOwner: true }));
 	}
+
 	// Unique (track, ref_id) makes a re-pin a no-op; ignoreDuplicates keeps it
 	// from touching pinned_at so the order doesn't jump on a double-tap.
 	const { error } = await supabaseAdmin
 		.from('journal_pins')
 		.upsert({ track, ref_id: refId }, { onConflict: 'track,ref_id', ignoreDuplicates: true });
+
 	if (error) throw new Error(`pin failed: ${error.message}`);
 }
 
@@ -97,6 +105,7 @@ export async function unpin(track: PinTrack, refId: number): Promise<void> {
 		.delete()
 		.eq('track', track)
 		.eq('ref_id', refId);
+
 	if (error) throw new Error(`unpin failed: ${error.message}`);
 }
 
@@ -106,13 +115,16 @@ export async function unpin(track: PinTrack, refId: number): Promise<void> {
 
 async function filmPins(ids: number[]): Promise<JournalItem[]> {
 	if (ids.length === 0) return [];
+
 	// Same select/shape as films.ts listMonthWatches, by id instead of month.
 	const { data, error } = await supabaseAdmin
 		.from('logs')
 		.select('id, watched_date, created_at, movies(tmdb_id, title, release_year, poster_path, runtime)')
 		.in('id', ids)
 		.is('deleted_at', null);
+
 	if (error) throw new Error(`filmPins failed: ${error.message}`);
+
 	const rows = (data ?? []) as unknown as {
 		id: number;
 		watched_date: string;
@@ -125,6 +137,7 @@ async function filmPins(ids: number[]): Promise<JournalItem[]> {
 			runtime: number | null;
 		} | null;
 	}[];
+
 	return filmItems(
 		rows.flatMap((r) =>
 			r.movies
@@ -146,11 +159,14 @@ async function filmPins(ids: number[]): Promise<JournalItem[]> {
 
 async function bookPins(ids: number[], isOwner: boolean): Promise<JournalItem[]> {
 	if (ids.length === 0) return [];
+
 	const { data, error } = await supabaseAdmin
 		.from('book_detail')
 		.select('id, title, authors, cover_url, is_public, last_counted_day, finished_at')
 		.in('id', ids);
+
 	if (error) throw new Error(`bookPins failed: ${error.message}`);
+
 	const rows = (data ?? []) as {
 		id: number;
 		title: string | null;
@@ -160,6 +176,7 @@ async function bookPins(ids: number[], isOwner: boolean): Promise<JournalItem[]>
 		last_counted_day: string | null;
 		finished_at: string | null;
 	}[];
+
 	return rows
 		.filter((b) => isOwner || bookVisibleToVisitor(b))
 		.map((b) => ({
@@ -183,6 +200,7 @@ async function bookPins(ids: number[], isOwner: boolean): Promise<JournalItem[]>
 
 async function mealPins(ids: number[]): Promise<JournalItem[]> {
 	if (ids.length === 0) return [];
+
 	const [visits, photos] = await Promise.all([
 		supabaseAdmin.from('restaurant_diary').select('*').in('id', ids),
 		supabaseAdmin
@@ -192,9 +210,12 @@ async function mealPins(ids: number[]): Promise<JournalItem[]> {
 			.order('position')
 			.order('id'),
 	]);
+
 	if (visits.error) throw new Error(`mealPins failed: ${visits.error.message}`);
+
 	if (photos.error) throw new Error(`mealPins photos failed: ${photos.error.message}`);
 	const byVisit = new Map<number, { url: string; width: number | null; height: number | null }[]>();
+
 	for (const p of (photos.data ?? []) as {
 		visit_id: number;
 		storage_path: string;
@@ -205,6 +226,7 @@ async function mealPins(ids: number[]): Promise<JournalItem[]> {
 		list.push({ url: r2PublicUrl(p.storage_path), width: p.width, height: p.height });
 		byVisit.set(p.visit_id, list);
 	}
+
 	const rows = (visits.data ?? []) as {
 		id: number;
 		visited_on: string;
@@ -214,13 +236,16 @@ async function mealPins(ids: number[]): Promise<JournalItem[]> {
 		tags: string[] | null;
 		neighborhood: string | null;
 	}[];
+
 	return mealItems(rows.map((v) => ({ ...v, photos: byVisit.get(v.id) ?? [] })));
 }
 
 async function movePins(ids: number[], isOwner: boolean): Promise<JournalItem[]> {
 	if (ids.length === 0) return [];
 	const { data, error } = await supabaseAdmin.from('activity_list').select('*').in('id', ids);
+
 	if (error) throw new Error(`movePins failed: ${error.message}`);
+
 	const rows = (data ?? []) as {
 		id: number;
 		sport: string;
@@ -233,6 +258,7 @@ async function movePins(ids: number[], isOwner: boolean): Promise<JournalItem[]>
 		private: boolean;
 		hide_from_review: boolean;
 	}[];
+
 	// Drop private/hidden entirely for a visitor — recent-journal.ts's rule.
 	return activityItems(rows.filter((a) => isOwner || activityVisibleToVisitor(a)));
 }

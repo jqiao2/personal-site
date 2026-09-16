@@ -109,6 +109,7 @@ export const HEADER_THEMES: Record<HeaderTheme, Record<string, string>> = {
     `--sh-max` override for pages whose column isn't the theme's default. */
 export function headerThemeStyle(theme: HeaderTheme = 'root', max?: string): string {
 	const vars = { ...(HEADER_THEMES[theme] ?? HEADER_THEMES.root), ...(max ? { '--sh-max': max } : {}) };
+
 	return Object.entries(vars)
 		.map(([k, v]) => `${k}:${v}`)
 		.join(';');

@@ -19,6 +19,7 @@ export const GET: APIRoute = async ({ cookies }) => {
 	try {
 		const isOwner = await requireOwner(cookies);
 		const facets = await listWatchedFacets(isOwner);
+
 		// The owner response carries friend chips; it must never land in the shared
 		// edge cache where a visitor could be served it. Only the redacted visitor
 		// response is cacheable.

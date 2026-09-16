@@ -39,7 +39,9 @@ if (!(await requireOwner(Astro.cookies))) {
 const today = new Date().toLocaleDateString('en-CA');
 
 let pmc: PmcPoint[] = [];
+
 let unreachable = false;
+
 try {
 	pmc = computePmc(await listDailyLoads(), today);
 } catch (err) {
@@ -48,7 +50,9 @@ try {
 }
 
 const { from, to } = rangeDates(DEFAULT_RANGE, today);
+
 const initial = windowPmc(pmc, from, to);
+
 const p = plotPmc(initial);
 
 // The three series, named once so the legend, the header numbers and the CSS
@@ -62,9 +66,13 @@ const SERIES = [
 /** A word for the current Form value — the whole point of the number. */
 function formWord(tsb: number): string {
 	if (tsb > 15) return 'very fresh';
+
 	if (tsb > 5) return 'fresh';
+
 	if (tsb >= -10) return 'neutral';
+
 	if (tsb >= -25) return 'fatigued';
+
 	return 'very fatigued';
 }
 
@@ -73,6 +81,7 @@ const fmtDate = (iso: string) =>
 
 // The custom pickers start showing the default window's actual bounds.
 const inputFrom = initial.length ? initial[0].date : from ?? '';
+
 const inputTo = initial.length ? initial[initial.length - 1].date : to;
 ---
 
@@ -192,7 +201,9 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 	import { computePmc, windowPmc, rangeDates, plotPmc, PLOT_H, type PmcPoint, type FitnessMark, type RangeKey } from '../../lib/fitness';
 
 	const dataEl = document.getElementById('pmc-data');
+
 	const svg = document.querySelector<SVGElement>('[data-plot]');
+
 	if (dataEl && svg) {
 		const PMC: PmcPoint[] = JSON.parse(dataEl.textContent ?? '[]');
 		const today = svg.getAttribute('data-today') ?? new Date().toLocaleDateString('en-CA');
@@ -203,6 +214,7 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		// other. The whole SVG is redrawn below anyway, so it just replots taller.
 		const tall = window.matchMedia('(max-width: 640px)');
 		let H = PLOT_H;
+
 		function setHeight() {
 			H = tall.matches ? PLOT_H * 2 : PLOT_H;
 			svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -214,13 +226,16 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		let marks: FitnessMark[] = [];
 		const crossG = svg.querySelector<SVGGElement>('[data-cross]')!;
 		const crossLine = svg.querySelector<SVGElement>('[data-cross-line]')!;
+
 		const markEls = {
 			ctl: svg.querySelector<SVGElement>('[data-mark-ctl]')!,
 			atl: svg.querySelector<SVGElement>('[data-mark-atl]')!,
 			tsb: svg.querySelector<SVGElement>('[data-mark-tsb]')!,
 		};
+
 		const tip = document.querySelector<HTMLElement>('[data-tip]')!;
 		const tipDate = tip.querySelector<HTMLElement>('[data-tip-date]')!;
+
 		const tipVals = {
 			ctl: tip.querySelector<HTMLElement>('[data-tip-key="ctl"]')!,
 			atl: tip.querySelector<HTMLElement>('[data-tip-key="atl"]')!,
@@ -230,20 +245,25 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		const fromInput = document.querySelector<HTMLInputElement>('[data-from]')!;
 		const toInput = document.querySelector<HTMLInputElement>('[data-to]')!;
 		const MONTH = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 		const fmtDate = (iso: string) => {
 			const [y, m, d] = iso.split('-').map(Number);
+
 			return `${MONTH[(m || 1) - 1]} ${d}, ${y}`;
 		};
 
 		function el(tag: string, attrs: Record<string, string | number>) {
 			const node = document.createElementNS(SVG_NS, tag);
+
 			for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, String(v));
+
 			return node;
 		}
 
 		function draw(from: string, to: string) {
 			const win = windowPmc(PMC, from || null, to || null);
 			const p = plotPmc(win, H);
+
 			if (!p) return;
 
 			(svg.querySelector('[data-line-ctl]') as SVGElement).setAttribute('points', p.ctlLine);
@@ -256,14 +276,17 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 
 			const ygrid = svg.querySelector('[data-ygrid]')!;
 			ygrid.textContent = '';
+
 			for (const t of p.yTicks) {
 				ygrid.appendChild(el('line', { class: 'grid', x1: 30, y1: t.y, x2: W - 6, y2: t.y }));
 				const label = el('text', { class: 'ylabel', x: 26, y: t.y + 3, 'text-anchor': 'end' });
 				label.textContent = String(t.value);
 				ygrid.appendChild(label);
 			}
+
 			const xaxis = svg.querySelector('[data-xaxis]')!;
 			xaxis.textContent = '';
+
 			for (const t of p.xTicks) {
 				const label = el('text', { class: 'xlabel', x: t.x, y: H - 5, 'text-anchor': 'middle' });
 				label.textContent = t.label;
@@ -273,8 +296,10 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 			// Header numbers + the Form word.
 			const set = (key: 'ctl' | 'atl' | 'tsb') =>
 				(document.querySelector(`[data-now-key="${key}"]`)!.textContent = p.last[key].toFixed(1));
+
 			set('ctl'); set('atl'); set('tsb');
 			const word = document.querySelector('[data-form-word]');
+
 			if (word) word.textContent = formWord(p.last.tsb);
 
 			document.querySelector('[data-span]')!.textContent = `${fmtDate(win[0].date)} – ${fmtDate(win[win.length - 1].date)}`;
@@ -288,9 +313,13 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 
 		function formWord(tsb: number): string {
 			if (tsb > 15) return 'very fresh';
+
 			if (tsb > 5) return 'fresh';
+
 			if (tsb >= -10) return 'neutral';
+
 			if (tsb >= -25) return 'fatigued';
+
 			return 'very fatigued';
 		}
 
@@ -326,9 +355,11 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		function scrub(clientX: number) {
 			if (marks.length === 0) return;
 			const rect = svg.getBoundingClientRect();
+
 			if (rect.width === 0) return;
 			const vbX = ((clientX - rect.left) / rect.width) * W;
 			let best = marks[0];
+
 			for (const m of marks) if (Math.abs(m.x - vbX) < Math.abs(best.x - vbX)) best = m;
 
 			crossG.removeAttribute('hidden');

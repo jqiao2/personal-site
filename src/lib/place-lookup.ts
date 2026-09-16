@@ -60,6 +60,7 @@ export interface PlaceLookup {
 export async function lookupPlaces(name: string, hint = ''): Promise<PlaceLookup> {
 	const q = hint ? `${name}, ${hint}` : name;
 	let reachable = true;
+
 	try {
 		const [local, geo] = await Promise.all([
 			fetch(`/api/restaurants/gazetteer?q=${encodeURIComponent(name)}`)
@@ -73,6 +74,7 @@ export async function lookupPlaces(name: string, hint = ''): Promise<PlaceLookup
 					// gave nothing usable back — the site is up, the answer is empty.
 					// Anything else is the route itself not answering.
 					if (String((e as Error).message) !== '502') reachable = false;
+
 					return { hits: [] };
 				}),
 		]);
@@ -95,6 +97,7 @@ export async function lookupPlaces(name: string, hint = ''): Promise<PlaceLookup
 			// `precise` exists to distinguish.
 			precise: true,
 		}));
+
 		const osm: GeoHit[] = ((geo.hits ?? []) as GeoHit[]).map((h) => ({
 			...h,
 			source: 'osm',
@@ -107,6 +110,7 @@ export async function lookupPlaces(name: string, hint = ''): Promise<PlaceLookup
 		// Same place from two sources is one row: ours wins, because it is the
 		// one with the health department's geocode on it.
 		const seen = new Set(mine.map((h) => h.name.toLowerCase()));
+
 		return { hits: [...mine, ...osm.filter((h) => !seen.has(h.name.toLowerCase()))], reachable };
 	} catch {
 		return { hits: [], reachable: false };

@@ -11,10 +11,12 @@ import { createClient } from '@supabase/supabase-js';
 // importing this module, or anything that transitively imports it, throws
 // before a script has done anything.
 const env: Record<string, string | undefined> = import.meta.env ?? process.env;
+
 const url = env.SUPABASE_URL;
 
 function required(name: string, value: string | undefined): string {
 	if (!value) throw new Error(`${name} is not set`);
+
 	return value;
 }
 

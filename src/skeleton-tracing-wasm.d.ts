@@ -5,11 +5,13 @@ declare module 'skeleton-tracing-wasm' {
 		polylines: [number, number][][];
 		rects: number[][];
 	}
+
 	class TraceSkeleton {
 		static load(): Promise<TraceSkeleton>;
 		fromBoolArray(arr: ArrayLike<number>, w: number, h: number): Traced;
 		fromImageData(img: ImageData): Traced;
 		fromCharString(str: string, w: number, h: number): Traced;
 	}
+
 	export default TraceSkeleton;
 }

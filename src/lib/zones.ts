@@ -67,6 +67,7 @@ function median(xs: number[]): number {
 	if (xs.length === 0) return 0;
 	const s = [...xs].sort((a, b) => a - b);
 	const m = Math.floor(s.length / 2);
+
 	return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
 
@@ -78,16 +79,20 @@ function sampleIntervals(timeStream: number[] | null | undefined, n: number): nu
 	if (!timeStream || timeStream.length !== n || n === 0) return new Array(n).fill(1);
 	const raw = new Array<number>(n);
 	const deltas: number[] = [];
+
 	for (let i = 0; i < n - 1; i++) {
 		const d = timeStream[i + 1] - timeStream[i];
 		raw[i] = d > 0 ? d : 0;
+
 		if (d > 0) deltas.push(d);
 	}
+
 	const med = median(deltas) || 1;
 	raw[n - 1] = med;
 	// ponytail: cap at 4× the median gap (min 3s) to swallow pause jumps;
 	// widen if a device ever logs legitimately irregular multi-second intervals.
 	const cap = Math.max(4 * med, 3);
+
 	return raw.map((d) => Math.min(d, cap));
 }
 
@@ -107,16 +112,21 @@ export function timeInZones(
 	const dt = sampleIntervals(timeStream, values.length);
 	const seconds = new Array<number>(zones.length).fill(0);
 	let any = false;
+
 	for (let i = 0; i < values.length; i++) {
 		const v = values[i];
+
 		if (typeof v !== 'number' || !Number.isFinite(v)) continue;
 		const pct = (100 * v) / threshold;
 		let zi = 0;
+
 		for (let z = 0; z < zones.length; z++) if (zones[z].loPct <= pct) zi = z;
 		seconds[zi] += dt[i];
 		any = true;
 	}
+
 	if (!any) return null;
+
 	return zones.map((zone, i) => ({
 		zone,
 		lo: Math.round((threshold * zone.loPct) / 100),

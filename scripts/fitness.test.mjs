@@ -18,7 +18,9 @@ import {
 
 // --- addDay: string in, string out, no UTC drift --------------------------
 assert.equal(addDay('2026-01-01', 1), '2026-01-02');
+
 assert.equal(addDay('2026-01-01', -1), '2025-12-31', 'crosses the year');
+
 assert.equal(addDay('2026-03-01', -1), '2026-02-28', 'crosses the month');
 
 // --- computePmc: the model ------------------------------------------------
@@ -50,6 +52,7 @@ assert.deepEqual(computePmc([], '2026-01-10'), []);
 		[{ date: '2026-01-01', load: 80 }, { date: '2026-01-02', load: 120 }],
 		'2026-01-04',
 	);
+
 	for (let i = 1; i < pmc.length; i++) {
 		assert.ok(
 			Math.abs(pmc[i].tsb - (pmc[i - 1].ctl - pmc[i - 1].atl)) < 0.11,
@@ -68,6 +71,7 @@ assert.deepEqual(computePmc([], '2026-01-10'), []);
 		],
 		'2026-01-01',
 	);
+
 	assert.equal(pmc.length, 1, 'a future load does not extend the series');
 	const aCtl = 1 - Math.exp(-1 / CTL_DAYS);
 	assert.ok(Math.abs(pmc[0].ctl - Math.round(aCtl * 100 * 10) / 10) < 0.05, 'same day summed to 100');
@@ -90,6 +94,7 @@ assert.deepEqual(computePmc([], '2026-01-10'), []);
 		Array.from({ length: 400 }, (_, i) => ({ date: addDay('2025-01-01', i), load: 40 })),
 		addDay('2025-01-01', 399),
 	);
+
 	const today = pmc[pmc.length - 1].date;
 	const { from, to } = rangeDates('6m', today);
 	assert.equal(to, today);
@@ -104,6 +109,7 @@ assert.deepEqual(computePmc([], '2026-01-10'), []);
 
 // --- plot geometry --------------------------------------------------------
 assert.equal(plotPmc([]), null, 'no points, no plot');
+
 {
 	const pmc = computePmc(
 		[
@@ -113,16 +119,19 @@ assert.equal(plotPmc([]), null, 'no points, no plot');
 		],
 		'2026-02-01',
 	);
+
 	const p = plotPmc(pmc);
 	assert.ok(p, 'a real window plots');
 	assert.ok(p.lo <= 0, 'the axis includes zero (form dips negative)');
 	assert.ok(p.hi > 0);
 	// Every drawn coordinate stays inside the box.
 	const coords = `${p.ctlLine} ${p.atlLine} ${p.tsbLine}`.split(' ').map((pair) => pair.split(',').map(Number));
+
 	for (const [cx, cy] of coords) {
 		assert.ok(cx >= 0 && cx <= PLOT_W, `x ${cx} in box`);
 		assert.ok(cy >= 0 && cy <= PLOT_H, `y ${cy} in box`);
 	}
+
 	// The zero baseline sits between hi and lo, and the area path closes on it.
 	assert.ok(p.zeroY > 0 && p.zeroY < PLOT_H);
 	assert.ok(p.tsbArea.startsWith('M') && p.tsbArea.endsWith('Z'), 'form area is a closed polygon');
@@ -133,10 +142,13 @@ assert.equal(plotPmc([]), null, 'no points, no plot');
 	// Scrub marks: one per day, coordinates in the box, lines built from them.
 	assert.equal(p.marks.length, pmc.length, 'one mark per day');
 	assert.equal(p.marks[p.marks.length - 1].date, p.last.date);
+
 	for (const m of p.marks) {
 		assert.ok(m.x >= 0 && m.x <= PLOT_W, 'mark x in box');
+
 		for (const my of [m.yCtl, m.yAtl, m.yTsb]) assert.ok(my >= 0 && my <= PLOT_H, 'mark y in box');
 	}
+
 	assert.equal(p.ctlLine.split(' ')[0], `${p.marks[0].x},${p.marks[0].yCtl}`, 'the line is the marks');
 }
 

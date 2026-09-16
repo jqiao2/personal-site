@@ -25,6 +25,7 @@ import { decodePolyline, encodePolyline, mercator, simplify, splitOnGaps } from 
 function isMissingColumn(err: { code?: string; message?: string } | null): boolean {
 	if (!err) return false;
 	const msg = (err.message ?? '').toLowerCase();
+
 	return (
 		err.code === '42703' || // undefined_column
 		err.code === 'PGRST204' || // column not found in schema cache
@@ -36,6 +37,7 @@ function isMissingColumn(err: { code?: string; message?: string } | null): boole
 function isMissingRelation(err: { code?: string; message?: string } | null): boolean {
 	if (!err) return false;
 	const msg = (err.message ?? '').toLowerCase();
+
 	return (
 		err.code === '42P01' || // undefined_table
 		err.code === 'PGRST200' || // no such relationship in the schema cache
@@ -69,14 +71,18 @@ const EMPTY_THRESHOLDS: Thresholds = {
 	css_pace_s_per_100m: null,
 	weight_kg: null,
 };
+
 export { redactActivities };
 
 // Mirrors exertion.ts's ExertionMethod — 'ski' is the lift-served ski rung
 // (migration 0050). Kept as a local copy so this file's row types don't depend
 // on importing the calculator, but it must stay in step with it.
 export type ExertionMethod = 'tss' | 'hrtss' | 'avghr' | 'ptss' | 'met' | 'ski';
+
 export type ExertionConfidence = 'measured' | 'estimated' | 'assumed';
+
 export type LapType = 'lap' | 'interval' | 'rest' | 'transition' | 'length';
+
 export type GearKind = 'bike' | 'shoes' | 'skis' | 'board' | 'other';
 
 /** The full `activities` row — the detail page's read model. */
@@ -421,6 +427,7 @@ const DEFAULT_LIST_LIMIT = 50;
 async function personalBestIds(): Promise<Set<number>> {
 	const PAGE = 1000;
 	const bestBySport = new Map<string, { id: number; distance: number }>();
+
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabasePublic
 			.from('activity_list')
@@ -428,19 +435,25 @@ async function personalBestIds(): Promise<Set<number>> {
 			.is('parent_id', null)
 			.not('distance_m', 'is', null)
 			.range(offset, offset + PAGE - 1);
+
 		if (error) {
 			if (isDegraded(error)) return new Set();
 			throw new Error(`personalBestIds failed: ${error.message}`);
 		}
+
 		const rows = (data ?? []) as { id: number; sport: string; distance_m: number }[];
+
 		for (const row of rows) {
 			const best = bestBySport.get(row.sport);
+
 			if (!best || row.distance_m > best.distance) {
 				bestBySport.set(row.sport, { id: row.id, distance: row.distance_m });
 			}
 		}
+
 		if (rows.length < PAGE) break;
 	}
+
 	return new Set([...bestBySport.values()].map((b) => b.id));
 }
 
@@ -473,26 +486,39 @@ export async function listActivities(
 	// value both ways.)
 
 	const prIds = query.personalBestOnly ? await personalBestIds() : null;
+
 	if (prIds && prIds.size === 0) return { rows: [], total: 0 };
 
 	let req = supabasePublic.from('activity_list').select('*', { count: 'exact' });
 
 	if (!query.includeChildren) req = req.is('parent_id', null);
+
 	if (prIds) req = req.in('id', [...prIds]);
 
 	if (query.sports?.length) req = req.in('sport', query.sports);
+
 	if (query.dateFrom) req = req.gte('local_date', query.dateFrom);
+
 	if (query.dateTo) req = req.lte('local_date', query.dateTo);
+
 	if (query.distanceMinM != null) req = req.gte('distance_m', query.distanceMinM);
+
 	if (query.distanceMaxM != null) req = req.lte('distance_m', query.distanceMaxM);
+
 	if (query.durationMinS != null) req = req.gte('moving_seconds', query.durationMinS);
+
 	if (query.durationMaxS != null) req = req.lte('moving_seconds', query.durationMaxS);
+
 	if (query.elevationMinM != null) req = req.gte('elevation_gain_m', query.elevationMinM);
+
 	if (query.elevationMaxM != null) req = req.lte('elevation_gain_m', query.elevationMaxM);
+
 	if (query.exertionMin != null) req = req.gte('exertion', query.exertionMin);
+
 	if (query.exertionMax != null) req = req.lte('exertion', query.exertionMax);
 
 	if (query.hasGps === true) req = req.not('route_path', 'is', null);
+
 	if (query.hasGps === false) req = req.is('route_path', null);
 
 	if (query.gearIds?.length) req = req.in('gear_id', query.gearIds);
@@ -504,12 +530,15 @@ export async function listActivities(
 	}
 
 	if (query.hasPower) req = req.not('avg_power_w', 'is', null);
+
 	if (query.hasHr) req = req.not('avg_hr', 'is', null);
 
 	const place = query.place?.trim();
+
 	if (place) req = req.ilike('start_place', `%${place.replace(/[%_]/g, '\\$&')}%`);
 
 	req = req.order(SORT_COLUMN[sort], { ascending, nullsFirst: false });
+
 	// Tiebreak for a deterministic order (matters for paging): newest id last
 	// unless we're already sorting by date, in which case id order and date
 	// order agree closely enough that a second date-adjacent key would be
@@ -518,10 +547,12 @@ export async function listActivities(
 	req = req.order('id', { ascending: false });
 
 	const { data, error, count } = await req.range(offset, offset + limit - 1);
+
 	if (error) {
 		if (isDegraded(error)) return { rows: [], total: 0 };
 		throw new Error(`listActivities failed: ${error.message}`);
 	}
+
 	return { rows: redactActivities((data ?? []) as ActivityListRow[], isOwner), total: count ?? 0 };
 }
 
@@ -551,34 +582,43 @@ export async function listActivityDays(
 		.select('*')
 		.order('local_date', { ascending: false })
 		.limit(limit);
+
 	if (opts.before) dayReq = dayReq.lt('local_date', opts.before);
 
 	const { data: days, error: dayErr } = await dayReq;
+
 	if (dayErr) {
 		if (isDegraded(dayErr)) return [];
 		throw new Error(`listActivityDays failed: ${dayErr.message}`);
 	}
+
 	const dayRows = (days ?? []) as ActivityDay[];
+
 	if (dayRows.length === 0) return [];
 
 	const dates = dayRows.map((d) => d.local_date);
+
 	const { data: activities, error: actErr } = await supabasePublic
 		.from('activity_list')
 		.select('*')
 		.in('local_date', dates)
 		.is('parent_id', null)
 		.order('started_at', { ascending: true });
+
 	if (actErr) {
 		if (isDegraded(actErr)) return dayRows.map((d) => ({ ...d, activities: [] }));
 		throw new Error(`listActivityDays (activities) failed: ${actErr.message}`);
 	}
 
 	const byDate = new Map<string, ActivityListRow[]>();
+
 	for (const row of redactActivities((activities ?? []) as ActivityListRow[], opts.isOwner ?? false)) {
 		const list = byDate.get(row.local_date);
+
 		if (list) list.push(row);
 		else byDate.set(row.local_date, [row]);
 	}
+
 	return dayRows.map((d) => ({ ...d, activities: byDate.get(d.local_date) ?? [] }));
 }
 
@@ -599,20 +639,26 @@ export async function listActivityDays(
 export async function listDailyLoads(): Promise<{ date: string; load: number }[]> {
 	const PAGE = 1000;
 	const out: { date: string; load: number }[] = [];
+
 	for (let offset = 0; ; offset += PAGE) {
 		const { data, error } = await supabasePublic
 			.from('activity_days')
 			.select('local_date, total_exertion')
 			.order('local_date', { ascending: true })
 			.range(offset, offset + PAGE - 1);
+
 		if (error) {
 			if (isDegraded(error)) return [];
 			throw new Error(`listDailyLoads failed: ${error.message}`);
 		}
+
 		const rows = (data ?? []) as { local_date: string; total_exertion: number | null }[];
+
 		for (const r of rows) out.push({ date: r.local_date, load: r.total_exertion ?? 0 });
+
 		if (rows.length < PAGE) break;
 	}
+
 	return out;
 }
 
@@ -696,6 +742,7 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 	// activity on the site. Each step drops one more, newest first.
 	const noMovie = PUBLIC_ACTIVITY_COLUMNS.replace(', movie_tmdb_id, movie_title', '');
 	const noSki = noMovie.replace(', ski_segments', '');
+
 	const attempts = [
 		PUBLIC_ACTIVITY_COLUMNS,
 		noMovie,
@@ -704,6 +751,7 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 		noSki.replace(', hide_from_review', '').replace(', private', ''),
 		noSki.replace(', hide_from_review', '').replace(', private', '').replace(', tags', ''),
 	];
+
 	for (const [i, columns] of attempts.entries()) {
 		const { data, error } = await supabasePublic
 			.from('activities')
@@ -711,15 +759,19 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 			.eq('id', id)
 			.is('deleted_at', null)
 			.maybeSingle();
+
 		if (error) {
 			// Keep dropping columns while there's a shorter select left to try.
 			// (This used to compare against the first entry, which made every
 			// step after the second unreachable.)
 			if (isMissingColumn(error) && i < attempts.length - 1) continue;
+
 			if (isDegraded(error)) return null;
 			throw new Error(`getActivity failed: ${error.message}`);
 		}
+
 		if (!data) return null;
+
 		// The three late columns may be absent (the fallback selects above), so
 		// they're defaulted rather than spread over. `private` defaults the
 		// restrictive way — anything but an explicit false is private — while
@@ -741,6 +793,7 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 			movie_tmdb_id?: number | null;
 			movie_title?: string | null;
 		};
+
 		return {
 			...row,
 			tags: row.tags ?? [],
@@ -752,6 +805,7 @@ export async function getActivity(id: number, includePrivate = false): Promise<A
 			private_notes: includePrivate ? await getActivityPrivateNotes(id) : null,
 		};
 	}
+
 	return null;
 }
 
@@ -763,7 +817,9 @@ async function getActivityPrivateNotes(id: number): Promise<string | null> {
 		.select('private_notes')
 		.eq('id', id)
 		.maybeSingle();
+
 	if (error) return null;
+
 	return (data as { private_notes?: string | null } | null)?.private_notes ?? null;
 }
 
@@ -775,10 +831,12 @@ export async function getActivityStreams(id: number): Promise<ActivityStreams | 
 		.select('*')
 		.eq('activity_id', id)
 		.maybeSingle();
+
 	if (error) {
 		if (isDegraded(error)) return null;
 		throw new Error(`getActivityStreams failed: ${error.message}`);
 	}
+
 	return (data as ActivityStreams | null) ?? null;
 }
 
@@ -789,10 +847,12 @@ export async function listActivityLaps(id: number): Promise<ActivityLap[]> {
 		.select('*')
 		.eq('activity_id', id)
 		.order('lap_index', { ascending: true });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listActivityLaps failed: ${error.message}`);
 	}
+
 	return (data ?? []) as ActivityLap[];
 }
 
@@ -804,10 +864,12 @@ export async function listActivityChildren(parentId: number, isOwner = false): P
 		.select('*')
 		.eq('parent_id', parentId)
 		.order('leg', { ascending: true, nullsFirst: false });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listActivityChildren failed: ${error.message}`);
 	}
+
 	return redactActivities((data ?? []) as ActivityListRow[], isOwner);
 }
 
@@ -822,6 +884,7 @@ function firstOfNextMonth(monthKey: string): string {
 	const [y, m] = monthKey.split('-').map(Number);
 	const nextY = m === 12 ? y + 1 : y;
 	const nextM = m === 12 ? 1 : m + 1;
+
 	return `${nextY}-${String(nextM).padStart(2, '0')}-01`;
 }
 
@@ -839,10 +902,12 @@ export async function listActivitiesForMonth(monthKey: string, isOwner = false):
 		.lt('local_date', firstOfNextMonth(monthKey))
 		.is('parent_id', null)
 		.order('started_at', { ascending: true });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listActivitiesForMonth failed: ${error.message}`);
 	}
+
 	return redactActivities((data ?? []) as ActivityListRow[], isOwner);
 }
 
@@ -906,10 +971,12 @@ export async function getActivityStats(isOwner = false): Promise<ActivityStats> 
 			.select('sport, local_date, distance_m, elevation_gain_m, moving_seconds, exertion')
 			.is('parent_id', null)
 			.range(offset, offset + PAGE - 1);
+
 		if (error) {
 			if (isDegraded(error)) return EMPTY_ACTIVITY_STATS;
 			throw new Error(`getActivityStats failed: ${error.message}`);
 		}
+
 		const rows = (data ?? []) as {
 			sport: string;
 			local_date: string;
@@ -918,6 +985,7 @@ export async function getActivityStats(isOwner = false): Promise<ActivityStats> 
 			moving_seconds: number | null;
 			exertion: number | null;
 		}[];
+
 		for (const row of rows) {
 			if (row.local_date >= `${year}-01-01`) activitiesThisYear++;
 			totalDistanceM += row.distance_m ?? 0;
@@ -927,6 +995,7 @@ export async function getActivityStats(isOwner = false): Promise<ActivityStats> 
 			const family = sportMeta(row.sport).family;
 			bySportFamily.set(family, (bySportFamily.get(family) ?? 0) + 1);
 		}
+
 		if (rows.length < PAGE) break;
 	}
 
@@ -971,19 +1040,24 @@ export async function thresholdsOn(date: string): Promise<AthleteThresholds | nu
 		.select('*')
 		.lte('effective_from', date)
 		.order('effective_from', { ascending: true });
+
 	if (error) {
 		if (isDegraded(error)) return null;
 		throw new Error(`thresholdsOn failed: ${error.message}`);
 	}
+
 	const rows = (data as AthleteThresholds[] | null) ?? [];
+
 	if (rows.length === 0) return null;
 	// Oldest → newest so each later non-null overwrites; nulls leave the
 	// carried-forward value standing.
 	const merged = { ...rows[rows.length - 1] };
+
 	for (const field of THRESHOLD_FIELDS) {
 		const latest = rows.findLast((r) => r[field] != null);
 		merged[field] = latest ? latest[field] : null;
 	}
+
 	return merged;
 }
 
@@ -995,10 +1069,12 @@ export async function listThresholds(): Promise<AthleteThresholds[]> {
 		.from('athlete_thresholds')
 		.select('*')
 		.order('effective_from', { ascending: false });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listThresholds failed: ${error.message}`);
 	}
+
 	return (data ?? []) as AthleteThresholds[];
 }
 
@@ -1023,10 +1099,12 @@ export async function listWeighIns(): Promise<WeighIn[]> {
 		.select('measured_on, weight_kg')
 		.eq('ignored', false)
 		.order('measured_on', { ascending: true });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listWeighIns failed: ${error.message}`);
 	}
+
 	return (data ?? []) as WeighIn[];
 }
 
@@ -1040,13 +1118,16 @@ export async function upsertWeighIns(
 ): Promise<number> {
 	if (rows.length === 0) return 0;
 	const updated_at = new Date().toISOString();
+
 	const { error } = await supabaseAdmin
 		.from('body_weight')
 		.upsert(
 			rows.map((r) => ({ ...r, updated_at })),
 			{ onConflict: 'measured_on' },
 		);
+
 	if (error) throw new Error(`upsertWeighIns failed: ${error.message}`);
+
 	return rows.length;
 }
 
@@ -1062,10 +1143,12 @@ export async function listGear(): Promise<ActivityGear[]> {
 		.order('retired_at', { ascending: true, nullsFirst: true })
 		.order('kind', { ascending: true })
 		.order('name', { ascending: true });
+
 	if (error) {
 		if (isDegraded(error)) return [];
 		throw new Error(`listGear failed: ${error.message}`);
 	}
+
 	return (data ?? []) as ActivityGear[];
 }
 
@@ -1097,10 +1180,12 @@ export async function listActivityFacets(isOwner = false): Promise<ActivityFacet
 			.select('sport, gear_id, gear_name, gear_nickname, start_place')
 			.is('parent_id', null)
 			.range(offset, offset + PAGE - 1);
+
 		if (error) {
 			if (isDegraded(error)) return { sports: [], gear: [], places: [] };
 			throw new Error(`listActivityFacets failed: ${error.message}`);
 		}
+
 		const rows = (data ?? []) as {
 			sport: string;
 			gear_id: number | null;
@@ -1108,15 +1193,19 @@ export async function listActivityFacets(isOwner = false): Promise<ActivityFacet
 			gear_nickname: string | null;
 			start_place: string | null;
 		}[];
+
 		for (const row of rows) {
 			sportCounts.set(row.sport, (sportCounts.get(row.sport) ?? 0) + 1);
+
 			if (row.gear_id != null) {
 				const label = row.gear_nickname || row.gear_name || `gear ${row.gear_id}`;
 				const existing = gearCounts.get(row.gear_id);
 				gearCounts.set(row.gear_id, { name: label, count: (existing?.count ?? 0) + 1 });
 			}
+
 			if (row.start_place) placeCounts.set(row.start_place, (placeCounts.get(row.start_place) ?? 0) + 1);
 		}
+
 		if (rows.length < PAGE) break;
 	}
 
@@ -1172,18 +1261,28 @@ export interface UpdateActivityInput {
  */
 export async function updateActivity(id: number, input: UpdateActivityInput): Promise<boolean> {
 	const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+
 	if (input.title !== undefined) {
 		const title = input.title.trim();
+
 		if (!title) throw new Error('title cannot be empty');
 		patch.title = title;
 	}
+
 	if (input.notes !== undefined) patch.notes = input.notes?.trim() || null;
+
 	if (input.privateNotes !== undefined) patch.private_notes = input.privateNotes?.trim() || null;
+
 	if (input.sport !== undefined) patch.sport = input.sport;
+
 	if (input.gearId !== undefined) patch.gear_id = input.gearId;
+
 	if (input.tags !== undefined) patch.tags = input.tags;
+
 	if (input.private !== undefined) patch.private = input.private;
+
 	if (input.hideFromReview !== undefined) patch.hide_from_review = input.hideFromReview;
+
 	// The film link is set and cleared together: a null id clears both columns,
 	// and a real id carries its captured title (null title is tolerated but the
 	// UI always sends one).
@@ -1193,14 +1292,17 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
 	}
 
 	const current = await getActivity(id);
+
 	if (!current) return false;
 
 	const { error } = await supabaseAdmin.from('activities').update(patch).eq('id', id).is('deleted_at', null);
+
 	if (error) throw new Error(`updateActivity failed: ${error.message}`);
 
 	if (input.gearId !== undefined && input.gearId !== current.gear_id) {
 		await moveGearDistance(current.gear_id, input.gearId, current.distance_m ?? 0);
 	}
+
 	return true;
 }
 
@@ -1216,9 +1318,11 @@ export async function updateActivity(id: number, input: UpdateActivityInput): Pr
  */
 export async function saveSkiSegments(id: number, override: SkiSegmentOverride[] | null): Promise<boolean> {
 	const activity = await getActivity(id);
+
 	if (!activity) return false;
 
 	const [streams, thresholds] = await Promise.all([getActivityStreams(id), thresholdsOn(activity.local_date)]);
+
 	const ex = computeExertion(
 		{
 			sport: activity.sport,
@@ -1244,6 +1348,7 @@ export async function saveSkiSegments(id: number, override: SkiSegmentOverride[]
 	);
 
 	const round = (v: number | null, dp = 2) => (v == null || !Number.isFinite(v) ? null : Number(v.toFixed(dp)));
+
 	const { error } = await supabaseAdmin
 		.from('activities')
 		.update({
@@ -1256,7 +1361,9 @@ export async function saveSkiSegments(id: number, override: SkiSegmentOverride[]
 		})
 		.eq('id', id)
 		.is('deleted_at', null);
+
 	if (error) throw new Error(`saveSkiSegments failed: ${error.message}`);
+
 	return true;
 }
 
@@ -1275,6 +1382,7 @@ export async function saveSkiSegments(id: number, override: SkiSegmentOverride[]
  */
 export async function deleteActivity(id: number): Promise<boolean> {
 	const current = await getActivity(id);
+
 	if (!current) return false;
 
 	const { error } = await supabaseAdmin
@@ -1282,17 +1390,21 @@ export async function deleteActivity(id: number): Promise<boolean> {
 		.update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
 		.eq('id', id)
 		.is('deleted_at', null);
+
 	if (error) throw new Error(`deleteActivity failed: ${error.message}`);
 
 	await moveGearDistance(current.gear_id, null, current.distance_m ?? 0);
+
 	return true;
 }
 
 async function moveGearDistance(from: number | null, to: number | null, distanceM: number): Promise<void> {
 	if (!distanceM) return;
+
 	for (const [gearId, delta] of [[from, -distanceM], [to, distanceM]] as const) {
 		if (gearId == null) continue;
 		const { data } = await supabaseAdmin.from('activity_gear').select('distance_m').eq('id', gearId).maybeSingle();
+
 		if (!data) continue;
 		const next = Math.max(0, (data.distance_m ?? 0) + delta);
 		await supabaseAdmin.from('activity_gear').update({ distance_m: next, updated_at: new Date().toISOString() }).eq('id', gearId);
@@ -1341,12 +1453,14 @@ function simplifyPoints(points: [number, number][]): [number, number][] {
 	// original lat/lng pairs come back by walking the two in lockstep — no
 	// inverse projection, no index bookkeeping.
 	const out: [number, number][] = [];
+
 	for (let i = 0, j = 0; i < projected.length && j < kept.length; i++) {
 		if (projected[i] === kept[j]) {
 			out.push(points[i]);
 			j++;
 		}
 	}
+
 	return out;
 }
 
@@ -1387,18 +1501,23 @@ export async function listRoutePolylines(isOwner = false): Promise<{ family: Spo
 			.select('id, parent_id, sport, sub_sport, polyline')
 			.is('deleted_at', null)
 			.not('polyline', 'is', null);
+
 		if (!isOwner) req = req.eq('private', false);
 		const { data, error } = await req.range(offset, offset + PAGE - 1);
+
 		if (error) {
 			if (isDegraded(error)) return [];
 			throw new Error(`listRoutePolylines failed: ${error.message}`);
 		}
+
 		const page = (data ?? []) as typeof rows;
 		rows.push(...page);
+
 		if (page.length < PAGE) break;
 	}
 
 	const parents = new Set(rows.map((r) => r.parent_id).filter((id): id is number => id != null));
+
 	return rows
 		.filter((r) => !parents.has(r.id) && r.sub_sport !== 'indoor' && !sportMeta(r.sport).indoor)
 		.flatMap((r) => splitTrack(r.polyline).map((polyline) => ({ family: sportMeta(r.sport).family, polyline })));

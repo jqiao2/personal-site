@@ -28,6 +28,7 @@ import {
 export const READING_TZ = SITE_TZ;
 
 const DAY_MS = 86_400_000;
+
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** The local day an instant falls on, e.g. a `last_read_at` timestamptz. */
@@ -42,6 +43,7 @@ export function today(): string {
 
 function dayMs(day: string): number {
 	const [y, m, d] = day.split('-').map(Number);
+
 	return Date.UTC(y, m - 1, d);
 }
 
@@ -49,6 +51,7 @@ function msDay(ms: number): string {
 	const d = new Date(ms);
 	const m = String(d.getUTCMonth() + 1).padStart(2, '0');
 	const day = String(d.getUTCDate()).padStart(2, '0');
+
 	return `${d.getUTCFullYear()}-${m}-${day}`;
 }
 
@@ -68,19 +71,23 @@ export function formatNumber(n: number): string {
 /** Seconds as reading time: "41m" under an hour, "4h 41m" over. */
 export function formatDuration(seconds: number): string {
 	const minutes = Math.round(seconds / 60);
+
 	if (minutes < 60) return `${minutes}m`;
+
 	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
 }
 
 /** "2025-04-13" → "13 Apr 2025". */
 export function formatDay(day: string): string {
 	const [y, m, d] = day.split('-').map(Number);
+
 	return `${d} ${MONTHS[m - 1]} ${y}`;
 }
 
 /** "2025-04-13" → "Apr 2025". */
 export function formatMonth(day: string): string {
 	const [y, m] = day.split('-').map(Number);
+
 	return `${MONTHS[m - 1]} ${y}`;
 }
 
@@ -97,7 +104,9 @@ function plural(n: number, word: string): string {
  */
 export function splitTitle(title: string): { main: string; sub: string | null } {
 	const at = title.indexOf(': ');
+
 	if (at <= 0) return { main: title, sub: null };
+
 	return { main: title.slice(0, at), sub: title.slice(at + 2) };
 }
 
@@ -127,10 +136,13 @@ export const REFERENCE_SPINE_HEIGHT = 180;
 
 /** Covers, boards and endpapers — a book has width before it has any pages. */
 const SPINE_BOARDS = 16;
+
 /** Width per page, at REFERENCE_SPINE_HEIGHT. */
 const SPINE_PER_PAGE = 0.05;
+
 /** Reached around 960 pages; the few books past it are all "very long" alike. */
 const MAX_SPINE = 64;
+
 /** Below this a scaled-down spine stops reading as a book and becomes a rule. */
 const MIN_DRAWN_SPINE = 8;
 
@@ -173,6 +185,7 @@ export function spineWidth(
 	const length = known > 0 ? known : DEFAULT_PAGES;
 	const width = Math.min(MAX_SPINE, SPINE_BOARDS + length * SPINE_PER_PAGE);
 	const drawn = Math.max(MIN_DRAWN_SPINE, (width * height) / REFERENCE_SPINE_HEIGHT);
+
 	// Half-pixel steps rather than whole ones. At the small end of the scale a
 	// whole-pixel round quantises away most of the difference the linear scale was
 	// adopted to show — 90 pages and 150 pages would come out the same width.
@@ -187,10 +200,12 @@ export interface BookFact {
 /** FNV-1a. Any stable hash would do; this one is short and has no dependencies. */
 function hash32(s: string): number {
 	let h = 2166136261;
+
 	for (let i = 0; i < s.length; i++) {
 		h ^= s.charCodeAt(i);
 		h = Math.imul(h, 16777619);
 	}
+
 	return h >>> 0;
 }
 
@@ -239,6 +254,7 @@ export function bookCloth(id: number | string): BookCloth {
 	const hue = family.h + (seed01(key, 'hue') - 0.5) * 12;
 	const sat = Math.max(10, family.s + (seed01(key, 'sat') - 0.5) * 7);
 	const lit = family.l + (seed01(key, 'lit') - 0.5) * 7;
+
 	const at = (d: number) =>
 		`hsl(${hue.toFixed(1)} ${sat.toFixed(1)}% ${Math.max(8, lit + d).toFixed(1)}%)`;
 
@@ -326,8 +342,11 @@ export const FINISHED_PROGRESS = 0.97;
  */
 function formatPercent(progress: number): string {
 	const pct = progress * 100;
+
 	if (pct >= 99.995) return '100%';
+
 	if (pct < 10 || pct > 99) return `${pct.toFixed(1)}%`;
+
 	return `${Math.round(pct)}%`;
 }
 
@@ -409,7 +428,9 @@ function stars(rating: number): string {
 /** "27–31 Mar 2025", collapsing to one date or opening out across months. */
 function readRange(from: string, to: string): string {
 	if (from === to) return formatDay(from);
+
 	if (from.slice(0, 7) === to.slice(0, 7)) return `${Number(from.slice(8))}–${formatDay(to)}`;
+
 	return `${formatDay(from)} → ${formatDay(to)}`;
 }
 
@@ -587,9 +608,13 @@ export function readDays(heatmap: HeatmapDay[]): ActivityDay[] {
 export function heatLevel(pages: number, max: number): number {
 	if (!pages) return 0;
 	const ratio = pages / max;
+
 	if (ratio <= 0.25) return 1;
+
 	if (ratio <= 0.5) return 2;
+
 	if (ratio <= 0.75) return 3;
+
 	return 4;
 }
 
@@ -616,15 +641,18 @@ export interface SpellRow {
 
 /** Days closer together than this belong to the same spell. */
 const SPELL_GAP_DAYS = 3;
+
 /** How many spells to show. Older ones are scrollback nobody reads. */
 const MAX_SPELLS = 8;
 
 /** "13–22 Apr 2025", collapsing to one date or opening out across months. */
 function spellLabel(from: string, to: string): string {
 	if (from === to) return formatDay(from);
+
 	if (from.slice(0, 7) === to.slice(0, 7)) {
 		return `${Number(from.slice(8))}–${formatDay(to)}`;
 	}
+
 	return `${formatDay(from)} → ${formatDay(to)}`;
 }
 
@@ -632,6 +660,7 @@ function cellFor(day: string, record: ActivityDay | undefined, maxPages: number)
 	const detail = record
 		? ` · ${formatNumber(record.pages)} pages · ${formatDuration(record.seconds)}`
 		: ' · nothing read';
+
 	return {
 		title: formatDay(day) + detail,
 		level: record ? heatLevel(record.pages, maxPages) : 0,
@@ -662,6 +691,7 @@ export function buildSpells(
 
 	const clusters: ActivityDay[][] = [];
 	let run: ActivityDay[] = [days[0]];
+
 	for (let i = 1; i < days.length; i++) {
 		if (daysBetween(days[i - 1].day, days[i].day) <= SPELL_GAP_DAYS) run.push(days[i]);
 		else {
@@ -669,6 +699,7 @@ export function buildSpells(
 			run = [days[i]];
 		}
 	}
+
 	clusters.push(run);
 
 	const shown = clusters.slice(-MAX_SPELLS);
@@ -691,6 +722,7 @@ export function buildSpells(
 		const from = cluster[0].day;
 		const to = cluster[cluster.length - 1].day;
 		const cells: ActivityCell[] = [];
+
 		for (let offset = 0; offset <= daysBetween(from, to); offset++) {
 			const day = addDays(from, offset);
 			cells.push(cellFor(day, byDay.get(day), maxPages));
@@ -760,21 +792,26 @@ export function buildHeatmap(
 
 	const columns: HeatColumn[] = [];
 	let labelled = -1;
+
 	for (let week = 0; week * 7 <= daysBetween(start, todayDay); week++) {
 		const columnStart = addDays(start, week * 7);
 		const cells: ActivityCell[] = [];
+
 		for (let dow = 0; dow < 7; dow++) {
 			const day = addDays(columnStart, dow);
+
 			if (day > todayDay) {
 				cells.push({ title: '', level: 0, read: false, inRange: false });
 			} else {
 				cells.push(cellFor(day, byDay.get(day), maxPages));
 			}
 		}
+
 		const month = Number(columnStart.slice(5, 7));
 		// Label the column that opens a month, but only when the month actually
 		// starts inside it — otherwise the label sits a week off.
 		const showLabel = month !== labelled && Number(columnStart.slice(8)) <= 7;
+
 		if (showLabel) labelled = month;
 		columns.push({ month: showLabel ? MONTHS[month - 1] : '', cells });
 	}
@@ -795,6 +832,7 @@ export function prefersHeatmap(days: ActivityDay[], todayDay = today()): boolean
 	const recent = days.filter((d) => daysBetween(d.day, todayDay) <= 365);
 	const monday = dayMs('2020-01-06');
 	const weeks = new Set(recent.map((d) => Math.floor((dayMs(d.day) - monday) / (7 * DAY_MS))));
+
 	return recent.length >= 60 && weeks.size >= 14;
 }
 

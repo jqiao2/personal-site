@@ -52,25 +52,31 @@ export function normalise(raw) {
 }
 
 const EARTH_M = 6371000;
+
 function metres(aLat, aLng, bLat, bLng) {
 	const toRad = (d) => (d * Math.PI) / 180;
 	const dLat = toRad(bLat - aLat);
 	const dLng = toRad(bLng - aLng);
+
 	const h =
 		Math.sin(dLat / 2) ** 2 +
 		Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng / 2) ** 2;
+
 	return 2 * EARTH_M * Math.asin(Math.sqrt(h));
 }
 
 const hasCoords = (r) => r.lat != null && r.lng != null;
+
 const cityKey = (r) => String(r.city ?? '').trim().toLowerCase();
 
 /** Are these two rows the same real place? Conservative — see the file header. */
 export function samePlace(a, b) {
 	const na = normalise(a.name);
 	const nb = normalise(b.name);
+
 	if (!na || !nb) return false;
 	const nameMatch = na === nb || na.includes(nb) || nb.includes(na);
+
 	if (!nameMatch) return false;
 
 	if (hasCoords(a) && hasCoords(b)) {
@@ -78,6 +84,7 @@ export function samePlace(a, b) {
 		// guard that keeps a franchise's branches apart.
 		return metres(a.lat, a.lng, b.lat, b.lng) < MERGE_RADIUS_M;
 	}
+
 	// One or both unplaced — no distance to check. Require an EXACT name (not just
 	// a substring) and the same city, or a chain with no coords would collapse.
 	return na === nb && !!cityKey(a) && cityKey(a) === cityKey(b);
@@ -89,7 +96,9 @@ function keepOf(cluster) {
 		if ((r.visit_count ?? 0) !== (best.visit_count ?? 0)) {
 			return (r.visit_count ?? 0) > (best.visit_count ?? 0) ? r : best;
 		}
+
 		if (r.created_at !== best.created_at) return r.created_at < best.created_at ? r : best;
+
 		return r.id < best.id ? r : best;
 	});
 }
@@ -102,13 +111,16 @@ function keepOf(cluster) {
 export function cluster(rows) {
 	// ponytail: O(n²) pairwise, fine at a few hundred rows; index by name if it grows.
 	const parent = new Map(rows.map((r) => [r.id, r.id]));
+
 	const find = (id) => {
 		while (parent.get(id) !== id) {
 			parent.set(id, parent.get(parent.get(id)));
 			id = parent.get(id);
 		}
+
 		return id;
 	};
+
 	const uni = (a, b) => parent.set(find(a), find(b));
 
 	for (let i = 0; i < rows.length; i++) {
@@ -118,14 +130,17 @@ export function cluster(rows) {
 	}
 
 	const groups = new Map();
+
 	for (const r of rows) {
 		const root = find(r.id);
 		(groups.get(root) ?? groups.set(root, []).get(root)).push(r);
 	}
+
 	return [...groups.values()]
 		.filter((g) => g.length > 1)
 		.map((g) => {
 			const keep = keepOf(g);
+
 			return { keep, drops: g.filter((r) => r.id !== keep.id), rows: g };
 		});
 }
@@ -179,6 +194,7 @@ async function selfCheck() {
 		{ id: 5, name: 'Cheeky', lat: null, lng: null, city: 'New York', visit_count: 0, created_at: '2024-01-01' },
 		{ id: 9, name: 'Cheeky', lat: null, lng: null, city: 'New York', visit_count: 3, created_at: '2024-06-01' },
 	]);
+
 	assert.equal(c.keep.id, 9, 'the visited row should be kept');
 	assert.deepEqual(c.drops.map((d) => d.id), [5], 'the to-try-only row should be dropped');
 
@@ -193,13 +209,16 @@ async function run() {
 	const commit = process.argv.includes('--commit');
 
 	const url = process.env.SUPABASE_URL;
+
 	const key = commit
 		? process.env.SUPABASE_SERVICE_ROLE_KEY
 		: (process.env.SUPABASE_ANON_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY);
+
 	if (!url || !key) {
 		console.error('SUPABASE_URL and a key must be set (service-role key to --commit).');
 		process.exit(1);
 	}
+
 	const db = createClient(url, key, { auth: { persistSession: false } });
 
 	// restaurant_places already excludes merged rows and hands us visit_count, so
@@ -207,10 +226,12 @@ async function run() {
 	const { data, error } = await db
 		.from('restaurant_places')
 		.select('id,name,lat,lng,city,neighborhood,visit_count,created_at');
+
 	if (error) {
 		console.error('could not read places:', error.message);
 		process.exit(1);
 	}
+
 	const clusters = cluster(data ?? []);
 
 	if (clusters.length === 0) {
@@ -219,15 +240,19 @@ async function run() {
 	}
 
 	console.log(commit ? '' : '(dry run — pass --commit to apply)\n');
+
 	const place = (r) =>
 		`${r.name}  [${[r.neighborhood, r.city].filter(Boolean).join(', ') || '—'}]` +
 		`${r.lat != null ? ` ${r.lat.toFixed(4)},${r.lng.toFixed(4)}` : ' (unplaced)'}` +
 		`  ${r.visit_count} visit${r.visit_count === 1 ? '' : 's'}`;
+
 	for (const { keep, drops } of clusters) {
 		console.log(`keep  #${keep.id}  ${place(keep)}`);
+
 		for (const d of drops) console.log(`  merge #${d.id}  ${place(d)}`);
 		console.log('');
 	}
+
 	console.log(
 		`${clusters.length} cluster${clusters.length === 1 ? '' : 's'}, ` +
 		`${clusters.reduce((n, c) => n + c.drops.length, 0)} row(s) to fold in.`,
@@ -241,6 +266,7 @@ async function run() {
 	for (const { keep, drops } of clusters) {
 		await mergeCluster(db, keep.id, drops.map((d) => d.id));
 	}
+
 	console.log('\nmerged.');
 }
 
@@ -251,15 +277,18 @@ async function run() {
  */
 async function mergeCluster(db, keepId, dropIds) {
 	const { data: rows, error } = await db.from('restaurants').select('*').in('id', [keepId, ...dropIds]);
+
 	if (error) throw new Error(error.message);
 	const byId = new Map((rows ?? []).map((r) => [r.id, r]));
 	const keep = byId.get(keepId);
 	const dropRows = dropIds.map((id) => byId.get(id)).filter(Boolean);
 
 	const repoint = await db.from('restaurant_visits').update({ restaurant_id: keepId }).in('restaurant_id', dropIds);
+
 	if (repoint.error) throw new Error(repoint.error.message);
 
 	const payload = { updated_at: new Date().toISOString() };
+
 	for (const col of [
 		'lat', 'lng', 'neighborhood', 'borough', 'city', 'state_region', 'country',
 		'price_band', 'website_url', 'yelp_url', 'beli_url', 'google_place_id',
@@ -267,21 +296,31 @@ async function mergeCluster(db, keepId, dropIds) {
 	]) {
 		if (keep[col] == null) {
 			const from = dropRows.find((d) => d[col] != null);
+
 			if (from) payload[col] = from[col];
 		}
 	}
+
 	const union = (col) => {
 		const seen = new Set();
+
 		for (const row of [keep, ...dropRows]) for (const v of row[col] ?? []) seen.add(v);
+
 		return [...seen];
 	};
+
 	const cuisines = union('cuisines');
+
 	if (cuisines.length > (keep.cuisines ?? []).length) payload.cuisines = cuisines;
 	const toTryTags = union('to_try_tags');
+
 	if (toTryTags.length > (keep.to_try_tags ?? []).length) payload.to_try_tags = toTryTags;
+
 	if (!keep.trip && dropRows.some((d) => d.trip)) payload.trip = true;
+
 	if (Object.keys(payload).length > 1) {
 		const fill = await db.from('restaurants').update(payload).eq('id', keepId);
+
 		if (fill.error) throw new Error(fill.error.message);
 	}
 
@@ -289,6 +328,7 @@ async function mergeCluster(db, keepId, dropIds) {
 		.from('restaurants')
 		.update({ merged_into: keepId, to_try_added_at: null, updated_at: new Date().toISOString() })
 		.in('id', dropIds);
+
 	if (mark.error) throw new Error(mark.error.message);
 }
 

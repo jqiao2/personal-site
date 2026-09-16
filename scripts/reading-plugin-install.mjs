@@ -27,10 +27,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+
 const SOURCE = resolve(HERE, '..', 'koreader-plugin', 'readingsync.koplugin');
 
 const args = parseArgs(process.argv.slice(2));
+
 const dest = typeof args.dest === 'string' ? args.dest : null;
+
 if (!dest) {
 	console.error('--dest <kindle root> is required, e.g. --dest F:/');
 	process.exit(1);
@@ -50,25 +53,31 @@ const token = process.env.READING_SYNC_TOKEN ?? null;
 
 // --- is this actually a Kindle running KOReader? ----------------------------
 const koreader = join(dest, 'koreader');
+
 const settingsDir = join(koreader, 'settings');
+
 const pluginsDir = join(koreader, 'plugins');
 
 if (!existsSync(dest)) {
 	console.error(`${dest} is not mounted. Plug the Kindle in and check the drive letter.`);
 	process.exit(1);
 }
+
 if (!existsSync(koreader) || !statSync(koreader).isDirectory()) {
 	console.error(`${dest} has no koreader/ directory — is this the right drive?`);
 	console.error(`It contains: ${readdirSync(dest).slice(0, 12).join(', ')}`);
 	process.exit(1);
 }
+
 if (!existsSync(settingsDir)) {
 	console.error(`${koreader} has no settings/ directory — KOReader may never have been run.`);
 	process.exit(1);
 }
 
 const statsDb = join(settingsDir, 'statistics.sqlite3');
+
 console.log(`KOReader found at ${koreader}`);
+
 console.log(
 	existsSync(statsDb)
 		? `  statistics.sqlite3 present (${(statSync(statsDb).size / 1024).toFixed(0)} KB)`
@@ -79,7 +88,9 @@ console.log(
 // Decided before anything is written, so a missing token stops the run instead
 // of leaving a new plugin next to settings it cannot configure.
 const settingsPath = join(settingsDir, 'readingsync.lua');
+
 const settingsExist = existsSync(settingsPath);
+
 const writeSettings = !settingsExist || opts.force;
 
 if (writeSettings && !token) {
@@ -93,8 +104,11 @@ if (writeSettings && !token) {
 
 // --- the plugin -------------------------------------------------------------
 const target = join(pluginsDir, 'readingsync.koplugin');
+
 const files = readdirSync(SOURCE);
+
 console.log(`\nplugin  ${target}`);
+
 for (const f of files) console.log(`          ${f}`);
 
 if (!opts.dryRun) {
@@ -141,6 +155,7 @@ function luaSettings(path, data) {
 	const lines = Object.entries(data).map(
 		([k, v]) => `    [${quote(k)}] = ${typeof v === 'string' ? quote(v) : String(v)},`,
 	);
+
 	return `-- ${path}\nreturn {\n${lines.join('\n')}\n}\n`;
 }
 
@@ -151,16 +166,20 @@ function quote(s) {
 
 function parseArgs(argv) {
 	const out = {};
+
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
+
 		if (!a.startsWith('--')) continue;
 		const key = a.slice(2);
 		const next = argv[i + 1];
+
 		if (next === undefined || next.startsWith('--')) out[key] = true;
 		else {
 			out[key] = next;
 			i++;
 		}
 	}
+
 	return out;
 }

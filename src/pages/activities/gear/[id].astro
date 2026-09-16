@@ -39,32 +39,43 @@ import {
 export const prerender = false;
 
 const id = Number(Astro.params.id);
+
 if (!Number.isInteger(id) || id <= 0) return new Response('Not found', { status: 404 });
 
 let detail: GearDetail | null = null;
+
 try {
 	detail = await getGearDetail(id);
 } catch (err) {
 	console.error(`gear detail ${id}: could not reach the activity log —`, err);
+
 	return new Response('The activity log could not be reached', { status: 503 });
 }
+
 if (!detail) return new Response('Not found', { status: 404 });
 
 const isOwner = await requireOwner(Astro.cookies);
+
 const { gear, use, fitted, history } = detail;
 
 const isBike = gear.kind === 'bike';
+
 const retired = retiredDate(gear);
+
 const today = isoToday();
+
 const num = (n: number) => n.toLocaleString('en-US');
 
 const title = gear.nickname || gear.name;
+
 const catalog = [gear.brand, gear.model].filter(Boolean).join(' ');
+
 // Most of the rack is named exactly what its brand and model spell out, so the
 // subtitle would print the title back at you. Compare loosely — "cervelo S3" is
 // not a different fact from "Cervélo S3", just differently typed.
 const norm = (v: string) =>
 	v.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
 const subtitle =
 	catalog && norm(catalog) !== norm(title)
 		? catalog
@@ -75,6 +86,7 @@ const subtitle =
 // The gear's own start date if it's known; otherwise the earliest activity
 // tagged to it, which is a floor and is labelled as one.
 const start = gear.first_used_on ?? use.firstDate;
+
 const startIsFloor = !gear.first_used_on && !!use.firstDate;
 
 // Kinds not currently fitted — what the "fit a part" picker should offer
@@ -100,8 +112,11 @@ function barPercent(w: ComponentWear): number {
  * interval over the far end, which is what makes the shaded zone. */
 function duePercent(w: ComponentWear): number {
 	const m = w.meta;
+
 	if (m.lifeMiles) return (m.lifeMiles[0] / m.lifeMiles[1]) * 100;
+
 	if (m.lifeMonths) return (m.lifeMonths[0] / m.lifeMonths[1]) * 100;
+
 	return 100;
 }
 
@@ -114,9 +129,11 @@ function duePercent(w: ComponentWear): number {
  * stays quiet; there is nothing to explain. */
 function usedText(w: ComponentWear): string {
 	const parts = [`${Math.round(w.miles).toLocaleString('en-US')} mi`, ageText(w.days), `${num(w.rides)} rides`];
+
 	if (w.excludedIndoorMiles >= 1) {
 		parts.push(`${Math.round(w.excludedIndoorMiles).toLocaleString('en-US')} mi indoors not counted`);
 	}
+
 	return parts.join(' · ');
 }
 ---
@@ -356,25 +373,33 @@ function usedText(w: ComponentWear): string {
 			// re-rendering from the server is both the shortest correct update and
 			// the only one that can't drift from what the next visitor will see.
 			const page = document.querySelector<HTMLElement>('.page[data-gear-id]');
+
 			const gearId = Number(page?.dataset.gearId);
 
 			async function send(method: string, body: Record<string, unknown>, msg: HTMLElement | null) {
 				if (msg) msg.textContent = 'saving…';
+
 				try {
 					const res = await fetch('/api/activities/gear', {
 						method,
 						headers: { 'content-type': 'application/json' },
 						body: JSON.stringify(body),
 					});
+
 					if (!res.ok) {
 						const err = await res.json().catch(() => ({ error: res.statusText }));
+
 						if (msg) msg.textContent = err.error ?? 'failed';
+
 						return false;
 					}
+
 					location.reload();
+
 					return true;
 				} catch {
 					if (msg) msg.textContent = 'network error';
+
 					return false;
 				}
 			}
@@ -397,20 +422,26 @@ function usedText(w: ComponentWear): string {
 			document.getElementById('c-add')?.addEventListener('click', () => {
 				const installedOn = val('c-installed');
 				const msg = document.getElementById('c-msg');
+
 				if (!installedOn) {
 					if (msg) msg.textContent = 'a fitted date is required';
+
 					return;
 				}
+
 				// A window that was typed but not understood is refused rather than
 				// dropped: silently fitting the part against the category default
 				// would be the one failure this feature can't recover from, because
 				// nothing on the page would say the number had been ignored.
 				const raw = val('c-interval').trim();
 				const parsed = raw ? parseInterval(raw) : null;
+
 				if (raw && !parsed) {
 					if (msg) msg.textContent = 'window must read like "2500-5000 mi" or "4-8 mo"';
+
 					return;
 				}
+
 				send(
 					'POST',
 					{
@@ -432,20 +463,24 @@ function usedText(w: ComponentWear): string {
 			// listener, and so rows added by a later render still work.
 			document.addEventListener('click', (e) => {
 				const btn = (e.target as HTMLElement | null)?.closest<HTMLButtonElement>('.link-btn');
+
 				if (!btn) return;
 				const li = btn.closest<HTMLElement>('[data-component-id]');
 				const id = Number(li?.dataset.componentId);
+
 				if (!Number.isInteger(id)) return;
 
 				if (btn.dataset.act === 'fitted') {
 					const current = li?.querySelector<HTMLElement>('[data-fitted]')?.dataset.fitted ?? '';
 					const on = prompt('Fitted on (YYYY-MM-DD)', current);
+
 					if (!on) return;
 					send('PATCH', { target: 'component', id, installedOn: on }, null);
 				} else if (btn.dataset.act === 'replace') {
 					// Prefilled with today, but editable: a part is usually noticed
 					// as worn out some days after the ride that finished it.
 					const on = prompt('Removed on (YYYY-MM-DD)', new Date().toISOString().slice(0, 10));
+
 					if (!on) return;
 					send('PATCH', { target: 'component', id, removedOn: on }, null);
 				} else if (btn.dataset.act === 'interval') {
@@ -453,12 +488,16 @@ function usedText(w: ComponentWear): string {
 					// editing a window starts from the window rather than from blank.
 					const current = li?.querySelector('.part__interval')?.textContent?.trim() ?? '';
 					const raw = prompt('Replace window. Write it like "2500-5000 mi" or "4-8 mo". Blank uses the default.', current);
+
 					if (raw === null) return;
 					const parsed = raw.trim() ? parseInterval(raw) : null;
+
 					if (raw.trim() && !parsed) {
 						alert('Not a window. Write it like "2500-5000 mi" or "4-8 mo".');
+
 						return;
 					}
+
 					send(
 						'PATCH',
 						{

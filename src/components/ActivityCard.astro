@@ -66,9 +66,13 @@ interface Props {
 const { activity: a, size = 'tile' } = Astro.props;
 
 const label = sportMeta(a.sport).label;
+
 const glyph = sportIcon(a.sport);
+
 const hasRoute = !a.redacted && !!a.route_path;
+
 const stats = a.redacted ? [] : cardStats(a, size === 'cell' ? 2 : 3);
+
 const face = a.redacted || hasRoute ? null : noGpsStats(a);
 
 // A redacted card has nowhere to go, so it isn't a link. Astro renders a
@@ -78,6 +82,7 @@ const Element = a.redacted ? 'div' : 'a';
 // Pull the route's start point out of "M x y …" to place the start dot —
 // route_path is always emitted by route-shape.ts in this exact form.
 const startMatch = a.route_path?.match(/^M\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/);
+
 const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) } : null;
 ---
 

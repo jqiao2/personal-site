@@ -41,6 +41,7 @@ import { requireOwner } from './lib/auth';
  *  staleness is only ever visible to a visitor, for whom six-hour-old data is
  *  fine. Shorten it if a shared link needs to be fresher than that. */
 const FRESH = 21_600;
+
 /** How long past that it may keep serving the old copy while it refreshes in
  *  the background — so a slow week doesn't turn every visit into a cold render. */
 const STALE = 86_400;
@@ -52,8 +53,11 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 	// stated its own policy (the TMDB proxies, the no-store activity reads) knows
 	// its data better than a blanket rule does — leave those alone.
 	if (ctx.request.method !== 'GET' && ctx.request.method !== 'HEAD') return res;
+
 	if (res.status !== 200) return res;
+
 	if (res.headers.has('cache-control')) return res;
+
 	// Vercel refuses to cache a response that sets a cookie anyway; saying so
 	// here keeps the header honest rather than misleading.
 	if (res.headers.has('set-cookie')) return res;
@@ -64,6 +68,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 	// `requireOwner` is true without a cookie and the page really is the owner's.
 	if (await requireOwner(ctx.cookies)) {
 		res.headers.set('cache-control', 'private, no-store');
+
 		return res;
 	}
 
@@ -73,5 +78,6 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 	// Append: Astro already varies some responses on Origin, and replacing that
 	// outright would let one origin's copy answer another's.
 	res.headers.append('vary', 'Cookie');
+
 	return res;
 });

@@ -38,12 +38,16 @@
 import { createClient } from '@supabase/supabase-js';
 
 const [, , sourceName, ...flags] = process.argv;
+
 const commit = flags.includes('--commit');
+
 const limit = Number(flagValue('--limit') ?? 0) || null;
+
 const bboxName = flagValue('--bbox') ?? 'nyc';
 
 function flagValue(name) {
 	const i = flags.indexOf(name);
+
 	return i >= 0 ? flags[i + 1] : undefined;
 }
 
@@ -62,6 +66,7 @@ const BOXES = {
 function box(name) {
 	if (BOXES[name]) return BOXES[name];
 	const parts = name.split(',').map(Number);
+
 	if (parts.length === 4 && parts.every(Number.isFinite)) return parts;
 	throw new Error(`unknown --bbox "${name}" — use a name (${Object.keys(BOXES).join(', ')}) or w,s,e,n`);
 }
@@ -106,7 +111,9 @@ export function normalise(raw) {
 /** "PIZZA HUT" → "Pizza hut"; drops the source's non-answers. */
 function tidy(raw) {
 	const v = (raw ?? '').trim().toLowerCase();
+
 	if (!v || v === 'not listed/not applicable' || v === 'other' || v === 'unspecified') return null;
+
 	return v[0].toUpperCase() + v.slice(1);
 }
 
@@ -115,24 +122,31 @@ function tidy(raw) {
 // ---------------------------------------------------------------------------
 
 const SOCRATA = 'https://data.cityofnewyork.us/resource/43nn-pn8j.json';
+
 const PAGE = 50000;
 
 async function fromDohmh() {
 	const byCamis = new Map();
+
 	for (let offset = 0; ; offset += PAGE) {
 		const url =
 			`${SOCRATA}?$select=camis,dba,boro,building,street,zipcode,cuisine_description,latitude,longitude,phone,inspection_date` +
 			`&$where=latitude is not null and latitude != 0&$order=camis&$limit=${PAGE}&$offset=${offset}`;
+
 		process.stderr.write(`  fetching rows ${offset}…\n`);
 		const res = await fetch(url, { headers: { accept: 'application/json' } });
+
 		if (!res.ok) throw new Error(`NYC Open Data answered ${res.status}`);
 		const page = await res.json();
+
 		for (const r of page) {
 			const lat = Number(r.latitude);
 			const lng = Number(r.longitude);
+
 			// (0, 0) is the dataset saying it could not geocode this one.
 			if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) continue;
 			const prev = byCamis.get(r.camis);
+
 			if (prev && prev.on >= (r.inspection_date ?? '')) continue;
 			const cuisine = tidy(r.cuisine_description);
 			byCamis.set(r.camis, {
@@ -155,8 +169,10 @@ async function fromDohmh() {
 				on: r.inspection_date ?? '',
 			});
 		}
+
 		if (page.length < PAGE) break;
 	}
+
 	return [...byCamis.values()].filter((r) => r.name && r.name_norm).map(({ on, ...row }) => row);
 }
 
@@ -174,23 +190,29 @@ async function overtureRelease() {
 	const res = await fetchRetry(
 		'https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=release/&delimiter=/',
 	);
+
 	const xml = await res.text();
-	const releases = [...xml.matchAll(/<Prefix>release\/([^<\/]+)\/<\/Prefix>/g)].map((m) => m[1]);
+	const releases = [...xml.matchAll(/<Prefix>release\/([^</]+)\/<\/Prefix>/g)].map((m) => m[1]);
+
 	if (releases.length === 0) throw new Error('could not list Overture releases');
+
 	return releases.sort().at(-1);
 }
 
 async function listKeys(prefix) {
 	const keys = [];
 	let token = '';
+
 	do {
 		const url =
 			`https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=${encodeURIComponent(prefix)}` +
 			(token ? `&continuation-token=${encodeURIComponent(token)}` : '');
+
 		const xml = await (await fetchRetry(url)).text();
 		keys.push(...[...xml.matchAll(/<Key>([^<]+)<\/Key>/g)].map((m) => m[1]));
 		token = xml.match(/<NextContinuationToken>([^<]+)<\/NextContinuationToken>/)?.[1] ?? '';
 	} while (token);
+
 	return keys.filter((k) => k.endsWith('.parquet'));
 }
 
@@ -199,6 +221,7 @@ async function duck() {
 	const db = await DuckDBInstance.create(':memory:');
 	const c = await db.connect();
 	await c.run('install httpfs; load httpfs;');
+
 	return c;
 }
 
@@ -211,10 +234,12 @@ async function fromOverture() {
 	const c = await duck();
 
 	const rows = [];
+
 	for (const [i, key] of keys.entries()) {
 		const url = `https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/${key}`;
 		process.stderr.write(`  [${i + 1}/${keys.length}] ${key.split('/').pop().slice(0, 24)}…`);
 		const started = Date.now();
+
 		// The bbox struct carries per-row-group statistics, so a file that holds
 		// nothing in this box costs one footer read rather than a gigabyte.
 		// `addresses` is a LIST of structs and `bbox` carries the per-row-group
@@ -241,9 +266,11 @@ async function fromOverture() {
 			       or categories.primary in ('cafe','bakery','bar','coffee_shop','deli',
 			                                 'ice_cream_shop','pizzeria','diner','juice_bar','tea_room','pub'))
 		`;
+
 		// One retry: httpfs times out on these gigabyte files often enough that
 		// dropping a NYC-overlapping one on a single flake would lose real places.
 		let found = null;
+
 		for (let attempt = 0; attempt < 2 && found === null; attempt++) {
 			try {
 				found = (await c.runAndReadAll(q)).getRowObjects();
@@ -251,10 +278,12 @@ async function fromOverture() {
 				if (attempt === 1) process.stderr.write(` failed: ${String(err).slice(0, 80)}\n`);
 			}
 		}
+
 		if (found) {
 			rows.push(...found);
 			process.stderr.write(` ${found.length} (${((Date.now() - started) / 1000).toFixed(1)}s)\n`);
 		}
+
 		if (limit && rows.length >= limit) break;
 	}
 
@@ -302,16 +331,20 @@ async function fromFoursquare() {
 	const latest = releases.map((r) => r.path).sort().at(-1);
 	const files = await (await fetch(`${HF}/${latest}/places/parquet`)).json();
 	process.stderr.write(`  foursquare ${latest}, ${files.length} files\n`);
+
 	const url = files
 		.map((f) => `'https://huggingface.co/datasets/foursquare/fsq-os-places/resolve/main/${f.path}'`)
 		.join(',');
+
 	const q = `
 		select fsq_place_id, name, latitude as lat, longitude as lng, address, locality, region, country,
 		       website, tel, fsq_category_labels
 		from read_parquet([${url}])
 		where longitude between ${w} and ${e} and latitude between ${s} and ${n}
 	`;
+
 	const r = await c.runAndReadAll(q);
+
 	return r
 		.getRowObjects()
 		.filter((x) => x.name)
@@ -347,7 +380,9 @@ if (!sourceName || !SOURCES[sourceName]) {
 }
 
 const rows = await SOURCES[sourceName]();
+
 console.error(`\n${rows.length} places from ${sourceName}.`);
+
 for (const r of rows.slice(0, 8)) {
 	console.error(`  ${r.name.slice(0, 34).padEnd(34)} ${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}  ${r.cuisines[0] ?? ''}`);
 }
@@ -358,32 +393,43 @@ if (!commit) {
 }
 
 const url = process.env.SUPABASE_URL;
+
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 if (!url || !key) {
 	console.error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set to --commit');
 	process.exit(1);
 }
+
 const db = createClient(url, key, { auth: { persistSession: false } });
 
 // Upsert on (source, source_id): a re-import refreshes what moved and adds what
 // is new, without ever making a second row for the same place.
 const CHUNK = 500;
+
 let written = 0;
+
 for (let i = 0; i < rows.length; i += CHUNK) {
 	const slice = rows.slice(i, i + CHUNK).map(({ on, ...r }) => ({ ...r, imported_at: new Date().toISOString() }));
 	// Retry the write too: a single dropped connection here used to lose 500
 	// places silently, since the loop moved on rather than trying again.
 	let error = null;
+
 	for (let attempt = 0; attempt < 4; attempt++) {
 		({ error } = await db.from('place_sources').upsert(slice, { onConflict: 'source,source_id' }));
+
 		if (!error) break;
+
 		if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt));
 	}
+
 	if (error) {
 		console.error(`  chunk ${i} failed after retries: ${error.message}`);
 		continue;
 	}
+
 	written += slice.length;
 	process.stderr.write(`  written ${written}/${rows.length}\r`);
 }
+
 console.error(`\n${written} rows in place_sources for ${sourceName}.`);

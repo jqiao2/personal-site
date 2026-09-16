@@ -10,7 +10,9 @@ export const prerender = false;
 // the queue, resolving AMC-style events to TMDB films.
 export const POST: APIRoute = async ({ cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
+
 	if (!isConfigured()) return apiError('Google Calendar is not configured', 503);
+
 	try {
 		return json(await syncFromCalendar());
 	} catch (e) {

@@ -10,8 +10,11 @@ import assert from 'node:assert/strict';
 // gazetteer.ts pulls in the Supabase client at load; give it something to
 // construct so importing the pure helper needs no real credentials.
 process.env.SUPABASE_URL ??= 'http://localhost';
+
 process.env.SUPABASE_ANON_KEY ??= 'test';
+
 process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'test';
+
 const { titleCaseName } = await import('../src/lib/gazetteer.ts');
 
 const cases = [

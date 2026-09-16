@@ -31,6 +31,7 @@
 	/** Swap a deferred poster's URL into `src` and reveal it once it decodes. */
 	function load(img: HTMLImageElement): void {
 		const url = img.dataset.poster;
+
 		if (!url || started.has(img)) return;
 		started.add(img);
 		img.addEventListener(
@@ -75,12 +76,15 @@
 	 */
 	function observePosters(root: ParentNode = document): void {
 		const pending = root.querySelectorAll<HTMLImageElement>('img[data-poster]');
+
 		// No IntersectionObserver (very old browsers): load everything rather than
 		// leave the grid empty. Still after paint, which is the bigger win.
 		if (!io) {
 			for (const img of pending) load(img);
+
 			return;
 		}
+
 		for (const img of pending) if (!started.has(img)) io.observe(img);
 	}
 

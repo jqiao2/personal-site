@@ -12,6 +12,7 @@ import { listTags, listFriends } from '../../lib/restaurants';
 export const prerender = false;
 
 const isOwner = await requireOwner(Astro.cookies);
+
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 ---
 

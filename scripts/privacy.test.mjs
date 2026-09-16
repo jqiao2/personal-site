@@ -65,6 +65,7 @@ const ride = (over = {}) => ({
 	// naming fields, so a column added to activity_list tomorrow is covered by
 	// this test on the day it appears instead of the day someone remembers.
 	const allowed = new Set(['id', 'sport', 'local_date', 'elapsed_seconds', 'title', 'has_streams', 'private', 'redacted']);
+
 	for (const [key, value] of Object.entries(row)) {
 		if (allowed.has(key)) continue;
 		assert.equal(value, null, `${key} survived redaction`);
@@ -128,11 +129,13 @@ for (const value of [undefined, null, true, 'false', 0]) {
 		sort: 'exertion',
 		includeChildren: true,
 	};
+
 	const q = visitorQuery(asked);
 	assert.deepEqual(q.sports, ['ride'], 'sport is on the card already');
 	assert.equal(q.dateFrom, '2026-01-01', 'so is the day');
 	assert.equal(q.dateTo, '2026-03-31');
 	assert.equal(q.sort, 'date', 'a stat sort leaks the ordering with no filter set at all');
+
 	for (const key of Object.keys(asked)) {
 		if (['sports', 'dateFrom', 'dateTo', 'sortDir', 'sort'].includes(key)) continue;
 		assert.equal(q[key], undefined, `${key} reached the query`);

@@ -27,6 +27,7 @@ import { detailRows } from '../src/lib/activity-detail.ts';
 		},
 		false,
 	);
+
 	const speed = rows.find((r) => r.label === 'Speed');
 	assert.ok(speed && speed.max, 'Speed pairs avg + max');
 	const hr = rows.find((r) => r.label === 'Heart rate');

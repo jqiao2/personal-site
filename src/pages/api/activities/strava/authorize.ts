@@ -15,5 +15,6 @@ export const prerender = false;
 export const GET: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 	const redirectUri = `${new URL(request.url).origin}/api/activities/strava/callback`;
+
 	return new Response(null, { status: 302, headers: { location: authorizeUrl(redirectUri) } });
 };

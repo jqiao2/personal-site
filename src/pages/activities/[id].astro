@@ -82,6 +82,7 @@ function stripRideMovieNote(notes: string): string {
 }
 
 const id = Number(Astro.params.id);
+
 const validId = Number.isInteger(id) && id > 0;
 
 // ---------------------------------------------------------------------------
@@ -101,20 +102,25 @@ const validId = Number.isInteger(id) && id > 0;
 // ---------------------------------------------------------------------------
 if (Astro.request.method === 'POST') {
 	const isOwner = validId && (await requireOwner(Astro.cookies));
+
 	if (!isOwner) {
 		return new Response('Forbidden', { status: 403 });
 	}
+
 	const form = await Astro.request.formData();
 	const action = form.get('action');
+
 	if (action === 'delete') {
 		// Soft — see deleteActivity. The redirect goes to the index rather than
 		// back here, because "here" is now a 404.
 		await deleteActivity(id);
+
 		return Astro.redirect('/activities', 303);
 	} else if (action === 'save') {
 		const title = String(form.get('title') ?? '').trim();
 		const sport = String(form.get('sport') ?? '');
 		const gearRaw = String(form.get('gear_id') ?? '');
+
 		// An empty title is the one input that can't be saved as given — the
 		// header would have nothing to say. Reopen the editor rather than
 		// silently keeping the old one.
@@ -124,13 +130,16 @@ if (Astro.request.method === 'POST') {
 		// "leave/clear" rather than trusted.
 		const raw = String(form.get('movie_tmdb_id') ?? '').trim();
 		const tmdbId = raw === '' ? null : Number(raw);
+
 		const movie: { movieTmdbId: number | null; movieTitle?: string } =
 			Number.isInteger(tmdbId) && (tmdbId as number) > 0
 				? { movieTmdbId: tmdbId as number, movieTitle: String(form.get('movie_title') ?? '') }
 				: { movieTmdbId: null };
+
 		// Once a film is linked, the hand-typed "Ride movie: …" note is redundant —
 		// the link carries it structurally — so strip that line on save.
 		let notes = String(form.get('notes') ?? '');
+
 		if (movie.movieTmdbId != null) notes = stripRideMovieNote(notes);
 		await updateActivity(id, {
 			title,
@@ -162,6 +171,7 @@ if (Astro.request.method === 'POST') {
 	} else if (action === 'reset-runs') {
 		// Drop the override, reverting display and exertion to auto-detection.
 		await saveSkiSegments(id, null);
+
 		return Astro.redirect(Astro.url.pathname, 303);
 	} else if (action === 'save-runs') {
 		// The editor posts three parallel arrays in row order — start, end and the
@@ -171,17 +181,22 @@ if (Astro.request.method === 'POST') {
 		const t1s = form.getAll('seg_t1');
 		const types = form.getAll('seg_type');
 		const valid = new Set(['run', 'lift', 'idle']);
+
 		const override = t0s
 			.map((t0, i) => ({ t0: Number(t0), t1: Number(t1s[i]), type: String(types[i]) }))
 			.filter((s) => Number.isFinite(s.t0) && Number.isFinite(s.t1) && s.t1 > s.t0 && valid.has(s.type))
 			.map((s) => ({ t0: s.t0, t1: s.t1, type: s.type as SkiSegmentType }));
+
 		if (override.length > 0) await saveSkiSegments(id, override);
+
 		return Astro.redirect(Astro.url.pathname, 303);
 	}
+
 	return Astro.redirect(Astro.url.pathname, 303);
 }
 
 const isOwner = await requireOwner(Astro.cookies);
+
 const activity = validId ? await getActivity(id, isOwner) : null;
 
 // A private activity does not exist for anyone but the owner — not as a stub,
@@ -209,7 +224,9 @@ if (!activity || (activity.private && !isOwner)) {
 }
 
 const meta = sportMeta(activity.sport);
+
 const hasRoute = Boolean(activity.polyline);
+
 const activityPinned = isOwner ? await isPinned('move', activity.id) : false;
 
 const [streams, laps, parent, children, thresholds] = await Promise.all([
@@ -232,6 +249,7 @@ const [streams, laps, parent, children, thresholds] = await Promise.all([
 // so they are useless as runs. The detected run count is the honest "Runs"
 // stat; every other sport still counts its laps.
 const isLiftServed = activity.sport === 'alpine_ski' || activity.sport === 'snowboard';
+
 const skiStreams: SkiStreams = {
 	time_s: streams?.time_s ?? undefined,
 	altitude_m: streams?.altitude_m ?? undefined,
@@ -239,14 +257,20 @@ const skiStreams: SkiStreams = {
 	latlng: streams?.latlng ?? undefined,
 	moving: streams?.moving ?? undefined,
 };
+
 // The resolved segments honour a saved edit (activity.ski_segments), else
 // auto-detect. One computation drives the breakdown, the profile bands and the
 // editor, so they never disagree.
 const skiSegments = isLiftServed ? resolveSkiSegments(skiStreams, activity.ski_segments) : [];
+
 const skiView = skiSegments.length > 0 ? buildSkiView(skiSegments, skiStreams, activity.max_speed_ms) : null;
+
 const editingRuns = isOwner && isLiftServed && Astro.url.searchParams.has('editruns');
+
 const skiEditRows = editingRuns ? buildSkiEditRows(skiSegments) : [];
+
 const skiEdited = isLiftServed && activity.ski_segments != null;
+
 const runsCount = skiView
 	? skiView.summary.runs
 	: laps.length > 0
@@ -286,6 +310,7 @@ const detailTable = detailRows(activity.sport, statRow, Boolean(skiView));
 // drops from the table. Exertion is handled in the markup: it carries the
 // hover-pill with its method, confidence and explanation.
 const distanceHeadline = formatStat('distance', statRow);
+
 const movingHeadline = skiView ? null : formatStat('moving_time', statRow);
 
 // ---------------------------------------------------------------------------
@@ -310,6 +335,7 @@ const METHOD_LABEL: Record<string, string> = {
 	met: 'MET-minutes',
 	ski: 'active-descent MET',
 };
+
 const CONFIDENCE_LABEL: Record<string, string> = {
 	measured: 'Measured',
 	estimated: 'Estimated',
@@ -323,6 +349,7 @@ const CONFIDENCE_LABEL: Record<string, string> = {
 // `activity!` sprinkled everywhere it's touched.
 function exertionDetail(act: ActivityRow): string | null {
 	if (act.exertion == null || !act.exertion_method) return null;
+
 	try {
 		const exStreams: ExertionStreams | undefined = streams
 			? {
@@ -334,6 +361,7 @@ function exertionDetail(act: ActivityRow): string | null {
 					moving: streams.moving ?? undefined,
 				}
 			: undefined;
+
 		const result = computeExertion(
 			{
 				sport: act.sport,
@@ -347,20 +375,24 @@ function exertionDetail(act: ActivityRow): string | null {
 			},
 			thresholds ?? EMPTY_THRESHOLDS,
 		);
+
 		// Only trust the recomputed sentence when it took the same rung AND
 		// landed close to the stored score. Method agreement alone isn't
 		// enough — a threshold edited since ingest, say, would still take the
 		// same rung but produce a sentence whose numbers (an NP, an FTP) don't
 		// match the score sitting next to it, which is worse than no sentence.
 		const scoreAgrees = Math.abs(result.score - act.exertion) <= Math.max(3, act.exertion * 0.15);
+
 		if (result.method === act.exertion_method && scoreAgrees) return result.detail;
 	} catch {
 		// Recomputation is best-effort; the generic fallback below always works.
 	}
+
 	return null;
 }
 
 const durationLabel = formatDuration(activity.moving_seconds ?? activity.elapsed_seconds);
+
 const detail =
 	exertionDetail(activity) ??
 	(activity.exertion != null && activity.exertion_method
@@ -390,6 +422,7 @@ const hrBins =
 	streams?.heartrate && thresholds?.lthr_bpm
 		? timeInZones(streams.heartrate, streams.time_s ?? null, thresholds.lthr_bpm, HR_ZONES)
 		: null;
+
 const powerBins =
 	meta.family === 'bike' && streams?.power_w && thresholds?.ftp_w
 		? timeInZones(streams.power_w, streams.time_s ?? null, thresholds.ftp_w, POWER_ZONES)
@@ -404,19 +437,24 @@ function formatDuration(seconds: number | null | undefined): string {
 	const h = Math.floor(s / 3600);
 	const m = Math.floor((s % 3600) / 60);
 	const ss = s % 60;
+
 	if (h > 0) return `${h}h ${m}m`;
+
 	if (m > 0) return `${m}m`;
+
 	return `${ss}s`;
 }
 
 function formatDateLong(dateStr: string): string {
 	const [y, m, d] = dateStr.split('-').map(Number);
 	const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+
 	return dt.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
 
 function legLabel(leg: number | null): string {
 	if (leg == null) return '';
+
 	return `Leg ${leg}`;
 }
 
@@ -424,16 +462,23 @@ function legLabel(leg: number | null): string {
 // for the editor's picker. Retired gear is kept in the list — an old ride was
 // ridden on the bike that's since been retired, and that has to stay sayable.
 const gear = activity.gear_id != null || isOwner ? await listGear() : [];
+
 const activityGear = gear.find((g) => g.id === activity.gear_id) ?? null;
+
 const gearLabel = (g: (typeof gear)[number]) => g.nickname || g.name;
+
 const editing = isOwner && Astro.url.searchParams.has('edit');
+
 const titleError = Astro.url.searchParams.get('error') === 'title';
+
 // The film link is a virtual-ride idea (the trainer with a movie on), but a ride
 // already linked keeps its editor even if the sport was later changed.
 const showMovie = activity.sport === 'virtual_ride' || activity.movie_tmdb_id != null;
 
 const pageTitle = `${activity.title} — Jason's activity log`;
+
 const glyph = sportIcon(activity.sport);
+
 const exInk = exertionInk(activity.exertion);
 ---
 
@@ -831,12 +876,19 @@ const exInk = exertionInk(activity.exertion);
 	// Progressive: with no JS the field still shows the linked film and its
 	// Remove button (a plain form control), just without new-film search.
 	const pick = document.getElementById('movie-pick');
+
 	const idInput = pick?.querySelector<HTMLInputElement>('input[name="movie_tmdb_id"]');
+
 	const titleInput = pick?.querySelector<HTMLInputElement>('input[name="movie_title"]');
+
 	const chosen = pick?.querySelector<HTMLElement>('.movie-chosen');
+
 	const chosenTitle = pick?.querySelector<HTMLElement>('.movie-chosen__title');
+
 	const search = document.getElementById('movie-search') as HTMLInputElement | null;
+
 	const results = document.getElementById('movie-results');
+
 	if (pick && idInput && titleInput && chosen && chosenTitle && search && results) {
 		const showChosen = (title: string) => {
 			chosenTitle.textContent = title;
@@ -845,6 +897,7 @@ const exInk = exertionInk(activity.exertion);
 			results.hidden = true;
 			results.replaceChildren();
 		};
+
 		const showSearch = () => {
 			idInput.value = '';
 			titleInput.value = '';
@@ -860,18 +913,23 @@ const exInk = exertionInk(activity.exertion);
 		search.addEventListener('input', () => {
 			clearTimeout(timer);
 			const q = search.value.trim();
+
 			if (!q) {
 				results.hidden = true;
 				results.replaceChildren();
+
 				return;
 			}
+
 			timer = setTimeout(async () => {
 				try {
 					const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(q)}`);
+
 					if (!res.ok) return;
 					const data = await res.json();
 					const items = (data.results ?? []).slice(0, 8) as { id: number; title: string; release_date?: string }[];
 					results.replaceChildren();
+
 					for (const m of items) {
 						const li = document.createElement('li');
 						const btn = document.createElement('button');
@@ -882,12 +940,14 @@ const exInk = exertionInk(activity.exertion);
 						titleEl.className = 'movie-results__title';
 						titleEl.textContent = m.title;
 						btn.appendChild(titleEl);
+
 						if (year) {
 							const yearEl = document.createElement('span');
 							yearEl.className = 'movie-results__year';
 							yearEl.textContent = year;
 							btn.appendChild(yearEl);
 						}
+
 						btn.addEventListener('click', () => {
 							idInput.value = String(m.id);
 							titleInput.value = m.title;
@@ -896,6 +956,7 @@ const exInk = exertionInk(activity.exertion);
 						li.appendChild(btn);
 						results.appendChild(li);
 					}
+
 					results.hidden = items.length === 0;
 				} catch {
 					/* leave the box as-is on a failed search */

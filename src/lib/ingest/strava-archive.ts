@@ -38,6 +38,7 @@ export function parseCsv(text: string): string[][] {
 
 	for (let i = 0; i < text.length; i++) {
 		const c = text[i];
+
 		if (quoted) {
 			if (c === '"') {
 				if (text[i + 1] === '"') {
@@ -47,6 +48,7 @@ export function parseCsv(text: string): string[][] {
 			} else field += c;
 			continue;
 		}
+
 		if (c === '"') quoted = true;
 		else if (c === ',') {
 			row.push(field);
@@ -58,10 +60,12 @@ export function parseCsv(text: string): string[][] {
 			field = '';
 		} else if (c !== '\r') field += c;
 	}
+
 	if (field !== '' || row.length) {
 		row.push(field);
 		rows.push(row);
 	}
+
 	return rows;
 }
 
@@ -88,8 +92,10 @@ export function indexHeader(header: string[]): CsvIndex {
 	header.forEach((name, i) => {
 		const key = name.trim();
 		last.set(key, i);
+
 		if (!first.has(key)) first.set(key, i);
 	});
+
 	return {
 		header,
 		col: (name) => last.get(name) ?? -1,
@@ -123,11 +129,13 @@ export function readRow(cells: string[], idx: CsvIndex): StravaCsvRow | null {
 	const getFirst = (name: string): string => (idx.firstCol(name) >= 0 ? (cells[idx.firstCol(name)] ?? '').trim() : '');
 
 	const activityId = getFirst('Activity ID');
+
 	if (!activityId) return null;
 
 	const values: Record<string, string> = {};
 	idx.header.forEach((name, i) => {
 		const v = (cells[i] ?? '').trim();
+
 		if (v !== '') values[name.trim()] = v;
 	});
 
@@ -149,15 +157,21 @@ export function readRow(cells: string[], idx: CsvIndex): StravaCsvRow | null {
  *  the zone, so the parsed fields are re-assembled as UTC explicitly. */
 export function parseStravaDate(s: string): string | null {
 	const m = /^(\w{3})\s+(\d{1,2}),\s*(\d{4}),\s*(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)$/i.exec(s.trim());
+
 	if (!m) {
 		const t = Date.parse(s);
+
 		return Number.isFinite(t) ? new Date(t).toISOString() : null;
 	}
+
 	const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 	const month = months.findIndex((x) => x.toLowerCase() === m[1].toLowerCase());
+
 	if (month < 0) return null;
 	let hour = Number(m[4]) % 12;
+
 	if (m[7].toUpperCase() === 'PM') hour += 12;
+
 	return new Date(Date.UTC(Number(m[3]), month, Number(m[2]), hour, Number(m[5]), Number(m[6]))).toISOString();
 }
 
@@ -168,6 +182,7 @@ export function parseStravaDate(s: string): string | null {
 const n = (v: string | undefined): number | null => {
 	if (v === undefined || v === '') return null;
 	const x = Number(v);
+
 	return Number.isFinite(x) ? x : null;
 };
 
@@ -183,6 +198,7 @@ const n = (v: string | undefined): number | null => {
  */
 export function csvRowToCanonical(row: StravaCsvRow): CanonicalActivity | null {
 	const startedAt = parseStravaDate(row.startedAt);
+
 	if (!startedAt) return null;
 
 	const v = row.values;
@@ -249,6 +265,8 @@ export function mergeCanonical(fromFile: CanonicalActivity, fromCsv: CanonicalAc
 
 function stripNulls(a: CanonicalActivity): Partial<CanonicalActivity> {
 	const out: Record<string, unknown> = {};
+
 	for (const [k, v] of Object.entries(a)) if (v !== null && v !== undefined) out[k] = v;
+
 	return out as Partial<CanonicalActivity>;
 }

@@ -30,6 +30,7 @@
 const TZ = 'America/New_York';
 
 const args = parseArgs(process.argv.slice(2));
+
 const opts = {
 	from: args.from ?? isoDate(Date.now() - 5 * 86400_000),
 	days: int(args.days, 5),
@@ -72,6 +73,7 @@ function buildPayload(o) {
 			const duration = rand() < 0.06
 				? 60 + Math.floor(rand() * 240)
 				: 20 + Math.floor(rand() * 41);
+
 			sessions.push({
 				book_md5: o.md5,
 				page,
@@ -103,19 +105,24 @@ function buildPayload(o) {
 
 async function post(baseUrl, body) {
 	const token = process.env.READING_SYNC_TOKEN;
+
 	if (!token) {
 		console.error('READING_SYNC_TOKEN is not set (try: node --env-file=.env …)');
 		process.exit(1);
 	}
+
 	const url = new URL('/api/books/sync', baseUrl).toString();
+
 	const res = await fetch(url, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
 		body: JSON.stringify(body),
 	});
+
 	const text = await res.text();
 	console.log(`${res.status} ${url}`);
 	console.log(text);
+
 	if (!res.ok) process.exit(1);
 }
 
@@ -132,7 +139,9 @@ function zonedEpochSeconds(date, hour, minute) {
 	const [y, m, d] = date.split('-').map(Number);
 	const wall = Date.UTC(y, m - 1, d, hour, minute);
 	let ts = wall;
+
 	for (let i = 0; i < 2; i++) ts = wall - tzOffsetMs(ts);
+
 	return Math.floor(ts / 1000);
 }
 
@@ -151,6 +160,7 @@ function tzOffsetMs(ts) {
 			.formatToParts(ts)
 			.map((p) => [p.type, p.value]),
 	);
+
 	const asUtc = Date.UTC(
 		+parts.year,
 		+parts.month - 1,
@@ -159,6 +169,7 @@ function tzOffsetMs(ts) {
 		+parts.minute,
 		+parts.second,
 	);
+
 	return asUtc - ts;
 }
 
@@ -169,18 +180,21 @@ function isoDate(ms) {
 		month: '2-digit',
 		day: '2-digit',
 	}).format(ms);
+
 	return parts;
 }
 
 function addDays(date, n) {
 	const [y, m, d] = date.split('-').map(Number);
 	const t = new Date(Date.UTC(y, m - 1, d + n));
+
 	return t.toISOString().slice(0, 10);
 }
 
 /** Days since the epoch — a stable per-date RNG seed. */
 function dayNumber(date) {
 	const [y, m, d] = date.split('-').map(Number);
+
 	return Math.floor(Date.UTC(y, m - 1, d) / 86400_000);
 }
 
@@ -192,27 +206,33 @@ function mulberry32(a) {
 		a = (a + 0x6d2b79f5) | 0;
 		let t = Math.imul(a ^ (a >>> 15), 1 | a);
 		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+
 		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 	};
 }
 
 function parseArgs(argv) {
 	const out = {};
+
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i];
+
 		if (!a.startsWith('--')) continue;
 		const key = a.slice(2);
 		const next = argv[i + 1];
+
 		if (next === undefined || next.startsWith('--')) out[key] = true;
 		else {
 			out[key] = next;
 			i++;
 		}
 	}
+
 	return out;
 }
 
 function int(v, fallback) {
 	const n = Number.parseInt(String(v), 10);
+
 	return Number.isFinite(n) ? n : fallback;
 }

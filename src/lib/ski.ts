@@ -84,8 +84,11 @@ export interface SkiSummary {
 // how much net vertical a segment needs before it's a real run or lift rather
 // than a traverse or a mid-station bump.
 const NOISE_M = 8;
+
 const MIN_RUN_M = 25;
+
 const MIN_LIFT_M = 25;
+
 const SMOOTH_WINDOW_S = 15;
 
 /** Centered moving average of `values` over a ±window/2 second window, so a
@@ -97,17 +100,21 @@ function smoothOverTime(values: number[], time: number[], windowS: number): numb
 	let lo = 0;
 	let hi = 0;
 	let sum = 0;
+
 	for (let i = 0; i < n; i++) {
 		while (lo < n && time[lo] < time[i] - half) {
 			sum -= values[lo];
 			lo++;
 		}
+
 		while (hi < n && time[hi] <= time[i] + half) {
 			sum += values[hi];
 			hi++;
 		}
+
 		out[i] = sum / (hi - lo);
 	}
+
 	return out;
 }
 
@@ -139,6 +146,7 @@ interface RawSegment {
 function autoRawSegments(streams: SkiStreams): RawSegment[] {
 	const t = streams.time_s;
 	const alt = streams.altitude_m;
+
 	if (!t || !alt || t.length < 10 || alt.length !== t.length) return [];
 
 	const salt = smoothOverTime(alt, t, SMOOTH_WINDOW_S);
@@ -152,8 +160,10 @@ function autoRawSegments(streams: SkiStreams): RawSegment[] {
 	let dir: 0 | 1 | -1 = 0;
 	let maxIdx = 0;
 	let minIdx = 0;
+
 	for (let i = 1; i < n; i++) {
 		if (salt[i] > salt[maxIdx]) maxIdx = i;
+
 		if (salt[i] < salt[minIdx]) minIdx = i;
 
 		if (dir !== -1 && salt[maxIdx] - salt[i] >= NOISE_M) {
@@ -168,12 +178,15 @@ function autoRawSegments(streams: SkiStreams): RawSegment[] {
 			maxIdx = i;
 		}
 	}
+
 	if (pivots[pivots.length - 1] !== n - 1) pivots.push(n - 1);
 
 	const raw: RawSegment[] = [];
+
 	for (let p = 0; p < pivots.length - 1; p++) {
 		const startIdx = pivots[p];
 		const endIdx = pivots[p + 1];
+
 		if (endIdx <= startIdx) continue;
 		const delta = salt[endIdx] - salt[startIdx];
 		raw.push({
@@ -182,31 +195,42 @@ function autoRawSegments(streams: SkiStreams): RawSegment[] {
 			type: delta <= -MIN_RUN_M ? 'run' : delta >= MIN_LIFT_M ? 'lift' : 'idle',
 		});
 	}
+
 	return raw;
 }
 
 /** Map a saved override's second-offsets back to sample index bounds. */
 function overrideRawSegments(streams: SkiStreams, override: SkiSegmentOverride[]): RawSegment[] {
 	const t = streams.time_s;
+
 	if (!t || t.length < 2) return [];
+
 	const nearest = (target: number): number => {
 		// Binary search on the monotonic time axis.
 		let lo = 0;
 		let hi = t.length - 1;
+
 		while (lo < hi) {
 			const mid = (lo + hi) >> 1;
+
 			if (t[mid] < target) lo = mid + 1;
 			else hi = mid;
 		}
+
 		if (lo > 0 && Math.abs(t[lo - 1] - target) <= Math.abs(t[lo] - target)) return lo - 1;
+
 		return lo;
 	};
+
 	const raw: RawSegment[] = [];
+
 	for (const seg of override) {
 		const startIdx = nearest(seg.t0);
 		const endIdx = nearest(seg.t1);
+
 		if (endIdx > startIdx) raw.push({ startIdx, endIdx, type: seg.type });
 	}
+
 	return raw;
 }
 
@@ -215,11 +239,14 @@ function overrideRawSegments(streams: SkiStreams, override: SkiSegmentOverride[]
  *  the three collapse into a single run, on screen and in the score. */
 function coalesce(raw: RawSegment[]): RawSegment[] {
 	const out: RawSegment[] = [];
+
 	for (const seg of raw) {
 		const last = out[out.length - 1];
+
 		if (last && last.type === seg.type && seg.startIdx <= last.endIdx + 1) last.endIdx = seg.endIdx;
 		else out.push({ ...seg });
 	}
+
 	return out;
 }
 
@@ -229,9 +256,11 @@ function coalesce(raw: RawSegment[]): RawSegment[] {
 function enrich(streams: SkiStreams, raw: RawSegment[]): SkiSegment[] {
 	const t = streams.time_s!;
 	const alt = streams.altitude_m!;
+
 	return raw.map(({ startIdx, endIdx, type }) => {
 		const seconds = Math.max(0, t[endIdx] - t[startIdx]);
 		const distanceM = segmentDistance(streams, startIdx, endIdx);
+
 		return {
 			type,
 			startIdx,
@@ -257,6 +286,7 @@ function enrich(streams: SkiStreams, raw: RawSegment[]): SkiSegment[] {
 export function resolveSkiSegments(streams: SkiStreams, override?: SkiSegmentOverride[] | null): SkiSegment[] {
 	if (!streams.time_s || !streams.altitude_m) return [];
 	const raw = override && override.length ? overrideRawSegments(streams, override) : autoRawSegments(streams);
+
 	return enrich(streams, coalesce(raw));
 }
 
@@ -274,15 +304,20 @@ export function toOverride(segments: SkiSegment[]): SkiSegmentOverride[] {
 
 function segmentDistance(streams: SkiStreams, a: number, b: number): number | null {
 	const d = streams.distance_m;
+
 	if (d && d[a] != null && d[b] != null) return Math.max(0, d[b] - d[a]);
 	const ll = streams.latlng;
+
 	if (ll && ll[a] && ll[b]) {
 		let sum = 0;
+
 		for (let i = a + 1; i <= b; i++) {
 			if (ll[i - 1] && ll[i]) sum += haversine(ll[i - 1], ll[i]);
 		}
+
 		return sum;
 	}
+
 	return null;
 }
 
@@ -294,6 +329,7 @@ function haversine(a: [number, number], b: [number, number]): number {
 	const lat1 = toRad(a[0]);
 	const lat2 = toRad(b[0]);
 	const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+
 	return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -303,6 +339,7 @@ export function summarizeSki(segments: SkiSegment[]): SkiSummary {
 	const runSeconds = runs.reduce((a, s) => a + s.seconds, 0);
 	const liftSeconds = lifts.reduce((a, s) => a + s.seconds, 0);
 	const total = segments.length ? segments[segments.length - 1].endTime - segments[0].startTime : 0;
+
 	return {
 		runCount: runs.length,
 		liftCount: lifts.length,
@@ -328,8 +365,10 @@ export function skiActive(
 	override?: SkiSegmentOverride[] | null,
 ): { activeSeconds: number; activeMask: boolean[]; runCount: number } | null {
 	const t = streams.time_s;
+
 	if (!t) return null;
 	const segments = resolveSkiSegments(streams, override);
+
 	if (segments.length === 0) return null;
 	const n = streams.altitude_m?.length ?? 0;
 	const moving = streams.moving;
@@ -342,15 +381,20 @@ export function skiActive(
 	// is a recording gap, not real time, and is dropped for the same reason the
 	// GPX moving calc caps its own gaps.
 	const MAX_GAP_S = 30;
+
 	for (const s of segments) {
 		if (s.type !== 'run') continue;
 		runCount++;
+
 		for (let i = s.startIdx; i < s.endIdx && i < n; i++) {
 			mask[i] = true;
+
 			if (moving && moving[i] === false) continue;
 			const dt = t[i + 1] - t[i];
+
 			if (dt > 0 && dt <= MAX_GAP_S) activeSeconds += dt;
 		}
 	}
+
 	return { activeSeconds, activeMask: mask, runCount };
 }

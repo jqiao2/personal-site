@@ -26,6 +26,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
 	try {
 		const isOwner = await requireOwner(cookies);
+
 		return json(await listWatchedPage({ ...watchedQueryFromParams(p), limit, offset }, isOwner));
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'failed to list watched films', 500);
@@ -34,5 +35,6 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 
 function clamp(n: number, min: number, max: number, fallback: number): number {
 	if (!Number.isFinite(n)) return fallback;
+
 	return Math.min(max, Math.max(min, n));
 }

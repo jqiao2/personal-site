@@ -72,8 +72,11 @@ export const ACTIVITY_MAP_TOKENS = {
 } as const;
 
 const TILES = 'https://api.maptiler.com/tiles/v3/tiles.json';
+
 const TERRAIN_RGB = 'https://api.maptiler.com/tiles/terrain-rgb-v2/tiles.json';
+
 const CONTOURS = 'https://api.maptiler.com/tiles/contours/tiles.json';
+
 const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
 
 /**
@@ -84,6 +87,7 @@ const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
  */
 export function alpineBasemap(key: string) {
 	const t = ACTIVITY_MAP_TOKENS;
+
 	return {
 		version: 8 as const,
 		name: "Jason's activity log",
@@ -276,6 +280,7 @@ export interface RouteGeoJSON {
  *  track is a MultiLineString of one member — the layers below don't care. */
 export function polylineToGeoJSON(polyline: string): RouteGeoJSON {
 	const pieces = splitOnGaps(decodePolyline(polyline));
+
 	return {
 		type: 'Feature',
 		geometry: {
@@ -293,6 +298,7 @@ export function polylineToGeoJSON(polyline: string): RouteGeoJSON {
 export function routeGapsGeoJSON(polyline: string): RouteGeoJSON {
 	const pieces = splitOnGaps(decodePolyline(polyline));
 	const hops: [number, number][][] = [];
+
 	for (let i = 1; i < pieces.length; i++) {
 		const prev = pieces[i - 1];
 		const [aLat, aLng] = prev[prev.length - 1];
@@ -302,6 +308,7 @@ export function routeGapsGeoJSON(polyline: string): RouteGeoJSON {
 			[bLng, bLat],
 		]);
 	}
+
 	return { type: 'Feature', geometry: { type: 'MultiLineString', coordinates: hops }, properties: {} };
 }
 
@@ -314,9 +321,11 @@ export interface StartFinish {
  *  polyline decodes to fewer than 2 points (nothing to mark). */
 export function startFinish(polyline: string): StartFinish | null {
 	const points = decodePolyline(polyline);
+
 	if (points.length < 2) return null;
 	const [sLat, sLng] = points[0];
 	const [fLat, fLng] = points[points.length - 1];
+
 	return { start: [sLng, sLat], finish: [fLng, fLat] };
 }
 
@@ -327,7 +336,9 @@ export function startFinish(polyline: string): StartFinish | null {
  *  columns, say). Null if the track never actually moves. */
 export function routeBoundsLngLat(polyline: string): [[number, number], [number, number]] | null {
 	const b: Bounds | null = trackBounds(decodePolyline(polyline));
+
 	if (!b) return null;
+
 	return [
 		[b.w, b.s],
 		[b.e, b.n],

@@ -4,7 +4,9 @@
 interface Props {
 	rating: number | null;
 }
+
 const { rating } = Astro.props;
+
 const pct = rating != null ? (rating / 5) * 100 : 0;
 ---
 

@@ -22,16 +22,21 @@ function balanced(from, open, close) {
 	const start = src.indexOf(open, from);
 	assert.ok(start > 0, `no ${open} after index ${from}`);
 	let depth = 0;
+
 	for (let i = start; i < src.length; i++) {
 		if (src[i] === open) depth++;
 		else if (src[i] === close && --depth === 0) return src.slice(start, i + 1);
 	}
+
 	throw new Error('unbalanced literal');
 }
 
 const labelZoom = Number(/const LABEL_ZOOM = (\d+)/.exec(src)[1]);
+
 const sortSrc = balanced(src.indexOf('const LABEL_SORT'), '[', ']');
+
 const sourceSrc = balanced(src.indexOf("map.addSource('place-labels'"), '{', '}');
+
 const layerSrc = balanced(src.indexOf('map.addLayer('), '{', '}').replace('LABEL_SORT', sortSrc);
 
 /** The literals are TypeScript; `as const` is the only annotation in them. */
@@ -48,18 +53,23 @@ const samplePoints = [
 
 // `cfg` is what the component reads its palette and its pins off.
 const cfg = { tokens: MAP_TOKENS, points: samplePoints };
+
 const source = evalIn(sourceSrc, { cfg });
+
 const layer = evalIn(layerSrc, { cfg, LABEL_ZOOM: labelZoom });
+
 const sortKey = evalIn(sortSrc, {});
 
 // 1. Source and layer are valid MapLibre, against the style they are added to.
 {
 	const style = menuBasemap('test');
+
 	const errors = validateStyleMin({
 		...style,
 		sources: { ...style.sources, 'place-labels': source },
 		layers: [...style.layers, layer],
 	});
+
 	assert.deepEqual(
 		errors.map((e) => `${e.line ?? ''} ${e.message}`),
 		[],
@@ -75,6 +85,7 @@ const sortKey = evalIn(sortSrc, {});
 
 // 2. Names only from LABEL_ZOOM up — far out, a name per pin is a smear.
 assert.equal(layer.minzoom, labelZoom);
+
 assert.ok(labelZoom >= 12, 'labels should not appear at city-wide zoom');
 
 // 3. Collisions are MapLibre's to resolve, but the ORDER is ours: lower
@@ -86,6 +97,7 @@ assert.ok(labelZoom >= 12, 'labels should not appear at city-wide zoom');
 		'property-type': 'data-driven',
 		expression: { interpolated: false, parameters: ['feature'] },
 	});
+
 	assert.equal(compiled.result, 'success', 'sort key is not a valid expression');
 
 	const rank = (trip, visits) =>
@@ -98,7 +110,9 @@ assert.ok(labelZoom >= 12, 'labels should not appear at city-wide zoom');
 
 // 4. The label sits below the pin's point, not over the 34px marker above it.
 assert.equal(layer.layout['text-anchor'], 'top');
+
 assert.ok(layer.layout['text-offset'][1] > 0, 'offset must push the label downward');
+
 assert.equal(layer.layout['text-allow-overlap'], false, 'overlapping labels defeat the point');
 
 console.log('restaurant map labels: ok');

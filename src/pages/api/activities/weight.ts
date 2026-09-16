@@ -37,6 +37,7 @@ export const POST: APIRoute = async ({ request }) => {
 	}
 
 	let body: unknown;
+
 	try {
 		body = await request.json();
 	} catch {
@@ -54,6 +55,7 @@ export const POST: APIRoute = async ({ request }) => {
 
 	const today = new Date().toISOString().slice(0, 10);
 	const parsed = parseWeighIns(items, today);
+
 	if ('error' in parsed) return apiError(parsed.error, 400);
 
 	try {
@@ -63,6 +65,7 @@ export const POST: APIRoute = async ({ request }) => {
 		const rows = flagOutliers(await listWeighIns(), parsed.rows);
 		const count = await upsertWeighIns(rows);
 		const ignored = rows.filter((r) => r.ignored).length;
+
 		return json({ ok: true, count, ignored });
 	} catch (e) {
 		return apiError(e instanceof Error ? e.message : 'weight sync failed', 500);

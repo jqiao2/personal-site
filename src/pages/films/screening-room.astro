@@ -19,12 +19,17 @@ import { addWeeks, buildWeeks, firstMonday, runStartMonth } from '../../lib/scre
 export const prerender = false;
 
 const [queue, isOwner] = await Promise.all([listQueue(), requireOwner(Astro.cookies)]);
+
 const calSync = isOwner && calendarConfigured();
 
 const today = siteDay();
+
 const PAGE_WEEKS = 12;
+
 const start = firstMonday(runStartMonth(queue, today));
+
 const rendered = buildWeeks({ startMonday: start, weeks: PAGE_WEEKS, queue, today });
+
 const next = addWeeks(start, PAGE_WEEKS);
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -234,8 +239,10 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 				if (loading) return;
 				loading = true;
 				const from = run.dataset.next!;
+
 				try {
 					const res = await fetch(`/films/screening-room/months?from=${from}&weeks=${weeks}`);
+
 					if (!res.ok) throw new Error();
 					run.insertAdjacentHTML('beforeend', await res.text());
 					const d = new Date(`${from}T00:00:00`);
@@ -260,17 +267,23 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 		// Delegated, so films on pages appended later behave the same.
 		run?.addEventListener('click', async (e) => {
 			const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('.film__remove');
+
 			if (!btn) return;
 			const film = btn.closest<HTMLElement>('.film');
 			const tmdbId = film?.dataset.tmdbId;
+
 			if (!tmdbId) return;
 			btn.disabled = true;
+
 			try {
 				const res = await fetch(`/api/films/screening-queue?tmdbId=${tmdbId}`, { method: 'DELETE' });
+
 				if (res.status === 401) {
 					window.location.href = '/films/login?redirect=/films/screening-room';
+
 					return;
 				}
+
 				if (!res.ok) throw new Error();
 				film!.remove();
 			} catch {
@@ -286,6 +299,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 			run.addEventListener('dragstart', (e) => {
 				const film = (e.target as HTMLElement).closest<HTMLElement>('.film[draggable="true"]');
+
 				if (!film) return;
 				dragged = film;
 				film.classList.add('is-dragging');
@@ -304,9 +318,11 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 			run.addEventListener('dragover', (e) => {
 				const cell = cellUnder(e);
+
 				if (!cell) return;
 				e.preventDefault();
 				e.dataTransfer!.dropEffect = 'move';
+
 				if (!cell.classList.contains('is-over')) {
 					run.querySelectorAll('.cell.is-over').forEach((c) => c.classList.remove('is-over'));
 					cell.classList.add('is-over');
@@ -314,23 +330,27 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 			});
 			run.addEventListener('dragleave', (e) => {
 				const cell = cellUnder(e);
+
 				if (cell && !cell.contains(e.relatedTarget as Node)) cell.classList.remove('is-over');
 			});
 
 			run.addEventListener('drop', async (e) => {
 				const cell = cellUnder(e);
 				const film = dragged;
+
 				if (!cell || !film) return;
 				e.preventDefault();
 				cell.classList.remove('is-over');
 
 				const home = film.parentElement!;
 				const target = cell.querySelector('.cell__films')!;
+
 				if (home === target) return;
 
 				const sibling = film.nextSibling;
 				target.appendChild(film);
 				film.classList.add('is-saving');
+
 				try {
 					const res = await fetch('/api/films/screening-queue', {
 						method: 'POST',
@@ -342,10 +362,13 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 							venue: film.dataset.venue || null,
 						}),
 					});
+
 					if (res.status === 401) {
 						window.location.href = '/films/login?redirect=/films/screening-room';
+
 						return;
 					}
+
 					if (!res.ok) throw new Error();
 				} catch {
 					home.insertBefore(film, sibling);
@@ -358,33 +381,44 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 		// --- Sync from the Movies calendar (owner) ---
 		// Pulls AMC-style events in, then reloads to show them. Reports what came back.
 		const syncBtn = document.getElementById('sync-btn') as HTMLButtonElement | null;
+
 		const syncMsg = document.getElementById('sync-msg');
+
 		syncBtn?.addEventListener('click', async () => {
 			syncBtn.disabled = true;
+
 			if (syncMsg) {
 				syncMsg.hidden = false;
 				syncMsg.className = 'sync-msg';
 				syncMsg.textContent = 'Syncing from calendar…';
 			}
+
 			try {
 				const res = await fetch('/api/films/screening-queue/sync', { method: 'POST' });
 				const data = await res.json().catch(() => ({}));
+
 				if (!res.ok) throw new Error(data.error || 'Sync failed');
+
 				if (data.added > 0) {
 					window.location.reload();
+
 					return;
 				}
+
 				if (syncMsg) {
 					const bits = [`${data.added} added`, `${data.skipped} already synced`];
+
 					if (data.unresolved?.length) bits.push(`couldn't match: ${data.unresolved.join(', ')}`);
 					syncMsg.textContent = bits.join(' · ');
 				}
+
 				syncBtn.disabled = false;
 			} catch (err) {
 				if (syncMsg) {
 					syncMsg.className = 'sync-msg error';
 					syncMsg.textContent = err instanceof Error ? err.message : 'Sync failed';
 				}
+
 				syncBtn.disabled = false;
 			}
 		});

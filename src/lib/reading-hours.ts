@@ -52,6 +52,7 @@ const SIZES: Record<HourSize, Geom> = {
 
 export function geometry(size: HourSize, scale = 1): Geom {
 	const g = SIZES[size];
+
 	return {
 		...g,
 		H: Math.round(g.H * scale),
@@ -63,14 +64,18 @@ export function geometry(size: HourSize, scale = 1): Geom {
 /** "midnight", "noon", "2am" — the compact form, for under the axis. */
 export function axisLabel(hour: number): string {
 	if (hour === 0) return 'midnight';
+
 	if (hour === 12) return 'noon';
+
 	return `${hour % 12 === 0 ? 12 : hour % 12}${hour < 12 ? 'am' : 'pm'}`;
 }
 
 /** "midnight", "noon", "2 am" — the spoken form, for the tooltip and prose. */
 export function clockLabel(hour: number): string {
 	if (hour === 0) return 'midnight';
+
 	if (hour === 12) return 'noon';
+
 	return `${hour % 12 === 0 ? 12 : hour % 12}${hour < 12 ? ' am' : ' pm'}`;
 }
 
@@ -85,7 +90,9 @@ export function tooFewLine(hours: number[]): string {
 	hours.forEach((v, h) => {
 		if (v > 0) on.push(h);
 	});
+
 	if (on.length === 0) return 'No page turns with a usable time on them.';
+
 	return `Only ${on.map(clockLabel).join(' and ')} — not enough of a day to draw one.`;
 }
 
@@ -147,6 +154,7 @@ export function buildHistogram(input: HourInput): HourHistogram {
 	const columns: HourColumn[] = hours.map((pages, hour) => {
 		const ratio = pages / max;
 		const level = !pages ? 0 : ratio <= 0.25 ? 1 : ratio <= 0.5 ? 2 : ratio <= 0.75 ? 3 : 4;
+
 		return {
 			hour,
 			pages,
@@ -162,6 +170,7 @@ export function buildHistogram(input: HourInput): HourHistogram {
 
 	const labels: HourAxisLabel[] = geom.labels.map((hour) => {
 		const left = centre(hour);
+
 		return {
 			text: axisLabel(hour),
 			left,
@@ -191,5 +200,6 @@ export function buildHistogram(input: HourInput): HourHistogram {
  */
 function tipFor(hour: number, pages: number): string {
 	if (!pages) return `${clockLabel(hour)} — nothing read`;
+
 	return `${clockLabel(hour)} — ${pages.toLocaleString('en-US')} ${pages === 1 ? 'page' : 'pages'}`;
 }

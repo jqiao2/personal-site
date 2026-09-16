@@ -20,11 +20,14 @@ import {
 
 function required(name: string, value: string | undefined): string {
 	if (!value) throw new Error(`${name} is not set`);
+
 	return value;
 }
 
 const accountId = required('R2_ACCOUNT_ID', import.meta.env.R2_ACCOUNT_ID);
+
 export const R2_BUCKET = required('R2_BUCKET', import.meta.env.R2_BUCKET);
+
 const publicUrl = required('R2_PUBLIC_URL', import.meta.env.R2_PUBLIC_URL).replace(/\/$/, '');
 
 export const r2 = new S3Client({
@@ -52,6 +55,7 @@ const SOFT_CAP_BYTES = 8 * 1024 ** 3;
 async function assertUnderCap(): Promise<void> {
 	let total = 0;
 	let continuationToken: string | undefined;
+
 	do {
 		const page = await r2.send(
 			new ListObjectsV2Command({
@@ -59,6 +63,7 @@ async function assertUnderCap(): Promise<void> {
 				ContinuationToken: continuationToken,
 			}),
 		);
+
 		for (const obj of page.Contents ?? []) total += obj.Size ?? 0;
 		continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
 	} while (continuationToken);

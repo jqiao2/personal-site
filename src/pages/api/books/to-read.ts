@@ -39,6 +39,7 @@ interface Body {
 function text(v: unknown): string | null {
 	if (typeof v !== 'string') return null;
 	const t = v.trim();
+
 	return t.length > 0 ? t : null;
 }
 
@@ -46,6 +47,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	let body: Body;
+
 	try {
 		body = (await request.json()) as Body;
 	} catch {
@@ -53,6 +55,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 	}
 
 	const title = text(body.title);
+
 	if (!title) return apiError('title is required', 400);
 
 	const authors = text(body.authors);
@@ -70,6 +73,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			.eq('ol_key', olKey)
 			.limit(1)
 			.maybeSingle();
+
 		if (error) return apiError(`lookup failed: ${error.message}`, 500);
 
 		if (existing) {
@@ -77,6 +81,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 			// finish is not this route's decision to make: the book page has an
 			// action for that and says what it is doing.
 			await updateBook(existing.id as number, { added_at: now });
+
 			return json({ ok: true, id: existing.id, existing: true });
 		}
 	}
@@ -90,6 +95,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 		kind: null as string | null,
 		firstPublished: null as string | null,
 	};
+
 	if (olKey) {
 		try {
 			work = await getWork(olKey);

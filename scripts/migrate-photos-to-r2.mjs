@@ -16,11 +16,14 @@ import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s
 
 function required(name) {
 	const v = process.env[name];
+
 	if (!v) throw new Error(`${name} is not set`);
+
 	return v;
 }
 
 const SUPABASE_URL = required('SUPABASE_URL');
+
 const BUCKET = 'restaurant-photos';
 
 const r2 = new S3Client({
@@ -31,6 +34,7 @@ const r2 = new S3Client({
 		secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
 	},
 });
+
 const R2_BUCKET = required('R2_BUCKET');
 
 const OBJECTS = [
@@ -84,6 +88,7 @@ const OBJECTS = [
 async function alreadyInR2(path) {
 	try {
 		const head = await r2.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: path }));
+
 		return head.ContentLength ?? null;
 	} catch (e) {
 		if (e.name === 'NotFound' || e.$metadata?.httpStatusCode === 404) return null;
@@ -100,6 +105,7 @@ async function main() {
 
 	for (const obj of OBJECTS) {
 		const existingSize = await alreadyInR2(obj.path);
+
 		if (existingSize === obj.size) {
 			skipped++;
 			continue;
@@ -107,12 +113,15 @@ async function main() {
 
 		const url = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/${obj.path}`;
 		const res = await fetch(url);
+
 		if (!res.ok) {
 			console.error(`FAILED download ${obj.path}: HTTP ${res.status}`);
 			failed++;
 			continue;
 		}
+
 		const bytes = new Uint8Array(await res.arrayBuffer());
+
 		if (bytes.byteLength !== obj.size) {
 			console.error(`FAILED ${obj.path}: downloaded ${bytes.byteLength} bytes, expected ${obj.size}`);
 			failed++;
@@ -130,6 +139,7 @@ async function main() {
 		);
 
 		const verifySize = await alreadyInR2(obj.path);
+
 		if (verifySize !== bytes.byteLength) {
 			console.error(`FAILED verify ${obj.path}: R2 has ${verifySize} bytes after upload`);
 			failed++;
@@ -141,6 +151,7 @@ async function main() {
 	}
 
 	console.log(`\nDone. copied=${copied} skipped(already present)=${skipped} failed=${failed}`);
+
 	if (failed > 0) {
 		console.error('Some objects failed — Supabase originals untouched. Re-run to retry.');
 		process.exit(1);

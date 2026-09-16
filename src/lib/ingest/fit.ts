@@ -64,6 +64,7 @@ export function parseFit(buf: Buffer | Uint8Array, opts: FitParseOptions): Canon
  */
 export function parseFitSessions(buf: Buffer | Uint8Array, opts: FitParseOptions): CanonicalActivity[] {
 	const decoder = new Decoder(Stream.fromBuffer(buf));
+
 	if (!decoder.isFIT()) return [];
 
 	// Not checking integrity: a truncated tail (a head unit that ran out of
@@ -72,9 +73,11 @@ export function parseFitSessions(buf: Buffer | Uint8Array, opts: FitParseOptions
 	const { messages } = decoder.read({ mesgListener: undefined }) as { messages: FitMessages };
 
 	const sessions = messages.sessionMesgs ?? [];
+
 	if (!sessions.length) return [];
 
 	const multisport = sessions.length > 1;
+
 	return sessions
 		.map((session) => oneSession(session, messages, opts, multisport))
 		.filter((a): a is CanonicalActivity => a !== null);
@@ -87,6 +90,7 @@ function oneSession(
 	multisport: boolean,
 ): CanonicalActivity | null {
 	const startedAt: Date = session.startTime ?? session.timestamp;
+
 	if (!startedAt) return null;
 
 	// Slice the file's records down to this session's window. A single-session
@@ -94,9 +98,11 @@ function oneSession(
 	const from = new Date(startedAt).getTime();
 	const to = from + (num(session.totalElapsedTime) ?? 0) * 1000;
 	const allRecords = messages.recordMesgs ?? [];
+
 	const records = multisport
 		? allRecords.filter((r) => {
 				const t = new Date(r.timestamp).getTime();
+
 				return t >= from && t <= to;
 			})
 		: allRecords;
@@ -150,6 +156,7 @@ function oneSession(
 			multisport
 				? (messages.lapMesgs ?? []).filter((l) => {
 						const t = new Date(l.startTime ?? l.timestamp).getTime();
+
 						return t >= from && t <= to;
 					})
 				: (messages.lapMesgs ?? []),
@@ -165,7 +172,9 @@ function oneSession(
  */
 function fileSport(session: Record<string, any>, opts: FitParseOptions): Sport {
 	const slug = sportFromFit(session.sport, session.subSport) ?? opts.sport;
+
 	if (!slug) throw new UnknownSportError(String(session.sport ?? '(the file states no sport)'));
+
 	return slug;
 }
 
@@ -220,6 +229,7 @@ function toStreams(records: Record<string, any>[], startTime: Date | undefined):
 
 		const lat = r.positionLat;
 		const lng = r.positionLong;
+
 		if (typeof lat === 'number' && typeof lng === 'number') {
 			latlng.push([lat * SEMICIRCLE, lng * SEMICIRCLE]);
 			anyLatLng = true;
@@ -229,44 +239,63 @@ function toStreams(records: Record<string, any>[], startTime: Date | undefined):
 
 		const alt = r.enhancedAltitude ?? r.altitude;
 		altitude_m.push(numOrNaN(alt));
+
 		if (Number.isFinite(alt)) anyAlt = true;
 
 		distance_m.push(numOrNaN(r.distance));
+
 		if (Number.isFinite(r.distance)) anyDist = true;
 
 		heartrate.push(numOrNaN(r.heartRate));
+
 		if (Number.isFinite(r.heartRate)) anyHr = true;
 
 		cadence.push(numOrNaN(r.cadence));
+
 		if (Number.isFinite(r.cadence)) anyCad = true;
 
 		power_w.push(numOrNaN(r.power));
+
 		if (Number.isFinite(r.power)) anyPower = true;
 
 		const spd = r.enhancedSpeed ?? r.speed;
 		speed_ms.push(numOrNaN(spd));
+
 		if (Number.isFinite(spd)) anySpeed = true;
 
 		temp_c.push(numOrNaN(r.temperature));
+
 		if (Number.isFinite(r.temperature)) anyTemp = true;
 
 		grade.push(numOrNaN(r.grade));
+
 		if (Number.isFinite(r.grade)) anyGrade = true;
 
 		moving.push(Number.isFinite(spd) ? (spd as number) > 0.3 : true);
 	}
 
 	const out: CanonicalStreams = { time_s };
+
 	if (anyLatLng) out.latlng = latlng.map(([a, b]) => [nanToNull(a), nanToNull(b)] as unknown as [number, number]);
+
 	if (anyAlt) out.altitude_m = nulled(altitude_m);
+
 	if (anyDist) out.distance_m = nulled(distance_m);
+
 	if (anyHr) out.heartrate = nulled(heartrate);
+
 	if (anyCad) out.cadence = nulled(cadence);
+
 	if (anyPower) out.power_w = nulled(power_w);
+
 	if (anySpeed) out.speed_ms = nulled(speed_ms);
+
 	if (anyTemp) out.temp_c = nulled(temp_c);
+
 	if (anyGrade) out.grade = nulled(grade);
+
 	if (anySpeed) out.moving = moving;
+
 	return out;
 }
 
@@ -302,18 +331,22 @@ function offsetFromActivityMesg(activity: Record<string, any> | undefined): numb
 	const utcMs = new Date(activity.timestamp).getTime();
 	const localMs = FIT_EPOCH_MS + activity.localTimestamp * 1000;
 	const offset = Math.round((localMs - utcMs) / 60000);
+
 	// Sanity: real offsets are within ±14h and land on a quarter hour. Anything
 	// else means the field was garbage, and a wrong offset silently files the
 	// activity on the wrong day, so refuse it and let the home-zone fallback run.
 	if (Math.abs(offset) > 14 * 60 || offset % 15 !== 0) return null;
+
 	return offset;
 }
 
 function deviceName(messages: FitMessages): string | null {
 	const creator = messages.deviceInfoMesgs?.find((d) => d.deviceIndex === 'creator');
 	const named = creator ?? messages.deviceInfoMesgs?.find((d) => d.productName);
+
 	if (named?.productName) return String(named.productName);
 	const manufacturer = messages.fileIdMesgs?.[0]?.manufacturer;
+
 	return manufacturer ? String(manufacturer) : null;
 }
 
@@ -326,7 +359,11 @@ function swolf(session: Record<string, any>): number | null {
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
 const int = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
+
 const numOrNaN = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : NaN);
+
 const nanToNull = (v: number): number | null => (Number.isFinite(v) ? v : null);
+
 const nulled = (arr: number[]): number[] => arr.map((v) => (Number.isFinite(v) ? v : null)) as unknown as number[];

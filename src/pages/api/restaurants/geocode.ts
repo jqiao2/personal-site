@@ -15,6 +15,7 @@ export const GET: APIRoute = async ({ url, cookies }) => {
 	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
 
 	const q = url.searchParams.get('q') ?? '';
+
 	if (q.trim().length < 3) return json({ hits: [] });
 
 	try {

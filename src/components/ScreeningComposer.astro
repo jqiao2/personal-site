@@ -298,8 +298,10 @@
 		let tmdbId: number | null = null;
 
 		const pad = (n: number) => String(n).padStart(2, '0');
+
 		const today = () => {
 			const d = new Date();
+
 			return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 		};
 
@@ -312,12 +314,15 @@
 		q.addEventListener('input', () => {
 			window.clearTimeout(timer);
 			const query = q.value.trim();
+
 			if (!query) return hideResults();
 			timer = window.setTimeout(() => runSearch(query), 300);
 		});
+
 		async function runSearch(query: string) {
 			try {
 				const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+
 				if (!res.ok) return hideResults();
 				const data = await res.json();
 				renderResults(data.results ?? []);
@@ -325,35 +330,45 @@
 				hideResults();
 			}
 		}
+
 		function renderResults(items: any[]) {
 			results.textContent = '';
+
 			if (!items.length) return hideResults();
+
 			for (const m of items.slice(0, 8)) {
 				const li = document.createElement('li');
 				const img = document.createElement('img');
+
 				if (m.poster_path) img.src = IMG + m.poster_path;
 				img.alt = '';
 				const label = document.createElement('span');
 				label.textContent = m.title;
+
 				if (m.release_date) {
 					const yr = document.createElement('span');
 					yr.className = 'r-year';
 					yr.textContent = m.release_date.slice(0, 4);
 					label.appendChild(yr);
 				}
+
 				li.append(img, label);
 				li.addEventListener('click', () => selectMovie(m));
 				results.appendChild(li);
 			}
+
 			results.hidden = false;
 		}
+
 		function hideResults() {
 			results.hidden = true;
 			results.textContent = '';
 		}
+
 		function selectMovie(m: any) {
 			tmdbId = m.id;
 			selTitle.textContent = m.title + (m.release_date ? ` (${m.release_date.slice(0, 4)})` : '');
+
 			if (m.poster_path) {
 				selPoster.src = IMG + m.poster_path;
 				selPoster.hidden = false;
@@ -361,6 +376,7 @@
 				selPoster.removeAttribute('src');
 				selPoster.hidden = true;
 			}
+
 			hideResults();
 			searchWrap.hidden = true;
 			selected.hidden = false;
@@ -368,6 +384,7 @@
 			msg.textContent = '';
 			syncSave();
 		}
+
 		change.addEventListener('click', () => {
 			tmdbId = null;
 			selected.hidden = true;
@@ -384,6 +401,7 @@
 		const closeModal = () => {
 			modal.hidden = true;
 		};
+
 		const openModal = (date?: string) => {
 			// Reset to a clean state each open — a trigger may seed a different day.
 			tmdbId = null;
@@ -398,8 +416,10 @@
 			modal.hidden = false;
 			q.focus();
 		};
+
 		document.addEventListener('click', (e) => {
 			const trigger = (e.target as HTMLElement).closest<HTMLElement>('[data-open-screening]');
+
 			if (trigger) openModal(trigger.dataset.date);
 		});
 		close.addEventListener('click', closeModal);
@@ -414,6 +434,7 @@
 			save.disabled = true;
 			msg.className = 'save-msg';
 			msg.textContent = 'Scheduling…';
+
 			try {
 				const res = await fetch('/api/films/screening-queue', {
 					method: 'POST',
@@ -424,11 +445,15 @@
 						venue: venueInput.value.trim() || null,
 					}),
 				});
+
 				if (res.status === 401) {
 					window.location.href = '/films/login?redirect=/films/screening-room';
+
 					return;
 				}
+
 				const data = await res.json().catch(() => ({}));
+
 				if (!res.ok) throw new Error(data.error || 'Schedule failed');
 				window.location.reload();
 			} catch (err) {
