@@ -1570,9 +1570,9 @@ export interface WatchlistEntry extends WatchlistTile {
 	premiere_date: string | null;
 }
 
-/** The entire watchlist, most recently added first — powers /films/watchlist.
- * Unpaged: the page filters and sorts the whole list in the browser, so it has to
- * ship all of it. Fine at a few hundred films; revisit if it reaches thousands.
+/** The entire watchlist, most recently added first. /films/watchlist pages through
+ * listWatchlistPage instead; this stays for the archived film wheel.
+ * Unpaged, so fine at a few hundred films; revisit if it reaches thousands.
  *
  * Deliberately narrow. Each film's genres, directors and cast are arrays that
  * roughly double the response and, rendered as per-tile data attributes, more than
@@ -1626,7 +1626,7 @@ export interface WatchlistFacetRow {
  * Every watchlist film's genres, credits and language — what the Genre / Language /
  * People filters match on, and what their chips are derived from.
  *
- * Split out of listAllWatchlist so the page can render its tiles without waiting on
+ * Split out of listWatchlistPage so the page can render its tiles without waiting on
  * it, then fill the filters in afterwards. Steps down a tier when original_language
  * (0009) isn't there yet, so Language / People come back empty rather than erroring
  * before the migration lands.
@@ -2316,7 +2316,7 @@ async function listWatchedReleaseYears(): Promise<number[]> {
  * each element keeps names with commas, spaces or braces (a "{" in a title) from
  * being misread as array syntax.
  */
-function pgTextArray(values: string[]): string {
+export function pgTextArray(values: string[]): string {
 	const escaped = values.map((v) => `"${v.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
 
 	return `{${escaped.join(',')}}`;
