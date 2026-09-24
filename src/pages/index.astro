@@ -34,7 +34,8 @@ import RecentFeed from '../components/RecentFeed.astro';
 				</div>
 			</RecentFeed>
 
-			<p class="feed__more"><a href="/month">The month in review →</a></p>
+			{/* The feed above is /log's page 1, so "See more" picks up at page 2. */}
+			<p class="feed__more"><a href="/log/2">See more →</a></p>
 		</div>
 
 		<aside class="sidebar" id="site-drawer" data-site-drawer>
@@ -96,7 +97,7 @@ import RecentFeed from '../components/RecentFeed.astro';
 	   below it moves when the island lands — the six rows are what the reader
 	   sees, the min-height is what holds the rest of the page still.
 	   ponytail: the reserve is measured (15 rows at 1280px/420px), not derived.
-	   It drifts if the row template or `recentJournal(15)` changes; re-measure
+	   It drifts if the row template or `PAGE_SIZE` (journal-log-page.ts) changes; re-measure
 	   with a script like tmp/measure.mjs rather than guessing. */
 	.feed__skeleton {
 		min-height: 1730px;

@@ -25,10 +25,11 @@ import { getReadingMonth } from './books-queries';
 import { listMonthVisits } from './restaurants';
 import { listActivitiesForMonth } from './activities';
 import { listJournalMonths } from './journal-months';
+import { compareEntries } from './journal-log-page';
 
 /** One month's items across all four tracks, already reduced to what a visitor
- *  may see. */
-async function monthItemsPublic(key: string, isOwner: boolean): Promise<JournalItem[]> {
+ *  may see. /log reads its pages through this too. */
+export async function monthItemsPublic(key: string, isOwner: boolean): Promise<JournalItem[]> {
 	const [watches, reading, visits, activities] = await Promise.all([
 		listMonthWatches(key),
 		getReadingMonth(key),
@@ -74,12 +75,8 @@ export async function recentJournal(limit = 15, isOwner = false): Promise<Journa
 		// Reverse-chronological throughout: newest day first, and within a day the
 		// last thing logged on top (`logged` — created_at for films/meals, the real
 		// started_at for activities, the date for reading days that have no time).
-		.sort(
-			(a, b) =>
-				b.day.localeCompare(a.day) ||
-				b.logged.localeCompare(a.logged) ||
-				a.key.localeCompare(b.key),
-		)
+		// Shared with /log, so its page 1 is this feed row for row.
+		.sort(compareEntries)
 		.slice(0, limit);
 }
 

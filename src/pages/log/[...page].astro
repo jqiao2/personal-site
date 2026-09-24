@@ -1,0 +1,165 @@
+---
+// /log, /log/2 … /log/n — every film, reading day, meal and activity ever
+// logged, as the home feed's rows, newest first. Page 1 is the home feed
+// itself (same size, same order), which is why the home page's "See more"
+// opens on page 2. /log/1 redirects to /log so page 1 has one address.
+import Layout from '../../layouts/Layout.astro';
+import FeedRows from '../../components/FeedRows.astro';
+import { journalPage } from '../../lib/journal-log';
+import { pagerNumbers } from '../../lib/journal-log-page';
+import { requireOwner } from '../../lib/auth';
+
+export const prerender = false;
+
+const raw = Astro.params.page;
+
+const page = raw === undefined ? 1 : Number(raw);
+
+if (!Number.isInteger(page) || page < 1 || String(page) !== (raw ?? '1')) {
+	return new Response(null, { status: 404 });
+}
+
+if (raw === '1') return Astro.redirect('/log', 301);
+
+const { items, pages, total } = await journalPage(page, await requireOwner(Astro.cookies));
+
+if (items.length === 0 && page > 1) return new Response(null, { status: 404 });
+
+const href = (p: number) => (p === 1 ? '/log' : `/log/${p}`);
+
+const numbers = pagerNumbers(page, pages);
+---
+
+<Layout title={page === 1 ? 'Everything logged' : `Everything logged — page ${page}`} wide>
+	<div class="log">
+		<header class="log__head">
+			<h1>Everything logged</h1>
+			<p class="log__count">
+				{total.toLocaleString('en-US')} entries · page {page} of {pages}
+			</p>
+		</header>
+
+		<FeedRows items={items} />
+
+		{
+			pages > 1 && (
+				<nav class="pager" aria-label="Pages">
+					{page > 1 ? (
+						<a class="pager__step" href={href(page - 1)} rel="prev">
+							&larr; Newer
+						</a>
+					) : (
+						<span class="pager__step pager__step--off">&larr; Newer</span>
+					)}
+					<ol class="pager__nums">
+						{numbers.map((n) =>
+							n === null ? (
+								<li class="pager__gap">…</li>
+							) : n === page ? (
+								<li>
+									<span class="pager__num pager__num--at" aria-current="page">
+										{n}
+									</span>
+								</li>
+							) : (
+								<li>
+									<a class="pager__num" href={href(n)}>
+										{n}
+									</a>
+								</li>
+							),
+						)}
+					</ol>
+					{page < pages ? (
+						<a class="pager__step" href={href(page + 1)} rel="next">
+							Older &rarr;
+						</a>
+					) : (
+						<span class="pager__step pager__step--off">Older &rarr;</span>
+					)}
+				</nav>
+			)
+		}
+	</div>
+</Layout>
+
+<style>
+	.log {
+		max-width: 720px;
+	}
+	.log__head {
+		margin: 0 0 0.5rem;
+		padding-bottom: 1rem;
+		border-bottom: 1px solid var(--rule);
+	}
+	.log__head h1 {
+		margin: 0;
+	}
+	.log__count {
+		margin: 0.3rem 0 0;
+		font-family: var(--sans);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+	}
+
+	.pager {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-top: 1.5rem;
+		font-family: var(--sans);
+		font-size: 0.8rem;
+	}
+	.pager__step--off {
+		color: var(--ink-soft);
+		opacity: 0.5;
+	}
+	.pager__nums {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.2rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.pager__num,
+	.pager__gap {
+		display: inline-block;
+		min-width: 1.9rem;
+		padding: 0.25rem 0.4rem;
+		text-align: center;
+		border-radius: 2px;
+	}
+	.pager__num {
+		text-decoration: none;
+	}
+	.pager__num:hover {
+		background: var(--accent-bg);
+	}
+	.pager__num--at {
+		font-weight: 700;
+		color: var(--accent);
+		background: var(--accent-bg);
+		border: 1px solid var(--rule);
+	}
+	.pager__gap {
+		color: var(--ink-soft);
+	}
+	/* Narrow: the numbers get a row of their own, Newer/Older share the next. */
+	@media (max-width: 600px) {
+		.pager__nums {
+			order: -1;
+			flex-basis: 100%;
+			justify-content: center;
+		}
+		.pager__num,
+		.pager__gap {
+			min-width: 1.6rem;
+			padding: 0.25rem 0.2rem;
+		}
+	}
+</style>

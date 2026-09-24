@@ -36,6 +36,7 @@
     "bike:test": "node --import ./scripts/ts-hook.mjs scripts/bike-route.test.mjs",
     "postman:test": "node --import ./scripts/ts-hook.mjs scripts/postman.test.mjs",
     "lineart:test": "node --import ./scripts/ts-hook.mjs scripts/line-art.test.mjs",
+    "log:test": "node --import ./scripts/ts-hook.mjs scripts/journal-log.test.mjs",
     "shot": "node --env-file=.env scripts/shot.mjs",
     "lint": "oxlint"
   },
