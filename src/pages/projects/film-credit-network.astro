@@ -19,6 +19,14 @@ if (!(await requireOwner(Astro.cookies))) {
 	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
 }
 
+// The most expensive render on the site (wiki 0018), and its input only changes
+// when a film is logged. That's an owner write, which re-stamps the Cookie
+// header the browser's copy is varied on (src/middleware.ts). So the browser
+// may keep the graph for a day and still rebuild it right after the next log.
+Astro.response.headers.set('cache-control', 'private, max-age=86400');
+
+Astro.response.headers.append('vary', 'Cookie');
+
 const yearParam = Astro.url.searchParams.get('year');
 
 const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
