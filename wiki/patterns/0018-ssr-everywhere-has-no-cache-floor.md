@@ -96,6 +96,37 @@ the CPU split, needs a dashboard/CLI login this environment does not have. Moot
 now that the routes it would have measured are static; the structural fix holds
 regardless of how the traffic was distributed.
 
+## Second round (2026-09-24): the owner's own traffic, and a false lever
+
+The allowance ran out again after the visitor path was already cached, so the
+remainder was mostly **the owner's own browsing**. Every owner request was
+`private, no-store`, so none of it was ever reused.
+
+- **Lowering function memory does not help.** Fluid bills Active CPU,
+  provisioned memory and invocations as three separate meters. A smaller memory
+  size cuts the memory meter, not the CPU one, and Hobby is locked to the
+  Standard 1 vCPU size anyway. Don't recommend it for an Active CPU overrun.
+- **Owner pages now get `private, max-age=60` + `Vary: Cookie`**, so back/forward
+  and quick returns are free. The staleness risk is real: most editors save and
+  then navigate with `location.href = …` rather than `reload()`, and a plain
+  max-age would land the owner on the pre-save copy. The guard is a **write
+  stamp**: the middleware re-sets a `wv=<timestamp>` cookie after every
+  successful owner non-GET under `/api/` (not `/api/auth/`). The new value
+  changes the Cookie header, so every browser copy misses at once. Login and
+  logout change the header anyway, and logout deletes `wv` so a logged-out
+  browser is cookie-less again for the CDN.
+- The 60 s only bounds writes the stamp can't see: the Strava cron, the Kindle
+  sync, the calendar sync.
+- The same stamp lets `/projects/film-credit-network` (owner-only, ~109 ms CPU)
+  take `private, max-age=86400`: its input only changes when a film is logged,
+  and that is an owner write.
+- Visitor `s-maxage` went from 6 h to 24 h.
+
+Verifying this locally: Supabase can be unreachable from the dev box, but
+headers don't need the DB. Probe with a throwaway no-DB endpoint (GET + DELETE)
+under `/api/`, send an `Origin` header on the non-GET (Astro's origin check 403s
+without it), and flip `OWNER_DEV=0` for the visitor path.
+
 ## The other half of the same bill: DB egress
 
 The same incident also blew Supabase's 5 GB egress allowance, and it is worth

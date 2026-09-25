@@ -23,7 +23,16 @@ export const COOKIE_NAME = 'film_session';
 // matches the session cookie so the two travel and expire together.
 export const OWNER_HINT_COOKIE = 'owner';
 
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+// The owner's write stamp. The owner's pages are browser-cached for a short
+// while, varied on Cookie (see src/middleware.ts), and the middleware re-stamps
+// this cookie after every successful owner write under /api/. A new value
+// changes the Cookie header, so every copy the browser holds misses at once.
+// That is what lets a save that redirects with `location.href = …` land on a
+// fresh page instead of the cached one. Carries no authority; the value is
+// just a timestamp.
+export const WRITE_STAMP_COOKIE = 'wv';
+
+export const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 const encoder = new TextEncoder();
 
