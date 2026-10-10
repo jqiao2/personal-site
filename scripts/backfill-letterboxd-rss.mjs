@@ -23,7 +23,7 @@ const SINCE = process.argv.find((a) => a.startsWith('--since='))?.slice(8) ?? '0
 const VENUES = {
 	'34th': 'AMC 34th Street 14, New York, NY',
 	empire: 'AMC Empire 25, New York, NY',
-	'seventh-heaven': '7th Heaven',
+	'seventh-heaven': '7th Heaven, Bushwick, Brooklyn, NY',
 	'central-park': 'Central Park, New York, NY',
 };
 const FORMATS = { imax: 'IMAX', 'dolby-cinema': 'Dolby Cinema', '35mm': '35mm', '70mm': '70mm', '3d': '3D' };
