@@ -27,7 +27,8 @@ export function imageUrl(path: string | null | undefined, size: ImageSize = 'w34
 }
 
 function apiKey(): string {
-	const key = import.meta.env.TMDB_API_KEY;
+	// process.env when a plain-node script imports this (see supabase.ts).
+	const key = (import.meta.env ?? process.env).TMDB_API_KEY;
 
 	if (!key) throw new Error('TMDB_API_KEY is not set');
 

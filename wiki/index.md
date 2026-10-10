@@ -32,3 +32,4 @@ add or update a pattern.
 | [0024](patterns/0024-merge-duplicate-rows-via-self-fk.md) | Merge duplicate rows non-destructively via a self-FK | strategy | the same real thing is several rows in one table, a computed flag desyncs across them, or dedupe rows other tables reference |
 | [0025](patterns/0025-shot-without-playwright-browser-or-r2.md) | `npm run shot` with no Playwright browser and no R2 env | failure-mode | shot says the Chromium executable is missing, or dev 500s on "R2_* is not set" in a worktree |
 | [0026](patterns/0026-archive-imports-keep-lib-exports-alive.md) | The archive still imports from `src/lib` | failure-mode | deleting/renaming a lib export that seems unused outside the archive |
+| [0027](patterns/0027-letterboxd-rss-catch-up.md) | Catching the film log up from Letterboxd RSS | strategy | films were logged on Letterboxd while the site could not take them |

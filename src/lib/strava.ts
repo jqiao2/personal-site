@@ -27,7 +27,7 @@ const API_BASE = 'https://www.strava.com/api/v3';
 export const STRAVA_SCOPE = 'read,activity:read_all';
 
 function clientId(): string {
-	const v = import.meta.env.STRAVA_CLIENT_ID;
+	const v = (import.meta.env ?? process.env).STRAVA_CLIENT_ID;
 
 	if (!v) throw new Error('STRAVA_CLIENT_ID is not set');
 
@@ -35,7 +35,7 @@ function clientId(): string {
 }
 
 function clientSecret(): string {
-	const v = import.meta.env.STRAVA_CLIENT_SECRET;
+	const v = (import.meta.env ?? process.env).STRAVA_CLIENT_SECRET;
 
 	if (!v) throw new Error('STRAVA_CLIENT_SECRET is not set');
 
