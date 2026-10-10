@@ -32,4 +32,10 @@ registerHooks({
 
 		return nextResolve(specifier, context);
 	},
+	// Vite imports JSON bare; node insists on `with { type: 'json' }`.
+	load(url, context, nextLoad) {
+		if (url.endsWith('.json')) context = { ...context, importAttributes: { type: 'json' } };
+
+		return nextLoad(url, context);
+	},
 });
