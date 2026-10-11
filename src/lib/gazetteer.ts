@@ -16,6 +16,7 @@ import { supabasePublic } from './supabase';
 /** The datasets a suggestion can come from, and what to call them on screen. */
 export const SOURCE_LABELS = {
 	dohmh: 'NYC health dept',
+	nys: 'NY State licence',
 	overture: 'Overture',
 	foursquare: 'Foursquare',
 	osm: 'OpenStreetMap',
@@ -96,6 +97,9 @@ export function titleCaseName(raw: string): string {
 		.join(' ');
 }
 
+/** Sources that store every name in block capitals. */
+const SHOUTS = new Set<string>(['dohmh', 'nys']);
+
 const EARTH_M = 6371000;
 
 function metres(aLat: number, aLng: number, bLat: number, bLng: number): number {
@@ -153,6 +157,8 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 
 	if (error) throw new Error(error.message);
 
+	// SAFETY: the select above names exactly these columns, so every row
+	// PostgREST returns has this shape.
 	const rows = (data ?? []) as Omit<GazetteerHit, 'sourceLabel' | 'distance'>[];
 	const near = query.near ?? null;
 
@@ -170,10 +176,10 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 	return rows
 		.map((r) => ({
 			...r,
-			// The health department SHOUTS; nobody else does. Title-case its names,
-			// and only its names, and only when they really are all caps — so this
-			// leaves a source that already cases its names alone.
-			name: r.source === 'dohmh' && !/[a-z]/.test(r.name) ? titleCaseName(r.name) : r.name,
+			// The health department and the state licence list SHOUT; nobody else
+			// does. Title-case their names, and only theirs, and only when they
+			// really are all caps — so a source that cases its names is left alone.
+			name: SHOUTS.has(r.source) && !/[a-z]/.test(r.name) ? titleCaseName(r.name) : r.name,
 			sourceLabel: SOURCE_LABELS[r.source] ?? r.source,
 			distance: near ? metres(near.lat, near.lng, r.lat, r.lng) : null,
 		}))

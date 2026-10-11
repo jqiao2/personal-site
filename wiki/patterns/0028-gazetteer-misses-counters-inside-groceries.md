@@ -33,17 +33,30 @@ Release `2026-09-23.1` has **no `categories` column**. It now has `taxonomy`
 `categories.primary` throws a Binder Error on every file, so **a re-import fails
 today** until the query moves to `taxonomy.primary`.
 
-## Fix directions
+## Fix (2026-10-11)
 
-- Overture: select `taxonomy.primary`, and filter on the food categories above
-  (or on `taxonomy.hierarchy`) instead of a substring list. Grocery and
-  convenience stores are a judgement call: they help address search find a
-  counter like this one, but they are noisy.
-- Import NYS Ag & Markets Retail Food Stores (`data.ny.gov` `9a8c-vfzj`, Socrata,
-  no key needed, about 11.5k NYC rows) as a fifth `place_sources` source. Rows
-  carry `dba_name`, `entity_name`, the address and a point.
-- For names that only Google knows, use a live Google Places lookup or parse a pasted
-  Google Maps share link.
+- **Overture** now filters on `taxonomy.hierarchy[1] = 'food_and_drink'` and
+  reads `taxonomy.primary` as the cuisine. That root covers restaurants, casual
+  eateries (bakeries, delis, bagel and sandwich shops), bars, cafes, juice and
+  bubble-tea shops, about 72k open NYC places. Groceries and liquor stores are under
+  `shopping` and stay out, because the state list covers the counters inside them.
+- **New source `nys`** (migration 0067): NYS Ag & Markets Retail Food Stores,
+  `data.ny.gov` `9a8c-vfzj`, NYC counties only. It keeps licences whose
+  `estab_type` contains C (food prep) or B (bakery), about 9.5k rows. A bare `A` is
+  a shop with no food made on the spot. Names are all caps, so `gazetteer.ts`
+  title-cases `nys` as it does `dohmh`.
+  `node --env-file=.env scripts/import-place-source.mjs nys --commit`
+- This place now comes up when you type its address ("9 bay 50" →
+  Barron Grocery Store). Its trade name still exists only on Google.
+
+## Gotchas
+
+- Re-imports upsert and never delete. Overture rows that the old filter let in
+  (food banks, delivery services) or that have since closed stay in the table.
+  Remove them by `imported_at` older than the latest run if they get in the way.
+- `@duckdb/node-api` is still not in `package.json`, because it is a large native
+  module and a Vercel build doesn't need it. Install it ad hoc
+  (`npm i --no-save @duckdb/node-api`) before an Overture run.
 
 ## How it was checked
 
