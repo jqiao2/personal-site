@@ -205,6 +205,9 @@ const weekHasActivity = week.totals.activityCount > 0;
 		.week__grid {
 			display: flex;
 			flex-direction: column-reverse;
+			/* The grid's align-items:start would carry over and shrink each day to
+			   its content, so a long title made a wide card and a huge face. */
+			align-items: stretch;
 		}
 	}
 </style>
