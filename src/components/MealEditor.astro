@@ -226,8 +226,7 @@ const config = {
 		// disagreeing with a carried number is one click on the stars.
 		//
 		// An edit inherits nothing: it is showing a visit that happened, not
-		// proposing one, so cfg.initial wins wherever both could speak.
-		const inherited = cfg.initial ? null : (cfg.place?.previous ?? null);
+		// proposing one, so cfg.initial wins wherever both could speak. See load().
 
 		type Pane = 'log' | 'try';
 
@@ -241,18 +240,22 @@ const config = {
 		const state = {
 			pane: 'log' as Pane,
 			open: false,
-			placeId: cfg.place?.id ?? null,
+			// Whether the open log pane is editing cfg.visitId or logging a new
+			// visit. On a diary entry both happen: "Edit this entry" edits it, the
+			// header's "+ Log meal" starts a fresh one.
+			editing: false,
+			placeId: null as number | null,
 			placeName: '',
-			locked: cfg.place,
-			rating: cfg.initial?.rating ?? inherited?.rating ?? 0,
-			verdict: cfg.initial?.verdict ?? inherited?.verdict ?? 0,
-			verdictSet: cfg.initial?.verdict != null || inherited?.verdict != null,
-			hearted: cfg.initial?.hearted ?? inherited?.hearted ?? false,
-			revisit: cfg.initial?.revisit ?? (cfg.place ? cfg.place.visits > 0 : false),
+			locked: null as PlaceSpec | null,
+			rating: 0,
+			verdict: 0,
+			verdictSet: false,
+			hearted: false,
+			revisit: false,
 			// Whether those answers were carried over rather than given. Changing
 			// the place clears carried answers and leaves typed ones alone.
-			borrowed: Boolean(!cfg.initial && cfg.place && (inherited || cfg.place.trip)),
-			photos: (cfg.photos ?? []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
+			borrowed: false,
+			photos: [] as PhotoItem[],
 			// Taking a stored photograph out of the list is a decision, not yet a
 			// deletion: the file goes when the visit is saved, so Cancel leaves the
 			// entry exactly as it was found.
@@ -263,7 +266,7 @@ const config = {
 			// The place's own answer, in both panes. Seeded from the place when
 			// the composer opens on one, so logging a meal doesn't quietly
 			// un-mark somewhere already marked.
-			trip: cfg.place?.trip ?? false,
+			trip: false,
 			tryTrip: false,
 			/** A confirmed point from the geocoder, or null for an unplaced entry. */
 			geo: null as GeoHit | null,
@@ -283,7 +286,10 @@ const config = {
 		});
 
 		// -- opening / closing ------------------------------------------------
-		function open(pane: Pane) {
+		function open(pane: Pane, edit = false) {
+			// Every log open starts from what it says it is — the stored visit
+			// or a blank — never from whichever one was open last.
+			if (pane === 'log') load(edit && Boolean(cfg.visitId));
 			state.pane = pane;
 			state.open = true;
 			// A point belongs to the place you were naming, not to the dialog, so
@@ -306,8 +312,11 @@ const config = {
 			$('[data-me-pane="log"]')!.hidden = pane !== 'log';
 			$('[data-me-pane="try"]')!.hidden = pane !== 'try';
 			$('[data-me-title]')!.textContent =
-				pane === 'try' ? 'Add to to-try' : cfg.visitId ? 'Edit this visit' : state.locked ? 'Log a visit' : 'Log a meal';
-			$('[data-me-save]')!.textContent = pane === 'try' ? 'Add' : cfg.visitId ? 'Save' : 'Log visit';
+				pane === 'try' ? 'Add to to-try' : state.editing ? 'Edit this visit' : state.locked ? 'Log a visit' : 'Log a meal';
+			$('[data-me-save]')!.textContent = pane === 'try' ? 'Add' : state.editing ? 'Save' : 'Log visit';
+			const del = $('[data-me-delete]');
+
+			if (del) del.hidden = pane === 'try' || !state.editing;
 			render();
 			window.setTimeout(() => {
 				const focus = pane === 'try' ? $('[data-me-try-name]') : state.locked ? $('[data-me-date]') : $('[data-me-place]');
@@ -333,7 +342,7 @@ const config = {
 				);
 			}
 
-			if (cfg.visitId) return true;
+			if (state.editing) return true;
 
 			return Boolean(
 				state.placeId ||
@@ -373,8 +382,50 @@ const config = {
 		const friendField = chip('me-friend', cfg.friendOptions);
 		const tagField = chip('me-tag', cfg.tagOptions);
 		const whyField = chip('me-why', cfg.whyOptions);
-		friendField.set(cfg.initial?.friends ?? []);
-		tagField.set(cfg.initial?.tags ?? []);
+
+		/**
+		 * Fill the log pane for an edit of cfg.visitId, or for a new visit. A
+		 * new visit on a diary entry starts with no place: the entry's place is
+		 * the one being edited, not a guess at where the next meal was.
+		 */
+		function load(edit: boolean) {
+			const initial = edit ? cfg.initial : null;
+			const place = edit || !cfg.visitId ? cfg.place : null;
+			const inherited = initial ? null : (place?.previous ?? null);
+
+			for (const p of state.photos) if (p.kind === 'new') URL.revokeObjectURL(p.url);
+
+			Object.assign(state, {
+				editing: edit,
+				placeId: place?.id ?? null,
+				placeName: '',
+				locked: place,
+				rating: initial?.rating ?? inherited?.rating ?? 0,
+				verdict: initial?.verdict ?? inherited?.verdict ?? 0,
+				verdictSet: initial?.verdict != null || inherited?.verdict != null,
+				hearted: initial?.hearted ?? inherited?.hearted ?? false,
+				revisit: initial?.revisit ?? (place ? place.visits > 0 : false),
+				borrowed: Boolean(!initial && place && (inherited || place.trip)),
+				photos: (edit ? cfg.photos : []).map((p): PhotoItem => ({ kind: 'stored', id: p.id, url: p.url })),
+				removed: [],
+				trip: place?.trip ?? false,
+			});
+
+			friendField.set(initial?.friends ?? []);
+			tagField.set(initial?.tags ?? []);
+			friendField.hideSuggest();
+			tagField.hideSuggest();
+			($('[data-me-place]') as HTMLInputElement).value = '';
+			$('[data-me-suggest]')!.hidden = true;
+			// An edit opens on the stored visit; everything else opens on today —
+			// the BROWSER's today, so the user's own midnight, not the UTC one a
+			// Vercel function would name from 8pm Eastern onwards.
+			dateField().value = initial?.visitedOn ?? localDay();
+			($('[data-me-notes]') as HTMLTextAreaElement).value = initial?.review ?? '';
+			const priv = $('[data-me-private]') as HTMLTextAreaElement;
+			priv.value = initial?.privateNote ?? '';
+			showPrivate(priv.value.length > 0);
+		}
 
 		function render() {
 			const locked = state.locked;
@@ -896,10 +947,11 @@ const config = {
 				tags: tagField.get(),
 			};
 
-			const url = cfg.visitId ? `/api/restaurants/visits/${cfg.visitId}` : '/api/restaurants/visits';
+			const editId = state.editing ? cfg.visitId : null;
+			const url = editId ? `/api/restaurants/visits/${editId}` : '/api/restaurants/visits';
 
 			const res = await fetch(url, {
-				method: cfg.visitId ? 'PATCH' : 'POST',
+				method: editId ? 'PATCH' : 'POST',
 				headers: { 'content-type': 'application/json' },
 				body: JSON.stringify(payload),
 			});
@@ -912,7 +964,7 @@ const config = {
 
 			if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'could not log that visit');
 			const saved = await res.json();
-			const visitId = cfg.visitId ?? saved.id;
+			const visitId = editId ?? saved.id;
 
 			// A photograph taken out of the list goes now, once the rest of the
 			// edit has been accepted — before this point Save could still fail,
@@ -982,7 +1034,7 @@ const config = {
 			// photograph moved, or a new one nudged in front of the old ones — is
 			// sent whole, since the arrangement is what is being saved, not the
 			// moves that produced it.
-			const seeded = cfg.photos ?? [];
+			const seeded = editId ? cfg.photos : [];
 			const stored = new Set(seeded.map((p) => p.id));
 			const kept = new Set(order.filter((id) => stored.has(id)));
 
@@ -1011,11 +1063,12 @@ const config = {
 				window.alert(`The visit was saved. Some parts did not: ${[...new Set(failures)].join('; ')}.`);
 			}
 
-			location.href = cfg.redirect;
+			// A new visit logged from another visit's entry lands on its own entry.
+			location.href = cfg.visitId && !editId ? `/restaurants/diary/${visitId}` : cfg.redirect;
 		}
 
 		async function remove() {
-			if (!cfg.visitId) return;
+			if (!state.editing || !cfg.visitId) return;
 
 			if (!window.confirm('Delete this visit?')) return;
 			const res = await fetch(`/api/restaurants/visits/${cfg.visitId}`, { method: 'DELETE' });
@@ -1031,7 +1084,7 @@ const config = {
 
 		// -- wiring -------------------------------------------------------------
 		document.querySelectorAll('[data-open-meal-editor]').forEach((el) =>
-			el.addEventListener('click', () => open('log')),
+			el.addEventListener('click', () => open('log', (el as HTMLElement).dataset.openMealEditor === 'edit')),
 		);
 		document.querySelectorAll('[data-open-try-editor]').forEach((el) =>
 			el.addEventListener('click', () => open('try')),
@@ -1168,18 +1221,6 @@ const config = {
 				render();
 			}),
 		);
-
-		// An edit opens on the stored visit; everything else opens on today —
-		// the BROWSER's today, so the user's own midnight, not the UTC one a
-		// Vercel function would name from 8pm Eastern onwards.
-		dateField().value = cfg.initial?.visitedOn ?? localDay();
-
-		if (cfg.initial) {
-			($('[data-me-notes]') as HTMLTextAreaElement).value = cfg.initial.review;
-			const priv = $('[data-me-private]') as HTMLTextAreaElement;
-			priv.value = cfg.initial.privateNote;
-			showPrivate(priv.value.length > 0);
-		}
 
 		render();
 	}

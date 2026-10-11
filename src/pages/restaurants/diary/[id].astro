@@ -157,7 +157,7 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 					isOwner && (
 						<div class="rl-box rl-box--panel rl-box__pad owner">
 							<div class="rl-label">Owner</div>
-							<button type="button" class="owner__link" data-open-meal-editor>
+							<button type="button" class="owner__link" data-open-meal-editor="edit">
 								Edit this entry
 							</button>
 							<PinButton track="meal" refId={visit.id} pinned={pinned} />
