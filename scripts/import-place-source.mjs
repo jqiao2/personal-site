@@ -7,6 +7,7 @@
 //
 // Usage:
 //   node --env-file=.env scripts/import-place-source.mjs dohmh --commit
+//   node --env-file=.env scripts/import-place-source.mjs nys --commit
 //   node --env-file=.env scripts/import-place-source.mjs overture --bbox nyc --commit
 //   node --env-file=.env scripts/import-place-source.mjs foursquare --bbox nyc --commit
 //
@@ -173,7 +174,65 @@ async function fromDohmh() {
 		if (page.length < PAGE) break;
 	}
 
-	return [...byCamis.values()].filter((r) => r.name && r.name_norm).map(({ on, ...row }) => row);
+	return byCamis.values().filter((r) => r.name && r.name_norm).map(({ on: _on, ...row }) => row).toArray();
+}
+
+// ---------------------------------------------------------------------------
+// NYS — Agriculture & Markets licensed retail food stores
+// ---------------------------------------------------------------------------
+
+const NYS = 'https://data.ny.gov/resource/9a8c-vfzj.json';
+
+/** The five boroughs as the state names their counties. */
+const BOROUGHS = { 'NEW YORK': null, KINGS: 'Brooklyn', QUEENS: 'Queens', BRONX: 'Bronx', RICHMOND: 'Staten Island' };
+
+/**
+ * The counters DOHMH never sees.
+ *
+ * A bagel shop or a deli counter inside a grocery is often licensed by the
+ * state as a retail food store, not permitted by the city as a restaurant —
+ * so it is on this list and not on the health department's. Only licences
+ * with food preparation (type C) or a bakery (B) are kept; a bare "A" is a
+ * shop with nothing to eat on the spot. One row per licence, already current.
+ */
+async function fromNys() {
+	const counties = Object.keys(BOROUGHS).map((c) => `'${c}'`).join(',');
+
+	const url =
+		`${NYS}?$select=license_number,county,estab_type,entity_name,dba_name,street_number,street_name,georeference` +
+		`&$where=county in(${counties}) and (estab_type like '%25B%25' or estab_type like '%25C%25') and georeference is not null` +
+		`&$limit=50000`;
+
+	process.stderr.write('  fetching state licences…\n');
+	const res = await fetchRetry(url, { headers: { accept: 'application/json' } });
+
+	if (!res.ok) throw new Error(`data.ny.gov answered ${res.status}`);
+
+	return (await res.json())
+		.map((r) => {
+			const [lng, lat] = r.georeference?.coordinates ?? [];
+			// The trading name when there is one; the company name when not.
+			const name = (r.dba_name || r.entity_name || '').trim();
+
+			return {
+				source: 'nys',
+				source_id: r.license_number,
+				name,
+				name_norm: normalise(name),
+				lat: Number(lat),
+				lng: Number(lng),
+				// Street names carry stray filler ("CROPSEY AVE ###").
+				address: [r.street_number, r.street_name].filter(Boolean).join(' ').replace(/#+/g, '').replace(/\s+/g, ' ').trim() || null,
+				locality: BOROUGHS[r.county] ?? null,
+				city: 'New York',
+				region: 'New York',
+				country: 'US',
+				cuisines: [],
+				phone: null,
+				website: null,
+			};
+		})
+		.filter((r) => r.name_norm && Number.isFinite(r.lat) && Number.isFinite(r.lng) && r.lat !== 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -240,18 +299,23 @@ async function fromOverture() {
 		process.stderr.write(`  [${i + 1}/${keys.length}] ${key.split('/').pop().slice(0, 24)}…`);
 		const started = Date.now();
 
-		// The bbox struct carries per-row-group statistics, so a file that holds
-		// nothing in this box costs one footer read rather than a gigabyte.
 		// `addresses` is a LIST of structs and `bbox` carries the per-row-group
 		// statistics that make this cheap — a file holding nothing in the box
-		// costs one footer read rather than a gigabyte. Both verified against
-		// the 2026-07 release rather than assumed.
+		// costs one footer read rather than a gigabyte.
+		//
+		// THE FILTER IS THE TAXONOMY ROOT, NOT A LIST OF CATEGORY NAMES. The
+		// 2026-09 release replaced `categories` with `taxonomy`, and the old
+		// substring list ("restaurant", "food", plus eleven names) had been
+		// dropping delis, bagel shops, sandwich shops, steakhouses and cocktail
+		// bars — about ten thousand NYC places. Everything under `food_and_drink`
+		// is somewhere you eat or drink; groceries and liquor stores sit under
+		// `shopping` and stay out. See wiki/patterns/0028.
 		const q = `
 			select id,
 			       names.primary            as name,
 			       bbox.xmin                as lng,
 			       bbox.ymin                as lat,
-			       categories.primary       as category,
+			       taxonomy.primary         as category,
 			       addresses[1].freeform    as address,
 			       addresses[1].locality    as locality,
 			       addresses[1].region      as region,
@@ -261,10 +325,7 @@ async function fromOverture() {
 			from read_parquet('${url}')
 			where bbox.xmin between ${w} and ${e} and bbox.ymin between ${s} and ${n}
 			  and (operating_status is null or operating_status = 'open')
-			  and (categories.primary ilike '%restaurant%'
-			       or categories.primary ilike '%food%'
-			       or categories.primary in ('cafe','bakery','bar','coffee_shop','deli',
-			                                 'ice_cream_shop','pizzeria','diner','juice_bar','tea_room','pub'))
+			  and taxonomy.hierarchy[1] = 'food_and_drink'
 		`;
 
 		// One retry: httpfs times out on these gigabyte files often enough that
@@ -288,6 +349,7 @@ async function fromOverture() {
 	}
 
 	return rows
+		.values()
 		.filter((r) => r.name)
 		.map((r) => ({
 			source: 'overture',
@@ -304,7 +366,8 @@ async function fromOverture() {
 			cuisines: r.category ? [tidy(String(r.category).replace(/_/g, ' '))].filter(Boolean) : [],
 			phone: r.phone ?? null,
 			website: r.website ?? null,
-		}));
+		}))
+		.toArray();
 }
 
 /**
@@ -372,7 +435,7 @@ async function fromFoursquare() {
 // The run
 // ---------------------------------------------------------------------------
 
-const SOURCES = { dohmh: fromDohmh, overture: fromOverture, foursquare: fromFoursquare };
+const SOURCES = { dohmh: fromDohmh, nys: fromNys, overture: fromOverture, foursquare: fromFoursquare };
 
 if (!sourceName || !SOURCES[sourceName]) {
 	console.error(`usage: node --env-file=.env scripts/import-place-source.mjs <${Object.keys(SOURCES).join('|')}> [--bbox nyc] [--commit]`);
@@ -410,7 +473,7 @@ const CHUNK = 500;
 let written = 0;
 
 for (let i = 0; i < rows.length; i += CHUNK) {
-	const slice = rows.slice(i, i + CHUNK).map(({ on, ...r }) => ({ ...r, imported_at: new Date().toISOString() }));
+	const slice = rows.slice(i, i + CHUNK).map(({ on: _on, ...r }) => ({ ...r, imported_at: new Date().toISOString() }));
 	// Retry the write too: a single dropped connection here used to lose 500
 	// places silently, since the loop moved on rather than trying again.
 	let error = null;

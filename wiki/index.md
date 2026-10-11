@@ -33,3 +33,4 @@ add or update a pattern.
 | [0025](patterns/0025-shot-without-playwright-browser-or-r2.md) | `npm run shot` with no Playwright browser and no R2 env | failure-mode | shot says the Chromium executable is missing, or dev 500s on "R2_* is not set" in a worktree |
 | [0026](patterns/0026-archive-imports-keep-lib-exports-alive.md) | The archive still imports from `src/lib` | failure-mode | deleting/renaming a lib export that seems unused outside the archive |
 | [0027](patterns/0027-letterboxd-rss-catch-up.md) | Catching the film log up from Letterboxd RSS | strategy | films were logged on Letterboxd while the site could not take them |
+| [0028](patterns/0028-gazetteer-misses-counters-inside-groceries.md) | The gazetteer misses food counters inside a grocery licence | failure-mode | a real food place is missing from suggestions though DOHMH + Overture are imported; Overture import errors on `categories` |
