@@ -40,7 +40,13 @@ import SiteHeader from '../components/SiteHeader.astro';
 						</g>
 					</svg>
 
+					<div id="sm-geo" hidden></div>
+
 					<div class="sm-controls">
+						<div class="sm-view">
+							<button id="sm-view-diagram" aria-pressed="true">Diagram</button>
+							<button id="sm-view-map" aria-pressed="false">Map</button>
+						</div>
 						<div class="sm-zoom">
 							<button id="sm-zin" title="Zoom in">+</button>
 							<button id="sm-zout" title="Zoom out">&minus;</button>
@@ -136,6 +142,31 @@ import SiteHeader from '../components/SiteHeader.astro';
 			.sm-zoom {
 				display: flex;
 				gap: 6px;
+			}
+			#sm-geo {
+				position: absolute;
+				inset: 0;
+			}
+			.sm-view {
+				display: flex;
+			}
+			.sm-view button {
+				border: none;
+				background: #20100f;
+				color: #a2857a;
+				font: 600 12px Archivo, Arial, sans-serif;
+				padding: 9px 12px;
+				cursor: pointer;
+			}
+			.sm-view button:first-child {
+				border-radius: 8px 0 0 8px;
+			}
+			.sm-view button:last-child {
+				border-radius: 0 8px 8px 0;
+			}
+			.sm-view button[aria-pressed='true'] {
+				color: #f4e8d1;
+				background: #3a1d1f;
 			}
 			.sm-zoom button {
 				width: 34px;
@@ -757,21 +788,26 @@ import SiteHeader from '../components/SiteHeader.astro';
 				document.getElementById('sm-tot-st')!.textContent = visited + ' / ' + STATIONS.length + ' stations visited';
 				document.getElementById('sm-tot-sg')!.textContent = ridden + ' / ' + SEGMENTS.length + ' track segments ridden';
 				document.getElementById('sm-tot-pct')!.textContent = Math.round((100 * ridden) / SEGMENTS.length) + '% of the system ridden';
+				geo?.show(marks);
 			}
 
 			// ---- marking ----
 			function toggleSeg(id: string) {
-				if (dragMoved) return;
+				if (!dragMoved) markSeg(id);
+			}
 
+			function stationClick(id: number) {
+				if (!dragMoved) markSt(id);
+			}
+
+			function markSeg(id: string) {
 				if (marks.seg[id]) delete marks.seg[id]; else marks.seg[id] = 1;
 				save();
 				renderSegMark(segEls[id].sg);
 				renderSidebar();
 			}
 
-			function stationClick(id: number) {
-				if (dragMoved) return;
-
+			function markSt(id: number) {
 				if (marks.st[id]) delete marks.st[id]; else marks.st[id] = 1;
 				save();
 				renderPillMark(stById[id]);
@@ -885,12 +921,49 @@ import SiteHeader from '../components/SiteHeader.astro';
 				input.value = '';
 			});
 
+			// ---- diagram / map view ----
+			// The map view is the same network over real streets; MapLibre only loads
+			// the first time it is opened.
+			const VIEW_KEY = 'mta-subway-view';
+
+			const geoEl = document.getElementById('sm-geo')!;
+
+			const zoomEl = document.querySelector<HTMLElement>('.sm-zoom')!;
+
+			const viewBtns = { diagram: document.getElementById('sm-view-diagram')!, map: document.getElementById('sm-view-map')! };
+
+			let geo: { show: (m: Marks) => void; resize: () => void } | null = null;
+
+			async function setView(v: 'diagram' | 'map') {
+				const isMap = v === 'map';
+				svg.style.display = isMap ? 'none' : '';
+				zoomEl.style.display = isMap ? 'none' : '';
+				geoEl.hidden = !isMap;
+				viewBtns.diagram.setAttribute('aria-pressed', String(!isMap));
+				viewBtns.map.setAttribute('aria-pressed', String(isMap));
+
+				try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+
+				if (!isMap) return;
+
+				if (geo) { geo.resize(); return; }
+				const { mountGeoMap } = await import('../scripts/subway-geo-map');
+				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt);
+				geo.show(marks);
+			}
+
+			viewBtns.diagram.addEventListener('click', () => setView('diagram'));
+
+			viewBtns.map.addEventListener('click', () => setView('map'));
+
 			// ---- go ----
 			applyPan();
 
 			drawGeometry();
 
 			renderAllMarks();
+
+			try { if (localStorage.getItem(VIEW_KEY) === 'map') setView('map'); } catch (e) {}
 		</script>
 	</body>
 </html>
