@@ -93,6 +93,14 @@ holds the SQL of anything applied without a file, should one need
 reconstructing. See `0027_merge_duplicate_theaters.sql`, which was recovered
 that way.
 
+**Indexes need a query that uses them.** The database sits near the free-tier
+size cap, and `0069_drop_unused_indexes.sql` removed 41 indexes (≈41 MB) that
+had never been scanned once. Before adding one, name the query it serves and
+check that the table is big enough for the planner to pick it over a seq scan
+(`explain` it). A new filter, sort or join on a large table is a good reason;
+"this column might get searched" is not. Unique/primary keys are exempt: they
+enforce constraints.
+
 ## Documentation
 
 Full documentation: https://docs.astro.build
