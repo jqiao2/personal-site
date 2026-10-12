@@ -201,6 +201,8 @@ export function parseEventSummary(summary: string): { title: string; venue: stri
 
 export interface SyncResult {
 	added: number;
+	/** Already-synced events whose day changed in Google — their rows were re-dated. */
+	moved: number;
 	skipped: number;
 	/** Titles the TMDB search couldn't resolve — reported so they can be fixed by hand. */
 	unresolved: string[];
@@ -209,7 +211,8 @@ export interface SyncResult {
 /**
  * Pull the Movies calendar into the queue: parse each event from the start of
  * the current month onward, resolve its title to a TMDB film, and schedule it.
- * Events we created (already stored under their id) are skipped. Films not yet
+ * Events already stored under their id are skipped, unless their day changed in
+ * Google — then the row moves to the new day. Films not yet
  * on the watchlist are added there by addToQueue.
  */
 export async function syncFromCalendar(): Promise<SyncResult> {
@@ -221,26 +224,44 @@ export async function syncFromCalendar(): Promise<SyncResult> {
 	const events = await gcal.listEvents(timeMin);
 
 	// Event ids we've already mirrored — dedupes our own creations and prior syncs.
+	// Event id → the date we have it on, so an event dragged to another day in
+	// Google moves its queue row too.
 	const { data: known, error } = await supabaseAdmin
 		.from('screening_queue')
-		.select('google_event_id')
+		.select('google_event_id, scheduled_date')
 		.not('google_event_id', 'is', null);
 
 	if (error) throw new Error(`syncFromCalendar read failed: ${error.message}`);
-	const seen = new Set((known ?? []).map((r) => r.google_event_id as string));
 
-	const result: SyncResult = { added: 0, skipped: 0, unresolved: [] };
+	const seen = new Map(
+		(known ?? []).map((r) => [String(r.google_event_id), String(r.scheduled_date)]),
+	);
+
+	const result: SyncResult = { added: 0, moved: 0, skipped: 0, unresolved: [] };
 
 	for (const ev of events) {
-		if (seen.has(ev.id)) {
-			result.skipped++;
-			continue;
-		}
-
 		const day = gcal.eventDay(ev);
 
 		if (!day) {
 			result.skipped++;
+			continue;
+		}
+
+		const stored = seen.get(ev.id);
+
+		if (stored === day) {
+			result.skipped++;
+			continue;
+		}
+
+		if (stored) {
+			const { error: mErr } = await supabaseAdmin
+				.from('screening_queue')
+				.update({ scheduled_date: day })
+				.eq('google_event_id', ev.id);
+
+			if (mErr) throw new Error(`syncFromCalendar move failed: ${mErr.message}`);
+			result.moved++;
 			continue;
 		}
 
