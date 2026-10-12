@@ -36,4 +36,4 @@ add or update a pattern.
 | [0028](patterns/0028-gazetteer-misses-counters-inside-groceries.md) | The gazetteer misses food counters inside a grocery licence | failure-mode | a real food place is missing from suggestions though DOHMH + Overture are imported; Overture import errors on `categories` |
 | [0029](patterns/0029-form-post-redirect-skipped-write-stamp.md) | A form post that redirects skipped the owner's write stamp | failure-mode | an owner form post 303s back and the page shows stale data |
 | [0030](patterns/0030-numeric-arrays-delta-encode-not-float.md) | Shrinking numeric arrays: delta-encode, don't switch to floats | strategy | a JSONB/array table of numeric series is eating the DB size cap |
-| [0031](patterns/0031-schematic-to-geographic-subway.md) | Putting the schematic subway on a real map | strategy | geocoding id-less schematic data, or parallel lines via MapLibre `line-offset` |
+| [0031](patterns/0031-schematic-to-geographic-subway.md) | Putting the schematic subway on real track | strategy | geocoding id-less schematic data, slicing GTFS shapes, or parallel lines via MapLibre `line-offset` |

@@ -1,42 +1,55 @@
-// Gives every schematic station in src/scripts/subway-data.js a real position, so
-// /subway/map can draw the same network (same station ids, same segment ids, so
-// the same saved log) over a real map. Run with: node scripts/generate-subway-geo.mjs
+// Gives the schematic network in src/scripts/subway-data.js its real geography,
+// so /subway's Map view can draw the same stations and segments (same ids, so
+// the same saved log) where the tunnels and tracks actually run.
+// Run with: node scripts/generate-subway-geo.mjs   (needs `unzip` on PATH)
 //
-// Source: MTA Subway Stations, data.ny.gov/resource/39hk-dx4f (one row per GTFS
-// stop, with daytime routes and lat/lon). The schematic has no stop ids, so each
-// station is matched on name + shared services + where the schematic puts it:
-//   1. confident matches (same normalised name, overlapping services) fit an
-//      affine canvas -> lon/lat transform — the schematic is roughly geographic;
-//   2. every station then takes the stop that shares the most services, with the
-//      fewest-metres miss from its affine-predicted spot, name agreement as a bonus.
-// Stations of one complex that the schematic splits (Times Sq's 1/2/3 vs N/Q/R/W)
-// land on their own platforms, which is what makes the transfers look right.
+// 1-2. Stations. MTA Subway Stations (data.ny.gov 39hk-dx4f) has every GTFS stop
+//      with its daytime routes. The schematic has no stop ids, so each station is
+//      matched on name (dominant), shared services, then where an affine fit of
+//      the schematic predicts it — the schematic is km off outside Manhattan, so
+//      position only breaks same-name ties (the three "145 St"s).
+// 3-4. Track. GTFS stop_times say which stops each service really calls at; a
+//      segment is its service's shape (shapes.txt) sliced between those two stops.
+// 5.   One station marker per platform used, joined by a link within a complex.
+// 6.   Side-by-side order comes from which services really share each stretch.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { STATIONS } from "../src/scripts/subway-data.js";
+import { SEGMENTS, SERVICES, STATIONS } from "../src/scripts/subway-data.js";
 
 const OUT = path.join(fileURLToPath(new URL(".", import.meta.url)), "..", "src", "scripts", "subway-geo.js");
 
 const ABBR = { street: "st", sts: "st", avenue: "av", ave: "av", park: "pk", parkway: "pkwy", road: "rd", broadway: "bway", bway: "bway", square: "sq", boulevard: "blvd", center: "ctr", heights: "hts", place: "pl", east: "e", west: "w", north: "n", south: "s" };
+
 const tokens = (n) => n.toLowerCase().replace(/\[.*?\]|\(.*?\)|'/g, "").split(/[^a-z0-9]+/).filter(Boolean).map((w) => ABBR[w] ?? w);
+
 const norm = (n) => tokens(n).join("");
 
 function nameSim(a, b) {
   const A = new Set(tokens(a)), B = new Set(tokens(b));
   const both = [...A].filter((w) => B.has(w)).length;
+
   return both / (A.size + B.size - both || 1);
 }
 
 const overlap = (svcs, routes) => svcs.filter((v) => routes.has(v)).length;
 
 // Stations the MTA has renamed since the schematic was drawn, where the token
-// overlap is too thin for the name to win on its own.
-const RENAMED = { "149 St-Grand Concourse": "149 St-Hostos", "President St": "President St-Medgar Evers College" };
+// overlap is too thin for the name to win on its own. "name|services" when the
+// bare name is shared (the 6's 23 St is now 23 St-Baruch College; the R/W's isn't).
+const RENAMED = { "149 St-Grand Concourse": "149 St-Hostos", "President St": "President St-Medgar Evers College", "23 St|6": "23 St-Baruch College" };
 
-const res = await fetch("https://data.ny.gov/resource/39hk-dx4f.json?$limit=1000");
-const stops = (await res.json()).map((s) => ({
+// data.ny.gov intermittently hands Node a healthdata.ny.gov cert; retry
+async function get(url) {
+  for (let i = 0; ; i++) {
+    try { return await fetch(url); } catch (e) { if (i === 4) throw e; await new Promise((r) => setTimeout(r, 2000 * 2 ** i)); }
+  }
+}
+
+const stops = (await (await get("https://data.ny.gov/resource/39hk-dx4f.json?$limit=1000")).json()).map((s) => ({
   name: s.stop_name,
   key: norm(s.stop_name),
   routes: new Set(s.daytime_routes.split(" ")),
@@ -44,10 +57,12 @@ const stops = (await res.json()).map((s) => ({
   lat: +s.gtfs_latitude,
 }));
 
-// 1. affine fit (least squares) on confident pairs
+// ---- 1. affine fit (least squares) on confident pairs ----
 const pairs = [];
+
 for (const s of STATIONS) {
   const c = stops.filter((t) => t.key === norm(s.name) && overlap(s.svcs, t.routes) > 0);
+
   if (c.length === 1) pairs.push([s, c[0]]);
 }
 
@@ -55,44 +70,323 @@ function solve3(A, b) {
   // Cramer's rule on a 3x3 normal-equation system
   const det = (m) => m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
   const d = det(A);
+
   return [0, 1, 2].map((i) => det(A.map((row, r) => row.map((v, c) => (c === i ? b[r] : v)))) / d);
 }
 
-function fit(get) {
+function fit(pick) {
   const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]], b = [0, 0, 0];
+
   for (const [s, t] of pairs) {
-    const v = [s.x, s.y, 1], y = get(t);
-    for (let i = 0; i < 3; i++) { b[i] += v[i] * y; for (let j = 0; j < 3; j++) A[i][j] += v[i] * v[j]; }
+    const v = [s.x, s.y, 1], y = pick(t);
+
+    for (let i = 0; i < 3; i++) { b[i] += v[i] * y;
+
+ for (let j = 0; j < 3; j++) A[i][j] += v[i] * v[j]; }
   }
+
   return solve3(A, b);
 }
 
 const fx = fit((t) => t.lon), fy = fit((t) => t.lat);
-const predict = (s) => [fx[0] * s.x + fx[1] * s.y + fx[2], fy[0] * s.x + fy[1] * s.y + fy[2]];
-const metres = (a, b) => Math.hypot((a[0] - b[0]) * 84000, (a[1] - b[1]) * 111000);
 
-// 2. pick a stop per station
+const predict = (s) => [fx[0] * s.x + fx[1] * s.y + fx[2], fy[0] * s.x + fy[1] * s.y + fy[2]];
+
+// local metres — plenty accurate across one city
+const X = (lon) => (lon + 74) * 84300, Y = (lat) => (lat - 40.7) * 111000;
+
+const LON = (x) => x / 84300 - 74, LAT = (y) => y / 111000 + 40.7;
+
+const metres = (a, b) => Math.hypot(X(a[0]) - X(b[0]), Y(a[1]) - Y(b[1]));
+
+// ---- 2. pick a stop per station ----
 const geo = {};
+
 const report = [];
+
 for (const s of STATIONS) {
   const p = predict(s);
   let best = null, bestScore = -Infinity;
+
   for (const t of stops) {
-    const ov = overlap(s.svcs, t.routes);
-    const d = metres(p, [t.lon, t.lat]);
-    // name dominates; shared services next; the (rough) affine position only breaks ties
-    const score = nameSim(RENAMED[s.name] ?? s.name, t.name) * 10000 + ov * 1500 - d;
+    const score = nameSim(RENAMED[`${s.name}|${s.svcs.join("")}`] ?? RENAMED[s.name] ?? s.name, t.name) * 10000 + overlap(s.svcs, t.routes) * 1500 - metres(p, [t.lon, t.lat]);
+
     if (score > bestScore) { bestScore = score; best = t; }
   }
-  geo[s.id] = [+best.lon.toFixed(6), +best.lat.toFixed(6)];
-  if (best.key !== norm(s.name)) report.push(`${s.name} [${s.svcs.join("")}] -> ${best.name} [${[...best.routes].join("")}] ${Math.round(metres(p, [best.lon, best.lat]))}m`);
+
+  geo[s.id] = [best.lon, best.lat];
+
+  if (best.key !== norm(s.name)) report.push(`${s.name} [${s.svcs.join("")}] -> ${best.name} [${[...best.routes].join("")}]`);
+}
+
+
+// ---- 3. GTFS: tracks, stops, and which stops each route really calls at ----
+const zip = path.join(os.tmpdir(), "gtfs_subway.zip"), dir = path.join(os.tmpdir(), "gtfs_subway");
+
+fs.writeFileSync(zip, Buffer.from(await (await get("https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip")).arrayBuffer()));
+
+execFileSync("unzip", ["-o", "-q", zip, "shapes.txt", "stops.txt", "trips.txt", "stop_times.txt", "-d", dir]);
+
+const rows = (f) => fs.readFileSync(path.join(dir, f), "utf8").split(/\r?\n/).slice(1).filter(Boolean).map((l) => l.split(","));
+
+const tracks = new Map(); // shape_id -> { route, pts: [[x, y]] }  (ids look like "A..N55R", "GS.N01R")
+
+for (const [id, , lat, lon] of rows("shapes.txt")) {
+  if (!tracks.has(id)) tracks.set(id, { route: id.split(".")[0], pts: [] });
+  tracks.get(id).pts.push([X(+lon), Y(+lat)]);
+}
+
+const gstops = {}; // parent stop id -> { id, name, p: [x, y] }
+
+for (const [id, name, lat, lon, type] of rows("stops.txt")) if (type === "1") gstops[id] = { id, name, p: [X(+lon), Y(+lat)] };
+
+const tripRoute = {};
+
+for (const [route, trip] of rows("trips.txt")) tripRoute[trip] = route;
+
+const routeStops = {}; // route -> Set(parent stop id)
+
+for (const [trip, stop] of rows("stop_times.txt")) (routeStops[tripRoute[trip]] ??= new Set()).add(stop.slice(0, 3));
+
+// our service -> GTFS route ids. W and Z have stops but no tracks of their own;
+// they borrow the track of whatever route also serves both ends (N/R, J).
+const ROUTES = { S: ["GS", "FS", "H"], SIR: ["SI"], 6: ["6", "6X"], 7: ["7", "7X"], F: ["F", "FX"] };
+
+const routesOf = (svc) => ROUTES[svc] ?? [svc];
+
+// The platform a service really uses at a schematic station: the nearest stop
+// it calls at, near where the name match put the station (complexes like Times
+// Sq or Fulton St span several stops a few hundred metres apart).
+const platformCache = {};
+
+function platform(stationId, svc) {
+  const key = stationId + "|" + svc;
+
+  if (key in platformCache) return platformCache[key];
+  const st = STATIONS.find((s) => s.id === +stationId), at = [X(geo[stationId][0]), Y(geo[stationId][1])];
+  // Own routes' stops are preferred, but any route's stop with the right name can
+  // win: the feed reflects this week's service, and the M is sometimes routed
+  // via 63 St (57 St) instead of its usual 53 St stops.
+  const own = new Set(routesOf(svc).flatMap((r) => [...(routeStops[r] ?? [])]));
+  let best = null, bestScore = Infinity;
+
+  for (const g of Object.values(gstops)) {
+    const d = Math.hypot(g.p[0] - at[0], g.p[1] - at[1]);
+
+    if (d > 700) continue;
+    const score = d - 300 * nameSim(st.name, g.name) + (own.has(g.id) ? 0 : 500);
+
+    if (score < bestScore) { bestScore = score; best = g; }
+  }
+
+  return (platformCache[key] = best);
+}
+
+// nearest point on a polyline: distance, fractional index along it, the point
+function project(pts, p) {
+  let best = { d: Infinity, at: 0, q: pts[0] };
+
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, ay] = pts[i], [bx, by] = pts[i + 1], dx = bx - ax, dy = by - ay;
+    const L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((p[0] - ax) * dx + (p[1] - ay) * dy) / L)) : 0;
+    const q = [ax + t * dx, ay + t * dy], d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+
+    if (d < best.d) best = { d, at: i + t, q };
+  }
+
+  return best;
+}
+
+function slice(pts, a, b) {
+  const [lo, hi] = a.at <= b.at ? [a, b] : [b, a];
+  const out = [lo.q];
+
+  for (let i = Math.floor(lo.at) + 1; i <= Math.floor(hi.at); i++) out.push(pts[i]);
+  out.push(hi.q);
+
+  return a.at <= b.at ? out : out.reverse();
+}
+
+const pathLen = (pts) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
+
+// Douglas–Peucker, so a slice keeps its curves but not every few-metre GTFS point
+function simplify(pts, tol) {
+  if (pts.length < 3) return pts;
+  const [ax, ay] = pts[0], [bx, by] = pts[pts.length - 1], L = Math.hypot(bx - ax, by - ay) || 1;
+  let far = 0, at = 0;
+
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = Math.abs((bx - ax) * (ay - pts[i][1]) - (ax - pts[i][0]) * (by - ay)) / L;
+
+    if (d > far) { far = d; at = i; }
+  }
+
+  return far <= tol ? [pts[0], pts[pts.length - 1]] : [...simplify(pts.slice(0, at + 1), tol).slice(0, -1), ...simplify(pts.slice(at), tol)];
+}
+
+// ---- 4. each segment = its service's track sliced between its two platforms ----
+function track(svc, A, B) {
+  const direct = Math.hypot(B.p[0] - A.p[0], B.p[1] - A.p[1]);
+  const own = routesOf(svc);
+  const borrow = Object.keys(routeStops).filter((r) => routeStops[r].has(A.id) && routeStops[r].has(B.id));
+
+  for (const routes of [own, borrow]) {
+    let best = null;
+
+    for (const sh of tracks.values()) {
+      if (!routes.includes(sh.route)) continue;
+      const pa = project(sh.pts, A.p), pb = project(sh.pts, B.p);
+
+      if (pa.d > 150 || pb.d > 150) continue; // 2 Av's shape runs ~100 m off its stops
+      const pts = slice(sh.pts, pa, pb), len = pathLen(pts);
+
+      if (len > direct * 2.5 + 300) continue; // went the long way round a loop
+
+      if (!best || len < best.len) best = { pts, len };
+    }
+
+    if (best) return best.pts;
+  }
+
+  return null;
+}
+
+// The schematic has a few links that are no real track, each standing in for a
+// real stretch it lacks: the A's 104 St - Aqueduct Racetrack (for Rockaway Blvd -
+// 104 St) and the R's Canal St - DeKalb Av (for Jay St - DeKalb Av). Those ids are
+// drawn along the stretch they stand in for.
+const VIA = { "A|93552|93589": [93543, 93552], "R|91885|92660": [91876, 91885] };
+
+// Phantom links with no track and nothing missing to stand in for: the 5 has a
+// Bronx Park East - Morris Park link beside the real E 180 St - Morris Park.
+// Left off the map; they still count in the log like any other segment.
+const SKIP = new Set(["5|95872|96087"]);
+
+const lines = [], problems = [];
+
+const nameOf = (id) => STATIONS.find((s) => s.id === +id).name;
+
+for (const sg of SEGMENTS) {
+  if (SKIP.has(sg.id)) continue;
+  const [a, b] = VIA[sg.id] ?? [sg.a, sg.b];
+  const A = platform(a, sg.svc), B = platform(b, sg.svc);
+  let pts = A && B && A.id !== B.id ? track(sg.svc, A, B) : null;
+
+  if (!pts) {
+    problems.push(`${sg.svc}: ${nameOf(a)} (${A?.name ?? "no stop"}) - ${nameOf(b)} (${B?.name ?? "no stop"})`);
+    pts = [A?.p ?? [X(geo[a][0]), Y(geo[a][1])], B?.p ?? [X(geo[b][0]), Y(geo[b][1])]];
+  }
+
+  // pin both ends to the platform itself, so every service meeting there touches it
+  if (A) pts[0] = A.p;
+
+  if (B) pts[pts.length - 1] = B.p;
+  lines.push({ sg, pts: simplify(pts, 2), A: VIA[sg.id] ? null : A, B: VIA[sg.id] ? null : B });
+}
+
+// ---- 5. station markers: one dot per platform used, linked within a complex ----
+const platforms = {}; // station id -> Map(stop id -> { p, n })
+
+for (const { sg, A, B } of lines) {
+  for (const [sid, g] of [[sg.a, A], [sg.b, B]]) {
+    if (!g) continue;
+    const m = (platforms[sid] ??= new Map());
+
+    if (!m.has(g.id)) m.set(g.id, { p: g.p, svcs: new Set() });
+    m.get(g.id).svcs.add(sg.svc);
+  }
+}
+
+const ll = (p) => [+LON(p[0]).toFixed(5), +LAT(p[1]).toFixed(5)];
+
+const markers = [], links = [];
+
+for (const st of STATIONS) {
+  const ps = [...(platforms[st.id]?.values() ?? [])];
+
+  if (!ps.length) ps.push({ p: [X(geo[st.id][0]), Y(geo[st.id][1])], svcs: new Set(st.svcs) });
+
+  for (const p of ps) markers.push({ id: st.id, n: p.svcs.size, c: ll(p.p) });
+
+  // chain each platform to its nearest already-linked one (a tiny spanning tree)
+  for (let i = 1; i < ps.length; i++) {
+    const near = ps.slice(0, i).reduce((m, q) => (Math.hypot(q.p[0] - ps[i].p[0], q.p[1] - ps[i].p[1]) < Math.hypot(m.p[0] - ps[i].p[0], m.p[1] - ps[i].p[1]) ? q : m));
+    links.push({ id: st.id, c: [ll(near.p), ll(ps[i].p)] });
+  }
+}
+
+// ---- 6. side-by-side order from what actually shares the tunnel ----
+// The diagram fans services within a trunk, but on real track trunks share:
+// E/F/M/R on Queens Blvd, 2/3/4/5 on Eastern Pkwy, D/N/R on 4 Av. A segment's
+// bundle is every service whose track runs within 15 m of it, parallel, along
+// most of its length — tight, because separate tunnels converge to 30-40 m (7 Av
+// and Broadway at Times Sq) without sharing anything. Ordered by the global
+// service order, the segment takes its rank. Lines are stored heading
+// east-or-north at their midpoint, so the offset's "left" is the same side for
+// every member of a bundle.
+const ORDER = SERVICES.map((s) => s.svc);
+
+function along(pts, f) {
+  const half = pathLen(pts) * f;
+  let run = 0;
+
+  for (let i = 1; i < pts.length; i++) {
+    const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]) || 1e-9;
+
+    if (run + l >= half || i === pts.length - 1) {
+      const t = Math.min(1, (half - run) / l);
+
+      return { p: [pts[i - 1][0] + t * (pts[i][0] - pts[i - 1][0]), pts[i - 1][1] + t * (pts[i][1] - pts[i - 1][1])], v: [(pts[i][0] - pts[i - 1][0]) / l, (pts[i][1] - pts[i - 1][1]) / l] };
+    }
+
+    run += l;
+  }
+}
+
+// services whose track runs right alongside point m (heading m.v)
+function alongside(m, self) {
+  const found = new Set();
+
+  for (const T of lines) {
+    if (T.sg.svc === self || found.has(T.sg.svc)) continue;
+    const pr = project(T.pts, m.p);
+
+    if (pr.d > 15) continue;
+    const i = Math.min(Math.floor(pr.at), T.pts.length - 2), a = T.pts[i], b = T.pts[i + 1];
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+
+    if (Math.abs(((b[0] - a[0]) * m.v[0] + (b[1] - a[1]) * m.v[1]) / l) > 0.85) found.add(T.sg.svc);
+  }
+
+  return found;
+}
+
+const SAMPLES = [0.2, 0.35, 0.5, 0.65, 0.8];
+
+const out = {};
+
+for (const L of lines) {
+  const m = along(L.pts, 0.5), flip = m.v[0] + m.v[1] < 0;
+  const seen = {};
+
+  for (const f of SAMPLES) for (const svc of alongside(along(L.pts, f), L.sg.svc)) seen[svc] = (seen[svc] ?? 0) + 1;
+  const bundle = [L.sg.svc, ...Object.keys(seen).filter((svc) => seen[svc] >= 3)];
+  const svcs = bundle.sort((x, y) => ORDER.indexOf(x) - ORDER.indexOf(y));
+  out[L.sg.id] = { o: svcs.indexOf(L.sg.svc) - (svcs.length - 1) / 2, c: (flip ? [...L.pts].reverse() : L.pts).map(ll) };
 }
 
 fs.writeFileSync(
   OUT,
   "// AUTO-GENERATED by scripts/generate-subway-geo.mjs from MTA Subway Stations\n" +
-    "// (data.ny.gov 39hk-dx4f). Station id (as in subway-data.js) -> [lon, lat].\n\n" +
-    "export const GEO = " + JSON.stringify(geo) + ";\n",
+    "// (data.ny.gov 39hk-dx4f) and MTA GTFS (shapes, stops, stop_times).\n" +
+    "// LINES: segment id -> its real track `c` ([lon, lat][]) and `o`, its slot among\n" +
+    "// the services sharing that stretch. STOPS: one marker per platform a station's\n" +
+    "// services use (id = station id). LINKS: walkways joining a complex's platforms.\n\n" +
+    "export const LINES = " + JSON.stringify(out) + ";\n\n" +
+    "export const STOPS = " + JSON.stringify(markers) + ";\n\n" +
+    "export const LINKS = " + JSON.stringify(links) + ";\n",
 );
 
-console.log(`${pairs.length} anchor pairs, ${STATIONS.length} stations; name mismatches:\n` + report.join("\n"));
+console.log(`${pairs.length} anchor pairs, ${STATIONS.length} stations; renamed/abbreviated matches:\n` + report.join("\n"));
+
+console.log(`\n${problems.length} segments with no track found (drawn straight):\n` + problems.join("\n"));

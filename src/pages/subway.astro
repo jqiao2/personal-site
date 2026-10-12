@@ -396,6 +396,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			// ---- helpers ----
 			function el(name: string, attrs: Record<string, string | number>): SVGElement {
+				// SAFETY: created in the SVG namespace, so it is always an SVGElement.
 				const e = document.createElementNS(SVGNS, name) as SVGElement;
 
 				for (const kk in attrs) e.setAttribute(kk, String(attrs[kk]));
@@ -903,6 +904,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			});
 
 			document.getElementById('sm-import')!.addEventListener('change', (e) => {
+				// SAFETY: this listener is on #sm-import, an <input type="file">.
 				const input = e.target as HTMLInputElement;
 				const f = input.files && input.files[0];
 
@@ -946,7 +948,10 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 				if (!isMap) return;
 
-				if (geo) { geo.resize(); return; }
+				if (geo) { geo.resize();
+
+ return; }
+
 				const { mountGeoMap } = await import('../scripts/subway-geo-map');
 				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt);
 				geo.show(marks);
