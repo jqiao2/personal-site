@@ -205,6 +205,10 @@ const showtimesHref = `https://www.google.com/search?q=${encodeURIComponent(
 // its showtimes/tickets. Owner-only, on unseen films, for A-List.
 const amcHref = `https://www.amctheatres.com/search?q=${encodeURIComponent(movie.title)}`;
 
+// Paradiso (NYC repertory listings) — resolved to its own film id on click; see
+// src/pages/api/films/paradiso.ts. Opens the iOS app via universal link.
+const paradisoHref = `/api/films/paradiso?${new URLSearchParams({ tmdb: String(tmdbId), title: movie.title })}`;
+
 // Whether this film is actually in the Jellyfin library can't be answered here —
 // the server is tailnet-only and this render happens on Vercel. So we ship the
 // config and let the page ask from the browser; see the script at the foot of the
@@ -306,6 +310,9 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 									</a>
 									<a class="btn-ghost" href={amcHref} target="_blank" rel="noopener noreferrer">
 										<span class="btn-ghost__icon">🎬</span><span>AMC showtimes</span>
+									</a>
+									<a class="btn-ghost" href={paradisoHref} target="_blank" rel="noopener noreferrer">
+										<span class="btn-ghost__icon">🎞</span><span>Paradiso</span>
 									</a>
 									<a class="btn-ghost" href={downloadHref} target="_blank" rel="noopener noreferrer">
 										<span class="btn-ghost__icon">↓</span><span>Download</span>
