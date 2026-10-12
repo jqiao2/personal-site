@@ -19,6 +19,7 @@ import { verdictAt } from '../../../lib/verdict';
 import { starText } from '../../../lib/format';
 import PinButton from '../../../components/PinButton.astro';
 import { isPinned } from '../../../lib/pins';
+import { activitiesForMeal, activitiesNear, shortDay, withLinked } from '../../../lib/activity-meals';
 
 export const prerender = false;
 
@@ -37,6 +38,12 @@ if (!visit) return new Response('Not found', { status: 404 });
 const [tagOptions, friendOptions] = isOwner ? await Promise.all([listTags(), listFriends()]) : [[], []];
 
 const pinned = isOwner ? await isPinned('meal', visit.id) : false;
+
+const linkedActivities = await activitiesForMeal(visit.id, isOwner);
+
+const activityOptions = isOwner ? withLinked(linkedActivities, await activitiesNear(visit.visited_on)) : [];
+
+const linkedActivityIds = new Set(linkedActivities.map((a) => a.id));
 
 const verdict = verdictAt(visit.verdict);
 
@@ -87,6 +94,18 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 							)
 						}
 					</div>
+					{
+						linkedActivities.length > 0 && (
+							<div class="entry__moves">
+								{linkedActivities.map((a) => (
+									<a class="entry__move" href={`/activities/${a.id}`}>
+										{a.sportLabel}: {a.title}
+										{a.distance && <span class="entry__move-dist">{a.distance}</span>}
+									</a>
+								))}
+							</div>
+						)
+					}
 				</header>
 
 				{photos.length > 0 && <PhotoWall photos={photos} height={230} />}
@@ -161,6 +180,20 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 								Edit this entry
 							</button>
 							<PinButton track="meal" refId={visit.id} pinned={pinned} />
+							{activityOptions.length > 0 && (
+								<form class="links" method="POST" action={`/api/restaurants/visits/${visit.id}/activities`}>
+									<div class="rl-label">Activities</div>
+									{activityOptions.map((a) => (
+										<label class="links__row">
+											<input type="checkbox" name="activity_id" value={a.id} checked={linkedActivityIds.has(a.id)} />
+											<span>
+												{a.title} · {shortDay(a.local_date)}
+											</span>
+										</label>
+									))}
+									<button type="submit" class="owner__link">Save links</button>
+								</form>
+							)}
 						</div>
 					)
 				}
@@ -394,6 +427,42 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 		--pin-border: var(--rule);
 		--pin-accent: var(--terracotta);
 		--pin-accent-bg: #f6e7d4;
+	}
+	.entry__moves {
+		margin-top: 9px;
+		display: flex;
+		gap: 14px;
+		flex-wrap: wrap;
+		font-size: 13px;
+	}
+	.entry__move {
+		color: var(--ink-2);
+		text-decoration: underline;
+		text-decoration-color: var(--rule);
+		text-underline-offset: 2px;
+	}
+	.entry__move:hover {
+		color: var(--terracotta);
+		text-decoration-color: currentColor;
+	}
+	.entry__move-dist {
+		margin-left: 6px;
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--ink-3);
+	}
+	.links {
+		margin-top: 14px;
+		padding-top: 12px;
+		border-top: 1px solid var(--rule-2);
+	}
+	.links__row {
+		display: flex;
+		align-items: baseline;
+		gap: 7px;
+		margin-top: 7px;
+		font-size: 12.5px;
+		color: var(--ink-2);
 	}
 	.owner__link {
 		display: block;

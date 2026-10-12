@@ -59,6 +59,7 @@ import {
 } from '../../lib/activities';
 import { requireOwner } from '../../lib/auth';
 import { isPinned } from '../../lib/pins';
+import { mealsForActivity, mealsNear, setLinks, shortDay, withLinked } from '../../lib/activity-meals';
 import PinButton from '../../components/PinButton.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { sportMeta, sportIcon, formatStat, SPORTS, type StatKey, type StatRow } from '../../lib/sports';
@@ -168,6 +169,11 @@ if (Astro.request.method === 'POST') {
 				),
 			],
 		});
+
+		// Only when the editor rendered the meal checkboxes: an unticked box is
+		// absent from the post, so without the marker "no meals" and "no field"
+		// would look the same and a save would unlink everything.
+		if (form.has('meal_links')) await setLinks('activity_id', id, form.getAll('meal_id').map(Number));
 	} else if (action === 'reset-runs') {
 		// Drop the override, reverting display and exertion to auto-detection.
 		await saveSkiSegments(id, null);
@@ -475,6 +481,12 @@ const titleError = Astro.url.searchParams.get('error') === 'title';
 // already linked keeps its editor even if the sport was later changed.
 const showMovie = activity.sport === 'virtual_ride' || activity.movie_tmdb_id != null;
 
+const linkedMeals = await mealsForActivity(activity.id);
+
+const mealOptions = editing ? withLinked(linkedMeals, await mealsNear(activity.local_date)) : [];
+
+const linkedMealIds = new Set(linkedMeals.map((m) => m.id));
+
 const pageTitle = `${activity.title} — Jason's activity log`;
 
 const glyph = sportIcon(activity.sport);
@@ -609,6 +621,22 @@ const exInk = exertionInk(activity.exertion);
 							</div>
 						)}
 
+						{mealOptions.length > 0 && (
+							/* Meals from the same day, plus any already
+							   linked. Ticked is linked; the marker tells the save handler
+							   these boxes were on the form. */
+							<div class="edit__field">
+								<span class="edit__label">🍽 Meals</span>
+								<input type="hidden" name="meal_links" value="1" />
+								{mealOptions.map((m) => (
+									<label class="edit__toggle">
+										<input type="checkbox" name="meal_id" value={m.id} checked={linkedMealIds.has(m.id)} />
+										<span>{m.restaurant_name} · {shortDay(m.visited_on)}</span>
+									</label>
+								))}
+							</div>
+						)}
+
 						<label class="edit__toggle">
 							<input type="checkbox" name="private" value="public" checked={!activity.private} />
 							<span>Public. Anyone can see this activity, its route and its numbers.</span>
@@ -668,6 +696,11 @@ const exInk = exertionInk(activity.exertion);
 									<span aria-hidden="true">🎬</span> {activity.movie_title || 'Ride movie'}
 								</a>
 							)}
+							{linkedMeals.map((m) => (
+								<a class="head__movie" href={`/restaurants/diary/${m.id}`}>
+									<span aria-hidden="true">🍽</span> {m.restaurant_name}
+								</a>
+							))}
 							{activity.private_notes && (
 								<div class="head__private">
 									<div class="head__private-label"><span aria-hidden="true">🔒</span> Private note</div>
@@ -1103,7 +1136,7 @@ const exInk = exertionInk(activity.exertion);
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
-		margin-top: 0.85rem;
+		margin: 0.85rem 1.1rem 0 0;
 		font-size: 0.9rem;
 		color: #1c6e8c;
 		text-decoration: none;
