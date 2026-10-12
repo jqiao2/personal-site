@@ -39,6 +39,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { computeExertion } from '../src/lib/exertion.ts';
+import { unpackStreams } from '../src/lib/stream-codec.ts';
 
 // ---------------------------------------------------------------------------
 // CLI
@@ -185,9 +186,9 @@ for (const a of activities) {
 	// Streams are fetched one activity at a time on purpose: at full device
 	// resolution a single ride's arrays run to tens of thousands of samples,
 	// and a page of fifty would be hundreds of megabytes in one response.
-	const { data: s, error: sErr } = await db
+	const { data: packed, error: sErr } = await db
 		.from('activity_streams')
-		.select('time_s, power_w, heartrate, altitude_m, distance_m, moving')
+		.select('time_s_packed, power_w_packed, heartrate_packed, altitude_m_packed, distance_m_packed, moving')
 		.eq('activity_id', a.id)
 		.maybeSingle();
 
@@ -195,6 +196,8 @@ for (const a of activities) {
 		stats.failures.push(`${a.id}: ${sErr.message}`);
 		continue;
 	}
+
+	const s = packed ? unpackStreams(packed) : null;
 
 	let result;
 

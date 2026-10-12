@@ -104,8 +104,8 @@ export interface Thresholds {
 	weight_kg: number | null;
 }
 
-/** Per-sample streams, already unpacked from the `activity_streams` JSONB
- *  columns. Every array is optional — a treadmill run may have heartrate but
+/** Per-sample streams, already unpacked from `activity_streams` (see
+ *  stream-codec.ts). Every array is optional — a treadmill run may have heartrate but
  *  no altitude; a trainer ride has power but no distance. `moving` is a
  *  parallel boolean array (device-reported "not stopped"), used to trim the
  *  power/HR streams down to moving samples before they're fed to NP/TRIMP so

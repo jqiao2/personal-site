@@ -35,6 +35,7 @@ import {
 	UnknownSportError,
 } from '../src/lib/ingest/canonical.ts';
 import { parseGpx, parseTcx } from '../src/lib/ingest/gpx.ts';
+import { packStreams, unpackStreams } from '../src/lib/stream-codec.ts';
 import { parseFit } from '../src/lib/ingest/fit.ts';
 import { SPORT_META } from '../src/lib/sports.ts';
 
@@ -288,9 +289,10 @@ const TH = {
 		},
 	};
 
-	const { activity, streams } = toRows(withStreams, TH);
+	const { activity, streams: row } = toRows(withStreams, TH);
+	const streams = unpackStreams(row);
 
-	assert.equal(streams.sample_count, n, 'every sample is stored, not a decimated subset');
+	assert.equal(row.sample_count, n, 'every sample is stored, not a decimated subset');
 	for (const key of ['time_s', 'power_w', 'heartrate', 'latlng', 'moving']) {
 		assert.equal(streams[key].length, n, `${key} must be stored whole`);
 	}
@@ -306,6 +308,22 @@ const TH = {
 
 	assert.equal(activity.exertion_method, 'tss');
 	assert.equal(activity.exertion_confidence, 'measured');
+
+	// Packing is lossless at the stored precision, and a null sample (GPS
+	// dropout) stays null without throwing off the samples after it.
+	const plain = {
+		latlng: [[47.612345, -122.333333], [null, null], [47.612401, -122.333299]],
+		altitude_m: [12.3, null, -4.1],
+		speed_ms: [3.09, 0, 12.75],
+		grade: [-52.29, 0.01, 7],
+		temp_c: [24.5, 24, -3.2],
+		moving: [true, null, false],
+	};
+
+	assert.deepEqual(unpackStreams(packStreams(plain)), {
+		...plain,
+		time_s: null, distance_m: null, heartrate: null, cadence: null, power_w: null,
+	});
 }
 
 // ---------------------------------------------------------------------------

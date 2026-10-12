@@ -14,6 +14,7 @@ import { supabaseAdmin, supabasePublic } from './supabase';
 import { siteYear } from './day';
 import { sportMeta, type SportFamily } from './sports';
 import { decodePolyline, encodePolyline, mercator, simplify, splitOnGaps } from './route-shape';
+import { unpackStreams, type PackedStreams } from './stream-codec';
 
 // ---------------------------------------------------------------------------
 // Migration-tier degradation — mirrors films.ts's isMissingCreditColumn /
@@ -837,7 +838,12 @@ export async function getActivityStreams(id: number): Promise<ActivityStreams | 
 		throw new Error(`getActivityStreams failed: ${error.message}`);
 	}
 
-	return (data as ActivityStreams | null) ?? null;
+	if (!data) return null;
+
+	// SAFETY: select('*') on activity_streams returns exactly these columns (migration 0070).
+	const row = data as PackedStreams & { activity_id: number; sample_count: number };
+
+	return { activity_id: row.activity_id, sample_count: row.sample_count, ...unpackStreams(row) };
 }
 
 /** An activity's laps, in order. [] for an activity with none. */

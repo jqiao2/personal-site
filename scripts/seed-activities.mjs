@@ -30,6 +30,7 @@
 // nothing else writes to it yet, so a full clear-and-reinsert on --reset is
 // safe and exact rather than approximate.
 import { createClient } from '@supabase/supabase-js';
+import { packStreams } from '../src/lib/stream-codec.ts';
 
 // --- CLI -------------------------------------------------------------------
 const args = process.argv.slice(2);
@@ -677,17 +678,19 @@ function buildStreams({ points, elevations, movingSeconds, avgHr, maxHr, avgPowe
 
 	return {
 		sample_count: sampleCount,
-		time_s,
-		latlng,
-		altitude_m,
-		distance_m: distArr,
-		heartrate: hasHr ? wobble(avgHr, 8).map((v) => Math.max(80, Math.min(maxHr, v))) : null,
-		cadence: null,
-		power_w: hasPower ? wobble(avgPower, avgPower * 0.15).map((v) => Math.max(0, Math.min(maxPower, v))) : null,
-		speed_ms: wobble(avgSpeed, avgSpeed * 0.2).map((v) => round2(Math.max(0, Math.min(maxSpeed, v)))),
-		temp_c: idx.map(() => round1(temp + between(-1, 1))),
-		grade: idx.map((i, k) => (k === 0 ? 0 : round1(((altitude_m[k] - altitude_m[k - 1]) / (distArr[k] - distArr[k - 1] || 1)) * 100))),
-		moving: idx.map(() => true),
+		...packStreams({
+			time_s,
+			latlng,
+			altitude_m,
+			distance_m: distArr,
+			heartrate: hasHr ? wobble(avgHr, 8).map((v) => Math.max(80, Math.min(maxHr, v))) : null,
+			cadence: null,
+			power_w: hasPower ? wobble(avgPower, avgPower * 0.15).map((v) => Math.max(0, Math.min(maxPower, v))) : null,
+			speed_ms: wobble(avgSpeed, avgSpeed * 0.2).map((v) => round2(Math.max(0, Math.min(maxSpeed, v)))),
+			temp_c: idx.map(() => round1(temp + between(-1, 1))),
+			grade: idx.map((i, k) => (k === 0 ? 0 : round1(((altitude_m[k] - altitude_m[k - 1]) / (distArr[k] - distArr[k - 1] || 1)) * 100))),
+			moving: idx.map(() => true),
+		}),
 	};
 }
 
@@ -1346,6 +1349,10 @@ function lit(v) {
 	return `'${String(v).replace(/'/g, "''")}'`;
 }
 
+function arrayLit(v) {
+	return `'{${v.map((x) => x ?? 'NULL').join(',')}}'`;
+}
+
 function jsonLit(v) {
 	return v == null ? 'null' : `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
 }
@@ -1436,16 +1443,16 @@ function buildSql() {
 
 	if (streamRows.length) {
 		out.push('-- activity_streams');
-		const scols = ['activity_id', 'sample_count', 'time_s', 'latlng', 'altitude_m', 'distance_m', 'heartrate', 'cadence', 'power_w', 'speed_ms', 'temp_c', 'grade', 'moving'];
+		const scols = Object.keys(streamRows[0][1]);
 
 		for (let i = 0; i < streamRows.length; i += 4) {
 			const batch = streamRows.slice(i, i + 4);
-			out.push(`insert into public.activity_streams (${scols.join(', ')}) values`);
+			out.push(`insert into public.activity_streams (activity_id, ${scols.join(', ')}) values`);
 			out.push(
 				batch
 					.map(
 						([key, s]) =>
-							`\t(${key}, ${s.sample_count}, ${jsonLit(s.time_s)}, ${jsonLit(s.latlng)}, ${jsonLit(s.altitude_m)}, ${jsonLit(s.distance_m)}, ${jsonLit(s.heartrate)}, ${jsonLit(s.cadence)}, ${jsonLit(s.power_w)}, ${jsonLit(s.speed_ms)}, ${jsonLit(s.temp_c)}, ${jsonLit(s.grade)}, ${jsonLit(s.moving)})`,
+							`\t(${key}, ${scols.map((c) => (Array.isArray(s[c]) ? arrayLit(s[c]) : String(s[c] ?? 'null'))).join(', ')})`,
 					)
 					.join(',\n') + ';',
 			);

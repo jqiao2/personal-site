@@ -35,3 +35,4 @@ add or update a pattern.
 | [0027](patterns/0027-letterboxd-rss-catch-up.md) | Catching the film log up from Letterboxd RSS | strategy | films were logged on Letterboxd while the site could not take them |
 | [0028](patterns/0028-gazetteer-misses-counters-inside-groceries.md) | The gazetteer misses food counters inside a grocery licence | failure-mode | a real food place is missing from suggestions though DOHMH + Overture are imported; Overture import errors on `categories` |
 | [0029](patterns/0029-form-post-redirect-skipped-write-stamp.md) | A form post that redirects skipped the owner's write stamp | failure-mode | an owner form post 303s back and the page shows stale data |
+| [0030](patterns/0030-numeric-arrays-delta-encode-not-float.md) | Shrinking numeric arrays: delta-encode, don't switch to floats | strategy | a JSONB/array table of numeric series is eating the DB size cap |

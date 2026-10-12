@@ -652,20 +652,28 @@ partial unique on `favorite_rank where favorite_rank is not null`,
 One row per activity. Streams are big and are only read on the detail page, so
 they never join the list queries.
 
+Each numeric stream is stored as an `int[]` of fixed-point **deltas**: sample N
+is `round(v × scale)` minus the previous non-null sample's (migration 0070).
+Consecutive samples differ by small, repeating amounts, so the table compresses
+to about a third of what JSONB took. Never read or write the `_packed` columns
+by hand: `src/lib/stream-codec.ts` (`packStreams` / `unpackStreams`) holds the
+scales, and `toRows` / `getActivityStreams` already go through it.
+
 ```
-activity_id  bigint pk references activities(id) on delete cascade
-sample_count integer not null
-time_s       jsonb   -- int[] seconds from start
-latlng       jsonb   -- [[lat,lng], …]
-altitude_m   jsonb
-distance_m   jsonb
-heartrate    jsonb
-cadence      jsonb
-power_w      jsonb
-speed_ms     jsonb
-temp_c       jsonb
-grade        jsonb
-moving       jsonb   -- bool[]
+activity_id       bigint pk references activities(id) on delete cascade
+sample_count      integer not null
+time_s_packed     int[]   -- seconds        ×1
+lat_packed        int[]   -- degrees        ×1e6
+lng_packed        int[]   -- degrees        ×1e6
+altitude_m_packed int[]   -- metres         ×10
+distance_m_packed int[]   -- metres         ×10
+heartrate_packed  int[]   -- bpm            ×1
+cadence_packed    int[]   -- rpm / spm      ×1
+power_w_packed    int[]   -- watts          ×1
+speed_ms_packed   int[]   -- metres/second  ×100
+temp_c_packed     int[]   -- °C             ×10
+grade_packed      int[]   -- percent        ×100
+moving            boolean[]
 ```
 
 ### `activity_laps`
