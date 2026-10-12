@@ -320,7 +320,9 @@ for (const st of STATIONS) {
 // ---- 6. side-by-side slots, worked out along each line (scripts/subway-bundles.mjs) ----
 const sections = sectionLines(lines, SERVICES.map((s) => s.svc));
 
-const out = Object.fromEntries(Object.entries(sections).map(([id, pieces]) => [id, pieces.map((pc) => ({ o: pc.o, c: pc.pts.map(ll) }))]));
+// Line coordinates keep 6 decimals (~0.1 m): at 5 (~1 m) a short edge's direction
+// is noise, and line-offset pushes the line sideways along it.
+const out = Object.fromEntries(Object.entries(sections).map(([id, pieces]) => [id, pieces.map((pc) => ({ o: pc.o, c: pc.pts.map(([x, y]) => [+LON(x).toFixed(6), +LAT(y).toFixed(6)]) }))]));
 
 fs.writeFileSync(
   OUT,

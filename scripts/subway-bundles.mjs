@@ -12,13 +12,15 @@
 //   2. A straight's bundle is every service whose track runs alongside it,
 //      recorded from both sides (see 2 below). Its slot is the service's rank
 //      in that bundle by the global service order.
-//   3. Left/right is read once per straight, against one fixed axis (AXIS), so
-//      every member of a bundle means the same side.
+//   3. Left/right is read once per connected group of straights (bundle mates,
+//      and a service's straights through curves, stations and junctions), against
+//      one fixed axis (AXIS) — so bundle mates agree and nothing mirrors.
 //   4. Through a curve the slot interpolates from the straight before to the
 //      one after. At a station the two segments of a service meet halfway
 //      between their slots, easing in over STATION_EASE m.
-//   5. The interpolated stretches are drawn as small constant pieces (1/QUANT of
-//      a slot each), since `line-offset` is constant per feature.
+//   5. The interpolated stretches are drawn as constant pieces (1/QUANT of a slot
+//      each, ends on track vertices, none tiny), since `line-offset` is constant
+//      per feature.
 
 const SAME_TRACK = 15; // any parallel track this close shares the bundle
 
@@ -34,7 +36,13 @@ const CHECK = 150;
 
 const STATION_EASE = 80;
 
-const QUANT = 16;
+const QUANT = 4; // a shift is drawn in quarter-slot steps
+
+const SNAP = 6; // piece ends move to a track vertex this close
+
+const MIN_PIECE = 8;
+
+const MIN_EDGE = 2;
 
 const CELL = 50;
 
@@ -60,10 +68,15 @@ function at(pts, acc, a) {
 }
 
 // the part of a polyline between arc lengths a0 and a1
+// (no edge shorter than MIN_EDGE: see the piece snapping in sectionLines)
 function cut(pts, acc, a0, a1) {
   const out = [at(pts, acc, a0).p];
+  let last = a0;
 
-  for (let i = 1; i < pts.length - 1; i++) if (acc[i] > a0 && acc[i] < a1) out.push(pts[i]);
+  for (let i = 1; i < pts.length - 1; i++) {
+    if (acc[i] - last >= MIN_EDGE && a1 - acc[i] >= MIN_EDGE) { out.push(pts[i]); last = acc[i]; }
+  }
+
   out.push(at(pts, acc, a1).p);
 
   return out;
@@ -218,27 +231,21 @@ export function sectionLines(lines, order) {
         if (h.count < Math.max(2, Math.ceil(n * 0.4))) continue;
         s.shares.add(svc);
 
-        for (const r of h.refs) back.push([r, l.sg.svc]);
+        for (const r of h.refs) back.push([r, l.sg.svc, l, s]);
       }
     }
   }
 
-  for (const [r, svc] of back) {
+  const sharing = []; // [line, straight, other line, other straight]: bundle mates
+
+  for (const [r, svc, l, s] of back) {
     const [li, si] = r.split(",").map(Number);
     L[li].straights[si].shares.add(svc);
+    sharing.push([l, s, L[li], L[li].straights[si]]);
   }
 
-  // 3. each straight's slot, read against the line's own stored direction
-  for (const l of L) {
-    for (const s of l.straights) {
-      const set = [...s.shares].sort((x, y) => order.indexOf(x) - order.indexOf(y));
-      const slot = set.indexOf(l.sg.svc) - (set.length - 1) / 2;
-      const t = at(l.pts, l.acc, (s.a0 + s.a1) / 2).t;
-      s.off = t[0] * u[0] + t[1] * u[1] >= 0 ? slot : -slot;
-    }
-  }
-
-  // 4. at each station, the same service's best-aligned neighbouring segment
+  // the same service's best-aligned neighbouring segment at one end of line li:
+  // { li, atStart, same } (`same`: stored running the same way through the station)
   const ends = new Map(); // "svc|station" -> [{ li, atStart }]
 
   L.forEach((l, li) => {
@@ -250,10 +257,7 @@ export function sectionLines(lines, order) {
     }
   });
 
-  const endSlot = (l, atStart) => (atStart ? l.straights[0].off : l.straights[l.straights.length - 1].off);
-
-  // slot of the neighbour's straight touching this end, read in l's direction (l's own if none)
-  function across(li, atStart) {
+  function neighbour(li, atStart) {
     const l = L[li], st = atStart ? l.sg.a : l.sg.b;
     const out = atStart ? at(l.pts, l.acc, 0).t.map((v) => -v) : at(l.pts, l.acc, l.total).t;
     let best = null, bestDot = 0.3;
@@ -266,11 +270,100 @@ export function sectionLines(lines, order) {
       if (dot > bestDot) { bestDot = dot; best = n; }
     }
 
-    if (!best) return endSlot(l, atStart);
-    const theirs = endSlot(L[best.li], best.atStart);
+    // a neighbour that begins where l begins (or ends where l ends) is stored the other way
+    return best && { ...best, same: best.atStart !== atStart };
+  }
 
-    // a neighbour stored running away from the shared station reads reversed
-    return best.atStart !== atStart ? theirs : -theirs;
+  const touching = (l, atStart) => (atStart ? l.straights[0] : l.straights[l.straights.length - 1]);
+
+  // 3. Left/right is read per connected GROUP of straights, not per straight.
+  //    Read per straight, a winding stretch (DeKalb Av to Atlantic Av) has
+  //    straights on both sides of the axis's perpendicular, and every curve
+  //    mirrored the line across the bundle and back; read per run of one
+  //    bundle, a run could vote the other way from the run before it, and the
+  //    line crossed the bundle at the junction. So straights are linked, with
+  //    their relative direction, in priority order:
+  //      a. bundle mates (they must agree, or they draw over each other);
+  //      b. a service's consecutive straights in the same bundle, through
+  //         curves and across stations;
+  //      c. a service's consecutive straights across a junction.
+  //    A link that contradicts earlier ones is skipped — a flip then happens
+  //    only where a loop forces one. Each group reads left/right once, by a
+  //    length-weighted vote of its straights against the axis.
+  //    Union-find with parity: `par` is a straight's direction relative to its root.
+  const all = L.flatMap((l) => l.straights.map((s) => ({ l, s })));
+
+  all.forEach((x, i) => {
+    x.s.i = i;
+    x.s.key = [...x.s.shares].sort().join();
+  });
+
+  const parent = all.map((_, i) => i), par = all.map(() => 1);
+
+  function find(x) {
+    if (parent[x] === x) return x;
+    const r = find(parent[x]);
+    par[x] *= par[parent[x]];
+    parent[x] = r;
+
+    return r;
+  }
+
+  // b runs `rel` (+1 / −1) relative to a; a contradiction (same root) is skipped
+  function link(a, b, rel) {
+    const ra = find(a), rb = find(b);
+
+    if (ra === rb) return;
+    par[rb] = par[a] * rel * par[b];
+    parent[rb] = ra;
+  }
+
+  const mid = (l, s) => at(l.pts, l.acc, (s.a0 + s.a1) / 2).t;
+
+  // a.
+  for (const [l, s, m, z] of sharing) {
+    const t = mid(l, s), v = mid(m, z);
+    link(s.i, z.i, t[0] * v[0] + t[1] * v[1] >= 0 ? 1 : -1);
+  }
+
+  // b, then c
+  for (const sameBundle of [true, false]) {
+    L.forEach((l, li) => {
+      for (let i = 1; i < l.straights.length; i++) if ((l.straights[i].key === l.straights[i - 1].key) === sameBundle) link(l.straights[i - 1].i, l.straights[i].i, 1);
+
+      for (const atStart of [true, false]) {
+        const n = neighbour(li, atStart), mine = touching(l, atStart);
+
+        if (!n) continue;
+        const theirs = touching(L[n.li], n.atStart);
+
+        if ((theirs.key === mine.key) === sameBundle) link(mine.i, theirs.i, n.same ? 1 : -1);
+      }
+    });
+  }
+
+  const vote = new Map();
+
+  for (const { l, s } of all) {
+    const r = find(s.i), t = mid(l, s);
+    vote.set(r, (vote.get(r) ?? 0) + (s.a1 - s.a0) * (t[0] * u[0] + t[1] * u[1] >= 0 ? 1 : -1) * par[s.i]);
+  }
+
+  // each straight's slot, read against the line's own stored direction
+  for (const { l, s } of all) {
+    const set = [...s.shares].sort((x, y) => order.indexOf(x) - order.indexOf(y));
+    const slot = set.indexOf(l.sg.svc) - (set.length - 1) / 2, r = find(s.i);
+    s.off = (vote.get(r) >= 0 ? 1 : -1) * par[s.i] * slot;
+  }
+
+  // 4. at a station, the neighbour's slot read in l's direction (l's own if none)
+  function across(li, atStart) {
+    const n = neighbour(li, atStart);
+
+    if (!n) return touching(L[li], atStart).off;
+    const theirs = touching(L[n.li], n.atStart).off;
+
+    return n.same ? theirs : -theirs;
   }
 
   // 5. offset as anchors (arc, slot), linear between; cut into constant pieces
@@ -305,7 +398,29 @@ export function sectionLines(lines, order) {
       }
     }
 
-    out[l.sg.id] = pieces.map((pc) => ({ o: pc.o || 0, pts: cut(l.pts, l.acc, pc.a0, pc.a1) })); // `|| 0`: no -0
+    // Piece ends sit on the track's own vertices where one is near, and no piece
+    // is shorter than MIN_PIECE: an edge of a metre or two has a direction that
+    // rounding makes close to random, and line-offset pushes it sideways along it.
+    for (let i = 1; i < pieces.length; i++) {
+      const b = pieces[i].a0;
+      let near = b;
+
+      for (let v = 1; v < l.acc.length - 1; v++) if (Math.abs(l.acc[v] - b) < Math.abs(near - b) && Math.abs(l.acc[v] - b) <= SNAP) near = l.acc[v];
+      pieces[i - 1].a1 = pieces[i].a0 = near;
+    }
+
+    const kept = [];
+
+    for (const pc of pieces) {
+      const prev = kept[kept.length - 1];
+
+      if (prev && (pc.a1 - pc.a0 < MIN_PIECE || prev.o === pc.o)) prev.a1 = pc.a1;
+      else kept.push({ ...pc });
+    }
+
+    if (kept.length > 1 && kept[0].a1 - kept[0].a0 < MIN_PIECE) { kept[1].a0 = 0; kept.shift(); }
+
+    out[l.sg.id] = kept.map((pc) => ({ o: pc.o || 0, pts: cut(l.pts, l.acc, pc.a0, pc.a1) })); // `|| 0`: no -0
   });
 
   return out;

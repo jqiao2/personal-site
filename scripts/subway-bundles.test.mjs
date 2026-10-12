@@ -7,7 +7,7 @@ const line = (svc, a, b, pts) => ({ sg: { id: `${svc}|${a}|${b}`, svc, a, b }, p
 const gentle = (id, out) => {
   const os = out[id].map((p) => p.o);
 
-  for (let i = 1; i < os.length; i++) assert.ok(Math.abs(os[i] - os[i - 1]) <= 1 / 16 + 1e-9, `${id} steps gently: ${os}`);
+  for (let i = 1; i < os.length; i++) assert.ok(Math.abs(os[i] - os[i - 1]) <= 1 / 4 + 1e-9, `${id} steps gently: ${os}`);
 
   return os;
 };
@@ -53,8 +53,19 @@ const joined = (out) => {
 
   assert.equal(a[0], -0.5);
   assert.equal(b.at(-1), 0);
-  assert.ok(Math.abs(a.at(-1) - b[0]) <= 1 / 16 + 1e-9, `meet at the station: ${a.at(-1)} vs ${b[0]}`);
+  assert.ok(Math.abs(a.at(-1) - b[0]) <= 1 / 4 + 1e-9, `meet at the station: ${a.at(-1)} vs ${b[0]}`);
   joined(out);
+}
+
+// 3. Two services share a stretch that winds through ~180° in short straights
+//    (east, then north, then west). One run: neither ever changes slot, so no
+//    curve mirrors them across each other.
+{
+  const wind = [[0, 0], [400, 0], [430, 10], [455, 30], [470, 60], [480, 100], [480, 400], [470, 440], [455, 470], [430, 490], [400, 500], [0, 500]];
+  const out = sectionLines([line("2", 1, 2, wind), line("5", 1, 2, wind)], ["2", "5"]);
+
+  assert.deepEqual(out["2|1|2"].map((p) => p.o), [-0.5]);
+  assert.deepEqual(out["5|1|2"].map((p) => p.o), [0.5]);
 }
 
 console.log("subway-bundles ok");

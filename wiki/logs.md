@@ -196,3 +196,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-12 — 0031: /subway gained a Map view (same ids/log over MapLibre). Station matching: name must dominate, the schematic's affine fit is km off outside Manhattan.
 - 2026-10-12 — 0031 rev: straight chords rejected; Map view now slices GTFS shapes per service between the stops it really serves (stop_times), per-platform markers, 15 m multi-sample bundles. Three schematic phantom links found (VIA/SKIP).
 - 2026-10-12 — 0031 rev 2: subway map slots now per straight, interpolated through curves (scripts/subway-bundles.mjs); symmetric 15/45 m membership fixed W 4 St + downtown Brooklyn overlaps; user wants global service order kept.
+- 2026-10-12 — 0031 rev 3: subway map jitter = per-straight left/right mirroring on winding track + sub-metre edges under line-offset; fixed with parity-linked groups and vertex-snapped pieces.

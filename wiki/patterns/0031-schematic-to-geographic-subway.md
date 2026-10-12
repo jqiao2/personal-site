@@ -53,9 +53,22 @@ and clicks still treat them as one line.
 - **Record membership from both sides.** If straight X sees service S alongside,
   the straights of S it saw count X back. One-sided detection left the A/C/E and
   B/D/F/M through W 4 St each thinking they had the track, overlapping.
-- **Read left/right once per straight**, against an axis chosen where the least
-  straight track runs perpendicular. Per-sample readings flipped back and forth
-  on Queens Blvd curves.
+- **Read left/right once per connected group, not per straight.** Against a
+  fixed axis, a winding stretch (DeKalb Av → Atlantic Av) has straights on both
+  sides of the axis's perpendicular; read per straight, each curve mirrored the
+  B across the bundle and back (+2 → −2 → +0.5 → −1.5 in one segment). Read per
+  same-bundle run, a run could vote opposite to the one before and the line
+  crossed at the junction. Fix: union-find with parity linking (a) bundle mates,
+  (b) a service's same-bundle straights through curves and stations, (c) across
+  junctions — skipping any link that contradicts an earlier one — then one
+  length-weighted vote per group. Debug by printing a segment's straights:
+  `bundle off root` per straight shows a mirror (same bundle, sign flips) vs a
+  real rank change (bundle changes, same root).
+- **No tiny edges.** Rounding to 5 decimals (~0.85 m) plus cutting pieces at
+  inserted points made 0-1 m edges whose direction is noise; `line-offset`
+  shoved them sideways as stubs. Piece ends snap to track vertices within 6 m,
+  pieces are ≥ 8 m, edges ≥ 2 m, line coordinates keep 6 decimals, and shifts
+  use quarter-slot steps (1.4k pieces, 38 KB gzipped).
 - Unridden lines use an **opaque faded colour**, not `line-opacity`: translucent
   pieces darken where their round ends overlap, making the line look dotted.
 
