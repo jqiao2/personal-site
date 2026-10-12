@@ -59,3 +59,9 @@ taking `ls | tail -1` plus one. (0058 was free, so the number stood.)
 ## Seen
 - 2026-09-03 — Applying `0058_athlete_height.sql` while building
   `/activities/athlete`.
+- 2026-10-11 — `0068_activity_meals.sql`: `supabase db push` and the pooler both
+  timed out from this machine. Applied through the Supabase MCP's `execute_sql`
+  instead (NOT `apply_migration`, which stamps a timestamp version): the file's
+  SQL plus the `schema_migrations` insert above, in one `begin … commit`. The
+  first API call against the new table then 500'd once (PostgREST schema cache
+  catching up); the retry worked.

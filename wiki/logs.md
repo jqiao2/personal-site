@@ -189,3 +189,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-10: backfilled 20 Letterboxd entries (Sep 15–Oct 7) after the Supabase pause via RSS → logFilm(); see 0027.
 - 2026-10-11: Bagels & Grill (9 Bay 50th St) missing; it is a counter inside a grocery licence. DOHMH lacks it, Overture has it as a grocery the importer drops, and Overture 2026-09 renamed categories→taxonomy (import broken). See 0028.
 - 2026-10-11 — 0029: owner form-post redirects weren't re-stamping the write cookie (activity↔meal links, PR #257).
+- 2026-10-11: applied 0068 via MCP execute_sql + history insert (pooler timed out); see 0011.
