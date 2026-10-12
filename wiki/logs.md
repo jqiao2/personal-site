@@ -190,3 +190,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-11: Bagels & Grill (9 Bay 50th St) missing; it is a counter inside a grocery licence. DOHMH lacks it, Overture has it as a grocery the importer drops, and Overture 2026-09 renamed categories→taxonomy (import broken). See 0028.
 - 2026-10-11 — 0029: owner form-post redirects weren't re-stamping the write cookie (activity↔meal links, PR #257).
 - 2026-10-11: applied 0068 via MCP execute_sql + history insert (pooler timed out); see 0011.
+- 2026-10-12 — 0030: activity_streams JSONB → delta-encoded int[] (0070). Also: scripts/ingest.test.mjs has a raw 0x97 byte, so oxlint silently skips the whole file and the Edit tool rewrites the byte to U+FFFD. Restore it by byte.

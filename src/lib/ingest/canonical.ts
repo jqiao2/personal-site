@@ -20,6 +20,7 @@ import { computeExertion, type Thresholds } from './../exertion';
 import { encodePolyline, routePath, bounds } from './../route-shape';
 import { SPORT_META, type Sport } from './../sports';
 import { defaultPrivate } from './../activity-privacy';
+import { packStreams } from './../stream-codec';
 
 // ---------------------------------------------------------------------------
 // The canonical shapes
@@ -548,22 +549,7 @@ export function toRows(a: CanonicalActivity, thresholds: Thresholds): ActivityRo
 
 	const stored = hasStreams ? trimFloatNoise(a.streams as CanonicalStreams) : null;
 
-	const streams = stored
-		? {
-				sample_count: streamLength(stored),
-				time_s: stored.time_s ?? null,
-				latlng: stored.latlng ?? null,
-				altitude_m: stored.altitude_m ?? null,
-				distance_m: stored.distance_m ?? null,
-				heartrate: stored.heartrate ?? null,
-				cadence: stored.cadence ?? null,
-				power_w: stored.power_w ?? null,
-				speed_ms: stored.speed_ms ?? null,
-				temp_c: stored.temp_c ?? null,
-				grade: stored.grade ?? null,
-				moving: stored.moving ?? null,
-			}
-		: null;
+	const streams = stored ? { sample_count: streamLength(stored), ...packStreams(stored) } : null;
 
 	const laps = (a.laps ?? []).map((l) => ({
 		lap_index: l.lap_index,
