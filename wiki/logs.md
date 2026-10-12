@@ -188,3 +188,4 @@ wiki across every iteration, even reverted ones).
 - 2026-09-24 — Fluid Active CPU ran out again: owner pages now private max-age=60 + Vary: Cookie, guarded by a `wv` write-stamp cookie re-set after owner /api writes; film-credit-network private for a day; visitor s-maxage 6 h → 24 h. Memory size ruled out (separate meter). Supabase still unreachable locally; headers verified with a throwaway probe endpoint. Updated 0018.
 - 2026-10-10: backfilled 20 Letterboxd entries (Sep 15–Oct 7) after the Supabase pause via RSS → logFilm(); see 0027.
 - 2026-10-11: Bagels & Grill (9 Bay 50th St) missing; it is a counter inside a grocery licence. DOHMH lacks it, Overture has it as a grocery the importer drops, and Overture 2026-09 renamed categories→taxonomy (import broken). See 0028.
+- 2026-10-11 — 0029: owner form-post redirects weren't re-stamping the write cookie (activity↔meal links, PR #257).

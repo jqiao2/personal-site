@@ -33,7 +33,7 @@
 //
 // The owner's staleness is bounded differently, because the owner is the one
 // person who would notice. Their copies also vary on Cookie, and every
-// successful owner write under /api/ re-stamps WRITE_STAMP_COOKIE. After a save,
+// successful owner write (an /api/ call or a page's form post) re-stamps WRITE_STAMP_COOKIE. After a save,
 // every page the browser holds is a miss, whether the editor reloads or
 // navigates with `location.href`. What the stamp cannot see is a write that
 // doesn't come from the owner's browser (the Strava cron, the Kindle sync, the
@@ -65,13 +65,21 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 	if (ctx.request.method !== 'GET' && ctx.request.method !== 'HEAD') {
 		// Re-stamp after an owner write so the owner's browser-cached pages miss.
 		// /api/auth/ is excluded: login isn't an owner request yet, and logout
-		// clears the stamp itself. `res.ok` also skips redirects, whose headers
-		// are immutable.
-		if (res.ok && ctx.url.pathname.startsWith('/api/') && !ctx.url.pathname.startsWith('/api/auth/') && (await requireOwner(ctx.cookies))) {
-			res.headers.append(
+		// clears the stamp itself. A form post that redirects (the activity
+		// editor, the meal's activity links) is a write too, and the page it
+		// lands on must miss; a redirect's headers are immutable, so it is
+		// copied before stamping.
+		const redirected = res.status >= 300 && res.status < 400;
+
+		if ((res.ok || redirected) && !ctx.url.pathname.startsWith('/api/auth/') && (await requireOwner(ctx.cookies))) {
+			const out = redirected ? new Response(res.body, res) : res;
+
+			out.headers.append(
 				'set-cookie',
 				`${WRITE_STAMP_COOKIE}=${Date.now().toString(36)}; Path=/; Max-Age=${MAX_AGE_SECONDS}; SameSite=Lax${import.meta.env.PROD ? '; Secure' : ''}`,
 			);
+
+			return out;
 		}
 
 		return res;
