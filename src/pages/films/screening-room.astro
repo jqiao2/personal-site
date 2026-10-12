@@ -399,7 +399,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 				if (!res.ok) throw new Error(data.error || 'Sync failed');
 
-				if (data.added > 0) {
+				if (data.added > 0 || data.moved > 0) {
 					window.location.reload();
 
 					return;
