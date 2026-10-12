@@ -191,15 +191,6 @@ const back = seen
 // to the displayed year for films cached before the premiere date was.
 const downloadHref = ytsUrl(movie.title, releaseYear(movie.premiere_date) ?? movie.release_year);
 
-// "Find showtimes" — a Google showtimes search scoped to NYC (10001). We don't
-// scrape or gate availability: Google's own showtimes widget self-gates, listing
-// every local theater (AMC, Regal, the indies) with inline booking links when the
-// film is playing and simply showing nothing when it isn't. One link covers what
-// 14 fragile, bot-blocked theater scrapers couldn't. Owner-only, on unseen films.
-const showtimesHref = `https://www.google.com/search?q=${encodeURIComponent(
-	`${movie.title} showtimes 10001`,
-)}`;
-
 // AMC search, deep-linked to this title. AMC's search route reads `?q=` on load
 // (unlike `?query=`, which it ignores), so this lands on the film's AMC result →
 // its showtimes/tickets. Owner-only, on unseen films, for A-List.
@@ -305,9 +296,6 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 						) : (
 							isOwner && (
 								<>
-									<a class="btn-ghost" href={showtimesHref} target="_blank" rel="noopener noreferrer">
-										<span class="btn-ghost__icon">🎟</span><span>Find showtimes</span>
-									</a>
 									<a class="btn-ghost" href={amcHref} target="_blank" rel="noopener noreferrer">
 										<span class="btn-ghost__icon">🎬</span><span>AMC showtimes</span>
 									</a>
