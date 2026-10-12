@@ -179,6 +179,10 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 							<button type="button" class="owner__link" data-open-meal-editor="edit">
 								Edit this entry
 							</button>
+							<label class="owner__link" data-add-photos={visit.id}>
+								<span data-add-photos-text>Add photos</span>
+								<input type="file" accept="image/*" multiple hidden />
+							</label>
 							<PinButton track="meal" refId={visit.id} pinned={pinned} />
 							{activityOptions.length > 0 && (
 								<form class="links" method="POST" action={`/api/restaurants/visits/${visit.id}/activities`}>
@@ -231,6 +235,48 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 		)
 	}
 </RestaurantLayout>
+
+<script>
+	import { preparePhoto } from '../../../lib/photo';
+
+	// Straight to the photos endpoint, skipping the editor: one photograph per
+	// request, shrunk first, for the same 4.5 MB body cap the editor works under.
+	const label = document.querySelector<HTMLLabelElement>('[data-add-photos]');
+	const input = label?.querySelector('input');
+	const text = label?.querySelector('[data-add-photos-text]');
+
+	input?.addEventListener('change', async () => {
+		const files = Array.from(input.files ?? []);
+
+		if (files.length === 0 || !label || !text) return;
+		const url = `/api/restaurants/visits/${label.dataset.addPhotos}/photos`;
+		const failures: string[] = [];
+
+		input.disabled = true;
+
+		for (const [i, file] of files.entries()) {
+			text.textContent = `Uploading ${i + 1} of ${files.length}…`;
+			const p = await preparePhoto(file);
+			URL.revokeObjectURL(p.url);
+			const form = new FormData();
+			form.append('photo', p.file, p.file.name);
+			form.append('width', String(p.width));
+			form.append('height', String(p.height));
+			form.append('caption', '');
+
+			try {
+				const res = await fetch(url, { method: 'POST', body: form });
+
+				if (!res.ok) failures.push(`${file.name} (${res.status === 413 ? 'too large' : `HTTP ${res.status}`})`);
+			} catch {
+				failures.push(file.name);
+			}
+		}
+
+		if (failures.length > 0) window.alert(`Did not upload: ${failures.join(', ')}.`);
+		location.reload();
+	});
+</script>
 
 <style>
 	.entry {
