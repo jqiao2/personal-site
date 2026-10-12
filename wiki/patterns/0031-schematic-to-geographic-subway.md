@@ -61,8 +61,9 @@ and clicks still treat them as one line.
 
 ## `line-offset` follows line direction
 It's in screen px (constant bundle width at any zoom), but offsets to the line's
-left. Store every line heading east-or-north at its midpoint, or a→b and b→a
-neighbours land on opposite sides.
+right. Segments are stored a→b or b→a arbitrarily, so a slot must be read
+against a shared axis, not the line's own direction (see "Read left/right once
+per straight" above), or neighbours land on opposite sides.
 
 ## Also
 - data.ny.gov intermittently serves a `healthdata.ny.gov` cert to Node's fetch
