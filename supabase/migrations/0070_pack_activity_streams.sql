@@ -16,6 +16,22 @@
 
 set statement_timeout = 0;
 
+-- One row broke "nothing is lost": activity 3497, a 2021 hike imported from a
+-- Strava GPX, has interpolated heart rate and cadence (122.7 bpm, 54.2 rpm) on
+-- 219 and 664 of its 1184 samples. Sensors report whole numbers, so these are
+-- rounded to the integers every other activity already holds (each moves by
+-- under 0.5), and the check below then holds for every row.
+update public.activity_streams
+set heartrate = (
+		select jsonb_agg(case when jsonb_typeof(e) = 'number' then to_jsonb(round((e #>> '{}')::numeric)) else e end order by i)
+		from jsonb_array_elements(heartrate) with ordinality x(e, i)
+	),
+	cadence = (
+		select jsonb_agg(case when jsonb_typeof(e) = 'number' then to_jsonb(round((e #>> '{}')::numeric)) else e end order by i)
+		from jsonb_array_elements(cadence) with ordinality x(e, i)
+	)
+where activity_id = 3497;
+
 create function pg_temp.stream_pack(a jsonb, scale numeric) returns int[]
 language plpgsql immutable as $$
 declare
