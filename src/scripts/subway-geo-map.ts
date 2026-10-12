@@ -2,13 +2,14 @@
 // (same ids, so the same saved log) drawn over a real map of the city.
 //
 // Geometry comes from subway-geo.js (scripts/generate-subway-geo.mjs): every
-// segment is its service's real GTFS track between the two stations, and `o` is
-// its slot among the services that actually share that stretch of tunnel.
+// segment is its service's real GTFS track between the two stations, cut into
+// pieces whose `o` is its slot among the services sharing that stretch — so a
+// line shifts gradually where its bundle changes instead of stepping.
 //
 // Parallel services fan apart with `line-offset`, which is in screen pixels, so
 // the bundle keeps a constant on-screen width at any zoom — the same trick the
-// SVG diagram does by hand. The generator stores every line heading the same
-// general way, so the offset's sign means the same side for all of them.
+// SVG diagram does by hand. The generator reads each slot against its piece's own
+// direction, so the offset's sign means the same side for every member.
 import * as maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // See RestaurantMap.astro: the tile worker has to go through Vite's worker build.
@@ -23,15 +24,28 @@ type Marks = { st: Record<string, 1>; seg: Record<string, 1> };
 
 const on: maplibregl.ExpressionSpecification = ['boolean', ['feature-state', 'on'], false];
 
+// Unridden track is the service colour faded into the ground, as in the diagram.
+// An opaque colour rather than line-opacity: a segment is several pieces, and
+// translucent pieces darken where their round ends overlap — a dotted line.
+function fade(hex: string) {
+	const ground = [0xee, 0xf1, 0xee];
+
+	return '#' + ground.map((g, j) => Math.round(parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) * 0.32 + g * 0.68).toString(16).padStart(2, '0')).join('');
+}
+
 function lineGeoJSON() {
 	return {
 		type: 'FeatureCollection' as const,
 		// a few phantom schematic links have no track and are left off (see the generator)
-		features: SEGMENTS.filter((sg) => LINES[sg.id]).map((sg) => ({
-			type: 'Feature' as const,
-			properties: { id: sg.id, o: LINES[sg.id].o, color: sg.color },
-			geometry: { type: 'LineString' as const, coordinates: LINES[sg.id].c },
-		})),
+		// One feature per piece; a segment's pieces share its id, so feature-state
+		// (ridden) and clicks treat them as one line.
+		features: SEGMENTS.flatMap((sg) =>
+			(LINES[sg.id] ?? []).map((piece) => ({
+				type: 'Feature' as const,
+				properties: { id: sg.id, o: piece.o, color: sg.color, faded: fade(sg.color) },
+				geometry: { type: 'LineString' as const, coordinates: piece.c },
+			})),
+		),
 	};
 }
 
@@ -106,8 +120,7 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 			source: 'seg',
 			layout: { 'line-cap': 'round', 'line-join': 'round' },
 			paint: {
-				'line-color': ['get', 'color'],
-				'line-opacity': ['case', on, 1, 0.32],
+				'line-color': ['case', on, ['get', 'color'], ['get', 'faded']],
 				'line-width': ['interpolate', ['linear'], ['zoom'], 10, ['case', on, 2.4, 2], 13, ['case', on, 3.6, 3], 16, ['case', on, 5.5, 4.6]],
 				'line-offset': offset,
 			},
