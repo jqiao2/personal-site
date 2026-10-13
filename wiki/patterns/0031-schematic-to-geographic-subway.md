@@ -73,9 +73,12 @@ and clicks still treat them as one line.
   real rank change (bundle changes, same root).
 - **No tiny edges.** Rounding to 5 decimals (~0.85 m) plus cutting pieces at
   inserted points made 0-1 m edges whose direction is noise; `line-offset`
-  shoved them sideways as stubs. Piece ends snap to track vertices within 6 m,
-  pieces are ≥ 8 m, edges ≥ 2 m, line coordinates keep 6 decimals, and shifts
-  use quarter-slot steps (1.4k pieces, 38 KB gzipped).
+  shoved them sideways as stubs. Line coordinates keep 6 decimals and edges
+  inside a piece are ≥ 2 m. Shifts were then drawn in quarter-slot steps, which
+  read as a staircase on tight bends (~1.6 px per step at z16). `line-offset`
+  is constant per feature, so the fix is steps well under a pixel: 1/16 slot,
+  pieces ≥ 2 m, ends snapped to vertices within 1 m (3.7k pieces, 62 KB
+  gzipped). The diagram has no such limit: SVG offsets per vertex (`smooth`).
 - Unridden lines use an **opaque faded colour**, not `line-opacity`: translucent
   pieces darken where their round ends overlap, making the line look dotted.
 
