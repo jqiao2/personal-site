@@ -260,7 +260,12 @@ function track(svc, A, B) {
 
       if (len > direct * 2.5 + 300) continue; // went the long way round a loop
 
-      if (!best || len < best.len) best = { pts, len };
+      // Shortest wins, but a track that misses the platforms pays for it: at Bronx
+      // Park East the 5's Dyre Av track passes 68 m off, 17 m shorter than the
+      // White Plains Rd track the 5 really takes from E 180 St.
+      const score = len + 3 * (pa.d + pb.d);
+
+      if (!best || score < best.score) best = { pts, score };
     }
 
     if (best) return best.pts;
