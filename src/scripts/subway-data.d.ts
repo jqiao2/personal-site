@@ -27,11 +27,9 @@ export interface SubwayStation {
 export declare const STATIONS: SubwayStation[];
 
 /**
- * One service's track between two adjacent stations. `o` is the offset index that
- * fans parallel services apart; `pts` is the polyline in canvas coordinates.
- *
- * `_n` (per-vertex unit normals) is not in the generated data — src/pages/subway.astro
- * computes it onto every segment before the first draw, so it is typed as present.
+ * One service's track between two adjacent stations. `pts` is the polyline in
+ * canvas coordinates. `o` is the old per-segment offset index; the page draws the
+ * slots in subway-diagram.js instead.
  */
 export interface SubwaySegment {
 	id: string;
@@ -41,7 +39,6 @@ export interface SubwaySegment {
 	a: number;
 	b: number;
 	pts: number[][];
-	_n: number[][];
 }
 
 export declare const SEGMENTS: SubwaySegment[];

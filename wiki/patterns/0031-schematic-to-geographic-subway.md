@@ -27,10 +27,19 @@ every service meeting there touches it. W and Z have stops but no shapes: borrow
 the shape of any route serving both stops.
 
 ## The schematic has phantom links
-Segments with no real track: A 104 St–Aqueduct (stands in for the missing
-Rockaway Blvd–104 St), R Canal St–DeKalb (for Jay St–DeKalb), 5 Bronx Park
-East–Morris Park (pure duplicate). The generator prints every segment it can't
-find track for; route stand-ins via `VIA`, leave pure phantoms off via `SKIP`.
+Segments with no real track: 5 Bronx Park East–Morris Park (pure duplicate),
+left off via `SKIP`. The generator prints every segment it can't find track for.
+
+Replace a phantom at the source (generate-subway-data.mjs) when the real link
+is missing, since the Diagram view draws it too (the map's old `VIA` stand-ins
+are gone). Most skip a stop the service makes, so scan for them: any segment
+whose polyline passes within 2 units of another station of the same service.
+`stopsAt()` fixes that shape (B DeKalb–7 Av, R DeKalb–Union St, A 104 St–
+Aqueduct). The others: the R's Canal
+St–DeKalb (now Jay St–DeKalb), the M's B'way-Lafayette–Marcy Av that doubled
+its Essex St link (now Essex–Marcy), the F's York St links (now
+B'way-Lafayette–2 Av). A replaced id in the owner's saved log moves to its
+successor on load (`RETIRED` in src/scripts/subway-marks.ts).
 Also check the longest track/direct ratios — a 5 km R "segment" was the clue.
 
 ## Bundles: per straight, shift inside curves (`scripts/subway-bundles.mjs`)
@@ -66,11 +75,51 @@ and clicks still treat them as one line.
   real rank change (bundle changes, same root).
 - **No tiny edges.** Rounding to 5 decimals (~0.85 m) plus cutting pieces at
   inserted points made 0-1 m edges whose direction is noise; `line-offset`
-  shoved them sideways as stubs. Piece ends snap to track vertices within 6 m,
-  pieces are ≥ 8 m, edges ≥ 2 m, line coordinates keep 6 decimals, and shifts
-  use quarter-slot steps (1.4k pieces, 38 KB gzipped).
+  shoved them sideways as stubs. Line coordinates keep 6 decimals and edges
+  inside a piece are ≥ 2 m. Shifts were then drawn in quarter-slot steps, which
+  read as a staircase on tight bends (~1.6 px per step at z16). `line-offset`
+  is constant per feature, so the fix is steps well under a pixel: 1/16 slot,
+  pieces ≥ 2 m, ends snapped to vertices within 1 m (3.7k pieces, 62 KB
+  gzipped). The diagram has no such limit: SVG offsets per vertex (`smooth`).
+  Short pieces need the GeoJSON source's `tolerance: 0`: by default the tiler
+  simplifies per zoom and drops features tiny at that zoom, so zoomed out the
+  curves went missing.
 - Unridden lines use an **opaque faded colour**, not `line-opacity`: translucent
   pieces darken where their round ends overlap, making the line look dotted.
+
+- **Bundle mates share one centreline.** Slots fan out in pixels from each
+  service's own track, so an express a few metres off its local (Lex 4/5 vs 6)
+  or the B/D beside the N/Q on the Manhattan Bridge drew over each other close
+  in. Each vertex moves to the weighted mean of its bundle mates' tracks (full
+  within 30 m, none past 50 m, smoothed over ±60 m), ends at a station together.
+- **Cut straights at every line's stations.** An express's straight with no
+  stops (B/D 34 St–W 4 St) got one bundle for its whole length, including the
+  A/C/E it only meets at the end, and sat half a slot off the F/M — interleaved,
+  one thick band. Cutting it where the locals' stations sit gives bundle mates
+  the same boundaries; a slot change at a cut eases in like a station.
+- **Forced flips land on the line that leaves.** With a fixed order, some
+  junctions must cross (E/B/D at 7 Av–53 St). Side links are tried most
+  carried-over mates first, so the skipped link — the flip — falls on the line
+  leaving its mates (the E, which crosses 6 Av anyway), not between a pair that
+  travels on together (the B/D swapped sides there before).
+- **A slot change gets at least 80 m.** A one-vertex curve gave a zero-length
+  slide: the 1 jumped a slot at a corner near South Ferry. Short curves borrow
+  length from the straights either side.
+- **Markers sit at the moved line ends,** not the raw platform: the centreline
+  pull can move an end tens of metres.
+- **Check overlaps by scan, not by eye.** Walk every piece, find parallel pieces
+  of other services within 6 m, compare slots read against one fixed direction;
+  < 0.75 apart is an overlap. What's left after the fixes is short slides.
+
+## The Diagram view uses the same bundler
+`scripts/generate-subway-diagram.mjs` runs `sectionLines` on the schematic
+(1 unit = 100 "m"), with three options: `smooth` (per-vertex slots, since SVG
+offsets each vertex itself — no quarter-slot staircases), `axis` (left/right per
+straight against a fixed SW axis: octilinear track never winds, and the group
+vote put the 2/3 across the 1 at Chambers St), and `curveGap` (schematic corner
+vertices are ~2 units apart, so the default split corners into fragments). The
+schematic's few real gaps (N/Q at Union Sq, Canal St) are welded first; this
+replaced the renderer weld and the per-segment `o`.
 
 ## `line-offset` follows line direction
 It's in screen px (constant bundle width at any zoom), but offsets to the line's

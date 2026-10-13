@@ -146,6 +146,17 @@ import SiteHeader from '../components/SiteHeader.astro';
 			#sm-geo {
 				position: absolute;
 				inset: 0;
+				background: #1a1c1e;
+			}
+			/* the map is dark; so are its zoom buttons */
+			#sm-geo .maplibregl-ctrl-group {
+				background: #20100f;
+			}
+			#sm-geo .maplibregl-ctrl-group button + button {
+				border-top-color: #3a2a28;
+			}
+			#sm-geo .maplibregl-ctrl-icon {
+				filter: invert(1);
 			}
 			.sm-view {
 				display: flex;
@@ -324,6 +335,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 		<script>
 			import { CANVAS, SERVICES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
+			import { LINES } from '../scripts/subway-diagram.js';
 			import type { SubwaySegment, SubwayStation } from '../scripts/subway-data.js';
 			import { loadMarks, saveMark, saveAll, type Marks } from '../scripts/subway-marks';
 
@@ -419,66 +431,6 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			function setMsg(t: string) { if (t) { msgEl.textContent = t; msgEl.hidden = false; } else msgEl.hidden = true; }
 
-			// Orient a normal toward the north-east (screen +x is east, −y is north) so
-			// the low-index service sits on the south-west side and the high-index one on
-			// the north-east — i.e. 1/2/3 and 4/5/6 run west→east and south→north. The
-			// boundary is the SW–NE diagonal (few multi-line bundles run that way).
-			function hemi(nx: number, ny: number) { return nx - ny < 0 ? [-nx, -ny] : [nx, ny]; }
-
-			// ---- per-segment unit normals (zoom-independent), pts[0]↔a, pts[last]↔b ----
-			// Orient by PROPAGATION from the most axis-aligned vertex so the normal
-			// never flips sign along a segment (which made diagonals look harsh).
-			SEGMENTS.forEach((sg) => {
-				const P = sg.pts, L = P.length, raw = [];
-
-				for (let i = 0; i < L; i++) {
-					let ax, ay;
-
-					if (L === 1) { ax = 1; ay = 0; }
-					else if (i === 0) { ax = P[1][0] - P[0][0]; ay = P[1][1] - P[0][1]; }
-					else if (i === L - 1) { ax = P[L - 1][0] - P[L - 2][0]; ay = P[L - 1][1] - P[L - 2][1]; }
-					else { ax = P[i + 1][0] - P[i - 1][0]; ay = P[i + 1][1] - P[i - 1][1]; }
-
-					const len = Math.hypot(ax, ay) || 1;
-					raw.push([-ay / len, ax / len]);
-				}
-
-				// seed at the vertex whose normal sits furthest from the flip boundary
-				let seed = 0, bm = -1;
-
-				for (let i = 0; i < L; i++) { const m = Math.abs(raw[i][0] - raw[i][1]);
-
- if (m > bm) { bm = m; seed = i; } }
-
-				const N = new Array(L);
-				N[seed] = hemi(raw[seed][0], raw[seed][1]);
-
-				for (let i = seed + 1; i < L; i++) N[i] = raw[i][0] * N[i - 1][0] + raw[i][1] * N[i - 1][1] >= 0 ? raw[i] : [-raw[i][0], -raw[i][1]];
-
-				for (let i = seed - 1; i >= 0; i--) N[i] = raw[i][0] * N[i + 1][0] + raw[i][1] * N[i + 1][1] >= 0 ? raw[i] : [-raw[i][0], -raw[i][1]];
-				sg._n = N;
-			});
-
-			// ---- share endpoint normals so parallel lines line up through a station ----
-			const stationEnds: Record<string, { sg: SubwaySegment; i: number }[]> = {};
-
-			SEGMENTS.forEach((sg) => {
-				const L = sg.pts.length;
-				(stationEnds[sg.a] = stationEnds[sg.a] || []).push({ sg, i: 0 });
-				(stationEnds[sg.b] = stationEnds[sg.b] || []).push({ sg, i: L - 1 });
-			});
-
-			for (const id in stationEnds) {
-				const ends = stationEnds[id];
-
-				if (ends.length !== 2) continue; // only straightforward through-stations
-				const n0 = ends[0].sg._n[ends[0].i], n1 = ends[1].sg._n[ends[1].i];
-				let sx = n0[0] + n1[0], sy = n0[1] + n1[1];
-				const l = Math.hypot(sx, sy) || 1; sx /= l; sy /= l;
-				ends[0].sg._n[ends[0].i] = [sx, sy];
-				ends[1].sg._n[ends[1].i] = [sx, sy];
-			}
-
 			// ---- per-station markers + label priority ----
 			// Group the lines meeting a station into 45° direction buckets and give each
 			// bucket its own pill. A simple stop has one; a big crossing complex like
@@ -527,18 +479,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 			const stationsByPrio = [...STATIONS].sort((a, b) => stMeta[b.id].prio - stMeta[a.id].prio);
 
 			// ---- build lines (visible + hit) ----
-			/**
-			 * The drawn form of one segment. `_ra` / `_rb` are its raw (pre-weld) offset
-			 * endpoints, recomputed by drawGeometry on every zoom.
-			 */
-			type SegEl = {
-				sg: SubwaySegment;
-				vis: SVGElement;
-				hit: SVGElement;
-				title: SVGElement;
-				_ra?: number[];
-				_rb?: number[];
-			};
+			/** The drawn form of one segment. */
+			type SegEl = { sg: SubwaySegment; vis: SVGElement; hit: SVGElement; title: SVGElement };
 
 			const segEls: Record<string, SegEl> = {};
 
@@ -561,23 +503,6 @@ import SiteHeader from '../components/SiteHeader.astro';
 				gHit.appendChild(hit);
 				segEls[sg.id] = { sg, vis, hit, title };
 			});
-
-			// ---- weld groups: every segment-end of ONE service meeting at a station ----
-			// A service's consecutive segments meet at a shared station, but each segment
-			// computes its own per-vertex normal and carries its own offset index, so the
-			// two endpoints land on slightly different points and the line jogs sideways
-			// at the junction. At draw time we snap all ends in a group to their common
-			// mean, then blend that correction back along each segment so the endpoints
-			// coincide exactly with no kink. Keyed per service so parallel lines stay fanned.
-			const weldGroups: Record<string, { id: string; end: number }[]> = {}; // 'svc|stationId' -> [{ id, end: 0 | last }]
-
-			SEGMENTS.forEach((sg) => {
-				const last = sg.pts.length - 1;
-				(weldGroups[sg.svc + '|' + sg.a] = weldGroups[sg.svc + '|' + sg.a] || []).push({ id: sg.id, end: 0 });
-				(weldGroups[sg.svc + '|' + sg.b] = weldGroups[sg.svc + '|' + sg.b] || []).push({ id: sg.id, end: last });
-			});
-
-			const weld: Record<string, number[]> = {}; // recomputed each draw: 'svc|stationId' -> [x, y]
 
 			// ---- build station pills + labels ----
 			const pillEls: Record<number, { s: SubwayStation; rects: { rect: SVGElement; title: SVGElement; p: Pill }[] }> = {};
@@ -615,57 +540,38 @@ import SiteHeader from '../components/SiteHeader.astro';
 				labelEls[s.id] = { s, label, right, w: s.name.length * LABEL_FONT * 0.54 };
 			});
 
+			// A polyline scaled by k, each point moved slot·sp px to the right of the
+			// direction of travel (y points down), with mitred corners.
+			function offsetPath(c: [number, number, number][], sp: number) {
+				const right = (i: number) => {
+					const dx = c[i + 1][0] - c[i][0], dy = c[i + 1][1] - c[i][1], l = Math.hypot(dx, dy);
+
+					return l ? [-dy / l, dx / l] : null;
+				};
+
+				let d = '';
+
+				for (let i = 0; i < c.length; i++) {
+					const n0 = i > 0 ? right(i - 1) : null, n1 = i < c.length - 1 ? right(i) : null;
+					const a = n0 ?? n1 ?? [0, 0], b = n1 ?? a;
+					const mx = a[0] + b[0], my = a[1] + b[1], ml = Math.hypot(mx, my) || 1;
+					// mitre: stretch the bisector so both offset edges keep their distance (capped at sharp turns)
+					const s = (c[i][2] * sp) / Math.max(0.3, (mx * b[0] + my * b[1]) / ml);
+					d += (i ? ' L ' : 'M ') + (c[i][0] * k + (s * mx) / ml).toFixed(1) + ' ' + (c[i][1] * k + (s * my) / ml).toFixed(1);
+				}
+
+				return d;
+			}
+
 			// ---- geometry (depends on zoom k). Positions scale; sizes/offsets fixed. ----
 			function drawGeometry() {
 				curScale = sizeScaleFor(k);
 				const sp = SPACING * curScale;
 				const hw = (HIT_W * curScale).toFixed(2);
 
-				// Pass 1 — raw offset endpoints (first + last vertex) of every segment.
+				// Each line carries its slot per point (see scripts/generate-subway-diagram.mjs).
 				for (const id in segEls) {
-					const e = segEls[id], sg = e.sg, off = sg.o * sp, P = sg.pts, N = sg._n, L = P.length;
-					e._ra = [P[0][0] * k + off * N[0][0], P[0][1] * k + off * N[0][1]];
-					e._rb = [P[L - 1][0] * k + off * N[L - 1][0], P[L - 1][1] * k + off * N[L - 1][1]];
-				}
-
-				// Pass 2 — a service's ends meeting at a station weld to their mean point.
-				for (const key in weldGroups) {
-					const g = weldGroups[key];
-					let sx = 0, sy = 0;
-
-					for (let j = 0; j < g.length; j++) { const p = segEls[g[j].id][g[j].end === 0 ? '_ra' : '_rb']!; sx += p[0]; sy += p[1]; }
-
-					weld[key] = [sx / g.length, sy / g.length];
-				}
-
-				// Pass 3 — draw each segment on its natural offset, then add a correction
-				// that is (weld − raw) at each end and blends linearly by arc-length between
-				// them. Endpoints hit the welded point exactly; the blend is straight so it
-				// adds no kink even where corner-rounding put a vertex right at the station.
-				for (const id in segEls) {
-					const e = segEls[id], sg = e.sg, off = sg.o * sp, P = sg.pts, N = sg._n, L = P.length;
-					const wa = weld[sg.svc + '|' + sg.a], wb = weld[sg.svc + '|' + sg.b];
-					const dax = wa[0] - e._ra![0], day = wa[1] - e._ra![1];
-					const dbx = wb[0] - e._rb![0], dby = wb[1] - e._rb![1];
-					const rx = new Array(L), ry = new Array(L), cum = new Array(L);
-					let tot = 0;
-
-					for (let i = 0; i < L; i++) {
-						rx[i] = P[i][0] * k + off * N[i][0];
-						ry[i] = P[i][1] * k + off * N[i][1];
-
-						if (i) tot += Math.hypot(rx[i] - rx[i - 1], ry[i] - ry[i - 1]);
-						cum[i] = tot;
-					}
-
-					let d = '';
-
-					for (let i = 0; i < L; i++) {
-						const t = tot > 0 ? cum[i] / tot : (L > 1 ? i / (L - 1) : 0);
-						const x = rx[i] + dax * (1 - t) + dbx * t;
-						const y = ry[i] + day * (1 - t) + dby * t;
-						d += (i ? ' L ' : 'M ') + x.toFixed(1) + ' ' + y.toFixed(1);
-					}
+					const e = segEls[id], sg = e.sg, d = offsetPath(LINES[id], sp);
 
 					e.vis.setAttribute('d', d);
 					e.vis.setAttribute('stroke-width', ((marks.seg[sg.id] ? LINE_W_ON : LINE_W) * curScale).toFixed(2));

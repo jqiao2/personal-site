@@ -198,3 +198,8 @@ wiki across every iteration, even reverted ones).
 - 2026-10-12 — 0031 rev 2: subway map slots now per straight, interpolated through curves (scripts/subway-bundles.mjs); symmetric 15/45 m membership fixed W 4 St + downtown Brooklyn overlaps; user wants global service order kept.
 - 2026-10-12 — 0031 rev 3: subway map jitter = per-straight left/right mirroring on winding track + sub-metre edges under line-offset; fixed with parity-linked groups and vertex-snapped pieces.
 - 2026-10-12 — /subway owner log saved to subway_marks (0071) via /api/subway/log; guests start blank. execute_sql DELETE hung with no prompt — used the owner API to remove a test row (0011).
+- 2026-10-13 0031: subway diagram moved onto the map's bundler; map bundles now share one centreline and cut at every line's stations (express/local and Manhattan Bridge overlaps); map view dark; F B'way-Lafayette–2 Av restored in the schematic generator.
+- 2026-10-13 0031: phantom M B'way-Lafayette–Marcy and R Canal–DeKalb replaced at the source with Essex–Marcy and Jay St–DeKalb; saved marks on retired ids move to their successor on load.
+- 2026-10-13 0031: map slot shifts in 1/16-slot steps instead of 1/4 — the staircase on bends is gone (62 KB gz).
+- 2026-10-13 0031: zoomed-out gaps in curves — geojson tiler dropped the short slide pieces; tolerance: 0 on the seg source.
+- 2026-10-13 0031: more phantom skips fixed at source (B, R, A via stopsAt; VIA removed); side links ordered by carried-over mates (B/D no longer swap at 7 Av); min 80 m slide; markers at moved line ends.
