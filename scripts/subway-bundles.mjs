@@ -36,7 +36,7 @@ const MERGE = 30; // bundle mates' tracks this close draw on one centreline...
 
 const MERGE_END = 50; // ...and pull less and less out to this (the neighbour search's reach)
 
-const SMOOTH = 60; // ...the pull spread over this many metres either side
+const SMOOTH = 120; // ...the pull spread over this many metres either side
 
 const MIN_STRAIGHT = 60; // a cut at another line's station leaves no straight shorter than this
 
@@ -124,7 +124,9 @@ function curves(pts, acc, gap) {
 // left/right per straight against this fixed axis instead of per group (step
 // 3) — right for octilinear schematic track, which never winds across it.
 // opts.curveGap: overrides CURVE_GAP.
-export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smooth = false, axis = null, curveGap = CURVE_GAP } = {}) {
+// `orders` overrides `order` for one bundle, keyed by its services sorted and
+// comma-joined ("B,D,F,M"), where the global order would cross a line over.
+export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smooth = false, axis = null, curveGap = CURVE_GAP, orders = {} } = {}) {
   const L = lines.map((line) => {
     const acc = cumulative(line.pts), total = acc[acc.length - 1];
     // straights: the gaps between curves
@@ -523,7 +525,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
 
   // each straight's slot, read against the line's own stored direction
   for (const { l, s } of all) {
-    const set = [...s.shares].sort((x, y) => order.indexOf(x) - order.indexOf(y));
+    const o = orders[s.key] ?? order, set = [...s.shares].sort((x, y) => o.indexOf(x) - o.indexOf(y));
     const slot = set.indexOf(l.sg.svc) - (set.length - 1) / 2, r = find(s.i);
     const t = mid(l, s);
 
