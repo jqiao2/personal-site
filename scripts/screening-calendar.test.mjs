@@ -9,8 +9,7 @@ import assert from 'node:assert/strict';
 import {
 	addWeeks,
 	buildWeeks,
-	firstMonday,
-	runStartMonth,
+	weekMonday,
 } from '../src/lib/screening-calendar.ts';
 
 const q = (date, tmdb_id = 1) => ({
@@ -24,11 +23,13 @@ const q = (date, tmdb_id = 1) => ({
 });
 
 // --- Where a run opens ------------------------------------------------------
-// 2026-09-01 is a Tuesday, so its week opens on Monday 2026-08-31.
-assert.equal(firstMonday('2026-09'), '2026-08-31');
+// The run opens on the current week's Monday.
+assert.equal(weekMonday('2026-09-01'), '2026-08-31');
 
-// 2026-06-01 is itself a Monday.
-assert.equal(firstMonday('2026-06'), '2026-06-01');
+assert.equal(weekMonday('2026-06-01'), '2026-06-01');
+
+// Sunday belongs to the week that started six days earlier.
+assert.equal(weekMonday('2026-10-18'), '2026-10-12');
 
 assert.equal(addWeeks('2026-08-31', 12), '2026-11-23');
 
@@ -124,17 +125,5 @@ assert.deepEqual(day('2026-09-09').films.map((f) => f.tmdb_id), [33]);
 assert.deepEqual(day('2026-09-08').films, []);
 
 assert.equal(day('2026-09-08').isToday, false);
-
-// --- Scrollback is bounded --------------------------------------------------
-// Nothing queued, or only queued ahead → the run opens on the current month.
-assert.equal(runStartMonth([], '2026-09-07'), '2026-09');
-
-assert.equal(runStartMonth([q('2026-12-01')], '2026-09-07'), '2026-09');
-
-// Something queued a little earlier → open there instead.
-assert.equal(runStartMonth([q('2026-07-14')], '2026-09-07'), '2026-07');
-
-// Something queued years back doesn't drag the run all the way there.
-assert.equal(runStartMonth([q('2019-01-14')], '2026-09-07'), '2026-06');
 
 console.log('screening-calendar: ok');

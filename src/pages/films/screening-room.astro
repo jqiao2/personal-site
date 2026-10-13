@@ -13,7 +13,7 @@ import { requireOwner } from '../../lib/auth';
 import { listQueue } from '../../lib/screening-queue';
 import { isConfigured as calendarConfigured } from '../../lib/google-calendar';
 import { siteDay } from '../../lib/day';
-import { addWeeks, buildWeeks, firstMonday, runStartMonth } from '../../lib/screening-calendar';
+import { addWeeks, buildWeeks, weekMonday } from '../../lib/screening-calendar';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -26,7 +26,7 @@ const today = siteDay();
 
 const PAGE_WEEKS = 12;
 
-const start = firstMonday(runStartMonth(queue, today));
+const start = weekMonday(today);
 
 const rendered = buildWeeks({ startMonday: start, weeks: PAGE_WEEKS, queue, today });
 
@@ -258,9 +258,6 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 			new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), {
 				rootMargin: '600px',
 			}).observe(sentinel);
-
-			// Open on today rather than at the top of the scrollback.
-			run.querySelector(`[data-date="${run.dataset.today}"]`)?.scrollIntoView({ block: 'center' });
 		}
 
 		// --- Remove a queued film (owner) ---
