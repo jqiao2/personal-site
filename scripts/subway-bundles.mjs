@@ -83,7 +83,7 @@ function cut(pts, acc, a0, a1) {
 }
 
 // 1. curves: [a0, a1] arc ranges; everything between them is straight
-function curves(pts, acc) {
+function curves(pts, acc, gap) {
   const turning = [];
 
   for (let i = 1; i < pts.length - 1; i++) {
@@ -99,21 +99,29 @@ function curves(pts, acc) {
   for (const v of turning) {
     const last = out[out.length - 1];
 
-    if (last && v.a - last.a1 <= CURVE_GAP) { last.a1 = v.a; last.turn += v.turn; }
+    if (last && v.a - last.a1 <= gap) { last.a1 = v.a; last.turn += v.turn; }
     else out.push({ a0: v.a, a1: v.a, turn: v.turn });
   }
 
   return out.filter((c) => c.turn >= CURVE_TURN);
 }
 
-export function sectionLines(lines, order) {
+// opts.ease: how far a station's slot change eases in (default STATION_EASE;
+// it never takes more than a third of the straight). opts.smooth: return each
+// segment as one polyline of [x, y, slot] points, the slot linear between
+// them, instead of constant-slot pieces — for a renderer that offsets per
+// vertex (the SVG diagram) rather than per feature (MapLibre). opts.axis: read
+// left/right per straight against this fixed axis instead of per group (step
+// 3) — right for octilinear schematic track, which never winds across it.
+// opts.curveGap: overrides CURVE_GAP.
+export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smooth = false, axis = null, curveGap = CURVE_GAP } = {}) {
   const L = lines.map((line) => {
     const acc = cumulative(line.pts), total = acc[acc.length - 1];
     // straights: the gaps between curves
     const straights = [];
     let from = 0;
 
-    for (const c of curves(line.pts, acc)) {
+    for (const c of curves(line.pts, acc, curveGap)) {
       if (c.a0 > from) straights.push({ a0: from, a1: c.a0 });
       from = c.a1;
     }
@@ -353,7 +361,9 @@ export function sectionLines(lines, order) {
   for (const { l, s } of all) {
     const set = [...s.shares].sort((x, y) => order.indexOf(x) - order.indexOf(y));
     const slot = set.indexOf(l.sg.svc) - (set.length - 1) / 2, r = find(s.i);
-    s.off = (vote.get(r) >= 0 ? 1 : -1) * par[s.i] * slot;
+    const t = mid(l, s);
+
+    s.off = (axis ? (t[0] * axis[0] + t[1] * axis[1] >= 0 ? 1 : -1) : (vote.get(r) >= 0 ? 1 : -1) * par[s.i]) * slot;
   }
 
   // 4. at a station, the neighbour's slot read in l's direction (l's own if none)
@@ -371,7 +381,7 @@ export function sectionLines(lines, order) {
 
   L.forEach((l, li) => {
     const first = l.straights[0], last = l.straights[l.straights.length - 1];
-    const ease = (s) => Math.min(STATION_EASE, (s.a1 - s.a0) / 3);
+    const ease = (s) => Math.min(easeLen, (s.a1 - s.a0) / 3);
     const anchors = [[0, (first.off + across(li, true)) / 2]];
 
     for (const s of l.straights) {
@@ -380,6 +390,23 @@ export function sectionLines(lines, order) {
     }
 
     anchors.push([l.total, (last.off + across(li, false)) / 2]);
+
+    if (smooth) {
+      const arcs = [...new Set([...l.acc, ...anchors.map(([a]) => a)])].sort((x, y) => x - y);
+
+      const slot = (a) => {
+        let i = 1;
+
+        while (i < anchors.length - 1 && anchors[i][0] < a) i++;
+        const [a0, o0] = anchors[i - 1], [a1, o1] = anchors[i];
+
+        return a1 - a0 < 1e-6 ? o1 : o0 + ((o1 - o0) * (a - a0)) / (a1 - a0);
+      };
+
+      out[l.sg.id] = arcs.map((a) => [...at(l.pts, l.acc, a).p, slot(a) || 0]);
+
+      return;
+    }
 
     const pieces = [];
 
