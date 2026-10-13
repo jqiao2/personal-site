@@ -40,6 +40,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 						</g>
 					</svg>
 
+					<div id="sm-tip" class="sm-tip" hidden></div>
+
 					<div id="sm-geo" hidden></div>
 
 					<div class="sm-controls">
@@ -271,6 +273,22 @@ import SiteHeader from '../components/SiteHeader.astro';
 				font-size: 9px;
 				letter-spacing: 0.2px;
 			}
+			.sm-tip {
+				position: absolute;
+				pointer-events: none;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				background: #20100f;
+				color: #f4e8d1;
+				font: 500 12px Archivo, Arial, sans-serif;
+				padding: 5px 10px 5px 5px;
+				border-radius: 18px;
+				white-space: nowrap;
+			}
+			.sm-tip[hidden] {
+				display: none;
+			}
 			.sm-rowinfo {
 				min-width: 0;
 			}
@@ -336,6 +354,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 		<script>
 			import { CANVAS, SERVICES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
 			import { LINES } from '../scripts/subway-diagram.js';
+			import { MILES } from '../scripts/subway-miles.js';
 			import type { SubwaySegment, SubwayStation } from '../scripts/subway-data.js';
 			import { loadMarks, saveMark, saveAll, type Marks } from '../scripts/subway-marks';
 
@@ -480,7 +499,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			// ---- build lines (visible + hit) ----
 			/** The drawn form of one segment. */
-			type SegEl = { sg: SubwaySegment; vis: SVGElement; hit: SVGElement; title: SVGElement };
+			type SegEl = { sg: SubwaySegment; vis: SVGElement; hit: SVGElement };
 
 			const segEls: Record<string, SegEl> = {};
 
@@ -497,11 +516,11 @@ import SiteHeader from '../components/SiteHeader.astro';
 					'stroke-linecap': 'round', style: 'cursor:pointer;',
 				});
 
-				const title = el('title', {});
-				hit.appendChild(title);
 				hit.addEventListener('click', () => toggleSeg(sg.id));
+				hit.addEventListener('pointermove', (e) => showTip(sg, e));
+				hit.addEventListener('pointerleave', hideTip);
 				gHit.appendChild(hit);
-				segEls[sg.id] = { sg, vis, hit, title };
+				segEls[sg.id] = { sg, vis, hit };
 			});
 
 			// ---- build station pills + labels ----
@@ -623,7 +642,6 @@ import SiteHeader from '../components/SiteHeader.astro';
 				const e = segEls[sg.id], on = !!marks.seg[sg.id];
 				e.vis.setAttribute('stroke', on ? sg.color : mix(sg.color, TINT));
 				e.vis.setAttribute('stroke-width', ((on ? LINE_W_ON : LINE_W) * curScale).toFixed(2));
-				e.title.textContent = sg.svc + ' · ' + stById[sg.a].name + ' ↔ ' + stById[sg.b].name + (on ? ' — ridden' : '');
 			}
 
 			function renderPillMark(s: SubwayStation) {
@@ -642,6 +660,31 @@ import SiteHeader from '../components/SiteHeader.astro';
 				renderSidebar();
 			}
 
+			function makeBullet(svc: string, color: string) {
+				const b = document.createElement('span');
+				b.className = 'sm-bullet' + (svc.length > 1 ? ' sir' : '');
+				b.style.background = color;
+				b.style.color = textOn(color);
+				b.textContent = svc;
+
+				return b;
+			}
+
+			// ---- hover tooltip: the line's bullet beside the cursor ----
+			const tipEl = document.getElementById('sm-tip')!;
+
+			function showTip(sg: SubwaySegment, e: PointerEvent) {
+				if (drag) return hideTip();
+				const text = stById[sg.a].name + ' ↔ ' + stById[sg.b].name + (marks.seg[sg.id] ? ' · ridden' : '');
+				tipEl.replaceChildren(makeBullet(sg.svc, sg.color), text);
+				const r = svg.getBoundingClientRect();
+				tipEl.style.left = e.clientX - r.left + 14 + 'px';
+				tipEl.style.top = e.clientY - r.top + 14 + 'px';
+				tipEl.hidden = false;
+			}
+
+			function hideTip() { tipEl.hidden = true; }
+
 			// ---- sidebar ----
 			const rowEls: Record<string, { pct: HTMLElement; bar: HTMLElement }> = {};
 
@@ -650,11 +693,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			SERVICES.forEach((sv) => {
 				const row = document.createElement('div');
 				row.className = 'sm-row';
-				const bullet = document.createElement('span');
-				bullet.className = 'sm-bullet' + (sv.svc.length > 1 ? ' sir' : '');
-				bullet.style.background = sv.color;
-				bullet.style.color = textOn(sv.color);
-				bullet.textContent = sv.svc;
+				const bullet = makeBullet(sv.svc, sv.color);
 				const info = document.createElement('div');
 				info.className = 'sm-rowinfo';
 				const pct = document.createElement('div');
@@ -673,21 +712,25 @@ import SiteHeader from '../components/SiteHeader.astro';
 			});
 
 			function renderSidebar() {
-				const per: Record<string, { sgT: number; sgR: number }> = {};
-				SERVICES.forEach((sv) => (per[sv.svc] = { sgT: 0, sgR: 0 }));
-				SEGMENTS.forEach((sg) => { const p = per[sg.svc]; p.sgT++;
+				// Counted in miles of real track, so a long express hop outweighs a short local one.
+				const per: Record<string, { t: number; r: number }> = {};
+				SERVICES.forEach((sv) => (per[sv.svc] = { t: 0, r: 0 }));
+				let total = 0, ridden = 0;
+				SEGMENTS.forEach((sg) => {
+					const mi = MILES[sg.id] ?? 0, p = per[sg.svc];
+					p.t += mi; total += mi;
 
- if (marks.seg[sg.id]) p.sgR++; });
+					if (marks.seg[sg.id]) { p.r += mi; ridden += mi; }
+				});
 				SERVICES.forEach((sv) => {
-					const p = per[sv.svc], pct = p.sgT ? Math.round((100 * p.sgR) / p.sgT) : 0;
+					const p = per[sv.svc], pct = p.t ? Math.round((100 * p.r) / p.t) : 0;
 					rowEls[sv.svc].pct.textContent = pct + '%';
 					rowEls[sv.svc].bar.style.width = pct + '%';
 				});
 				const visited = STATIONS.filter((s) => marks.st[s.id]).length;
-				const ridden = SEGMENTS.filter((sg) => marks.seg[sg.id]).length;
 				document.getElementById('sm-tot-st')!.textContent = visited + ' / ' + STATIONS.length + ' stations visited';
-				document.getElementById('sm-tot-sg')!.textContent = ridden + ' / ' + SEGMENTS.length + ' track segments ridden';
-				document.getElementById('sm-tot-pct')!.textContent = Math.round((100 * ridden) / SEGMENTS.length) + '% of the system ridden';
+				document.getElementById('sm-tot-sg')!.textContent = ridden.toFixed(1) + ' / ' + Math.round(total) + ' miles ridden';
+				document.getElementById('sm-tot-pct')!.textContent = Math.round((100 * ridden) / total) + '% of the system ridden';
 				geo?.show(marks);
 			}
 
