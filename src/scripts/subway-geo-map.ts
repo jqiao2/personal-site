@@ -116,7 +116,10 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 	let loaded = false, pending: Marks | null = null;
 
 	map.on('load', () => {
-		map.addSource('seg', { type: 'geojson', data: lineGeoJSON(), promoteId: 'id' });
+		// tolerance 0: the tiler otherwise simplifies per zoom and drops features that
+		// are tiny at that zoom — zoomed out, the few-metre pieces a slide through a
+		// curve is drawn in vanished and left gaps in the lines
+		map.addSource('seg', { type: 'geojson', data: lineGeoJSON(), promoteId: 'id', tolerance: 0 });
 		map.addSource('st', { type: 'geojson', data: stationGeoJSON(), promoteId: 'id' });
 
 		map.addLayer({
