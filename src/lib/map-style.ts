@@ -38,6 +38,23 @@ export const MAP_TOKENS = {
 	pinRing: '#2f1e12', // pin outline, and the fill of a worth-the-trip pin
 } as const;
 
+// The same basemap re-inked for /subway's map view: the diagram's pale
+// green-grey ground, roads a touch lighter than it, so the 24 service colours
+// are the only saturated things on screen.
+export const SUBWAY_MAP_TOKENS = {
+	land: '#eef1ee',
+	water: '#d4dfe0',
+	park: '#e2e9de',
+	roadMajor: '#fafbfa',
+	roadCasing: '#d5dad6',
+	roadMinor: '#f6f8f6',
+	building: '#e5e9e5',
+	boundary: '#b9c0bc',
+	label: '#6b7370',
+	labelHalo: '#eef1ee',
+	pinRing: '#26231f',
+};
+
 const TILES = 'https://api.maptiler.com/tiles/v3/tiles.json';
 
 const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
@@ -55,9 +72,7 @@ const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
  * for type that renders at 11px under a pin. The label COLOUR and halo are ours,
  * which is what actually makes them look set rather than default.
  */
-export function menuBasemap(key: string) {
-	const t = MAP_TOKENS;
-
+export function menuBasemap(key: string, t: Record<keyof typeof MAP_TOKENS, string> = MAP_TOKENS) {
 	return {
 		version: 8 as const,
 		name: "Jason's restaurant log",

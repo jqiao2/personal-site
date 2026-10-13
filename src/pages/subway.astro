@@ -40,7 +40,13 @@ import SiteHeader from '../components/SiteHeader.astro';
 						</g>
 					</svg>
 
+					<div id="sm-geo" hidden></div>
+
 					<div class="sm-controls">
+						<div class="sm-view">
+							<button id="sm-view-diagram" aria-pressed="true">Diagram</button>
+							<button id="sm-view-map" aria-pressed="false">Map</button>
+						</div>
 						<div class="sm-zoom">
 							<button id="sm-zin" title="Zoom in">+</button>
 							<button id="sm-zout" title="Zoom out">&minus;</button>
@@ -75,7 +81,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 					<p class="sm-note">
 						Every service is its own line. The A, C and E each run their own track down 8 Av. You can
 						log them independently. Click a line to mark it ridden. Click a station to mark it
-						visited. Saved in this browser. Export to back up or move devices.
+						visited. Export to back up.
 					</p>
 				</aside>
 			</div>
@@ -136,6 +142,31 @@ import SiteHeader from '../components/SiteHeader.astro';
 			.sm-zoom {
 				display: flex;
 				gap: 6px;
+			}
+			#sm-geo {
+				position: absolute;
+				inset: 0;
+			}
+			.sm-view {
+				display: flex;
+			}
+			.sm-view button {
+				border: none;
+				background: #20100f;
+				color: #a2857a;
+				font: 600 12px Archivo, Arial, sans-serif;
+				padding: 9px 12px;
+				cursor: pointer;
+			}
+			.sm-view button:first-child {
+				border-radius: 8px 0 0 8px;
+			}
+			.sm-view button:last-child {
+				border-radius: 0 8px 8px 0;
+			}
+			.sm-view button[aria-pressed='true'] {
+				color: #f4e8d1;
+				background: #3a1d1f;
 			}
 			.sm-zoom button {
 				width: 34px;
@@ -294,8 +325,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 		<script>
 			import { CANVAS, SERVICES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
 			import type { SubwaySegment, SubwayStation } from '../scripts/subway-data.js';
+			import { loadMarks, saveMark, saveAll, type Marks } from '../scripts/subway-marks';
 
-			const KEY = 'mta-subway-log-v2';
 
 			const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -350,21 +381,14 @@ import SiteHeader from '../components/SiteHeader.astro';
 			STATIONS.forEach((s) => (stById[s.id] = s));
 
 			// ---- state ----
-			/** Marked stations / segments, as id → 1 sets. */
-			type Marks = { st: Record<string, 1>; seg: Record<string, 1> };
-
+			// Blank until loadMarks answers: the owner's saved log, or nothing for a visitor.
 			let marks: Marks = { st: {}, seg: {} };
-
-			try {
-				const s = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-
-				if (s && s.st && s.seg) marks = s;
-			} catch (e) {}
 
 			let k = 1, tx = 0, ty = 0, showLabels = false;
 
 			// ---- helpers ----
 			function el(name: string, attrs: Record<string, string | number>): SVGElement {
+				// SAFETY: created in the SVG namespace, so it is always an SVGElement.
 				const e = document.createElementNS(SVGNS, name) as SVGElement;
 
 				for (const kk in attrs) e.setAttribute(kk, String(attrs[kk]));
@@ -390,7 +414,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 				return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#141414' : '#ffffff';
 			}
 
-			function save() { try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {} }
+			// A failed save keeps the mark on screen and says so, rather than silently losing it.
+			function saved(p: Promise<unknown>) { p.catch(() => setMsg('Not saved. Check your connection and reload.')); }
 
 			function setMsg(t: string) { if (t) { msgEl.textContent = t; msgEl.hidden = false; } else msgEl.hidden = true; }
 
@@ -757,23 +782,28 @@ import SiteHeader from '../components/SiteHeader.astro';
 				document.getElementById('sm-tot-st')!.textContent = visited + ' / ' + STATIONS.length + ' stations visited';
 				document.getElementById('sm-tot-sg')!.textContent = ridden + ' / ' + SEGMENTS.length + ' track segments ridden';
 				document.getElementById('sm-tot-pct')!.textContent = Math.round((100 * ridden) / SEGMENTS.length) + '% of the system ridden';
+				geo?.show(marks);
 			}
 
 			// ---- marking ----
 			function toggleSeg(id: string) {
-				if (dragMoved) return;
+				if (!dragMoved) markSeg(id);
+			}
 
+			function stationClick(id: number) {
+				if (!dragMoved) markSt(id);
+			}
+
+			function markSeg(id: string) {
 				if (marks.seg[id]) delete marks.seg[id]; else marks.seg[id] = 1;
-				save();
+				saved(saveMark('segment', id, !!marks.seg[id]));
 				renderSegMark(segEls[id].sg);
 				renderSidebar();
 			}
 
-			function stationClick(id: number) {
-				if (dragMoved) return;
-
+			function markSt(id: number) {
 				if (marks.st[id]) delete marks.st[id]; else marks.st[id] = 1;
-				save();
+				saved(saveMark('station', String(id), !!marks.st[id]));
 				renderPillMark(stById[id]);
 				renderSidebar();
 			}
@@ -867,6 +897,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			});
 
 			document.getElementById('sm-import')!.addEventListener('change', (e) => {
+				// SAFETY: this listener is on #sm-import, an <input type="file">.
 				const input = e.target as HTMLInputElement;
 				const f = input.files && input.files[0];
 
@@ -877,13 +908,50 @@ import SiteHeader from '../components/SiteHeader.astro';
 						marks = { st: {}, seg: {} };
 						(d.stationsVisited || Object.keys(d.st || {})).forEach((id: string) => (marks.st[id] = 1));
 						(d.segmentsRidden || Object.keys(d.seg || {})).forEach((kk: string) => (marks.seg[kk] = 1));
-						save();
 						renderAllMarks();
-						setMsg('Imported.');
+						saveAll(marks).then(() => setMsg('Imported.'), () => setMsg('Imported, but not saved. Reload and try again.'));
 					} catch (err) { setMsg('Could not read that file.'); }
 				});
 				input.value = '';
 			});
+
+			// ---- diagram / map view ----
+			// The map view is the same network over real streets; MapLibre only loads
+			// the first time it is opened.
+			const VIEW_KEY = 'mta-subway-view';
+
+			const geoEl = document.getElementById('sm-geo')!;
+
+			const zoomEl = document.querySelector<HTMLElement>('.sm-zoom')!;
+
+			const viewBtns = { diagram: document.getElementById('sm-view-diagram')!, map: document.getElementById('sm-view-map')! };
+
+			let geo: { show: (m: Marks) => void; resize: () => void } | null = null;
+
+			async function setView(v: 'diagram' | 'map') {
+				const isMap = v === 'map';
+				svg.style.display = isMap ? 'none' : '';
+				zoomEl.style.display = isMap ? 'none' : '';
+				geoEl.hidden = !isMap;
+				viewBtns.diagram.setAttribute('aria-pressed', String(!isMap));
+				viewBtns.map.setAttribute('aria-pressed', String(isMap));
+
+				try { localStorage.setItem(VIEW_KEY, v); } catch (e) {}
+
+				if (!isMap) return;
+
+				if (geo) { geo.resize();
+
+ return; }
+
+				const { mountGeoMap } = await import('../scripts/subway-geo-map');
+				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt);
+				geo.show(marks);
+			}
+
+			viewBtns.diagram.addEventListener('click', () => setView('diagram'));
+
+			viewBtns.map.addEventListener('click', () => setView('map'));
 
 			// ---- go ----
 			applyPan();
@@ -891,6 +959,10 @@ import SiteHeader from '../components/SiteHeader.astro';
 			drawGeometry();
 
 			renderAllMarks();
+
+			loadMarks().then((m) => { marks = m; renderAllMarks(); }, () => setMsg('Could not load your log.'));
+
+			try { if (localStorage.getItem(VIEW_KEY) === 'map') setView('map'); } catch (e) {}
 		</script>
 	</body>
 </html>
