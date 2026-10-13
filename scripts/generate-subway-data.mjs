@@ -579,9 +579,11 @@ async function main() {
 
     // F: the source threads the F over the Manhattan Bridge alignment (phantom
     // Broadway-Lafayette/2 Av -> York St links) and leaves East Broadway a stub.
-    // The real F runs the Rutgers tunnel: East Broadway -> York St -> Jay St.
+    // The real F runs Broadway-Lafayette -> 2 Av, then the Rutgers tunnel:
+    // East Broadway -> York St -> Jay St.
     removeSeg('F', "B'way-Lafayette St", 'York St');
     removeSeg('F', '2 Av', 'York St');
+    addSeg('F', "B'way-Lafayette St", '2 Av');
     addSeg('F', 'East Broadway', 'York St');
 
     // 6 in the South Bronx. 3 Av-138 St / Brook Av / Cypress Av are meant to sit on

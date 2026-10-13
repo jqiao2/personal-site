@@ -24,14 +24,18 @@ type Marks = { st: Record<string, 1>; seg: Record<string, 1> };
 
 const on: maplibregl.ExpressionSpecification = ['boolean', ['feature-state', 'on'], false];
 
-// Unridden track is the service colour faded into the ground, as in the diagram.
-// An opaque colour rather than line-opacity: a segment is several pieces, and
-// translucent pieces darken where their round ends overlap — a dotted line.
+// Unridden track is the service colour faded into the (dark) ground, as the
+// diagram fades it into its pale one. An opaque colour rather than line-opacity:
+// a segment is several pieces, and translucent pieces darken where their round
+// ends overlap — a dotted line.
 function fade(hex: string) {
-	const ground = [0xee, 0xf1, 0xee];
+	const ground = [0x1a, 0x1c, 0x1e];
 
-	return '#' + ground.map((g, j) => Math.round(parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) * 0.32 + g * 0.68).toString(16).padStart(2, '0')).join('');
+	return '#' + ground.map((g, j) => Math.round(parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) * 0.55 + g * 0.45).toString(16).padStart(2, '0')).join('');
 }
+
+// on the dark ground a visited marker is the light one
+const INK = '#ecebe6', EDGE = '#80878b';
 
 function lineGeoJSON() {
 	return {
@@ -83,7 +87,8 @@ function linkGeoJSON() {
 	};
 }
 
-const offset: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 10, ['*', ['get', 'o'], 2.2], 13, ['*', ['get', 'o'], 3.4], 16, ['*', ['get', 'o'], 5.5]];
+// a slot is a little wider than a line, so neighbours keep a visible gap
+const offset: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 10, ['*', ['get', 'o'], 2.6], 13, ['*', ['get', 'o'], 4], 16, ['*', ['get', 'o'], 6.4]];
 
 export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) => void, onSt: (id: number) => void) {
 	const t = SUBWAY_MAP_TOKENS;
@@ -136,7 +141,7 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 		// a complex's platforms joined by a walkway, drawn like the markers it links
 		map.addSource('link', { type: 'geojson', data: linkGeoJSON(), promoteId: 'id' });
 
-		const links: [string, number, string][] = [['link-edge', 7, '#7a7264'], ['link', 4.4, '#ffffff']];
+		const links: [string, number, string][] = [['link-edge', 7, EDGE], ['link', 4.4, t.land]];
 
 		for (const [id, width, off] of links) {
 			map.addLayer({
@@ -145,7 +150,7 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 				source: 'link',
 				layout: { 'line-cap': 'round' },
 				paint: {
-					'line-color': ['case', on, '#26231f', off],
+					'line-color': ['case', on, INK, off],
 					'line-width': ['interpolate', ['linear'], ['zoom'], 11, width * 0.45, 16, width * 1.4],
 				},
 			});
@@ -157,8 +162,8 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 			source: 'st',
 			paint: {
 				'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, ['case', ['>', ['get', 'n'], 2], 3.2, 2.4], 16, ['case', ['>', ['get', 'n'], 2], 8, 6]],
-				'circle-color': ['case', on, '#26231f', '#ffffff'],
-				'circle-stroke-color': ['case', on, '#26231f', '#7a7264'],
+				'circle-color': ['case', on, INK, t.land],
+				'circle-stroke-color': ['case', on, INK, EDGE],
 				'circle-stroke-width': 1.3,
 			},
 		});
@@ -178,7 +183,7 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 					'text-offset': [0.9, 0],
 					'text-optional': true,
 				},
-				paint: { 'text-color': '#2a2620', 'text-halo-color': t.land, 'text-halo-width': 1.5 },
+				paint: { 'text-color': '#d9d7d1', 'text-halo-color': t.land, 'text-halo-width': 1.5 },
 			});
 		}
 

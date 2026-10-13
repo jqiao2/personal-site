@@ -146,6 +146,17 @@ import SiteHeader from '../components/SiteHeader.astro';
 			#sm-geo {
 				position: absolute;
 				inset: 0;
+				background: #1a1c1e;
+			}
+			/* the map is dark; so are its zoom buttons */
+			#sm-geo .maplibregl-ctrl-group {
+				background: #20100f;
+			}
+			#sm-geo .maplibregl-ctrl-group button + button {
+				border-top-color: #3a2a28;
+			}
+			#sm-geo .maplibregl-ctrl-icon {
+				filter: invert(1);
 			}
 			.sm-view {
 				display: flex;

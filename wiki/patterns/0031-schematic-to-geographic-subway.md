@@ -72,6 +72,30 @@ and clicks still treat them as one line.
 - Unridden lines use an **opaque faded colour**, not `line-opacity`: translucent
   pieces darken where their round ends overlap, making the line look dotted.
 
+- **Bundle mates share one centreline.** Slots fan out in pixels from each
+  service's own track, so an express a few metres off its local (Lex 4/5 vs 6)
+  or the B/D beside the N/Q on the Manhattan Bridge drew over each other close
+  in. Each vertex moves to the weighted mean of its bundle mates' tracks (full
+  within 30 m, none past 50 m, smoothed over ±60 m), ends at a station together.
+- **Cut straights at every line's stations.** An express's straight with no
+  stops (B/D 34 St–W 4 St) got one bundle for its whole length, including the
+  A/C/E it only meets at the end, and sat half a slot off the F/M — interleaved,
+  one thick band. Cutting it where the locals' stations sit gives bundle mates
+  the same boundaries; a slot change at a cut eases in like a station.
+- **Check overlaps by scan, not by eye.** Walk every piece, find parallel pieces
+  of other services within 6 m, compare slots read against one fixed direction;
+  < 0.75 apart is an overlap. What's left after the fixes is short slides.
+
+## The Diagram view uses the same bundler
+`scripts/generate-subway-diagram.mjs` runs `sectionLines` on the schematic
+(1 unit = 100 "m"), with three options: `smooth` (per-vertex slots, since SVG
+offsets each vertex itself — no quarter-slot staircases), `axis` (left/right per
+straight against a fixed SW axis: octilinear track never winds, and the group
+vote put the 2/3 across the 1 at Chambers St), and `curveGap` (schematic corner
+vertices are ~2 units apart, so the default split corners into fragments). The
+schematic's few real gaps (N/Q at Union Sq, Canal St) are welded first; this
+replaced the renderer weld and the per-segment `o`.
+
 ## `line-offset` follows line direction
 It's in screen px (constant bundle width at any zoom), but offsets to the line's
 right. Segments are stored a→b or b→a arbitrarily, so a slot must be read

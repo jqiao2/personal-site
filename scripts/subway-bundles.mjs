@@ -32,6 +32,14 @@ const CURVE_GAP = 60; // ...with the next such vertex if it is within this many 
 
 const CURVE_TURN = 15; // ...and the run counts as a curve once it turns this much in total
 
+const MERGE = 30; // bundle mates' tracks this close draw on one centreline...
+
+const MERGE_END = 50; // ...and pull less and less out to this (the neighbour search's reach)
+
+const SMOOTH = 60; // ...the pull spread over this many metres either side
+
+const MIN_STRAIGHT = 60; // a cut at another line's station leaves no straight shorter than this
+
 const CHECK = 150;
 
 const STATION_EASE = 80;
@@ -130,6 +138,41 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
 
     return { ...line, acc, total, straights };
   });
+
+  // Straights are also cut wherever any line's station sits on them, so an
+  // express's long straight (B/D from 34 St to W 4 St) breaks where its locals'
+  // do: bundle mates then share boundaries and agree on who is in the bundle.
+  // Measured as one straight, the B/D took the A/C/E from its last few hundred
+  // metres into the whole run and sat half a slot off the F/M all the way.
+  const stops = L.flatMap((l) => [l.pts[0], l.pts[l.pts.length - 1]]);
+
+  for (const l of L) {
+    const xs = l.pts.map((p) => p[0]), ys = l.pts.map((p) => p[1]);
+    const [x0, x1, y0, y1] = [Math.min(...xs) - SAME_TRACK, Math.max(...xs) + SAME_TRACK, Math.min(...ys) - SAME_TRACK, Math.max(...ys) + SAME_TRACK];
+    const cuts = [];
+
+    for (const q of stops) {
+      if (q[0] < x0 || q[0] > x1 || q[1] < y0 || q[1] > y1) continue;
+      let best = null;
+
+      for (let e = 0; e < l.pts.length - 1; e++) {
+        const [a, b] = [l.pts[e], l.pts[e + 1]], ex = b[0] - a[0], ey = b[1] - a[1], len = Math.hypot(ex, ey) || 1;
+        const k = Math.max(0, Math.min(1, ((q[0] - a[0]) * ex + (q[1] - a[1]) * ey) / (len * len)));
+        const d = Math.hypot(a[0] + k * ex - q[0], a[1] + k * ey - q[1]);
+
+        if (d <= SAME_TRACK && (!best || d < best.d)) best = { d, a: l.acc[e] + k * len };
+      }
+
+      if (best) cuts.push(best.a);
+    }
+
+    l.straights = l.straights.flatMap((s) => {
+      const inner = cuts.filter((a) => a > s.a0 + MIN_STRAIGHT && a < s.a1 - MIN_STRAIGHT).sort((x, y) => x - y);
+      const at = [s.a0, ...inner.filter((a, i) => !i || a - inner[i - 1] >= MIN_STRAIGHT), s.a1];
+
+      return at.slice(1).map((a1, i) => ({ a0: at[i], a1, cutStart: i > 0, cutEnd: i < at.length - 2 }));
+    });
+  }
 
   // AXIS: "left" and "right" of a bundle must mean the same side to every
   // member, so slots are read against one fixed axis u: a straight heading
@@ -265,6 +308,95 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     }
   });
 
+  // 2b. One centreline per bundle. Bundle mates on separate tracks (an express
+  //     beside its local, the B/D beside the N/Q on the Manhattan Bridge) are
+  //     metres apart, and the slots fan out in pixels from each one's own
+  //     track, so close in they drew over each other. Each vertex moves to the
+  //     weighted mean of its own track and its bundle mates' alongside: full
+  //     weight within MERGE m, none past MERGE_END, so a branch drifting away
+  //     lets go gradually. A service's ends at a station move together.
+  function nearestOf(svc, p, t) {
+    let best = null;
+
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (const [li, e] of grid.get(key(p[0] + dx * CELL, p[1] + dy * CELL)) ?? []) {
+          const o = L[li];
+
+          if (o.sg.svc !== svc) continue;
+          const [a, b] = [o.pts[e], o.pts[e + 1]], ex = b[0] - a[0], ey = b[1] - a[1], len = Math.hypot(ex, ey) || 1;
+          const k = Math.max(0, Math.min(1, ((p[0] - a[0]) * ex + (p[1] - a[1]) * ey) / (len * len)));
+          const q = [a[0] + k * ex, a[1] + k * ey], d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+
+          if (Math.abs((ex * t[0] + ey * t[1]) / len) > 0.85 && d <= MERGE_END && (!best || d < best.d)) best = { q, d };
+        }
+      }
+    }
+
+    return best;
+  }
+
+  const moved = L.map((l) =>
+    l.pts.map((p, i) => {
+      const s = l.straights[straightAt(l, l.acc[i])], a = l.pts[Math.max(0, i - 1)], b = l.pts[Math.min(l.pts.length - 1, i + 1)];
+      const n = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1, t = [(b[0] - a[0]) / n, (b[1] - a[1]) / n];
+      let x = p[0], y = p[1], w = 1;
+
+      for (const svc of s.shares) {
+        const near = svc === l.sg.svc ? null : nearestOf(svc, p, t);
+
+        if (!near) continue;
+        const k = Math.min(1, (MERGE_END - near.d) / (MERGE_END - MERGE));
+        x += k * near.q[0]; y += k * near.q[1]; w += k;
+      }
+
+      return [x / w - p[0], y / w - p[1]];
+    }),
+  ).map((shift, li) => {
+    // A pull measured vertex by vertex jumps wherever a mate's nearest point
+    // does (curves, junctions); spread over ±SMOOTH m it slides instead.
+    const { pts, acc } = L[li];
+
+    return pts.map((p, i) => {
+      let x = 0, y = 0, w = 0;
+
+      for (let j = 0; j < pts.length; j++) {
+        const d = Math.abs(acc[j] - acc[i]);
+
+        if (d > SMOOTH) continue;
+        const k = (1 - d / SMOOTH) * (((acc[j + 1] ?? acc[j]) - (acc[j - 1] ?? acc[j])) / 2 || 1);
+        x += k * shift[j][0]; y += k * shift[j][1]; w += k;
+      }
+
+      return [p[0] + x / w, p[1] + y / w];
+    });
+  });
+
+  for (const group of ends.values()) {
+    const pts = group.map(({ li, atStart }) => moved[li][atStart ? 0 : moved[li].length - 1]);
+    const c = [0, 1].map((j) => pts.reduce((sum, p) => sum + p[j], 0) / pts.length);
+
+    for (const { li, atStart } of group) moved[li][atStart ? 0 : moved[li].length - 1] = c;
+  }
+
+  L.forEach((l, li) => {
+    const acc = cumulative(moved[li]);
+
+    // straights keep their vertices; their arc positions follow the moved track
+    const remap = (a) => {
+      let i = 1;
+
+      while (i < l.acc.length - 1 && l.acc[i] < a) i++;
+      const f = (a - l.acc[i - 1]) / (l.acc[i] - l.acc[i - 1] || 1);
+
+      return acc[i - 1] + f * (acc[i] - acc[i - 1]);
+    };
+
+    for (const s of l.straights) { s.a0 = remap(s.a0); s.a1 = remap(s.a1); }
+
+    l.pts = moved[li]; l.acc = acc; l.total = acc[acc.length - 1];
+  });
+
   function neighbour(li, atStart) {
     const l = L[li], st = atStart ? l.sg.a : l.sg.b;
     const out = atStart ? at(l.pts, l.acc, 0).t.map((v) => -v) : at(l.pts, l.acc, l.total).t;
@@ -385,8 +517,9 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     const anchors = [[0, (first.off + across(li, true)) / 2]];
 
     for (const s of l.straights) {
-      anchors.push([s === first && s.a0 === 0 ? ease(s) : s.a0, s.off]);
-      anchors.push([s === last && s.a1 === l.total ? l.total - ease(s) : s.a1, s.off]);
+      // at a station, or a cut where another line's station sits, the change eases in
+      anchors.push([(s === first && s.a0 === 0) || s.cutStart ? s.a0 + ease(s) : s.a0, s.off]);
+      anchors.push([(s === last && s.a1 === l.total) || s.cutEnd ? s.a1 - ease(s) : s.a1, s.off]);
     }
 
     anchors.push([l.total, (last.off + across(li, false)) / 2]);
