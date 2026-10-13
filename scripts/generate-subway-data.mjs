@@ -625,6 +625,16 @@ async function main() {
     // The 5's Bronx Park East -> Morris Park stood in for its E 180 St -> Bronx Park East (White Plains Rd branch).
     stopsAt('5', 95872, 95881, 96087, '2'); // Bronx Park East, E 180 St, Morris Park
 
+    // 42 St Shuttle: the source draws it a couple of units under the 7, half
+    // overlapping it. Lay it on the 7's own path (through 5 Av, where it doesn't
+    // stop) so the bundler sets the two side by side.
+    {
+      const leg = (x, y) => { const sg = findSeg('7', x, y);
+
+ return sg.a === findSt(x, '7').id ? sg.pts : sg.pts.slice().reverse(); };
+      setSegPts('S', 'Times Sq-42 St', 'Grand Central-42 St', [...leg('Times Sq-42 St', '5 Av'), ...leg('5 Av', 'Grand Central-42 St').slice(1)]);
+    }
+
     // 6 in the South Bronx. 3 Av-138 St / Brook Av / Cypress Av are meant to sit on
     // one horizontal; snap them (and the segments between) to a single y so the run
     // is dead flat. Straighten the 125 St elbow and the Cypress climb to clean
