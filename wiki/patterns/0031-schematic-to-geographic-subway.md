@@ -79,6 +79,9 @@ and clicks still treat them as one line.
   is constant per feature, so the fix is steps well under a pixel: 1/16 slot,
   pieces ≥ 2 m, ends snapped to vertices within 1 m (3.7k pieces, 62 KB
   gzipped). The diagram has no such limit: SVG offsets per vertex (`smooth`).
+  Short pieces need the GeoJSON source's `tolerance: 0`: by default the tiler
+  simplifies per zoom and drops features tiny at that zoom, so zoomed out the
+  curves went missing.
 - Unridden lines use an **opaque faded colour**, not `line-opacity`: translucent
   pieces darken where their round ends overlap, making the line look dotted.
 
