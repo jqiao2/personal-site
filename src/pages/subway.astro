@@ -275,6 +275,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			}
 			.sm-tip {
 				position: absolute;
+				z-index: 1; /* above the map */
 				pointer-events: none;
 				display: flex;
 				align-items: center;
@@ -673,11 +674,12 @@ import SiteHeader from '../components/SiteHeader.astro';
 			// ---- hover tooltip: the line's bullet beside the cursor ----
 			const tipEl = document.getElementById('sm-tip')!;
 
-			function showTip(sg: SubwaySegment, e: PointerEvent) {
+			function showTip(sg: SubwaySegment, e: { clientX: number; clientY: number }) {
 				if (drag) return hideTip();
 				const text = stById[sg.a].name + ' ↔ ' + stById[sg.b].name + (marks.seg[sg.id] ? ' · ridden' : '');
 				tipEl.replaceChildren(makeBullet(sg.svc, sg.color), text);
-				const r = svg.getBoundingClientRect();
+				// the wrapper, not the svg: in the Map view the svg is hidden
+				const r = tipEl.parentElement!.getBoundingClientRect();
 				tipEl.style.left = e.clientX - r.left + 14 + 'px';
 				tipEl.style.top = e.clientY - r.top + 14 + 'px';
 				tipEl.hidden = false;
@@ -894,7 +896,7 @@ import SiteHeader from '../components/SiteHeader.astro';
  return; }
 
 				const { mountGeoMap } = await import('../scripts/subway-geo-map');
-				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt);
+				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt, (id, e) => (id ? showTip(segEls[id].sg, e) : hideTip()));
 				geo.show(marks);
 			}
 
@@ -911,7 +913,12 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			loadMarks().then((m) => { marks = m; renderAllMarks(); }, () => setMsg('Could not load your log.'));
 
-			try { if (localStorage.getItem(VIEW_KEY) === 'map') setView('map'); } catch (e) {}
+			// the Map view unless the Diagram was the last one picked
+			let lastView: string | null = null;
+
+			try { lastView = localStorage.getItem(VIEW_KEY); } catch (e) {}
+
+			setView(lastView === 'diagram' ? 'diagram' : 'map');
 		</script>
 	</body>
 </html>
