@@ -77,4 +77,23 @@ const joined = (out) => {
   assert.ok(Math.abs(y("4|1|2") - y("6|1|2")) < 0.5, `one centreline: ${y("4|1|2")} vs ${y("6|1|2")}`);
 }
 
+// 5. One straight with different mates at each end: the F runs with the G from
+//    Bergen St, then beside the A/C into Jay St. Measured whole it counted all
+//    three as mates and took the G's side; split where the G leaves, F and G
+//    sit on opposite sides of their shared stretch.
+{
+  const out = sectionLines(
+    [
+      line("F", 1, 2, [[0, 0], [0, 1000]]),
+      line("G", 1, 3, [[0, 0], [0, 400], [20, 440], [60, 470], [400, 480]]),
+      line("C", 2, 4, [[30, 1000], [30, 600], [50, 560], [90, 540], [500, 530]]),
+    ],
+    ["C", "F", "G"],
+  );
+  const near = (id) => out[id].find((p) => Math.min(...p.pts.map(([, y]) => y)) <= 200 && Math.max(...p.pts.map(([, y]) => y)) >= 200).o;
+
+  assert.ok(Math.abs(near("F|1|2") - near("G|1|3")) >= 1, `F and G apart: ${near("F|1|2")} vs ${near("G|1|3")}`);
+  joined(out);
+}
+
 console.log("subway-bundles ok");

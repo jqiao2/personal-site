@@ -97,6 +97,16 @@ and clicks still treat them as one line.
   A/C/E it only meets at the end, and sat half a slot off the F/M — interleaved,
   one thick band. Cutting it where the locals' stations sit gives bundle mates
   the same boundaries; a slot change at a cut eases in like a station.
+- **Recut where mates disagree.** A straight can have different mates at each
+  end without a station between them: the F from Bergen St runs with the G,
+  then beside the A/C into Jay St. Measured whole it counted all three, ranked
+  3rd of 4, while the G ranked 2nd of 2, so both landed on the same side. After
+  the first membership pass, any mate pair whose bundle sets differ cuts each
+  straight where the other's starts/ends, and membership runs again. Cutting
+  at *every* curve end (or every mate end) made the map worse: each cut eases
+  like a station and adds a slide. Pieces under CHECK m re-sample noisily (a
+  75 m stub at Atlantic Av dropped the Q from the B's bundle), so mate cuts
+  leave ≥ CHECK m either side. Overlap scan: 3.2 km → 2.4 km.
 - **Forced flips land on the line that leaves.** With a fixed order, some
   junctions must cross (E/B/D at 7 Av–53 St). Side links are tried most
   carried-over mates first, so the skipped link — the flip — falls on the line
