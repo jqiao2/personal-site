@@ -300,8 +300,12 @@ for (const sg of SEGMENTS) {
 // ---- 5. side-by-side slots, worked out along each line (scripts/subway-bundles.mjs) ----
 // Houston St: the F runs on east as the B, D and M turn down Chrystie St, and
 // the M then leaves them east for Essex St, so the M rides between the F and
-// the B/D. By the global order it sat beyond the F and crossed both.
-const sections = sectionLines(lines, SERVICES.map((s) => s.svc), { orders: { "B,D,F,M": ["B", "D", "M", "F"] } });
+// the B/D. By the global order it sat beyond the F and crossed both. The same
+// holds where the A/C/E join the bundle at W 4 St, or the M crosses the F on
+// the curve onto Houston St.
+const sections = sectionLines(lines, SERVICES.map((s) => s.svc), {
+  orders: { "B,D,F,M": ["B", "D", "M", "F"], "A,B,C,D,E,F,M": ["A", "C", "E", "B", "D", "M", "F"] },
+});
 
 // ---- 6. station markers: one dot per platform used, linked within a complex ----
 // A marker sits where its lines end, not on the platform itself: bundle mates
