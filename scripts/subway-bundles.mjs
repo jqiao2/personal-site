@@ -44,11 +44,11 @@ const CHECK = 150;
 
 const STATION_EASE = 80;
 
-const QUANT = 4; // a shift is drawn in quarter-slot steps
+const QUANT = 16; // a shift is drawn in 1/16-slot steps (well under a pixel)
 
-const SNAP = 6; // piece ends move to a track vertex this close
+const SNAP = 1; // piece ends move to a track vertex this close
 
-const MIN_PIECE = 8;
+const MIN_PIECE = 2;
 
 const MIN_EDGE = 2;
 
