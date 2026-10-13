@@ -622,6 +622,8 @@ async function main() {
     stopsAt('B', 91885, 91894, 92036, 'Q'); // DeKalb Av, Atlantic Av, 7 Av
     stopsAt('R', 91885, 91894, 91901, 'Q'); // DeKalb Av, Atlantic Av, Union St
     stopsAt('A', 93552, 93543, 93589, null); // 104 St, Rockaway Blvd, Aqueduct Racetrack
+    // The 5's Bronx Park East -> Morris Park stood in for its E 180 St -> Bronx Park East (White Plains Rd branch).
+    stopsAt('5', 95872, 95881, 96087, '2'); // Bronx Park East, E 180 St, Morris Park
 
     // 6 in the South Bronx. 3 Av-138 St / Brook Av / Cypress Av are meant to sit on
     // one horizontal; snap them (and the segments between) to a single y so the run
