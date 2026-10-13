@@ -38,6 +38,8 @@ const watchedHref = (params: Record<string, string | number>) => {
 // Bar-chart maxima (for relative heights/widths).
 const weekMax = Math.max(1, ...stats.weeks.map((w) => w.count));
 
+const weekdayMax = Math.max(1, ...stats.weekdays.map((d) => d.count));
+
 const byYearMax = Math.max(1, ...stats.byYear.map((d) => d.count));
 
 const ratingMax = Math.max(1, ...stats.ratings);
@@ -113,20 +115,56 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 				<section class="block">
 					<div class="block__head">
 						<div class="block__title">Films watched per week</div>
-						<div class="block__meta">{stats.weekSpan} · avg <span class="hl">{stats.weekAvg}</span>/wk</div>
+						<div class="block__meta">
+							<span class="key key--theater">Theater</span><span class="key">Elsewhere</span>
+							{stats.weekSpan} · avg <span class="hl">{stats.weekAvg}</span>/wk
+						</div>
 					</div>
 					<div class="bars bars--tall">
-						{stats.weeks.map((w) => (
-							<div class="bars__slot" title={w.title}>
+						{stats.weeks.map((w) => {
+							const bar = (
 								<div
-									class="bar"
+									class="bar bar--split"
 									style={`height:${Math.round((w.count / weekMax) * 100)}%;${w.count === 0 ? 'background:#402226;' : ''}`}
-								></div>
-							</div>
-						))}
+								>
+									{w.theater ? <div class="bar__theater" style={`height:${(w.theater / w.count) * 100}%`}></div> : null}
+								</div>
+							);
+							return w.count > 0 ? (
+								<a class="bars__slot" href={`/films/watched?wfrom=${w.from}&wto=${w.to}`} title={w.title}>{bar}</a>
+							) : (
+								<div class="bars__slot" title={w.title}>{bar}</div>
+							);
+						})}
 					</div>
 					<div class="axis">
 						{stats.weekLabels.map((l) => <span>{l}</span>)}
+					</div>
+				</section>
+			)}
+
+			<!-- Films watched by day of the week -->
+			{stats.showWeeks && stats.weekdays.some((d) => d.count > 0) && (
+				<section class="block">
+					<div class="block__head">
+						<div class="block__title">Day of the week</div>
+						<div class="block__meta">
+							<span class="key key--theater">Theater</span><span class="key">Elsewhere</span>
+						</div>
+					</div>
+					<div class="ratings">
+						<div class="bars bars--ratings">
+							{stats.weekdays.map((d) => (
+								<div class="bars__slot" title={d.title}>
+									<div class="bar bar--split" style={`height:${Math.round((d.count / weekdayMax) * 100)}%`}>
+										{d.theater ? <div class="bar__theater" style={`height:${(d.theater / d.count) * 100}%`}></div> : null}
+									</div>
+								</div>
+							))}
+						</div>
+						<div class="ratings__axis">
+							{['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => <span>{d}</span>)}
+						</div>
 					</div>
 				</section>
 			)}
@@ -458,6 +496,38 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 		.bars--tall .bars__slot:hover .bar,
 		.bars--ratings .bars__slot:hover .bar {
 			background: #f4e8d1;
+		}
+
+		/* Theater vs elsewhere: the bar is the "elsewhere" colour, with the
+		   theater share stacked in gold at its foot. */
+		.bar--split {
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			overflow: hidden;
+			background: #8a6f63;
+		}
+		.bar__theater {
+			background: #d9b45a;
+		}
+		.bars__slot:hover .bar__theater {
+			background: #f0d488;
+		}
+		.key {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			margin-right: 14px;
+		}
+		.key::before {
+			content: '';
+			width: 9px;
+			height: 9px;
+			border-radius: 2px;
+			background: #8a6f63;
+		}
+		.key--theater::before {
+			background: #d9b45a;
 		}
 		.axis {
 			display: flex;

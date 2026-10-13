@@ -78,6 +78,8 @@ const summary = hasFilters
 			releaseYears: query.releaseYears ?? [],
 			diaryYearMin: query.diaryYearMin ?? null,
 			diaryYearMax: query.diaryYearMax ?? null,
+			watchedFrom: query.watchedFrom ?? null,
+			watchedTo: query.watchedTo ?? null,
 			tags: query.tags ?? [],
 			directors: query.directors ?? [],
 			actors: query.actors ?? [],
@@ -193,6 +195,12 @@ const summary = hasFilters
 								<span id="ymin-label"></span><span id="ymax-label"></span>
 							</div>
 						</div>
+					</section>
+
+					{/* First-watch week, from a Stats week bar (?wfrom=…&wto=…) only. */}
+					<section id="wspan-section" hidden>
+						<h2 class="grp">Watched</h2>
+						<div class="chips" id="wspan"></div>
 					</section>
 
 					<section data-group="tag">
@@ -605,7 +613,8 @@ const summary = hasFilters
 		.panel__wide {
 			grid-column: 1 / -1;
 		}
-		#ryear-section[hidden] {
+		#ryear-section[hidden],
+		#wspan-section[hidden] {
 			display: none;
 		}
 
@@ -1043,7 +1052,7 @@ const summary = hasFilters
 
 	<script>
 		import { mediumLabel, starText } from '../../lib/format';
-		import { filterSentence } from '../../lib/watched-filters';
+		import { dateSpanLabel, filterSentence } from '../../lib/watched-filters';
 
 		interface WatchedFilm {
 			tmdb_id: number;
@@ -1141,6 +1150,10 @@ const summary = hasFilters
 			// removable chip in the Movie details drawer's "Release year" section.
 			const releaseYears = new Set<number>();
 
+			// First-watch date span. Like the release years, it only arrives from a
+			// Stats week bar (?wfrom=…&wto=…) and shows as one removable chip.
+			let watchedSpan: { from: string; to: string } | null = null;
+
 			// The raw ?dmin/?dmax and ?dymin/?dymax this page was served with — the
 			// numbers the server both filtered and wrote its filter sentence from. The
 			// sliders can't take over until the facets bring the bounds they snap to, so
@@ -1189,6 +1202,7 @@ const summary = hasFilters
 					(diaryActive() ? 1 : 0) +
 					(flags.liked ? 1 : 0) +
 					(flags.rewatched ? 1 : 0) +
+					(watchedSpan ? 1 : 0) +
 					releaseYears.size;
 
 				for (const s of Object.values(sets)) n += s.size;
@@ -1228,6 +1242,11 @@ const summary = hasFilters
 
 				// Exact release years, one param each — the API reads these as `ryear`.
 				for (const y of releaseYears) p.append('ryear', String(y));
+
+				if (watchedSpan) {
+					p.set('wfrom', watchedSpan.from);
+					p.set('wto', watchedSpan.to);
+				}
 
 				// Diary date is a true year span; the server keeps a film whose watch years
 				// intersect it. Send a bound only when it narrows, so the slider's extremes
@@ -1433,6 +1452,8 @@ const summary = hasFilters
 			const mdCount = document.getElementById('md-count')!;
 			const ryearSection = document.getElementById('ryear-section')!;
 			const ryears = document.getElementById('ryears')!;
+			const wspanSection = document.getElementById('wspan-section')!;
+			const wspan = document.getElementById('wspan')!;
 
 			/** Reflect state that isn't owned by the control the user just touched. */
 			function syncChrome() {
@@ -1529,6 +1550,8 @@ const summary = hasFilters
 					releaseYears: [...releaseYears],
 					diaryYearMin: hasDiaryRange ? (diaryActive() ? yMin : null) : urlDiaryMin,
 					diaryYearMax: hasDiaryRange ? (diaryActive() ? yMax : null) : urlDiaryMax,
+					watchedFrom: watchedSpan?.from ?? null,
+					watchedTo: watchedSpan?.to ?? null,
 					tags: [...sets.tag],
 					directors: [...sets.director],
 					actors: [...sets.actor],
@@ -1668,6 +1691,24 @@ const summary = hasFilters
 				const years = [...releaseYears].sort((a, b) => a - b);
 				ryearSection.hidden = years.length === 0;
 				ryears.replaceChildren(...years.map(makeReleaseYearChip));
+			}
+
+			function renderWatchedSpan() {
+				wspanSection.hidden = !watchedSpan;
+
+				if (!watchedSpan) return wspan.replaceChildren();
+				const label = dateSpanLabel(watchedSpan.from, watchedSpan.to);
+				const chip = el('button', 'chip') as HTMLButtonElement;
+				chip.type = 'button';
+				chip.setAttribute('aria-pressed', 'true');
+				chip.textContent = `${label} ✕`;
+				chip.setAttribute('aria-label', `Remove watched ${label}`);
+				chip.addEventListener('click', () => {
+					watchedSpan = null;
+					renderWatchedSpan();
+					applyFilters();
+				});
+				wspan.replaceChildren(chip);
 			}
 
 			// --- Facet-driven chip groups ---------------------------------------
@@ -1888,6 +1929,8 @@ const summary = hasFilters
 				setYears(YR_LO, YR_HI);
 				releaseYears.clear();
 				renderReleaseYears();
+				watchedSpan = null;
+				renderWatchedSpan();
 				// Deselecting the People chips lets their rows collapse back to the limit.
 				renderPeople();
 				applyFilters();
@@ -1938,6 +1981,11 @@ const summary = hasFilters
 				}
 
 				for (const y of releaseYears) p.append('ryear', String(y));
+
+				if (watchedSpan) {
+					p.set('wfrom', watchedSpan.from);
+					p.set('wto', watchedSpan.to);
+				}
 
 				if (diaryActive()) {
 					p.set('dymin', String(yMin));
@@ -2023,6 +2071,13 @@ const summary = hasFilters
 
 					if (Number.isInteger(y) && y >= 1870 && y <= nowYear + 5) releaseYears.add(y);
 				}
+
+				// Same shape check the server's watchedSpan() makes.
+				const wfrom = p.get('wfrom') ?? '';
+				const wto = p.get('wto') ?? '';
+				const isDay = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+				if (isDay(wfrom) && isDay(wto) && wfrom <= wto) watchedSpan = { from: wfrom, to: wto };
 
 				// The chips these values belong to don't exist yet, so the sets are filled
 				// straight from the params: the first query has to carry a deep-link's
@@ -2245,6 +2300,7 @@ const summary = hasFilters
 			// Draw any release-year chips restored from a ?ryear=… deep-link. These need
 			// no facets — the years come from the URL itself.
 			renderReleaseYears();
+			renderWatchedSpan();
 
 			// Fetch the filters once the page has settled — or straight away if the panel
 			// is opened first, so it's never waiting on an idle callback to start.

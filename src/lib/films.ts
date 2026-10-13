@@ -1738,6 +1738,10 @@ export interface WatchedQuery {
 	 * dated diary entry. Omit both for "any date". */
 	diaryYearMin?: number;
 	diaryYearMax?: number;
+	/** Inclusive YYYY-MM-DD bounds on `first_watched` — a Stats week bar links here.
+	 * Set both or neither. */
+	watchedFrom?: string;
+	watchedTo?: string;
 
 	// --- Log-level filters (true when ANY of the film's diary entries match) ---
 	/** Only films with at least one rewatch entry. */
@@ -2404,6 +2408,11 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 
 	if (query.liked) req = req.eq('liked', true);
 
+	// first_watched is midnight UTC of the watch day, so the day-end bound keeps `to`.
+	if (query.watchedFrom && query.watchedTo) {
+		req = req.gte('first_watched', query.watchedFrom).lte('first_watched', `${query.watchedTo}T23:59:59Z`);
+	}
+
 	// Release-year bounds against the joined movie row. `!inner` above is what makes
 	// a filter on the embed exclude the parent watched row; a film with a null
 	// release_year fails either comparison, which is what drops the undated.
@@ -2493,11 +2502,17 @@ export interface PersonStat {
 /** A labelled bar in a histogram. */
 export interface HistBar {
 	count: number;
+	/** How many of `count` were first watched in a theater (week/weekday bars only). */
+	theater?: number;
 	/** Tooltip text — e.g. "2024 · 132 films" or "Mar 3–9, 2024 · 2 films". */
 	title: string;
 	/** The release year this bar stands for — set only on the "Films by release
 	 * year" bars, so each can deep-link to that year's films. */
 	year?: number;
+	/** The week's first and last day (YYYY-MM-DD) — set only on the week bars, so
+	 * each can deep-link to the films first watched that week. */
+	from?: string;
+	to?: string;
 }
 
 /** One selectable timespan for the year picker. */
@@ -2524,6 +2539,9 @@ export interface FilmStats {
 	weekSpan: string;
 	weekAvg: string;
 
+	/** Films watched by day of the week of their first watch, Mon → Sun. */
+	weekdays: HistBar[];
+
 	/** Films watched, bucketed by their release year (all-time scope only). */
 	showByYear: boolean;
 	byYear: HistBar[];
@@ -2543,6 +2561,7 @@ export interface FilmStats {
 
 /** A watched film flattened with the movie facts the Stats page aggregates over. */
 interface WatchedFacts {
+	movie_id: number;
 	tmdb_id: number | null;
 	/** Null when the first watch is unknown (migration 0011) — such films count in
 	 * all-time totals but can't be attributed to any calendar year. */
@@ -2572,6 +2591,7 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 	];
 
 	type Row = {
+		movie_id: number;
 		first_watched: string | null;
 		rating: number | null;
 		movies: {
@@ -2594,7 +2614,7 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 		const res = await readAllPages<Row>((from, to, wantCount) =>
 			supabasePublic
 				.from('watched')
-				.select(`first_watched, rating, ${cols}`, wantCount ? { count: 'exact' } : undefined)
+				.select(`movie_id, first_watched, rating, ${cols}`, wantCount ? { count: 'exact' } : undefined)
 				.order('first_watched', { ascending: false, nullsFirst: false })
 				.range(from, to) as unknown as PromiseLike<PageResult<Row>>,
 		);
@@ -2610,6 +2630,7 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 	}
 
 	return rows.map((r) => ({
+		movie_id: r.movie_id,
 		tmdb_id: r.movies.tmdb_id,
 		first_watched: r.first_watched,
 		rating: r.rating,
@@ -2667,6 +2688,28 @@ function rankPeople(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], l
 		.slice(0, limit);
 }
 
+/**
+ * "movieId|YYYY-MM-DD" for every theater diary entry. A film counts as seen in a
+ * theater when one of these lands on its first-watch day, so a later theater
+ * rewatch doesn't recolour a first watch at home. Empty before migration 0010.
+ */
+async function loadTheaterDays(): Promise<Set<string>> {
+	const { data, error } = await supabasePublic
+		.from('logs')
+		.select('movie_id, watched_date, log')
+		.eq('medium', 'theater')
+		.is('deleted_at', null);
+
+	if (error) {
+		if (isMissingCreditColumn(error)) return new Set();
+		throw new Error(`loadTheaterDays failed: ${error.message}`);
+	}
+
+	return new Set(
+		(data ?? []).map((l: { movie_id: number; watched_date: string | null; log: string }) => `${l.movie_id}|${l.watched_date ?? l.log}`),
+	);
+}
+
 /** Year (local) of an ISO timestamp; null when the timestamp is unknown. */
 export function yearOf(iso: string | null): number | null {
 	return iso ? new Date(iso).getFullYear() : null;
@@ -2680,7 +2723,14 @@ export function yearOf(iso: string | null): number | null {
  * aren't synced yet simply contribute nothing to those sections.
  */
 export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmStats> {
-	const all = await loadWatchedFacts();
+	const [all, theaterDays] = await Promise.all([loadWatchedFacts(), loadTheaterDays()]);
+
+	// first_watched is stored as midnight UTC of the watch day.
+	const inTheater = (r: WatchedFacts) =>
+		r.first_watched != null && theaterDays.has(`${r.movie_id}|${r.first_watched.slice(0, 10)}`);
+
+	const filmsLabel = (c: number, t: number) =>
+		`${c} ${c === 1 ? 'film' : 'films'}${t ? ` · ${t} in theaters` : ''}`;
 
 	// Picker options: years with a meaningful sample, newest first. Undated films
 	// (unknown first watch) belong to no year, so they only reach the 'all' scope.
@@ -2740,6 +2790,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		const year = selected as number;
 		const yearStart = new Date(year, 0, 1);
 		const bins: number[] = [];
+		const theaterBins: number[] = [];
 		const ranges: { start: Date; end: Date }[] = [];
 
 		for (let d = new Date(yearStart); d.getFullYear() === year; d.setDate(d.getDate() + 7)) {
@@ -2750,13 +2801,18 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 			if (end.getFullYear() > year) end.setTime(new Date(year, 11, 31).getTime());
 			ranges.push({ start, end });
 			bins.push(0);
+			theaterBins.push(0);
 		}
 
 		for (const r of rows) {
 			if (!r.first_watched) continue; // year scope already excludes these; keeps the cast honest
-			const days = Math.floor((new Date(r.first_watched).getTime() - yearStart.getTime()) / 86400000);
+			// first_watched is midnight UTC of the watch day, so count days in UTC —
+			// local time would slide every film back a day west of Greenwich.
+			const days = Math.floor((Date.parse(r.first_watched) - Date.UTC(year, 0, 1)) / 86400000);
 			const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(days / 7)));
 			bins[idx]++;
+
+			if (inTheater(r)) theaterBins[idx]++;
 		}
 
 		const fmtRange = (s: Date, e: Date) => {
@@ -2766,14 +2822,34 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 			return `${a}–${b}, ${e.getFullYear()}`;
 		};
 
+		const day = (d: Date) =>
+			`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 		weeks = bins.map((c, i) => ({
 			count: c,
-			title: `${fmtRange(ranges[i].start, ranges[i].end)} · ${c} ${c === 1 ? 'film' : 'films'}`,
+			theater: theaterBins[i],
+			from: day(ranges[i].start),
+			to: day(ranges[i].end),
+			title: `${fmtRange(ranges[i].start, ranges[i].end)} · ${filmsLabel(c, theaterBins[i])}`,
 		}));
 		weekLabels = ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov'];
 		weekSpan = `${year} · week by week`;
 		weekAvg = (bins.reduce((a, b) => a + b, 0) / (bins.length || 1)).toFixed(1);
 	}
+
+	// Films by weekday of first watch, Mon → Sun (UTC: see inTheater above).
+	const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+	const dayCounts = DAYS.map(() => ({ count: 0, theater: 0 }));
+
+	for (const r of rows) {
+		if (!r.first_watched) continue;
+		const day = dayCounts[(new Date(r.first_watched).getUTCDay() + 6) % 7];
+		day.count++;
+
+		if (inTheater(r)) day.theater++;
+	}
+
+	const weekdays: HistBar[] = dayCounts.map((d, i) => ({ ...d, title: `${DAYS[i]} · ${filmsLabel(d.count, d.theater)}` }));
 
 	// Films by release year (all-time scope): one bar per year, earliest → now.
 	let byYear: HistBar[] = [];
@@ -2827,6 +2903,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		weekLabels,
 		weekSpan,
 		weekAvg,
+		weekdays,
 		showByYear: isAll,
 		byYear,
 		byYearLabels,

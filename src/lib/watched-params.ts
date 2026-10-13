@@ -35,6 +35,7 @@ export function watchedQueryFromParams(p: URLSearchParams): WatchedQuery {
 		countries: p.getAll('country'),
 		diaryYearMin: yearBound(p.get('dymin')),
 		diaryYearMax: yearBound(p.get('dymax')),
+		...watchedSpan(p),
 		tags: p.getAll('tag'),
 		friends: p.getAll('friend'),
 		friendMode: isMatchMode(friendMode) ? friendMode : 'any',
@@ -55,6 +56,7 @@ export function watchedFilterCount(q: WatchedQuery): number {
 		(q.unratedOnly || q.ratingMin != null || q.ratingMax != null ? 1 : 0) +
 		(q.releaseYearMin != null || q.releaseYearMax != null ? 1 : 0) +
 		(q.diaryYearMin != null || q.diaryYearMax != null ? 1 : 0) +
+		(q.watchedFrom ? 1 : 0) +
 		(q.liked ? 1 : 0) +
 		(q.rewatched ? 1 : 0) +
 		(q.releaseYears?.length ?? 0);
@@ -104,6 +106,15 @@ function releaseBound(raw: string | null): number | undefined {
 	const ceiling = siteYear() + 5;
 
 	return Math.min(ceiling, Math.max(RELEASE_FLOOR, Math.round(n)));
+}
+
+/** `?wfrom=…&wto=…` as first-watch date bounds — both well-formed, or neither. */
+export function watchedSpan(p: URLSearchParams): { watchedFrom?: string; watchedTo?: string } {
+	const from = p.get('wfrom') ?? '';
+	const to = p.get('wto') ?? '';
+	const ok = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d);
+
+	return ok(from) && ok(to) && from <= to ? { watchedFrom: from, watchedTo: to } : {};
 }
 
 /** A diary-date year bound as an integer, or undefined if absent/invalid. */
