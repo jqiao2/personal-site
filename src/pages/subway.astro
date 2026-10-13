@@ -81,7 +81,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 					<p class="sm-note">
 						Every service is its own line. The A, C and E each run their own track down 8 Av. You can
 						log them independently. Click a line to mark it ridden. Click a station to mark it
-						visited. Saved in this browser. Export to back up or move devices.
+						visited. Export to back up.
 					</p>
 				</aside>
 			</div>
@@ -325,8 +325,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 		<script>
 			import { CANVAS, SERVICES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
 			import type { SubwaySegment, SubwayStation } from '../scripts/subway-data.js';
+			import { loadMarks, saveMark, saveAll, type Marks } from '../scripts/subway-marks';
 
-			const KEY = 'mta-subway-log-v2';
 
 			const SVGNS = 'http://www.w3.org/2000/svg';
 
@@ -381,16 +381,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 			STATIONS.forEach((s) => (stById[s.id] = s));
 
 			// ---- state ----
-			/** Marked stations / segments, as id → 1 sets. */
-			type Marks = { st: Record<string, 1>; seg: Record<string, 1> };
-
+			// Blank until loadMarks answers: the owner's saved log, or nothing for a visitor.
 			let marks: Marks = { st: {}, seg: {} };
-
-			try {
-				const s = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-
-				if (s && s.st && s.seg) marks = s;
-			} catch (e) {}
 
 			let k = 1, tx = 0, ty = 0, showLabels = false;
 
@@ -422,7 +414,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 				return 0.299 * r + 0.587 * g + 0.114 * b > 150 ? '#141414' : '#ffffff';
 			}
 
-			function save() { try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {} }
+			// A failed save keeps the mark on screen and says so, rather than silently losing it.
+			function saved(p: Promise<unknown>) { p.catch(() => setMsg('Not saved. Check your connection and reload.')); }
 
 			function setMsg(t: string) { if (t) { msgEl.textContent = t; msgEl.hidden = false; } else msgEl.hidden = true; }
 
@@ -803,14 +796,14 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			function markSeg(id: string) {
 				if (marks.seg[id]) delete marks.seg[id]; else marks.seg[id] = 1;
-				save();
+				saved(saveMark('segment', id, !!marks.seg[id]));
 				renderSegMark(segEls[id].sg);
 				renderSidebar();
 			}
 
 			function markSt(id: number) {
 				if (marks.st[id]) delete marks.st[id]; else marks.st[id] = 1;
-				save();
+				saved(saveMark('station', String(id), !!marks.st[id]));
 				renderPillMark(stById[id]);
 				renderSidebar();
 			}
@@ -915,9 +908,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 						marks = { st: {}, seg: {} };
 						(d.stationsVisited || Object.keys(d.st || {})).forEach((id: string) => (marks.st[id] = 1));
 						(d.segmentsRidden || Object.keys(d.seg || {})).forEach((kk: string) => (marks.seg[kk] = 1));
-						save();
 						renderAllMarks();
-						setMsg('Imported.');
+						saveAll(marks).then(() => setMsg('Imported.'), () => setMsg('Imported, but not saved. Reload and try again.'));
 					} catch (err) { setMsg('Could not read that file.'); }
 				});
 				input.value = '';
@@ -967,6 +959,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 			drawGeometry();
 
 			renderAllMarks();
+
+			loadMarks().then((m) => { marks = m; renderAllMarks(); }, () => setMsg('Could not load your log.'));
 
 			try { if (localStorage.getItem(VIEW_KEY) === 'map') setView('map'); } catch (e) {}
 		</script>
