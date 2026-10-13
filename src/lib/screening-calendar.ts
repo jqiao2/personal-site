@@ -36,11 +36,10 @@ export function parseDay(s: string): Date {
 	return new Date(y, m - 1, d);
 }
 
-/** The Monday on or before the 1st of `month` ("YYYY-MM") — where a run starts. */
-export function firstMonday(month: string): string {
-	const [y, m] = month.split('-').map(Number);
-	const d = new Date(y, m - 1, 1);
-	d.setDate(1 - ((d.getDay() + 6) % 7)); // Mon-first column of the 1st
+/** The Monday on or before `day` ("YYYY-MM-DD") — the run opens on this week. */
+export function weekMonday(day: string): string {
+	const d = parseDay(day);
+	d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Mon-first column
 
 	return dayKey(d);
 }
@@ -113,21 +112,4 @@ export function buildWeeks(opts: {
 	}
 
 	return out;
-}
-
-/**
- * Where the run opens: the current month, pulled back to the earliest month
- * anything is queued in, but never more than three months of empty scrollback.
- */
-export function runStartMonth(queue: QueueEntry[], today: string): string {
-	const current = today.slice(0, 7);
-	const [cy, cm] = current.split('-').map(Number);
-	const floor = dayKey(new Date(cy, cm - 4, 1)).slice(0, 7); // three months back
-
-	const earliest = queue.reduce(
-		(min, e) => (e.scheduled_date < min ? e.scheduled_date : min),
-		today,
-	).slice(0, 7);
-
-	return earliest < floor ? floor : earliest;
 }
