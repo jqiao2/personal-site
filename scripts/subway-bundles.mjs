@@ -141,19 +141,14 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     return { ...line, acc, total, straights };
   });
 
-  // Straights are also cut wherever any line's station sits on them, so an
-  // express's long straight (B/D from 34 St to W 4 St) breaks where its locals'
-  // do: bundle mates then share boundaries and agree on who is in the bundle.
-  // Measured as one straight, the B/D took the A/C/E from its last few hundred
-  // metres into the whole run and sat half a slot off the F/M all the way.
-  const stops = L.flatMap((l) => [l.pts[0], l.pts[l.pts.length - 1]]);
-
-  for (const l of L) {
+  // cut l's straights where points within `reach` m of its track project onto it,
+  // leaving no straight shorter than `min`
+  function cutAt(l, points, reach, min) {
     const xs = l.pts.map((p) => p[0]), ys = l.pts.map((p) => p[1]);
-    const [x0, x1, y0, y1] = [Math.min(...xs) - SAME_TRACK, Math.max(...xs) + SAME_TRACK, Math.min(...ys) - SAME_TRACK, Math.max(...ys) + SAME_TRACK];
+    const [x0, x1, y0, y1] = [Math.min(...xs) - reach, Math.max(...xs) + reach, Math.min(...ys) - reach, Math.max(...ys) + reach];
     const cuts = [];
 
-    for (const q of stops) {
+    for (const q of points) {
       if (q[0] < x0 || q[0] > x1 || q[1] < y0 || q[1] > y1) continue;
       let best = null;
 
@@ -162,19 +157,28 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
         const k = Math.max(0, Math.min(1, ((q[0] - a[0]) * ex + (q[1] - a[1]) * ey) / (len * len)));
         const d = Math.hypot(a[0] + k * ex - q[0], a[1] + k * ey - q[1]);
 
-        if (d <= SAME_TRACK && (!best || d < best.d)) best = { d, a: l.acc[e] + k * len };
+        if (d <= reach && (!best || d < best.d)) best = { d, a: l.acc[e] + k * len };
       }
 
       if (best) cuts.push(best.a);
     }
 
     l.straights = l.straights.flatMap((s) => {
-      const inner = cuts.filter((a) => a > s.a0 + MIN_STRAIGHT && a < s.a1 - MIN_STRAIGHT).sort((x, y) => x - y);
-      const at = [s.a0, ...inner.filter((a, i) => !i || a - inner[i - 1] >= MIN_STRAIGHT), s.a1];
+      const inner = cuts.filter((a) => a > s.a0 + min && a < s.a1 - min).sort((x, y) => x - y);
+      const at = [s.a0, ...inner.filter((a, i) => !i || a - inner[i - 1] >= min), s.a1];
 
-      return at.slice(1).map((a1, i) => ({ a0: at[i], a1, cutStart: i > 0, cutEnd: i < at.length - 2 }));
+      return at.slice(1).map((a1, i) => ({ a0: at[i], a1, cutStart: i > 0 || s.cutStart, cutEnd: i < at.length - 2 || s.cutEnd }));
     });
   }
+
+  // Straights are also cut wherever any line's station sits on them, so an
+  // express's long straight (B/D from 34 St to W 4 St) breaks where its locals'
+  // do: bundle mates then share boundaries and agree on who is in the bundle.
+  // Measured as one straight, the B/D took the A/C/E from its last few hundred
+  // metres into the whole run and sat half a slot off the F/M all the way.
+  const stops = L.flatMap((l) => [l.pts[0], l.pts[l.pts.length - 1]]);
+
+  for (const l of L) cutAt(l, stops, SAME_TRACK, MIN_STRAIGHT);
 
   // AXIS: "left" and "right" of a bundle must mean the same side to every
   // member, so slots are read against one fixed axis u: a straight heading
@@ -258,44 +262,66 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
   //    straight sees another service alongside, the straights it saw it on count
   //    this one back — so two bundles can't each think they have the track alone
   //    and draw over each other (the A/C/E and B/D/F/M through W 4 St).
-  const back = [];
+  function share() {
+    const back = [];
 
-  for (const l of L) {
-    for (const s of l.straights) {
-      const n = Math.min(12, Math.max(3, Math.round((s.a1 - s.a0) / CHECK)));
-      const hits = new Map(); // svc -> { count, refs }
+    for (const l of L) {
+      for (const s of l.straights) {
+        const n = Math.min(12, Math.max(3, Math.round((s.a1 - s.a0) / CHECK)));
+        const hits = new Map(); // svc -> { count, refs }
 
-      for (let i = 0; i < n; i++) {
-        const { p, t } = at(l.pts, l.acc, s.a0 + ((s.a1 - s.a0) * (i + 0.5)) / n);
+        for (let i = 0; i < n; i++) {
+          const { p, t } = at(l.pts, l.acc, s.a0 + ((s.a1 - s.a0) * (i + 0.5)) / n);
 
-        for (const [svc, refs] of alongside(p, t)) {
-          if (svc === l.sg.svc) continue;
+          for (const [svc, refs] of alongside(p, t)) {
+            if (svc === l.sg.svc) continue;
 
-          if (!hits.has(svc)) hits.set(svc, { count: 0, refs: new Set() });
-          const h = hits.get(svc);
-          h.count++;
-          refs.forEach((r) => h.refs.add(r));
+            if (!hits.has(svc)) hits.set(svc, { count: 0, refs: new Set() });
+            const h = hits.get(svc);
+            h.count++;
+            refs.forEach((r) => h.refs.add(r));
+          }
+        }
+
+        s.shares = new Set([l.sg.svc]);
+
+        for (const [svc, h] of hits) {
+          if (h.count < Math.max(2, Math.ceil(n * 0.4))) continue;
+          s.shares.add(svc);
+
+          for (const r of h.refs) back.push([r, l.sg.svc, l, s]);
         }
       }
-
-      s.shares = new Set([l.sg.svc]);
-
-      for (const [svc, h] of hits) {
-        if (h.count < Math.max(2, Math.ceil(n * 0.4))) continue;
-        s.shares.add(svc);
-
-        for (const r of h.refs) back.push([r, l.sg.svc, l, s]);
-      }
     }
+
+    const sharing = []; // [line, straight, other line, other straight]: bundle mates
+
+    for (const [r, svc, l, s] of back) {
+      const [li, si] = r.split(",").map(Number);
+      L[li].straights[si].shares.add(svc);
+      sharing.push([l, s, L[li], L[li].straights[si]]);
+    }
+
+    return sharing;
   }
 
-  const sharing = []; // [line, straight, other line, other straight]: bundle mates
+  // 2a. Where two mates disagree on who is in their bundle, each straight is cut
+  //     where the other's starts or ends beside it (leaving at least CHECK m
+  //     either side, enough to measure), and the bundles worked out again. The
+  //     F from Bergen St to Jay St runs with the G at one end and beside the A/C
+  //     at the other; measured whole, it ranked third of four while the G ranked
+  //     second of two, and both took the same side.
+  const mates = new Map(L.map((l) => [l, []]));
 
-  for (const [r, svc, l, s] of back) {
-    const [li, si] = r.split(",").map(Number);
-    L[li].straights[si].shares.add(svc);
-    sharing.push([l, s, L[li], L[li].straights[si]]);
+  for (const [l, s, m, z] of share()) {
+    if (s.shares.size === z.shares.size && [...s.shares].every((v) => z.shares.has(v))) continue;
+    mates.get(l).push(at(m.pts, m.acc, z.a0).p, at(m.pts, m.acc, z.a1).p);
+    mates.get(m).push(at(l.pts, l.acc, s.a0).p, at(l.pts, l.acc, s.a1).p);
   }
+
+  for (const l of L) cutAt(l, mates.get(l), SHARED, CHECK);
+
+  const sharing = share();
 
   // the same service's best-aligned neighbouring segment at one end of line li:
   // { li, atStart, same } (`same`: stored running the same way through the station)
