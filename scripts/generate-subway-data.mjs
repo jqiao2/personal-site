@@ -599,6 +599,30 @@ async function main() {
     removeSeg('R', 'Canal St [Lower Level]', 'DeKalb Av');
     addSeg('R', 'Jay St-MetroTech', 'DeKalb Av');
 
+    // A link that skips a stop the service makes: the source has the B straight
+    // from DeKalb Av to 7 Av (Park Slope) and the R from DeKalb Av to Union St,
+    // each beside its real DeKalb Av -> Atlantic Av link (or Atlantic -> 7 Av),
+    // with the leg through Atlantic Av missing. Drop the skip, add the missing
+    // leg with the geometry of another service's same link (or straight, when
+    // no other service runs it). By station id: the B serves two stations named
+    // 7 Av. The A's 104 St -> Aqueduct Racetrack stood in for Rockaway Blvd -> 104 St.
+    function stopsAt(svc, x, y, z, like) {
+      const has = (v, a, b) => SEGMENTS.find((sg) => sg.svc === v && [sg.a, sg.b].includes(a) && [sg.a, sg.b].includes(b));
+      const skip = has(svc, x, z), [a, b] = has(svc, x, y) ? [y, z] : [x, y];
+      const at = (id) => STATIONS.find((st) => st.id === id), geo = like ? has(like, a, b) : { ...skip, a, b, pts: [[at(a).x, at(a).y], [at(b).x, at(b).y]] };
+
+      if (!skip || has(svc, a, b) || !geo) { console.warn('  correction stopsAt: segments not as expected', svc, x, y, z);
+
+ return; }
+
+      SEGMENTS.splice(SEGMENTS.indexOf(skip), 1);
+      SEGMENTS.push({ ...geo, id: `${svc}|${Math.min(a, b)}|${Math.max(a, b)}`, svc, color: segColor(svc), pts: geo.pts.map((p) => p.slice()) });
+    }
+
+    stopsAt('B', 91885, 91894, 92036, 'Q'); // DeKalb Av, Atlantic Av, 7 Av
+    stopsAt('R', 91885, 91894, 91901, 'Q'); // DeKalb Av, Atlantic Av, Union St
+    stopsAt('A', 93552, 93543, 93589, null); // 104 St, Rockaway Blvd, Aqueduct Racetrack
+
     // 6 in the South Bronx. 3 Av-138 St / Brook Av / Cypress Av are meant to sit on
     // one horizontal; snap them (and the segments between) to a single y so the run
     // is dead flat. Straighten the 125 St elbow and the Cypress climb to clean

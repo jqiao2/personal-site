@@ -40,6 +40,8 @@ const SMOOTH = 60; // ...the pull spread over this many metres either side
 
 const MIN_STRAIGHT = 60; // a cut at another line's station leaves no straight shorter than this
 
+const MIN_SLIDE = 80; // a slot change slides over at least this many metres
+
 const CHECK = 150;
 
 const STATION_EASE = 80;
@@ -426,7 +428,8 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
   //      a. bundle mates (they must agree, or they draw over each other);
   //      b. a service's consecutive straights in the same bundle, through
   //         curves and across stations;
-  //      c. a service's consecutive straights across a junction.
+  //      c. a service's consecutive straights across a junction — b and c
+  //         together, ordered by how many bundle mates carry over.
   //    A link that contradicts earlier ones is skipped — a flip then happens
   //    only where a loop forces one. Each group reads left/right once, by a
   //    length-weighted vote of its straights against the axis.
@@ -466,21 +469,24 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     link(s.i, z.i, t[0] * v[0] + t[1] * v[1] >= 0 ? 1 : -1);
   }
 
-  // b, then c
-  for (const sameBundle of [true, false]) {
-    L.forEach((l, li) => {
-      for (let i = 1; i < l.straights.length; i++) if ((l.straights[i].key === l.straights[i - 1].key) === sameBundle) link(l.straights[i - 1].i, l.straights[i].i, 1);
+  // b and c, most shared mates first. A link carrying a pair that travels on
+  // together (the B and D turning off 6 Av onto 53 St) goes before one where a
+  // line leaves its mates (the E crossing 6 Av): where a loop forces a flip it
+  // then falls on the line that crosses the others anyway, not between the pair.
+  const runs = []; // [carried mates, a, b, rel]
+  const carried = (x, y) => [...x.shares].filter((v) => y.shares.has(v)).length;
 
-      for (const atStart of [true, false]) {
-        const n = neighbour(li, atStart), mine = touching(l, atStart);
+  L.forEach((l, li) => {
+    for (let i = 1; i < l.straights.length; i++) runs.push([carried(l.straights[i - 1], l.straights[i]), l.straights[i - 1].i, l.straights[i].i, 1]);
 
-        if (!n) continue;
-        const theirs = touching(L[n.li], n.atStart);
+    for (const atStart of [true, false]) {
+      const n = neighbour(li, atStart), mine = touching(l, atStart);
 
-        if ((theirs.key === mine.key) === sameBundle) link(mine.i, theirs.i, n.same ? 1 : -1);
-      }
-    });
-  }
+      if (n) runs.push([carried(mine, touching(L[n.li], n.atStart)), mine.i, touching(L[n.li], n.atStart).i, n.same ? 1 : -1]);
+    }
+  });
+
+  for (const [, a, b, rel] of runs.sort((x, y) => y[0] - x[0])) link(a, b, rel);
 
   const vote = new Map();
 
@@ -516,11 +522,17 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     const ease = (s) => Math.min(easeLen, (s.a1 - s.a0) / 3);
     const anchors = [[0, (first.off + across(li, true)) / 2]];
 
-    for (const s of l.straights) {
+    // a curve shorter than MIN_SLIDE (one sharp vertex, say) borrows the rest
+    // from the straights either side, so a slot change never jumps
+    const borrow = (s, t, gap) => (t && t.off !== s.off ? Math.min(ease(s), Math.max(0, (MIN_SLIDE - gap) / 2)) : 0);
+
+    l.straights.forEach((s, i) => {
+      const prev = l.straights[i - 1], next = l.straights[i + 1];
+
       // at a station, or a cut where another line's station sits, the change eases in
-      anchors.push([(s === first && s.a0 === 0) || s.cutStart ? s.a0 + ease(s) : s.a0, s.off]);
-      anchors.push([(s === last && s.a1 === l.total) || s.cutEnd ? s.a1 - ease(s) : s.a1, s.off]);
-    }
+      anchors.push([(s === first && s.a0 === 0) || s.cutStart ? s.a0 + ease(s) : s.a0 + borrow(s, prev, prev && s.a0 - prev.a1), s.off]);
+      anchors.push([(s === last && s.a1 === l.total) || s.cutEnd ? s.a1 - ease(s) : s.a1 - borrow(s, next, next && next.a0 - s.a1), s.off]);
+    });
 
     anchors.push([l.total, (last.off + across(li, false)) / 2]);
 

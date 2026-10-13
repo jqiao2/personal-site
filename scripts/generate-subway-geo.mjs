@@ -253,13 +253,9 @@ function track(svc, A, B) {
   return null;
 }
 
-// The schematic has a few links that are no real track, each standing in for a
-// real stretch it lacks: the A's 104 St - Aqueduct Racetrack (for Rockaway Blvd -
-// 104 St). Those ids are drawn along the stretch they stand in for. (The R's
-// Canal St - DeKalb Av was one; generate-subway-data.mjs now replaces it.)
-const VIA = { "A|93552|93589": [93543, 93552] };
-
-// Phantom links with no track and nothing missing to stand in for: the 5 has a
+// Links that stood in for a missing real one (the A, B, M, R, F) are replaced in
+// generate-subway-data.mjs, where the diagram gets them too. Phantom links with
+// no track and nothing missing to stand in for: the 5 has a
 // Bronx Park East - Morris Park link beside the real E 180 St - Morris Park.
 // Left off the map; they still count in the log like any other segment.
 const SKIP = new Set(["5|95872|96087"]);
@@ -270,7 +266,7 @@ const nameOf = (id) => STATIONS.find((s) => s.id === +id).name;
 
 for (const sg of SEGMENTS) {
   if (SKIP.has(sg.id)) continue;
-  const [a, b] = VIA[sg.id] ?? [sg.a, sg.b];
+  const { a, b } = sg;
   const A = platform(a, sg.svc), B = platform(b, sg.svc);
   let pts = A && B && A.id !== B.id ? track(sg.svc, A, B) : null;
 
@@ -283,21 +279,32 @@ for (const sg of SEGMENTS) {
   if (A) pts[0] = A.p;
 
   if (B) pts[pts.length - 1] = B.p;
-  lines.push({ sg, pts: simplify(pts, 2), A: VIA[sg.id] ? null : A, B: VIA[sg.id] ? null : B });
+  lines.push({ sg, pts: simplify(pts, 2), A, B });
 }
 
-// ---- 5. station markers: one dot per platform used, linked within a complex ----
-const platforms = {}; // station id -> Map(stop id -> { p, n })
+// ---- 5. side-by-side slots, worked out along each line (scripts/subway-bundles.mjs) ----
+const sections = sectionLines(lines, SERVICES.map((s) => s.svc));
+
+// ---- 6. station markers: one dot per platform used, linked within a complex ----
+// A marker sits where its lines end, not on the platform itself: bundle mates
+// are pulled onto one centreline, which can move an end by tens of metres
+// (the 1 at South Ferry, beside the 4/5) and leave the line short of its dot.
+const platforms = {}; // station id -> Map(stop id -> { p, svcs })
 
 for (const { sg, A, B } of lines) {
-  for (const [sid, g] of [[sg.a, A], [sg.b, B]]) {
+  const pieces = sections[sg.id];
+
+  for (const [sid, g, end] of [[sg.a, A, pieces[0].pts[0]], [sg.b, B, pieces.at(-1).pts.at(-1)]]) {
     if (!g) continue;
     const m = (platforms[sid] ??= new Map());
 
-    if (!m.has(g.id)) m.set(g.id, { p: g.p, svcs: new Set() });
+    if (!m.has(g.id)) m.set(g.id, { ends: [], svcs: new Set() });
+    m.get(g.id).ends.push(end);
     m.get(g.id).svcs.add(sg.svc);
   }
 }
+
+for (const m of Object.values(platforms)) for (const v of m.values()) v.p = [0, 1].map((j) => v.ends.reduce((t, e) => t + e[j], 0) / v.ends.length);
 
 const ll = (p) => [+LON(p[0]).toFixed(5), +LAT(p[1]).toFixed(5)];
 
@@ -317,8 +324,6 @@ for (const st of STATIONS) {
   }
 }
 
-// ---- 6. side-by-side slots, worked out along each line (scripts/subway-bundles.mjs) ----
-const sections = sectionLines(lines, SERVICES.map((s) => s.svc));
 
 // Line coordinates keep 6 decimals (~0.1 m): at 5 (~1 m) a short edge's direction
 // is noise, and line-offset pushes the line sideways along it.

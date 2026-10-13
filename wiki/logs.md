@@ -202,3 +202,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-13 0031: phantom M B'way-Lafayette–Marcy and R Canal–DeKalb replaced at the source with Essex–Marcy and Jay St–DeKalb; saved marks on retired ids move to their successor on load.
 - 2026-10-13 0031: map slot shifts in 1/16-slot steps instead of 1/4 — the staircase on bends is gone (62 KB gz).
 - 2026-10-13 0031: zoomed-out gaps in curves — geojson tiler dropped the short slide pieces; tolerance: 0 on the seg source.
+- 2026-10-13 0031: more phantom skips fixed at source (B, R, A via stopsAt; VIA removed); side links ordered by carried-over mates (B/D no longer swap at 7 Av); min 80 m slide; markers at moved line ends.

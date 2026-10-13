@@ -27,13 +27,15 @@ every service meeting there touches it. W and Z have stops but no shapes: borrow
 the shape of any route serving both stops.
 
 ## The schematic has phantom links
-Segments with no real track: A 104 St–Aqueduct (stands in for the missing
-Rockaway Blvd–104 St), 5 Bronx Park East–Morris Park (pure duplicate). The
-generator prints every segment it can't find track for; route stand-ins via
-`VIA`, leave pure phantoms off via `SKIP`.
+Segments with no real track: 5 Bronx Park East–Morris Park (pure duplicate),
+left off via `SKIP`. The generator prints every segment it can't find track for.
 
-Better still, replace a phantom at the source (generate-subway-data.mjs) when
-the real link is missing, since the Diagram view draws it too: the R's Canal
+Replace a phantom at the source (generate-subway-data.mjs) when the real link
+is missing, since the Diagram view draws it too (the map's old `VIA` stand-ins
+are gone). Most skip a stop the service makes, so scan for them: any segment
+whose polyline passes within 2 units of another station of the same service.
+`stopsAt()` fixes that shape (B DeKalb–7 Av, R DeKalb–Union St, A 104 St–
+Aqueduct). The others: the R's Canal
 St–DeKalb (now Jay St–DeKalb), the M's B'way-Lafayette–Marcy Av that doubled
 its Essex St link (now Essex–Marcy), the F's York St links (now
 B'way-Lafayette–2 Av). A replaced id in the owner's saved log moves to its
@@ -95,6 +97,16 @@ and clicks still treat them as one line.
   A/C/E it only meets at the end, and sat half a slot off the F/M — interleaved,
   one thick band. Cutting it where the locals' stations sit gives bundle mates
   the same boundaries; a slot change at a cut eases in like a station.
+- **Forced flips land on the line that leaves.** With a fixed order, some
+  junctions must cross (E/B/D at 7 Av–53 St). Side links are tried most
+  carried-over mates first, so the skipped link — the flip — falls on the line
+  leaving its mates (the E, which crosses 6 Av anyway), not between a pair that
+  travels on together (the B/D swapped sides there before).
+- **A slot change gets at least 80 m.** A one-vertex curve gave a zero-length
+  slide: the 1 jumped a slot at a corner near South Ferry. Short curves borrow
+  length from the straights either side.
+- **Markers sit at the moved line ends,** not the raw platform: the centreline
+  pull can move an end tens of metres.
 - **Check overlaps by scan, not by eye.** Walk every piece, find parallel pieces
   of other services within 6 m, compare slots read against one fixed direction;
   < 0.75 apart is an overlap. What's left after the fixes is short slides.
