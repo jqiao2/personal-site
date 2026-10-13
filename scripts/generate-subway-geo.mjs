@@ -294,11 +294,14 @@ for (const sg of SEGMENTS) {
   if (A) pts[0] = A.p;
 
   if (B) pts[pts.length - 1] = B.p;
-  lines.push({ sg, pts: simplify(pts, 2), A, B });
+  lines.push({ sg, pts: simplify(pts, 0.5), A, B });
 }
 
 // ---- 5. side-by-side slots, worked out along each line (scripts/subway-bundles.mjs) ----
-const sections = sectionLines(lines, SERVICES.map((s) => s.svc));
+// Houston St: the F runs on east as the B, D and M turn down Chrystie St, and
+// the M then leaves them east for Essex St, so the M rides between the F and
+// the B/D. By the global order it sat beyond the F and crossed both.
+const sections = sectionLines(lines, SERVICES.map((s) => s.svc), { orders: { "B,D,F,M": ["B", "D", "M", "F"] } });
 
 // ---- 6. station markers: one dot per platform used, linked within a complex ----
 // A marker sits where its lines end, not on the platform itself: bundle mates
@@ -332,10 +335,18 @@ for (const st of STATIONS) {
 
   for (const p of ps) markers.push({ id: st.id, n: p.svcs.size, c: ll(p.p) });
 
-  // chain each platform to its nearest already-linked one (a tiny spanning tree)
-  for (let i = 1; i < ps.length; i++) {
-    const near = ps.slice(0, i).reduce((m, q) => (Math.hypot(q.p[0] - ps[i].p[0], q.p[1] - ps[i].p[1]) < Math.hypot(m.p[0] - ps[i].p[0], m.p[1] - ps[i].p[1]) ? q : m));
-    links.push({ id: st.id, c: [ll(near.p), ll(ps[i].p)] });
+  // join the platforms by the shortest walkways (Prim's minimum spanning tree):
+  // linking in list order tied Fulton St's 4/5 to the 2/3, the A/C not yet linked
+  const dist = (q, r) => Math.hypot(q.p[0] - r.p[0], q.p[1] - r.p[1]);
+  const done = [ps[0]], left = ps.slice(1);
+
+  while (left.length) {
+    let best = null;
+
+    for (const q of left) for (const r of done) if (!best || dist(q, r) < best.d) best = { q, r, d: dist(q, r) };
+    left.splice(left.indexOf(best.q), 1);
+    done.push(best.q);
+    links.push({ id: st.id, c: [ll(best.r.p), ll(best.q.p)] });
   }
 }
 
