@@ -23,6 +23,9 @@ export interface FilterSummary {
 	/** Inclusive calendar-year bounds on when the films were logged. */
 	diaryYearMin: number | null;
 	diaryYearMax: number | null;
+	/** Inclusive YYYY-MM-DD bounds on the first watch (a Stats week bar). */
+	watchedFrom: string | null;
+	watchedTo: string | null;
 	tags: string[];
 	directors: string[];
 	actors: string[];
@@ -74,6 +77,17 @@ const MEDIUM_PHRASE: Record<string, string> = {
  * Split into parts rather than returned as a string so each value can be
  * highlighted; the caller wraps them in whatever element it draws with.
  */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "2026-03-03", "2026-03-09" → "Mar 3–9, 2026" (or "Mar 31–Apr 6, 2026"). */
+export function dateSpanLabel(from: string, to: string): string {
+	const [y, fm, fd] = from.split('-').map(Number);
+	const [, tm, td] = to.split('-').map(Number);
+	const a = `${MONTHS[fm - 1]} ${fd}`;
+
+	return `${a}–${fm === tm ? td : `${MONTHS[tm - 1]} ${td}`}, ${y}`;
+}
+
 export function filterSentence(s: FilterSummary): SentencePart[] {
 	const parts: SentencePart[] = [];
 	const lit = (t: string) => parts.push({ t, em: false });
@@ -171,6 +185,11 @@ export function filterSentence(s: FilterSummary): SentencePart[] {
 			lit(' logged between ');
 			em(`${lo} and ${hi}`);
 		}
+	}
+
+	if (s.watchedFrom && s.watchedTo) {
+		lit(' during ');
+		em(dateSpanLabel(s.watchedFrom, s.watchedTo));
 	}
 
 	if (s.friends.length) {

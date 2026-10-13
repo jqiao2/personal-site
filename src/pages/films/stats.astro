@@ -121,16 +121,21 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 						</div>
 					</div>
 					<div class="bars bars--tall">
-						{stats.weeks.map((w) => (
-							<div class="bars__slot" title={w.title}>
+						{stats.weeks.map((w) => {
+							const bar = (
 								<div
 									class="bar bar--split"
 									style={`height:${Math.round((w.count / weekMax) * 100)}%;${w.count === 0 ? 'background:#402226;' : ''}`}
 								>
 									{w.theater ? <div class="bar__theater" style={`height:${(w.theater / w.count) * 100}%`}></div> : null}
 								</div>
-							</div>
-						))}
+							);
+							return w.count > 0 ? (
+								<a class="bars__slot" href={`/films/watched?wfrom=${w.from}&wto=${w.to}`} title={w.title}>{bar}</a>
+							) : (
+								<div class="bars__slot" title={w.title}>{bar}</div>
+							);
+						})}
 					</div>
 					<div class="axis">
 						{stats.weekLabels.map((l) => <span>{l}</span>)}
@@ -139,7 +144,7 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			)}
 
 			<!-- Films watched by day of the week -->
-			{stats.weekdays.some((d) => d.count > 0) && (
+			{stats.showWeeks && stats.weekdays.some((d) => d.count > 0) && (
 				<section class="block">
 					<div class="block__head">
 						<div class="block__title">Day of the week</div>

@@ -1738,6 +1738,10 @@ export interface WatchedQuery {
 	 * dated diary entry. Omit both for "any date". */
 	diaryYearMin?: number;
 	diaryYearMax?: number;
+	/** Inclusive YYYY-MM-DD bounds on `first_watched` — a Stats week bar links here.
+	 * Set both or neither. */
+	watchedFrom?: string;
+	watchedTo?: string;
 
 	// --- Log-level filters (true when ANY of the film's diary entries match) ---
 	/** Only films with at least one rewatch entry. */
@@ -2404,6 +2408,11 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 
 	if (query.liked) req = req.eq('liked', true);
 
+	// first_watched is midnight UTC of the watch day, so the day-end bound keeps `to`.
+	if (query.watchedFrom && query.watchedTo) {
+		req = req.gte('first_watched', query.watchedFrom).lte('first_watched', `${query.watchedTo}T23:59:59Z`);
+	}
+
 	// Release-year bounds against the joined movie row. `!inner` above is what makes
 	// a filter on the embed exclude the parent watched row; a film with a null
 	// release_year fails either comparison, which is what drops the undated.
@@ -2500,6 +2509,10 @@ export interface HistBar {
 	/** The release year this bar stands for — set only on the "Films by release
 	 * year" bars, so each can deep-link to that year's films. */
 	year?: number;
+	/** The week's first and last day (YYYY-MM-DD) — set only on the week bars, so
+	 * each can deep-link to the films first watched that week. */
+	from?: string;
+	to?: string;
 }
 
 /** One selectable timespan for the year picker. */
@@ -2793,7 +2806,9 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 
 		for (const r of rows) {
 			if (!r.first_watched) continue; // year scope already excludes these; keeps the cast honest
-			const days = Math.floor((new Date(r.first_watched).getTime() - yearStart.getTime()) / 86400000);
+			// first_watched is midnight UTC of the watch day, so count days in UTC —
+			// local time would slide every film back a day west of Greenwich.
+			const days = Math.floor((Date.parse(r.first_watched) - Date.UTC(year, 0, 1)) / 86400000);
 			const idx = Math.min(bins.length - 1, Math.max(0, Math.floor(days / 7)));
 			bins[idx]++;
 
@@ -2807,9 +2822,14 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 			return `${a}–${b}, ${e.getFullYear()}`;
 		};
 
+		const day = (d: Date) =>
+			`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 		weeks = bins.map((c, i) => ({
 			count: c,
 			theater: theaterBins[i],
+			from: day(ranges[i].start),
+			to: day(ranges[i].end),
 			title: `${fmtRange(ranges[i].start, ranges[i].end)} · ${filmsLabel(c, theaterBins[i])}`,
 		}));
 		weekLabels = ['Jan', 'Mar', 'May', 'Jul', 'Sep', 'Nov'];
