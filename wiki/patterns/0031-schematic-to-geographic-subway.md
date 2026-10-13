@@ -28,9 +28,16 @@ the shape of any route serving both stops.
 
 ## The schematic has phantom links
 Segments with no real track: A 104 St–Aqueduct (stands in for the missing
-Rockaway Blvd–104 St), R Canal St–DeKalb (for Jay St–DeKalb), 5 Bronx Park
-East–Morris Park (pure duplicate). The generator prints every segment it can't
-find track for; route stand-ins via `VIA`, leave pure phantoms off via `SKIP`.
+Rockaway Blvd–104 St), 5 Bronx Park East–Morris Park (pure duplicate). The
+generator prints every segment it can't find track for; route stand-ins via
+`VIA`, leave pure phantoms off via `SKIP`.
+
+Better still, replace a phantom at the source (generate-subway-data.mjs) when
+the real link is missing, since the Diagram view draws it too: the R's Canal
+St–DeKalb (now Jay St–DeKalb), the M's B'way-Lafayette–Marcy Av that doubled
+its Essex St link (now Essex–Marcy), the F's York St links (now
+B'way-Lafayette–2 Av). A replaced id in the owner's saved log moves to its
+successor on load (`RETIRED` in src/scripts/subway-marks.ts).
 Also check the longest track/direct ratios — a 5 km R "segment" was the clue.
 
 ## Bundles: per straight, shift inside curves (`scripts/subway-bundles.mjs`)

@@ -255,9 +255,9 @@ function track(svc, A, B) {
 
 // The schematic has a few links that are no real track, each standing in for a
 // real stretch it lacks: the A's 104 St - Aqueduct Racetrack (for Rockaway Blvd -
-// 104 St) and the R's Canal St - DeKalb Av (for Jay St - DeKalb Av). Those ids are
-// drawn along the stretch they stand in for.
-const VIA = { "A|93552|93589": [93543, 93552], "R|91885|92660": [91876, 91885] };
+// 104 St). Those ids are drawn along the stretch they stand in for. (The R's
+// Canal St - DeKalb Av was one; generate-subway-data.mjs now replaces it.)
+const VIA = { "A|93552|93589": [93543, 93552] };
 
 // Phantom links with no track and nothing missing to stand in for: the 5 has a
 // Bronx Park East - Morris Park link beside the real E 180 St - Morris Park.

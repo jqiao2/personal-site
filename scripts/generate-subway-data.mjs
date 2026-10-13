@@ -586,6 +586,19 @@ async function main() {
     addSeg('F', "B'way-Lafayette St", '2 Av');
     addSeg('F', 'East Broadway', 'York St');
 
+    // M: the source links Broadway-Lafayette straight to Marcy Av, a phantom over
+    // the same Chrystie/Williamsburg Bridge track as its real Broadway-Lafayette ->
+    // Essex St link, and leaves Essex a dead end. The M stops at Essex St, so its
+    // bridge link starts there, on the J/Z's line.
+    removeSeg('M', "B'way-Lafayette St", 'Marcy Av');
+    addSeg('M', 'Delancey St-Essex St', 'Marcy Av', findSeg('J', 'Delancey St-Essex St', 'Marcy Av')?.pts.map((p) => p.slice()));
+
+    // R: the source runs the R from Canal St straight to DeKalb Av (the N/Q's
+    // bridge) and lacks its real Jay St-MetroTech -> DeKalb Av link, leaving the
+    // Montague tunnel a branch that dead-ends at Jay St.
+    removeSeg('R', 'Canal St [Lower Level]', 'DeKalb Av');
+    addSeg('R', 'Jay St-MetroTech', 'DeKalb Av');
+
     // 6 in the South Bronx. 3 Av-138 St / Brook Av / Cypress Av are meant to sit on
     // one horizontal; snap them (and the segments between) to a single y so the run
     // is dead flat. Straighten the 125 St elbow and the Cypress climb to clean

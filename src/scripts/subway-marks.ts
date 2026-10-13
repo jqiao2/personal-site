@@ -15,6 +15,11 @@ const API = '/api/subway/log';
 // after the move uploads it if the site has nothing yet, then drops it.
 const OLD_KEY = 'mta-subway-log-v2';
 
+// Segment ids the data no longer has -> the segment that now covers that ride.
+// The M's phantom B'way-Lafayette -> Marcy Av link is Essex St -> Marcy Av; the R's
+// phantom Canal St -> DeKalb Av is Jay St-MetroTech -> DeKalb Av.
+const RETIRED = { 'M|92633|93927': 'M|92633|92642', 'R|91885|92660': 'R|91876|91885' } satisfies Record<string, string>;
+
 export const isOwner = () => document.cookie.split('; ').includes('owner=1');
 
 const toSets = (st: string[], seg: string[]): Marks => ({
@@ -55,6 +60,14 @@ export async function loadMarks(): Promise<Marks> {
 	try {
 		localStorage.removeItem(OLD_KEY);
 	} catch {}
+
+	// a segment the generator dropped keeps its ride on the one that replaced it
+	for (const [old, now] of Object.entries(RETIRED)) {
+		if (!saved.seg.includes(old)) continue;
+		await send('POST', { kind: 'segment', ref: now, on: true });
+		await send('POST', { kind: 'segment', ref: old, on: false });
+		saved.seg = [...saved.seg.filter((id) => id !== old && id !== now), now];
+	}
 
 	return toSets(saved.st, saved.seg);
 }
