@@ -599,6 +599,13 @@ async function main() {
     removeSeg('R', 'Canal St [Lower Level]', 'DeKalb Av');
     addSeg('R', 'Jay St-MetroTech', 'DeKalb Av');
 
+    // R/W: the source runs Prince St straight to City Hall and leaves Canal St a
+    // spur off City Hall. The real order is Prince St -> Canal St -> City Hall.
+    for (const svc of ['R', 'W']) {
+      removeSeg(svc, 'Prince St', 'City Hall');
+      addSeg(svc, 'Prince St', 'Canal St [Lower Level]', [[246, 654.6], [246.1, 679.2], [257.3, 690.7]]);
+    }
+
     // A link that skips a stop the service makes: the source has the B straight
     // from DeKalb Av to 7 Av (Park Slope) and the R from DeKalb Av to Union St,
     // each beside its real DeKalb Av -> Atlantic Av link (or Atlantic -> 7 Av),
