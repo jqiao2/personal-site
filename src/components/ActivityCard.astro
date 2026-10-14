@@ -24,7 +24,7 @@
 // neither — it's in the server-rendered HTML, it scales losslessly at any
 // card size via `vector-effect="non-scaling-stroke"`, and the browser paints
 // it in the same pass as the text next to it.
-import { ALPINE, cardStats, noGpsStats, type CardStatRow } from '../lib/activity-tokens';
+import { ALPINE, activityDate, cardStats, noGpsStats, type CardStatRow } from '../lib/activity-tokens';
 import { sportIcon, sportMeta } from '../lib/sports';
 
 // The card asks activity-tokens.ts what to say under its face — cardStats()
@@ -157,6 +157,7 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 			</svg>
 			<span>{label}</span>
 		</div>
+		{size === 'row' && <time class="ac__date figure" datetime={a.local_date}>{activityDate(a.local_date)}</time>}
 		<div class="ac__stats figure">
 			{stats.map((s, i) => (
 				<>
@@ -284,6 +285,11 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	.ac__stats-sep {
 		color: var(--scree);
 	}
+	.ac__date {
+		font-size: 0.78rem;
+		color: var(--granite-soft);
+		white-space: nowrap;
+	}
 
 	/* Redacted: the whole card is the face, and the face is one glyph. No meta
 	   block, so the card is square-ish at every size instead of leaving an
@@ -365,7 +371,7 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	.ac--row .ac__meta {
 		flex: 1;
 		display: grid;
-		grid-template-columns: minmax(0, 1fr) auto auto;
+		grid-template-columns: minmax(0, 1fr) auto auto auto;
 		align-items: center;
 		column-gap: 1.25rem;
 		padding: 0 1rem;

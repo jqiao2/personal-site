@@ -148,6 +148,15 @@ export function noGpsStats(row: CardStatRow): string[] {
 	return leadFigures(row, 2);
 }
 
+const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** 'YYYY-MM-DD' → "Aug 11, 2026" — a plain string parse, no UTC-shifting Date. */
+export function activityDate(date: string): string {
+	const [y, m, d] = date.split('-').map(Number);
+
+	return `${MONTH_ABBR[(m || 1) - 1]} ${d}, ${y}`;
+}
+
 // The section's typefaces are no longer requested by URL from here: they are
 // declared once in astro.config.mjs (`fonts`) and pulled into the layout with
 // <Font cssVariable="--font-instrument-serif" />, which self-hosts them and

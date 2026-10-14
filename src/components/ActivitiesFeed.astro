@@ -17,6 +17,7 @@ import { getActivityStats, type ActivityListRow } from '../lib/activities';
 import { fetchActivityPage, activityQueryFromParams } from '../lib/activity-params';
 import { sportMeta, sportIcon, formatStat, type StatKey } from '../lib/sports';
 import { excerpt } from '../lib/format';
+import { activityDate } from '../lib/activity-tokens';
 
 // Page path from activities/index.astro — see the note in FilmsFeed: a
 // server:defer island's Astro.url is the island endpoint, not the page.
@@ -60,15 +61,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 // activity — summing it is the cheapest all-time count for the nav.
 const totalActivities = Object.values(stats.bySportFamily).reduce((a, b) => a + (b ?? 0), 0);
 
-/** 'YYYY-MM-DD' → "Aug 11, 2026" — a plain string parse, no UTC-shifting Date. */
-const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-function fmtDate(date: string): string {
-	const [y, m, d] = date.split('-').map(Number);
-
-	return `${MONTH_ABBR[(m || 1) - 1]} ${d}, ${y}`;
-}
-
 const STAT_KEYS: StatKey[] = ['distance', 'moving_time', 'elevation_gain'];
 
 function statLine(a: ActivityListRow): string[] {
@@ -102,7 +94,7 @@ function routeStart(path: string): { x: number; y: number } | null {
 						<article class="item item--redacted">
 							<div class="item__body">
 								<p class="item__meta">
-									<time>{fmtDate(a.local_date)}</time>
+									<time>{activityDate(a.local_date)}</time>
 									<span class="tag">{label}</span>
 								</p>
 							</div>
@@ -121,7 +113,7 @@ function routeStart(path: string): { x: number; y: number } | null {
 					<article class="item">
 						<div class="item__body">
 							<p class="item__meta">
-								<time>{fmtDate(a.local_date)}</time>
+								<time>{activityDate(a.local_date)}</time>
 								<span class="tag">{label}</span>
 							</p>
 							<h2 class="item__title"><a href={`/activities/${a.id}`}>{a.title}</a></h2>
