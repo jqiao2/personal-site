@@ -82,6 +82,10 @@ export function activityQueryFromParams(p: URLSearchParams): ActivityFilterQuery
 		hasPower: p.get('power') === '1',
 		hasHr: p.get('hr') === '1',
 		place: p.get('place')?.trim() || undefined,
+		ids: (p.get('ids') ?? '')
+			.split(',')
+			.map((v) => Number.parseInt(v, 10))
+			.filter((n) => Number.isFinite(n) && n > 0),
 		personalBestOnly: p.get('pr') === '1',
 		measuredOnly: p.get('measured') === '1',
 	};
@@ -104,6 +108,7 @@ export function activityFilterCount(q: ActivityFilterQuery): number {
 		(q.hasPower ? 1 : 0) +
 		(q.hasHr ? 1 : 0) +
 		(q.place ? 1 : 0) +
+		(q.ids?.length ? 1 : 0) +
 		(q.personalBestOnly ? 1 : 0) +
 		(q.measuredOnly ? 1 : 0)
 	);
@@ -315,6 +320,8 @@ export interface ActivityFilterSummary {
 	hasPower: boolean;
 	hasHr: boolean;
 	place: string | null;
+	/** Narrowed to the activities through one heatmap cell (?ids=). */
+	cell: boolean;
 	personalBestOnly: boolean;
 	measuredOnly: boolean;
 	gearNames: string[];
@@ -517,6 +524,11 @@ export function activityFilterSentence(s: ActivityFilterSummary): SentencePart[]
 	if (s.place) {
 		lit(' starting near ');
 		em(`"${s.place}"`);
+	}
+
+	if (s.cell) {
+		lit(' through ');
+		em('one heatmap cell');
 	}
 
 	lit('.');

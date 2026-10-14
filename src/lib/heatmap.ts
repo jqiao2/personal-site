@@ -90,21 +90,21 @@ export function tileGroundMeters(lat: number): number {
 const M_PER_DEG_LAT = 111_320;
 
 /**
- * Every tile a track unlocks, added to `counts` once per track — so a tile's
- * number is "how many activities crossed it", not "how many GPS samples landed
- * in it" (which would only measure how slowly you went through it). With the
- * heatmap off the page reads the same map as a boolean: present or absent.
+ * Every cell a track passes through, once each — so a cell's number is "how
+ * many activities crossed it", not "how many GPS samples landed in it" (which
+ * would only measure how slowly you went through it). With the heatmap off the
+ * page reads the same map as a boolean: present or absent.
  *
  * Samples along each segment at half a tile so a gap between two recorded
  * points — a tunnel, a paused watch, a 30 mph descent at 1 Hz — doesn't leave
  * a locked square in the middle of a road plainly ridden.
  */
-export function addTrackTiles(points: [number, number][], counts: Map<string, number>): void {
+function trackCells(points: [number, number][], keyOf: (lat: number, lng: number) => string): Set<string> {
 	const seen = new Set<string>();
 
 	for (let i = 0; i < points.length; i++) {
 		const [lat, lng] = points[i];
-		seen.add(tileKey(lat, lng));
+		seen.add(keyOf(lat, lng));
 		const next = points[i + 1];
 
 		if (!next) continue;
@@ -121,12 +121,15 @@ export function addTrackTiles(points: [number, number][], counts: Map<string, nu
 
 		for (let s = 1; s < steps; s++) {
 			const t = s / steps;
-			seen.add(tileKey(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
+			seen.add(keyOf(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
 		}
 	}
 
-	for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
+	return seen;
 }
+
+/** Every tile a track unlocks, as tileKey()s. */
+export const trackTiles = (points: [number, number][]) => trackCells(points, tileKey);
 
 /** The bucket boundaries the heatmap fill ramps over: unlocked once, a couple
  * of times, a habit, a rut. Counts are heavily skewed (one commute can be
@@ -258,32 +261,8 @@ export function hexRing(key: string): [number, number][] {
 	return ring;
 }
 
-/** addTrackTiles, on the hex grid. Same once-per-track counting, same
- *  half-a-cell sampling so a GPS gap doesn't leave a hole in a ridden road. */
-export function addTrackHexes(points: [number, number][], counts: Map<string, number>): void {
-	const seen = new Set<string>();
-
-	for (let i = 0; i < points.length; i++) {
-		const [lat, lng] = points[i];
-		seen.add(hexKey(lat, lng));
-		const next = points[i + 1];
-
-		if (!next) continue;
-		const [lat2, lng2] = next;
-		const cosLat = Math.cos((lat * Math.PI) / 180);
-		const dy = (lat2 - lat) * M_PER_DEG_LAT;
-		const dx = (lng2 - lng) * M_PER_DEG_LAT * cosLat;
-		const step = Math.max(1, tileGroundMeters(lat) / 2);
-		const steps = Math.floor(Math.hypot(dx, dy) / step);
-
-		for (let s = 1; s < steps; s++) {
-			const t = s / steps;
-			seen.add(hexKey(lat + (lat2 - lat) * t, lng + (lng2 - lng) * t));
-		}
-	}
-
-	for (const key of seen) counts.set(key, (counts.get(key) ?? 0) + 1);
-}
+/** trackTiles, on the hex grid. */
+export const trackHexes = (points: [number, number][]) => trackCells(points, hexKey);
 
 /** tilesToGeoJSON, on the hex grid — one MultiPolygon per TILE_BUCKETS bucket,
  *  for the same reason (185k features is a source MapLibre chokes on). */

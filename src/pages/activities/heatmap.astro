@@ -92,6 +92,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			<div class="map">
 				<div class="map__gl" data-heatmap role="img" aria-label="Map of every outdoor activity"></div>
 				<p class="map__status" data-status>Loading routes…</p>
+				<div class="map__pill" data-pill hidden></div>
 				<div class="map__legend" data-legend hidden>
 					<span>less</span><span class="map__legend-scale"></span><span>more</span>
 				</div>
@@ -113,7 +114,16 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 
 	import { alpineBasemap, bareAlpineGround } from '../../lib/activity-map';
 	import { decodePolyline, bounds as trackBounds } from '../../lib/route-shape';
-	import { addTrackTiles, tilesToGeoJSON, addTrackHexes, hexesToGeoJSON } from '../../lib/heatmap';
+	import {
+		trackTiles,
+		tilesToGeoJSON,
+		trackHexes,
+		hexesToGeoJSON,
+		tileKey,
+		hexKey,
+		tileBounds,
+		hexRing,
+	} from '../../lib/heatmap';
 	import { FAMILY_LABEL, FAMILY_ORDER, type SportFamily } from '../../lib/sports';
 
 	const tag = document.getElementById('heatmap-config');
@@ -170,21 +180,28 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		document.querySelector('[data-locate]')?.addEventListener('click', () => goToUser(true));
 
 		// --- data -------------------------------------------------------------
-		type Track = { family: SportFamily; points: [number, number][] };
+		type Track = { id: number; date: string; family: SportFamily; points: [number, number][] };
 
 		let tracks: Track[] = [];
 		// Families that pass the filter. Empty until data lands; then every family
 		// present is switched on, so the default is the whole map.
 		const active = new Set<SportFamily>();
 
-		const activePoints = (): [number, number][][] =>
-			tracks.filter((t) => active.has(t.family)).map((t) => t.points);
+		const activeTracks = () => tracks.filter((t) => active.has(t.family));
+
+		const activePoints = (): [number, number][][] => activeTracks().map((t) => t.points);
 
 		const filterSig = () => FAMILY_ORDER.filter((f) => active.has(f)).join(',');
+
+		// Per cell: which activities crossed it (ids, so a click can list them,
+		// and so a track split at a GPS gap still counts once) and the first and
+		// last day one did. local_date is YYYY-MM-DD, so string order is date order.
+		type CellStat = { ids: Set<number>; first: string; last: string };
+
 		// Quantised grids, keyed by view *and* the active-family signature —
 		// quantising every track costs real time, so each filter combination is
 		// built once and kept if the reader flips back to it.
-		const cellData = new Map<string, ReturnType<typeof tilesToGeoJSON>>();
+		const cellData = new Map<string, { geo: ReturnType<typeof tilesToGeoJSON>; stats: Map<string, CellStat> }>();
 
 		type CellView = 'tiles' | 'hexes';
 
@@ -210,14 +227,29 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			const cached = cellData.get(key);
 
 			if (cached) return cached;
-			const counts = new Map<string, number>();
-			const add = kind === 'tiles' ? addTrackTiles : addTrackHexes;
+			const stats = new Map<string, CellStat>();
+			const cellsOf = kind === 'tiles' ? trackTiles : trackHexes;
 
-			for (const points of activePoints()) add(points, counts);
-			const geo = (kind === 'tiles' ? tilesToGeoJSON : hexesToGeoJSON)(counts);
-			cellData.set(key, geo);
+			for (const t of activeTracks()) {
+				for (const cell of cellsOf(t.points)) {
+					const st = stats.get(cell);
 
-			return geo;
+					if (!st) stats.set(cell, { ids: new Set([t.id]), first: t.date, last: t.date });
+					else {
+						st.ids.add(t.id);
+
+						if (t.date < st.first) st.first = t.date;
+
+						if (t.date > st.last) st.last = t.date;
+					}
+				}
+			}
+
+			const counts = new Map([...stats].map(([cell, st]) => [cell, st.ids.size]));
+			const built = { geo: (kind === 'tiles' ? tilesToGeoJSON : hexesToGeoJSON)(counts), stats };
+			cellData.set(key, built);
+
+			return built;
 		}
 
 		function whenStyleReady(fn: () => void) {
@@ -257,13 +289,17 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 
 		function addCellLayer(kind: CellView) {
 			if (map.getSource(kind)) return;
-			map.addSource(kind, { type: 'geojson', data: buildCells(kind) as never });
-			map.addLayer({
-				id: `${kind}-fill`,
-				type: 'fill',
-				source: kind,
-				paint: { 'fill-color': tileFill(), 'fill-opacity': 0.72 },
-			});
+			map.addSource(kind, { type: 'geojson', data: buildCells(kind).geo as never });
+			map.addLayer(
+				{
+					id: `${kind}-fill`,
+					type: 'fill',
+					source: kind,
+					paint: { 'fill-color': tileFill(), 'fill-opacity': 0.72 },
+				},
+				// Under the hover outline, if a hover already created it.
+				map.getLayer('cell-hover-line') ? 'cell-hover-line' : undefined,
+			);
 		}
 
 		function applyView() {
@@ -284,6 +320,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			heatBtn?.toggleAttribute('disabled', view === 'routes');
 
 			if (legend) legend.hidden = view === 'routes' || !heat;
+			hideHover();
 		}
 
 		for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-view]')) {
@@ -317,9 +354,112 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			(map.getSource('routes') as maplibregl.GeoJSONSource | undefined)?.setData(routeGeoJSON() as never);
 
 			for (const kind of ['tiles', 'hexes'] as CellView[]) {
-				(map.getSource(kind) as maplibregl.GeoJSONSource | undefined)?.setData(buildCells(kind) as never);
+				(map.getSource(kind) as maplibregl.GeoJSONSource | undefined)?.setData(buildCells(kind).geo as never);
 			}
+
+			hideHover();
 		}
+
+		// --- hover pill + click-through -----------------------------------------
+		// The cell layers are one MultiPolygon per bucket, so there is no
+		// per-cell feature to query — the cursor's cell is recomputed from its
+		// lng/lat on the same fixed grid and looked up in the stats.
+		const pill = document.querySelector<HTMLElement>('[data-pill]');
+
+		let hoverKey: string | null = null;
+
+		const fmtDay = (d: string) =>
+			new Date(`${d}T00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+		const EMPTY = { type: 'FeatureCollection' as const, features: [] };
+
+		function hoverSource() {
+			if (!map.getSource('cell-hover')) {
+				map.addSource('cell-hover', { type: 'geojson', data: EMPTY });
+				map.addLayer({
+					id: 'cell-hover-line',
+					type: 'line',
+					source: 'cell-hover',
+					paint: { 'line-color': '#12495e', 'line-width': 2 },
+				});
+			}
+
+			return map.getSource<maplibregl.GeoJSONSource>('cell-hover');
+		}
+
+		function hideHover() {
+			hoverKey = null;
+
+			if (pill) pill.hidden = true;
+			map.getCanvas().style.cursor = '';
+			map.getSource<maplibregl.GeoJSONSource>('cell-hover')?.setData(EMPTY);
+		}
+
+		function cellAt(e: maplibregl.MapMouseEvent) {
+			if (view === 'routes' || !tracks.length) return null;
+			const { lat, lng } = e.lngLat;
+			const key = view === 'tiles' ? tileKey(lat, lng) : hexKey(lat, lng);
+			const stat = buildCells(view).stats.get(key);
+
+			return stat ? { key, stat } : null;
+		}
+
+		function cellRing(key: string): [number, number][] {
+			if (view === 'hexes') return hexRing(key);
+			const [[w, s], [e, n]] = tileBounds(key);
+
+			return [
+				[w, s],
+				[e, s],
+				[e, n],
+				[w, n],
+				[w, s],
+			];
+		}
+
+		function showHover(e: maplibregl.MapMouseEvent) {
+			const hit = cellAt(e);
+
+			if (!hit || !pill) return hideHover();
+			map.getCanvas().style.cursor = 'pointer';
+			pill.style.left = `${e.point.x}px`;
+			pill.style.top = `${e.point.y}px`;
+			// Flip to the cursor's left near the right edge, where .map clips it.
+			pill.classList.toggle('map__pill--left', e.point.x > host!.clientWidth - 300);
+			pill.hidden = false;
+
+			if (hit.key === hoverKey) return;
+			hoverKey = hit.key;
+			const { ids, first, last } = hit.stat;
+			pill.textContent =
+				ids.size === 1
+					? `1 activity · ${fmtDay(first)}`
+					: `${ids.size} activities · first ${fmtDay(first)} · last ${fmtDay(last)}`;
+			hoverSource()?.setData({
+				type: 'Feature',
+				geometry: { type: 'Polygon', coordinates: [cellRing(hit.key)] },
+				properties: {},
+			});
+		}
+
+		map.on('mousemove', showHover);
+		map.getCanvas().addEventListener('mouseleave', hideHover);
+		map.on('click', (e) => {
+			const hit = cellAt(e);
+
+			if (!hit) return;
+
+			// A touch has no hover, so the first tap on a cell shows its pill and
+			// the second goes through. With a mouse, hover has already shown it.
+			if (hit.key !== hoverKey) return showHover(e);
+			// ponytail: ids ride in the URL; a cell crossed ~1000+ times would
+			// make a URL too long for the list API's Supabase call — switch to a
+			// server-side cell lookup if a commute ever gets there.
+			const url = `/activities/all?ids=${[...hit.stat.ids].join(',')}`;
+
+			if (e.originalEvent.metaKey || e.originalEvent.ctrlKey) window.open(url, '_blank');
+			else location.href = url;
+		});
 
 		// One chip per activity family present, all on by default (the whole
 		// map). Built after data lands, so it lists only families actually
@@ -354,9 +494,9 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 
 		fetch('/api/activities/routes')
 			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-			.then((data: { routes: { family: SportFamily; polyline: string }[] }) => {
+			.then((data: { routes: { id: number; date: string; family: SportFamily; polyline: string }[] }) => {
 				tracks = data.routes
-					.map((r) => ({ family: r.family, points: decodePolyline(r.polyline) }))
+					.map((r) => ({ id: r.id, date: r.date, family: r.family, points: decodePolyline(r.polyline) }))
 					.filter((t) => t.points.length > 1);
 				buildFilters();
 
@@ -586,6 +726,26 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		font-size: 11.5px;
 		color: var(--granite-soft);
 		pointer-events: none;
+	}
+	.map__pill {
+		position: absolute;
+		z-index: 2;
+		transform: translate(14px, -50%);
+		white-space: nowrap;
+		background: rgba(248, 251, 253, 0.96);
+		border: 1px solid var(--scree);
+		border-radius: 999px;
+		padding: 5px 11px;
+		font-family: var(--sans);
+		font-size: 12px;
+		color: var(--granite);
+		pointer-events: none;
+	}
+	.map__pill--left {
+		transform: translate(calc(-100% - 14px), -50%);
+	}
+	.map__pill[hidden] {
+		display: none;
 	}
 	.map__legend[hidden] {
 		display: none;
