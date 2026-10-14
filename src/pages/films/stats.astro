@@ -50,6 +50,8 @@ const langMax = Math.max(1, ...stats.languages.map((g) => g.count));
 
 const countryMax = Math.max(1, ...stats.countries.map((g) => g.count));
 
+const filmsTitle = (c: number, t: number) => `${c} ${c === 1 ? 'film' : 'films'}${t ? ` · ${t} in theaters` : ''}`;
+
 const ratingLabels = Array.from({ length: 10 }, (_, i) => starText((i + 1) * 0.5) ?? '');
 
 const columns: { title: string; items: typeof stats.genres; max: number; param: string }[] = [
@@ -80,24 +82,36 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			<!-- Title + year picker -->
 			<div class="titleblock">
 				<h1>Stats</h1>
-				<details class="picker">
-					<summary>
-						<span>{stats.selectedLabel}</span>
-						<span class="picker__caret">▾</span>
-					</summary>
-					<div class="picker__menu">
-						{stats.yearOptions.map((o) => {
-							const on = o.label === stats.selectedLabel;
-							return (
-								<a class={on ? 'picker__row picker__row--on' : 'picker__row'} href={href(o.key)}>
-									<span class="picker__check">{on ? '✓' : ''}</span>
-									<span class="picker__label">{o.label}</span>
-									<span class="picker__count">{o.count}</span>
-								</a>
-							);
-						})}
-					</div>
-				</details>
+				<div class="controls">
+					<label class="split-toggle">
+						<input type="checkbox" class="split-toggle__input" checked />
+						<span class="split-toggle__track"></span>
+						<span class="split-toggle__label">Theater</span>
+					</label>
+					<script is:inline>
+						try {
+							if (localStorage.getItem('films-stats-split') === '0') document.querySelector('.split-toggle__input').checked = false;
+						} catch {}
+					</script>
+					<details class="picker">
+						<summary>
+							<span>{stats.selectedLabel}</span>
+							<span class="picker__caret">▾</span>
+						</summary>
+						<div class="picker__menu">
+							{stats.yearOptions.map((o) => {
+								const on = o.label === stats.selectedLabel;
+								return (
+									<a class={on ? 'picker__row picker__row--on' : 'picker__row'} href={href(o.key)}>
+										<span class="picker__check">{on ? '✓' : ''}</span>
+										<span class="picker__label">{o.label}</span>
+										<span class="picker__count">{o.count}</span>
+									</a>
+								);
+							})}
+						</div>
+					</details>
+				</div>
 			</div>
 
 			<!-- Metric cards -->
@@ -116,7 +130,6 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 					<div class="block__head">
 						<div class="block__title">Films watched per week</div>
 						<div class="block__meta">
-							<span class="key key--theater">Theater</span><span class="key">Elsewhere</span>
 							{stats.weekSpan} · avg <span class="hl">{stats.weekAvg}</span>/wk
 						</div>
 					</div>
@@ -146,12 +159,7 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			<!-- Films watched by day of the week -->
 			{stats.showWeeks && stats.weekdays.some((d) => d.count > 0) && (
 				<section class="block">
-					<div class="block__head">
-						<div class="block__title">Day of the week</div>
-						<div class="block__meta">
-							<span class="key key--theater">Theater</span><span class="key">Elsewhere</span>
-						</div>
-					</div>
+					<div class="block__title block__title--solo">Day of the week</div>
 					<div class="ratings">
 						<div class="bars bars--ratings">
 							{stats.weekdays.map((d) => (
@@ -174,17 +182,18 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 				<section class="block">
 					<div class="block__title block__title--solo">Films by release year</div>
 					<div class="bars">
-						{stats.byYear.map((d) =>
-							d.count > 0 && d.year != null ? (
-								<a class="bars__slot bars__slot--link" href={watchedHref({ ryear: d.year })} title={d.title}>
-									<div class="bar bar--thin" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}></div>
-								</a>
-							) : (
-								<div class="bars__slot" title={d.title}>
-									<div class="bar bar--thin" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}></div>
+						{stats.byYear.map((d) => {
+							const bar = (
+								<div class="bar bar--thin bar--split" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}>
+									{d.theater ? <div class="bar__theater" style={`height:${(d.theater / d.count) * 100}%`}></div> : null}
 								</div>
-							),
-						)}
+							);
+							return d.count > 0 && d.year != null ? (
+								<a class="bars__slot bars__slot--link" href={watchedHref({ ryear: d.year })} title={d.title}>{bar}</a>
+							) : (
+								<div class="bars__slot" title={d.title}>{bar}</div>
+							);
+						})}
 					</div>
 					<div class="axis">
 						{stats.byYearLabels.map((l) => <span>{l}</span>)}
@@ -200,10 +209,12 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 						<div class="ranked">
 							{col.items.length > 0 ? (
 								col.items.map((g) => (
-									<a class="ranked__row" href={watchedHref({ [col.param]: g.name })}>
+									<a class="ranked__row" href={watchedHref({ [col.param]: g.name })} title={filmsTitle(g.count, g.theater)}>
 										<span class="ranked__name">{g.name}</span>
 										<div class="ranked__track">
-											<div class="ranked__fill" style={`width:${Math.round((g.count / col.max) * 100)}%`}></div>
+											<div class="ranked__fill" style={`width:${Math.round((g.count / col.max) * 100)}%`}>
+												{g.theater ? <div class="ranked__theater" style={`width:${(g.theater / g.count) * 100}%`}></div> : null}
+											</div>
 										</div>
 										<span class="ranked__count">{g.count}</span>
 									</a>
@@ -227,13 +238,19 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 						<div class="bars bars--ratings">
 							{stats.ratings.map((c, i) => {
 								const stars = (i + 1) * 0.5;
-								const bar = <div class="bar" style={`height:${Math.round((c / ratingMax) * 100)}%`}></div>;
+								const t = stats.ratingsTheater[i];
+								const title = `${stars.toFixed(1)} · ${filmsTitle(c, t)}`;
+								const bar = (
+									<div class="bar bar--split" style={`height:${Math.round((c / ratingMax) * 100)}%`}>
+										{t ? <div class="bar__theater" style={`height:${(t / c) * 100}%`}></div> : null}
+									</div>
+								);
 								return c > 0 ? (
-									<a class="bars__slot" href={watchedHref({ rmin: stars, rmax: stars })} title={`${stars.toFixed(1)} · ${c} films`}>
+									<a class="bars__slot" href={watchedHref({ rmin: stars, rmax: stars })} title={title}>
 										{bar}
 									</a>
 								) : (
-									<div class="bars__slot" title={`${stars.toFixed(1)} · ${c} films`}>{bar}</div>
+									<div class="bars__slot" title={title}>{bar}</div>
 								);
 							})}
 						</div>
@@ -254,7 +271,9 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 								<span class="person__rank">{i + 1}</span>
 								<span class="person__name">{person.name}</span>
 								<span class="person__stars">{starText(person.rating) ?? ''}</span>
-								<span class="person__count">{person.count} films</span>
+								<span class="person__count">
+									{person.count} films{person.theater ? <span class="person__theater"> · {person.theater} in theaters</span> : null}
+								</span>
 							</a>
 						))}
 					</section>
@@ -335,6 +354,56 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			color: #f4e8d1;
 			letter-spacing: -0.5px;
 			line-height: 1;
+		}
+
+		.controls {
+			display: flex;
+			align-items: center;
+			gap: 18px;
+		}
+		.split-toggle {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+			cursor: pointer;
+		}
+		.split-toggle__input {
+			position: absolute;
+			opacity: 0;
+			pointer-events: none;
+		}
+		.split-toggle__track {
+			position: relative;
+			width: 30px;
+			height: 17px;
+			border-radius: 9px;
+			background: #4a2529;
+		}
+		.split-toggle__track::after {
+			content: '';
+			position: absolute;
+			top: 2px;
+			left: 2px;
+			width: 13px;
+			height: 13px;
+			border-radius: 50%;
+			background: #a2857a;
+		}
+		.split-toggle__input:checked + .split-toggle__track {
+			background: #d9b45a;
+		}
+		.split-toggle__input:checked + .split-toggle__track::after {
+			left: 15px;
+			background: #20100f;
+		}
+		.split-toggle__input:checked ~ .split-toggle__label {
+			color: #f4e8d1;
+		}
+		.split-toggle__input:focus-visible + .split-toggle__track {
+			outline: 2px solid #d9b45a;
+			outline-offset: 2px;
 		}
 
 		.picker {
@@ -498,36 +567,34 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			background: #f4e8d1;
 		}
 
-		/* Theater vs elsewhere: the bar is the "elsewhere" colour, with the
-		   theater share stacked in gold at its foot. */
+		/* Theater vs elsewhere, while the toggle is on: the bar turns the
+		   "elsewhere" colour, with the theater share stacked in gold at its foot
+		   (at its left on the ranked rows). :where() keeps these as weak as a
+		   plain .bar so the hover rules still win. */
 		.bar--split {
 			display: flex;
 			flex-direction: column;
 			justify-content: flex-end;
 			overflow: hidden;
+		}
+		.ranked__fill {
+			display: flex;
+			overflow: hidden;
+		}
+		:where(.wrap:has(.split-toggle__input:checked)) .bar--split,
+		:where(.wrap:has(.split-toggle__input:checked)) .ranked__fill {
 			background: #8a6f63;
 		}
-		.bar__theater {
+		:where(.wrap:has(.split-toggle__input:not(:checked))) :is(.bar__theater, .ranked__theater, .person__theater) {
+			display: none;
+		}
+		.bar__theater,
+		.ranked__theater {
 			background: #d9b45a;
 		}
-		.bars__slot:hover .bar__theater {
+		.bars__slot:hover .bar__theater,
+		a.ranked__row:hover .ranked__theater {
 			background: #f0d488;
-		}
-		.key {
-			display: inline-flex;
-			align-items: center;
-			gap: 5px;
-			margin-right: 14px;
-		}
-		.key::before {
-			content: '';
-			width: 9px;
-			height: 9px;
-			border-radius: 2px;
-			background: #8a6f63;
-		}
-		.key--theater::before {
-			background: #d9b45a;
 		}
 		.axis {
 			display: flex;
@@ -646,7 +713,7 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 		.person__count {
 			font-size: 13px;
 			color: #a2857a;
-			min-width: 70px;
+			min-width: 150px;
 			text-align: right;
 		}
 
@@ -726,6 +793,15 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 	</style>
 
 	<script>
+		// Remember the theater toggle across years and visits.
+		const split = document.querySelector<HTMLInputElement>('.split-toggle__input');
+
+		split?.addEventListener('change', () => {
+			try {
+				localStorage.setItem('films-stats-split', split.checked ? '1' : '0');
+			} catch {}
+		});
+
 		// Close the year picker when clicking outside it (native <details> only
 		// toggles on the summary).
 		const picker = document.querySelector('.picker');

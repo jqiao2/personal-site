@@ -2489,12 +2489,16 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 export interface RankedCount {
 	name: string;
 	count: number;
+	/** How many of `count` were first watched in a theater. */
+	theater: number;
 }
 
 /** A ranked person with film count and average star rating of their films. */
 export interface PersonStat {
 	name: string;
 	count: number;
+	/** How many of `count` were first watched in a theater. */
+	theater: number;
 	/** Mean rating across that person's films in scope; null if none are rated. */
 	rating: number | null;
 }
@@ -2502,7 +2506,7 @@ export interface PersonStat {
 /** A labelled bar in a histogram. */
 export interface HistBar {
 	count: number;
-	/** How many of `count` were first watched in a theater (week/weekday bars only). */
+	/** How many of `count` were first watched in a theater. */
 	theater?: number;
 	/** Tooltip text — e.g. "2024 · 132 films" or "Mar 3–9, 2024 · 2 films". */
 	title: string;
@@ -2549,6 +2553,8 @@ export interface FilmStats {
 
 	/** Ratings distribution, 10 buckets (index 0 = ½★ … 9 = 5★). */
 	ratings: number[];
+	/** Theater share of each `ratings` bucket. */
+	ratingsTheater: number[];
 	ratingAvg: string;
 	ratedTotal: number;
 
@@ -2647,27 +2653,49 @@ export async function loadWatchedFacts(): Promise<WatchedFacts[]> {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** Tally a name→count map from each film's list, most-common first, top `limit`. */
-function rankCounts(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], limit = 7): RankedCount[] {
-	const counts = new Map<string, number>();
+function rankCounts(
+	rows: WatchedFacts[],
+	pick: (r: WatchedFacts) => string[],
+	inTheater: (r: WatchedFacts) => boolean,
+	limit = 7,
+): RankedCount[] {
+	const counts = new Map<string, { count: number; theater: number }>();
 
 	for (const r of rows) {
-		for (const name of pick(r)) counts.set(name, (counts.get(name) ?? 0) + 1);
+		const t = inTheater(r);
+
+		for (const name of pick(r)) {
+			const c = counts.get(name) ?? { count: 0, theater: 0 };
+			c.count++;
+
+			if (t) c.theater++;
+			counts.set(name, c);
+		}
 	}
 
 	return [...counts.entries()]
-		.map(([name, count]) => ({ name, count }))
+		.map(([name, c]) => ({ name, ...c }))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 		.slice(0, limit);
 }
 
 /** Rank people by film count, carrying each person's average film rating. */
-function rankPeople(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], limit = 6): PersonStat[] {
-	const agg = new Map<string, { count: number; ratingSum: number; rated: number }>();
+function rankPeople(
+	rows: WatchedFacts[],
+	pick: (r: WatchedFacts) => string[],
+	inTheater: (r: WatchedFacts) => boolean,
+	limit = 6,
+): PersonStat[] {
+	const agg = new Map<string, { count: number; theater: number; ratingSum: number; rated: number }>();
 
 	for (const r of rows) {
+		const t = inTheater(r);
+
 		for (const name of pick(r)) {
-			const a = agg.get(name) ?? { count: 0, ratingSum: 0, rated: 0 };
+			const a = agg.get(name) ?? { count: 0, theater: 0, ratingSum: 0, rated: 0 };
 			a.count++;
+
+			if (t) a.theater++;
 
 			if (r.rating != null) {
 				a.ratingSum += r.rating;
@@ -2682,6 +2710,7 @@ function rankPeople(rows: WatchedFacts[], pick: (r: WatchedFacts) => string[], l
 		.map(([name, a]) => ({
 			name,
 			count: a.count,
+			theater: a.theater,
 			rating: a.rated ? a.ratingSum / a.rated : null,
 		}))
 		.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
@@ -2861,13 +2890,20 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		if (releaseYears.length) {
 			const min = Math.min(...releaseYears);
 			const max = Math.max(...releaseYears, thisYear);
-			const perRelease = new Map<number, number>();
+			const perRelease = new Map<number, { count: number; theater: number }>();
 
-			for (const y of releaseYears) perRelease.set(y, (perRelease.get(y) ?? 0) + 1);
+			for (const r of rows) {
+				if (r.release_year == null) continue;
+				const c = perRelease.get(r.release_year) ?? { count: 0, theater: 0 };
+				c.count++;
+
+				if (inTheater(r)) c.theater++;
+				perRelease.set(r.release_year, c);
+			}
 
 			for (let y = min; y <= max; y++) {
-				const c = perRelease.get(y) ?? 0;
-				byYear.push({ count: c, year: y, title: `${y} · ${c} ${c === 1 ? 'film' : 'films'}` });
+				const { count, theater } = perRelease.get(y) ?? { count: 0, theater: 0 };
+				byYear.push({ count, theater, year: y, title: `${y} · ${filmsLabel(count, theater)}` });
 			}
 
 			// ~6 evenly spaced year labels across the span.
@@ -2878,6 +2914,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 
 	// Ratings distribution (0.5 … 5.0 → 10 buckets).
 	const ratings = new Array(10).fill(0);
+	const ratingsTheater = new Array(10).fill(0);
 	let ratedTotal = 0;
 	let ratingWeighted = 0;
 
@@ -2886,6 +2923,8 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 
 		if (idx >= 0 && idx < 10) {
 			ratings[idx]++;
+
+			if (inTheater(r)) ratingsTheater[idx]++;
 			ratedTotal++;
 			ratingWeighted += r.rating;
 		}
@@ -2908,12 +2947,13 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		byYear,
 		byYearLabels,
 		ratings,
+		ratingsTheater,
 		ratingAvg,
 		ratedTotal,
-		genres: rankCounts(rows, (r) => r.genres),
-		languages: rankCounts(rows, (r) => (r.originalLanguage ? [r.originalLanguage] : [])),
-		countries: rankCounts(rows, (r) => r.countries),
-		directors: rankPeople(rows, (r) => r.directors),
-		actors: rankPeople(rows, (r) => r.actors),
+		genres: rankCounts(rows, (r) => r.genres, inTheater),
+		languages: rankCounts(rows, (r) => (r.originalLanguage ? [r.originalLanguage] : []), inTheater),
+		countries: rankCounts(rows, (r) => r.countries, inTheater),
+		directors: rankPeople(rows, (r) => r.directors, inTheater),
+		actors: rankPeople(rows, (r) => r.actors, inTheater),
 	};
 }
