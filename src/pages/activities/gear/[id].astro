@@ -286,7 +286,7 @@ function usedText(w: ComponentWear): string {
 										Part
 										<select id="c-kind">
 											{COMPONENT_ORDER.map((k) => (
-												<option value={k} disabled={fittedKinds.has(k) && k !== 'other'}>
+												<option value={k} disabled={fittedKinds.has(k) && k !== 'other' && !COMPONENT_KINDS[k].paired}>
 													{COMPONENT_KINDS[k].label}
 												</option>
 											))}
