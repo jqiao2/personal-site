@@ -2489,7 +2489,7 @@ export async function listWatchedPage(query: WatchedQuery = {}, isOwner = false)
 export interface RankedCount {
 	name: string;
 	count: number;
-	/** How many of `count` were first watched in a theater. */
+	/** How many of `count` were ever watched in a theater. */
 	theater: number;
 }
 
@@ -2497,7 +2497,7 @@ export interface RankedCount {
 export interface PersonStat {
 	name: string;
 	count: number;
-	/** How many of `count` were first watched in a theater. */
+	/** How many of `count` were ever watched in a theater. */
 	theater: number;
 	/** Mean rating across that person's films in scope; null if none are rated. */
 	rating: number | null;
@@ -2506,7 +2506,7 @@ export interface PersonStat {
 /** A labelled bar in a histogram. */
 export interface HistBar {
 	count: number;
-	/** How many of `count` were first watched in a theater. */
+	/** How many of `count` were ever watched in a theater. */
 	theater?: number;
 	/** Tooltip text — e.g. "2024 · 132 films" or "Mar 3–9, 2024 · 2 films". */
 	title: string;
@@ -2718,25 +2718,22 @@ function rankPeople(
 }
 
 /**
- * "movieId|YYYY-MM-DD" for every theater diary entry. A film counts as seen in a
- * theater when one of these lands on its first-watch day, so a later theater
- * rewatch doesn't recolour a first watch at home. Empty before migration 0010.
+ * Ids of every movie with a theater diary entry. A film counts as seen in a
+ * theater if any viewing was, first watch or rewatch. Empty before migration 0010.
  */
-async function loadTheaterDays(): Promise<Set<string>> {
+async function loadTheaterMovies(): Promise<Set<number>> {
 	const { data, error } = await supabasePublic
 		.from('logs')
-		.select('movie_id, watched_date, log')
+		.select('movie_id')
 		.eq('medium', 'theater')
 		.is('deleted_at', null);
 
 	if (error) {
 		if (isMissingCreditColumn(error)) return new Set();
-		throw new Error(`loadTheaterDays failed: ${error.message}`);
+		throw new Error(`loadTheaterMovies failed: ${error.message}`);
 	}
 
-	return new Set(
-		(data ?? []).map((l: { movie_id: number; watched_date: string | null; log: string }) => `${l.movie_id}|${l.watched_date ?? l.log}`),
-	);
+	return new Set((data ?? []).map((l: { movie_id: number }) => l.movie_id));
 }
 
 /** Year (local) of an ISO timestamp; null when the timestamp is unknown. */
@@ -2752,11 +2749,9 @@ export function yearOf(iso: string | null): number | null {
  * aren't synced yet simply contribute nothing to those sections.
  */
 export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmStats> {
-	const [all, theaterDays] = await Promise.all([loadWatchedFacts(), loadTheaterDays()]);
+	const [all, theaterMovies] = await Promise.all([loadWatchedFacts(), loadTheaterMovies()]);
 
-	// first_watched is stored as midnight UTC of the watch day.
-	const inTheater = (r: WatchedFacts) =>
-		r.first_watched != null && theaterDays.has(`${r.movie_id}|${r.first_watched.slice(0, 10)}`);
+	const inTheater = (r: WatchedFacts) => theaterMovies.has(r.movie_id);
 
 	const filmsLabel = (c: number, t: number) =>
 		`${c} ${c === 1 ? 'film' : 'films'}${t ? ` · ${t} in theaters` : ''}`;
@@ -2866,7 +2861,7 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		weekAvg = (bins.reduce((a, b) => a + b, 0) / (bins.length || 1)).toFixed(1);
 	}
 
-	// Films by weekday of first watch, Mon → Sun (UTC: see inTheater above).
+	// Films by weekday of first watch, Mon → Sun (first_watched is midnight UTC of the watch day).
 	const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 	const dayCounts = DAYS.map(() => ({ count: 0, theater: 0 }));
 
