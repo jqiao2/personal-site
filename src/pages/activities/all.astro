@@ -965,7 +965,7 @@ const scopeDummy: ActivityCardRow = {
 		// than an import of it; sports.ts and activity-tokens.ts have no such
 		// server dependency and are imported directly.
 		import { sportMeta, sportIcon } from '../../lib/sports';
-		import { ALPINE, cardStats, exertionLabel, noGpsStats } from '../../lib/activity-tokens';
+		import { ALPINE, activityDate, cardStats, exertionLabel, noGpsStats } from '../../lib/activity-tokens';
 		// Type-only — erased at build, so this brings in none of activities.ts's
 		// runtime code (and, through it, supabase.ts) the way a value import
 		// would.
@@ -1585,6 +1585,9 @@ const scopeDummy: ActivityCardRow = {
 			sportRow.appendChild(iconSvg as unknown as Node);
 			sportRow.appendChild(el('span', undefined, cardScope, sportMeta(a.sport).label));
 			metaBox.appendChild(sportRow);
+			const date = el('time', 'ac__date figure', cardScope, activityDate(a.local_date));
+			date.setAttribute('datetime', a.local_date);
+			metaBox.appendChild(date);
 
 			const statsRow = el('div', 'ac__stats figure', cardScope);
 			cardStats(a).forEach((value, i) => {
