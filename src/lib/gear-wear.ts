@@ -59,6 +59,9 @@ export interface ComponentMeta {
 	 * window would retire a tire that hasn't touched tarmac.
 	 */
 	outdoorOnly?: true;
+	/** A bike carries two (front and rear), so fitting a second while one is
+	 * already on isn't a mis-click and the picker keeps offering it. */
+	paired?: true;
 }
 
 // The intervals are windows, not thresholds — a chain is not "dead at 3,000
@@ -69,21 +72,21 @@ export const COMPONENT_KINDS: Record<ComponentKind, ComponentMeta> = {
 	chain: { label: 'Chain', trackBy: 'Miles', lifeMiles: [2000, 4000] },
 	cassette: { label: 'Cassette', trackBy: 'Miles', lifeMiles: [5000, 15000] },
 	chainrings: { label: 'Chainrings', trackBy: 'Miles', lifeMiles: [5000, 20000] },
-	brake_pads: { outdoorOnly: true, label: 'Brake pads', trackBy: 'Miles + wear', lifeMiles: [1000, 5000] },
-	brake_rotors: { outdoorOnly: true, label: 'Brake rotors', trackBy: 'Miles + thickness', lifeMiles: [5000, 15000] },
+	brake_pads: { paired: true, outdoorOnly: true, label: 'Brake pads', trackBy: 'Miles + wear', lifeMiles: [1000, 5000] },
+	brake_rotors: { paired: true, outdoorOnly: true, label: 'Brake rotors', trackBy: 'Miles + thickness', lifeMiles: [5000, 15000] },
 	// The wheel, not the bearings inside it — those are their own kind below,
 	// because a wheelset outlives several sets of bearings and the two are
 	// replaced for entirely different reasons. A disc-brake wheel has no
 	// scheduled life at all (nothing rubs the rim), so it carries no interval.
-	wheels: { outdoorOnly: true, label: 'Wheels', trackBy: 'Miles + condition' },
-	tires: { outdoorOnly: true, label: 'Tires', trackBy: 'Miles', lifeMiles: [2000, 5000] },
+	wheels: { paired: true, outdoorOnly: true, label: 'Wheels', trackBy: 'Miles + condition' },
+	tires: { paired: true, outdoorOnly: true, label: 'Tires', trackBy: 'Miles', lifeMiles: [2000, 5000] },
 	sealant: { label: 'Tubeless sealant', trackBy: 'Date added', lifeMonths: [3, 6] },
 	valves: { label: 'Tubeless valves', trackBy: 'Condition' },
 	bar_tape: { label: 'Bar tape', trackBy: 'Miles + date', lifeMonths: [12, 24] },
 	cables: { label: 'Cables / housing', trackBy: 'Miles + date', lifeMonths: [12, 36] },
 	bottom_bracket: { label: 'Bottom bracket', trackBy: 'Miles + symptoms' },
 	headset_bearings: { label: 'Headset bearings', trackBy: 'Miles + symptoms' },
-	wheel_bearings: { outdoorOnly: true, label: 'Wheel bearings', trackBy: 'Miles + symptoms' },
+	wheel_bearings: { paired: true, outdoorOnly: true, label: 'Wheel bearings', trackBy: 'Miles + symptoms' },
 	// Not on the bike. It's here because the shoes it bolts to aren't tracked
 	// as gear, and a cleat with no home is a cleat nobody replaces.
 	cleats: { label: 'Cleats', trackBy: 'Miles + symptoms' },
