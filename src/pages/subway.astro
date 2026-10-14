@@ -353,7 +353,8 @@ import SiteHeader from '../components/SiteHeader.astro';
 					height: auto;
 				}
 				.sm-mapwrap {
-					height: 70vh;
+					flex: none; /* flex: 1's zero basis would override the height */
+					height: calc(100svh - 62px);
 				}
 				.sm-side {
 					width: 100%;
