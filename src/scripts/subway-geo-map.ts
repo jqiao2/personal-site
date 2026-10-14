@@ -90,7 +90,7 @@ function linkGeoJSON() {
 // a slot is a little wider than a line, so neighbours keep a visible gap
 const offset: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 10, ['*', ['get', 'o'], 2.6], 13, ['*', ['get', 'o'], 4], 16, ['*', ['get', 'o'], 6.4]];
 
-export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) => void, onSt: (id: number) => void, onHover: (id: string | null, e: MouseEvent) => void) {
+export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) => void, onSt: (id: number) => void, onHover: (h: { kind: 'seg'; id: string } | { kind: 'st'; id: number } | null, e: MouseEvent) => void) {
 	const t = SUBWAY_MAP_TOKENS;
 
 	const style = key
@@ -219,12 +219,12 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 		else if (h) onSeg(h.id);
 	});
 
-	// a line under the cursor shows its bullet (not while panning)
+	// a line or station under the cursor shows its bullets (not while panning)
 	map.on('mousemove', (e) => {
 		if (!loaded) return;
 		const h = hitAt(e.point);
 		map.getCanvas().style.cursor = h ? 'pointer' : '';
-		onHover(h?.kind === 'seg' && !e.originalEvent.buttons ? h.id : null, e.originalEvent);
+		onHover(e.originalEvent.buttons ? null : h, e.originalEvent);
 	});
 
 	map.on('mouseout', (e) => onHover(null, e.originalEvent));
