@@ -273,6 +273,17 @@ import SiteHeader from '../components/SiteHeader.astro';
 				font-size: 9px;
 				letter-spacing: 0.2px;
 			}
+			/* express variant: the MTA's diamond, its letter kept upright */
+			.sm-bullet.dia {
+				width: 19px;
+				height: 19px;
+				margin: 0 3px;
+				border-radius: 2px;
+				transform: rotate(45deg);
+			}
+			.sm-bullet.dia > span {
+				transform: rotate(-45deg);
+			}
 			.sm-tip {
 				position: absolute;
 				z-index: 1; /* above the map */
@@ -356,6 +367,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			import { CANVAS, SERVICES, STATIONS, SEGMENTS } from '../scripts/subway-data.js';
 			import { LINES } from '../scripts/subway-diagram.js';
 			import { MILES } from '../scripts/subway-miles.js';
+			import { BULLETS } from '../scripts/subway-bullets.js';
 			import type { SubwaySegment, SubwayStation } from '../scripts/subway-data.js';
 			import { loadMarks, saveMark, saveAll, type Marks } from '../scripts/subway-marks';
 
@@ -525,7 +537,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			});
 
 			// ---- build station pills + labels ----
-			const pillEls: Record<number, { s: SubwayStation; rects: { rect: SVGElement; title: SVGElement; p: Pill }[] }> = {};
+			const pillEls: Record<number, { s: SubwayStation; rects: { rect: SVGElement; p: Pill }[] }> = {};
 
 			const labelEls: Record<number, { s: SubwayStation; label: SVGElement; right: boolean; w: number }> = {};
 
@@ -537,12 +549,12 @@ import SiteHeader from '../components/SiteHeader.astro';
 						'stroke-width': PILL_BORDER, 'vector-effect': 'non-scaling-stroke', style: 'cursor:pointer;',
 					});
 
-					const title = el('title', {});
-					rect.appendChild(title);
 					rect.addEventListener('click', () => stationClick(s.id));
+					rect.addEventListener('pointermove', (e) => showStTip(s, e));
+					rect.addEventListener('pointerleave', hideTip);
 					gPills.appendChild(rect);
 
-					return { rect, title, p };
+					return { rect, p };
 				});
 
 				pillEls[s.id] = { s, rects };
@@ -647,11 +659,9 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			function renderPillMark(s: SubwayStation) {
 				const on = !!marks.st[s.id];
-				const label = s.name + ' (' + s.svcs.join(' ') + ')' + (on ? ' — visited' : '');
 				pillEls[s.id].rects.forEach((r) => {
 					r.rect.setAttribute('fill', on ? '#26231f' : '#ffffff');
 					r.rect.setAttribute('stroke', on ? '#26231f' : '#7a7264');
-					r.title.textContent = label;
 				});
 			}
 
@@ -677,7 +687,34 @@ import SiteHeader from '../components/SiteHeader.astro';
 			function showTip(sg: SubwaySegment, e: { clientX: number; clientY: number }) {
 				if (drag) return hideTip();
 				const text = stById[sg.a].name + ' ↔ ' + stById[sg.b].name + (marks.seg[sg.id] ? ' · ridden' : '');
-				tipEl.replaceChildren(makeBullet(sg.svc, sg.color), text);
+				placeTip([makeBullet(sg.svc, sg.color), text], e);
+			}
+
+			// a station shows the bullet of every line that stops there
+			const svcColor = Object.fromEntries(SERVICES.map((sv) => [sv.svc, sv.color]));
+
+			function showStTip(s: SubwayStation, e: { clientX: number; clientY: number }) {
+				if (drag) return hideTip();
+				const b = BULLETS[s.id];
+				const kids = s.svcs.flatMap((v) => {
+					const one = makeBullet(v, svcColor[v]);
+
+					// stops here only some of the time: the MTA's hollow bullet
+					if (b?.h?.includes(v)) Object.assign(one.style, { background: '#fff', color: textOn(svcColor[v]) === '#ffffff' ? svcColor[v] : '#141414', boxShadow: 'inset 0 0 0 2px ' + svcColor[v] });
+
+					if (!b?.x?.includes(v)) return [one];
+					const dia = makeBullet('', svcColor[v]);
+					dia.classList.add('dia');
+					dia.append(Object.assign(document.createElement('span'), { textContent: v }));
+
+					return [one, dia];
+				});
+
+				placeTip([...kids, s.name + (marks.st[s.id] ? ' · visited' : '')], e);
+			}
+
+			function placeTip(kids: (Node | string)[], e: { clientX: number; clientY: number }) {
+				tipEl.replaceChildren(...kids);
 				// the wrapper, not the svg: in the Map view the svg is hidden
 				const r = tipEl.parentElement!.getBoundingClientRect();
 				tipEl.style.left = e.clientX - r.left + 14 + 'px';
@@ -896,7 +933,7 @@ import SiteHeader from '../components/SiteHeader.astro';
  return; }
 
 				const { mountGeoMap } = await import('../scripts/subway-geo-map');
-				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt, (id, e) => (id ? showTip(segEls[id].sg, e) : hideTip()));
+				geo = mountGeoMap(geoEl, import.meta.env.PUBLIC_MAPTILER_KEY ?? '', markSeg, markSt, (h, e) => (h?.kind === 'seg' ? showTip(segEls[h.id].sg, e) : h ? showStTip(stById[h.id], e) : hideTip()));
 				geo.show(marks);
 			}
 
