@@ -125,6 +125,7 @@ const summary = hasFilters
 			hasPower: Boolean(query.hasPower),
 			hasHr: Boolean(query.hasHr),
 			place: query.place ?? null,
+			cell: Boolean(query.ids?.length),
 			personalBestOnly: Boolean(query.personalBestOnly),
 			measuredOnly: Boolean(query.measuredOnly),
 			gearNames,
@@ -1045,6 +1046,7 @@ const scopeDummy: ActivityCardRow = {
 			hasPower: boolean;
 			hasHr: boolean;
 			place: string | null;
+			cell: boolean;
 			personalBestOnly: boolean;
 			measuredOnly: boolean;
 			gearNames: string[];
@@ -1185,6 +1187,11 @@ const scopeDummy: ActivityCardRow = {
 				em(`"${s.place}"`);
 			}
 
+			if (s.cell) {
+				lit(' through ');
+				em('one heatmap cell');
+			}
+
 			lit('.');
 
 			return parts;
@@ -1267,6 +1274,10 @@ const scopeDummy: ActivityCardRow = {
 
 		let place = placeInput.value.trim();
 
+		// Set only by a heatmap cell's link; no panel control, so it rides along
+		// untouched until "Clear all".
+		let ids = new URLSearchParams(location.search).get('ids') ?? '';
+
 		function activeCount(): number {
 			let n =
 				sports.size +
@@ -1279,6 +1290,7 @@ const scopeDummy: ActivityCardRow = {
 				(flags.measured ? 1 : 0) +
 				(flags.pr ? 1 : 0) +
 				(place ? 1 : 0) +
+				(ids ? 1 : 0) +
 				(distRange && distRange.isActive() ? 1 : 0) +
 				(durRange && durRange.isActive() ? 1 : 0) +
 				(elevRange && elevRange.isActive() ? 1 : 0) +
@@ -1431,6 +1443,8 @@ const scopeDummy: ActivityCardRow = {
 			for (const id of gear) p.append('gear', String(id));
 
 			if (place) p.set('place', place);
+
+			if (ids) p.set('ids', ids);
 
 			return p.toString();
 		}
@@ -1716,6 +1730,7 @@ const scopeDummy: ActivityCardRow = {
 				hasPower: flags.power,
 				hasHr: flags.hr,
 				place: place || null,
+				cell: Boolean(ids),
 				personalBestOnly: flags.pr,
 				measuredOnly: flags.measured,
 				gearNames: Array.from(gear).map((id) => {
@@ -1857,6 +1872,7 @@ const scopeDummy: ActivityCardRow = {
 			gps = null;
 			indoor = null;
 			place = '';
+			ids = '';
 			placeInput.value = '';
 			flags.power = flags.hr = flags.measured = flags.pr = false;
 			dateFromInput.value = '';

@@ -405,6 +405,9 @@ export interface ActivityQuery {
 	hasHr?: boolean;
 	/** Case-insensitive substring against start_place. */
 	place?: string;
+	/** Exact activity ids — what a heatmap cell links to (the activities that
+	 * crossed it). */
+	ids?: number[];
 	/**
 	 * "Personal best" has no dedicated column in the schema (ACTIVITIES.md §8
 	 * names the filter but §5's schema has no PR flag) — a real PR detector
@@ -495,6 +498,8 @@ export async function listActivities(
 	if (!query.includeChildren) req = req.is('parent_id', null);
 
 	if (prIds) req = req.in('id', [...prIds]);
+
+	if (query.ids?.length) req = req.in('id', query.ids);
 
 	if (query.sports?.length) req = req.in('sport', query.sports);
 
@@ -1489,9 +1494,19 @@ function splitTrack(polyline: string): string[] {
 		.map(encodePolyline);
 }
 
-export async function listRoutePolylines(isOwner = false): Promise<{ family: SportFamily; polyline: string }[]> {
+export async function listRoutePolylines(
+	isOwner = false,
+): Promise<{ id: number; date: string; family: SportFamily; polyline: string }[]> {
 	const PAGE = 1000;
-	const rows: { id: number; parent_id: number | null; sport: string; sub_sport: string | null; polyline: string }[] = [];
+
+	const rows: {
+		id: number;
+		parent_id: number | null;
+		local_date: string;
+		sport: string;
+		sub_sport: string | null;
+		polyline: string;
+	}[] = [];
 
 	for (let offset = 0; ; offset += PAGE) {
 		// A track is the single most identifying thing this table holds — it
@@ -1504,7 +1519,7 @@ export async function listRoutePolylines(isOwner = false): Promise<{ family: Spo
 		// job here — hiding soft-deleted rows — is done by the deleted_at filter.
 		let req = supabasePublic
 			.from('activities')
-			.select('id, parent_id, sport, sub_sport, polyline')
+			.select('id, parent_id, local_date, sport, sub_sport, polyline')
 			.is('deleted_at', null)
 			.not('polyline', 'is', null);
 
@@ -1526,5 +1541,14 @@ export async function listRoutePolylines(isOwner = false): Promise<{ family: Spo
 
 	return rows
 		.filter((r) => !parents.has(r.id) && r.sub_sport !== 'indoor' && !sportMeta(r.sport).indoor)
-		.flatMap((r) => splitTrack(r.polyline).map((polyline) => ({ family: sportMeta(r.sport).family, polyline })));
+		.flatMap((r) =>
+			splitTrack(r.polyline).map((polyline) => ({
+				// A leg reports as its parent: the heatmap links a cell to
+				// /activities/all, which lists the triathlon, not its legs.
+				id: r.parent_id ?? r.id,
+				date: r.local_date,
+				family: sportMeta(r.sport).family,
+				polyline,
+			})),
+		);
 }
