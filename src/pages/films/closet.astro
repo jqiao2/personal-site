@@ -170,10 +170,10 @@ const num = (n: number) => n.toLocaleString('en-US');
 			// Measured off the case, which has already moved out by the time this runs;
 			// its top face rises a further half its depth above it on screen.
 			const c = spine.firstElementChild!.getBoundingClientRect();
-			// Mirrors --pull and --d in the styles below.
+			// Mirrors --pull and --top in the styles below.
 			const pull = ((spine.offsetHeight * 135) / 190) * 0.4;
 
-			const rise = (14 + pull) / 2;
+			const rise = (31 + pull) / 2;
 
 			// The cover hangs off the side facing the open end: left on the left wall.
 			const side = spine.closest('.wall--left') ? -1 : 1;
@@ -281,6 +281,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 			--cover: calc(var(--h) * 135 / 190);
 			/* How far a hovered case slides out: enough to show some cover. */
 			--pull: calc(var(--cover) * 0.4);
+			/* How far back a case's top is seen: up to the board above it (whose
+			   front edge is 11px thick), where the shelf hides the rest. */
+			--top: calc(var(--pitch) - var(--h) - 11px);
+			/* Both faces that recede darken sharply going back, like the cover. */
+			--fade: rgba(16, 10, 6, 0) 0, rgba(16, 10, 6, 0.3) 10px, rgba(16, 10, 6, 0.95) 36px;
 			min-height: 100vh;
 			background: #1c1210;
 			padding: 0 24px 40px;
@@ -458,7 +463,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			row-gap: calc(var(--pitch) - var(--h));
 			/* The side padding lives here, not on the wall, so the painted boards
 			   run all the way to the bookcase's sides. */
-			padding: calc(var(--d) + 10px) 20px 0;
+			padding: var(--top) 20px 0;
 			min-height: calc(var(--pitch) * 3);
 			/* Under each row: the board's lit front edge, then the shadow it casts
 			   on the wall of the cubby below, down to the next row's book tops. */
@@ -470,7 +475,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 					rgba(0, 0, 0, 0.6) calc(var(--h) + 11px),
 					rgba(0, 0, 0, 0.12) var(--pitch)
 				)
-				0 calc(var(--d) + 10px);
+				0 var(--top);
 		}
 
 		/* A disc case seen end-on. Criterion's grammar: number at the head, title
@@ -514,10 +519,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 			left: 0;
 			right: 0;
 			bottom: 100%;
-			height: var(--d);
+			height: var(--top);
 			transform: skewX(var(--lean));
 			transform-origin: bottom;
-			background: linear-gradient(rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.24)), var(--c);
+			background:
+				linear-gradient(to top, var(--fade)),
+				linear-gradient(rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.24)),
+				var(--c);
 			box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.3);
 		}
 		.sp__case::before {
@@ -526,12 +534,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			width: min(var(--cover), var(--gap, 0px));
 			transform: skewY(var(--lean));
 			background:
-				linear-gradient(
-					to var(--back),
-					rgba(16, 10, 6, 0) 0,
-					rgba(16, 10, 6, 0.3) 10px,
-					rgba(16, 10, 6, 0.95) 36px
-				),
+				linear-gradient(to var(--back), var(--fade)),
 				var(--p, linear-gradient(transparent, transparent)) var(--front) center / var(--cover) 100% no-repeat,
 				var(--c);
 			box-shadow: inset 0 0 0 1px rgba(10, 10, 10, 0.6);
@@ -542,7 +545,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.sp:hover .sp__case::after,
 		.sp:focus-visible .sp__case::after {
-			height: calc(var(--d) + var(--pull));
+			height: calc(var(--top) + var(--pull));
 		}
 		.wall--left .sp .sp__case::before {
 			right: 100%;
