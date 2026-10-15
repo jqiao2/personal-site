@@ -77,9 +77,12 @@ const num = (n: number) => n.toLocaleString('en-US');
 	<dialog class="out" data-out aria-label="Film">
 		<div class="out__inner">
 			<a class="case" data-cover href="#">
-				<span class="case__spine" data-case-spine></span>
-				<img class="case__art" data-cover-img alt="" />
-				<span class="case__blank" data-cover-blank></span>
+				<span class="case__hinge"></span>
+				<span class="case__sleeve">
+					<span class="case__band" aria-hidden="true">Blu-ray</span>
+					<img class="case__art" data-cover-img alt="" />
+					<span class="case__blank" data-cover-blank></span>
+				</span>
 			</a>
 			<div class="info">
 				<h2 class="info__title" data-info-title></h2>
@@ -168,7 +171,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			cover.href = spine.getAttribute('href')!;
 			cover.style.setProperty('--c', spine.style.getPropertyValue('--c'));
 			cover.style.setProperty('--k', spine.style.getPropertyValue('--k'));
-			q('[data-case-spine]').textContent = d.title ?? '';
+			cover.classList.toggle('case--br', spine.classList.contains('sp--br'));
 			const img = q<HTMLImageElement>('[data-cover-img]');
 			img.hidden = !d.poster;
 			img.src = d.poster ?? '';
@@ -581,30 +584,73 @@ const num = (n: number) => n.toLocaleString('en-US');
 			align-items: start;
 			padding: 8px;
 		}
-		/* The case, front on: its spine colour wraps round the left edge. */
+		/* The keepcase, front on: a rounded plastic shell with the hinge down its
+		   left side and the cover under a glossy sleeve. DVD cases are 135 × 190 mm;
+		   Blu-ray cases are shorter, tinted blue, with the band across the top. */
 		.case {
 			display: flex;
-			aspect-ratio: 2 / 3;
-			background: var(--c);
-			box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+			aspect-ratio: 135 / 190;
+			padding: 5px 6px 5px 0;
+			border-radius: 7px;
+			background: #161616;
+			box-shadow:
+				inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+				0 20px 40px rgba(0, 0, 0, 0.7);
 			text-decoration: none;
 			color: var(--k);
 		}
-		.case__spine {
+		.case--br {
+			aspect-ratio: 128.5 / 148;
+			background: #1c4f93;
+		}
+		.case__hinge {
 			flex: none;
-			width: 18px;
-			writing-mode: vertical-rl;
+			width: 16px;
+			margin: -5px 2px -5px 0;
+			border-radius: 7px 0 0 7px;
+			background:
+				repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0 1px, transparent 1px 4px),
+				linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.35));
+		}
+		.case__sleeve {
+			position: relative;
+			flex: 1;
+			min-width: 0;
+			display: flex;
+			flex-direction: column;
 			overflow: hidden;
-			white-space: nowrap;
-			text-overflow: ellipsis;
-			padding: 8px 0;
-			font: 500 10px/18px var(--font-newsreader);
-			box-shadow: inset -2px 0 0 rgba(0, 0, 0, 0.3);
+			border-radius: 2px;
+			background: var(--c);
+		}
+		/* The clear sleeve catching the light. */
+		.case__sleeve::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			pointer-events: none;
+			background: linear-gradient(118deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 32%, transparent 33%);
+			box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+		}
+		.case__band {
+			display: none;
+		}
+		.case--br .case__band {
+			flex: none;
+			display: grid;
+			place-items: center;
+			height: 10%;
+			background: linear-gradient(180deg, #3a86d6, #1f5fae);
+			color: #fff;
+			font: 700 13px var(--font-archivo);
+			letter-spacing: 2.5px;
+			text-transform: uppercase;
 		}
 		.case__art {
 			flex: 1;
-			min-width: 0;
+			min-height: 0;
+			width: 100%;
 			object-fit: cover;
+			object-position: top;
 		}
 		.case__art[hidden] {
 			display: none;
