@@ -42,7 +42,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 						<div class="shelves" data-shelves>
 							{w.spines.map((s) => (
 								<a
-									class:list={['sp', { 'sp--br': s.bluray }]}
+									class="sp"
 									href={`/films/movie/${s.tmdb}`}
 									aria-label={`${s.title}${s.year ? ` (${s.year})` : ''}`}
 									data-spine
@@ -79,7 +79,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			<a class="case" data-cover href="#">
 				<span class="case__hinge"></span>
 				<span class="case__sleeve">
-					<span class="case__band" aria-hidden="true">Blu-ray</span>
 					<img class="case__art" data-cover-img alt="" />
 					<span class="case__blank" data-cover-blank></span>
 				</span>
@@ -171,7 +170,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			cover.href = spine.getAttribute('href')!;
 			cover.style.setProperty('--c', spine.style.getPropertyValue('--c'));
 			cover.style.setProperty('--k', spine.style.getPropertyValue('--k'));
-			cover.classList.toggle('case--br', spine.classList.contains('sp--br'));
 			const img = q<HTMLImageElement>('[data-cover-img]');
 			img.hidden = !d.poster;
 			img.src = d.poster ?? '';
@@ -424,8 +422,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 
 		/* A disc case seen end-on. Criterion's grammar: number at the head, title
-		   running down, year at the foot. Blu-rays are the slimmer cases with the
-		   blue band. */
+		   running down, year at the foot. */
 		/* The link is the hit area and never moves; the case inside it is what
 		   pulls forward, so the pointer can't slip off the spine it is lifting. */
 		.sp {
@@ -435,9 +432,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			height: var(--h);
 			text-decoration: none;
 			outline: none;
-		}
-		.sp--br {
-			width: 17px;
 		}
 		.sp__case {
 			position: absolute;
@@ -450,10 +444,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			box-shadow:
 				inset 1px 0 0 rgba(255, 255, 255, 0.18),
 				inset -2px 0 0 rgba(0, 0, 0, 0.25);
-		}
-		.sp--br .sp__case {
-			padding-top: 9px;
-			background: linear-gradient(#2667b3 0 9px, var(--c) 9px);
 		}
 		/* The case's top, and — only once it is pulled clear of its neighbours —
 		   the side facing the open end of the room. */
@@ -585,8 +575,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			padding: 8px;
 		}
 		/* The keepcase, front on: a rounded plastic shell with the hinge down its
-		   left side and the cover under a glossy sleeve. DVD cases are 135 × 190 mm;
-		   Blu-ray cases are shorter, tinted blue, with the band across the top. */
+		   left side and the cover under a glossy sleeve, at a DVD's 135 × 190 mm. */
 		.case {
 			display: flex;
 			aspect-ratio: 135 / 190;
@@ -598,10 +587,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 				0 20px 40px rgba(0, 0, 0, 0.7);
 			text-decoration: none;
 			color: var(--k);
-		}
-		.case--br {
-			aspect-ratio: 128.5 / 148;
-			background: #1c4f93;
 		}
 		.case__hinge {
 			flex: none;
@@ -630,20 +615,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			pointer-events: none;
 			background: linear-gradient(118deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 32%, transparent 33%);
 			box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
-		}
-		.case__band {
-			display: none;
-		}
-		.case--br .case__band {
-			flex: none;
-			display: grid;
-			place-items: center;
-			height: 10%;
-			background: linear-gradient(180deg, #3a86d6, #1f5fae);
-			color: #fff;
-			font: 700 13px var(--font-archivo);
-			letter-spacing: 2.5px;
-			text-transform: uppercase;
 		}
 		.case__art {
 			flex: 1;

@@ -52,7 +52,6 @@ export interface ClosetSpine {
 	number: number;
 	stars: string | null;
 	poster: string | null;
-	bluray: boolean;
 	case: string;
 	ink: string;
 	/** Positions under each sort, 0-based; the page reorders by these. */
@@ -134,7 +133,6 @@ function toSpines(raws: Raw[]): ClosetSpine[] {
 			number: numbers[i] + 1,
 			stars: starText(r.rating),
 			poster: imageUrl(r.movie.poster_path, 'w500'),
-			bluray: seed01(String(tmdb), 'disc') < 0.4,
 			case: bg,
 			ink,
 			rank: { recent: recent[i], alpha: alpha[i], year: year[i] },
