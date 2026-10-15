@@ -32,6 +32,7 @@ interface Movie {
 	title: string;
 	release_year: number | null;
 	poster_path: string | null;
+	poster_color: string | null;
 }
 
 /** One diary log as the opened case lists it. */
@@ -69,8 +70,19 @@ export interface Closet {
 	logs: Record<number, ClosetLog[]>;
 }
 
+/** Dark lettering on a light spine, light on a dark one (WCAG relative luminance). */
+export function inkOn(hex: string): string {
+	const [r, g, b] = [1, 3, 5].map((i) => {
+		const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+
+		return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+	});
+
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b > 0.25 ? '#1b1a17' : '#f4ead6';
+}
+
 /**
- * Case colours: the flat, printed spines of a boutique label rather than book
+ * Stock case colours, for a film whose poster colour isn't known yet: the flat, printed spines of a boutique label rather than book
  * cloth. Paired with the ink that reads on them.
  */
 const CASES: [string, string][] = [
@@ -126,7 +138,10 @@ function toSpines(raws: Raw[]): ClosetSpine[] {
 	// Shipped in the default (recent) order; the page re-sorts by `rank`.
 	const spines = raws.map((r, i): ClosetSpine => {
 		const tmdb = r.movie.tmdb_id;
-		const [bg, ink] = CASES[Math.floor(seed01(String(tmdb), 'case') * CASES.length)];
+
+		const [bg, ink] = r.movie.poster_color
+			? [r.movie.poster_color, inkOn(r.movie.poster_color)]
+			: CASES[Math.floor(seed01(String(tmdb), 'case') * CASES.length)];
 
 		return {
 			tmdb,
@@ -161,7 +176,7 @@ export async function loadCloset(): Promise<Closet> {
 		rewatched: boolean;
 	};
 
-	const MOVIE = 'movies!inner(tmdb_id, title, release_year, poster_path)';
+	const MOVIE = 'movies!inner(tmdb_id, title, release_year, poster_path, poster_color)';
 
 	const [watchedRows, listRows, logRows] = await Promise.all([
 		readAll<WatchedRow>('closet watched', (from, to) =>
