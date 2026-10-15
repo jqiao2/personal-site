@@ -139,9 +139,14 @@ const num = (n: number) => n.toLocaleString('en-US');
 			// Measured off the case, which has already moved out by the time this runs;
 			// its top face rises a further half its depth above it on screen.
 			const c = spine.firstElementChild!.getBoundingClientRect();
-			const rise = (c.height * 135) / 190 / 2;
+			const depth = (spine.offsetHeight * 135) / 190;
 
-			bubble.style.left = `${c.left + c.width / 2}px`;
+			const rise = depth / 2;
+
+			// The cover hangs off the side facing the open end: left on the left wall.
+			const side = spine.closest('.wall--left') ? -1 : 1;
+
+			bubble.style.left = `${c.left + c.width / 2 + (side * depth) / 2}px`;
 			bubble.style.top = `${c.top - rise - 8}px`;
 			bubble.hidden = false;
 		}
@@ -305,8 +310,12 @@ const num = (n: number) => n.toLocaleString('en-US');
 			position: relative;
 			display: flex;
 			flex-direction: column;
-			padding: 0 14px;
 			border-top: 12px solid #5a4128;
+		}
+		/* A pulled case comes out over everything: the other wall at the corner,
+		   and the floor below the bottom shelf. */
+		.wall:has(.sp:hover, .sp:focus-visible) {
+			z-index: 2;
 		}
 		.wall--left {
 			--lean: 45deg;
@@ -364,6 +373,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 			position: relative;
 			aspect-ratio: 2 / 1;
 			margin-bottom: 18px;
+			/* Its box is a rectangle over the walls' sloping feet; only the diamond
+			   is painted, so let the pointer through to the bottom shelves. */
+			pointer-events: none;
 		}
 		.floor::before,
 		.floor::after {
@@ -406,7 +418,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 			align-content: flex-start;
 			column-gap: 1px;
 			row-gap: calc(var(--pitch) - var(--h));
-			padding: calc(var(--d) + 10px) 6px 0;
+			/* The side padding lives here, not on the wall, so the painted boards
+			   run all the way to the bookcase's sides. */
+			padding: calc(var(--d) + 10px) 20px 0;
 			min-height: calc(var(--pitch) * 3);
 			/* Under each row: the board's lit front edge, then the shadow it casts
 			   on the wall of the cubby below, down to the next row's book tops. */
