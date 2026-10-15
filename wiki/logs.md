@@ -204,3 +204,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-13 0031: zoomed-out gaps in curves — geojson tiler dropped the short slide pieces; tolerance: 0 on the seg source.
 - 2026-10-13 0031: more phantom skips fixed at source (B, R, A via stopsAt; VIA removed); side links ordered by carried-over mates (B/D no longer swap at 7 Av); min 80 m slide; markers at moved line ends.
 - 2026-10-13 0031: F/G overlapped into Bergen St; one straight had different mates at each end. Recut where mates disagree (map overlap 3.2 → 2.4 km).
+- 2026-10-15 — /films/closet (watchlist + watched as isometric disc walls): a hover lift on the hit-area element itself flickers at the edge (it moves out from under the pointer); lift an inner layer instead. JS-built dialog rows needed :global styles (see astro-scoped-styles memory).

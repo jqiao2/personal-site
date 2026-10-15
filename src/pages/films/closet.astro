@@ -1,0 +1,594 @@
+---
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import { loadCloset, type ClosetSpine } from '../../lib/closet';
+
+// Rendered on demand; the middleware lets the CDN hold the visitor copy.
+export const prerender = false;
+
+const { watchlist, watched, logs } = await loadCloset();
+
+const walls: { key: string; name: string; spines: ClosetSpine[] }[] = [
+	{ key: 'left', name: 'To watch', spines: watchlist },
+	{ key: 'right', name: 'Watched', spines: watched },
+];
+
+// `<` escaped so a review containing "</script>" can't end the block early.
+const logsJson = JSON.stringify(logs).replace(/</g, '\\u003c');
+
+const num = (n: number) => n.toLocaleString('en-US');
+---
+
+<FilmLayout title="The closet — Jason's film log">
+	<div class="page">
+		<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
+
+		<header class="top">
+			<a class="back" href="/films">← Jason's film log</a>
+			<div class="sort" role="group" aria-label="Sort">
+				<button type="button" data-sort="r" aria-pressed="true">Recent</button>
+				<button type="button" data-sort="a" aria-pressed="false">A–Z</button>
+				<button type="button" data-sort="y" aria-pressed="false">Year</button>
+			</div>
+		</header>
+
+		<div class="room">
+			{
+				walls.map((w) => (
+					<section class={`wall wall--${w.key}`}>
+						<h2 class="placard">
+							{w.name} <span>{num(w.spines.length)}</span>
+						</h2>
+						<div class="shelves" data-shelves>
+							{w.spines.map((s) => (
+								<a
+									class:list={['sp', { 'sp--br': s.bluray }]}
+									href={`/films/movie/${s.tmdb}`}
+									aria-label={`${s.title}${s.year ? ` (${s.year})` : ''}`}
+									data-spine
+									data-tmdb={s.tmdb}
+									data-title={s.title}
+									data-year={s.year ?? ''}
+									data-stars={s.stars ?? ''}
+									data-poster={s.poster ?? ''}
+									data-when={s.when ?? ''}
+									data-r={s.rank.recent}
+									data-a={s.rank.alpha}
+									data-y={s.rank.year}
+									style={`--c:${s.case};--k:${s.ink}`}
+								>
+									<span class="sp__case">
+										<span class="sp__no">{s.number}</span>
+										<span class="sp__t">{s.title}</span>
+										{s.year && <span class="sp__y">{String(s.year).slice(2)}</span>}
+									</span>
+								</a>
+							))}
+						</div>
+					</section>
+				))
+			}
+		</div>
+	</div>
+
+	<div class="bubble" data-bubble hidden></div>
+
+	<dialog class="out" data-out aria-label="Film">
+		<div class="out__inner">
+			<a class="case" data-cover href="#">
+				<span class="case__spine" data-case-spine></span>
+				<img class="case__art" data-cover-img alt="" />
+				<span class="case__blank" data-cover-blank></span>
+			</a>
+			<div class="info">
+				<h2 class="info__title" data-info-title></h2>
+				<p class="info__when" data-info-when></p>
+				<p class="info__stars" data-info-stars></p>
+				<ol class="logs" data-logs></ol>
+			</div>
+		</div>
+	</dialog>
+
+	<script is:inline type="application/json" id="closet-logs" set:html={logsJson} />
+
+	<script>
+		interface Log {
+			id: number;
+			date: string | null;
+			stars: string | null;
+			liked: boolean;
+			rewatched: boolean;
+			note: string | null;
+		}
+
+		// SAFETY: the block is written by this page's own frontmatter from loadCloset's `logs`.
+		const logs = JSON.parse(document.getElementById('closet-logs')!.textContent ?? '{}') as Record<string, Log[]>;
+
+		const bubble = document.querySelector<HTMLElement>('[data-bubble]')!;
+
+		const out = document.querySelector<HTMLDialogElement>('[data-out]')!;
+
+		const q = <T extends HTMLElement>(sel: string) => out.querySelector<T>(sel)!;
+
+		// Sort: reorder the spines already on each wall by the rank the server worked out.
+		for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-sort]')) {
+			btn.addEventListener('click', () => {
+				const key = btn.dataset.sort!;
+
+				for (const b of document.querySelectorAll('[data-sort]')) b.setAttribute('aria-pressed', String(b === btn));
+
+				for (const shelves of document.querySelectorAll<HTMLElement>('[data-shelves]')) {
+					const spines = [...shelves.querySelectorAll<HTMLElement>('[data-spine]')];
+					spines.sort((a, b) => Number(a.dataset[key]) - Number(b.dataset[key]));
+					shelves.append(...spines);
+				}
+			});
+		}
+
+		// Hover: a pill above the pulled-forward spine.
+		function showBubble(spine: HTMLElement) {
+			const { title, year, stars } = spine.dataset;
+			bubble.replaceChildren(
+				Object.assign(document.createElement('b'), { textContent: title }),
+				...(year ? [Object.assign(document.createElement('span'), { textContent: ` ${year}` })] : []),
+				...(stars ? [Object.assign(document.createElement('i'), { textContent: ` ${stars}` })] : []),
+			);
+			const r = spine.getBoundingClientRect();
+			bubble.style.left = `${r.left + r.width / 2}px`;
+			bubble.style.top = `${r.top - 8}px`;
+			bubble.hidden = false;
+		}
+
+		const hideBubble = () => (bubble.hidden = true);
+
+		let current: HTMLElement | null = null;
+
+		function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, text?: string) {
+			const node = document.createElement(tag);
+			node.className = cls;
+
+			if (text) node.textContent = text;
+
+			return node;
+		}
+
+		// Click: take the case off the shelf and open it.
+		function pull(spine: HTMLElement) {
+			const d = spine.dataset;
+			current = spine;
+			spine.classList.add('sp--out');
+			hideBubble();
+
+			const cover = q<HTMLAnchorElement>('[data-cover]');
+			cover.href = spine.getAttribute('href')!;
+			cover.style.setProperty('--c', spine.style.getPropertyValue('--c'));
+			cover.style.setProperty('--k', spine.style.getPropertyValue('--k'));
+			q('[data-case-spine]').textContent = d.title ?? '';
+			const img = q<HTMLImageElement>('[data-cover-img]');
+			img.hidden = !d.poster;
+			img.src = d.poster ?? '';
+			q('[data-cover-blank]').textContent = d.poster ? '' : (d.title ?? '');
+
+			q('[data-info-title]').textContent = d.year ? `${d.title} (${d.year})` : (d.title ?? '');
+			q('[data-info-when]').textContent = d.when ?? '';
+			q('[data-info-stars]').textContent = d.stars ?? '';
+
+			const list = q('[data-logs]');
+			list.replaceChildren(
+				...(logs[d.tmdb!] ?? []).map((l) => {
+					const a = el('a', 'log');
+					a.href = `/films/diary/${l.id}`;
+					const head = el('span', 'log__head');
+					head.append(
+						el('span', 'log__date', l.date ?? 'Undated'),
+						...(l.stars ? [el('span', 'log__stars', l.stars)] : []),
+						...(l.liked ? [el('span', 'log__mark', '♥')] : []),
+						...(l.rewatched ? [el('span', 'log__mark', '↻')] : []),
+					);
+					a.append(head);
+
+					if (l.note) a.append(el('span', 'log__note', l.note));
+					const li = document.createElement('li');
+					li.append(a);
+
+					return li;
+				}),
+			);
+
+			out.showModal();
+		}
+
+		for (const spine of document.querySelectorAll<HTMLElement>('[data-spine]')) {
+			spine.addEventListener('mouseenter', () => showBubble(spine));
+			spine.addEventListener('mouseleave', hideBubble);
+			spine.addEventListener('focus', () => showBubble(spine));
+			spine.addEventListener('blur', hideBubble);
+			spine.addEventListener('click', (e) => {
+				e.preventDefault();
+				pull(spine);
+			});
+		}
+
+		window.addEventListener('scroll', hideBubble, { passive: true });
+
+		// The cover and the reviews are links; a click anywhere else puts the case back.
+		out.addEventListener('click', (e) => {
+			if (!(e.target instanceof Element && e.target.closest('a'))) out.close();
+		});
+
+		out.addEventListener('close', () => {
+			current?.classList.remove('sp--out');
+			current?.focus({ preventScroll: true });
+			hideBubble();
+			current = null;
+		});
+	</script>
+
+	<style>
+		/* The walls are skewed rather than rotated in 3D, so the room is a true
+		   isometric projection with no vanishing point — every shelf on a wall is
+		   parallel. tan(26.565°) = 0.5, the classic 2:1 pixel-art iso angle. */
+		.page {
+			--iso: 26.565deg;
+			--h: 148px;
+			--pitch: 178px;
+			min-height: 100vh;
+			background: #1c1210;
+			padding: 0 24px 40px;
+			overflow-x: hidden;
+		}
+		.top {
+			max-width: 1064px;
+			margin: 18px auto 34px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 16px;
+			font-family: var(--font-archivo);
+		}
+		.back {
+			color: #c8a98a;
+			font-size: 13px;
+			text-decoration: none;
+		}
+		.back:hover {
+			color: #f0d488;
+		}
+		.sort {
+			display: flex;
+			border: 1px solid #6b4a42;
+			border-radius: 8px;
+			overflow: hidden;
+		}
+		.sort button {
+			font: 700 12px var(--font-archivo);
+			color: #c8a98a;
+			background: none;
+			border: none;
+			padding: 7px 14px;
+			cursor: pointer;
+		}
+		.sort button + button {
+			border-left: 1px solid #6b4a42;
+		}
+		.sort button[aria-pressed='true'] {
+			background: #d9b45a;
+			color: #2a1214;
+		}
+
+		/* The two walls meet at the back corner, in the middle of the screen, and
+		   fall away towards you on either side. Skewing drops each wall's outer edge
+		   by half its width, which the padding underneath makes room for. */
+		.room {
+			max-width: 1064px;
+			margin: 0 auto;
+			display: grid;
+			grid-template-columns: 1fr 1fr;
+			padding-bottom: 290px;
+		}
+		.wall {
+			display: flex;
+			flex-direction: column;
+			padding: 0 14px;
+			border-top: 10px solid #4c3721;
+		}
+		.wall--left {
+			transform: skewY(calc(var(--iso) * -1));
+			transform-origin: 100% 0;
+			background: #3b2a1f;
+			border-left: 12px solid #2b1d12;
+			/* The corner: the left wall is lit, the right sits in its shadow. */
+			box-shadow: inset -18px 0 22px -14px rgba(0, 0, 0, 0.7);
+			--out: 9px;
+		}
+		.wall--right {
+			transform: skewY(var(--iso));
+			transform-origin: 0 0;
+			background: #2a1d15;
+			border-right: 12px solid #1d140c;
+			box-shadow: inset 18px 0 22px -14px rgba(0, 0, 0, 0.8);
+			--out: -9px;
+		}
+		.placard {
+			align-self: center;
+			margin: 14px 0 10px;
+			padding: 4px 12px;
+			font: 700 11px var(--font-archivo);
+			letter-spacing: 1.6px;
+			text-transform: uppercase;
+			color: #2a1214;
+			background: #d9b45a;
+		}
+		.placard span {
+			font-weight: 400;
+			margin-left: 4px;
+		}
+		/* Every case is one height, so the shelves are just rows of a wrapping flex
+		   box and the boards are painted at the row pitch behind them. Re-sorting
+		   moves spines without ever touching a shelf. */
+		.shelves {
+			flex: 1;
+			display: flex;
+			flex-wrap: wrap;
+			align-content: flex-start;
+			column-gap: 1px;
+			row-gap: calc(var(--pitch) - var(--h));
+			padding: 12px 6px 0;
+			min-height: calc(var(--pitch) * 3);
+			background: repeating-linear-gradient(
+					180deg,
+					transparent 0 var(--h),
+					#5a4128 var(--h) calc(var(--h) + 3px),
+					#46321e calc(var(--h) + 3px) calc(var(--h) + 14px),
+					rgba(0, 0, 0, 0.45) calc(var(--h) + 14px) calc(var(--h) + 22px),
+					transparent calc(var(--h) + 22px) var(--pitch)
+				)
+				0 12px;
+		}
+
+		/* A disc case seen end-on. Criterion's grammar: number at the head, title
+		   running down, year at the foot. Blu-rays are the slimmer cases with the
+		   blue band. */
+		/* The link is the hit area and never moves; the case inside it is what
+		   pulls forward, so the pointer can't slip off the spine it is lifting. */
+		.sp {
+			position: relative;
+			flex: none;
+			width: 20px;
+			height: var(--h);
+			text-decoration: none;
+			outline: none;
+		}
+		.sp--br {
+			width: 17px;
+		}
+		.sp__case {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			background: var(--c);
+			color: var(--k);
+			box-shadow:
+				inset 1px 0 0 rgba(255, 255, 255, 0.18),
+				inset -2px 0 0 rgba(0, 0, 0, 0.25);
+		}
+		.sp--br .sp__case::before {
+			content: '';
+			flex: none;
+			width: 100%;
+			height: 9px;
+			background: #2667b3;
+		}
+		.sp__no {
+			flex: none;
+			margin: 4px 0 3px;
+			font: 700 7px/1 var(--font-archivo);
+			letter-spacing: -0.3px;
+		}
+		.sp__t {
+			flex: 1;
+			min-height: 0;
+			writing-mode: vertical-rl;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			font: 500 11px/1 var(--font-newsreader);
+		}
+		.sp__y {
+			flex: none;
+			margin: 3px 0 4px;
+			font: 400 8px/1 var(--font-archivo);
+			opacity: 0.8;
+		}
+		/* Pulled towards you, along the wall's normal. In the wall's skewed frame
+		   (dx, dx) is straight out from it for either wall once dx takes its sign. */
+		.sp:hover,
+		.sp:focus-visible {
+			z-index: 2;
+		}
+		.sp:hover .sp__case,
+		.sp:focus-visible .sp__case {
+			transform: translate(var(--out), 9px);
+			box-shadow:
+				inset 1px 0 0 rgba(255, 255, 255, 0.18),
+				0 10px 14px -4px rgba(0, 0, 0, 0.8);
+		}
+		.sp:focus-visible {
+			outline: 2px solid #f0d488;
+		}
+		/* Off the shelf: a gap where it stood. */
+		.sp--out {
+			visibility: hidden;
+		}
+
+		.bubble {
+			position: fixed;
+			z-index: 20;
+			transform: translate(-50%, -100%);
+			pointer-events: none;
+			white-space: nowrap;
+			padding: 5px 11px;
+			border-radius: 999px;
+			background: #f4ead6;
+			color: #2a1214;
+			font: 13px var(--font-newsreader);
+			box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+		}
+		.bubble[hidden] {
+			display: none;
+		}
+		.bubble span {
+			color: #7a5a4a;
+		}
+		.bubble i {
+			font-style: normal;
+			color: #b3261e;
+		}
+
+		.out {
+			max-width: min(760px, calc(100vw - 32px));
+			padding: 0;
+			border: none;
+			background: none;
+			color: #f4ead6;
+		}
+		.out::backdrop {
+			background: rgba(10, 6, 5, 0.78);
+		}
+		.out__inner {
+			display: grid;
+			grid-template-columns: 300px minmax(0, 1fr);
+			gap: 32px;
+			align-items: start;
+			padding: 8px;
+		}
+		/* The case, front on: its spine colour wraps round the left edge. */
+		.case {
+			display: flex;
+			aspect-ratio: 2 / 3;
+			background: var(--c);
+			box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+			text-decoration: none;
+			color: var(--k);
+		}
+		.case__spine {
+			flex: none;
+			width: 18px;
+			writing-mode: vertical-rl;
+			overflow: hidden;
+			white-space: nowrap;
+			text-overflow: ellipsis;
+			padding: 8px 0;
+			font: 500 10px/18px var(--font-newsreader);
+			box-shadow: inset -2px 0 0 rgba(0, 0, 0, 0.3);
+		}
+		.case__art {
+			flex: 1;
+			min-width: 0;
+			object-fit: cover;
+		}
+		.case__art[hidden] {
+			display: none;
+		}
+		.case__blank:empty {
+			display: none;
+		}
+		.case__blank {
+			flex: 1;
+			display: grid;
+			place-items: center;
+			padding: 20px;
+			text-align: center;
+			font: 500 24px var(--font-newsreader);
+		}
+		.info__title {
+			margin: 6px 0 4px;
+			font: 500 28px/1.15 var(--font-newsreader);
+		}
+		.info__when {
+			margin: 0;
+			font: 12px var(--font-archivo);
+			color: #c8a98a;
+		}
+		.info__stars {
+			margin: 8px 0 0;
+			color: #d9b45a;
+			font-size: 18px;
+		}
+		.info__stars:empty {
+			display: none;
+		}
+		.logs {
+			list-style: none;
+			margin: 18px 0 0;
+			padding: 0;
+			max-height: 60vh;
+			overflow-y: auto;
+		}
+		/* Built by the script, so out of reach of scoped selectors. */
+		.logs :global(li + li) {
+			border-top: 1px solid #4a2529;
+		}
+		.logs :global(.log) {
+			display: block;
+			padding: 10px 0;
+			color: inherit;
+			text-decoration: none;
+		}
+		.logs :global(.log:hover .log__date) {
+			color: #f0d488;
+		}
+		.logs :global(.log__head) {
+			display: flex;
+			gap: 10px;
+			align-items: baseline;
+			font: 12px var(--font-archivo);
+		}
+		.logs :global(.log__date) {
+			color: #c8a98a;
+		}
+		.logs :global(.log__stars) {
+			color: #d9b45a;
+		}
+		.logs :global(.log__mark) {
+			color: #e07b6b;
+		}
+		.logs :global(.log__note) {
+			display: block;
+			margin-top: 4px;
+			font: italic 15px/1.4 var(--font-newsreader);
+			color: #e6d8c0;
+		}
+
+		/* A phone can't hold two angled walls: lay them flat, one above the other. */
+		@media (max-width: 720px) {
+			.page {
+				padding: 0 12px 32px;
+			}
+			.room {
+				grid-template-columns: 1fr;
+				gap: 28px;
+				padding-bottom: 0;
+			}
+			.wall--left,
+			.wall--right {
+				transform: none;
+				--out: 0px;
+			}
+			.sp:hover .sp__case,
+			.sp:focus-visible .sp__case {
+				transform: translateY(-8px);
+			}
+			.out__inner {
+				grid-template-columns: 1fr;
+				gap: 20px;
+			}
+			.case {
+				width: min(240px, 70vw);
+				justify-self: center;
+			}
+		}
+	</style>
+</FilmLayout>
