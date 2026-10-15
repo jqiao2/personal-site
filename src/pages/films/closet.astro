@@ -133,8 +133,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 		// The disc ending each row has its side open to the room — the first on the
 		// left wall, the last on the right. --gap is how far back that side can be
 		// seen before the bookcase's own side cuts it off: the space beside it.
-		const MIN_GAP = 30;
-
 		function markEdges() {
 			for (const shelves of document.querySelectorAll<HTMLElement>('[data-shelves]')) {
 				const left = shelves.closest('.wall--left') !== null;
@@ -146,10 +144,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 
 					const gap = left ? sp.offsetLeft : shelves.clientWidth - sp.offsetLeft - sp.offsetWidth;
 
-					// A slot barely wider than the shelf's own margin is in shadow, not a
-					// window onto the cover — drawn there, a sliver of poster just reads
-					// as one more disc squeezed in beside the bookcase.
-					const edge = (!next || next.offsetTop !== sp.offsetTop) && gap >= MIN_GAP;
+					const edge = !next || next.offsetTop !== sp.offsetTop;
 
 					sp.classList.toggle('sp--edge', edge);
 					sp.style.setProperty('--gap', edge ? `${gap}px` : '0px');
@@ -289,8 +284,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			/* How far back a case's top is seen: up to the board above it (whose
 			   front edge is 11px thick), where the shelf hides the rest. */
 			--top: calc(var(--pitch) - var(--h) - 11px);
-			/* Both faces that recede darken sharply going back, like the cover. */
-			--fade: rgba(16, 10, 6, 0) 0, rgba(16, 10, 6, 0.3) 10px, rgba(16, 10, 6, 0.95) 36px;
 			min-height: 100vh;
 			background: #1c1210;
 			padding: 0 24px 40px;
@@ -459,6 +452,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 		/* Every case is one height, so the shelves are just rows of a wrapping flex
 		   box and the boards are painted at the row pitch behind them. Re-sorting
 		   moves spines without ever touching a shelf. */
+		/* The bookcase's outer side hides whatever reaches past it: clip the shelf
+		   there, and only there, so a pulled case can still come out over the
+		   corner and the floor. */
+		.wall--left .shelves {
+			clip-path: inset(-2000px -2000px -2000px 0);
+		}
+		.wall--right .shelves {
+			clip-path: inset(-2000px 0 -2000px -2000px);
+		}
 		.shelves {
 			flex: 1;
 			display: flex;
@@ -506,6 +508,21 @@ const num = (n: number) => n.toLocaleString('en-US');
 			box-shadow:
 				inset 1px 0 0 rgba(255, 255, 255, 0.18),
 				inset -2px 0 0 rgba(0, 0, 0, 0.25);
+			/* Both faces that recede darken sharply going back into the shelf.
+			   The darkening starts at the shelf's front edge, so on a pulled case
+			   it starts --o further back and what sticks out stays lit. Declared
+			   here rather than on .page so --o resolves per case. */
+			--o: 0px;
+			--fade:
+				rgba(16, 10, 6, 0) var(--o), rgba(16, 10, 6, 0.3) calc(var(--o) + 10px),
+				rgba(16, 10, 6, 0.95) calc(var(--o) + 36px);
+			/* How far back a face is seen before the board above hides it. */
+			--reach: var(--top);
+		}
+		.sp:hover .sp__case,
+		.sp:focus-visible .sp__case {
+			--o: var(--pull);
+			--reach: calc(var(--top) + var(--pull));
 		}
 		/* The case's top, and its side facing the open end of the room. That side
 		   only exists where it can be seen: on the disc ending a row, as far back as
@@ -550,15 +567,33 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.sp:hover .sp__case::after,
 		.sp:focus-visible .sp__case::after {
-			height: calc(var(--top) + var(--pull));
+			height: var(--reach);
 		}
+		/* The side rises as it recedes (it is skewed 45°), so past --reach it would
+		   climb over the board above. Cut it along that board's underside: in the
+		   strip's own unskewed frame, a 45° line starting --reach in from the
+		   front edge. */
 		.wall--left .sp .sp__case::before {
 			right: 100%;
 			transform-origin: right;
+			clip-path: polygon(
+				100% 0,
+				calc(100% - var(--reach)) 0,
+				calc(100% - var(--reach) - 600px) 600px,
+				calc(100% - var(--reach) - 600px) 100%,
+				100% 100%
+			);
 		}
 		.wall--right .sp .sp__case::before {
 			left: 100%;
 			transform-origin: left;
+			clip-path: polygon(
+				0 0,
+				var(--reach) 0,
+				calc(var(--reach) + 600px) 600px,
+				calc(var(--reach) + 600px) 100%,
+				0 100%
+			);
 		}
 		.sp__no {
 			flex: none;
