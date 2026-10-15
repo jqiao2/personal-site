@@ -133,6 +133,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 		// The disc ending each row has its side open to the room — the first on the
 		// left wall, the last on the right. --gap is how far back that side can be
 		// seen before the bookcase's own side cuts it off: the space beside it.
+		const MIN_GAP = 30;
+
 		function markEdges() {
 			for (const shelves of document.querySelectorAll<HTMLElement>('[data-shelves]')) {
 				const left = shelves.closest('.wall--left') !== null;
@@ -142,9 +144,12 @@ const num = (n: number) => n.toLocaleString('en-US');
 				spines.forEach((sp, i) => {
 					const next = spines[left ? i - 1 : i + 1];
 
-					const edge = !next || next.offsetTop !== sp.offsetTop;
-
 					const gap = left ? sp.offsetLeft : shelves.clientWidth - sp.offsetLeft - sp.offsetWidth;
+
+					// A slot barely wider than the shelf's own margin is in shadow, not a
+					// window onto the cover — drawn there, a sliver of poster just reads
+					// as one more disc squeezed in beside the bookcase.
+					const edge = (!next || next.offsetTop !== sp.offsetTop) && gap >= MIN_GAP;
 
 					sp.classList.toggle('sp--edge', edge);
 					sp.style.setProperty('--gap', edge ? `${gap}px` : '0px');
