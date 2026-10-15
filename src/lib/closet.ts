@@ -52,6 +52,8 @@ export interface ClosetSpine {
 	number: number;
 	stars: string | null;
 	poster: string | null;
+	/** A small poster for the sliver of cover seen on a case's side. */
+	thumb: string | null;
 	case: string;
 	ink: string;
 	/** Positions under each sort, 0-based; the page reorders by these. */
@@ -133,6 +135,7 @@ function toSpines(raws: Raw[]): ClosetSpine[] {
 			number: numbers[i] + 1,
 			stars: starText(r.rating),
 			poster: imageUrl(r.movie.poster_path, 'w500'),
+			thumb: imageUrl(r.movie.poster_path, 'w185'),
 			case: bg,
 			ink,
 			rank: { recent: recent[i], alpha: alpha[i], year: year[i] },

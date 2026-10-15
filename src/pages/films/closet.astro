@@ -55,7 +55,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 									data-r={s.rank.recent}
 									data-a={s.rank.alpha}
 									data-y={s.rank.year}
-									style={`--c:${s.case};--k:${s.ink}${s.poster ? `;--p:url(${s.poster})` : ''}`}
+									style={`--c:${s.case};--k:${s.ink}${s.thumb ? `;--p:url(${s.thumb})` : ''}`}
 								>
 									<span class="sp__case">
 										<span class="sp__no">{s.number}</span>
@@ -125,8 +125,39 @@ const num = (n: number) => n.toLocaleString('en-US');
 					spines.sort((a, b) => Number(a.dataset[key]) - Number(b.dataset[key]));
 					shelves.append(...spines);
 				}
+
+				markEdges();
 			});
 		}
+
+		// The disc ending each row has its side open to the room — the first on the
+		// left wall, the last on the right. --gap is how far back that side can be
+		// seen before the bookcase's own side cuts it off: the space beside it.
+		function markEdges() {
+			for (const shelves of document.querySelectorAll<HTMLElement>('[data-shelves]')) {
+				const left = shelves.closest('.wall--left') !== null;
+
+				const spines = [...shelves.querySelectorAll<HTMLElement>('[data-spine]')];
+
+				spines.forEach((sp, i) => {
+					const next = spines[left ? i - 1 : i + 1];
+
+					const edge = !next || next.offsetTop !== sp.offsetTop;
+
+					const gap = left ? sp.offsetLeft : shelves.clientWidth - sp.offsetLeft - sp.offsetWidth;
+
+					sp.classList.toggle('sp--edge', edge);
+					sp.style.setProperty('--gap', edge ? `${gap}px` : '0px');
+				});
+			}
+		}
+
+		markEdges();
+
+		// Rows rewrap with the window, which moves every row's end.
+		const relayout = new ResizeObserver(markEdges);
+
+		for (const shelves of document.querySelectorAll('[data-shelves]')) relayout.observe(shelves);
 
 		// Hover: a pill above the pulled-forward spine.
 		function showBubble(spine: HTMLElement) {
@@ -139,14 +170,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 			// Measured off the case, which has already moved out by the time this runs;
 			// its top face rises a further half its depth above it on screen.
 			const c = spine.firstElementChild!.getBoundingClientRect();
-			const depth = (spine.offsetHeight * 135) / 190;
+			// Mirrors --pull and --d in the styles below.
+			const pull = ((spine.offsetHeight * 135) / 190) * 0.4;
 
-			const rise = depth / 2;
+			const rise = (14 + pull) / 2;
 
 			// The cover hangs off the side facing the open end: left on the left wall.
 			const side = spine.closest('.wall--left') ? -1 : 1;
 
-			bubble.style.left = `${c.left + c.width / 2 + (side * depth) / 2}px`;
+			bubble.style.left = `${c.left + c.width / 2 + (side * pull) / 2}px`;
 			bubble.style.top = `${c.top - rise - 8}px`;
 			bubble.hidden = false;
 		}
@@ -247,6 +279,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 			--d: 14px;
 			/* A real keepcase is as deep as its cover is wide: 135 × 190 mm. */
 			--cover: calc(var(--h) * 135 / 190);
+			/* How far a hovered case slides out: enough to show some cover. */
+			--pull: calc(var(--cover) * 0.4);
 			min-height: 100vh;
 			background: #1c1210;
 			padding: 0 24px 40px;
@@ -319,6 +353,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.wall--left {
 			--lean: 45deg;
+			--back: left;
+			--front: right;
 			--dir: 1;
 			transform: skewY(calc(var(--iso) * -1));
 			transform-origin: 100% 0;
@@ -329,6 +365,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 		.wall--right {
 			--lean: -45deg;
+			--back: right;
+			--front: left;
 			--dir: -1;
 			transform: skewY(var(--iso));
 			transform-origin: 0 0;
@@ -459,9 +497,14 @@ const num = (n: number) => n.toLocaleString('en-US');
 				inset 1px 0 0 rgba(255, 255, 255, 0.18),
 				inset -2px 0 0 rgba(0, 0, 0, 0.25);
 		}
-		/* The case's top, and — only once it is pulled clear of its neighbours —
-		   the side facing the open end of the room. */
+		/* The case's top, and its side facing the open end of the room. That side
+		   only exists where it can be seen: on the disc ending a row, as far back as
+		   the gap beside it reaches (--gap, set by the script), and on a pulled disc
+		   for the stretch that clears its neighbour. The cover printed on it darkens
+		   sharply towards the back — a glimpse, not the whole poster. Nothing is
+		   generated for any other disc, so their posters are never fetched. */
 		.sp__case::after,
+		.sp--edge .sp__case::before,
 		.sp:hover .sp__case::before,
 		.sp:focus-visible .sp__case::before {
 			content: '';
@@ -477,24 +520,29 @@ const num = (n: number) => n.toLocaleString('en-US');
 			background: linear-gradient(rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.24)), var(--c);
 			box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.3);
 		}
-		/* Pulled clear, the case shows its whole depth: the top at full size and
-		   the cover on its side. The poster is a custom property, so its image is
-		   only fetched once a case is actually pulled. */
-		.sp:hover .sp__case::before,
-		.sp:focus-visible .sp__case::before {
+		.sp__case::before {
 			top: 0;
 			bottom: 0;
-			width: var(--cover);
+			width: min(var(--cover), var(--gap, 0px));
 			transform: skewY(var(--lean));
 			background:
-				linear-gradient(rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.12)),
-				var(--p, linear-gradient(transparent, transparent)) center / cover no-repeat,
+				linear-gradient(
+					to var(--back),
+					rgba(16, 10, 6, 0) 0,
+					rgba(16, 10, 6, 0.3) 10px,
+					rgba(16, 10, 6, 0.95) 36px
+				),
+				var(--p, linear-gradient(transparent, transparent)) var(--front) center / var(--cover) 100% no-repeat,
 				var(--c);
-			box-shadow: inset 0 0 0 2px rgba(10, 10, 10, 0.75);
+			box-shadow: inset 0 0 0 1px rgba(10, 10, 10, 0.6);
+		}
+		.sp:hover .sp__case::before,
+		.sp:focus-visible .sp__case::before {
+			width: min(var(--cover), calc(var(--gap, 0px) + var(--pull)));
 		}
 		.sp:hover .sp__case::after,
 		.sp:focus-visible .sp__case::after {
-			height: var(--cover);
+			height: calc(var(--d) + var(--pull));
 		}
 		.wall--left .sp .sp__case::before {
 			right: 100%;
@@ -526,15 +574,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 			opacity: 0.8;
 		}
 		/* Pulled towards you along the wall's normal — in the wall's skewed frame
-		   (dx, dx) once dx takes the wall's sign — by its full depth, so the cover
-		   clears the neighbour that would otherwise hide it. */
+		   (dx, dx) once dx takes the wall's sign — part of its depth, so it still
+		   rests on the shelf. */
 		.sp:hover,
 		.sp:focus-visible {
 			z-index: 2;
 		}
 		.sp:hover .sp__case,
 		.sp:focus-visible .sp__case {
-			transform: translate(calc(var(--cover) * var(--dir)), var(--cover));
+			transform: translate(calc(var(--pull) * var(--dir)), var(--pull));
 			box-shadow:
 				inset 1px 0 0 rgba(255, 255, 255, 0.18),
 				0 10px 14px -4px rgba(0, 0, 0, 0.8);
