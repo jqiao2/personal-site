@@ -94,6 +94,8 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		mpa_rating: facts.mpaRating,
 		credits_synced_at: now,
 		poster_color: color,
+		// The taste space's mood words (0073).
+		keywords: d.keywords?.keywords.map((k) => k.name),
 	};
 
 	const upsert = (payload: typeof base | typeof withFacts) =>

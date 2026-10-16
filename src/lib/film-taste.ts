@@ -4,11 +4,14 @@
  * can import the field math and the test can run it; the loader is in
  * film-taste-load.ts.
  *
- *   x  Light ↔ Dark          mean of the film's genre tone weights
- *   y  Grounded ↔ Fantastical mean of its genre realism weights
- *   z  Obscure ↔ Blockbuster  log TMDB vote count
+ *   x  Light ↔ Dark           tone weights
+ *   y  Grounded ↔ Fantastical realism weights
+ *   z  Calm ↔ Intense         energy weights
  *
- * Each axis is stretched to [-1, 1] over the films being shown.
+ * Each axis is the mean weight over the film's genres and its TMDB keywords —
+ * mood words like "melancholy" or "frantic" (migration 0073) — so a film with
+ * mood tags is placed by them, and one without falls back to its genres. Each
+ * axis is then stretched to [-1, 1] over the films being shown.
  */
 
 export interface TasteFilm {
@@ -17,7 +20,7 @@ export interface TasteFilm {
 	year: number | null;
 	rating: number | null;
 	genres: string[];
-	votes: number;
+	keywords: string[];
 }
 
 /** One film in the space. Short keys: the whole list ships to the client as JSON. */
@@ -29,8 +32,82 @@ export interface TastePoint {
 	p: [number, number, number];
 }
 
+// Each table holds TMDB genres (capitalised) and keywords (lower case); a term
+// not listed is neutral and doesn't count toward the mean.
+
 // -1 light … +1 dark. Genres not listed (Action, Documentary, TV Movie) are neutral.
 export const TONE = {
+	cheerful: -1,
+	joyful: -1,
+	joyous: -1,
+	feelgood: -1,
+	celebratory: -0.9,
+	comforting: -0.9,
+	hilarious: -0.9,
+	lighthearted: -0.9,
+	amused: -0.8,
+	euphoric: -0.8,
+	exuberant: -0.8,
+	optimistic: -0.8,
+	playful: -0.8,
+	hopeful: -0.7,
+	loving: -0.7,
+	vibrant: -0.7,
+	whimsical: -0.7,
+	enthusiastic: -0.6,
+	farcical: -0.6,
+	inspirational: -0.6,
+	romantic: -0.6,
+	adoring: -0.6,
+	wonder: -0.6,
+	excited: -0.5,
+	mischievous: -0.5,
+	witty: -0.5,
+	sentimental: -0.4,
+	compassionate: -0.4,
+	appreciative: -0.4,
+	awestruck: -0.4,
+	admiring: -0.4,
+	casual: -0.4,
+	nostalgic: -0.3,
+	empathetic: -0.3,
+	absurd: -0.3,
+	bittersweet: 0.2,
+	reflective: 0.2,
+	introspective: 0.2,
+	philosophical: 0.2,
+	dramatic: 0.2,
+	mysterious: 0.3,
+	ambiguous: 0.3,
+	ambivalent: 0.3,
+	critical: 0.3,
+	biting: 0.4,
+	cautionary: 0.4,
+	provocative: 0.4,
+	serious: 0.4,
+	antagonistic: 0.5,
+	clinical: 0.5,
+	suspenseful: 0.5,
+	melancholy: 0.6,
+	anxious: 0.6,
+	aggressive: 0.6,
+	tense: 0.6,
+	cold: 0.6,
+	paranoid: 0.6,
+	shocking: 0.7,
+	dreary: 0.7,
+	tragic: 0.8,
+	foreboding: 0.8,
+	frightened: 0.8,
+	nihilism: 0.8,
+	depressing: 0.9,
+	disturbed: 0.9,
+	dread: 0.9,
+	grim: 0.9,
+	horrified: 0.9,
+	macabre: 0.9,
+	malicious: 0.9,
+	brutality: 1,
 	Comedy: -1,
 	Family: -1,
 	Music: -0.8,
@@ -68,17 +145,115 @@ export const REALISM = {
 	Animation: 0.8,
 	Fantasy: 1,
 	'Science Fiction': 1,
+	'based on true story': -1,
+	'true crime': -1,
+	biography: -0.9,
+	'historical figure': -0.9,
+	surrealism: 0.7,
+	surreal: 0.7,
+	magic: 0.9,
+	supernatural: 0.9,
 } satisfies Record<string, number>;
 
-/** Mean weight over the genres the table knows; 0 when it knows none. */
-export function genreScore(genres: string[], weights: Record<string, number>): number {
+// -1 calm … +1 intense.
+export const ENERGY = {
+	Action: 0.9,
+	Adventure: 0.6,
+	Horror: 0.6,
+	Thriller: 0.6,
+	War: 0.5,
+	Crime: 0.3,
+	'Science Fiction': 0.3,
+	Animation: 0.2,
+	Fantasy: 0.2,
+	Comedy: 0.1,
+	Family: 0.1,
+	Mystery: -0.1,
+	History: -0.4,
+	Romance: -0.5,
+	Documentary: -0.5,
+	Drama: -0.6,
+	calm: -1,
+	reflective: -0.8,
+	introspective: -0.8,
+	thoughtful: -0.7,
+	wistful: -0.7,
+	lyrical: -0.7,
+	melancholy: -0.6,
+	philosophical: -0.6,
+	intimate: -0.6,
+	comforting: -0.6,
+	dreary: -0.6,
+	detached: -0.6,
+	nostalgic: -0.5,
+	casual: -0.5,
+	sincere: -0.4,
+	earnest: -0.4,
+	sentimental: -0.4,
+	compassionate: -0.4,
+	empathetic: -0.4,
+	loving: -0.4,
+	depressing: -0.4,
+	romantic: -0.3,
+	candid: -0.3,
+	ambivalent: -0.3,
+	appreciative: -0.3,
+	cold: -0.3,
+	clinical: -0.3,
+	ambiguous: -0.2,
+	admiring: -0.2,
+	foreboding: 0.3,
+	provocative: 0.3,
+	antagonistic: 0.4,
+	playful: 0.4,
+	mischievous: 0.4,
+	joyful: 0.4,
+	commanding: 0.5,
+	assertive: 0.5,
+	dread: 0.5,
+	hilarious: 0.5,
+	joyous: 0.5,
+	vibrant: 0.5,
+	awestruck: 0.5,
+	heist: 0.5,
+	bold: 0.6,
+	powerful: 0.6,
+	anxious: 0.6,
+	enthusiastic: 0.6,
+	farcical: 0.6,
+	celebratory: 0.6,
+	brisk: 0.6,
+	fight: 0.6,
+	audacious: 0.7,
+	euphoric: 0.7,
+	exuberant: 0.7,
+	shocking: 0.7,
+	frightened: 0.7,
+	brutality: 0.7,
+	excited: 0.8,
+	tense: 0.8,
+	suspenseful: 0.8,
+	horrified: 0.8,
+	chase: 0.8,
+	gunfight: 0.8,
+	shootout: 0.8,
+	exhilarated: 0.9,
+	aggressive: 0.9,
+	urgent: 0.9,
+	intense: 1,
+	frantic: 1,
+	chaotic: 1,
+} satisfies Record<string, number>;
+
+/** Mean weight over the terms the table knows; 0 when it knows none. */
+export function termScore(terms: string[], weights: Record<string, number>): number {
 	let sum = 0;
 
 	let n = 0;
 
-	for (const g of genres) {
-		if (g in weights) {
-			sum += weights[g];
+	for (const t of terms) {
+		if (Object.hasOwn(weights, t)) {
+			sum += weights[t];
 			n++;
 		}
 	}
@@ -105,9 +280,12 @@ const round = (v: number) => Math.round(v * 1000) / 1000;
 
 export function placeFilms(films: TasteFilm[]): TastePoint[] {
 	if (!films.length) return [];
-	const xs = stretch(films.map((f) => genreScore(f.genres, TONE) + jitter(f.tmdbId, 1, 0.05)));
-	const ys = stretch(films.map((f) => genreScore(f.genres, REALISM) + jitter(f.tmdbId, 2, 0.05)));
-	const zs = stretch(films.map((f) => Math.log10(f.votes + 1)));
+	const terms = films.map((f) => [...f.genres, ...f.keywords]);
+	const axis = (weights: Record<string, number>, salt: number) =>
+		stretch(films.map((f, i) => termScore(terms[i], weights) + jitter(f.tmdbId, salt, 0.05)));
+	const xs = axis(TONE, 1);
+	const ys = axis(REALISM, 2);
+	const zs = axis(ENERGY, 3);
 
 	return films.map((f, i) => ({
 		t: f.tmdbId,

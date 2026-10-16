@@ -106,6 +106,7 @@ export interface TmdbMovieDetails {
 	};
 	videos?: { results: { key: string; site: string; type: string; name: string }[] };
 	similar?: { results: TmdbSearchResult[] };
+	keywords?: { keywords: { id: number; name: string }[] };
 }
 
 /** Genre + credit facts denormalized onto the movie cache row (migrations 0008 + 0009). */
@@ -267,7 +268,7 @@ export function searchMovies(query: string, page = 1) {
 /** Full details + cast + trailers + similar + release certs in ONE request. */
 export function getMovieDetails(tmdbId: number) {
 	return tmdbGet<TmdbMovieDetails>(`/movie/${tmdbId}`, {
-		append_to_response: 'credits,videos,similar,release_dates',
+		append_to_response: 'credits,videos,similar,release_dates,keywords',
 	});
 }
 
