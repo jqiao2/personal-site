@@ -62,7 +62,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 									<span class="sp__case">
 										<span class="sp__no">{s.number}</span>
 										<span class="sp__t">{s.title}</span>
-										{s.year && <span class="sp__y">{String(s.year).slice(2)}</span>}
+										{s.year && <span class="sp__y">{s.year}</span>}
 									</span>
 								</a>
 							))}
@@ -286,8 +286,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 			/* How far back a case's top is seen: up to the board above it (whose
 			   front edge is 11px thick), where the shelf hides the rest. */
 			--top: calc(var(--pitch) - var(--h) - 11px);
-			/* How deep a board's top shows where no disc stands on it. */
-			--board: 26px;
+			/* How far back a board's top catches the light before the shelf's
+			   shadow takes it — the same falloff as a case's cover and top. */
+			--board: 36px;
 			min-height: 100vh;
 			background: #1c1210;
 			padding: 0 24px 40px;
@@ -515,23 +516,26 @@ const num = (n: number) => n.toLocaleString('en-US');
 			   run all the way to the bookcase's sides. */
 			padding: var(--top) 20px 0;
 			min-height: calc(var(--pitch) * 3);
-			/* Each row stands on a board. Painted behind the discs, so it shows only
-			   where a row runs out: the board's top running back to the wall,
-			   lit at the front and darkening towards the back. Then its lit front
-			   edge, then the shadow it casts on the wall of the cubby below, down
-			   to the next row's tops. */
-			/* The stops are offset by --top rather than the background positioned:
+			/* Each row stands on a board, painted behind the discs so it shows only
+			   where a row runs out. Inside a cubby it is dark: the board's top is
+			   lit at its front edge and falls into shadow over the same 36px a
+			   case's cover does, and from there back — the rest of the board, the
+			   back of the bookcase, the gap under the board above — is all the same
+			   shadow. Lighter than that, an empty shelf reads as shallow next to
+			   discs whose back two-thirds are dark. Then the board's lit front edge.
+
+			   The stops are offset by --top rather than the background positioned:
 			   positioning shifts the whole painted box and wraps its bottom around
 			   to the top, which put a stray slice of board under the top rail. */
+			--shade: #160e09;
 			background: repeating-linear-gradient(
 				180deg,
-				transparent var(--top) calc(var(--top) + var(--h) - var(--board)),
-				#2e2014 calc(var(--top) + var(--h) - var(--board)),
+				var(--shade) var(--top) calc(var(--top) + var(--h) - var(--board)),
+				#5c442c calc(var(--top) + var(--h) - var(--board) * 10 / 36),
 				#7d5d3c calc(var(--top) + var(--h)),
 				#9a7a52 calc(var(--top) + var(--h)) calc(var(--top) + var(--h) + 2px),
 				#5e4429 calc(var(--top) + var(--h) + 2px) calc(var(--top) + var(--h) + 11px),
-				rgba(0, 0, 0, 0.6) calc(var(--top) + var(--h) + 11px),
-				rgba(0, 0, 0, 0.12) calc(var(--top) + var(--pitch))
+				var(--shade) calc(var(--top) + var(--h) + 11px) calc(var(--top) + var(--pitch))
 			);
 		}
 
@@ -553,7 +557,19 @@ const num = (n: number) => n.toLocaleString('en-US');
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			background: var(--c);
+			/* A keepcase's spine is barely rounded: a faint falloff from the hinge
+			   edge across it, half what phones get (see the media query), since
+			   here the tops and the shelf's shadow already give the cases form. */
+			background:
+				linear-gradient(
+					90deg,
+					rgba(255, 246, 225, 0.08) 0%,
+					rgba(255, 246, 225, 0.025) 16%,
+					rgba(0, 0, 0, 0) 44%,
+					rgba(0, 0, 0, 0.11) 80%,
+					rgba(0, 0, 0, 0.2) 100%
+				),
+				var(--c);
 			color: var(--k);
 			box-shadow:
 				inset 1px 0 0 rgba(255, 255, 255, 0.18),
@@ -663,7 +679,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 		.sp__y {
 			flex: none;
 			margin: 3px 0 4px;
-			font: 400 8px/1 var(--font-archivo);
+			/* Four digits across a 20px spine: the spine number's size and tracking. */
+			font: 400 7px/1 var(--font-archivo);
+			letter-spacing: -0.3px;
 			opacity: 0.8;
 		}
 		/* Pulled towards you along the wall's normal — in the wall's skewed frame
@@ -877,6 +895,27 @@ const num = (n: number) => n.toLocaleString('en-US');
 			.sp .sp__case::before,
 			.sp__case::after {
 				display: none;
+			}
+			/* With no tops or sides to give the cases bulk, shade the spines the
+			   way the /books shelf does: light catching the hinge edge, falling
+			   off across the spine, and each case casting a shadow on its
+			   neighbour and the board. Flatter than a book's — a keepcase's spine
+			   is moulded plastic, barely rounded. */
+			.sp__case {
+				background:
+					linear-gradient(
+						90deg,
+						rgba(255, 246, 225, 0.16) 0%,
+						rgba(255, 246, 225, 0.05) 16%,
+						rgba(0, 0, 0, 0) 44%,
+						rgba(0, 0, 0, 0.22) 80%,
+						rgba(0, 0, 0, 0.4) 100%
+					),
+					var(--c);
+				box-shadow:
+					6px 0 10px -7px rgba(0, 0, 0, 0.9),
+					0 9px 13px -8px rgba(0, 0, 0, 0.95),
+					inset -1px 0 0 rgba(0, 0, 0, 0.5);
 			}
 			.sp:hover .sp__case,
 			.sp:focus-visible .sp__case {
