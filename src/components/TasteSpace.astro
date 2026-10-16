@@ -1,0 +1,123 @@
+---
+import type { TastePoint } from '../lib/film-taste';
+
+interface Props {
+	points: TastePoint[];
+}
+
+const { points } = Astro.props;
+
+const rated = points.filter((p) => p.r != null);
+
+const avg = rated.length ? rated.reduce((s, p) => s + (p.r ?? 0), 0) / rated.length : 3;
+---
+
+{points.length > 0 && (
+	<section class="taste">
+		<div class="taste__head">
+			<div class="taste__title">Taste space</div>
+			<div class="taste__legend">
+				<span>{Math.max(0.5, avg - 1).toFixed(1)}★</span>
+				<span class="taste__ramp"></span>
+				<span>{Math.min(5, avg + 1).toFixed(1)}★</span>
+			</div>
+		</div>
+		<div class="taste__stage" data-taste data-avg={avg.toFixed(3)}>
+			<script type="application/json" data-taste-points set:html={JSON.stringify(points)} />
+			<a class="taste__tip" hidden></a>
+		</div>
+	</section>
+)}
+
+<style>
+	.taste {
+		margin-bottom: 46px;
+	}
+	.taste__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		padding-bottom: 10px;
+		border-bottom: 1px solid #402226;
+		margin-bottom: 18px;
+	}
+	.taste__title {
+		font-family: var(--font-newsreader);
+		font-style: italic;
+		font-size: 20px;
+		color: #ecdcbd;
+	}
+	.taste__legend {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		font-size: 12px;
+		color: #a2857a;
+	}
+	.taste__ramp {
+		width: 90px;
+		height: 8px;
+		border-radius: 4px;
+		background: linear-gradient(90deg, #5e9fd8, #8a6f63, #d9b45a);
+	}
+	.taste__stage {
+		position: relative;
+		height: 560px;
+		background: #1a0c0b;
+		border: 1px solid #4a2529;
+		border-radius: 10px;
+		overflow: hidden;
+		touch-action: none;
+	}
+	.taste__stage :global(canvas) {
+		display: block;
+		cursor: grab;
+	}
+	.taste__stage :global(canvas:active) {
+		cursor: grabbing;
+	}
+	.taste__stage :global(.taste__axis) {
+		position: absolute;
+		transform: translate(-50%, -50%);
+		font-size: 10.5px;
+		text-transform: uppercase;
+		letter-spacing: 1.2px;
+		color: #8a6f63;
+		pointer-events: none;
+		white-space: nowrap;
+	}
+	.taste__tip {
+		position: absolute;
+		z-index: 2;
+		padding: 7px 10px;
+		background: #20100f;
+		border: 1px solid #4a2529;
+		border-radius: 7px;
+		font-size: 12.5px;
+		color: #f4e8d1;
+		white-space: nowrap;
+		transform: translate(12px, -50%);
+	}
+	.taste__tip:hover {
+		border-color: #d9b45a;
+	}
+	.taste__tip :global(.taste__stars) {
+		color: #d9b45a;
+		margin-left: 8px;
+	}
+	.taste__tip :global(.taste__year) {
+		color: #8a6f63;
+		margin-left: 6px;
+	}
+	@media (max-width: 720px) {
+		.taste__stage {
+			height: 400px;
+		}
+	}
+</style>
+
+<script>
+	import { mountTasteSpace } from '../scripts/taste-space';
+
+	document.querySelectorAll<HTMLElement>('[data-taste]').forEach(mountTasteSpace);
+</script>
