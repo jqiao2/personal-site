@@ -2,25 +2,29 @@
 //
 // Run: node --import ./scripts/ts-hook.mjs scripts/film-taste.test.mjs
 import assert from 'node:assert/strict';
-import { genreScore, placeFilms, tasteField, TONE, REALISM } from '../src/lib/film-taste.ts';
+import { termScore, placeFilms, tasteField, TONE, REALISM, ENERGY } from '../src/lib/film-taste.ts';
 
-assert.equal(genreScore(['Comedy', 'Horror'], TONE), 0);
+assert.equal(termScore(['Comedy', 'Horror'], TONE), 0);
 
-assert.equal(genreScore(['Action'], TONE), 0, 'unknown genres are neutral');
+assert.equal(termScore(['Action'], TONE), 0, 'unknown genres are neutral');
 
-assert.equal(genreScore(['Fantasy'], REALISM), 1);
+assert.equal(termScore(['Fantasy'], REALISM), 1);
+
+assert.equal(termScore(['Drama', 'frantic', 'chaotic', 'murder'], ENERGY), (-0.6 + 1 + 1) / 3, 'mood keywords outvote the genre');
+
+assert.equal(termScore(['constructor'], TONE), 0, 'a keyword that is an Object prototype key is neutral');
 
 const films = [
-	{ tmdbId: 1, title: 'Light', year: 2000, rating: 5, genres: ['Comedy', 'Family'], votes: 10 },
-	{ tmdbId: 2, title: 'Dark', year: 2001, rating: 1, genres: ['Horror'], votes: 10000 },
-	{ tmdbId: 3, title: 'Unrated', year: null, rating: null, genres: ['Drama'], votes: 500 },
+	{ tmdbId: 1, title: 'Light', year: 2000, rating: 5, genres: ['Comedy', 'Family'], keywords: ['calm'] },
+	{ tmdbId: 2, title: 'Dark', year: 2001, rating: 1, genres: ['Horror'], keywords: ['frantic'] },
+	{ tmdbId: 3, title: 'Unrated', year: null, rating: null, genres: ['Drama'], keywords: [] },
 ];
 
 const pts = placeFilms(films);
 
 assert.ok(pts[0].p[0] < pts[1].p[0], 'comedy sits on the light side of horror');
 
-assert.ok(pts[0].p[2] < pts[1].p[2], 'fewer votes sits lower on the mainstream axis');
+assert.ok(pts[0].p[2] < pts[1].p[2], 'a calm film sits below a frantic one');
 
 for (const p of pts) for (const v of p.p) assert.ok(v >= -1 && v <= 1, 'axes stretch into [-1, 1]');
 

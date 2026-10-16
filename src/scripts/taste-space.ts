@@ -82,8 +82,8 @@ const AXES: [string, [number, number, number]][] = [
 	['Dark', [1.18, 0, 0]],
 	['Grounded', [0, -1.14, 0]],
 	['Fantastical', [0, 1.14, 0]],
-	['Obscure', [0, 0, -1.18]],
-	['Blockbuster', [0, 0, 1.18]],
+	['Calm', [0, 0, -1.18]],
+	['Intense', [0, 0, 1.18]],
 ];
 
 export function mountTasteSpace(stage: HTMLElement): void {
