@@ -882,6 +882,27 @@ const num = (n: number) => n.toLocaleString('en-US');
 			.sp__case::after {
 				display: none;
 			}
+			/* With no tops or sides to give the cases bulk, shade the spines the
+			   way the /books shelf does: light catching the hinge edge, falling
+			   off across the spine, and each case casting a shadow on its
+			   neighbour and the board. Flatter than a book's — a keepcase's spine
+			   is moulded plastic, barely rounded. */
+			.sp__case {
+				background:
+					linear-gradient(
+						90deg,
+						rgba(255, 246, 225, 0.16) 0%,
+						rgba(255, 246, 225, 0.05) 16%,
+						rgba(0, 0, 0, 0) 44%,
+						rgba(0, 0, 0, 0.22) 80%,
+						rgba(0, 0, 0, 0.4) 100%
+					),
+					var(--c);
+				box-shadow:
+					6px 0 10px -7px rgba(0, 0, 0, 0.9),
+					0 9px 13px -8px rgba(0, 0, 0, 0.95),
+					inset -1px 0 0 rgba(0, 0, 0, 0.5);
+			}
 			.sp:hover .sp__case,
 			.sp:focus-visible .sp__case {
 				transform: translateY(-8px);
