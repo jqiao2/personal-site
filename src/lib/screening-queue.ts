@@ -87,18 +87,8 @@ export function eventSummary(title: string, venue: string | null): string {
 
 /** Ensure a movie is on the plain watchlist too (idempotent) — queueing a film
  *  is a stronger statement of "to watch", and a calendar-sourced film must land
- *  on the watchlist first. A film already watched stays off it: calendar sync
- *  re-reads past screenings, and "watched" and "to watch" stay disjoint. */
+ *  on the watchlist first. */
 async function ensureOnWatchlist(movieId: number): Promise<void> {
-	const { count, error: wErr } = await supabaseAdmin
-		.from('watched')
-		.select('movie_id', { count: 'exact', head: true })
-		.eq('movie_id', movieId);
-
-	if (wErr) throw new Error(`ensureOnWatchlist watched check failed: ${wErr.message}`);
-
-	if (count) return;
-
 	const { error } = await supabaseAdmin
 		.from('watchlist')
 		.upsert({ movie_id: movieId }, { onConflict: 'movie_id' });
@@ -120,7 +110,9 @@ export async function addToQueue(input: {
 	googleEventId?: string | null;
 }): Promise<void> {
 	const movie = await ensureMovieCached(input.tmdbId);
-	await ensureOnWatchlist(movie.id);
+	// A screening on a day already gone has been seen (or missed) — it isn't
+	// "to watch". Calendar sync re-reads the whole month, past days included.
+	if (input.scheduledDate >= siteDay()) await ensureOnWatchlist(movie.id);
 
 	const venue = input.venue?.trim() || null;
 	const source = input.source ?? 'manual';
