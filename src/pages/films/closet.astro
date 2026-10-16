@@ -557,7 +557,19 @@ const num = (n: number) => n.toLocaleString('en-US');
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			background: var(--c);
+			/* A keepcase's spine is barely rounded: a faint falloff from the hinge
+			   edge across it, half what phones get (see the media query), since
+			   here the tops and the shelf's shadow already give the cases form. */
+			background:
+				linear-gradient(
+					90deg,
+					rgba(255, 246, 225, 0.08) 0%,
+					rgba(255, 246, 225, 0.025) 16%,
+					rgba(0, 0, 0, 0) 44%,
+					rgba(0, 0, 0, 0.11) 80%,
+					rgba(0, 0, 0, 0.2) 100%
+				),
+				var(--c);
 			color: var(--k);
 			box-shadow:
 				inset 1px 0 0 rgba(255, 255, 255, 0.18),
