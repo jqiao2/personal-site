@@ -62,7 +62,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 									<span class="sp__case">
 										<span class="sp__no">{s.number}</span>
 										<span class="sp__t">{s.title}</span>
-										{s.year && <span class="sp__y">{String(s.year).slice(2)}</span>}
+										{s.year && <span class="sp__y">{s.year}</span>}
 									</span>
 								</a>
 							))}
@@ -679,7 +679,9 @@ const num = (n: number) => n.toLocaleString('en-US');
 		.sp__y {
 			flex: none;
 			margin: 3px 0 4px;
-			font: 400 8px/1 var(--font-archivo);
+			/* Four digits across a 20px spine: the spine number's size and tracking. */
+			font: 400 7px/1 var(--font-archivo);
+			letter-spacing: -0.3px;
 			opacity: 0.8;
 		}
 		/* Pulled towards you along the wall's normal — in the wall's skewed frame
