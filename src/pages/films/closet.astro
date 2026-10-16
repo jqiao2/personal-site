@@ -828,11 +828,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 				grid-template-columns: 1fr;
 				gap: 40px;
 			}
-			/* Seen straight on from a little above: tops still show, sides don't. */
+			/* Seen straight on: nothing that recedes shows — no case tops or sides,
+			   no board tops — or the boards read as standing behind the discs. */
 			.wall--left,
 			.wall--right {
 				transform: none;
 				--lean: 0deg;
+				--board: 0px;
 			}
 			.wall--left::before {
 				right: 0;
@@ -842,7 +844,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 			}
 			.floor,
 			.wall::after,
-			.sp .sp__case::before {
+			.sp .sp__case::before,
+			.sp__case::after {
 				display: none;
 			}
 			.sp:hover .sp__case,
