@@ -490,17 +490,19 @@ const num = (n: number) => n.toLocaleString('en-US');
 			   lit at the front and darkening towards the back. Then its lit front
 			   edge, then the shadow it casts on the wall of the cubby below, down
 			   to the next row's tops. */
+			/* The stops are offset by --top rather than the background positioned:
+			   positioning shifts the whole painted box and wraps its bottom around
+			   to the top, which put a stray slice of board under the top rail. */
 			background: repeating-linear-gradient(
-					180deg,
-					transparent 0 calc(var(--h) - var(--board)),
-					#2e2014 calc(var(--h) - var(--board)),
-					#7d5d3c var(--h),
-					#9a7a52 var(--h) calc(var(--h) + 2px),
-					#5e4429 calc(var(--h) + 2px) calc(var(--h) + 11px),
-					rgba(0, 0, 0, 0.6) calc(var(--h) + 11px),
-					rgba(0, 0, 0, 0.12) var(--pitch)
-				)
-				0 var(--top);
+				180deg,
+				transparent var(--top) calc(var(--top) + var(--h) - var(--board)),
+				#2e2014 calc(var(--top) + var(--h) - var(--board)),
+				#7d5d3c calc(var(--top) + var(--h)),
+				#9a7a52 calc(var(--top) + var(--h)) calc(var(--top) + var(--h) + 2px),
+				#5e4429 calc(var(--top) + var(--h) + 2px) calc(var(--top) + var(--h) + 11px),
+				rgba(0, 0, 0, 0.6) calc(var(--top) + var(--h) + 11px),
+				rgba(0, 0, 0, 0.12) calc(var(--top) + var(--pitch))
+			);
 		}
 
 		/* A disc case seen end-on. Criterion's grammar: number at the head, title
