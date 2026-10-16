@@ -110,7 +110,9 @@ export async function addToQueue(input: {
 	googleEventId?: string | null;
 }): Promise<void> {
 	const movie = await ensureMovieCached(input.tmdbId);
-	await ensureOnWatchlist(movie.id);
+	// A screening on a day already gone has been seen (or missed) — it isn't
+	// "to watch". Calendar sync re-reads the whole month, past days included.
+	if (input.scheduledDate >= siteDay()) await ensureOnWatchlist(movie.id);
 
 	const venue = input.venue?.trim() || null;
 	const source = input.source ?? 'manual';
