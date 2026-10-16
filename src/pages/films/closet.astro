@@ -496,6 +496,10 @@ const num = (n: number) => n.toLocaleString('en-US');
 		   corner and the floor. */
 		.wall--left .shelves {
 			clip-path: inset(-2000px -2000px -2000px 0);
+			/* Both walls pack their rows into the corner, so a row's spare shelf is
+			   at the open end — the same on both walls, and where its last disc's
+			   side can be seen. */
+			justify-content: flex-end;
 		}
 		.wall--right .shelves {
 			clip-path: inset(-2000px 0 -2000px -2000px);
