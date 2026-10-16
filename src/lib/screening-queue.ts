@@ -87,8 +87,18 @@ export function eventSummary(title: string, venue: string | null): string {
 
 /** Ensure a movie is on the plain watchlist too (idempotent) — queueing a film
  *  is a stronger statement of "to watch", and a calendar-sourced film must land
- *  on the watchlist first. */
+ *  on the watchlist first. A film already watched stays off it: calendar sync
+ *  re-reads past screenings, and "watched" and "to watch" stay disjoint. */
 async function ensureOnWatchlist(movieId: number): Promise<void> {
+	const { count, error: wErr } = await supabaseAdmin
+		.from('watched')
+		.select('movie_id', { count: 'exact', head: true })
+		.eq('movie_id', movieId);
+
+	if (wErr) throw new Error(`ensureOnWatchlist watched check failed: ${wErr.message}`);
+
+	if (count) return;
+
 	const { error } = await supabaseAdmin
 		.from('watchlist')
 		.upsert({ movie_id: movieId }, { onConflict: 'movie_id' });
