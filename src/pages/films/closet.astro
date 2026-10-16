@@ -36,9 +36,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 			{
 				walls.map((w) => (
 					<section class={`wall wall--${w.key}`}>
-						<h2 class="placard">
-							{w.name} <span>{num(w.spines.length)}</span>
-						</h2>
+						<div class="rail">
+							<h2 class="placard">
+								{w.name} <span>{num(w.spines.length)}</span>
+							</h2>
+						</div>
 						<div class="shelves" data-shelves>
 							{w.spines.map((s) => (
 								<a
@@ -275,8 +277,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 			--iso: 26.565deg;
 			--h: 148px;
 			--pitch: 190px;
-			/* How far a case, or the bookcase, reaches back towards the wall. */
-			--d: 14px;
+			/* How deep the bookcase is, front to wall: a little more than a case. */
+			--d: calc(var(--cover) + 10px);
 			/* A real keepcase is as deep as its cover is wide: 135 × 190 mm. */
 			--cover: calc(var(--h) * 135 / 190);
 			/* How far a hovered case slides out: enough to show some cover. */
@@ -284,6 +286,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 			/* How far back a case's top is seen: up to the board above it (whose
 			   front edge is 11px thick), where the shelf hides the rest. */
 			--top: calc(var(--pitch) - var(--h) - 11px);
+			/* How deep a board's top shows where no disc stands on it. */
+			--board: 26px;
 			min-height: 100vh;
 			background: #1c1210;
 			padding: 0 24px 40px;
@@ -338,8 +342,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 		   skewed by --lean. Only the faces towards the viewer are drawn: tops, and
 		   the side facing the room's open end. */
 		.room {
+			position: relative;
 			max-width: 1064px;
-			margin: 0 auto;
+			/* Headroom for the bookcase's top, which peaks a full depth above the
+			   corner. */
+			margin: calc(var(--d) + 10px) auto 0;
 			display: grid;
 			grid-template-columns: 1fr 1fr;
 		}
@@ -347,7 +354,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			position: relative;
 			display: flex;
 			flex-direction: column;
-			border-top: 12px solid #5a4128;
 		}
 		/* A pulled case comes out over everything: the other wall at the corner,
 		   and the floor below the bottom shelf. */
@@ -377,23 +383,46 @@ const num = (n: number) => n.toLocaleString('en-US');
 			border-right: 12px solid #5a3f27;
 			box-shadow: inset 18px 0 22px -14px rgba(0, 0, 0, 0.8);
 		}
+		/* Where the two bookcases meet, a square of top belongs to both: each
+		   wall's top stops at the corner, so it is filled here — a diamond whose
+		   front point is the corner and back point the true corner of the room. */
+		.room::before {
+			content: '';
+			position: absolute;
+			/* 1px proud on every side, so antialiasing leaves no seam against the
+			   two tops it joins. */
+			left: calc(50% - var(--d) - 1px);
+			top: calc(var(--d) * -1 - 1px);
+			width: calc(var(--d) * 2 + 2px);
+			height: calc(var(--d) + 2px);
+			clip-path: polygon(50% 100%, 0 50%, 50% 0, 100% 50%);
+			background: #826240;
+		}
 		/* The bookcase's top, receding to the wall. */
 		.wall::before {
 			content: '';
 			position: absolute;
-			top: calc(-12px - var(--d));
+			top: calc(var(--d) * -1);
 			height: var(--d);
 			left: -12px;
 			right: -12px;
 			transform: skewX(var(--lean));
 			transform-origin: bottom;
-			background: linear-gradient(90deg, #8a6a45, #7a5a3a);
+			background: #826240;
+		}
+		/* Only the outer end runs past the wall, over the side panel's front; the
+		   corner end stops at the corner, where the diamond above takes over. */
+		.wall--left::before {
+			right: 0;
+		}
+		.wall--right::before {
+			left: 0;
 		}
 		/* The outer side of the bookcase, at the room's open end. */
 		.wall::after {
 			content: '';
 			position: absolute;
-			top: -12px;
+			top: 0;
 			bottom: 0;
 			width: var(--d);
 			transform: skewY(var(--lean));
@@ -435,10 +464,20 @@ const num = (n: number) => n.toLocaleString('en-US');
 				repeating-linear-gradient(26.565deg, transparent 0 46px, rgba(0, 0, 0, 0.18) 46px 48px),
 				#4a3424;
 		}
+		/* The bookcase's top board, built like every shelf board below it — the lit
+		   front edge, then the wood — and the same distance above the first row as
+		   a board is above any other. The wall's name is a plate fixed to it. */
+		.rail {
+			flex: none;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 30px;
+			background: linear-gradient(180deg, #9a7a52 0 2px, #5e4429 2px);
+		}
 		.placard {
-			align-self: center;
-			margin: 14px 0 10px;
-			padding: 4px 12px;
+			margin: 0;
+			padding: 3px 12px;
 			font: 700 11px var(--font-archivo);
 			letter-spacing: 1.6px;
 			text-transform: uppercase;
@@ -457,6 +496,10 @@ const num = (n: number) => n.toLocaleString('en-US');
 		   corner and the floor. */
 		.wall--left .shelves {
 			clip-path: inset(-2000px -2000px -2000px 0);
+			/* Both walls pack their rows into the corner, so a row's spare shelf is
+			   at the open end — the same on both walls, and where its last disc's
+			   side can be seen. */
+			justify-content: flex-end;
 		}
 		.wall--right .shelves {
 			clip-path: inset(-2000px 0 -2000px -2000px);
@@ -472,17 +515,24 @@ const num = (n: number) => n.toLocaleString('en-US');
 			   run all the way to the bookcase's sides. */
 			padding: var(--top) 20px 0;
 			min-height: calc(var(--pitch) * 3);
-			/* Under each row: the board's lit front edge, then the shadow it casts
-			   on the wall of the cubby below, down to the next row's book tops. */
+			/* Each row stands on a board. Painted behind the discs, so it shows only
+			   where a row runs out: the board's top running back to the wall,
+			   lit at the front and darkening towards the back. Then its lit front
+			   edge, then the shadow it casts on the wall of the cubby below, down
+			   to the next row's tops. */
+			/* The stops are offset by --top rather than the background positioned:
+			   positioning shifts the whole painted box and wraps its bottom around
+			   to the top, which put a stray slice of board under the top rail. */
 			background: repeating-linear-gradient(
-					180deg,
-					transparent 0 var(--h),
-					#9a7a52 var(--h) calc(var(--h) + 2px),
-					#5e4429 calc(var(--h) + 2px) calc(var(--h) + 11px),
-					rgba(0, 0, 0, 0.6) calc(var(--h) + 11px),
-					rgba(0, 0, 0, 0.12) var(--pitch)
-				)
-				0 var(--top);
+				180deg,
+				transparent var(--top) calc(var(--top) + var(--h) - var(--board)),
+				#2e2014 calc(var(--top) + var(--h) - var(--board)),
+				#7d5d3c calc(var(--top) + var(--h)),
+				#9a7a52 calc(var(--top) + var(--h)) calc(var(--top) + var(--h) + 2px),
+				#5e4429 calc(var(--top) + var(--h) + 2px) calc(var(--top) + var(--h) + 11px),
+				rgba(0, 0, 0, 0.6) calc(var(--top) + var(--h) + 11px),
+				rgba(0, 0, 0, 0.12) calc(var(--top) + var(--pitch))
+			);
 		}
 
 		/* A disc case seen end-on. Criterion's grammar: number at the head, title
@@ -805,26 +855,27 @@ const num = (n: number) => n.toLocaleString('en-US');
 		@media (max-width: 720px) {
 			.page {
 				padding: 0 12px 32px;
+				/* Flat on, the bookcase's top is a thin lip, not its whole depth. */
+				--d: 14px;
 			}
 			.room {
 				grid-template-columns: 1fr;
 				gap: 40px;
+				margin-top: 14px;
 			}
-			/* Seen straight on from a little above: tops still show, sides don't. */
+			/* Seen straight on: nothing that recedes shows — no case tops or sides,
+			   no board tops — or the boards read as standing behind the discs. */
 			.wall--left,
 			.wall--right {
 				transform: none;
 				--lean: 0deg;
-			}
-			.wall--left::before {
-				right: 0;
-			}
-			.wall--right::before {
-				left: 0;
+				--board: 0px;
 			}
 			.floor,
+			.room::before,
 			.wall::after,
-			.sp .sp__case::before {
+			.sp .sp__case::before,
+			.sp__case::after {
 				display: none;
 			}
 			.sp:hover .sp__case,
