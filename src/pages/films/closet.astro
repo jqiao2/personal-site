@@ -36,9 +36,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 			{
 				walls.map((w) => (
 					<section class={`wall wall--${w.key}`}>
-						<h2 class="placard">
-							{w.name} <span>{num(w.spines.length)}</span>
-						</h2>
+						<div class="rail">
+							<h2 class="placard">
+								{w.name} <span>{num(w.spines.length)}</span>
+							</h2>
+						</div>
 						<div class="shelves" data-shelves>
 							{w.spines.map((s) => (
 								<a
@@ -347,7 +349,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			position: relative;
 			display: flex;
 			flex-direction: column;
-			border-top: 12px solid #5a4128;
 		}
 		/* A pulled case comes out over everything: the other wall at the corner,
 		   and the floor below the bottom shelf. */
@@ -381,7 +382,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		.wall::before {
 			content: '';
 			position: absolute;
-			top: calc(-12px - var(--d));
+			top: calc(var(--d) * -1);
 			height: var(--d);
 			left: -12px;
 			right: -12px;
@@ -393,7 +394,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		.wall::after {
 			content: '';
 			position: absolute;
-			top: -12px;
+			top: 0;
 			bottom: 0;
 			width: var(--d);
 			transform: skewY(var(--lean));
@@ -435,10 +436,20 @@ const num = (n: number) => n.toLocaleString('en-US');
 				repeating-linear-gradient(26.565deg, transparent 0 46px, rgba(0, 0, 0, 0.18) 46px 48px),
 				#4a3424;
 		}
+		/* The bookcase's top board, built like every shelf board below it — the lit
+		   front edge, then the wood — and the same distance above the first row as
+		   a board is above any other. The wall's name is a plate fixed to it. */
+		.rail {
+			flex: none;
+			display: flex;
+			justify-content: center;
+			align-items: center;
+			height: 30px;
+			background: linear-gradient(180deg, #9a7a52 0 2px, #5e4429 2px);
+		}
 		.placard {
-			align-self: center;
-			margin: 14px 0 10px;
-			padding: 4px 12px;
+			margin: 0;
+			padding: 3px 12px;
 			font: 700 11px var(--font-archivo);
 			letter-spacing: 1.6px;
 			text-transform: uppercase;
