@@ -1,6 +1,7 @@
 // Service layer that sits between the API routes and Supabase/TMDB.
 // Endpoints stay thin; the "check cache → maybe fetch TMDB → write" logic lives
 // here so it's written once.
+import { posterColor } from './poster-color';
 import { supabaseAdmin, supabasePublic } from './supabase';
 // The add-path hook that keeps the credit_* tables current as films are logged.
 // The credit collaboration network that reads those tables lives in films-credits.ts.
@@ -59,6 +60,9 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const releasedOn = preferredReleaseDate(d);
 	const premieredOn = premiereDate(d);
 	const now = new Date().toISOString();
+	// The closet's spine colour (0072). Undefined when it can't be worked out:
+	// JSON drops an undefined key, so a failed read never blanks a stored colour.
+	const color = (await posterColor(d.poster_path)) ?? undefined;
 
 	const base = {
 		tmdb_id: d.id,
@@ -89,6 +93,7 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 		original_language: facts.originalLanguage,
 		mpa_rating: facts.mpaRating,
 		credits_synced_at: now,
+		poster_color: color,
 	};
 
 	const upsert = (payload: typeof base | typeof withFacts) =>
