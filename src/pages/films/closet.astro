@@ -277,8 +277,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 			--iso: 26.565deg;
 			--h: 148px;
 			--pitch: 190px;
-			/* How far a case, or the bookcase, reaches back towards the wall. */
-			--d: 14px;
+			/* How deep the bookcase is, front to wall: a little more than a case. */
+			--d: calc(var(--cover) + 10px);
 			/* A real keepcase is as deep as its cover is wide: 135 × 190 mm. */
 			--cover: calc(var(--h) * 135 / 190);
 			/* How far a hovered case slides out: enough to show some cover. */
@@ -342,8 +342,11 @@ const num = (n: number) => n.toLocaleString('en-US');
 		   skewed by --lean. Only the faces towards the viewer are drawn: tops, and
 		   the side facing the room's open end. */
 		.room {
+			position: relative;
 			max-width: 1064px;
-			margin: 0 auto;
+			/* Headroom for the bookcase's top, which peaks a full depth above the
+			   corner. */
+			margin: calc(var(--d) + 10px) auto 0;
 			display: grid;
 			grid-template-columns: 1fr 1fr;
 		}
@@ -380,6 +383,21 @@ const num = (n: number) => n.toLocaleString('en-US');
 			border-right: 12px solid #5a3f27;
 			box-shadow: inset 18px 0 22px -14px rgba(0, 0, 0, 0.8);
 		}
+		/* Where the two bookcases meet, a square of top belongs to both: each
+		   wall's top stops at the corner, so it is filled here — a diamond whose
+		   front point is the corner and back point the true corner of the room. */
+		.room::before {
+			content: '';
+			position: absolute;
+			/* 1px proud on every side, so antialiasing leaves no seam against the
+			   two tops it joins. */
+			left: calc(50% - var(--d) - 1px);
+			top: calc(var(--d) * -1 - 1px);
+			width: calc(var(--d) * 2 + 2px);
+			height: calc(var(--d) + 2px);
+			clip-path: polygon(50% 100%, 0 50%, 50% 0, 100% 50%);
+			background: #826240;
+		}
 		/* The bookcase's top, receding to the wall. */
 		.wall::before {
 			content: '';
@@ -390,7 +408,15 @@ const num = (n: number) => n.toLocaleString('en-US');
 			right: -12px;
 			transform: skewX(var(--lean));
 			transform-origin: bottom;
-			background: linear-gradient(90deg, #8a6a45, #7a5a3a);
+			background: #826240;
+		}
+		/* Only the outer end runs past the wall, over the side panel's front; the
+		   corner end stops at the corner, where the diamond above takes over. */
+		.wall--left::before {
+			right: 0;
+		}
+		.wall--right::before {
+			left: 0;
 		}
 		/* The outer side of the bookcase, at the room's open end. */
 		.wall::after {
@@ -825,10 +851,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 		@media (max-width: 720px) {
 			.page {
 				padding: 0 12px 32px;
+				/* Flat on, the bookcase's top is a thin lip, not its whole depth. */
+				--d: 14px;
 			}
 			.room {
 				grid-template-columns: 1fr;
 				gap: 40px;
+				margin-top: 14px;
 			}
 			/* Seen straight on: nothing that recedes shows — no case tops or sides,
 			   no board tops — or the boards read as standing behind the discs. */
@@ -838,13 +867,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 				--lean: 0deg;
 				--board: 0px;
 			}
-			.wall--left::before {
-				right: 0;
-			}
-			.wall--right::before {
-				left: 0;
-			}
 			.floor,
+			.room::before,
 			.wall::after,
 			.sp .sp__case::before,
 			.sp__case::after {
