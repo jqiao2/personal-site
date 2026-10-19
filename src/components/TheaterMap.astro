@@ -1,0 +1,172 @@
+---
+// Where the theater viewings happened: a heatmap over the film section's dark
+// basemap, framed on the bounds of the venues in scope — all New York shows New
+// York; New York plus San Diego shows the country between them.
+import type { TheaterSpot } from '../lib/film-theater-map';
+
+interface Props {
+	spots: TheaterSpot[];
+	unplaced: number;
+}
+
+const { spots, unplaced } = Astro.props;
+
+const total = spots.reduce((s, p) => s + p.n, 0);
+
+const config = { key: import.meta.env.PUBLIC_MAPTILER_KEY ?? '', spots };
+---
+
+{spots.length > 0 && (
+	<section class="tmap">
+		<div class="tmap__head">
+			<div class="tmap__title">Where I saw them</div>
+			<div class="tmap__meta">
+				{total} in theaters · {spots.length} {spots.length === 1 ? 'venue' : 'venues'}
+				{unplaced > 0 && <span> · {unplaced} unmapped</span>}
+			</div>
+		</div>
+		<div class="tmap__gl" data-theater-map></div>
+		<script type="application/json" data-theater-map-config set:html={JSON.stringify(config)} is:inline />
+	</section>
+)}
+
+<style>
+	.tmap {
+		margin-bottom: 46px;
+	}
+	.tmap__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		padding-bottom: 10px;
+		border-bottom: 1px solid #402226;
+		margin-bottom: 18px;
+	}
+	.tmap__title {
+		font-family: var(--font-newsreader);
+		font-style: italic;
+		font-size: 20px;
+		color: #ecdcbd;
+	}
+	.tmap__meta {
+		font-size: 12px;
+		color: #a2857a;
+	}
+	.tmap__gl {
+		height: 420px;
+		border: 1px solid #4a2529;
+		border-radius: 10px;
+		overflow: hidden;
+		background: #2a1214;
+	}
+	@media (max-width: 720px) {
+		.tmap__gl {
+			height: 320px;
+		}
+	}
+</style>
+
+<script>
+	import * as maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
+	// See RestaurantMap.astro: the tile worker has to go through Vite's worker build.
+	import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
+	import { menuBasemap, FILM_MAP_TOKENS } from '../lib/map-style';
+	import type { TheaterSpot } from '../lib/film-theater-map';
+
+	maplibregl.setWorkerUrl(maplibreWorkerUrl);
+
+	const host = document.querySelector<HTMLElement>('[data-theater-map]');
+
+	const tag = document.querySelector('[data-theater-map-config]');
+
+	if (host && tag) {
+		// SAFETY: the tag is this component's own frontmatter `config`, serialised above.
+		const { key, spots } = JSON.parse(tag.textContent || '{}') as { key: string; spots: TheaterSpot[] };
+
+		const t = FILM_MAP_TOKENS;
+
+		const max = Math.max(...spots.map((s) => s.n));
+
+		const map = new maplibregl.Map({
+			container: host,
+			// SAFETY: menuBasemap builds a literal style spec; its `as const` types are just narrower.
+			style: key
+				? (menuBasemap(key, t) as maplibregl.StyleSpecification)
+				: { version: 8, sources: {}, layers: [{ id: 'ground', type: 'background', paint: { 'background-color': t.land } }] },
+			center: [spots[0].lng, spots[0].lat],
+			zoom: 10,
+			attributionControl: { compact: true },
+			// A map in the middle of a long page: the wheel scrolls the page, the
+			// buttons zoom the map.
+			scrollZoom: false,
+			dragRotate: false,
+			pitchWithRotate: false,
+			touchPitch: false,
+			fadeDuration: 0,
+		});
+
+		map.touchZoomRotate.disableRotation();
+		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+
+		const b = new maplibregl.LngLatBounds();
+
+		for (const s of spots) b.extend([s.lng, s.lat]);
+
+		map.resize();
+		map.fitBounds(b, { padding: 56, maxZoom: 13, animate: false });
+
+		map.on('load', () => {
+			map.addSource('theaters', {
+				type: 'geojson',
+				data: {
+					type: 'FeatureCollection',
+					features: spots.map((s) => ({
+						type: 'Feature',
+						// Floored so a one-off venue still glows next to a regular.
+						properties: { w: 0.3 + (0.7 * s.n) / max, label: `${s.name} · ${s.n}` },
+						geometry: { type: 'Point', coordinates: [s.lng, s.lat] },
+					})),
+				},
+			});
+
+			map.addLayer({
+				id: 'heat',
+				type: 'heatmap',
+				source: 'theaters',
+				paint: {
+					'heatmap-weight': ['get', 'w'],
+					'heatmap-intensity': ['interpolate', ['linear'], ['zoom'], 3, 1, 13, 2],
+					'heatmap-radius': ['interpolate', ['linear'], ['zoom'], 3, 22, 10, 30, 14, 60],
+					'heatmap-opacity': 0.9,
+					'heatmap-color': [
+						'interpolate',
+						['linear'],
+						['heatmap-density'],
+						0, 'rgba(0,0,0,0)',
+						0.15, 'rgba(122,40,40,0.55)',
+						0.4, '#a8552f',
+						0.7, '#d9b45a',
+						1, '#f4e8d1',
+					],
+				},
+			});
+
+			// Close in, each venue is named with its count.
+			map.addLayer({
+				id: 'names',
+				type: 'symbol',
+				source: 'theaters',
+				minzoom: 11,
+				layout: {
+					'text-field': ['get', 'label'],
+					'text-font': ['Noto Sans Regular'],
+					'text-size': 11,
+					'text-offset': [0, 1.4],
+					'symbol-sort-key': ['-', ['get', 'w']],
+				},
+				paint: { 'text-color': '#f4e8d1', 'text-halo-color': t.land, 'text-halo-width': 1.5 },
+			});
+		});
+	}
+</script>
