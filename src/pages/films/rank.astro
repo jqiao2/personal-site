@@ -45,11 +45,13 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 						<span class="card__title" id="b-title"></span>
 						<span class="card__meta" id="b-meta"></span>
 					</button>
-				</div>
-				<div class="controls">
-					<button type="button" class="btn-ghost" data-pick="tie">Too close <kbd>↑</kbd></button>
-					<button type="button" class="btn-ghost" data-pick="skip">Skip <kbd>S</kbd></button>
-					<button type="button" class="btn-ghost" data-pick="undo">Undo <kbd>Z</kbd></button>
+					<div class="controls">
+						<button type="button" class="btn-ghost" data-pick="tie">Too close <kbd>↑</kbd></button>
+						<button type="button" class="btn-ghost" data-pick="skip">Skip <kbd>S</kbd></button>
+						<button type="button" class="btn-ghost" data-pick="undo">Undo <kbd>Z</kbd></button>
+					</div>
+					<div class="info info--a" id="a-info"></div>
+					<div class="info info--b" id="b-info"></div>
 				</div>
 				<p class="status" id="status" role="status"></p>
 			</section>
@@ -104,12 +106,66 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 		.pair {
 			display: grid;
 			grid-template-columns: 1fr auto 1fr;
-			align-items: center;
-			gap: 20px;
-			max-width: 500px;
+			gap: 14px 20px;
+			max-width: 600px;
 			margin: 0 auto;
 		}
+		.info {
+			align-self: start;
+			font-size: 13px;
+			line-height: 1.5;
+			color: #c9b59c;
+		}
+		.info--a {
+			grid-column: 1;
+		}
+		.info--b {
+			grid-column: 3;
+		}
+		.info :global(.rated) {
+			margin: 0 0 6px;
+			font-size: 15px;
+			color: #d9b45a;
+		}
+		.info :global(.rated .liked) {
+			color: #e0806a;
+			margin-left: 6px;
+		}
+		.info :global(.rated .none) {
+			font-size: 12.5px;
+			color: #8a6f63;
+		}
+		.info :global(.links) {
+			display: flex;
+			gap: 14px;
+			margin: 0 0 10px;
+			font-size: 12.5px;
+		}
+		.info :global(.links a:hover) {
+			color: #f4e8d1;
+		}
+		.info :global(.entries) {
+			max-height: 260px;
+			overflow-y: auto;
+		}
+		.info :global(.entry) {
+			padding: 8px 0;
+			border-top: 1px solid #4a2529;
+		}
+		.info :global(.entry__head) {
+			font-size: 11.5px;
+			color: #8a6f63;
+		}
+		.info :global(.entry p) {
+			margin: 4px 0 0;
+			white-space: pre-line;
+		}
+		.info :global(.entry .note) {
+			font-style: italic;
+			color: #a2857a;
+		}
 		.or {
+			align-self: center;
 			font-family: var(--font-newsreader);
 			font-style: italic;
 			font-size: 20px;
@@ -161,9 +217,9 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 
 		.controls {
 			display: flex;
+			grid-column: 1 / -1;
 			justify-content: center;
 			gap: 10px;
-			margin-top: 24px;
 			flex-wrap: wrap;
 		}
 		.btn-ghost {
@@ -240,7 +296,8 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 	</style>
 
 	<script>
-		import { pickPivot, type RankFilm } from '../../lib/film-rank-pick';
+		import { pickPivot } from '../../lib/film-rank-pick';
+		import type { RankCard } from '../../lib/film-rank';
 
 		type Placing = { id: number; lo: number; hi: number; pivot: number };
 
@@ -248,7 +305,7 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 
 		// SAFETY: the payload is loadRanking()'s return value, serialised by this page's frontmatter.
 		const { films, order } = JSON.parse(document.getElementById('rank-data')!.textContent!) as {
-			films: RankFilm[];
+			films: RankCard[];
 			order: number[];
 		};
 
@@ -337,9 +394,87 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 			advance();
 		};
 
-		const meta = (f: RankFilm) => [f.year, f.directors.join(', ')].filter(Boolean).join(' · ');
+		const meta = (f: RankCard) => [f.year, f.directors.join(', ')].filter(Boolean).join(' · ');
 
-		const show = (side: 'a' | 'b', f: RankFilm) => {
+		const el = (tag: string, cls: string, text?: string) => {
+			const n = document.createElement(tag);
+
+			n.className = cls;
+
+			if (text != null) n.textContent = text;
+
+			return n;
+		};
+
+		const link = (href: string, text: string) => {
+			const a = document.createElement('a');
+
+			a.href = href;
+			a.target = '_blank';
+			a.rel = 'noopener';
+			a.textContent = text;
+
+			return a;
+		};
+
+		// The exact article via Wikidata's TMDB id (P4947); a search until that answers,
+		// or for good when Wikidata has no match.
+		const wikiSearch = (f: RankCard) =>
+			`https://en.wikipedia.org/w/index.php?search=${encodeURIComponent(`${f.title} ${f.year ?? ''} film`)}`;
+
+		const wikiCache = new Map<number, Promise<string | null>>();
+
+		const wikiArticle = (tmdbId: number) => {
+			let hit = wikiCache.get(tmdbId);
+
+			if (!hit) {
+				const q = `SELECT ?a WHERE { ?f wdt:P4947 "${tmdbId}" . ?a schema:about ?f ; schema:isPartOf <https://en.wikipedia.org/> . } LIMIT 1`;
+
+				hit = fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(q)}`)
+					.then((r) => (r.ok ? r.json() : null))
+					.then((j) => j?.results?.bindings?.[0]?.a?.value ?? null)
+					.catch(() => null);
+				wikiCache.set(tmdbId, hit);
+			}
+
+			return hit;
+		};
+
+		const showInfo = (side: 'a' | 'b', f: RankCard) => {
+			const rated = el('p', 'rated', f.stars ?? '');
+
+			if (!f.stars) rated.append(el('span', 'none', 'Unrated'));
+
+			if (f.liked) rated.append(el('span', 'liked', '♥'));
+
+			const wiki = link(wikiSearch(f), 'Wikipedia ↗');
+
+			void wikiArticle(f.tmdbId).then((url) => {
+				if (url) wiki.href = url;
+			});
+
+			const links = el('p', 'links');
+
+			links.append(link(`/films/movie/${f.tmdbId}`, 'Film page ↗'), wiki);
+
+			const entries = el('div', 'entries');
+
+			for (const e of f.entries) {
+				const entry = el('div', 'entry');
+
+				entry.append(el('span', 'entry__head', [e.date, e.stars].filter(Boolean).join(' · ') || 'Undated'));
+
+				if (e.review) entry.append(el('p', 'review', e.review));
+
+				if (e.note) entry.append(el('p', 'note', e.note));
+				entries.append(entry);
+			}
+
+			$(`${side}-info`).replaceChildren(rated, links, entries);
+		};
+
+		const show = (side: 'a' | 'b', f: RankCard) => {
+			showInfo(side, f);
 			const img = document.querySelector<HTMLImageElement>(`#${side}-poster`)!;
 
 			if (f.poster) img.src = f.poster;
