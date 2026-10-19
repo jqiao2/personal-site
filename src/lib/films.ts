@@ -2517,7 +2517,7 @@ export interface HistBar {
 	theater?: number;
 	/** Tooltip text — e.g. "2024 · 132 films" or "Mar 3–9, 2024 · 2 films". */
 	title: string;
-	/** The release year this bar stands for — set only on the "Films by release
+	/** The release or diary year this bar stands for — set only on the "Films by
 	 * year" bars, so each can deep-link to that year's films. */
 	year?: number;
 	/** The week's first and last day (YYYY-MM-DD) — set only on the week bars, so
@@ -2557,6 +2557,9 @@ export interface FilmStats {
 	showByYear: boolean;
 	byYear: HistBar[];
 	byYearLabels: string[];
+	/** The same films bucketed by the diary year of their first watch. */
+	byDiaryYear: HistBar[];
+	byDiaryYearLabels: string[];
 
 	/** Ratings distribution, 10 buckets (index 0 = ½★ … 9 = 5★). */
 	ratings: number[];
@@ -2882,37 +2885,42 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 
 	const weekdays: HistBar[] = dayCounts.map((d, i) => ({ ...d, title: `${DAYS[i]} · ${filmsLabel(d.count, d.theater)}` }));
 
-	// Films by release year (all-time scope): one bar per year, earliest → now.
-	let byYear: HistBar[] = [];
-	let byYearLabels: string[] = [];
+	// Films by year (all-time scope): one bar per year, earliest → now — keyed
+	// either by release year or by the diary year of the first watch.
+	const yearBars = (keyOf: (r: WatchedFacts) => number | null): { bars: HistBar[]; labels: string[] } => {
+		const perYear = new Map<number, { count: number; theater: number }>();
 
-	if (isAll) {
-		const releaseYears = rows.map((r) => r.release_year).filter((y): y is number => y != null);
+		for (const r of rows) {
+			const y = keyOf(r);
 
-		if (releaseYears.length) {
-			const min = Math.min(...releaseYears);
-			const max = Math.max(...releaseYears, thisYear);
-			const perRelease = new Map<number, { count: number; theater: number }>();
+			if (y == null) continue;
+			const c = perYear.get(y) ?? { count: 0, theater: 0 };
+			c.count++;
 
-			for (const r of rows) {
-				if (r.release_year == null) continue;
-				const c = perRelease.get(r.release_year) ?? { count: 0, theater: 0 };
-				c.count++;
-
-				if (inTheater(r)) c.theater++;
-				perRelease.set(r.release_year, c);
-			}
-
-			for (let y = min; y <= max; y++) {
-				const { count, theater } = perRelease.get(y) ?? { count: 0, theater: 0 };
-				byYear.push({ count, theater, year: y, title: `${y} · ${filmsLabel(count, theater)}` });
-			}
-
-			// ~6 evenly spaced year labels across the span.
-			const span = max - min;
-			byYearLabels = Array.from({ length: 6 }, (_, i) => String(Math.round(min + (span * i) / 5)));
+			if (inTheater(r)) c.theater++;
+			perYear.set(y, c);
 		}
-	}
+
+		if (!perYear.size) return { bars: [], labels: [] };
+		const min = Math.min(...perYear.keys());
+		const max = Math.max(...perYear.keys(), thisYear);
+		const bars: HistBar[] = [];
+
+		for (let y = min; y <= max; y++) {
+			const { count, theater } = perYear.get(y) ?? { count: 0, theater: 0 };
+			bars.push({ count, theater, year: y, title: `${y} · ${filmsLabel(count, theater)}` });
+		}
+
+		// ~6 evenly spaced year labels across the span, deduped for short spans.
+		const span = max - min;
+		const labels = [...new Set(Array.from({ length: 6 }, (_, i) => String(Math.round(min + (span * i) / 5))))];
+
+		return { bars, labels };
+	};
+
+	const empty = { bars: [], labels: [] };
+	const byRelease = isAll ? yearBars((r) => r.release_year) : empty;
+	const byDiary = isAll ? yearBars((r) => (r.first_watched ? new Date(r.first_watched).getUTCFullYear() : null)) : empty;
 
 	// Ratings distribution (0.5 … 5.0 → 10 buckets).
 	const ratings = new Array(10).fill(0);
@@ -2946,8 +2954,10 @@ export async function getFilmStats(scope: number | 'all' = 'all'): Promise<FilmS
 		weekAvg,
 		weekdays,
 		showByYear: isAll,
-		byYear,
-		byYearLabels,
+		byYear: byRelease.bars,
+		byYearLabels: byRelease.labels,
+		byDiaryYear: byDiary.bars,
+		byDiaryYearLabels: byDiary.labels,
 		ratings,
 		ratingsTheater,
 		ratingAvg,
