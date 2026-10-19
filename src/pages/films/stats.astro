@@ -5,6 +5,8 @@ import { starText } from '../../lib/format';
 import SiteHeader from '../../components/SiteHeader.astro';
 import TasteSpace from '../../components/TasteSpace.astro';
 import { loadTasteSpace } from '../../lib/film-taste-load';
+import TheaterMap from '../../components/TheaterMap.astro';
+import { loadTheaterSpots } from '../../lib/film-theater-map';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -15,7 +17,7 @@ const yearParam = Astro.url.searchParams.get('year');
 
 const scope = yearParam && yearParam !== 'all' && /^\d{4}$/.test(yearParam) ? Number(yearParam) : 'all';
 
-const [stats, taste] = await Promise.all([getFilmStats(scope), loadTasteSpace(scope)]);
+const [stats, taste, theaters] = await Promise.all([getFilmStats(scope), loadTasteSpace(scope), loadTheaterSpots(scope)]);
 
 const href = (key: number | 'all') => (key === 'all' ? '/films/stats' : `/films/stats?year=${key}`);
 
@@ -278,6 +280,8 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			)}
 
 			<TasteSpace points={taste} />
+
+			<TheaterMap spots={theaters.spots} unplaced={theaters.unplaced} />
 
 			<!-- Top directors / actors -->
 			{people.map((p) => (

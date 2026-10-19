@@ -55,7 +55,23 @@ export const SUBWAY_MAP_TOKENS = {
 	pinRing: '#ecebe6',
 };
 
-const TILES = 'https://api.maptiler.com/tiles/v3/tiles.json';
+// The film section's oxblood, for the theater map on /films/stats: the gold
+// heat is the only bright thing on it.
+export const FILM_MAP_TOKENS = {
+	land: '#2a1214',
+	water: '#1c0c0d',
+	park: '#2e1618',
+	roadMajor: '#3d2023',
+	roadCasing: '#33191c',
+	roadMinor: '#351a1d',
+	building: '#311a1c',
+	boundary: '#5a3438',
+	label: '#8a6f63',
+	labelHalo: '#2a1214',
+	pinRing: '#f4e8d1',
+};
+
+const TILES ='https://api.maptiler.com/tiles/v3/tiles.json';
 
 const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
 
