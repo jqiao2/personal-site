@@ -1,5 +1,6 @@
 import { siteYear } from './day';
 import { isMatchMode, isWatchedSort, type WatchedQuery } from './films';
+import type { FilterSummary } from './watched-filters';
 
 /**
  * The "All films" filter state, read out of a query string.
@@ -137,4 +138,37 @@ function starBound(raw: string | null): number | undefined {
 	if (!Number.isFinite(n)) return undefined;
 
 	return Math.min(5, Math.max(0.5, Math.round(n * 2) / 2));
+}
+
+/** The filter sentence's input for a parsed query — the server-side twin of the
+ * grid script's live-state builder. */
+export function filterSummaryOf(query: WatchedQuery, total: number): FilterSummary {
+	return {
+		total,
+		rewatched: Boolean(query.rewatched),
+		liked: Boolean(query.liked),
+		unrated: Boolean(query.unratedOnly),
+		ratingMin: query.ratingMin ?? null,
+		ratingMax: query.ratingMax ?? null,
+		releaseYearMin: query.releaseYearMin ?? null,
+		releaseYearMax: query.releaseYearMax ?? null,
+		releaseYears: query.releaseYears ?? [],
+		diaryYearMin: query.diaryYearMin ?? null,
+		diaryYearMax: query.diaryYearMax ?? null,
+		watchedFrom: query.watchedFrom ?? null,
+		watchedTo: query.watchedTo ?? null,
+		tags: query.tags ?? [],
+		directors: query.directors ?? [],
+		actors: query.actors ?? [],
+		genres: query.genres ?? [],
+		languages: query.languages ?? [],
+		countries: query.countries ?? [],
+		friends: query.friends ?? [],
+		friendMode: query.friendMode ?? 'any',
+		mediums: query.mediums ?? [],
+		// Theater names shorten only once the facets carrying the labels land;
+		// until then the sentence reads the full stored "Name, City".
+		venues: query.venues ?? [],
+		formats: query.formats ?? [],
+	};
 }

@@ -3,9 +3,10 @@ import FilmLayout from '../../layouts/FilmLayout.astro';
 import { countWatchedFilms, listWatchedPage } from '../../lib/films';
 import { starText } from '../../lib/format';
 import { filterSentence } from '../../lib/watched-filters';
-import { watchedFilterCount, watchedQueryFromParams } from '../../lib/watched-params';
+import { filterSummaryOf, watchedFilterCount, watchedQueryFromParams } from '../../lib/watched-params';
 import { imageUrl } from '../../lib/tmdb';
 import { requireOwner } from '../../lib/auth';
+import { getFilmList } from '../../lib/film-lists';
 import SiteHeader from '../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
@@ -65,36 +66,14 @@ const onlyQuery = query.q !== '' && !hasFilters;
 // sits above the grid, so having the script add it after paint would shove the
 // posters down. The script rebuilds it from live state on every change (and once
 // at startup), from this same builder.
-const summary = hasFilters
-	? filterSentence({
-			total,
-			rewatched: Boolean(query.rewatched),
-			liked: Boolean(query.liked),
-			unrated: Boolean(query.unratedOnly),
-			ratingMin: query.ratingMin ?? null,
-			ratingMax: query.ratingMax ?? null,
-			releaseYearMin: query.releaseYearMin ?? null,
-			releaseYearMax: query.releaseYearMax ?? null,
-			releaseYears: query.releaseYears ?? [],
-			diaryYearMin: query.diaryYearMin ?? null,
-			diaryYearMax: query.diaryYearMax ?? null,
-			watchedFrom: query.watchedFrom ?? null,
-			watchedTo: query.watchedTo ?? null,
-			tags: query.tags ?? [],
-			directors: query.directors ?? [],
-			actors: query.actors ?? [],
-			genres: query.genres ?? [],
-			languages: query.languages ?? [],
-			countries: query.countries ?? [],
-			friends: query.friends ?? [],
-			friendMode: query.friendMode ?? 'any',
-			mediums: query.mediums ?? [],
-			// Theater names shorten only once the facets carrying the labels land;
-			// until then the sentence reads the full stored "Name, City".
-			venues: query.venues ?? [],
-			formats: query.formats ?? [],
-		})
-	: [];
+const summary = hasFilters ? filterSentence(filterSummaryOf(query, total)) : [];
+
+// `?list=ID` arrives from a smart list's "Edit filters": the grid opens on that
+// list's filters and the save button writes back to it instead of making a new one.
+const listParam = Number(Astro.url.searchParams.get('list'));
+
+const editingList =
+	isOwner && Number.isInteger(listParam) && listParam > 0 ? (await getFilmList(listParam, true))?.list : undefined;
 ---
 
 <FilmLayout title="Films watched — Jason's film log">
@@ -117,6 +96,16 @@ const summary = hasFilters
 						<span class="sub__n" id="shown">{num(total)}</span>
 					</div>
 				</div>
+				{isOwner && (
+					<button
+						type="button"
+						class="pill pill--btn"
+						id="save-list"
+						data-list-id={editingList?.id}
+					>
+						{editingList ? `Save to “${editingList.name}”` : 'Save as smart list'}
+					</button>
+				)}
 			</div>
 
 			<div class="filterbar">
@@ -1053,6 +1042,33 @@ const summary = hasFilters
 	<script>
 		import { mediumLabel, starText } from '../../lib/format';
 		import { dateSpanLabel, filterSentence } from '../../lib/watched-filters';
+
+		// Owner: save the grid's current filters as a smart list, or back into the one
+		// being edited. The URL already carries every filter (the script keeps it in
+		// sync), so the query string is the list.
+		const saveList = document.getElementById('save-list');
+
+		saveList?.addEventListener('click', async () => {
+			const id = saveList.dataset.listId;
+			const query = location.search.slice(1);
+			const name = id ? null : prompt('Name this list');
+
+			if (!id && !name?.trim()) return;
+
+			const res = await fetch('/api/films/lists', {
+				method: id ? 'PATCH' : 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(id ? { id: Number(id), query } : { name, query }),
+			});
+
+			if (!res.ok) {
+				saveList.textContent = 'Could not save. Try again.';
+
+				return;
+			}
+
+			location.href = `/films/lists/${id ?? (await res.json()).id}`;
+		});
 
 		interface WatchedFilm {
 			tmdb_id: number;

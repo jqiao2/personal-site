@@ -210,3 +210,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-16: Talk to Me (594) and Presence (657) were Letterboxd-backfill mislinks to same-title shorts; fix-obsession-tmdb-id.mjs generalised to scripts/fix-tmdb-id.mjs <movies.id> <tmdb_id>, which also clears credits/poster colour for their backfills.
 - 2026-10-16 — taste space research: vote-count axis is flat (median 5k votes, corr with rating −0.03); TMDB keywords include mood adjectives on ~53% of films → valence × arousal axes. See 0032.
 - 2026-10-19 — /films/stats theater heatmap (0074 theater lat/lng, geocoded via Nominatim). Local .env has no PUBLIC_MAPTILER_KEY, so shots show the heat on bare ground only; the basemap is verifiable only on a deploy.
+- 2026-10-19 — film lists (/films/lists, smart lists = saved /films/watched query strings). Migration 0076 was taken by a sibling session mid-task; renumbered to 0077 and pushed with a temporary copy of its file. See 0033.

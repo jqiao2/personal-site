@@ -17,6 +17,7 @@ import { extractCrew, getMovieDetails, imageUrl, releaseYear } from '../../../li
 import { formatWatchedDate, starText, ytsUrl } from '../../../lib/format';
 import { requireOwner } from '../../../lib/auth';
 import { jellyfinConfig } from '../../../lib/jellyfin';
+import { listIdsContaining, listManualLists } from '../../../lib/film-lists';
 import SiteHeader from '../../../components/SiteHeader.astro';
 
 // Rendered on demand — reflects the live database.
@@ -205,6 +206,11 @@ const paradisoHref = `/api/films/paradiso?${new URLSearchParams({ tmdb: String(t
 // config and let the page ask from the browser; see the script at the foot of the
 // file. Null when Jellyfin isn't configured, which renders no button at all.
 const jellyfin = isOwner ? jellyfinConfig() : null;
+
+// Hand-picked lists (owner only), each checked when this film is already on it.
+const [manualLists, onLists] = isOwner
+	? await Promise.all([listManualLists(), listIdsContaining(movie.id)])
+	: [[], []];
 ---
 
 <html lang="en">
@@ -318,6 +324,18 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 									</button>
 								</>
 							)
+						)}
+
+						{manualLists.length > 0 && (
+							<details class="lists" id="lists" data-tmdb={movie.tmdb_id}>
+								<summary class="btn-ghost">Lists</summary>
+								{manualLists.map((l) => (
+									<label class="lists__row">
+										<input type="checkbox" value={l.id} checked={onLists.includes(l.id)} />
+										<span>{l.name}</span>
+									</label>
+								))}
+							</details>
 						)}
 					</aside>
 
@@ -753,6 +771,25 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 				border-color: #5d3036;
 			}
 
+			.lists summary {
+				list-style: none;
+			}
+			.lists summary::-webkit-details-marker {
+				display: none;
+			}
+			.lists__row {
+				display: flex;
+				align-items: center;
+				gap: 9px;
+				padding: 8px 4px 0;
+				font-size: 13px;
+				color: #e9d9c4;
+				cursor: pointer;
+			}
+			.lists__row input {
+				accent-color: #d9b45a;
+			}
+
 			/* Right column */
 			.col-right {
 				padding-top: 150px;
@@ -1121,6 +1158,30 @@ const jellyfin = isOwner ? jellyfinConfig() : null;
 					}
 				});
 			}
+
+			// Lists (owner only): each checkbox adds or removes this film, and reverts if
+			// the write fails.
+			const listsBox = document.getElementById('lists');
+
+			listsBox?.addEventListener('change', async (e) => {
+				const box = e.target;
+
+				if (!(box instanceof HTMLInputElement)) return;
+				const tmdbId = Number(listsBox.dataset.tmdb);
+				const listId = Number(box.value);
+				box.disabled = true;
+
+				const res = box.checked
+					? await fetch('/api/films/lists/items', {
+							method: 'POST',
+							headers: { 'Content-Type': 'application/json' },
+							body: JSON.stringify({ listId, tmdbId }),
+						})
+					: await fetch(`/api/films/lists/items?listId=${listId}&tmdbId=${tmdbId}`, { method: 'DELETE' });
+
+				if (!res.ok) box.checked = !box.checked;
+				box.disabled = false;
+			});
 
 			// Watchlist toggle (unwatched films, owner only). Optimistic-free: the
 			// button waits for the write, so its state always matches the list.

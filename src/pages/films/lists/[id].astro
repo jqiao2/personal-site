@@ -1,0 +1,515 @@
+---
+import FilmLayout from '../../../layouts/FilmLayout.astro';
+import SiteHeader from '../../../components/SiteHeader.astro';
+import { getFilmList } from '../../../lib/film-lists';
+import { filterSentence } from '../../../lib/watched-filters';
+import { filterSummaryOf, watchedQueryFromParams } from '../../../lib/watched-params';
+import { starText } from '../../../lib/format';
+import { imageUrl } from '../../../lib/tmdb';
+import { requireOwner } from '../../../lib/auth';
+
+// Rendered on demand — reflects the live database.
+export const prerender = false;
+
+const isOwner = await requireOwner(Astro.cookies);
+
+const id = Number(Astro.params.id);
+
+const found = Number.isInteger(id) && id > 0 ? await getFilmList(id, isOwner) : null;
+
+if (!found) return new Response('List not found', { status: 404 });
+
+const { list, films, total } = found;
+
+const smart = list.query != null;
+
+// A smart list describes itself with the grid's own filter sentence.
+const summary = smart
+	? filterSentence(filterSummaryOf(watchedQueryFromParams(new URLSearchParams(list.query!)), total))
+	: [];
+
+const editFiltersHref = smart ? `/films/watched?${list.query ? `${list.query}&` : ''}list=${list.id}` : null;
+---
+
+<FilmLayout title={`${list.name} — Jason's film log`}>
+	<div class="page">
+		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
+
+			<header class="topbar">
+				<a class="back" href="/films/lists">
+					<span class="back__arrow">←</span><span>Lists</span>
+				</a>
+				<span class="topbar__tag">{smart ? 'Smart list' : 'List'}</span>
+			</header>
+
+			<div class="titleblock">
+				<h1>{list.name}</h1>
+				{list.description && <p class="desc">{list.description}</p>}
+				{summary.length > 0 ? (
+					<p class="sentence">
+						{summary.map((part) => <span class={part.em ? 'em' : undefined}>{part.t}</span>)}
+					</p>
+				) : (
+					<div class="sub"><span class="sub__n">{total}</span> {total === 1 ? 'film' : 'films'}</div>
+				)}
+			</div>
+
+			{isOwner && (
+				<div class="owner" id="owner" data-list-id={list.id}>
+					<details class="edit">
+						<summary class="btn btn--ghost">Edit</summary>
+						<form id="edit-form" class="edit__form">
+							<input name="name" value={list.name} aria-label="Name" required />
+							<textarea name="description" rows="2" placeholder="Description" aria-label="Description">{list.description ?? ''}</textarea>
+							<button type="submit" class="btn">Save</button>
+						</form>
+					</details>
+					{editFiltersHref && <a class="btn btn--ghost" href={editFiltersHref}>Edit filters</a>}
+					<button type="button" class="btn btn--ghost btn--danger" id="delete-list">Delete</button>
+					{!smart && (
+						<div class="add">
+							<input type="search" id="add-q" placeholder="Add a film…" autocomplete="off" aria-label="Add a film" />
+							<ul class="add__results" id="add-results" hidden></ul>
+						</div>
+					)}
+				</div>
+			)}
+
+			{films.length === 0 && <p class="empty">No films yet.</p>}
+
+			<ol class="grid" id="grid">
+				{films.map((f) => {
+					const poster = imageUrl(f.poster_path, 'w342');
+					return (
+						<li class="cell" data-tmdb={f.tmdb_id}>
+							<a class={poster ? 'tile' : 'tile tile--noimg'} href={`/films/movie/${f.tmdb_id}`}>
+								{poster && <img data-poster={poster} alt={`${f.title} poster`} decoding="async" />}
+								<div class="tile__overlay">
+									<div class="tile__title">{f.title}</div>
+									<div class="tile__year">{f.release_year}</div>
+									{smart && <div class="tile__stars">{starText(f.rating) ?? 'Unrated'}</div>}
+								</div>
+							</a>
+							{isOwner && !smart && (
+								<div class="cell__tools">
+									<button type="button" data-move="-1" aria-label={`Move ${f.title} earlier`}>←</button>
+									<button type="button" data-move="1" aria-label={`Move ${f.title} later`}>→</button>
+									<button type="button" data-remove aria-label={`Remove ${f.title}`}>✕</button>
+								</div>
+							)}
+						</li>
+					);
+				})}
+			</ol>
+		</div>
+	</div>
+
+	<style>
+		.page {
+			overflow-x: hidden;
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 1000px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 34px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+		.titleblock {
+			margin-bottom: 22px;
+		}
+		h1 {
+			font-family: var(--font-newsreader);
+			font-weight: 500;
+			font-size: 52px;
+			color: #f4e8d1;
+			letter-spacing: -0.5px;
+			line-height: 1;
+			margin: 0;
+		}
+		.desc {
+			font-family: var(--font-newsreader);
+			font-size: 18px;
+			font-style: italic;
+			color: #d8c6ad;
+			max-width: 620px;
+			margin: 12px 0 0;
+			line-height: 1.5;
+		}
+		.sub {
+			font-size: 13px;
+			color: #a2857a;
+			margin-top: 10px;
+		}
+		.sub__n {
+			color: #d9b45a;
+			font-weight: 600;
+		}
+		.sentence {
+			font-size: 14px;
+			color: #c2a99a;
+			max-width: 620px;
+			line-height: 1.6;
+			margin: 12px 0 0;
+		}
+		.em {
+			color: #f0d488;
+		}
+
+		.owner {
+			display: flex;
+			flex-wrap: wrap;
+			align-items: flex-start;
+			gap: 10px;
+			margin-bottom: 20px;
+		}
+		.btn {
+			display: inline-block;
+			font-size: 13px;
+			font-weight: 700;
+			font-family: var(--font-archivo);
+			border-radius: 8px;
+			padding: 9px 15px;
+			cursor: pointer;
+			color: #2a1214;
+			background: #d9b45a;
+			border: 1px solid #d9b45a;
+			list-style: none;
+		}
+		.btn:hover {
+			background: #f0d488;
+		}
+		.btn--ghost {
+			color: #f0d488;
+			background: transparent;
+			border-color: #6b4a42;
+		}
+		.btn--ghost:hover {
+			background: #241012;
+			border-color: #d9b45a;
+		}
+		.btn--danger:hover {
+			border-color: #c0564a;
+			color: #f4b4a8;
+		}
+		.edit summary::-webkit-details-marker {
+			display: none;
+		}
+		.edit[open] {
+			flex-basis: 100%;
+		}
+		.edit__form {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			max-width: 460px;
+			margin-top: 10px;
+		}
+		.edit__form .btn {
+			align-self: flex-start;
+		}
+		input,
+		textarea {
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+			padding: 9px 13px;
+			color: #f4e8d1;
+			font-size: 14px;
+			font-family: var(--font-archivo);
+			outline: none;
+		}
+		input:focus,
+		textarea:focus {
+			border-color: #d9b45a;
+		}
+		.add {
+			position: relative;
+			flex: 1;
+			min-width: 220px;
+		}
+		.add input {
+			width: 100%;
+		}
+		.add__results {
+			position: absolute;
+			z-index: 5;
+			top: calc(100% + 4px);
+			left: 0;
+			right: 0;
+			list-style: none;
+			margin: 0;
+			padding: 4px;
+			background: #241012;
+			border: 1px solid #4a2529;
+			border-radius: 8px;
+		}
+		.add__results[hidden] {
+			display: none;
+		}
+		.add__results button {
+			width: 100%;
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			padding: 6px 8px;
+			background: transparent;
+			border: none;
+			border-radius: 6px;
+			color: #e9d9c4;
+			font-size: 13px;
+			font-family: var(--font-archivo);
+			text-align: left;
+			cursor: pointer;
+		}
+		.add__results button:hover {
+			background: #2c1518;
+		}
+		.add__results img {
+			width: 28px;
+			height: 42px;
+			object-fit: cover;
+			border-radius: 3px;
+			background: #2c1518;
+		}
+
+		.empty {
+			color: #8a6f63;
+			font-family: var(--font-newsreader);
+			font-style: italic;
+			font-size: 17px;
+		}
+		.grid {
+			list-style: none;
+			margin: 0;
+			padding: 0;
+			display: grid;
+			grid-template-columns: repeat(6, 1fr);
+			gap: 18px;
+		}
+		.cell {
+			display: flex;
+			flex-direction: column;
+			gap: 6px;
+		}
+		.tile {
+			position: relative;
+			aspect-ratio: 2 / 3;
+			border-radius: 5px;
+			overflow: hidden;
+			background-image: repeating-linear-gradient(135deg, #351a1d 0 9px, #2c1518 9px 18px);
+			border: 1px solid #4a2529;
+		}
+		.tile:hover {
+			border-color: #d9b45a;
+		}
+		.tile img {
+			position: absolute;
+			inset: 0;
+			width: 100%;
+			height: 100%;
+			object-fit: cover;
+		}
+		.tile__overlay {
+			position: absolute;
+			inset: 0;
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-end;
+			padding: 12px;
+			background: rgba(18, 8, 9, 0.82);
+			opacity: 0;
+		}
+		.tile:hover .tile__overlay {
+			opacity: 1;
+		}
+		.tile--noimg .tile__overlay {
+			opacity: 1;
+			background: transparent;
+		}
+		.tile__title {
+			font-family: var(--font-newsreader);
+			font-size: 16px;
+			font-weight: 500;
+			color: #f4e8d1;
+			line-height: 1.15;
+		}
+		.tile__year {
+			font-size: 11px;
+			letter-spacing: 1.4px;
+			text-transform: uppercase;
+			color: #d9b45a;
+			margin-top: 5px;
+		}
+		.tile__stars {
+			font-size: 12px;
+			color: #d9b45a;
+			margin-top: 4px;
+		}
+		.cell__tools {
+			display: flex;
+			gap: 4px;
+		}
+		.cell__tools button {
+			flex: 1;
+			height: 26px;
+			font-size: 12px;
+			background: transparent;
+			border: 1px solid #4a2529;
+			border-radius: 6px;
+			color: #a2857a;
+			cursor: pointer;
+		}
+		.cell__tools button:hover {
+			border-color: #d9b45a;
+			color: #f4e8d1;
+		}
+		@media (max-width: 860px) {
+			.grid {
+				grid-template-columns: repeat(4, 1fr);
+			}
+		}
+		@media (max-width: 560px) {
+			h1 {
+				font-size: 40px;
+			}
+			.grid {
+				grid-template-columns: repeat(3, 1fr);
+				gap: 12px;
+			}
+		}
+	</style>
+
+	<script>
+		const owner = document.getElementById('owner');
+
+		if (owner) {
+			const listId = Number(owner.dataset.listId);
+
+			const sendJson = (url: string, method: string, body: string) =>
+				fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body });
+
+			const form = document.getElementById('edit-form');
+
+			if (form instanceof HTMLFormElement) {
+				form.addEventListener('submit', async (e) => {
+					e.preventDefault();
+					const data = new FormData(form);
+					const body = JSON.stringify({ id: listId, name: data.get('name'), description: data.get('description') });
+
+					if ((await sendJson('/api/films/lists', 'PATCH', body)).ok) location.reload();
+				});
+			}
+
+			document.getElementById('delete-list')?.addEventListener('click', async () => {
+				if (!confirm('Delete this list?')) return;
+				const res = await fetch(`/api/films/lists?id=${listId}`, { method: 'DELETE' });
+
+				if (res.ok) location.href = '/films/lists';
+			});
+
+			// --- Hand-picked lists: remove and reorder in place, then save ---
+			const grid = document.getElementById('grid');
+
+			grid?.addEventListener('click', async (e) => {
+				const btn = e.target instanceof Element ? e.target.closest<HTMLButtonElement>('.cell__tools button') : null;
+				const cell = btn?.closest<HTMLElement>('.cell');
+
+				if (!btn || !cell) return;
+
+				if (btn.hasAttribute('data-remove')) {
+					const url = `/api/films/lists/items?listId=${listId}&tmdbId=${cell.dataset.tmdb}`;
+
+					if ((await fetch(url, { method: 'DELETE' })).ok) cell.remove();
+
+					return;
+				}
+
+				if (btn.dataset.move === '-1') cell.previousElementSibling?.before(cell);
+				else cell.nextElementSibling?.after(cell);
+				btn.focus();
+
+				const tmdbIds = [...grid.querySelectorAll<HTMLElement>('.cell')].map((c) => Number(c.dataset.tmdb));
+
+				await sendJson('/api/films/lists/items', 'PUT', JSON.stringify({ listId, tmdbIds }));
+			});
+
+			// --- Add a film: debounced TMDB search, click a result to add it ---
+			const q = document.getElementById('add-q');
+			const results = document.getElementById('add-results');
+			let timer: number | undefined;
+
+			interface SearchHit {
+				id: number;
+				title: string;
+				release_date?: string;
+				poster_path?: string | null;
+			}
+
+			function resultRow(m: SearchHit): HTMLLIElement {
+				const li = document.createElement('li');
+				const b = document.createElement('button');
+				const img = document.createElement('img');
+				b.type = 'button';
+				img.alt = '';
+
+				if (m.poster_path) img.src = `https://image.tmdb.org/t/p/w92${m.poster_path}`;
+				b.append(img, `${m.title}${m.release_date ? ` (${m.release_date.slice(0, 4)})` : ''}`);
+				b.addEventListener('click', async () => {
+					const body = JSON.stringify({ listId, tmdbId: m.id });
+
+					if ((await sendJson('/api/films/lists/items', 'POST', body)).ok) location.reload();
+				});
+				li.append(b);
+
+				return li;
+			}
+
+			if (q instanceof HTMLInputElement && results) {
+				q.addEventListener('input', () => {
+					window.clearTimeout(timer);
+					const query = q.value.trim();
+					results.hidden = true;
+
+					if (!query) return;
+
+					timer = window.setTimeout(async () => {
+						const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(query)}`);
+						const { results: hits = [] }: { results?: SearchHit[] } = res.ok ? await res.json() : {};
+
+						results.replaceChildren(...hits.slice(0, 8).map(resultRow));
+						results.hidden = hits.length === 0;
+					}, 300);
+				});
+			}
+		}
+	</script>
+</FilmLayout>
