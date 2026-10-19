@@ -42,7 +42,11 @@ const weekMax = Math.max(1, ...stats.weeks.map((w) => w.count));
 
 const weekdayMax = Math.max(1, ...stats.weekdays.map((d) => d.count));
 
-const byYearMax = Math.max(1, ...stats.byYear.map((d) => d.count));
+// Films by year: the same films keyed by release year or by diary (first-watch) year.
+const yearCharts = [
+	{ mode: 'release', bars: stats.byYear, labels: stats.byYearLabels, href: (y: number) => watchedHref({ ryear: y }) },
+	{ mode: 'diary', bars: stats.byDiaryYear, labels: stats.byDiaryYearLabels, href: (y: number) => watchedHref({ dymin: y, dymax: y }) },
+].map((c) => ({ ...c, max: Math.max(1, ...c.bars.map((d) => d.count)) }));
 
 const ratingMax = Math.max(1, ...stats.ratings);
 
@@ -179,27 +183,37 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 				</section>
 			)}
 
-			<!-- Films by release year (all-time scope) -->
+			<!-- Films by release year / diary year (all-time scope) -->
 			{stats.showByYear && stats.byYear.length > 0 && (
-				<section class="block">
-					<div class="block__title block__title--solo">Films by release year</div>
-					<div class="bars">
-						{stats.byYear.map((d) => {
-							const bar = (
-								<div class="bar bar--thin bar--split" style={`height:${Math.round((d.count / byYearMax) * 100)}%`}>
-									{d.theater ? <div class="bar__theater" style={`height:${(d.theater / d.count) * 100}%`}></div> : null}
-								</div>
-							);
-							return d.count > 0 && d.year != null ? (
-								<a class="bars__slot bars__slot--link" href={watchedHref({ ryear: d.year })} title={d.title}>{bar}</a>
-							) : (
-								<div class="bars__slot" title={d.title}>{bar}</div>
-							);
-						})}
+				<section class="block byyear">
+					<div class="block__head">
+						<div class="block__title">Films by year</div>
+						<div class="byyear__modes">
+							<label><input type="radio" name="byyear" value="release" checked />Release</label>
+							<label><input type="radio" name="byyear" value="diary" />Diary</label>
+						</div>
 					</div>
-					<div class="axis">
-						{stats.byYearLabels.map((l) => <span>{l}</span>)}
-					</div>
+					{yearCharts.map((c) => (
+						<div class={`byyear__chart byyear__chart--${c.mode}`}>
+							<div class="bars">
+								{c.bars.map((d) => {
+									const bar = (
+										<div class="bar bar--thin bar--split" style={`height:${Math.round((d.count / c.max) * 100)}%`}>
+											{d.theater ? <div class="bar__theater" style={`height:${(d.theater / d.count) * 100}%`}></div> : null}
+										</div>
+									);
+									return d.count > 0 && d.year != null ? (
+										<a class="bars__slot bars__slot--link" href={c.href(d.year)} title={d.title}>{bar}</a>
+									) : (
+										<div class="bars__slot" title={d.title}>{bar}</div>
+									);
+								})}
+							</div>
+							<div class="axis">
+								{c.labels.map((l) => <span>{l}</span>)}
+							</div>
+						</div>
+					))}
 				</section>
 			)}
 
@@ -606,6 +620,40 @@ const people: { title: string; items: typeof stats.directors; param: string }[] 
 			margin-top: 8px;
 			font-size: 9.5px;
 			color: #8a6f63;
+		}
+
+		/* Films by year: release ↔ diary */
+		.byyear__modes {
+			display: flex;
+			border: 1px solid #4a2529;
+			border-radius: 7px;
+			overflow: hidden;
+			font-size: 12px;
+		}
+		.byyear__modes label {
+			padding: 4px 11px;
+			color: #a2857a;
+			cursor: pointer;
+		}
+		.byyear__modes label:hover {
+			color: #f4e8d1;
+		}
+		.byyear__modes label:has(:checked) {
+			background: #d9b45a;
+			color: #20100f;
+		}
+		.byyear__modes label:has(:focus-visible) {
+			outline: 2px solid #d9b45a;
+			outline-offset: -2px;
+		}
+		.byyear__modes input {
+			position: absolute;
+			opacity: 0;
+			pointer-events: none;
+		}
+		.byyear:has([value='release']:checked) .byyear__chart--diary,
+		.byyear:has([value='diary']:checked) .byyear__chart--release {
+			display: none;
 		}
 
 		/* Ratings (narrower, centred) */
