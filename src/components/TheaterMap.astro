@@ -97,9 +97,6 @@ const config = { key: import.meta.env.PUBLIC_MAPTILER_KEY ?? '', spots };
 			center: [spots[0].lng, spots[0].lat],
 			zoom: 10,
 			attributionControl: { compact: true },
-			// A map in the middle of a long page: the wheel scrolls the page, the
-			// buttons zoom the map.
-			scrollZoom: false,
 			dragRotate: false,
 			pitchWithRotate: false,
 			touchPitch: false,
