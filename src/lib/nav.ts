@@ -81,6 +81,7 @@ const SECTION_NAV: Partial<Record<HeaderTheme, readonly SectionLink[]>> = {
 		{ href: '/films/watchlist', label: 'Watchlist' },
 		{ href: '/films/stats', label: 'Stats' },
 		{ href: '/films/month', label: 'The month in film', ownerOnly: true },
+		{ href: '/films/rank', label: 'Rank', ownerOnly: true },
 	],
 	book: [
 		{ href: '/books/to-read', label: 'To read' },

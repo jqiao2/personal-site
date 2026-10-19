@@ -1,0 +1,439 @@
+---
+// Owner-only: rank every watched film into one list, Beli-style. Each unranked
+// film is binary-searched into the ranked list one A-or-B question at a time
+// (A is already ranked, B is being placed); pivots favour similar films first,
+// see film-rank-pick.ts. The order is saved after every placement, so the work
+// can be spread over days. A film half-way through being placed starts over on
+// reload.
+import FilmLayout from '../../layouts/FilmLayout.astro';
+import SiteHeader from '../../components/SiteHeader.astro';
+import { requireOwner } from '../../lib/auth';
+import { loadRanking } from '../../lib/film-rank';
+
+export const prerender = false;
+
+if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login');
+
+// `<` escaped so a title can never close the script tag it is embedded in.
+const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
+---
+
+<FilmLayout title="Rank — Jason's film log">
+	<div class="page">
+		<div class="wrap">
+			<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
+
+			<header class="topbar">
+				<a class="back" href="/films">
+					<span class="back__arrow">←</span><span>Films</span>
+				</a>
+				<span class="topbar__tag" id="progress"></span>
+			</header>
+
+			<section id="duel" hidden>
+				<div class="pair">
+					<button type="button" class="card" data-pick="a">
+						<span class="card__rank" id="a-rank"></span>
+						<img class="card__poster" id="a-poster" alt="" />
+						<span class="card__title" id="a-title"></span>
+						<span class="card__meta" id="a-meta"></span>
+					</button>
+					<span class="or">or</span>
+					<button type="button" class="card" data-pick="b">
+						<span class="card__rank card__rank--new" id="b-range"></span>
+						<img class="card__poster" id="b-poster" alt="" />
+						<span class="card__title" id="b-title"></span>
+						<span class="card__meta" id="b-meta"></span>
+					</button>
+				</div>
+				<div class="controls">
+					<button type="button" class="btn-ghost" data-pick="tie">Too close <kbd>↑</kbd></button>
+					<button type="button" class="btn-ghost" data-pick="skip">Skip <kbd>S</kbd></button>
+					<button type="button" class="btn-ghost" data-pick="undo">Undo <kbd>Z</kbd></button>
+				</div>
+				<p class="status" id="status" role="status"></p>
+			</section>
+
+			<p class="done" id="done" hidden>Every film is ranked.</p>
+
+			<ol class="list" id="list"></ol>
+		</div>
+	</div>
+
+	<script is:inline type="application/json" id="rank-data" set:html={data} />
+
+	<style>
+		.page {
+			overflow-x: hidden;
+			display: flex;
+			justify-content: center;
+			padding: 0 24px 80px;
+		}
+		.wrap {
+			width: 100%;
+			max-width: 1000px;
+		}
+		.topbar {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 26px 0 22px;
+			border-bottom: 1px solid #4a2529;
+			margin-bottom: 34px;
+		}
+		.back {
+			display: flex;
+			align-items: center;
+			gap: 9px;
+			font-size: 13px;
+			color: #a2857a;
+		}
+		.back:hover {
+			color: #f4e8d1;
+		}
+		.back__arrow {
+			font-size: 15px;
+		}
+		.topbar__tag {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #8a6f63;
+		}
+
+		.pair {
+			display: grid;
+			grid-template-columns: 1fr auto 1fr;
+			align-items: center;
+			gap: 20px;
+			max-width: 500px;
+			margin: 0 auto;
+		}
+		.or {
+			font-family: var(--font-newsreader);
+			font-style: italic;
+			font-size: 20px;
+			color: #8a6f63;
+		}
+		.card {
+			display: flex;
+			flex-direction: column;
+			gap: 8px;
+			padding: 14px;
+			border: 1px solid #4a2529;
+			border-radius: 10px;
+			background: transparent;
+			color: inherit;
+			font: inherit;
+			text-align: left;
+			cursor: pointer;
+		}
+		.card:hover,
+		.card:focus-visible {
+			border-color: #d9b45a;
+		}
+		.card__rank {
+			font-size: 11.5px;
+			text-transform: uppercase;
+			letter-spacing: 2px;
+			color: #a2857a;
+		}
+		.card__rank--new {
+			color: #d9b45a;
+		}
+		.card__poster {
+			width: 100%;
+			aspect-ratio: 2 / 3;
+			object-fit: cover;
+			border-radius: 4px;
+			background: #2a1517;
+		}
+		.card__title {
+			font-family: var(--font-newsreader);
+			font-size: 21px;
+			line-height: 1.15;
+			color: #f4e8d1;
+		}
+		.card__meta {
+			font-size: 12.5px;
+			color: #a2857a;
+		}
+
+		.controls {
+			display: flex;
+			justify-content: center;
+			gap: 10px;
+			margin-top: 24px;
+			flex-wrap: wrap;
+		}
+		.btn-ghost {
+			font-size: 12.5px;
+			padding: 10px 16px;
+			border-radius: 8px;
+			cursor: pointer;
+			font-family: var(--font-archivo);
+			border: 1px solid #6b4a42;
+			background: transparent;
+			color: #f0d488;
+			white-space: nowrap;
+		}
+		.btn-ghost:hover {
+			border-color: #d9b45a;
+		}
+		.btn-ghost:disabled {
+			opacity: 0.4;
+			cursor: default;
+		}
+		kbd {
+			font-family: inherit;
+			font-size: 11px;
+			color: #8a6f63;
+			margin-left: 4px;
+		}
+		.status {
+			min-height: 1.2em;
+			text-align: center;
+			font-size: 12.5px;
+			color: #e0806a;
+		}
+		.done {
+			text-align: center;
+			font-family: var(--font-newsreader);
+			font-size: 24px;
+		}
+
+		.list {
+			margin: 48px 0 0;
+			padding: 24px 0 0 3em;
+			border-top: 1px solid #4a2529;
+			columns: 3 260px;
+			column-gap: 32px;
+			font-size: 13.5px;
+			line-height: 1.7;
+			color: #f4e8d1;
+		}
+		.list :global(li) {
+			break-inside: avoid;
+		}
+		.list :global(li::marker) {
+			color: #8a6f63;
+			font-variant-numeric: tabular-nums;
+		}
+		.list :global(.yr) {
+			color: #8a6f63;
+		}
+		.list :global(.just) {
+			color: #d9b45a;
+		}
+
+		@media (max-width: 560px) {
+			.pair {
+				gap: 10px;
+			}
+			.card {
+				padding: 8px;
+			}
+			.card__title {
+				font-size: 17px;
+			}
+		}
+	</style>
+
+	<script>
+		import { pickPivot, type RankFilm } from '../../lib/film-rank-pick';
+
+		type Placing = { id: number; lo: number; hi: number; pivot: number };
+
+		type State = { order: number[]; queue: number[]; cur: Placing | null; just: number | null };
+
+		// SAFETY: the payload is loadRanking()'s return value, serialised by this page's frontmatter.
+		const { films, order } = JSON.parse(document.getElementById('rank-data')!.textContent!) as {
+			films: RankFilm[];
+			order: number[];
+		};
+
+		const byId = new Map(films.map((f) => [f.id, f]));
+
+		const $ = (id: string) => document.getElementById(id)!;
+
+		const shuffle = <T,>(xs: T[]) => {
+			for (let i = xs.length - 1; i > 0; i--) {
+				const j = Math.floor(Math.random() * (i + 1));
+				[xs[i], xs[j]] = [xs[j], xs[i]];
+			}
+
+			return xs;
+		};
+
+		const ranked = new Set(order);
+
+		// `order` arrays are never mutated, only replaced, so a snapshot can share them.
+		let s: State = {
+			order,
+			queue: shuffle(films.filter((f) => !ranked.has(f.id)).map((f) => f.id)),
+			cur: null,
+			just: null,
+		};
+
+		const history: State[] = [];
+
+		const remember = () => {
+			history.push({ ...s, queue: s.queue.slice(), cur: s.cur && { ...s.cur } });
+
+			if (history.length > 300) history.shift();
+		};
+
+		// The whole order goes up each time, so a failed save is healed by the next one.
+		let saved = order;
+
+		const save = async () => {
+			const sending = s.order;
+
+			if (sending === saved) return;
+
+			try {
+				const res = await fetch('/api/films/ranking', {
+					method: 'PUT',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ order: sending }),
+					keepalive: true,
+				});
+
+				if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? res.statusText);
+
+				saved = sending;
+				$('status').textContent = '';
+			} catch (e) {
+				$('status').textContent = `Not saved: ${e instanceof Error ? e.message : e}`;
+			}
+		};
+
+		const rankedFilms = () => s.order.map((id) => byId.get(id)!);
+
+		/** Start placing the next queued film, dropping it straight in when nothing is ranked yet. */
+		const advance = () => {
+			const id = s.queue.shift();
+
+			if (id == null) return;
+
+			if (s.order.length === 0) {
+				s.order = [id];
+				s.just = id;
+
+				return advance();
+			}
+
+			const hi = s.order.length;
+
+			s.cur = { id, lo: 0, hi, pivot: pickPivot(rankedFilms(), 0, hi, byId.get(id)!) };
+		};
+
+		const place = (at: number) => {
+			const { id } = s.cur!;
+
+			s.order = [...s.order.slice(0, at), id, ...s.order.slice(at)];
+			s.just = id;
+			s.cur = null;
+			advance();
+		};
+
+		const meta = (f: RankFilm) => [f.year, f.directors.join(', ')].filter(Boolean).join(' · ');
+
+		const show = (side: 'a' | 'b', f: RankFilm) => {
+			const img = document.querySelector<HTMLImageElement>(`#${side}-poster`)!;
+
+			if (f.poster) img.src = f.poster;
+			else img.removeAttribute('src');
+			$(`${side}-title`).textContent = f.title;
+			$(`${side}-meta`).textContent = meta(f);
+		};
+
+		const render = () => {
+			$('progress').textContent = `${s.order.length.toLocaleString()} of ${films.length.toLocaleString()} ranked`;
+
+			$('duel').hidden = s.cur == null;
+			$('done').hidden = s.cur != null;
+			document.querySelector<HTMLButtonElement>('[data-pick="undo"]')!.disabled = history.length === 0;
+
+			if (s.cur) {
+				const { id, lo, hi, pivot } = s.cur;
+
+				show('a', byId.get(s.order[pivot])!);
+				show('b', byId.get(id)!);
+				$('a-rank').textContent = `#${pivot + 1}`;
+				$('b-range').textContent = `#${lo + 1}–${hi + 1}`;
+			}
+
+			const list = $('list');
+
+			list.replaceChildren(
+				...s.order.map((id) => {
+					const f = byId.get(id)!;
+					const li = document.createElement('li');
+
+					li.textContent = `${f.title} `;
+
+					if (f.year) li.insertAdjacentHTML('beforeend', `<span class="yr">${f.year}</span>`);
+
+					if (id === s.just) li.className = 'just';
+
+					return li;
+				}),
+			);
+		};
+
+		const pick = (what: string) => {
+			if (what === 'undo') {
+				const prev = history.pop();
+
+				if (prev) s = prev;
+			} else if (s.cur) {
+				remember();
+
+				const c = s.cur;
+
+				if (what === 'skip') {
+					s.queue.push(c.id);
+					s.cur = null;
+					advance();
+				} else if (what === 'tie') {
+					place(c.pivot + 1);
+				} else {
+					// A wins: B goes below the pivot. B wins: above it.
+					if (what === 'a') c.lo = c.pivot + 1;
+					else c.hi = c.pivot;
+
+					if (c.lo >= c.hi) place(c.lo);
+					else c.pivot = pickPivot(rankedFilms(), c.lo, c.hi, byId.get(c.id)!);
+				}
+			}
+
+			render();
+			void save();
+		};
+
+		for (const b of document.querySelectorAll<HTMLButtonElement>('[data-pick]')) {
+			b.addEventListener('click', () => pick(b.dataset.pick!));
+		}
+
+		const KEYS = new Map([
+			['ArrowLeft', 'a'],
+			['ArrowRight', 'b'],
+			['ArrowUp', 'tie'],
+			['s', 'skip'],
+			['z', 'undo'],
+		]);
+
+		document.addEventListener('keydown', (e) => {
+			const what = KEYS.get(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+
+			if (!what || e.metaKey || e.ctrlKey || e.altKey) return;
+			e.preventDefault();
+			pick(what);
+		});
+
+		advance();
+
+		render();
+	</script>
+</FilmLayout>
