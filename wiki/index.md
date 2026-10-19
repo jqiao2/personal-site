@@ -38,3 +38,4 @@ add or update a pattern.
 | [0030](patterns/0030-numeric-arrays-delta-encode-not-float.md) | Shrinking numeric arrays: delta-encode, don't switch to floats | strategy | a JSONB/array table of numeric series is eating the DB size cap |
 | [0031](patterns/0031-schematic-to-geographic-subway.md) | Putting the schematic subway on real track | strategy | geocoding id-less schematic data, slicing GTFS shapes, or parallel lines via MapLibre `line-offset` |
 | [0032](patterns/0032-tmdb-keywords-carry-a-mood-vocabulary.md) | TMDB keywords carry a mood vocabulary; vote count carries no taste | strategy | placing films on felt axes (tone/energy/mood) or refining the taste space |
+| [0033](patterns/0033-parallel-sessions-race-for-a-migration-number.md) | Parallel sessions race for the next migration number | failure-mode | writing a migration while other sessions are open, or `db push` names one unknown recent remote version |
