@@ -1,15 +1,18 @@
-// One-time backfill: the dominant poster colour the closet prints each spine in
+// Backfill: the poster background colour the closet prints each spine in
 // (migration 0072). syncMovieFromTmdb fills it for films cached from now on;
 // this does the ones already cached.
 //
 // Idempotent: only rows with a poster and no colour are read, so a re-run picks
-// up just what failed or arrived since.
+// up just what failed or arrived since. --all recomputes every row, for when
+// posterColor itself changes.
 //
-//   node --env-file=.env scripts/backfill-poster-colors.mjs [--dry-run]
+//   node --env-file=.env scripts/backfill-poster-colors.mjs [--dry-run] [--all]
 import { createClient } from '@supabase/supabase-js';
 import { posterColor } from '../src/lib/poster-color.ts';
 
 const DRY_RUN = process.argv.includes('--dry-run');
+
+const ALL = process.argv.includes('--all');
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
 	auth: { persistSession: false, autoRefreshToken: false },
@@ -18,13 +21,10 @@ const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_R
 const rows = [];
 
 for (let from = 0; ; from += 1000) {
-	const { data, error } = await sb
-		.from('movies')
-		.select('id, title, poster_path')
-		.not('poster_path', 'is', null)
-		.is('poster_color', null)
-		.order('id')
-		.range(from, from + 999);
+	let q = sb.from('movies').select('id, title, poster_path').not('poster_path', 'is', null);
+
+	if (!ALL) q = q.is('poster_color', null);
+	const { data, error } = await q.order('id').range(from, from + 999);
 
 	if (error) throw error;
 
