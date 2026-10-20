@@ -64,3 +64,36 @@ export function pickPivot(ranked: RankFilm[], lo: number, hi: number, film: Rank
 
 	return best;
 }
+
+/** A film part-way through being placed: it belongs somewhere in [lo, hi) of the ranked list. */
+export interface Placing {
+	id: number;
+	lo: number;
+	hi: number;
+}
+
+// Several films are placed at once, so the list shifts under each open range.
+// A film inserted inside a range is one that range's film hasn't been compared
+// with yet, so the range widens to keep it in play.
+
+/** `order` with `id` inserted at `at`; every open range is shifted to match. */
+export function insertAt(order: number[], at: number, id: number, open: Placing[]): number[] {
+	for (const p of open) {
+		if (at < p.lo) p.lo++;
+
+		if (at <= p.hi) p.hi++;
+	}
+
+	return [...order.slice(0, at), id, ...order.slice(at)];
+}
+
+/** `order` without the film at `at`; every open range is shifted to match. */
+export function removeAt(order: number[], at: number, open: Placing[]): number[] {
+	for (const p of open) {
+		if (at < p.lo) p.lo--;
+
+		if (at < p.hi) p.hi--;
+	}
+
+	return [...order.slice(0, at), ...order.slice(at + 1)];
+}

@@ -2,7 +2,7 @@
 //
 // Run: node --import ./scripts/ts-hook.mjs scripts/film-rank.test.mjs
 import assert from 'node:assert/strict';
-import { pickPivot, similarity } from '../src/lib/film-rank-pick.ts';
+import { insertAt, pickPivot, removeAt, similarity } from '../src/lib/film-rank-pick.ts';
 
 const film = (id, o = {}) => ({ id, title: `F${id}`, year: 1950, poster: null, directors: [`d${id}`], actors: [], genres: [], ...o });
 
@@ -50,5 +50,65 @@ for (let i = 0; i < 200; i++) {
 }
 
 for (let i = 1; i < order.length; i++) assert.ok(score.get(order[i - 1].id) >= score.get(order[i].id), 'ranked best first');
+
+// The page's way: three films in flight at once, a random one asked each turn,
+// with ranked films pulled out and dropped elsewhere along the way.
+let open = [];
+
+let queue = Array.from({ length: 200 }, (_, i) => film(5000 + i));
+
+order = [];
+
+for (const f of queue) score.set(f.id, Math.random());
+
+const byId = new Map(queue.map((f) => [f.id, f]));
+
+for (let turn = 0; queue.length || open.length; turn++) {
+	while (open.length < 3 && queue.length) {
+		const f = queue.shift();
+
+		if (order.length) open.push({ id: f.id, lo: 0, hi: order.length });
+		else order = [f];
+	}
+
+	// Now and then, move a ranked film to a random spot (the list editor). It's
+	// put back where it belongs, so the list stays sorted while the ranges shift.
+	if (turn % 7 === 0 && order.length > 2) {
+		const from = Math.floor(Math.random() * order.length);
+		const f = order[from];
+		const ids = removeAt(order.map((x) => x.id), from, open);
+
+		order = ids.map((id) => byId.get(id));
+
+		const at = order.findIndex((x) => score.get(x.id) < score.get(f.id));
+
+		order = insertAt(ids, at < 0 ? order.length : at, f.id, open).map((id) => byId.get(id));
+	}
+
+	// A move can empty a range; that film's place is then already known.
+	for (const e of open.filter((x) => x.lo >= x.hi)) {
+		open = open.filter((x) => x !== e);
+		order = insertAt(order.map((x) => x.id), e.lo, e.id, open).map((id) => byId.get(id));
+	}
+
+	if (!open.length) continue;
+
+	const p = open[Math.floor(Math.random() * open.length)];
+	const pivot = pickPivot(order, p.lo, p.hi, byId.get(p.id));
+
+	assert.ok(pivot >= p.lo && pivot < p.hi, 'interleaved pivot inside the open range');
+
+	if (score.get(p.id) > score.get(order[pivot].id)) p.hi = pivot;
+	else p.lo = pivot + 1;
+
+	if (p.lo >= p.hi) {
+		open = open.filter((x) => x !== p);
+		order = insertAt(order.map((x) => x.id), p.lo, p.id, open).map((id) => byId.get(id));
+	}
+}
+
+assert.equal(order.length, 200);
+
+for (let i = 1; i < order.length; i++) assert.ok(score.get(order[i - 1].id) >= score.get(order[i].id), 'interleaved: ranked best first');
 
 console.log('film-rank ok');
