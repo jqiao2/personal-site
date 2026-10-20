@@ -2,9 +2,11 @@
 // Owner-only: rank every watched film into one list, Beli-style. Each unranked
 // film is binary-searched into the ranked list one A-or-B question at a time
 // (A is already ranked, B is being placed); pivots favour similar films first,
-// see film-rank-pick.ts. The order is saved after every placement, so the work
-// can be spread over days. A film half-way through being placed starts over on
-// reload.
+// see film-rank-pick.ts. Three films are placed at once and each question goes
+// to a random one of them, so the same film doesn't come up turn after turn.
+// The list underneath can be edited: drag a film to move it, or ↻ to rank it
+// again. The order is saved after every change, so the work can be spread over
+// days. Films half-way through being placed start over on reload.
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { requireOwner } from '../../lib/auth';
@@ -281,6 +283,29 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 		.list :global(.just) {
 			color: #d9b45a;
 		}
+		.list :global(li[draggable]) {
+			cursor: grab;
+		}
+		.list :global(li.over) {
+			box-shadow: 0 -2px 0 #d9b45a;
+		}
+		.list :global(.rerank) {
+			margin-left: 4px;
+			padding: 0 4px;
+			border: 0;
+			background: transparent;
+			color: #8a6f63;
+			font: inherit;
+			cursor: pointer;
+		}
+		.list :global(.rerank:hover) {
+			color: #f0d488;
+		}
+		@media (hover: hover) {
+			.list :global(li:not(:hover) .rerank) {
+				visibility: hidden;
+			}
+		}
 
 		@media (max-width: 560px) {
 			.pair {
@@ -296,12 +321,20 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 	</style>
 
 	<script>
-		import { pickPivot } from '../../lib/film-rank-pick';
+		import { insertAt, pickPivot, removeAt, type Placing } from '../../lib/film-rank-pick';
 		import type { RankCard } from '../../lib/film-rank';
 
-		type Placing = { id: number; lo: number; hi: number; pivot: number };
+		type State = {
+			order: number[];
+			queue: number[];
+			/** Films being placed; each question goes to one of them. */
+			open: Placing[];
+			/** The question on screen: `id` (being placed) against order[pivot]. */
+			q: { id: number; pivot: number } | null;
+			just: number | null;
+		};
 
-		type State = { order: number[]; queue: number[]; cur: Placing | null; just: number | null };
+		const IN_FLIGHT = 3;
 
 		// SAFETY: the payload is loadRanking()'s return value, serialised by this page's frontmatter.
 		const { films, order } = JSON.parse(document.getElementById('rank-data')!.textContent!) as {
@@ -328,14 +361,15 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 		let s: State = {
 			order,
 			queue: shuffle(films.filter((f) => !ranked.has(f.id)).map((f) => f.id)),
-			cur: null,
+			open: [],
+			q: null,
 			just: null,
 		};
 
 		const history: State[] = [];
 
 		const remember = () => {
-			history.push({ ...s, queue: s.queue.slice(), cur: s.cur && { ...s.cur } });
+			history.push({ ...s, queue: s.queue.slice(), open: s.open.map((p) => ({ ...p })), q: s.q && { ...s.q } });
 
 			if (history.length > 300) history.shift();
 		};
@@ -367,31 +401,38 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 
 		const rankedFilms = () => s.order.map((id) => byId.get(id)!);
 
-		/** Start placing the next queued film, dropping it straight in when nothing is ranked yet. */
-		const advance = () => {
-			const id = s.queue.shift();
-
-			if (id == null) return;
-
-			if (s.order.length === 0) {
-				s.order = [id];
-				s.just = id;
-
-				return advance();
-			}
-
-			const hi = s.order.length;
-
-			s.cur = { id, lo: 0, hi, pivot: pickPivot(rankedFilms(), 0, hi, byId.get(id)!) };
+		const place = (p: Placing, at: number) => {
+			s.open = s.open.filter((x) => x !== p);
+			s.order = insertAt(s.order, at, p.id, s.open);
+			s.just = p.id;
 		};
 
-		const place = (at: number) => {
-			const { id } = s.cur!;
+		/**
+		 * Top the open films up from the queue and set the next question: `prefer`'s if
+		 * it is open, else a random open film other than the one just asked about.
+		 */
+		const ask = (prefer?: number) => {
+			for (;;) {
+				const settled = s.open.find((p) => p.lo >= p.hi);
 
-			s.order = [...s.order.slice(0, at), id, ...s.order.slice(at)];
-			s.just = id;
-			s.cur = null;
-			advance();
+				if (settled) {
+					// An edit to the list can leave a range empty: its place is known.
+					place(settled, settled.lo);
+				} else if (s.open.length < IN_FLIGHT && s.queue.length) {
+					const id = s.queue.shift()!;
+
+					if (s.order.length === 0) {
+						s.order = [id];
+						s.just = id;
+					} else s.open.push({ id, lo: 0, hi: s.order.length });
+				} else break;
+			}
+
+			const others = s.open.filter((p) => p.id !== s.q?.id);
+			const pool = others.length ? others : s.open;
+			const p = s.open.find((x) => x.id === prefer) ?? pool[Math.floor(Math.random() * pool.length)];
+
+			s.q = p ? { id: p.id, pivot: pickPivot(rankedFilms(), p.lo, p.hi, byId.get(p.id)!) } : null;
 		};
 
 		const meta = (f: RankCard) => [f.year, f.directors.join(', ')].filter(Boolean).join(' · ');
@@ -486,12 +527,13 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 		const render = () => {
 			$('progress').textContent = `${s.order.length.toLocaleString()} of ${films.length.toLocaleString()} ranked`;
 
-			$('duel').hidden = s.cur == null;
-			$('done').hidden = s.cur != null;
+			$('duel').hidden = s.q == null;
+			$('done').hidden = s.q != null;
 			document.querySelector<HTMLButtonElement>('[data-pick="undo"]')!.disabled = history.length === 0;
 
-			if (s.cur) {
-				const { id, lo, hi, pivot } = s.cur;
+			if (s.q) {
+				const { id, pivot } = s.q;
+				const { lo, hi } = s.open.find((p) => p.id === id)!;
 
 				show('a', byId.get(s.order[pivot])!);
 				show('b', byId.get(id)!);
@@ -502,13 +544,20 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 			const list = $('list');
 
 			list.replaceChildren(
-				...s.order.map((id) => {
+				...s.order.map((id, i) => {
 					const f = byId.get(id)!;
 					const li = document.createElement('li');
 
 					li.textContent = `${f.title} `;
+					li.draggable = true;
+					li.dataset.i = String(i);
 
 					if (f.year) li.insertAdjacentHTML('beforeend', `<span class="yr">${f.year}</span>`);
+
+					const again = el('button', 'rerank', '↻');
+
+					again.title = 'Rank again';
+					li.append(again);
 
 					if (id === s.just) li.className = 'just';
 
@@ -522,30 +571,98 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 				const prev = history.pop();
 
 				if (prev) s = prev;
-			} else if (s.cur) {
+			} else if (s.q) {
 				remember();
 
-				const c = s.cur;
+				const { id, pivot } = s.q;
+				const p = s.open.find((x) => x.id === id)!;
 
 				if (what === 'skip') {
-					s.queue.push(c.id);
-					s.cur = null;
-					advance();
+					s.open = s.open.filter((x) => x !== p);
+					s.queue.push(id);
 				} else if (what === 'tie') {
-					place(c.pivot + 1);
+					place(p, pivot + 1);
 				} else {
 					// A wins: B goes below the pivot. B wins: above it.
-					if (what === 'a') c.lo = c.pivot + 1;
-					else c.hi = c.pivot;
+					if (what === 'a') p.lo = pivot + 1;
+					else p.hi = pivot;
 
-					if (c.lo >= c.hi) place(c.lo);
-					else c.pivot = pickPivot(rankedFilms(), c.lo, c.hi, byId.get(c.id)!);
+					if (p.lo >= p.hi) place(p, p.lo);
 				}
+
+				ask();
 			}
 
 			render();
 			void save();
 		};
+
+		// Editing the list. A move keeps the question on screen, with its pivot
+		// re-picked since the indexes under it shifted.
+		const rerank = (i: number) => {
+			remember();
+
+			const id = s.order[i];
+
+			s.order = removeAt(s.order, i, s.open);
+			s.open.push({ id, lo: 0, hi: s.order.length });
+			ask(id);
+			render();
+			void save();
+		};
+
+		const move = (from: number, to: number) => {
+			if (from === to) return;
+			remember();
+
+			const id = s.order[from];
+
+			s.order = insertAt(removeAt(s.order, from, s.open), to, id, s.open);
+			s.just = id;
+			ask(s.q?.id);
+			render();
+			void save();
+		};
+
+		const list = $('list');
+
+		const row = (e: Event) => (e.target instanceof Element ? e.target.closest('li') : null);
+
+		let dragFrom = -1;
+
+		list.addEventListener('click', (e) => {
+			const li = row(e);
+
+			if (li && e.target instanceof Element && e.target.closest('.rerank')) rerank(Number(li.dataset.i));
+		});
+
+		list.addEventListener('dragstart', (e) => {
+			dragFrom = Number(row(e)?.dataset.i ?? -1);
+		});
+
+		list.addEventListener('dragover', (e) => {
+			const li = row(e);
+
+			if (dragFrom < 0 || !li) return;
+			e.preventDefault();
+
+			for (const o of list.querySelectorAll('.over')) if (o !== li) o.classList.remove('over');
+			li.classList.add('over');
+		});
+
+		list.addEventListener('drop', (e) => {
+			const li = row(e);
+
+			e.preventDefault();
+
+			if (li && dragFrom >= 0) move(dragFrom, Number(li.dataset.i));
+		});
+
+		list.addEventListener('dragend', () => {
+			dragFrom = -1;
+
+			for (const o of list.querySelectorAll('.over')) o.classList.remove('over');
+		});
 
 		for (const b of document.querySelectorAll<HTMLButtonElement>('[data-pick]')) {
 			b.addEventListener('click', () => pick(b.dataset.pick!));
@@ -567,7 +684,7 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 			pick(what);
 		});
 
-		advance();
+		ask();
 
 		render();
 	</script>
