@@ -1702,7 +1702,12 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 							});
 
 				if (res.status === 401) return loginRedirect();
-				const data = await res.json();
+				// Vercel's bot checkpoint answers with an HTML page, not our JSON.
+				const data = await res.json().catch(() => null);
+
+				if (!data) {
+					throw new Error('Blocked by Vercel’s security check. Copy your text, reload, and save again.');
+				}
 
 				if (!res.ok) throw new Error(data.error || 'Save failed');
 				// The page renders from the DB, so a reload is the refresh.
