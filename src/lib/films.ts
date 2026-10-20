@@ -284,10 +284,14 @@ function hasDiaryContent(input: CreateLogInput): boolean {
 	);
 }
 
-/** Split a "Name, City" venue string into its parts (city = text after the last comma). */
+/**
+ * Split a "Name, City" venue string at its FIRST comma: the city half is itself
+ * "City, ST" (or "Bushwick, Brooklyn, NY"). Splitting at the last comma turned
+ * every autocomplete pick into a new row — see 0027 and 0078.
+ */
 export function parseVenue(venue: string): { name: string; city: string | null } {
 	const s = venue.trim();
-	const i = s.lastIndexOf(',');
+	const i = s.indexOf(',');
 
 	if (i === -1) return { name: s, city: null };
 	const name = s.slice(0, i).trim();
@@ -296,17 +300,33 @@ export function parseVenue(venue: string): { name: string; city: string | null }
 	return { name: name || s, city };
 }
 
-/** Upsert a theater by (name, city) and return its id. */
+/** "Name, City" folded for comparison, the same key 0078's unique index uses. */
+function venueKey(venue: string): string {
+	return venue.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
+ * Find the theater whose "Name, City" label matches, or insert one. Matching on
+ * the rendered label (not the parsed pair) means a pick from the autocomplete
+ * always lands on the row it was shown from, however that row is split.
+ */
 async function resolveTheaterId(venue: string): Promise<number | null> {
 	const { name, city } = parseVenue(venue);
 
 	if (!name) return null;
 
-	const { data, error } = await supabaseAdmin
-		.from('theaters')
-		.upsert({ name, city }, { onConflict: 'name,city' })
-		.select('id')
-		.single();
+	const { data: rows, error: listError } = await supabaseAdmin.from('theaters').select('id, name, city');
+
+	if (listError) throw new Error(`resolve theater failed: ${listError.message}`);
+
+	const key = venueKey(venue);
+	const existing = ((rows ?? []) as { id: number; name: string; city: string | null }[]).find(
+		(t) => venueKey([t.name, t.city].filter(Boolean).join(', ')) === key,
+	);
+
+	if (existing) return existing.id;
+
+	const { data, error } = await supabaseAdmin.from('theaters').insert({ name, city }).select('id').single();
 
 	if (error) throw new Error(`resolve theater failed: ${error.message}`);
 
