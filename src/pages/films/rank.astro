@@ -6,7 +6,7 @@
 // to a random one of them, so the same film doesn't come up turn after turn.
 // The list underneath can be edited: drag a film to move it, or ↻ to rank it
 // again. The order is saved after every change, so the work can be spread over
-// days. Films half-way through being placed start over on reload.
+// days. Films half-way through being placed are kept in localStorage.
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { requireOwner } from '../../lib/auth';
@@ -357,11 +357,57 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 
 		const ranked = new Set(order);
 
+		// Half-placed films survive a reload in this browser. Their ranges are indexes
+		// into the order they were narrowed against, so they're only kept while the
+		// saved order still matches it.
+		const OPEN_KEY = 'film-rank-open';
+
+		const restoreOpen = (): Placing[] => {
+			try {
+				// SAFETY: written by persistOpen below; every field is checked before use.
+				const kept = JSON.parse(localStorage.getItem(OPEN_KEY) ?? 'null') as { order: number[]; open: Placing[] } | null;
+
+				if (kept?.order?.join() !== order.join()) return [];
+
+				const seen = new Set<number>();
+
+				return kept.open.filter((p) => {
+					const ok =
+						byId.has(p.id) &&
+						!ranked.has(p.id) &&
+						!seen.has(p.id) &&
+						Number.isInteger(p.lo) &&
+						Number.isInteger(p.hi) &&
+						p.lo >= 0 &&
+						p.lo < p.hi &&
+						p.hi <= order.length;
+
+					seen.add(p.id);
+
+					return ok;
+				});
+			} catch {
+				return [];
+			}
+		};
+
+		const persistOpen = () => {
+			try {
+				localStorage.setItem(OPEN_KEY, JSON.stringify({ order: s.order, open: s.open }));
+			} catch {
+				// Storage blocked: half-placed films just start over on reload.
+			}
+		};
+
+		const restored = restoreOpen();
+
+		const placing = new Set(restored.map((p) => p.id));
+
 		// `order` arrays are never mutated, only replaced, so a snapshot can share them.
 		let s: State = {
 			order,
-			queue: shuffle(films.filter((f) => !ranked.has(f.id)).map((f) => f.id)),
-			open: [],
+			queue: shuffle(films.filter((f) => !ranked.has(f.id) && !placing.has(f.id)).map((f) => f.id)),
+			open: restored,
 			q: null,
 			just: null,
 		};
@@ -525,6 +571,7 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 		};
 
 		const render = () => {
+			persistOpen();
 			$('progress').textContent = `${s.order.length.toLocaleString()} of ${films.length.toLocaleString()} ranked`;
 
 			$('duel').hidden = s.q == null;
