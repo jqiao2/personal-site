@@ -1,0 +1,199 @@
+---
+// Owner-only: one recipe, as a post.
+import Layout from '../../layouts/Layout.astro';
+import { requireOwner } from '../../lib/auth';
+import { formatWatchedDate } from '../../lib/format';
+import { COMPLETENESS_LABEL, courseLabel, formatMinutes, totalMinutes } from '../../lib/recipes';
+import { getRecipe } from '../../lib/recipes-db';
+
+export const prerender = false;
+
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const recipe = await getRecipe(Astro.params.id ?? '');
+
+if (!recipe) return Astro.redirect('/recipes');
+
+const total = totalMinutes(recipe);
+
+const facts = [
+	recipe.prep_minutes != null && ['Prep', formatMinutes(recipe.prep_minutes)],
+	recipe.cook_minutes != null && ['Cook', formatMinutes(recipe.cook_minutes)],
+	total != null && ['Total', formatMinutes(total)],
+	recipe.servings && ['Makes', recipe.servings],
+].filter((f) => f !== false && f !== null) as [string, string][];
+---
+
+<Layout title={`${recipe.title} · Recipes`}>
+	<p class="back"><a href="/recipes">← Recipes</a></p>
+
+	<p class="meta">
+		<time datetime={recipe.added}>{formatWatchedDate(recipe.added)}</time>
+		<a href={`/recipes?course=${recipe.course}`}>{courseLabel(recipe.course)}</a>
+		{recipe.cuisine && <a href={`/recipes?cuisine=${encodeURIComponent(recipe.cuisine)}`}>{recipe.cuisine}</a>}
+		{recipe.completeness !== 'full' && <span class="tag">{COMPLETENESS_LABEL[recipe.completeness]}</span>}
+	</p>
+	<h1>{recipe.title}</h1>
+	{recipe.summary && <p class="summary">{recipe.summary}</p>}
+
+	{
+		facts.length > 0 && (
+			<dl class="facts">
+				{facts.map(([label, value]) => (
+					<div>
+						<dt>{label}</dt>
+						<dd>{value}</dd>
+					</div>
+				))}
+			</dl>
+		)
+	}
+
+	{
+		recipe.ingredients.length > 0 && (
+			<section>
+				<h2>Ingredients</h2>
+				<ul>
+					{recipe.ingredients.map((i) => (
+						<li>{i}</li>
+					))}
+				</ul>
+			</section>
+		)
+	}
+
+	{
+		recipe.steps.length > 0 && (
+			<section>
+				<h2>Steps</h2>
+				<ol>
+					{recipe.steps.map((s) => (
+						<li>{s}</li>
+					))}
+				</ol>
+			</section>
+		)
+	}
+
+	{recipe.note && <p class="note">{recipe.note}</p>}
+
+	<p class="links">
+		<a href={recipe.source_url} rel="noopener" target="_blank">
+			{recipe.creator ? `@${recipe.creator} on Instagram` : 'Instagram'}
+		</a>
+		{
+			recipe.site_url && (
+				<a href={recipe.site_url} rel="noopener" target="_blank">
+					Creator’s site
+				</a>
+			)
+		}
+	</p>
+
+	<p class="tags">
+		{
+			recipe.key_ingredients.map((i) => (
+				<a href={`/recipes?ingredient=${encodeURIComponent(i)}`}>{i}</a>
+			))
+		}
+		{recipe.tags.map((t) => <a href={`/recipes?tag=${encodeURIComponent(t)}`}>{t}</a>)}
+	</p>
+</Layout>
+
+<style>
+	.back {
+		margin: 0 0 1.25rem;
+		font-family: var(--sans);
+		font-size: 0.85rem;
+	}
+	.meta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.55rem;
+		align-items: baseline;
+		margin: 0 0 0.2rem;
+		font-family: var(--sans);
+		font-size: 0.72rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+	}
+	.tag {
+		font-size: 0.62rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		padding: 0.1rem 0.4rem;
+		border: 1px solid var(--rule);
+		border-radius: 2px;
+		background: var(--accent-bg);
+		color: var(--accent);
+	}
+	h1 {
+		font-size: 1.9rem;
+		line-height: 1.2;
+		margin: 0;
+	}
+	.summary {
+		margin: 0.5rem 0 0;
+		color: var(--ink-soft);
+	}
+	.facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.75rem;
+		margin: 1.25rem 0 0;
+		padding: 0.6rem 0;
+		border-top: 1px solid var(--rule);
+		border-bottom: 1px solid var(--rule);
+	}
+	.facts dt {
+		font-family: var(--sans);
+		font-size: 0.68rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+	}
+	.facts dd {
+		margin: 0;
+	}
+	h2 {
+		font-size: 1.15rem;
+		margin: 1.75rem 0 0.5rem;
+	}
+	ul,
+	ol {
+		margin: 0;
+		padding-left: 1.3rem;
+	}
+	li {
+		margin-bottom: 0.3rem;
+	}
+	ol li {
+		margin-bottom: 0.6rem;
+	}
+	.note {
+		margin: 1.5rem 0 0;
+		padding: 0.6rem 0.8rem;
+		background: var(--card);
+		border-left: 2px solid var(--accent);
+		font-size: 0.95rem;
+	}
+	.links {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1.25rem;
+		margin: 1.75rem 0 0;
+	}
+	.tags {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem 0.75rem;
+		margin: 1rem 0 0;
+		padding-top: 0.75rem;
+		border-top: 1px solid var(--rule-soft);
+		font-family: var(--sans);
+		font-size: 0.8rem;
+	}
+</style>

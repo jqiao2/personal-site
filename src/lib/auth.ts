@@ -172,6 +172,15 @@ export function requireOwner(cookies: AstroCookies): Promise<boolean> {
 	return isValidToken(cookies.get(COOKIE_NAME)?.value);
 }
 
+/** True for Vercel's cron, which sends `Bearer $CRON_SECRET` when that is set. */
+export function isCron(request: Request): boolean {
+	const secret = import.meta.env.CRON_SECRET;
+
+	if (!secret) return false;
+
+	return request.headers.get('authorization') === `Bearer ${secret}`;
+}
+
 /** Options for the session cookie. Secure in production, httpOnly always. */
 export function sessionCookieOptions(): {
 	httpOnly: boolean;

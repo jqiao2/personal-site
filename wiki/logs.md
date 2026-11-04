@@ -213,3 +213,4 @@ wiki across every iteration, even reverted ones).
 - 2026-10-19 — film lists (/films/lists, smart lists = saved /films/watched query strings). Migration 0076 was taken by a sibling session mid-task; renumbered to 0077 and pushed with a temporary copy of its file. See 0033.
 - 2026-10-19 — Theater duplicates returned: 0027's parseVenue fix never shipped. Fixed split + label match + unique index (0078); MCP writes auto-decline, used CLI db push. Pattern 0034.
 - 2026-10-20 — /films/rank: three films placed at once, questions shuffled between them; list editable (drag to move, ↻ to rank again). Range shifting tested in film-rank.test.mjs; browser check stubbed the PUT. Pattern 0035.
+2026-11-04 — 0036: CRLF files made a scripted multi-line replace miss part way through the recipes library work.
