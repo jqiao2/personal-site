@@ -3,7 +3,7 @@
 import Layout from '../../layouts/Layout.astro';
 import { requireOwner } from '../../lib/auth';
 import { formatWatchedDate } from '../../lib/format';
-import { COMPLETENESS_LABEL, courseLabel, formatMinutes, totalMinutes } from '../../lib/recipes';
+import { COMPLETENESS_LABEL, formatMinutes, totalMinutes } from '../../lib/recipes';
 import { getRecipe } from '../../lib/recipes-db';
 
 export const prerender = false;
@@ -16,12 +16,11 @@ const recipe = await getRecipe(Astro.params.id ?? '');
 
 if (!recipe) return Astro.redirect('/recipes');
 
-const total = totalMinutes(recipe);
-
 const facts = [
-	recipe.prep_minutes != null && ['Prep', formatMinutes(recipe.prep_minutes)],
-	recipe.cook_minutes != null && ['Cook', formatMinutes(recipe.cook_minutes)],
-	total != null && ['Total', formatMinutes(total)],
+	['Prep', formatMinutes(recipe.prep_minutes)],
+	recipe.cook_active_minutes > 0 && ['Cooking', formatMinutes(recipe.cook_active_minutes)],
+	recipe.cook_waiting_minutes > 0 && ['Waiting', formatMinutes(recipe.cook_waiting_minutes)],
+	['Total', formatMinutes(totalMinutes(recipe))],
 	recipe.servings && ['Makes', recipe.servings],
 ].filter((f) => f !== false && f !== null) as [string, string][];
 ---
@@ -31,7 +30,7 @@ const facts = [
 
 	<p class="meta">
 		<time datetime={recipe.added}>{formatWatchedDate(recipe.added)}</time>
-		<a href={`/recipes?course=${recipe.course}`}>{courseLabel(recipe.course)}</a>
+		<a href={`/recipes?type=${encodeURIComponent(recipe.type)}`}>{recipe.type}</a>
 		{recipe.cuisine && <a href={`/recipes?cuisine=${encodeURIComponent(recipe.cuisine)}`}>{recipe.cuisine}</a>}
 		{recipe.completeness !== 'full' && <span class="tag">{COMPLETENESS_LABEL[recipe.completeness]}</span>}
 	</p>

@@ -3,17 +3,6 @@
 // Muse owns the format: docs/RECIPES_FORMAT.md in the jqiao2/recipes repo.
 import { z } from 'astro/zod';
 
-export const COURSES = [
-	{ key: 'main', label: 'Mains' },
-	{ key: 'noodles', label: 'Noodles & pasta' },
-	{ key: 'rice', label: 'Rice' },
-	{ key: 'side', label: 'Sides & salads' },
-	{ key: 'app', label: 'Appetizers & snacks' },
-	{ key: 'bake', label: 'Baking & desserts' },
-	{ key: 'prep', label: 'Prep & dough' },
-	{ key: 'other', label: 'Other' },
-] as const;
-
 export const COMPLETENESS_LABEL = {
 	full: 'Full recipe',
 	partial: 'Partial',
@@ -44,12 +33,7 @@ const lines = z.array(z.string().trim().min(1));
 
 const labels = lines.transform((v) => [...new Set(v.map((s) => s.toLowerCase()))]);
 
-const minutes = z
-	.number()
-	.int()
-	.min(0)
-	.nullish()
-	.transform((v) => v ?? null);
+const minutes = z.number().int().min(0);
 
 /** One entry of recipes.json, which an agent writes. URLs end up in an href and
  *  the id in a path, so they are checked here. Its field names become ours. */
@@ -61,7 +45,7 @@ const recipeSchema = z
 		creator: optionalText.transform((v) => v?.replace(/^@/, '') ?? null),
 		source_url: z.string().refine(isHttps, 'must be an https URL'),
 		source_links: z.array(z.string()).default([]),
-		category: z.enum(COURSES.map((c) => c.key)),
+		type: z.string().trim().min(1).toLowerCase(),
 		cuisine: optionalText.transform((v) => v?.toLowerCase() ?? null),
 		tags: labels.default([]),
 		key_ingredients: labels,
@@ -69,14 +53,16 @@ const recipeSchema = z
 		steps: lines.default([]),
 		notes: lines.default([]),
 		prep_minutes: minutes,
-		cook_minutes: minutes,
+		cook_active_minutes: minutes,
+		cook_waiting_minutes: minutes,
 		servings: optionalText,
 		status: z.enum(['full', 'partial', 'video']),
 	})
-	.transform(({ category, status, source_links, notes, ...recipe }) => ({
+	.transform(({ status, source_links, notes, ...recipe }) => ({
 		...recipe,
 		added: postedOn(recipe.id),
-		course: category,
+		// The file repeats the cuisine and type as tags; they have their own filters.
+		tags: recipe.tags.filter((t) => t !== recipe.cuisine && t !== recipe.type),
 		completeness: status,
 		site_url: source_links.find(isHttps) ?? null,
 		note: notes.join(' ') || null,
@@ -119,10 +105,12 @@ export const recipesFile = z.array(z.unknown()).transform((entries) => {
 
 export type RecipesFile = z.output<typeof recipesFile>;
 
-/** Start to table. Unknown unless both parts are; a no-cook recipe has cook 0. */
-export function totalMinutes(r: Pick<Recipe, 'prep_minutes' | 'cook_minutes'>): number | null {
-	return r.prep_minutes == null || r.cook_minutes == null ? null : r.prep_minutes + r.cook_minutes;
-}
+type RecipeTimes = Pick<Recipe, 'prep_minutes' | 'cook_active_minutes' | 'cook_waiting_minutes'>;
+
+/** Time you are working: everything but the waiting. */
+export const handsOnMinutes = (r: RecipeTimes): number => r.prep_minutes + r.cook_active_minutes;
+
+export const totalMinutes = (r: RecipeTimes): number => handsOnMinutes(r) + r.cook_waiting_minutes;
 
 export function formatMinutes(total: number): string {
 	const hours = Math.floor(total / 60);
@@ -134,51 +122,50 @@ export function formatMinutes(total: number): string {
 	return mins ? `${hours} hr ${mins} min` : `${hours} hr`;
 }
 
-export const courseLabel = (key: string): string => COURSES.find((c) => c.key === key)?.label ?? key;
-
 export const TIME_LIMITS = [15, 30, 60] as const;
 
 export interface RecipeQuery {
 	q: string;
-	courses: string[];
+	types: string[];
 	cuisines: string[];
 	ingredients: string[];
 	tags: string[];
 	maxMinutes: number | null;
+	maxHandsOn: number | null;
 	fullOnly: boolean;
 }
 
 export function parseRecipeQuery(params: URLSearchParams): RecipeQuery {
-	const max = Number(params.get('max'));
+	const limit = (key: string): number | null => TIME_LIMITS.find((t) => t === Number(params.get(key))) ?? null;
 
 	return {
 		q: params.get('q') ?? '',
-		courses: params.getAll('course'),
+		types: params.getAll('type'),
 		cuisines: params.getAll('cuisine'),
 		ingredients: params.getAll('ingredient'),
 		tags: params.getAll('tag'),
-		maxMinutes: TIME_LIMITS.some((t) => t === max) ? max : null,
+		maxMinutes: limit('max'),
+		maxHandsOn: limit('hands'),
 		fullOnly: params.get('full') === '1',
 	};
 }
 
-/** Course and cuisine widen (any selected); ingredients and tags narrow (all selected). */
+/** Type and cuisine widen (any selected); ingredients and tags narrow (all selected). */
 export function filterRecipes(recipes: RecipeListing[], query: RecipeQuery): RecipeListing[] {
 	const terms = query.q.toLowerCase().split(/\s+/).filter(Boolean);
 
 	return recipes.filter((r) => {
-		const total = totalMinutes(r);
-
 		const haystack = [r.title, r.creator, r.cuisine, ...r.tags, ...r.key_ingredients, ...r.ingredients]
 			.join(' ')
 			.toLowerCase();
 
 		return (
-			(!query.courses.length || query.courses.includes(r.course)) &&
+			(!query.types.length || query.types.includes(r.type)) &&
 			(!query.cuisines.length || (r.cuisine != null && query.cuisines.includes(r.cuisine))) &&
 			query.ingredients.every((i) => r.key_ingredients.includes(i)) &&
 			query.tags.every((t) => r.tags.includes(t)) &&
-			(query.maxMinutes == null || (total != null && total <= query.maxMinutes)) &&
+			(query.maxMinutes == null || totalMinutes(r) <= query.maxMinutes) &&
+			(query.maxHandsOn == null || handsOnMinutes(r) <= query.maxHandsOn) &&
 			(!query.fullOnly || r.completeness === 'full') &&
 			terms.every((t) => haystack.includes(t))
 		);
@@ -225,19 +212,24 @@ export function recipeIndexView(recipes: RecipeListing[], params: URLSearchParam
 	// An any-of group is counted with its own selection off, so its options show
 	// what picking them would add. An all-of group is counted on the current
 	// results, so its options show what is left.
-	const chips = (key: string, selected: string[], pool: string[], label = (v: string) => v): RecipeChip[] =>
+	const chips = (key: string, selected: string[], pool: string[]): RecipeChip[] =>
 		tally(pool).map(([value, count]) => ({
-			label: label(value),
+			label: value,
 			count,
 			href: link(key, toggled(selected, value)),
 			on: selected.includes(value),
 		}));
 
-	const times: RecipeChip[] = TIME_LIMITS.map((t) => ({
-		label: `Under ${formatMinutes(t)}`,
-		href: link('max', query.maxMinutes === t ? [] : [String(t)]),
-		on: query.maxMinutes === t,
-	}));
+	const limits = (key: string, selected: number | null): RecipeChip[] =>
+		TIME_LIMITS.map((t) => ({
+			label: `Under ${formatMinutes(t)}`,
+			href: link(key, selected === t ? [] : [String(t)]),
+			on: selected === t,
+		}));
+
+	const times = limits('max', query.maxMinutes);
+
+	const handsOn = limits('hands', query.maxHandsOn);
 
 	const full: RecipeChip = {
 		label: COMPLETENESS_LABEL.full,
@@ -245,18 +237,13 @@ export function recipeIndexView(recipes: RecipeListing[], params: URLSearchParam
 		on: query.fullOnly,
 	};
 
-	const selection = (key: string, selected: string[], label = (v: string) => v) =>
-		selected.map((v) => ({ label: label(v), href: link(key, toggled(selected, v)) }));
+	const selection = (key: string, selected: string[]) =>
+		selected.map((v) => ({ label: v, href: link(key, toggled(selected, v)) }));
 
 	return {
 		query,
 		shown,
-		courses: chips(
-			'course',
-			query.courses,
-			filterRecipes(recipes, { ...query, courses: [] }).map((r) => r.course),
-			courseLabel,
-		),
+		types: chips('type', query.types, filterRecipes(recipes, { ...query, types: [] }).map((r) => r.type)),
 		cuisines: chips(
 			'cuisine',
 			query.cuisines,
@@ -265,14 +252,16 @@ export function recipeIndexView(recipes: RecipeListing[], params: URLSearchParam
 		ingredients: chips('ingredient', query.ingredients, shown.flatMap((r) => r.key_ingredients)),
 		tags: chips('tag', query.tags, shown.flatMap((r) => r.tags)),
 		times,
+		handsOn,
 		full,
 		active: [
 			...(query.q.trim() ? [{ label: `“${query.q.trim()}”`, href: link('q', []) }] : []),
-			...selection('course', query.courses, courseLabel),
+			...selection('type', query.types),
 			...selection('cuisine', query.cuisines),
 			...selection('ingredient', query.ingredients),
 			...selection('tag', query.tags),
 			...times.filter((t) => t.on),
+			...handsOn.filter((t) => t.on).map((t) => ({ ...t, label: `Hands-on ${t.label.toLowerCase()}` })),
 			...(full.on ? [full] : []),
 		],
 		// The search form re-sends these so submitting a query keeps the filters.

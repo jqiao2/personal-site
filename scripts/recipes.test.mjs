@@ -2,7 +2,7 @@
 //
 // Run: node --import ./scripts/ts-hook.mjs scripts/recipes.test.mjs
 import assert from 'node:assert/strict';
-import { filterRecipes, parseRecipeQuery, recipeIndexView, recipesFile, totalMinutes } from '../src/lib/recipes.ts';
+import { filterRecipes, handsOnMinutes, parseRecipeQuery, recipeIndexView, recipesFile, totalMinutes } from '../src/lib/recipes.ts';
 
 const parseRecipes = (data) => recipesFile.parse(data);
 
@@ -10,14 +10,17 @@ const entry = (o = {}) => ({
 	id: 'DdmFAorRxJM',
 	title: 'Roast chicken',
 	source_url: 'https://www.instagram.com/reel/DdmFAorRxJM/',
-	category: 'main',
+	type: 'main',
 	status: 'full',
+	prep_minutes: 5,
+	cook_active_minutes: 5,
+	cook_waiting_minutes: 0,
 	key_ingredients: ['Chicken', 'onion'],
 	...o,
 });
 
 // A good entry is normalised.
-const { recipes: [ok] } = parseRecipes([entry({ creator: '@zest', cuisine: 'American', tags: ['One-Pan', 'one-pan'] })]);
+const { recipes: [ok] } = parseRecipes([entry({ creator: '@zest', cuisine: 'American', tags: ['One-Pan', 'one-pan', 'american', 'main'] })]);
 
 assert.equal(ok.creator, 'zest');
 
@@ -31,7 +34,7 @@ assert.equal(ok.site_url, null);
 
 assert.equal(ok.added, '2026-09-22', 'the date comes from the shortcode');
 
-assert.equal(ok.course, 'main');
+assert.equal(ok.type, 'main');
 
 assert.equal(ok.completeness, 'full');
 
@@ -46,9 +49,10 @@ const mixed = parseRecipes([
 	entry(),
 	entry(),
 	entry({ id: 'aaaaaaaaaaa', source_url: 'javascript:alert(1)' }),
-	entry({ id: 'bbbbbbbbbbb', category: 'soup' }),
+	entry({ id: 'bbbbbbbbbbb', type: ' ' }),
 	entry({ id: 'ccccccccccc', status: 'constructor' }),
 	entry({ id: 'ddddddddddd', prep_minutes: 1.5 }),
+	entry({ id: 'fffffffffff', cook_waiting_minutes: undefined }),
 	entry({ id: '../x/../y/z' }),
 	entry({ id: 'x'.repeat(40) }),
 	entry({ id: 'eeeeeeeeeee', key_ingredients: undefined }),
@@ -57,34 +61,37 @@ const mixed = parseRecipes([
 
 assert.equal(mixed.recipes.length, 1);
 
-assert.equal(mixed.skipped.length, 9);
+assert.equal(mixed.skipped.length, 10);
 
 assert.equal(mixed.skipped[0].reason, 'duplicate id');
 
 assert.throws(() => parseRecipes({ recipes: [] }), /expected array/);
 
-// Unknown time only stays unknown; a no-cook recipe counts.
-assert.equal(totalMinutes({ prep_minutes: 10, cook_minutes: null }), null);
+const times = { prep_minutes: 10, cook_active_minutes: 5, cook_waiting_minutes: 60 };
 
-assert.equal(totalMinutes({ prep_minutes: 10, cook_minutes: 0 }), 10);
+assert.equal(handsOnMinutes(times), 15);
+
+assert.equal(totalMinutes(times), 75);
 
 const row = (id, o) => parseRecipes([entry({ id, ...o })]).recipes[0];
 
 const all = [
-	row('aaaaaaaaaaa', { category: 'main', cuisine: 'thai', key_ingredients: ['chicken', 'basil'], prep_minutes: 5, cook_minutes: 10 }),
-	row('bbbbbbbbbbb', { category: 'main', cuisine: 'italian', key_ingredients: ['chicken', 'lemon'], prep_minutes: 20, cook_minutes: 40 }),
-	row('ccccccccccc', { category: 'rice', cuisine: 'thai', key_ingredients: ['rice', 'basil'], status: 'partial' }),
+	row('aaaaaaaaaaa', { type: 'main', cuisine: 'thai', key_ingredients: ['chicken', 'basil'], prep_minutes: 5, cook_active_minutes: 5, cook_waiting_minutes: 5 }),
+	row('bbbbbbbbbbb', { type: 'main', cuisine: 'italian', key_ingredients: ['chicken', 'lemon'], prep_minutes: 5, cook_active_minutes: 5, cook_waiting_minutes: 480 }),
+	row('ccccccccccc', { type: 'rice', cuisine: 'thai', key_ingredients: ['rice', 'basil'], prep_minutes: 20, cook_active_minutes: 20, status: 'partial' }),
 ];
 
 const ids = (qs) => filterRecipes(all, parseRecipeQuery(new URLSearchParams(qs))).map((r) => r.id[0]);
 
 assert.deepEqual(ids(''), ['a', 'b', 'c']);
 
-assert.deepEqual(ids('course=main&course=rice'), ['a', 'b', 'c'], 'courses widen');
+assert.deepEqual(ids('type=main&type=rice'), ['a', 'b', 'c'], 'types widen');
 
 assert.deepEqual(ids('ingredient=chicken&ingredient=basil'), ['a'], 'ingredients narrow');
 
-assert.deepEqual(ids('max=15'), ['a'], 'an unknown time does not pass a limit');
+assert.deepEqual(ids('max=15'), ['a'], 'total counts the waiting');
+
+assert.deepEqual(ids('hands=15'), ['a', 'b'], 'hands-on does not');
 
 assert.deepEqual(ids('max=7'), ['a', 'b', 'c'], 'a limit that is not offered is ignored');
 

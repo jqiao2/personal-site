@@ -6,7 +6,7 @@ import Layout from '../../layouts/Layout.astro';
 import RecipeFilterGroup from '../../components/RecipeFilterGroup.astro';
 import { requireOwner } from '../../lib/auth';
 import { formatWatchedDate } from '../../lib/format';
-import { COMPLETENESS_LABEL, courseLabel, formatMinutes, recipeIndexView, totalMinutes } from '../../lib/recipes';
+import { COMPLETENESS_LABEL, formatMinutes, handsOnMinutes, recipeIndexView, totalMinutes } from '../../lib/recipes';
 import { listRecipes } from '../../lib/recipes-db';
 
 export const prerender = false;
@@ -40,15 +40,18 @@ const view = recipeIndexView(recipes, Astro.url.searchParams);
 
 			{
 				view.shown.map((r) => {
+					const handsOn = handsOnMinutes(r);
+
 					const total = totalMinutes(r);
 
 					return (
 						<article class="entry">
 							<p class="entry__meta">
 								<time datetime={r.added}>{formatWatchedDate(r.added)}</time>
-								<span>{courseLabel(r.course)}</span>
+								<span>{r.type}</span>
 								{r.cuisine && <span>{r.cuisine}</span>}
-								{total != null && <span>{formatMinutes(total)}</span>}
+								<span>{formatMinutes(total)}</span>
+								{handsOn !== total && <span>{formatMinutes(handsOn)} hands-on</span>}
 								{r.completeness !== 'full' && <span class="tag">{COMPLETENESS_LABEL[r.completeness]}</span>}
 							</p>
 							<h2 class="entry__title">
@@ -76,8 +79,9 @@ const view = recipeIndexView(recipes, Astro.url.searchParams);
 
 			<details class="filters" open data-active={view.active.length > 0 || undefined}>
 				<summary>Filters</summary>
-				<RecipeFilterGroup title="Type" chips={view.courses} />
-				<RecipeFilterGroup title="Time" chips={view.times} />
+				<RecipeFilterGroup title="Type" chips={view.types} />
+				<RecipeFilterGroup title="Total time" chips={view.times} />
+				<RecipeFilterGroup title="Hands-on" chips={view.handsOn} />
 				<RecipeFilterGroup title="Ingredient" chips={view.ingredients} head={14} />
 				<RecipeFilterGroup title="Cuisine" chips={view.cuisines} />
 				<RecipeFilterGroup title="Tag" chips={view.tags} />
