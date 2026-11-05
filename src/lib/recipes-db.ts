@@ -6,7 +6,7 @@ import { recipesFile, type Recipe, type RecipeListing, type RecipesFile, type Sk
 const SOURCE = 'https://api.github.com/repos/jqiao2/recipes/contents/recipes.json';
 
 const LISTING =
-	'id, title, summary, creator, added, type, cuisine, tags, key_ingredients, ingredients, prep_minutes, cook_active_minutes, cook_waiting_minutes, completeness';
+	'id, title, creator, added, type, cuisine, tags, key_ingredients, ingredients, prep_minutes, cook_active_minutes, cook_waiting_minutes, completeness';
 
 // ponytail: reads all rows and filters in JS, and PostgREST stops at 1000 rows.
 // Move the filters into the query if the library gets near that.

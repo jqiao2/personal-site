@@ -35,7 +35,6 @@ const facts = [
 		{recipe.completeness !== 'full' && <span class="tag">{COMPLETENESS_LABEL[recipe.completeness]}</span>}
 	</p>
 	<h1>{recipe.title}</h1>
-	{recipe.summary && <p class="summary">{recipe.summary}</p>}
 
 	{
 		facts.length > 0 && (
@@ -133,10 +132,6 @@ const facts = [
 		font-size: 1.9rem;
 		line-height: 1.2;
 		margin: 0;
-	}
-	.summary {
-		margin: 0.5rem 0 0;
-		color: var(--ink-soft);
 	}
 	.facts {
 		display: flex;

@@ -57,7 +57,6 @@ const view = recipeIndexView(recipes, Astro.url.searchParams);
 							<h2 class="entry__title">
 								<a href={`/recipes/${r.id}`}>{r.title}</a>
 							</h2>
-							{r.summary && <p class="entry__summary">{r.summary}</p>}
 							<p class="entry__ingredients">
 								{r.key_ingredients.join(', ')}
 								{r.creator && <span class="entry__creator"> · @{r.creator}</span>}
@@ -207,9 +206,6 @@ const view = recipeIndexView(recipes, Astro.url.searchParams);
 	}
 	.entry__title a:hover {
 		text-decoration: underline;
-	}
-	.entry__summary {
-		margin: 0.35rem 0 0;
 	}
 	.entry__ingredients {
 		margin: 0.3rem 0 0;

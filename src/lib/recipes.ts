@@ -41,7 +41,6 @@ const recipeSchema = z
 	.object({
 		id: z.string().regex(/^[\w-]{10,12}$/),
 		title: z.string().trim().min(1),
-		summary: optionalText,
 		creator: optionalText.transform((v) => v?.replace(/^@/, '') ?? null),
 		source_url: z.string().refine(isHttps, 'must be an https URL'),
 		source_links: z.array(z.string()).default([]),
