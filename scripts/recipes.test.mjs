@@ -9,10 +9,9 @@ const parseRecipes = (data) => recipesFile.parse(data);
 const entry = (o = {}) => ({
 	id: 'DdmFAorRxJM',
 	title: 'Roast chicken',
-	added: '2026-11-04',
 	source_url: 'https://www.instagram.com/reel/DdmFAorRxJM/',
-	course: 'main',
-	completeness: 'full',
+	category: 'main',
+	status: 'full',
 	key_ingredients: ['Chicken', 'onion'],
 	...o,
 });
@@ -30,17 +29,29 @@ assert.deepEqual(ok.tags, ['one-pan']);
 
 assert.equal(ok.site_url, null);
 
+assert.equal(ok.added, '2026-09-22', 'the date comes from the shortcode');
+
+assert.equal(ok.course, 'main');
+
+assert.equal(ok.completeness, 'full');
+
+const linked = parseRecipes([entry({ source_links: ['http://a.example', 'https://b.example'], notes: ['One.', 'Two.'] })]).recipes[0];
+
+assert.equal(linked.site_url, 'https://b.example', 'the first https link');
+
+assert.equal(linked.note, 'One. Two.');
+
 // A bad entry is skipped with a reason, and the good ones still go through.
 const mixed = parseRecipes([
 	entry(),
 	entry(),
-	entry({ id: 'a', source_url: 'javascript:alert(1)' }),
-	entry({ id: 'b', site_url: 'http://example.com' }),
-	entry({ id: 'c', course: 'soup' }),
-	entry({ id: 'd', completeness: 'constructor' }),
-	entry({ id: 'e', prep_minutes: 1.5 }),
-	entry({ id: '../x' }),
-	entry({ id: 'f', key_ingredients: undefined }),
+	entry({ id: 'aaaaaaaaaaa', source_url: 'javascript:alert(1)' }),
+	entry({ id: 'bbbbbbbbbbb', category: 'soup' }),
+	entry({ id: 'ccccccccccc', status: 'constructor' }),
+	entry({ id: 'ddddddddddd', prep_minutes: 1.5 }),
+	entry({ id: '../x/../y/z' }),
+	entry({ id: 'x'.repeat(40) }),
+	entry({ id: 'eeeeeeeeeee', key_ingredients: undefined }),
 	null,
 ]);
 
@@ -60,12 +71,12 @@ assert.equal(totalMinutes({ prep_minutes: 10, cook_minutes: 0 }), 10);
 const row = (id, o) => parseRecipes([entry({ id, ...o })]).recipes[0];
 
 const all = [
-	row('a', { course: 'main', cuisine: 'thai', key_ingredients: ['chicken', 'basil'], prep_minutes: 5, cook_minutes: 10 }),
-	row('b', { course: 'main', cuisine: 'italian', key_ingredients: ['chicken', 'lemon'], prep_minutes: 20, cook_minutes: 40 }),
-	row('c', { course: 'rice', cuisine: 'thai', key_ingredients: ['rice', 'basil'], completeness: 'partial' }),
+	row('aaaaaaaaaaa', { category: 'main', cuisine: 'thai', key_ingredients: ['chicken', 'basil'], prep_minutes: 5, cook_minutes: 10 }),
+	row('bbbbbbbbbbb', { category: 'main', cuisine: 'italian', key_ingredients: ['chicken', 'lemon'], prep_minutes: 20, cook_minutes: 40 }),
+	row('ccccccccccc', { category: 'rice', cuisine: 'thai', key_ingredients: ['rice', 'basil'], status: 'partial' }),
 ];
 
-const ids = (qs) => filterRecipes(all, parseRecipeQuery(new URLSearchParams(qs))).map((r) => r.id);
+const ids = (qs) => filterRecipes(all, parseRecipeQuery(new URLSearchParams(qs))).map((r) => r.id[0]);
 
 assert.deepEqual(ids(''), ['a', 'b', 'c']);
 

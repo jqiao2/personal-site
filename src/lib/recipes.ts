@@ -1,6 +1,6 @@
 // The recipe library: the recipes.json format, and the filters on /recipes.
 // No I/O here, so scripts/recipes.test.mjs can import it without Supabase env.
-// docs/RECIPES_FORMAT.md is the same format written out for Muse; change both.
+// Muse owns the format: docs/RECIPES_FORMAT.md in the jqiao2/recipes repo.
 import { z } from 'astro/zod';
 
 export const COURSES = [
@@ -20,7 +20,19 @@ export const COMPLETENESS_LABEL = {
 	video: 'Video only',
 } as const;
 
-const https = z.string().refine((v) => URL.canParse(v) && new URL(v).protocol === 'https:', 'must be an https URL');
+const isHttps = (v: string): boolean => URL.canParse(v) && new URL(v).protocol === 'https:';
+
+const SHORTCODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+/** The day a post went up. A shortcode is the media id in base64, and the id's high
+ *  bits are milliseconds since Instagram's 2011 epoch. recipes.json has no date. */
+function postedOn(shortcode: string): string {
+	let media = 0n;
+
+	for (const c of shortcode) media = media * 64n + BigInt(SHORTCODE_ALPHABET.indexOf(c));
+
+	return new Date(Number(media >> 23n) + 1314220021721).toISOString().slice(0, 10);
+}
 
 const optionalText = z
 	.string()
@@ -40,27 +52,35 @@ const minutes = z
 	.transform((v) => v ?? null);
 
 /** One entry of recipes.json, which an agent writes. URLs end up in an href and
- *  the id in a path, so they are checked here. */
-const recipeSchema = z.object({
-	id: z.string().regex(/^[\w-]+$/),
-	title: z.string().trim().min(1),
-	summary: optionalText,
-	creator: optionalText.transform((v) => v?.replace(/^@/, '') ?? null),
-	added: z.iso.date(),
-	source_url: https,
-	site_url: https.nullish().transform((v) => v ?? null),
-	course: z.enum(COURSES.map((c) => c.key)),
-	cuisine: optionalText.transform((v) => v?.toLowerCase() ?? null),
-	tags: labels.default([]),
-	key_ingredients: labels,
-	ingredients: lines.default([]),
-	steps: lines.default([]),
-	note: optionalText,
-	prep_minutes: minutes,
-	cook_minutes: minutes,
-	servings: optionalText,
-	completeness: z.enum(['full', 'partial', 'video']),
-});
+ *  the id in a path, so they are checked here. Its field names become ours. */
+const recipeSchema = z
+	.object({
+		id: z.string().regex(/^[\w-]{10,12}$/),
+		title: z.string().trim().min(1),
+		summary: optionalText,
+		creator: optionalText.transform((v) => v?.replace(/^@/, '') ?? null),
+		source_url: z.string().refine(isHttps, 'must be an https URL'),
+		source_links: z.array(z.string()).default([]),
+		category: z.enum(COURSES.map((c) => c.key)),
+		cuisine: optionalText.transform((v) => v?.toLowerCase() ?? null),
+		tags: labels.default([]),
+		key_ingredients: labels,
+		ingredients: lines.default([]),
+		steps: lines.default([]),
+		notes: lines.default([]),
+		prep_minutes: minutes,
+		cook_minutes: minutes,
+		servings: optionalText,
+		status: z.enum(['full', 'partial', 'video']),
+	})
+	.transform(({ category, status, source_links, notes, ...recipe }) => ({
+		...recipe,
+		added: postedOn(recipe.id),
+		course: category,
+		completeness: status,
+		site_url: source_links.find(isHttps) ?? null,
+		note: notes.join(' ') || null,
+	}));
 
 export type Recipe = z.output<typeof recipeSchema>;
 
