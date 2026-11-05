@@ -144,6 +144,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 						class:list={['sh__link', n.active && 'sh__link--active']}
 						href={n.href}
 						aria-current={n.active ? 'page' : undefined}
+						data-owner-only-nav={n.ownerOnly}
 					>
 						{n.label}
 					</a>

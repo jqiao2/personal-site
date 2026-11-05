@@ -1,0 +1,106 @@
+---
+// One group of filter links in /recipes' sidebar. Long groups show their most
+// common options and put the others behind a <details>.
+import type { RecipeChip } from '../lib/recipes';
+
+interface Props {
+	title: string;
+	chips: RecipeChip[];
+	head?: number;
+}
+
+const { title, chips, head = 10 } = Astro.props;
+
+const shown = chips.slice(0, head);
+
+const more = chips.slice(head);
+---
+
+{
+	chips.length > 0 && (
+		<section class="group">
+			<h3 class="group__title">{title}</h3>
+			<div class="group__chips">
+				{shown.map((c) => (
+					<a class="chip" href={c.href} aria-current={c.on ? 'true' : undefined}>
+						{c.label}
+						{c.count != null && <span class="chip__n">{c.count}</span>}
+					</a>
+				))}
+			</div>
+			{more.length > 0 && (
+				<details class="group__more" open={more.some((c) => c.on) || undefined}>
+					<summary>{more.length} more</summary>
+					<div class="group__chips">
+						{more.map((c) => (
+							<a class="chip" href={c.href} aria-current={c.on ? 'true' : undefined}>
+								{c.label}
+								{c.count != null && <span class="chip__n">{c.count}</span>}
+							</a>
+						))}
+					</div>
+				</details>
+			)}
+		</section>
+	)
+}
+
+<style>
+	.group {
+		margin-bottom: 1.25rem;
+	}
+	.group__title {
+		font-family: var(--sans);
+		font-size: 0.72rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+		margin: 0 0 0.45rem;
+		padding-bottom: 0.25rem;
+		border-bottom: 1px solid var(--rule);
+	}
+	.group__chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.3rem;
+	}
+	.chip {
+		font-family: var(--sans);
+		font-size: 0.8rem;
+		line-height: 1.3;
+		padding: 0.15rem 0.45rem;
+		border: 1px solid var(--rule);
+		border-radius: 2px;
+		background: var(--card);
+		color: var(--ink);
+		text-decoration: none;
+	}
+	.chip:visited {
+		color: var(--ink);
+	}
+	.chip:hover {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+	.chip[aria-current] {
+		background: var(--accent-bg);
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+	.chip__n {
+		margin-left: 0.25rem;
+		font-size: 0.7rem;
+		color: var(--ink-soft);
+	}
+	.group__more {
+		margin-top: 0.3rem;
+	}
+	.group__more summary {
+		font-family: var(--sans);
+		font-size: 0.75rem;
+		color: var(--ink-soft);
+		cursor: pointer;
+		margin-bottom: 0.3rem;
+	}
+</style>

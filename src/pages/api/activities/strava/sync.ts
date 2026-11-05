@@ -5,20 +5,11 @@
 //
 // Either credential is accepted; the work is identical.
 import type { APIRoute } from 'astro';
-import { requireOwner } from '../../../../lib/auth';
+import { isCron, requireOwner } from '../../../../lib/auth';
 import { json, apiError } from '../../../../lib/http';
 import { syncStrava } from '../../../../lib/strava-sync';
 
 export const prerender = false;
-
-function isCron(request: Request): boolean {
-	const secret = import.meta.env.CRON_SECRET;
-
-	if (!secret) return false;
-	const header = request.headers.get('authorization');
-
-	return header === `Bearer ${secret}`;
-}
 
 async function run(request: Request, cookies: Parameters<APIRoute>[0]['cookies']): Promise<Response> {
 	if (!isCron(request) && !(await requireOwner(cookies))) return apiError('unauthorized', 401);

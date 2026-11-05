@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/activities/strava/sync", "schedule": "0 6 * * *" }
+    { "path": "/api/activities/strava/sync", "schedule": "0 6 * * *" },
+    { "path": "/api/recipes/sync", "schedule": "30 6 * * *" }
   ]
 }

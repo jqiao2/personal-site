@@ -84,6 +84,7 @@ const style = headerThemeStyle(theme);
 					class:list={['dnav__row', n.active && 'dnav__row--active']}
 					href={n.href}
 					aria-current={n.active ? 'page' : undefined}
+					data-owner-only-nav={n.ownerOnly}
 				>
 					{n.label}
 				</a>

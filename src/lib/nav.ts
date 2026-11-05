@@ -36,6 +36,8 @@ export const JOURNAL_HREF = '/month';
 
 export interface NavItem extends NavLink {
 	active: boolean;
+	/** Hidden from visitors client-side; see [data-owner-only-nav] in SiteHeader. */
+	ownerOnly?: boolean;
 	/** Present on the Journal tab: the four logs, as a dropdown. */
 	children?: (NavLink & { active: boolean })[];
 }
@@ -60,6 +62,7 @@ export function siteNav(current?: string): NavItem[] {
 			active: isActive(JOURNAL_HREF, current) || children.some((c) => c.active),
 			children,
 		},
+		{ href: '/recipes', label: 'Recipes', active: isActive('/recipes', current), ownerOnly: true },
 	];
 }
 

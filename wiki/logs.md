@@ -213,3 +213,6 @@ wiki across every iteration, even reverted ones).
 - 2026-10-19 — film lists (/films/lists, smart lists = saved /films/watched query strings). Migration 0076 was taken by a sibling session mid-task; renumbered to 0077 and pushed with a temporary copy of its file. See 0033.
 - 2026-10-19 — Theater duplicates returned: 0027's parseVenue fix never shipped. Fixed split + label match + unique index (0078); MCP writes auto-decline, used CLI db push. Pattern 0034.
 - 2026-10-20 — /films/rank: three films placed at once, questions shuffled between them; list editable (drag to move, ↻ to rank again). Range shifting tested in film-rank.test.mjs; browser check stubbed the PUT. Pattern 0035.
+2026-11-04 — 0036: CRLF files made a scripted multi-line replace miss part way through the recipes library work.
+2026-11-05 — /recipes parser follows Muse's own recipes.json spec (category, status, source_links, notes); added is decoded from the Instagram shortcode, since the file has no date.
+2026-11-05 — 0080 first failed on add column not null: recipes already had 74 rows from a sync on the PR preview, which reaches the live database. Check row counts before a not-null migration; rewritten to keep the rows.
