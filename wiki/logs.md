@@ -216,3 +216,4 @@ wiki across every iteration, even reverted ones).
 2026-11-04 — 0036: CRLF files made a scripted multi-line replace miss part way through the recipes library work.
 2026-11-05 — /recipes parser follows Muse's own recipes.json spec (category, status, source_links, notes); added is decoded from the Instagram shortcode, since the file has no date.
 2026-11-05 — 0080 first failed on add column not null: recipes already had 74 rows from a sync on the PR preview, which reaches the live database. Check row counts before a not-null migration; rewritten to keep the rows.
+2026-11-12 — film lists: drag to reorder + ?sort= views. Only list in the DB was smart, so drag was checked by marking its cells draggable in-page with the PUT stubbed (0035); the goto after dragTo hung (0037).
