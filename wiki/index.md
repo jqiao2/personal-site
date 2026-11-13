@@ -42,3 +42,4 @@ add or update a pattern.
 | [0034](patterns/0034-data-fix-migration-without-its-code-fix.md) | A data-fix migration shipped without the code fix it describes | failure-mode | duplicates a past migration cleaned up are back, or writing a migration that repairs data a bug made; MCP `execute_sql` writes rejected with no prompt |
 | [0035](patterns/0035-stub-owner-writes-when-driving-dev.md) | Stub the owner's writes when driving a page in dev | strategy | clicking through an autosaving owner page with Playwright against the live DB |
 | [0036](patterns/0036-crlf-breaks-scripted-string-edits.md) | Scripted string edits miss in CRLF files | failure-mode | editing source with a node/sed script, especially a multi-line match |
+| [0037](patterns/0037-playwright-hangs-after-html5-drag.md) | Playwright navigation hangs after an HTML5 `dragTo` | failure-mode | driving native drag and drop with Playwright, then navigating |

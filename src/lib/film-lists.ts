@@ -20,6 +20,8 @@ export interface FilmList {
 
 export interface FilmListFilm extends WatchlistTile {
 	rating?: number | null;
+	/** When it went on a hand-picked list. */
+	added_at?: string;
 }
 
 export interface FilmListSummary extends FilmList {
@@ -32,6 +34,7 @@ const LIST_COLUMNS = 'id, name, description, query, position';
 
 const itemRows = z.array(
 	z.object({
+		added_at: z.string(),
 		movies: z.object({
 			tmdb_id: z.number(),
 			title: z.string(),
@@ -49,7 +52,7 @@ async function filmsOf(list: FilmList, isOwner: boolean, limit: number): Promise
 
 	const { data, error, count } = await supabasePublic
 		.from('film_list_items')
-		.select('position, movies!inner(tmdb_id, title, release_year, poster_path)', { count: 'exact' })
+		.select('added_at, movies!inner(tmdb_id, title, release_year, poster_path)', { count: 'exact' })
 		.eq('list_id', list.id)
 		.order('position')
 		.order('added_at')
@@ -58,7 +61,7 @@ async function filmsOf(list: FilmList, isOwner: boolean, limit: number): Promise
 	if (error) throw new Error(`film list items failed: ${error.message}`);
 
 	// The client types a to-one embed as an array; it arrives as one object.
-	const films = itemRows.parse(data ?? []).map((r) => r.movies);
+	const films = itemRows.parse(data ?? []).map((r) => ({ ...r.movies, added_at: r.added_at }));
 
 	return { films, total: count ?? 0 };
 }

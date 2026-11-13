@@ -7,6 +7,7 @@ import { filterSummaryOf, watchedQueryFromParams } from '../../../lib/watched-pa
 import { starText } from '../../../lib/format';
 import { imageUrl } from '../../../lib/tmdb';
 import { requireOwner } from '../../../lib/auth';
+import { listSorts, parseListSort, sortListFilms } from '../../../lib/film-list-sort';
 
 // Rendered on demand — reflects the live database.
 export const prerender = false;
@@ -29,6 +30,15 @@ const summary = smart
 	: [];
 
 const editFiltersHref = smart ? `/films/watched?${list.query ? `${list.query}&` : ''}list=${list.id}` : null;
+
+const sorts = listSorts(smart);
+
+const sort = parseListSort(Astro.url.searchParams.get('sort'), smart);
+
+const shown = sortListFilms(films, sort);
+
+// Only the hand-picked order itself can be rearranged; a sorted view is read-only.
+const arrangeable = isOwner && !smart && sort === '';
 ---
 
 <FilmLayout title={`${list.name} — Jason's film log`}>
@@ -78,20 +88,45 @@ const editFiltersHref = smart ? `/films/watched?${list.query ? `${list.query}&` 
 
 			{films.length === 0 && <p class="empty">No films yet.</p>}
 
+			{films.length > 1 && (
+				<nav class="sorts" aria-label="Sort">
+					{sorts.map((s) => (
+						<a
+							href={s.key ? `?sort=${s.key}` : Astro.url.pathname}
+							class={s.key === sort ? 'sorts__on' : undefined}
+							aria-current={s.key === sort ? 'true' : undefined}
+						>
+							{s.label}
+						</a>
+					))}
+				</nav>
+			)}
+
 			<ol class="grid" id="grid">
-				{films.map((f) => {
+				{shown.map((f) => {
 					const poster = imageUrl(f.poster_path, 'w342');
 					return (
-						<li class="cell" data-tmdb={f.tmdb_id}>
-							<a class={poster ? 'tile' : 'tile tile--noimg'} href={`/films/movie/${f.tmdb_id}`}>
-								{poster && <img data-poster={poster} alt={`${f.title} poster`} decoding="async" />}
+						<li class="cell" data-tmdb={f.tmdb_id} draggable={arrangeable ? 'true' : undefined}>
+							<a
+								class={poster ? 'tile' : 'tile tile--noimg'}
+								href={`/films/movie/${f.tmdb_id}`}
+								draggable={arrangeable ? 'false' : undefined}
+							>
+								{poster && (
+									<img
+										data-poster={poster}
+										alt={`${f.title} poster`}
+										decoding="async"
+										draggable={arrangeable ? 'false' : undefined}
+									/>
+								)}
 								<div class="tile__overlay">
 									<div class="tile__title">{f.title}</div>
 									<div class="tile__year">{f.release_year}</div>
 									{smart && <div class="tile__stars">{starText(f.rating) ?? 'Unrated'}</div>}
 								</div>
 							</a>
-							{isOwner && !smart && (
+							{arrangeable && (
 								<div class="cell__tools">
 									<button type="button" data-move="-1" aria-label={`Move ${f.title} earlier`}>←</button>
 									<button type="button" data-move="1" aria-label={`Move ${f.title} later`}>→</button>
@@ -307,6 +342,28 @@ const editFiltersHref = smart ? `/films/watched?${list.query ? `${list.query}&` 
 			font-style: italic;
 			font-size: 17px;
 		}
+		.sorts {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 4px 16px;
+			font-size: 12.5px;
+			margin-bottom: 16px;
+		}
+		.sorts a {
+			color: #a2857a;
+		}
+		.sorts a:hover {
+			color: #f4e8d1;
+		}
+		.sorts .sorts__on {
+			color: #f0d488;
+		}
+		.cell[draggable='true'] {
+			cursor: grab;
+		}
+		.cell--dragging {
+			opacity: 0.35;
+		}
 		.grid {
 			list-style: none;
 			margin: 0;
@@ -439,6 +496,50 @@ const editFiltersHref = smart ? `/films/watched?${list.query ? `${list.query}&` 
 			// --- Hand-picked lists: remove and reorder in place, then save ---
 			const grid = document.getElementById('grid');
 
+			const order = () => [...(grid?.querySelectorAll<HTMLElement>('.cell') ?? [])].map((c) => Number(c.dataset.tmdb));
+
+			const saveOrder = () =>
+				sendJson('/api/films/lists/items', 'PUT', JSON.stringify({ listId, tmdbIds: order() }));
+
+			// Drag a poster onto another to move it there. Cells move as the drag passes
+			// over them, so the drop lands where the gap already is; the arrows below stay
+			// for keyboards and touch screens without drag and drop.
+			let dragging: HTMLElement | null = null;
+			let before = '';
+
+			grid?.addEventListener('dragstart', (e) => {
+				const cell = e.target instanceof Element ? e.target.closest<HTMLElement>('.cell[draggable="true"]') : null;
+
+				if (!cell || !e.dataTransfer) return;
+				dragging = cell;
+				before = order().join();
+				e.dataTransfer.effectAllowed = 'move';
+				// Firefox won't start a drag that carries no data.
+				e.dataTransfer.setData('text/plain', cell.dataset.tmdb ?? '');
+				cell.classList.add('cell--dragging');
+			});
+
+			grid?.addEventListener('dragover', (e) => {
+				if (!dragging) return;
+				e.preventDefault();
+				const over = e.target instanceof Element ? e.target.closest<HTMLElement>('.cell') : null;
+
+				if (!over || over === dragging) return;
+
+				if (dragging.compareDocumentPosition(over) & Node.DOCUMENT_POSITION_FOLLOWING) over.after(dragging);
+				else over.before(dragging);
+			});
+
+			grid?.addEventListener('drop', (e) => e.preventDefault());
+
+			grid?.addEventListener('dragend', () => {
+				if (!dragging) return;
+				dragging.classList.remove('cell--dragging');
+				dragging = null;
+
+				if (order().join() !== before) void saveOrder();
+			});
+
 			grid?.addEventListener('click', async (e) => {
 				const btn = e.target instanceof Element ? e.target.closest<HTMLButtonElement>('.cell__tools button') : null;
 				const cell = btn?.closest<HTMLElement>('.cell');
@@ -457,9 +558,7 @@ const editFiltersHref = smart ? `/films/watched?${list.query ? `${list.query}&` 
 				else cell.nextElementSibling?.after(cell);
 				btn.focus();
 
-				const tmdbIds = [...grid.querySelectorAll<HTMLElement>('.cell')].map((c) => Number(c.dataset.tmdb));
-
-				await sendJson('/api/films/lists/items', 'PUT', JSON.stringify({ listId, tmdbIds }));
+				await saveOrder();
 			});
 
 			// --- Add a film: debounced TMDB search, click a result to add it ---
