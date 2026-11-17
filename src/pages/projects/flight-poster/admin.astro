@@ -40,12 +40,12 @@ const f = v.current?.flight;
 		<summary>Setup</summary>
 		<ol>
 			<li class:list={{ done: tokenSet }}>
-				Set <code>FLIGHT_POSTER_TOKEN</code> in Vercel to a long random string.
+				Set <code>FLIGHT_POSTER_TOKEN</code> in Vercel to a long random string.{' '}
 				{tokenSet ? '(set)' : '(not set)'}
 			</li>
 			<li>Flash over USB-C: <code>pio run -e esp32s3 -t upload</code></li>
 			<li>
-				Copy <code>config.example.json</code> to the SD card as <code>/config.json</code>. Fill in Wi-Fi,
+				Copy <code>config.example.json</code> to the SD card as <code>/config.json</code>. Fill in Wi-Fi,{' '}
 				<code>ota_password</code>, and:
 				<pre>"site_url": "{Astro.url.origin}",
 "site_token": "&lt;FLIGHT_POSTER_TOKEN&gt;"</pre>
