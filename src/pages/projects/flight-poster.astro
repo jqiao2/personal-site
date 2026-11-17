@@ -1,0 +1,191 @@
+---
+// The flight poster, for visitors: an exploded view of the frame. Static; the
+// owner's settings live at /projects/flight-poster/admin, linked below for the
+// owner only (hidden client-side, see SiteHeader.astro).
+import Layout from '../../layouts/Layout.astro';
+import { H, LAYERS, VIEWBOX, W, layerMatrix, leaderEnd } from '../../lib/flight-poster-exploded';
+
+// Back first, so nearer layers paint over farther ones.
+const layers = LAYERS.map((l, depth) => ({ ...l, depth, matrix: layerMatrix(depth), end: leaderEnd(depth) })).reverse();
+
+const front = leaderEnd(0);
+
+const back = leaderEnd(LAYERS.length - 1);
+
+const INKS = [
+	['black', '#1c1c1c'],
+	['white', '#f2efe6'],
+	['yellow', '#e8c425'],
+	['red', '#b8322a'],
+	['blue', '#2d5fa8'],
+	['green', '#3d7a3a'],
+];
+---
+
+<Layout title="Flight Poster">
+	<h1>Flight Poster</h1>
+	<p class="lede">
+		A framed colour e-ink poster for whichever plane is flying over the apartment, drawn as a vintage travel poster
+		for where it came from or where it is going.
+	</p>
+
+	<figure class="exploded">
+		<svg viewBox={VIEWBOX} role="img" aria-labelledby="fp-title">
+			<title id="fp-title">
+				Exploded view, front to back: {LAYERS.map((l) => l.name).join(', ')}
+			</title>
+
+			<line class="axis" x1={front.x} y1={front.y} x2={back.x} y2={back.y} />
+
+			{
+				layers.map((l) => (
+					<g>
+						<g transform={l.matrix}>
+							{l.key === 'back' && (
+								<>
+									<rect width={W} height={H} fill="#b9a582" stroke="#6f6148" />
+									<path d="M55 14 l4 -5 4 5 4 -5 4 5 4 -5 4 5 4 -5 4 5" fill="none" stroke="#555" stroke-width="1.5" />
+									<circle cx={W / 2} cy={H - 14} r="4" fill="#6f6148" />
+									<path d={`M${W / 2} ${H - 14} C ${W / 2} ${H + 30}, ${W / 2 - 40} ${H + 40}, ${W / 2 - 60} ${H + 70}`} fill="none" stroke="#333" stroke-width="2.5" />
+								</>
+							)}
+							{l.key === 'board' && (
+								<>
+									<rect class="ghost" width={W} height={H} />
+									<rect x="40" y="118" width="70" height="48" rx="2" fill="#1f5c3a" stroke="#123a24" />
+									<rect x="60" y="114" width="30" height="6" fill="#333" />
+									<rect x="47" y="126" width="30" height="24" fill="#c9c9c9" stroke="#888" />
+									<rect x="84" y="128" width="18" height="14" fill="#8a8a8a" />
+									<rect x="69" y="161" width="12" height="6" rx="2" fill="#b5b5b5" />
+								</>
+							)}
+							{l.key === 'panel' && (
+								<>
+									<rect x="8" y="8" width={W - 16} height={H - 16} fill="#d9d6cf" stroke="#9a968d" />
+									<rect x="20" y="20" width={W - 40} height={H - 40} fill="#f2efe6" />
+									<rect x="20" y="20" width={W - 40} height="80" fill="#2d5fa8" />
+									<circle cx="98" cy="58" r="16" fill="#e8c425" />
+									<path d="M20 112 L52 76 L78 100 L100 82 L130 110 L130 130 L20 130 Z" fill="#3d7a3a" />
+									<rect x="58" y="96" width="12" height="34" fill="#b8322a" />
+									<rect x="32" y="142" width="86" height="10" fill="#1c1c1c" />
+									<rect x="48" y="158" width="54" height="5" fill="#b8322a" />
+									<rect x="60" y={H - 8} width="30" height="16" fill="#c58a2c" />
+								</>
+							)}
+							{l.key === 'mat' && (
+								<path d={`M0 0 H${W} V${H} H0 Z M24 24 V${H - 24} H${W - 24} V24 Z`} fill="#f7f4ec" stroke="#bdb6a6" fill-rule="evenodd" />
+							)}
+							{l.key === 'glass' && (
+								<>
+									<rect width={W} height={H} fill="rgba(170, 200, 215, 0.22)" stroke="rgba(110, 150, 170, 0.8)" />
+									<path d="M24 60 L70 14 M30 84 L96 18" stroke="rgba(255, 255, 255, 0.7)" stroke-width="3" />
+								</>
+							)}
+							{l.key === 'frame' && (
+								<>
+									<path d={`M0 0 H${W} V${H} H0 Z M14 14 V${H - 14} H${W - 14} V14 Z`} fill="#8a6a4a" stroke="#4e3a26" fill-rule="evenodd" />
+									<rect x="14" y="14" width={W - 28} height={H - 28} fill="none" stroke="#5e4630" />
+								</>
+							)}
+						</g>
+						<line class="leader" x1="12" y1={l.end.y} x2={l.end.x} y2={l.end.y} />
+						<circle class="dot" cx={l.end.x} cy={l.end.y} r="2.5" />
+						<text x="12" y={l.end.y - 6} class="name">{l.name}</text>
+						<text x="12" y={l.end.y + 14} class="spec">{l.spec}</text>
+					</g>
+				))
+			}
+		</svg>
+	</figure>
+
+	<h2>How it works</h2>
+	<ol>
+		<li>Every five minutes, from 7am to 11pm, the board asks adsb.fi what is in the sky within 25 nautical miles.</li>
+		<li>It keeps the airliners, looks up each one's route on adsbdb, and picks one, weighted toward the far-away cities.</li>
+		<li>It draws that city's poster from the microSD card. A full refresh takes about 20 seconds, so it only redraws when the city changes, and never more than once an hour.</li>
+	</ol>
+	<p>
+		The panel holds its picture with the power off, and it only draws power while it refreshes. There are six inks,
+		and every poster is dithered down to them:
+	</p>
+	<ul class="inks">
+		{
+			INKS.map(([name, hex]) => (
+				<li>
+					<span class="swatch" style={`background:${hex}`} />
+					{name}
+				</li>
+			))
+		}
+	</ul>
+	<p>
+		<a href="https://github.com/jqiao2/flight-poster">Source on GitHub</a>
+		<span data-owner-only-nav> · <a href="/projects/flight-poster/admin">Settings</a></span>
+	</p>
+</Layout>
+
+<style>
+	.lede {
+		color: var(--ink-soft);
+	}
+
+	.exploded {
+		margin: 1.5rem 0;
+	}
+
+	.exploded svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.axis {
+		stroke: var(--ink-soft);
+		stroke-dasharray: 4 4;
+	}
+
+	.ghost {
+		fill: none;
+		stroke: var(--ink-soft);
+		stroke-dasharray: 3 4;
+	}
+
+	.leader {
+		stroke: var(--ink-soft);
+		stroke-width: 0.75;
+	}
+
+	.dot {
+		fill: var(--ink-soft);
+	}
+
+	.name {
+		fill: var(--fg);
+		font: 600 14px var(--serif);
+	}
+
+	.spec {
+		fill: var(--ink-soft);
+		font: 12px var(--sans);
+	}
+
+	.inks {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem 1.25rem;
+	}
+
+	.inks li {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.swatch {
+		width: 1rem;
+		height: 1rem;
+		border: 1px solid var(--border);
+	}
+</style>
