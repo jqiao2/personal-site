@@ -11,6 +11,8 @@ interface ImportMetaEnv {
 	readonly READING_SYNC_TOKEN: string;
 	/** Bearer token for /api/activities/weight — the iOS scale-sync Shortcut's only credential. */
 	readonly WEIGHT_SYNC_TOKEN?: string;
+	/** Bearer token for /api/flight-poster/sync — the e-ink board's site_token. */
+	readonly FLIGHT_POSTER_TOKEN?: string;
 	/** Optional — see src/lib/jellyfin.ts. Absent means "no play button". */
 	readonly JELLYFIN_URL?: string;
 	readonly JELLYFIN_LOCAL_URL?: string;

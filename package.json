@@ -40,6 +40,7 @@
     "log:test": "node --import ./scripts/ts-hook.mjs scripts/journal-log.test.mjs",
     "recipes:test": "node --import ./scripts/ts-hook.mjs scripts/recipes.test.mjs",
     "taste:test": "node --import ./scripts/ts-hook.mjs scripts/film-taste.test.mjs",
+    "flightposter:test": "node --import ./scripts/ts-hook.mjs scripts/flight-poster.test.mjs",
     "shot": "node --env-file=.env scripts/shot.mjs",
     "lint": "oxlint"
   },

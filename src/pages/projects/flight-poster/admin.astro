@@ -1,0 +1,290 @@
+---
+// Owner-only: the flight poster's setup, what it shows, what else it can show,
+// and its settings. The board reaches the site, never the reverse (it sits on the
+// home network), so everything here is read from or queued for its next poll —
+// see /api/flight-poster/sync.
+import Layout from '../../../layouts/Layout.astro';
+import { requireOwner } from '../../../lib/auth';
+import { adminView, boardTime } from '../../../lib/flight-poster';
+import { getPoster } from '../../../lib/flight-poster-db';
+
+export const prerender = false;
+
+if (!(await requireOwner(Astro.cookies))) {
+	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
+}
+
+const v = adminView(await getPoster());
+
+const tokenSet = Boolean(import.meta.env.FLIGHT_POSTER_TOKEN);
+
+const c = v.config;
+
+const f = v.current?.flight;
+---
+
+<Layout title="Flight Poster · Settings">
+	<p class="crumb"><a href="/projects/flight-poster">Flight Poster</a></p>
+	<h1>Settings</h1>
+
+	<p class:list={['state', { 'state--off': v.offline || v.unsetup }]}>
+		{v.unsetup ? 'Not connected yet' : v.offline ? `Offline · last heard ${v.syncedAgo}` : `Online · ${v.syncedAgo}`}
+		{v.status.firmware && <span> · firmware {v.status.firmware}</span>}
+		{v.status.wifi?.rssi != null && <span> · Wi-Fi {v.status.wifi.rssi} dBm</span>}
+		{v.status.sd_mounted === false && <span class="warn"> · SD card not mounted</span>}
+		{v.status.index_error && <span class="warn"> · {v.status.index_error}</span>}
+		{v.status.last_api_error && <span class="warn"> · {v.status.last_api_error}</span>}
+	</p>
+
+	<details class="setup" open={v.unsetup || undefined}>
+		<summary>Setup</summary>
+		<ol>
+			<li class:list={{ done: tokenSet }}>
+				Set <code>FLIGHT_POSTER_TOKEN</code> in Vercel to a long random string.
+				{tokenSet ? '(set)' : '(not set)'}
+			</li>
+			<li>Flash over USB-C: <code>pio run -e esp32s3 -t upload</code></li>
+			<li>
+				Copy <code>config.example.json</code> to the SD card as <code>/config.json</code>. Fill in Wi-Fi,
+				<code>ota_password</code>, and:
+				<pre>"site_url": "{Astro.url.origin}",
+"site_token": "&lt;FLIGHT_POSTER_TOKEN&gt;"</pre>
+			</li>
+			<li>Pack posters onto the card: <code>python3 tools/pack_poster.py art.jpg --sd /Volumes/POSTER --slug london</code></li>
+			<li>
+				Run <code>python3 tools/make_test_pattern.py --sd /Volumes/POSTER</code>, insert the card and power it up. This page
+				fills in on its first poll.
+			</li>
+			<li class:list={{ done: !v.unsetup }}>Check colours and orientation with Show city → Test pattern below.</li>
+		</ol>
+	</details>
+
+	<h2>Now showing</h2>
+	{
+		v.current ? (
+			<div class="now">
+				<p class="now__city">{v.current.name}</p>
+				<p class="meta">since {v.current.shownAt}</p>
+				{f && !f.manual && (
+					<p>
+						{f.callsign} {f.airline && `· ${f.airline}`} {f.type && `· ${f.type}`}
+						<br />
+						{f.origin} {f.origin_city && `(${f.origin_city})`} → {f.destination} {f.dest_city && `(${f.dest_city})`}
+						<br />
+						<span class="meta">
+							{f.alt_ft?.toLocaleString()} ft · {f.distance_km?.toLocaleString()} km from home
+						</span>
+					</p>
+				)}
+				{f?.manual && <p class="meta">forced by hand</p>}
+			</div>
+		) : (
+			<p class="meta">Nothing reported yet.</p>
+		)
+	}
+
+	<h2 id="library">Library</h2>
+	{
+		v.pending && (
+			<form method="post" action="/api/flight-poster" class="pending">
+				<input type="hidden" name="action" value="cancel" />
+				Showing <strong>{v.pending}</strong> on the next poll.
+				<button type="submit">Cancel</button>
+			</form>
+		)
+	}
+	{v.cities.length === 0 && <p class="meta">No cities reported yet.</p>}
+	<ul class="cities">
+		{
+			v.cities.map((city) => (
+				<li class:list={{ current: city.current, pending: city.pending }}>
+					<form method="post" action="/api/flight-poster">
+						<input type="hidden" name="action" value="show" />
+						<input type="hidden" name="slug" value={city.slug} />
+						<button type="submit" disabled={city.current || undefined} title={city.current ? 'On the wall now' : `Show ${city.name}`}>
+							{city.name}
+						</button>
+					</form>
+				</li>
+			))
+		}
+	</ul>
+
+	<h2 id="settings">Behaviour</h2>
+	<form method="post" action="/api/flight-poster" class="settings">
+		<input type="hidden" name="action" value="config" />
+
+		<fieldset>
+			<legend>Where to look</legend>
+			<label>Latitude <input name="lat" type="number" step="0.0001" value={c.home.lat} required /></label>
+			<label>Longitude <input name="lon" type="number" step="0.0001" value={c.home.lon} required /></label>
+			<label>Radius (NM) <input name="radius_nm" type="number" min="1" max="250" value={c.home.radius_nm} required /></label>
+		</fieldset>
+
+		<fieldset>
+			<legend>When</legend>
+			<label>From <input name="start" type="time" value={c.active_hours.start} required /></label>
+			<label>To <input name="end" type="time" value={c.active_hours.end} required /></label>
+			<label>Poll every (min) <input name="poll_minutes" type="number" min="1" max="120" value={c.poll_minutes} required /></label>
+			<label>Hold a poster at least (min) <input name="min_hold_minutes" type="number" min="0" max="1440" value={c.min_hold_minutes} required /></label>
+		</fieldset>
+
+		<fieldset>
+			<legend>Which planes</legend>
+			<label>Minimum altitude (ft) <input name="min_altitude_ft" type="number" min="0" max="50000" value={c.filter.min_altitude_ft} required /></label>
+			<label class="check"><input name="airline_callsigns_only" type="checkbox" checked={c.filter.airline_callsigns_only} /> Airline callsigns only</label>
+			<label>Ignore ADS-B categories <input name="drop_categories" value={c.filter.drop_categories.join(', ')} /></label>
+			<label>Ignore callsign prefixes <input name="exclude_callsign_prefixes" value={c.filter.exclude_callsign_prefixes.join(', ')} /></label>
+		</fieldset>
+
+		<fieldset>
+			<legend>Which city</legend>
+			<label>Distance exponent <input name="distance_exponent" type="number" min="0" max="4" step="0.1" value={c.selection.distance_exponent} required /></label>
+			<label>Distance floor (km) <input name="min_distance_km" type="number" min="0" max="20000" value={c.selection.min_distance_km} required /></label>
+			<label class="check"><input name="prefer_cities_with_posters" type="checkbox" checked={c.selection.prefer_cities_with_posters} /> Prefer cities with posters</label>
+			<label class="check"><input name="use_fallback_posters" type="checkbox" checked={c.use_fallback_posters} /> Fallback art when a city has none</label>
+		</fieldset>
+
+		<button type="submit">Save</button>
+	</form>
+
+	{
+		(v.status.log?.length ?? 0) > 0 && (
+			<>
+				<h2>Recent decisions</h2>
+				<ol class="log">
+					{v.status.log!.map((e) => (
+						<li>
+							<time>{boardTime(e.at)}</time> {e.text}
+						</li>
+					))}
+				</ol>
+			</>
+		)
+	}
+</Layout>
+
+<style>
+	.crumb {
+		margin: 0;
+		font-size: 0.9rem;
+	}
+
+	.meta,
+	.state {
+		color: var(--ink-soft);
+		font-size: 0.9rem;
+	}
+
+	.state--off,
+	.warn {
+		color: var(--accent);
+	}
+
+	.setup {
+		border: 1px solid var(--border);
+		padding: 0.5rem 1rem;
+		margin: 1rem 0;
+	}
+
+	.setup summary {
+		cursor: pointer;
+		font-weight: 600;
+	}
+
+	.setup li {
+		margin: 0.4rem 0;
+	}
+
+	.setup .done {
+		color: var(--ink-soft);
+	}
+
+	.setup pre {
+		background: var(--card);
+		border: 1px solid var(--border);
+		padding: 0.5rem;
+		overflow-x: auto;
+	}
+
+	.now__city {
+		font-size: 1.6rem;
+		margin: 0;
+	}
+
+	.cities {
+		list-style: none;
+		padding: 0;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem;
+	}
+
+	.cities button {
+		font: inherit;
+		background: var(--card);
+		color: var(--fg);
+		border: 1px solid var(--border);
+		padding: 0.2rem 0.6rem;
+		cursor: pointer;
+	}
+
+	.cities button:hover {
+		border-color: var(--fg);
+	}
+
+	.cities .current button {
+		background: var(--fg);
+		color: var(--bg);
+		cursor: default;
+	}
+
+	.cities .pending button {
+		border-color: var(--accent);
+		color: var(--accent);
+	}
+
+	.pending {
+		margin-bottom: 0.75rem;
+	}
+
+	.pending button {
+		margin-left: 0.5rem;
+	}
+
+	.settings fieldset {
+		border: 1px solid var(--border);
+		margin: 0 0 1rem;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+		gap: 0.6rem 1rem;
+	}
+
+	.settings label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		font-size: 0.9rem;
+	}
+
+	.settings label.check {
+		flex-direction: row;
+		align-items: center;
+	}
+
+	.settings input:not([type='checkbox']) {
+		font: inherit;
+		padding: 0.25rem 0.4rem;
+	}
+
+	.log {
+		list-style: none;
+		padding: 0;
+		font-size: 0.85rem;
+	}
+
+	.log time {
+		color: var(--ink-soft);
+		margin-right: 0.5rem;
+	}
+</style>
