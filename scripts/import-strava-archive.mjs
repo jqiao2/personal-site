@@ -942,7 +942,7 @@ function buildMultisport(rows, file, sessions) {
 
 			// Transitions are named by POSITION, not by which csv row matched.
 			// Strava types both T1 and T2 as "Workout", so they are
-			// interchangeable to the matcher above — and it duly labelled one
+			// interchangeable to the matcher above — and it duly labeled one
 			// event's first transition "T2". The file's session order is the
 			// truth: the first transition of a triathlon is T1.
 			if (canonical.sport === 'transition') {

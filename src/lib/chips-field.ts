@@ -1,7 +1,7 @@
 // Free-text values as removable chips, with autocomplete over names already in
 // the database. Shared by the film editor (tags, "watched with") and the meal
 // editor (tags, "with", to-try "why") — the same interaction everywhere. The
-// markup and styling live in ChipsField.astro; this is only the behaviour.
+// markup and styling live in ChipsField.astro; this is only the behavior.
 export interface ChipField {
 	get(): string[];
 	set(values: string[]): void;

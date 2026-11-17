@@ -16,7 +16,7 @@ import { supabasePublic } from './supabase';
 /** The datasets a suggestion can come from, and what to call them on screen. */
 export const SOURCE_LABELS = {
 	dohmh: 'NYC health dept',
-	nys: 'NY State licence',
+	nys: 'NY State license',
 	overture: 'Overture',
 	foursquare: 'Foursquare',
 	osm: 'OpenStreetMap',
@@ -41,19 +41,19 @@ export interface GazetteerHit {
 	cuisines: string[];
 	phone: string | null;
 	website: string | null;
-	/** Metres from the reference point, when one was given. */
+	/** Meters from the reference point, when one was given. */
 	distance: number | null;
 }
 
 /**
- * The same normalisation the imported names were stored under.
+ * The same normalization the imported names were stored under.
  *
  * It exists in three places — here, the importer, and `place_norm()` in the
  * database — and all three have to agree or a search finds nothing. The
  * database function is the one that matters; these two are for building queries
  * without a round trip.
  */
-export function normalise(raw: string): string {
+export function normalize(raw: string): string {
 	return raw
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
@@ -102,7 +102,7 @@ const SHOUTS = new Set<string>(['dohmh', 'nys']);
 
 const EARTH_M = 6371000;
 
-function metres(aLat: number, aLng: number, bLat: number, bLng: number): number {
+function meters(aLat: number, aLng: number, bLat: number, bLng: number): number {
 	const toRad = (d: number) => (d * Math.PI) / 180;
 	const dLat = toRad(bLat - aLat);
 	const dLng = toRad(bLng - aLng);
@@ -132,17 +132,17 @@ export interface GazetteerQuery {
  * find the four Daily Provisions; the word that names the street picks the one.
  *
  * FETCH WIDE, RANK HERE. The database can find the rows — a trigram index over
- * thirty thousand names answers in milliseconds — but "best" is a judgement
+ * thirty thousand names answers in milliseconds — but "best" is a judgment
  * involving three things it would take a stored procedure to express: whether
  * the match is at the start of the name, how far away it is, and which source
  * said so. Sixty candidates is a small enough net to sort in memory and a wide
  * enough one that the right answer is in it.
  */
 export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerHit[]> {
-	const norm = normalise(query.q);
+	const norm = normalize(query.q);
 
 	if (norm.length < 2) return [];
-	// Normalisation leaves only A-Z, 0-9 and spaces, so no term can carry a
+	// Normalization leaves only A-Z, 0-9 and spaces, so no term can carry a
 	// comma or a percent into the filter it is spliced into below.
 	const terms = norm.split(' ').filter(Boolean).slice(0, 5);
 
@@ -164,7 +164,7 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 
 	/** How well the NAME alone answers the query — 0 is best. */
 	const rank = (name: string): number => {
-		const n = normalise(name);
+		const n = normalize(name);
 
 		if (n.startsWith(norm)) return 0;
 
@@ -176,12 +176,12 @@ export async function searchGazetteer(query: GazetteerQuery): Promise<GazetteerH
 	return rows
 		.map((r) => ({
 			...r,
-			// The health department and the state licence list SHOUT; nobody else
+			// The health department and the state license list SHOUT; nobody else
 			// does. Title-case their names, and only theirs, and only when they
 			// really are all caps — so a source that cases its names is left alone.
 			name: SHOUTS.has(r.source) && !/[a-z]/.test(r.name) ? titleCaseName(r.name) : r.name,
 			sourceLabel: SOURCE_LABELS[r.source] ?? r.source,
-			distance: near ? metres(near.lat, near.lng, r.lat, r.lng) : null,
+			distance: near ? meters(near.lat, near.lng, r.lat, r.lng) : null,
 		}))
 		.sort((a, b) => {
 			// A name that STARTS with what you typed is what you meant; "Thai

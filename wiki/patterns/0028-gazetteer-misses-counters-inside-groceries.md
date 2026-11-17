@@ -1,4 +1,4 @@
-# The gazetteer misses food counters that live inside a grocery licence
+# The gazetteer misses food counters that live inside a grocery license
 
 **Type:** failure-mode · **Applies when:** a real, open food place is missing from
 the composer's suggestions even though DOHMH and Overture are both imported
@@ -12,7 +12,7 @@ by no suggestion source, so it can only be added by hand.
 
 1. **DOHMH never had it.** The health-department inspection set (`43nn-pn8j`)
    has nothing at that address or phone. Many bagel/deli counters operate under a
-   **NY State Ag & Markets retail-food-store licence**, not a DOHMH restaurant
+   **NY State Ag & Markets retail-food-store license**, not a DOHMH restaurant
    permit. The state lists this address as `BARRON GROCERY STORE`
    (Unlimited Opportunity Inc). It also lists `BEST BUY 24HR BAGELS` and `2819
    CROPSEY BAGELS & DELI` nearby, and neither of those is in `place_sources`.
@@ -24,7 +24,7 @@ by no suggestion source, so it can only be added by hand.
    `bubble_tea_shop`, `steakhouse` (413, which has no "restaurant" in its slug), `wine_bar`, and so on.
    Grocery and convenience stores (9.4k) also go.
 3. **The name exists only on Google.** No open source carries the trade name
-   "Bagels & Grill". Every licence and POI dataset names the grocery that holds it.
+   "Bagels & Grill". Every license and POI dataset names the grocery that holds it.
 
 ## Also broken: the Overture schema moved
 
@@ -41,7 +41,7 @@ today** until the query moves to `taxonomy.primary`.
   bubble-tea shops, about 72k open NYC places. Groceries and liquor stores are under
   `shopping` and stay out, because the state list covers the counters inside them.
 - **New source `nys`** (migration 0067): NYS Ag & Markets Retail Food Stores,
-  `data.ny.gov` `9a8c-vfzj`, NYC counties only. It keeps licences whose
+  `data.ny.gov` `9a8c-vfzj`, NYC counties only. It keeps licenses whose
   `estab_type` contains C (food prep) or B (bakery), about 9.5k rows. A bare `A` is
   a shop with no food made on the spot. Names are all caps, so `gazetteer.ts`
   title-cases `nys` as it does `dohmh`.

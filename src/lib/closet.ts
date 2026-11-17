@@ -1,6 +1,6 @@
 // The closet at /films/closet: the watchlist and everything watched, drawn as
 // two walls of disc cases. Reads the whole of both collections plus the diary,
-// and turns each film into a spine — colour, case, number and the three sort
+// and turns each film into a spine — color, case, number and the three sort
 // ranks the page's toggle switches between — so the .astro file stays markup.
 import { supabasePublic } from './supabase';
 import { seed01 } from './books-view';
@@ -82,7 +82,7 @@ export function inkOn(hex: string): string {
 }
 
 /**
- * Stock case colours, for a film whose poster colour isn't known yet: the flat, printed spines of a boutique label rather than book
+ * Stock case colors, for a film whose poster color isn't known yet: the flat, printed spines of a boutique label rather than book
  * cloth. Paired with the ink that reads on them.
  */
 const CASES: [string, string][] = [

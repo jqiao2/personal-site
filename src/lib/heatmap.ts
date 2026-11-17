@@ -38,7 +38,7 @@ const EARTH_RADIUS_M = 6378137; // WGS84 equatorial radius — matches EPSG:3857
 
 const MAX_LAT = 85.05112878; // mercator's own cutoff
 
-/** The cell's side in Web Mercator metres. Mercator stretches by 1/cos(lat),
+/** The cell's side in Web Mercator meters. Mercator stretches by 1/cos(lat),
  * so a cell that measures TILE_M on the ground at REF_LAT measures this in the
  * projection — everywhere. */
 const CELL = TILE_M / Math.cos((REF_LAT * Math.PI) / 180);
@@ -81,7 +81,7 @@ export function tileBounds(key: string): [[number, number], [number, number]] {
 	];
 }
 
-/** The ground size of a tile at a given latitude, in metres — TILE_M at
+/** The ground size of a tile at a given latitude, in meters — TILE_M at
  * REF_LAT by construction, and what the sampling step below is derived from. */
 export function tileGroundMeters(lat: number): number {
 	return CELL * Math.cos((Math.max(-MAX_LAT, Math.min(MAX_LAT, lat)) * Math.PI) / 180);
@@ -109,7 +109,7 @@ function trackCells(points: [number, number][], keyOf: (lat: number, lng: number
 
 		if (!next) continue;
 		const [lat2, lng2] = next;
-		// Metres between the two points, flat-earth over a segment this short.
+		// Meters between the two points, flat-earth over a segment this short.
 		const cosLat = Math.cos((lat * Math.PI) / 180);
 		const dy = (lat2 - lat) * M_PER_DEG_LAT;
 		const dx = (lng2 - lng) * M_PER_DEG_LAT * cosLat;
@@ -135,7 +135,7 @@ export const trackTiles = (points: [number, number][]) => trackCells(points, til
  * of times, a habit, a rut. Counts are heavily skewed (one commute can be
  * ridden hundreds of times while most ground is crossed once), so fixed
  * thresholds read better than a linear ramp to the maximum, which would push
- * everything but the commute into the palest colour. */
+ * everything but the commute into the palest color. */
 export const TILE_BUCKETS = [1, 2, 4, 10] as const;
 
 export interface TileCollection {
@@ -154,7 +154,7 @@ const round = (n: number) => Math.round(n * 1e6) / 1e6;
 /**
  * The unlocked tiles as drawable rectangles, grouped into one MultiPolygon per
  * bucket of TILE_BUCKETS. With the heatmap off the page paints every bucket
- * the same colour, which is the boolean reading; with it on, the bucket picks
+ * the same color, which is the boolean reading; with it on, the bucket picks
  * the shade.
  *
  * ONE FEATURE PER BUCKET, NOT ONE PER TILE. A few years of riding unlocks
@@ -212,7 +212,7 @@ export function tilesToGeoJSON(counts: Map<string, number>): TileCollection {
 //
 // ponytail: the tile functions above are kept as-is, not refactored into a
 // shared "cell grid" abstraction — two concrete grids are less code than one
-// parameterised one, and the tiles are the fallback if hexes don't stick.
+// parameterized one, and the tiles are the fallback if hexes don't stick.
 
 /** Circumradius of a hex whose area equals CELL². area = (3√3/2)R². */
 const HEX_R = CELL / Math.sqrt((3 * Math.sqrt(3)) / 2);

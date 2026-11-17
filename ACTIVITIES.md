@@ -53,7 +53,7 @@ Nothing else reads the table.
    read-only grant would silently miss every private ride).
 
 After that the daily cron pulls new rides; "Sync now" on the same page forces a
-pull. The connection only ever syncs rides made *after* it was authorised —
+pull. The connection only ever syncs rides made *after* it was authorized —
 backfilling old rides stays the archive importer's job.
 
 Deliberately skipped: **webhooks** (Strava's push subscriptions) — polling a
@@ -230,7 +230,7 @@ schtasks /create /tn activities-add /sc hourly ^
 - `activities.csv` has **103 columns and repeats four names** — `Elapsed
   Time`, `Distance`, `Max Heart Rate`, `Relative Effort`. The first of each
   pair is Strava's rounded display copy (distance in **km**), the second the
-  precise one (**metres**). Address columns by index, not name.
+  precise one (**meters**). Address columns by index, not name.
 - **The athlete moved.** Recorded UTC offsets run −7/−8 through 2024 and −4/−5
   from 2025. §2's "alpine, PNW" art direction and the Seattle place names in
   the seed script are now a description of the older half of the history.
@@ -304,7 +304,7 @@ That difference decides most of the design:
 
 | Path | What it is |
 | --- | --- |
-| `/activities` | Landing. Top-four favourites, then a reverse-chronological Mon–Sun **week** calendar; each day is a vertical list of that day's activities. |
+| `/activities` | Landing. Top-four favorites, then a reverse-chronological Mon–Sun **week** calendar; each day is a vertical list of that day's activities. |
 | `/activities/all` | Every activity, reverse chronological, with filters and sorts. |
 | `/activities/[id]` | One activity. Interactive map first; the stats shown depend on the sport. |
 | `/activities/heatmap` | Owner-only. Every outdoor track on one map. |
@@ -388,7 +388,7 @@ export const ALPINE = {
   lakeDeep:   '#12495e', // hover/pressed, and the deep end of a gradient
   glacier:    '#8fd0d8', // a second cold tone: water fills, swim sports
   fir:        '#3f6b52', // subalpine fir — hikes, trails, elevation fills
-  larch:      '#d99a3a', // the one warm note. Autumn larch. PRs, favourites, peaks.
+  larch:      '#d99a3a', // the one warm note. Autumn larch. PRs, favorites, peaks.
   scree:      '#c9d4dc', // hairlines, borders, empty grid cells
   alpenglow:  '#c96f5e', // reserved for maximum-exertion marks only
 } as const;
@@ -398,8 +398,8 @@ Rules that keep it from turning into a dashboard:
 
 - **One saturated thing per view.** On the landing page it's the route lines. On
   the detail page it's the map's route. Everything else is granite on snow.
-- **No coloured chips per sport.** Sport is said with a mark (an icon) and a
-  word, not with twelve hues. The palette above assigns colour to *meaning*
+- **No colored chips per sport.** Sport is said with a mark (an icon) and a
+  word, not with twelve hues. The palette above assigns color to *meaning*
   (water, land, effort), not to taxonomy.
 - **Elevation is drawn as terrain, not as a chart.** Area fills, not lines, in
   `fir` over `scree`.
@@ -432,7 +432,7 @@ Archivo/Newsreader:
 | **Banister TRIMP** | HR stream + HRrest/HRmax | Anything with a strap. `TRIMP = min × ΔHRr × 0.64·e^(1.92·ΔHRr)` (male) |
 | **Edwards TRIMP** | HR stream + zones | Zone-weighted time; simpler, coarser |
 | **hrTSS** | HR + threshold HR | TRIMP rescaled so an hour at threshold = 100 |
-| **rTSS** | pace + grade + threshold pace | Running, via normalised graded pace |
+| **rTSS** | pace + grade + threshold pace | Running, via normalized graded pace |
 | **sTSS** | pace + threshold pace (CSS) | Swimming |
 | **MET-minutes** | sport + duration only | The floor. Works for everything, including a hike with a dead watch. |
 
@@ -465,7 +465,7 @@ board 6), marked `estimated` because that time was measured off the stream. Only
 self-powered, so their whole moving time is the effort. A ski day *with* a strap
 uses the same run mask to trim its HR rung to descending samples. The same
 segments drive the Slopes-style "Runs & lifts" breakdown on the detail page
-(`src/components/SkiRuns.astro`) and coloured run/lift bands on the elevation
+(`src/components/SkiRuns.astro`) and colored run/lift bands on the elevation
 profile; the `activity_laps` rows on these days are Strava's arbitrary auto-laps
 and are useless as runs. Detection can be hand-corrected: an owner-only editor
 reclassifies any segment, and the correction is stored on `activities.ski_segments`
@@ -487,7 +487,7 @@ table when a threshold changes.
 
 Key details:
 
-- **Normalised power** is the 30-second rolling average of power, raised to the
+- **Normalized power** is the 30-second rolling average of power, raised to the
   4th power, averaged, 4th-rooted. Needs a 1 Hz stream; fall back to average
   power when the stream is missing, and mark it `estimated`.
 - **Thresholds change over time.** FTP in March is not FTP in September. They
@@ -630,7 +630,7 @@ intensity_factor     double precision
 
 -- geometry, for the poster and the map
 polyline             text                  -- encoded polyline, full-ish fidelity
-route_path           text                  -- normalised SVG path, viewBox 0 0 100 100. See §7.
+route_path           text                  -- normalized SVG path, viewBox 0 0 100 100. See §7.
 start_lat/start_lng  double precision
 end_lat/end_lng      double precision
 bbox_w/s/e/n         double precision
@@ -665,12 +665,12 @@ sample_count      integer not null
 time_s_packed     int[]   -- seconds        ×1
 lat_packed        int[]   -- degrees        ×1e6
 lng_packed        int[]   -- degrees        ×1e6
-altitude_m_packed int[]   -- metres         ×10
-distance_m_packed int[]   -- metres         ×10
+altitude_m_packed int[]   -- meters         ×10
+distance_m_packed int[]   -- meters         ×10
 heartrate_packed  int[]   -- bpm            ×1
 cadence_packed    int[]   -- rpm / spm      ×1
 power_w_packed    int[]   -- watts          ×1
-speed_ms_packed   int[]   -- metres/second  ×100
+speed_ms_packed   int[]   -- meters/second  ×100
 temp_c_packed     int[]   -- °C             ×10
 grade_packed      int[]   -- percent        ×100
 moving            boolean[]
@@ -693,7 +693,7 @@ leg you can look at on its own and a marker inside the whole day's effort.
 
 ```
 id, kind ('bike'|'shoes'|'skis'|'board'|'other'), name, brand, model,
-nickname, first_used_on (date), retired_at, distance_m (denormalised),
+nickname, first_used_on (date), retired_at, distance_m (denormalized),
 external_ids jsonb
 ```
 
@@ -733,7 +733,7 @@ part** — a 28mm race tire and a 45mm gravel tire are both `tires` and are not
 the same question. `life_miles` / `life_months` (0037) let any instance carry
 its own window; `effectiveMeta()` lays them over the default, so an override
 *replaces* an axis rather than adding to it, and clearing it falls back. An
-override on an axis the kind doesn't otherwise have is honoured too — that is
+override on an axis the kind doesn't otherwise have is honored too — that is
 how a bottom bracket gets a wear bar at all. Overridden rows are marked `*` on
 the detail page, because a reader comparing two chains has to know one is being
 judged against a different ruler.
@@ -769,7 +769,7 @@ a counter accrued at upload time; this site's is a live sum over the activities
 in the window the part was fitted. Loading the Cervélo's history (0041) showed
 them agreeing to a tenth of a mile on every component closed before Nov 2024
 and diverging by 2–10% on everything still accruing since. The derived figure
-is the one to trust — that is the whole reason nothing here is denormalised —
+is the one to trust — that is the whole reason nothing here is denormalized —
 and Strava's numbers are deliberately **not** written into
 `baseline_distance_m`, which would only reinstate the disagreement as data.
 
@@ -872,13 +872,13 @@ The film log's tile is a poster. Here it is **the shape of where you went**, and
 it has to survive forty-to-a-page with no map tiles and no JavaScript.
 
 So at ingest time, `src/lib/route-shape.ts` turns the GPS track into a
-**normalised SVG path string**, stored on the row as `route_path`:
+**normalized SVG path string**, stored on the row as `route_path`:
 
 1. Decode the polyline to `[lat, lng][]`.
 2. Project web-mercator (so the shape isn't squashed at latitude).
 3. Simplify (Ramer–Douglas–Peucker) to ≤ 200 points — a 60px thumbnail cannot
    show more, and the string has to stay small enough to sit in a list query.
-4. Fit to a `0 0 100 100` viewBox preserving aspect, centred, with 6 units of
+4. Fit to a `0 0 100 100` viewBox preserving aspect, centered, with 6 units of
    padding.
 5. Emit `M x y L x y …`, coordinates to 1 decimal place.
 
@@ -896,7 +896,7 @@ plus a `size` (`'tile' | 'row' | 'cell'`).
 
 Filters: sport (multi), date range, distance range, duration range, elevation
 range, **exertion range**, has-GPS, gear, indoor/outdoor, has-power, has-HR,
-place (start_place), favourites only, personal-best only.
+place (start_place), favorites only, personal-best only.
 
 Sorts: date (default, desc), **exertion**, distance, duration, elevation gain,
 avg speed / pace, avg power, avg HR, calories.

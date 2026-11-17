@@ -4,7 +4,7 @@
 // This isn't built yet, and the design problem is a page that says "not yet"
 // without looking broken. Three things do that: it states what it HAS (the
 // visits are logged, the fields are there), it shows where it's going as small
-// grey sketches rather than as empty chart frames waiting to be filled, and it
+// gray sketches rather than as empty chart frames waiting to be filled, and it
 // offers the two pages that can answer questions today. An empty axis with no
 // data on it would read as a bug; a sketch reads as a plan.
 //
@@ -15,7 +15,7 @@
 //   * Price mix — yes, from `price_band`. Four values, no nulls worth worrying
 //     about.
 //   * Where I eat — yes, from `city` / `neighborhood`, though `neighborhood` is
-//     null outside New York, so this is really two charts: neighbourhoods
+//     null outside New York, so this is really two charts: neighborhoods
 //     within New York, cities everywhere else.
 //   * Visits over time — yes, from `visited_on`.
 // The one thing the model CANNOT answer is what anything cost: `price_band` is
@@ -135,8 +135,8 @@ const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 							<span class="blob" style="left:70%; top:52%; width:10px; height:10px"></span>
 						</div>
 						<p class="sketch__note">
-							Neighbourhoods inside New York. Cities everywhere else, because
-							outside New York the neighbourhood is usually null.
+							Neighborhoods inside New York. Cities everywhere else, because
+							outside New York the neighborhood is usually null.
 						</p>
 					</div>
 

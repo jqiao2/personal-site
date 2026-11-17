@@ -81,7 +81,7 @@ const config = { key: import.meta.env.PUBLIC_MAPTILER_KEY ?? '', spots };
 	const tag = document.querySelector('[data-theater-map-config]');
 
 	if (host && tag) {
-		// SAFETY: the tag is this component's own frontmatter `config`, serialised above.
+		// SAFETY: the tag is this component's own frontmatter `config`, serialized above.
 		const { key, spots } = JSON.parse(tag.textContent || '{}') as { key: string; spots: TheaterSpot[] };
 
 		const t = FILM_MAP_TOKENS;

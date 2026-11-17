@@ -136,9 +136,9 @@ export function parseTcx(xml: string, opts: XmlParseOptions): CanonicalActivity 
  * Everything the schema wants, derived from the points, because neither format
  * carries a summary.
  *
- * Elevation gain is the sum of positive changes with a 3-metre threshold. The
+ * Elevation gain is the sum of positive changes with a 3-meter threshold. The
  * threshold is the whole reason this isn't a one-liner: barometric and GPS
- * altitude both jitter by a metre or two at rest, and a naive sum turns a flat
+ * altitude both jitter by a meter or two at rest, and a naive sum turns a flat
  * ride into 400m of climbing. 3m is the convention Strava and Garmin both use.
  */
 function fromPoints(points: Point[], sport: Sport, name: string | null): CanonicalActivity | null {

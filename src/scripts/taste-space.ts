@@ -15,7 +15,7 @@ const HIGH = new THREE.Color('#d9b45a');
 
 const UNRATED = new THREE.Color('#5a4440');
 
-// Diverging around the owner's own average: a whole star either side is full colour.
+// Diverging around the owner's own average: a whole star either side is full color.
 function ratingColor(r: number, avg: number, out = new THREE.Color()): THREE.Color {
 	const t = Math.max(-1, Math.min(1, r - avg));
 
@@ -49,7 +49,7 @@ const FOG_FRAG = /* glsl */ `
 	}
 `;
 
-// Solid disc with a dark rim, so neighbouring films stay separable.
+// Solid disc with a dark rim, so neighboring films stay separable.
 const DOT_FRAG = /* glsl */ `
 	varying vec3 vTint;
 	varying float vAlpha;

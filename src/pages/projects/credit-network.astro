@@ -2,7 +2,7 @@
 // Film credit collaboration network. Nodes are people who clear a per-role
 // threshold (actor >= 5 films, director >= 2, composer >= 2); edges join people
 // who share at least 2 films, weighted by how many. People who clear more than
-// one role are drawn as split-colour pie nodes.
+// one role are drawn as split-color pie nodes.
 //
 // Full-bleed rather than inside Layout.astro, whose 800px column would strangle a
 // force-directed graph — same reasoning as /subway. The graph itself is rendered
@@ -80,7 +80,7 @@ if (!(await requireOwner(Astro.cookies))) {
 				</section>
 
 				<section>
-					<h2>Colour by</h2>
+					<h2>Color by</h2>
 					<label class="field">
 						<select id="color-by"></select>
 					</label>
@@ -379,7 +379,7 @@ if (!(await requireOwner(Astro.cookies))) {
 				margin-top: 0.6rem;
 				cursor: pointer;
 			}
-			/* Role swatches would contradict the nodes when colour encodes region
+			/* Role swatches would contradict the nodes when color encodes region
 			   or era, so they're hidden outside role mode. */
 			#legend.no-swatch .swatch {
 				display: none;

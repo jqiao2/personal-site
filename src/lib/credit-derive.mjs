@@ -8,12 +8,12 @@
 // rationale for each choice lives in build.mjs; this file is just the mechanics.
 
 // ---------------------------------------------------------------------------
-// Region (production country) colour dimension
+// Region (production country) color dimension
 // ---------------------------------------------------------------------------
 
 export const NEUTRAL = '#9A9A95';
 
-/** The repeating four, chosen to stay separable under colour blindness. */
+/** The repeating four, chosen to stay separable under color blindness. */
 export const CYCLE = [
 	'#E69F00', // orange
 	'#4400DD', // blue-violet
@@ -104,7 +104,7 @@ export function countryProfile(filmIds, filmById) {
 }
 
 // ---------------------------------------------------------------------------
-// Era colour dimension
+// Era color dimension
 // ---------------------------------------------------------------------------
 
 export const ERAS = [
@@ -241,7 +241,7 @@ export function shrunkMean(sum, count, prior) {
 	return (sum + SHRINKAGE * prior) / (count + SHRINKAGE);
 }
 
-/** The colour-mode legends the client renders, derived from the tables above. */
+/** The color-mode legends the client renders, derived from the tables above. */
 export function regionLegend() {
 	return COUNTRIES.map((c) => ({ label: c.label, light: c.color, dark: c.color }));
 }

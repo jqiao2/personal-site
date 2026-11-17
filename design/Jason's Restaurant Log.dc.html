@@ -63,10 +63,10 @@
 
       <div>
         <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px 16px; flex-wrap:wrap; border-bottom:2px solid #2f1e12; padding-bottom:8px;">
-          <span style="font-family:'Ultra',Georgia,serif; font-size:20px; color:#2f1e12;">Favourites</span>
+          <span style="font-family:'Ultra',Georgia,serif; font-size:20px; color:#2f1e12;">Favorites</span>
         </div>
         <div style="margin-top:16px; display:grid; grid-template-columns:repeat(auto-fill,minmax(198px,1fr)); gap:16px;">
-          <sc-for list="{{ favourites }}" as="t" hint-placeholder-count="4">
+          <sc-for list="{{ favorites }}" as="t" hint-placeholder-count="4">
             <div onClick="{{ t.go }}" style="background:#fdf7e8; border:1px solid #c4ad86; cursor:pointer; display:flex; flex-direction:column;" style-hover="border-color:#b34328">
               <sc-if value="{{ t.hasPhoto }}">
                 <div style="height:126px; background:{{ t.photo }}; box-shadow:inset 0 0 0 1px rgba(47,30,18,.16); position:relative;">
@@ -629,7 +629,7 @@
             <a href="#" onClick="{{ openLogHere }}" style="font-size:12.5px; color:#8e3220;">+ Log another visit</a>
             <a href="#" onClick="{{ openPlaceSearch }}" style="font-size:12.5px; color:#8e3220;">{{ place.ownerLink }}</a>
             <a href="#" style="font-size:12.5px; color:#8e3220;">Edit this place</a>
-            <a href="#" style="font-size:12.5px; color:#8e3220;">Set favourite rank</a>
+            <a href="#" style="font-size:12.5px; color:#8e3220;">Set favorite rank</a>
           </div>
         </div>
       </div>
@@ -1272,7 +1272,7 @@
             </div>
 
             <sc-if value="{{ pp.areaWarn }}" hint-placeholder-val="{{ false }}">
-              <div style="border-left:2px solid #a83a22; background:#fbf3e1; padding:11px 14px; font-size:12.5px; color:#4a3626; line-height:1.6; text-wrap:pretty;">This result is the centre of an area, not a door. Confirming it fills in the words and leaves the place off the map.</div>
+              <div style="border-left:2px solid #a83a22; background:#fbf3e1; padding:11px 14px; font-size:12.5px; color:#4a3626; line-height:1.6; text-wrap:pretty;">This result is the center of an area, not a door. Confirming it fills in the words and leaves the place off the map.</div>
             </sc-if>
 
             <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px;">
@@ -1384,7 +1384,7 @@ const TOTRY = [
   { n: "Wu's Wonton King", hood: "Two Bridges", city: "New York", cuisine: "Cantonese", p: "$$", why: "Peking duck, BYOB, a big table", tags: ["a group", "the room"], trip: true, x: 560, y: 268, added: "2026-07-30" },
   { n: "Sami's Kabab House", hood: "Astoria", city: "New York", cuisine: "Afghan", p: "$", why: "Afghan; the mantu", tags: ["a dish"], trip: false, x: 700, y: 120, added: "2026-07-22" },
   { n: "Mercado de Coyoac\u00e1n", hood: "Coyoac\u00e1n", city: "Mexico City", cuisine: "Mexican", p: "$", why: "Tostadas, the whole aisle of them", tags: ["a dish", "cheap eats"], trip: true, added: "2026-07-19" },
-  { n: "B\u00e1nh M\u00ec S\u00e0i G\u00f2n", hood: "Nolita", city: "New York", cuisine: "Vietnamese", p: "$", why: "Counter inside a jewellery shop", tags: ["the room"], trip: false, x: 520, y: 206, added: "2026-07-11" },
+  { n: "B\u00e1nh M\u00ec S\u00e0i G\u00f2n", hood: "Nolita", city: "New York", cuisine: "Vietnamese", p: "$", why: "Counter inside a jewelry shop", tags: ["the room"], trip: false, x: 520, y: 206, added: "2026-07-11" },
   { n: "Kuun", hood: "Sunset Park", city: "New York", cuisine: "Korean", p: "$$", why: "Walked past it twice, both times full", tags: ["walked past"], trip: false, x: 172, y: 222, added: "2026-06-28" },
   { n: "Tlayuda Oaxaque\u00f1a SR San Pablo", hood: "Sunset Park", city: "New York", cuisine: "Oaxacan", p: "$", why: "The tlayuda, at eleven at night, from a van", tags: ["late night", "a dish"], trip: true, x: 208, y: 268, added: "2026-06-14" },
   { n: "Benfaremo \u2014 The Lemon Ice King of Corona", hood: "Corona", city: "New York", cuisine: "Italian ices", p: "$", why: "Lemon, and nothing but lemon, since 1944", tags: ["press"], trip: false, x: 800, y: 262, added: "2026-05-26" },
@@ -1409,7 +1409,7 @@ const OSM_WOLF = [
     addr: "1301 N Howard St, Fishtown, Philadelphia, Pennsylvania", lat: 39.97182, lng: -75.13604, precise: true },
   { name: "Laser Wolf Rooftop", hood: "Williamsburg", city: "Brooklyn", kind: "bar", cuisine: "",
     addr: "The Hoxton, 97 Wythe Ave, Brooklyn, New York", lat: 40.72181, lng: -73.95793, precise: true },
-  { name: "Williamsburg", hood: null, city: "Brooklyn", kind: "neighbourhood", cuisine: "",
+  { name: "Williamsburg", hood: null, city: "Brooklyn", kind: "neighborhood", cuisine: "",
     addr: "Williamsburg, Kings County, New York", lat: 40.71427, lng: -73.95368, precise: false },
   { name: "Laser Wolf", hood: "Jaffa Port", city: "Tel Aviv", kind: "restaurant", cuisine: "Israeli",
     addr: "Ha-Ta\u2019arukha St 4, Jaffa Port, Tel Aviv, Israel", lat: 32.05003, lng: 34.75157, precise: true },
@@ -1420,7 +1420,7 @@ const OSM_BAX = [
     addr: "4222 8th Ave, Dyker Heights, Brooklyn, New York", lat: 40.63498, lng: -74.01452, precise: true },
   { name: "Ba Xuy\u00ean Bakery", hood: "Sunset Park", city: "Brooklyn", kind: "fast food", cuisine: "Vietnamese",
     addr: "5810 5th Ave, Sunset Park, Brooklyn, New York", lat: 40.63871, lng: -74.01614, precise: true },
-  { name: "Sunset Park", hood: null, city: "Brooklyn", kind: "neighbourhood", cuisine: "",
+  { name: "Sunset Park", hood: null, city: "Brooklyn", kind: "neighborhood", cuisine: "",
     addr: "Sunset Park, Kings County, New York", lat: 40.64524, lng: -74.01207, precise: false },
 ];
 
@@ -1598,7 +1598,7 @@ class Component extends DCLogic {
         hasSecondMore: hoodAll.length > hoodShown.length,
         secondMore: (hoodAll.length - hoodShown.length) + " more \u25be",
         hasNone: !!f.city && hoodAll.length === 0,
-        noneLabel: "no neighbourhoods on record",
+        noneLabel: "no neighborhoods on record",
       },
       {
         label: "Cuisine", chips: cuisineDefs.map(c => chip(c[0], c[1], f.cuisines.indexOf(c[0]) >= 0, () => this.setF({ cuisines: this.toggleIn(f.cuisines, c[0]) }))),
@@ -2046,7 +2046,7 @@ class Component extends DCLogic {
     });
     if (tryAway.length) tryGroups.push({ title: "Away from home", sub: "city only", count: tryAway.length + (tryAway.length === 1 ? " place" : " places"), rows: tryAway.map(tryRow) });
 
-    // ponytail: zoom is centred on the map, there is no pan yet
+    // ponytail: zoom is centered on the map, there is no pan yet
     const Z = this.mapZoom();
     const vw = 900 / Z, vh = 560 / Z, vx = 450 - vw / 2, vy = 280 - vh / 2;
     const inView = (o) => o.x !== undefined && o.x >= vx && o.x <= vx + vw && o.y >= vy && o.y <= vy + vh;
@@ -2234,7 +2234,7 @@ class Component extends DCLogic {
         inviteTitle: unplaced ? "This place has no point on the map." : "Located, but still not on the map.",
         inviteBody: unplaced
           ? "It doesn\u2019t appear on the map screen, and its city counts toward nothing in the rollup. Nothing else came with it either \u2014 no cuisine, no price band, no links."
-          : "Williamsburg, Brooklyn came from OpenStreetMap\u2019s outline of the neighbourhood, which has no door to point at. The words are on record; the map still has nothing to draw.",
+          : "Williamsburg, Brooklyn came from OpenStreetMap\u2019s outline of the neighborhood, which has no door to point at. The words are on record; the map still has nothing to draw.",
         evidence: unplaced
           ? UNPLACED.evidence
           : "located 4 Aug 2026 \u00b7 OpenStreetMap area match \u00b7 \u201cWilliamsburg, Brooklyn\u201d \u00b7 no coordinates",
@@ -2247,7 +2247,7 @@ class Component extends DCLogic {
         mapRow: unplaced ? "not on it" : "words only",
         mapRowTip: unplaced
           ? "The map screen only draws places with both coordinates."
-          : "Located to a neighbourhood, which has no point to draw.",
+          : "Located to a neighborhood, which has no point to draw.",
         tripOn: (() => { const s = this.subject().name; return this.tripOf("r" + s, (REST.filter(r => r.n === s)[0] || {}).trip || false); })(),
         tripLabel: (() => {
           const s = this.subject().name;
@@ -2330,7 +2330,7 @@ class Component extends DCLogic {
       isLanding: this.screen() === "Landing",
       yearLine: dayOne ? "no restaurants yet" : "38 restaurants this year",
       favCaption: dayOne ? "0 of 4 picked" : "picked by hand, ranked",
-      favourites: shown.map((r, i) => this.tile(r, i)),
+      favorites: shown.map((r, i) => this.tile(r, i)),
       favHoles: holes,
       recent,
       toTryShort: (() => {

@@ -92,7 +92,7 @@ local function query(conn, sql)
 end
 
 --- Values arrive as LuaJIT cdata for integer columns, which JSON.encode cannot
---- serialise. tonumber on the way out of every column is not optional.
+--- serialize. tonumber on the way out of every column is not optional.
 local function num(result, col, row)
 	return tonumber(result[col][row])
 end

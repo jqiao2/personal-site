@@ -19,7 +19,7 @@ const entry = (o = {}) => ({
 	...o,
 });
 
-// A good entry is normalised.
+// A good entry is normalized.
 const { recipes: [ok] } = parseRecipes([entry({ creator: '@zest', cuisine: 'American', tags: ['One-Pan', 'one-pan', 'american', 'main'] })]);
 
 assert.equal(ok.creator, 'zest');

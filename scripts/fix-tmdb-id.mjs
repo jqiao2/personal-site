@@ -6,7 +6,7 @@
 //   594 → 1008042  Talk to Me (Philippou, 2022), not Ribal Chedid's 2022 short
 //   657 → 1140535  Presence (Soderbergh, 2024), not Ben Hutchison's PRESENCE
 //
-// Credits and the poster colour are cleared so their backfills re-derive them:
+// Credits and the poster color are cleared so their backfills re-derive them:
 //   node --env-file=.env scripts/fix-tmdb-id.mjs <movies.id> <tmdb_id>
 //   node --env-file=.env scripts/backfill-credits.mjs
 //   node --env-file=.env scripts/backfill-poster-colors.mjs

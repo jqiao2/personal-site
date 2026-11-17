@@ -7,7 +7,7 @@
 // that have opted in via `is_public`.
 //
 // Every day-level number below has a minimum applied under it: a book counts
-// towards a day only if more than `reading_day_min_pages()` pages of it were
+// toward a day only if more than `reading_day_min_pages()` pages of it were
 // turned that day, so opening something to check a reference no longer lights a
 // heatmap square or holds a streak together. It is enforced once, in the views
 // (migration 0028), and nothing here re-checks it.
@@ -164,7 +164,7 @@ export async function getHeatmap(from: string, to: string): Promise<HeatmapDay[]
  *
  * A private book comes back with its title and cover stripped here rather than
  * in the page: the card draws it as a blank print, and what a redacted book is
- * called has no business travelling to the browser at all.
+ * called has no business traveling to the browser at all.
  *
  * A book that was barely opened on a day holds no cell there: `book_days` has
  * the minimum applied (migration 0028), so a day of it never reaches the card.

@@ -1785,7 +1785,7 @@ const editingList =
 				if (!host) return;
 				// Only a section that is *only* this group can be hidden on its behalf —
 				// medium / theater / format share one section and are matched by no
-				// [data-group], so an empty format row never hides its two neighbours.
+				// [data-group], so an empty format row never hides its two neighbors.
 				const section = host.closest<HTMLElement>(`section[data-group="${key}"]`);
 				const none = section?.querySelector<HTMLElement>('[data-none]') ?? null;
 

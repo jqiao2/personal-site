@@ -2,7 +2,7 @@
 --
 -- src/lib/ski.ts auto-detects runs and lifts from the altitude sawtooth, which
 -- is right almost always — but "almost" is why this column exists: a lift the
--- owner actually hiked, or a cat-track the detector called a run, is a judgement
+-- owner actually hiked, or a cat-track the detector called a run, is a judgment
 -- only a person can make. When set, this REPLACES detection for the activity,
 -- both in the on-screen breakdown and in the exertion score (a reclassified
 -- lift now counts as active descent).

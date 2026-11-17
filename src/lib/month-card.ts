@@ -184,13 +184,13 @@ export function canShareFile(): boolean {
 export interface RenderConfig {
 	/** The 1080-wide artboard element. */
 	card: HTMLElement;
-	/** Solid ground behind the export — the card's own background colour. */
+	/** Solid ground behind the export — the card's own background color. */
 	backgroundColor: string;
 	/** Bust the URL cache when inlining cross-origin <img>s (TMDB, Open Library). */
 	cacheBust?: boolean;
-	/** Keep the `?w=` on optimised photos so they don't collide to one cache key. */
+	/** Keep the `?w=` on optimized photos so they don't collide to one cache key. */
 	includeQueryParams?: boolean;
-	/** A second pass on WebKit, which can drop <img>s on a cold rasterise. */
+	/** A second pass on WebKit, which can drop <img>s on a cold rasterize. */
 	webkitDouble?: boolean;
 	/** Explicit pixel height; defaults to the card's own offsetHeight. */
 	height?: number;
@@ -199,7 +199,7 @@ export interface RenderConfig {
 const isWebkit = (): boolean =>
 	/AppleWebKit/.test(navigator.userAgent) && !/Chrome|Chromium|Edg\//.test(navigator.userAgent);
 
-/** Rasterise the card to a PNG blob via html-to-image. */
+/** Rasterize the card to a PNG blob via html-to-image. */
 export async function renderCard(cfg: RenderConfig): Promise<Blob | null> {
 	const { toBlob } = await import('html-to-image');
 

@@ -110,12 +110,12 @@ const fx = fit((t) => t.lon), fy = fit((t) => t.lat);
 
 const predict = (s) => [fx[0] * s.x + fx[1] * s.y + fx[2], fy[0] * s.x + fy[1] * s.y + fy[2]];
 
-// local metres — plenty accurate across one city
+// local meters — plenty accurate across one city
 const X = (lon) => (lon + 74) * 84300, Y = (lat) => (lat - 40.7) * 111000;
 
 const LON = (x) => x / 84300 - 74, LAT = (y) => y / 111000 + 40.7;
 
-const metres = (a, b) => Math.hypot(X(a[0]) - X(b[0]), Y(a[1]) - Y(b[1]));
+const meters = (a, b) => Math.hypot(X(a[0]) - X(b[0]), Y(a[1]) - Y(b[1]));
 
 // ---- 2. pick a stop per station ----
 const geo = {};
@@ -127,7 +127,7 @@ for (const s of STATIONS) {
   let best = null, bestScore = -Infinity;
 
   for (const t of stops) {
-    const score = nameSim(RENAMED[`${s.name}|${s.svcs.join("")}`] ?? RENAMED[s.name] ?? s.name, t.name) * 10000 + overlap(s.svcs, t.routes) * 1500 - metres(p, [t.lon, t.lat]);
+    const score = nameSim(RENAMED[`${s.name}|${s.svcs.join("")}`] ?? RENAMED[s.name] ?? s.name, t.name) * 10000 + overlap(s.svcs, t.routes) * 1500 - meters(p, [t.lon, t.lat]);
 
     if (score > bestScore) { bestScore = score; best = t; }
   }
@@ -174,7 +174,7 @@ const routesOf = (svc) => ROUTES[svc] ?? [svc];
 
 // The platform a service really uses at a schematic station: the nearest stop
 // it calls at, near where the name match put the station (complexes like Times
-// Sq or Fulton St span several stops a few hundred metres apart).
+// Sq or Fulton St span several stops a few hundred meters apart).
 const platformCache = {};
 
 function platform(stationId, svc) {
@@ -227,7 +227,7 @@ function slice(pts, a, b) {
 
 const pathLen = (pts) => pts.reduce((s, p, i) => (i ? s + Math.hypot(p[0] - pts[i - 1][0], p[1] - pts[i - 1][1]) : 0), 0);
 
-// Douglas–Peucker, so a slice keeps its curves but not every few-metre GTFS point
+// Douglas–Peucker, so a slice keeps its curves but not every few-meter GTFS point
 function simplify(pts, tol) {
   if (pts.length < 3) return pts;
   const [ax, ay] = pts[0], [bx, by] = pts[pts.length - 1], L = Math.hypot(bx - ax, by - ay) || 1;
@@ -309,7 +309,7 @@ const sections = sectionLines(lines, SERVICES.map((s) => s.svc), {
 
 // ---- 6. station markers: one dot per platform used, linked within a complex ----
 // A marker sits where its lines end, not on the platform itself: bundle mates
-// are pulled onto one centreline, which can move an end by tens of metres
+// are pulled onto one centerline, which can move an end by tens of meters
 // (the 1 at South Ferry, beside the 4/5) and leave the line short of its dot.
 const platforms = {}; // station id -> Map(stop id -> { p, svcs })
 

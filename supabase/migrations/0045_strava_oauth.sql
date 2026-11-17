@@ -25,7 +25,7 @@ create table if not exists public.strava_auth (
 	scope         text,
 	-- The polling watermark: only activities that started after this are pulled.
 	-- Set to "now" at connect time, so the connection syncs rides made AFTER it
-	-- was authorised — the whole back-catalogue is the archive importer's job,
+	-- was authorized — the whole back-catalog is the archive importer's job,
 	-- not this one's.
 	last_sync_at  timestamptz,
 	created_at    timestamptz not null default now(),
@@ -35,6 +35,6 @@ create table if not exists public.strava_auth (
 comment on table public.strava_auth is
 	'Single-row (id=1) Strava OAuth token store. RLS on with no policy — tokens are secrets, reachable only by the service-role key. See src/lib/strava.ts.';
 comment on column public.strava_auth.last_sync_at is
-	'Polling watermark: activities with start after this are fetched. Set to now() at connect so only rides made after authorising are pulled — history is the archive importer''s job.';
+	'Polling watermark: activities with start after this are fetched. Set to now() at connect so only rides made after authorizing are pulled — history is the archive importer''s job.';
 
 alter table public.strava_auth enable row level security;

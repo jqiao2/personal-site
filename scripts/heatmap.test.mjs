@@ -44,7 +44,7 @@ for (const lat of [0.5, REF_LAT, 64.1]) {
 	assert.ok(Math.abs(width - TILE_M) / TILE_M < 0.02, `tile at REF_LAT is ${width.toFixed(1)}m, want ${TILE_M}m`);
 }
 
-// 2. ONE GLOBAL GRID. Neighbouring tiles share an edge exactly, and a tile
+// 2. ONE GLOBAL GRID. Neighboring tiles share an edge exactly, and a tile
 //    1,000 km north shares its column's east/west edges — a fog-of-war board
 //    only reads as one if the squares tessellate.
 {
@@ -69,7 +69,7 @@ for (const lat of [0.5, REF_LAT, 64.1]) {
 	assert.equal([...counts.values()][0], 2, 'a second activity increments it');
 }
 
-// 4. Two points 1 km apart are a kilometre ridden, not two dots — the gap is
+// 4. Two points 1 km apart are a kilometer ridden, not two dots — the gap is
 //    unlocked square by square, with no holes, at both latitude extremes the
 //    step has to adapt to.
 for (const lat of [REF_LAT, 64.1]) {
@@ -115,7 +115,7 @@ for (const lat of [REF_LAT, 64.1]) {
 //    resolution, or the honeycomb is just a different map.
 {
 	const ring = hexRing(hexKey(REF_LAT, -73.98));
-	// Shoelace on local metres, which is exact enough over 50 m.
+	// Shoelace on local meters, which is exact enough over 50 m.
 	const [lng0, lat0] = ring[0];
 
 	const xy = ring.map(([lng, lat]) => [

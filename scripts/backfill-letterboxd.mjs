@@ -479,7 +479,7 @@ async function main() {
 	// viewing date for that film. Aggregate per movie_id (dedupe collisions).
 	//
 	// CAUTION: `r.Date` from watched.csv is the day the film was ADDED to the
-	// watched list, not the day it was seen — for a back-catalogue film those are
+	// watched list, not the day it was seen — for a back-catalog film those are
 	// years apart. Migrations 0011/0012 nulled the 499 rows whose date came only
 	// from that column (56 films "watched" on 2021-09-15, etc.). The upsert below
 	// overwrites first_watched, so re-running this script AS-IS restores every one

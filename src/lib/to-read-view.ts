@@ -166,7 +166,7 @@ function looksLikeSameBook(pileTitle: string, candidate: string): boolean {
 export interface MergeSuggestion {
 	/** The row the Kindle created, which is the one that gets folded in. */
 	sourceId: number;
-	/** What KOReader calls the file — the recognisable half of the sentence. */
+	/** What KOReader calls the file — the recognizable half of the sentence. */
 	sourceTitle: string;
 	line: string;
 }

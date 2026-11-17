@@ -135,7 +135,7 @@ assert.equal(plotPmc([]), null, 'no points, no plot');
 	// The zero baseline sits between hi and lo, and the area path closes on it.
 	assert.ok(p.zeroY > 0 && p.zeroY < PLOT_H);
 	assert.ok(p.tsbArea.startsWith('M') && p.tsbArea.endsWith('Z'), 'form area is a closed polygon');
-	assert.ok(p.xTicks.length >= 1 && p.xTicks[0].label.length > 0, 'month ticks are labelled');
+	assert.ok(p.xTicks.length >= 1 && p.xTicks[0].label.length > 0, 'month ticks are labeled');
 	assert.ok(p.yTicks.length >= 1, 'y gridlines exist');
 	assert.equal(p.last.date, '2026-02-01', 'last point is today');
 

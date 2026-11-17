@@ -24,7 +24,7 @@ import {
 	monthLabel,
 	monthQuery,
 	parseMonthKey,
-	summarise,
+	summarize,
 	weekRows,
 } from '../../../lib/month-view';
 
@@ -71,7 +71,7 @@ const initial = geometry[aspect.id];
 
 const cells = buildCells(key, watches);
 
-const summary = summarise(key, watches);
+const summary = summarize(key, watches);
 
 const label = monthLabel(key);
 
@@ -160,7 +160,7 @@ const clientData = JSON.stringify({
 					aria-pressed={String(showTheaters) as 'true' | 'false'}
 				>
 					<span class="switch"><span class="switch__knob"></span></span>
-					<span>Show theatres</span>
+					<span>Show theaters</span>
 				</button>
 
 				<div class="actions">
@@ -243,7 +243,7 @@ const clientData = JSON.stringify({
 															)}
 															{cell.films[0].liked && <div class="heart">♥</div>}
 															{cell.films[0].inTheater && (
-																<div class="theater" aria-label="Watched in a theatre">
+																<div class="theater" aria-label="Watched in a theater">
 																	<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
 																		<path d="M3 21V9a9 9 0 0 1 18 0v12M3 21h18M3 9q9 6 18 0M8 9q-2 6 0 12M16 9q2 6 0 12" />
 																	</svg>
@@ -544,7 +544,7 @@ const clientData = JSON.stringify({
 		width: var(--cell);
 		height: calc(var(--cell) * 1.5);
 	}
-	/* Hovering fans the stack open and lifts it over its neighbours. Screen only —
+	/* Hovering fans the stack open and lifts it over its neighbors. Screen only —
 	   the export never sees a hover state. */
 	.cell:hover {
 		z-index: 30;
@@ -687,8 +687,8 @@ const clientData = JSON.stringify({
 		line-height: 1.45;
 		text-wrap: pretty;
 	}
-	/* Centring is what pushes it out in the outer columns — there, hang it off the
-	   grid edge instead. The columns either side have room to stay centred. */
+	/* Centering is what pushes it out in the outer columns — there, hang it off the
+	   grid edge instead. The columns either side have room to stay centered. */
 	.cell:nth-child(7n + 1) .tip {
 		left: 0;
 		transform: none;
@@ -877,7 +877,7 @@ const clientData = JSON.stringify({
 		// The viewport sizes itself from --card-h too; seed it from the card's own.
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 
-		// ---- likes / theatres ----
+		// ---- likes / theaters ----
 		const likes = document.querySelector<HTMLElement>('[data-likes]');
 		likes?.addEventListener('click', () => {
 			showLikes = !showLikes;

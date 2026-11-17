@@ -386,7 +386,7 @@ export interface Figure {
  * includes one finished by hand with no page turns behind it, so the number can
  * exceed what the grid appears to show.
  */
-export function summarise(key: string, rows: ReadingDay[], finishedInMonth: number): Figure[] {
+export function summarize(key: string, rows: ReadingDay[], finishedInMonth: number): Figure[] {
 	const books = new Set(rows.map((r) => r.book_id));
 	const pages = rows.reduce((total, r) => total + r.pages, 0);
 

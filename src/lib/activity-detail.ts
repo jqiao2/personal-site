@@ -6,7 +6,7 @@
 // The table reuses sports.ts wholesale: `isStatRelevant` decides what a sport
 // shows, `formatStat` renders every value, and a '—' from either is dropped
 // rather than printed. This file only decides ORDER and which pairs of stats
-// (speed avg/max, HR avg/max) collapse into one labelled row with two columns —
+// (speed avg/max, HR avg/max) collapse into one labeled row with two columns —
 // the shape of the example the redesign is drawn from.
 
 import { formatStat, sportMeta, isStatRelevant, type StatKey, type StatRow } from './sports';
@@ -22,7 +22,7 @@ export interface DetailRow {
 // The three figures the header leads with — never in the table below.
 const HEADLINE: StatKey[] = ['distance', 'moving_time', 'exertion'];
 
-// avg/max pairs that share one labelled row with two value columns.
+// avg/max pairs that share one labeled row with two value columns.
 const PAIRS: { avg: StatKey; max: StatKey; label: string }[] = [
 	{ avg: 'avg_speed', max: 'max_speed', label: 'Speed' },
 	{ avg: 'avg_hr', max: 'max_hr', label: 'Heart rate' },

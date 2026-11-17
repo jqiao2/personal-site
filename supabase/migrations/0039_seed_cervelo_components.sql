@@ -5,7 +5,7 @@
 -- component mileage here is derived from installed_on, any date invented to
 -- fill that gap becomes a number the page then states as fact: dating this
 -- chain to the bike's first ride (2020-04-04) would credit it with 18,106
--- miles, seven chains' worth, drawn as a wear bar and labelled overdue. So
+-- miles, seven chains' worth, drawn as a wear bar and labeled overdue. So
 -- tracking starts today, every figure above it is true from this point on, and
 -- the real install dates can be set by hand as they're remembered.
 --

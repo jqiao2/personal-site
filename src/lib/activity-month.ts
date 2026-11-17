@@ -20,7 +20,7 @@
 // asks "what did you do that day" — they don't recite the commute, they say
 // "I did the five-hour ride." A rejected alternative: sort by distance or
 // duration, the way the film card sorts by rating. Neither is comparable across
-// sports (a 5k swim and a 5-mile hike aren't "bigger" by metres), which is
+// sports (a 5k swim and a 5-mile hike aren't "bigger" by meters), which is
 // exactly the gap ACTIVITIES.md §3 built `exertion` to close — it is this
 // section's only honest answer to "which of today's activities was the one."
 //
@@ -123,7 +123,7 @@ export function dominantActivity(activities: MonthActivity[]): MonthActivity | n
 // ---------------------------------------------------------------------------
 // The per-cell face — route stroke, or sport glyph + one headline figure.
 // Same two-faces-by-design rule as ActivityCard.astro (ACTIVITIES.md §7): a
-// cell with no GPS does not apologise for the blank map, it gives its whole
+// cell with no GPS does not apologize for the blank map, it gives its whole
 // face to the number the workout does have.
 // ---------------------------------------------------------------------------
 
@@ -171,7 +171,7 @@ export function cellIcon(a: MonthActivity): string {
 	return sportIcon(a.sport);
 }
 
-/** The colour exertion drives the cell's face at — a hard month should read
+/** The color exertion drives the cell's face at — a hard month should read
  *  hard at a glance, the one thing this card can say that a list can't. */
 export function cellInk(a: MonthActivity | null): AlpineColor {
 	return exertionInk(a?.exertion);
@@ -317,7 +317,7 @@ export interface SummaryStat {
  * reason `exertion` exists at all (ACTIVITIES.md §3) is the reason its total
  * belongs here.
  */
-export function summarise(key: string, activities: MonthActivity[]): SummaryStat[] {
+export function summarize(key: string, activities: MonthActivity[]): SummaryStat[] {
 	const distanceM = activities.reduce((total, a) => total + (a.distance_m ?? 0), 0);
 	const elevationM = activities.reduce((total, a) => total + (a.elevation_gain_m ?? 0), 0);
 	const movingS = activities.reduce((total, a) => total + (a.moving_seconds ?? a.elapsed_seconds ?? 0), 0);

@@ -9,7 +9,7 @@
 // the local resorts). Weekday trainer rides and treadmill runs, and pool
 // swims, deliberately carry NO gps at all — see ACTIVITIES.md §7, "not every
 // activity has a route" — while everything outdoors gets a real-ish lat/lng
-// track, an encoded `polyline`, and a normalised `route_path` computed with
+// track, an encoded `polyline`, and a normalized `route_path` computed with
 // the exact §7 pipeline (implemented inline here, not imported from src/ —
 // this script has to run with plain node, no Astro/TS build step).
 //
@@ -170,7 +170,7 @@ function simplifyToLimit(points, limit = 200) {
 	return points.filter((_, i) => i % stride === 0);
 }
 
-/** §7 steps 2-5, given the raw (lat,lng) track. Returns the normalised
+/** §7 steps 2-5, given the raw (lat,lng) track. Returns the normalized
  * "M x y L x y …" path string, viewBox 0 0 100 100. */
 function buildRoutePath(latlngs) {
 	if (latlngs.length < 2) return null;
@@ -189,7 +189,7 @@ function buildRoutePath(latlngs) {
 	const PAD = 6;
 	const box = 100 - 2 * PAD;
 	const scale = box / Math.max(w, h);
-	// Centre the (possibly non-square) content within the padded box.
+	// Center the (possibly non-square) content within the padded box.
 	const drawW = w * scale;
 	const drawH = h * scale;
 	const offX = PAD + (box - drawW) / 2;
@@ -1264,7 +1264,7 @@ for (let d = new Date(startDate); d <= today; d = addDays(d, 1)) {
 // generation time — but not every one needs its sample arrays actually
 // written to activity_streams: the detail page only needs enough real
 // examples to render against, not a full stream per activity. Keeps every
-// favourite and both triathlons' legs (the activities most likely to be
+// favorite and both triathlons' legs (the activities most likely to be
 // clicked into), then a spread of the rest, capped well below the full set.
 {
 	const STREAM_CAP = 30;
@@ -1297,7 +1297,7 @@ for (let d = new Date(startDate); d <= today; d = addDays(d, 1)) {
 	}
 }
 
-// --- gear distance totals (denormalised column, kept in sync here as the
+// --- gear distance totals (denormalized column, kept in sync here as the
 // "on write" the schema comment describes) ---
 const gearDistance = new Map();
 

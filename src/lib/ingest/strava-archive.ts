@@ -72,8 +72,8 @@ export function parseCsv(text: string): string[][] {
 /**
  * The header repeats four names — `Elapsed Time`, `Distance`, `Max Heart Rate`
  * and `Relative Effort` all appear twice. The first of each pair is the value
- * Strava shows in the UI (rounded, and `Distance` in kilometres); the second
- * is the precise one off the activity itself (metres, seconds). So columns are
+ * Strava shows in the UI (rounded, and `Distance` in kilometers); the second
+ * is the precise one off the activity itself (meters, seconds). So columns are
  * addressed by INDEX, and a lookup by name takes the LAST index of that name,
  * which is the precise copy in every one of the four cases.
  */

@@ -7,7 +7,7 @@
 // It takes NAMES, not coordinates, because a name is what those lists actually
 // contain and because looking one up is the same job the composer already
 // does: Nominatim, one request a second, and only a point-precise hit is
-// allowed to become a location. A neighbourhood centroid is not where a
+// allowed to become a location. A neighborhood centroid is not where a
 // restaurant is, so a place that only matches an area is still added — it just
 // goes on the list unplaced, and says so.
 //
@@ -79,7 +79,7 @@ const PRECISE_PLACE_RANK = 30;
  * fifteen minutes' walk. Wide enough for OSM and Google to disagree about which
  * door a restaurant uses, or for a saved pin dropped on the block rather than
  * the building; far too narrow for the same-named place in the next
- * neighbourhood to slip through.
+ * neighborhood to slip through.
  */
 const MATCH_RADIUS_M = 1200;
 
@@ -254,7 +254,7 @@ async function fetchList(id) {
  * Wagyu Shabu House | Manhattan"), a bilingual tail ("Chong Qing Wharf Hot Pot
  * &…山城码头火锅"). Both make a lookup miss that the plain name finds, so they
  * come off the query — and off the query only. What gets STORED is the name as
- * saved, because that is the name that will be recognised in the list.
+ * saved, because that is the name that will be recognized in the list.
  */
 function searchable(name) {
 	let q = name.split('|')[0];
@@ -285,7 +285,7 @@ const DISTRICTS = new Set([
 function trimDistrict(query) {
 	const words = query.split(' ');
 
-	while (words.length > 1 && DISTRICTS.has(normalise(words[words.length - 1]))) words.pop();
+	while (words.length > 1 && DISTRICTS.has(normalize(words[words.length - 1]))) words.pop();
 	const trimmed = words.join(' ');
 
 	return trimmed === query ? null : trimmed;
@@ -340,8 +340,8 @@ async function boundsOf(place) {
 	return b ? `${b[2]},${b[1]},${b[3]},${b[0]}` : null;
 }
 
-/** Metres between two points, close enough at city scale. */
-function metresBetween(a, b) {
+/** Meters between two points, close enough at city scale. */
+function metersBetween(a, b) {
 	const R = 6371000;
 	const rad = (d) => (d * Math.PI) / 180;
 	const dLat = rad(b.lat - a.lat);
@@ -354,7 +354,7 @@ function metresBetween(a, b) {
 }
 
 /** Lower-cased, unaccented, unpunctuated — the form two names can be compared in. */
-function normalise(s) {
+function normalize(s) {
 	return s
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
@@ -383,8 +383,8 @@ const GENERIC = new Set([
  * Brazilian place in Astoria.
  */
 function matches(wanted, hit) {
-	const a = normalise(searchable(wanted));
-	const b = normalise(hit.name ?? (hit.display_name ?? '').split(',')[0] ?? '');
+	const a = normalize(searchable(wanted));
+	const b = normalize(hit.name ?? (hit.display_name ?? '').split(',')[0] ?? '');
 
 	if (!a || !b) return false;
 
@@ -416,7 +416,7 @@ function pick(rows, entry) {
 	}
 
 	const near_ = candidates
-		.map((r) => ({ r, m: metresBetween(entry.at, { lat: Number(r.lat), lng: Number(r.lon) }) }))
+		.map((r) => ({ r, m: metersBetween(entry.at, { lat: Number(r.lat), lng: Number(r.lon) }) }))
 		.filter(({ m }) => m <= MATCH_RADIUS_M)
 		.sort((a, b) => a.m - b.m);
 
@@ -435,7 +435,7 @@ function why(rows, entry) {
 	if (!entry.at) return 'several places share the name';
 
 	const km = Math.min(
-		...points.map((r) => metresBetween(entry.at, { lat: Number(r.lat), lng: Number(r.lon) })),
+		...points.map((r) => metersBetween(entry.at, { lat: Number(r.lat), lng: Number(r.lon) })),
 	) / 1000;
 
 	return `the nearest "${points[0].name}" is ${km.toFixed(1)} km off`;
@@ -448,16 +448,16 @@ function titleCase(v) {
 }
 
 /**
- * OSM's neighbourhood, or nothing, depending on which kind of answer it gave.
+ * OSM's neighborhood, or nothing, depending on which kind of answer it gave.
  *
- * Two of its answers are not neighbourhoods a person would say. A community
+ * Two of its answers are not neighborhoods a person would say. A community
  * board is a unit of city government — "Manhattan Community Board 3" is where
  * Katz's lands — and reads as an error on a restaurant card, so it becomes the
  * null this column is designed to hold. A historic district IS the
- * neighbourhood, wearing a landmarks-commission suffix: "Cobble Hill Historic
+ * neighborhood, wearing a landmarks-commission suffix: "Cobble Hill Historic
  * District" is Cobble Hill, and losing two words makes it right.
  */
-function neighbourhood(a) {
+function neighborhood(a) {
 	const raw = a.neighbourhood ?? a.suburb ?? a.quarter ?? null;
 
 	if (!raw || /community board/i.test(raw)) return null;
@@ -471,7 +471,7 @@ function toRow(entry, hit) {
 	return {
 		name: entry.name,
 		cuisines: (hit?.extratags?.cuisine ?? '').split(';').map(titleCase).filter(Boolean),
-		neighborhood: neighbourhood(a),
+		neighborhood: neighborhood(a),
 		city: a.city ?? a.town ?? a.village ?? a.municipality ?? near ?? 'New York',
 		state_region: a.state ?? null,
 		country: a.country_code ? a.country_code.toUpperCase() : 'US',
@@ -536,7 +536,7 @@ if (db) {
 // Compared unaccented: "Bánh Mì Cô Út" and a hand-typed "Banh mi co ut" are one
 // place, and importing the second on top of the first is the duplicate this is
 // here to prevent.
-const existing = new Set(existingRows.map((r) => normalise(r.name)));
+const existing = new Set(existingRows.map((r) => normalize(r.name)));
 
 log(commit ? '' : sqlOnly ? '' : '  (dry run — pass --commit to write)\n');
 
@@ -549,7 +549,7 @@ let unplaced = 0;
 let skipped = 0;
 
 for (const entry of entries) {
-	if (existing.has(normalise(entry.name))) {
+	if (existing.has(normalize(entry.name))) {
 		log(`  skip     ${entry.name}  (already on record)`);
 		skipped++;
 		continue;
@@ -580,7 +580,7 @@ for (const entry of entries) {
 	}
 
 	toInsert.push(row);
-	existing.add(normalise(entry.name));
+	existing.add(normalize(entry.name));
 }
 
 log(`\n${placed} placed · ${unplaced} unplaced · ${skipped} already on record`);

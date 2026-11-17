@@ -5,7 +5,7 @@
 // had been accumulating since 2021. None of it has a file, an md5 or a single
 // page turn, which is most of what migration 0024 exists to accommodate.
 //
-// Matching against what is already here is by TITLE, normalised. There is no
+// Matching against what is already here is by TITLE, normalized. There is no
 // shared identifier: KOReader knows an md5 of a file, StoryGraph knows an ISBN
 // of an edition, and the three books that appear in both arrived by different
 // routes. Titles are compared with articles, punctuation and subtitles stripped,

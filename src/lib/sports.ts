@@ -14,7 +14,7 @@
 // athlete's real history, not for an open marketplace of activity types. A
 // `text` column with a checked-at-ingest slug is enough; a `sports` table would
 // add a join to every list query for a dimension that changes maybe once a
-// year. `sportMeta()` is deliberately tolerant of a slug it doesn't recognise
+// year. `sportMeta()` is deliberately tolerant of a slug it doesn't recognize
 // (falls back to 'other') so a new device string never 500s a page — it just
 // looks generic until someone adds it here.
 //
@@ -29,7 +29,7 @@
 // WHY IMPERIAL FOR EVERYTHING BUT SWIM PACE. This is a US athlete's log:
 // distance, elevation and speed read as miles, feet and mph everywhere, the
 // way his watch already displays them. Swimming is the one deliberate
-// exception — pools are built and swum in metres (a "25" or a "50"), so a pace
+// exception — pools are built and swum in meters (a "25" or a "50"), so a pace
 // of "1:38 / 100yd" would be answering a question nobody asked. Per-100m pace
 // stays metric because that's the unit the sport is actually measured in.
 
@@ -256,7 +256,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 		icon: 'swim',
 		// A pool session isn't "indoor" the way a trainer ride is — the laps are
 		// really swum, so its distance is a true measurement (and the profile
-		// graph defaults to it), unlike a machine's simulated kilometres.
+		// graph defaults to it), unlike a machine's simulated kilometers.
 		indoor: false,
 		hasDistance: true,
 		paceStyle: 'per_100m',
@@ -436,7 +436,7 @@ export const SPORT_META: Record<Sport, SportMeta> = {
 
 /**
  * Tolerant lookup — a device or import path handing us a slug we don't
- * recognise (a new Garmin sport type, a typo in a manual entry) must not 500
+ * recognize (a new Garmin sport type, a typo in a manual entry) must not 500
  * the page. It falls back to `other` and lets that sport's generic stat list
  * and icon carry it until someone adds a proper row above.
  */
@@ -510,7 +510,7 @@ export interface StatRow {
 	avg_temp_c?: number | null;
 	calories?: number | null;
 	/** Not a DB column — the alpine-ski "runs" count comes off lap rows
-	 *  (`activity_laps` where `lap_type = 'lap'`), summarised before this is
+	 *  (`activity_laps` where `lap_type = 'lap'`), summarized before this is
 	 *  called. Optional so every other sport's row can omit it. */
 	runs?: number | null;
 }
@@ -635,7 +635,7 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 
 		case 'pace_100m': {
 			// Metric on purpose — see the header comment. Pools are measured in
-			// metres regardless of what unit the rest of the page is in.
+			// meters regardless of what unit the rest of the page is in.
 			if (row.avg_speed_ms == null || row.avg_speed_ms <= 0) return withLabel('Pace', MISSING);
 			const secPer100m = 100 / row.avg_speed_ms;
 
@@ -654,7 +654,7 @@ export function formatStat(key: StatKey, row: StatRow): FormattedStat {
 			if (m == null) return withLabel('Pool length', MISSING);
 
 			// Pools are conventionally named by their nominal length, not their
-			// exact metreage (a "25" is 25 yards or 25 metres, not 22.86).
+			// exact meterage (a "25" is 25 yards or 25 meters, not 22.86).
 			return withLabel('Pool length', { value: `${Math.round(m)}m` });
 		}
 
@@ -777,7 +777,7 @@ const SPORT_ICONS: Record<string, string> = {
 	// one thing this sport is.
 	transition: 'M5 10h10l4 4-4 4H5zM9 10V6h6v4',
 	// Other: an unfilled diamond — deliberately the least specific mark in the
-	// set, so an unrecognised sport never accidentally borrows another
+	// set, so an unrecognized sport never accidentally borrows another
 	// sport's meaning.
 	other: 'M12 3l7 9-7 9-7-9z',
 };

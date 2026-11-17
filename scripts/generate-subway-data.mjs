@@ -5,7 +5,7 @@
 //   https://www.arcgis.com/apps/mapviewer/index.html?layers=1c7928d1e11f45a286f4312055435f8c
 //   Feature service: NYC_Subway_Diagram_Updated_Layers
 //     layer 1 = Station_Features (points, with a `services` list per station)
-//     layer 2 = Subway_lines     (trunk-colour polylines: "1,2,3", "A,C,E", ...)
+//     layer 2 = Subway_lines     (trunk-color polylines: "1,2,3", "A,C,E", ...)
 //
 // The diagram's own schematic coordinates are scaled/flipped into a portrait
 // canvas (north up). It is intentionally NOT geographically accurate — it matches
@@ -285,7 +285,7 @@ async function main() {
       }
 
       // Walk from each station node to the nearest station in every direction.
-      // Cap the distance travelled: within a trunk each service uses only some
+      // Cap the distance traveled: within a trunk each service uses only some
       // branches, and without a cap a walk wanders down another service's branch
       // (e.g. the D leaving Coney Island up the F's Culver line) and invents a
       // phantom "adjacency" to a far-away station.
@@ -413,7 +413,7 @@ async function main() {
         if (!tri) break;
         const [a, b, c] = tri;
         const es = [[a, b], [b, c], [a, c]].map(([x, y]) => ({ x, y, d: D(x, y), seg: edge[x + '|' + y] })).sort((p, q) => p.d - q.d);
-        // A vertex with no neighbours outside the triangle is a pure pass-through
+        // A vertex with no neighbors outside the triangle is a pure pass-through
         // (a station the third edge skips): drop the edge that bypasses it.
         const ext = (v) => [...adj[v]].filter((n) => n !== a && n !== b && n !== c).length;
         const mid = tri.filter((v) => ext(v) === 0);
@@ -557,7 +557,7 @@ async function main() {
         const r = t * Math.tan(ang / 2);       // actual radius after capping
         const T1 = [P[0] + v1x * t, P[1] + v1y * t];
         const T2 = [P[0] + v2x * t, P[1] + v2y * t];
-        let bx = v1x + v2x, by = v1y + v2y;    // bisector toward the arc centre
+        let bx = v1x + v2x, by = v1y + v2y;    // bisector toward the arc center
         const bl = Math.hypot(bx, by) || 1; bx /= bl; by /= bl;
         const C = [P[0] + bx * (r / Math.sin(ang / 2)), P[1] + by * (r / Math.sin(ang / 2))];
         let a1 = Math.atan2(T1[1] - C[1], T1[0] - C[0]);
@@ -663,7 +663,7 @@ async function main() {
     // where they are (Nostrand/Kingston/Crown Hts stay on their 45-degree line;
     // President/Sterling/... on theirs) but redraw the two Franklin-Av branch starts
     // as a clean horizontal-then-45 elbow (no dip), and lay the green expresses on
-    // the SAME centrelines so the fixed +/-0.5 offsets render each branch as one
+    // the SAME centerlines so the fixed +/-0.5 offsets render each branch as one
     // tight red+green pair. The green expresses converge in from their approach
     // point; the global rounding turns every elbow into the house radius.
     {
@@ -674,7 +674,7 @@ async function main() {
       // Red 2 -> President: leave horizontally, bend down onto the 45-deg SE line.
       setSegPts('2', 'Franklin Av', 'President St', [[GX, 844], [539.6, 844], [558.5, 862.9]]);
 
-      // Green 4 (express) traces the red 3's full NE centreline, converging in.
+      // Green 4 (express) traces the red 3's full NE centerline, converging in.
       const ne = [].concat(
         findSeg('3', 'Franklin Av', 'Nostrand Av').pts,
         findSeg('3', 'Nostrand Av', 'Kingston Av').pts.slice(1),
@@ -682,7 +682,7 @@ async function main() {
       );
 
       setSegPts('4', 'Franklin Av', 'Crown Hts-Utica Av', [[GX, GY]].concat(ne.slice(1)));
-      // Green 5 traces the red 2's SE centreline, converging in, then follows it.
+      // Green 5 traces the red 2's SE centerline, converging in, then follows it.
       const se = findSeg('2', 'Franklin Av', 'President St').pts;
       setSegPts('5', 'Franklin Av', 'President St', [[GX, GY]].concat(se.slice(1)));
 
@@ -739,7 +739,7 @@ async function main() {
 
   // Realign lone runs: when a line branches off on its own (e.g. the 1 up Broadway
   // north of 96 St, while 2/3 peel off to Lenox) it should keep the offset it had
-  // in the bundle and continue straight, not recentre onto the trunk centreline.
+  // in the bundle and continue straight, not recenter onto the trunk centerline.
   {
     const bySvc = {};
 
@@ -828,7 +828,7 @@ async function main() {
     // 6 on the Pelham line runs alone north of 125 St, but inherits the Lexington
     // bundle's offset (o=1) from the realign step. With a non-zero offset a 90-deg
     // turn between two stations can't render flat (the parallel normal rotates), so
-    // the flat 3 Av-138/Brook/Cypress run and the elbows tilt. Recentre the lone
+    // the flat 3 Av-138/Brook/Cypress run and the elbows tilt. Recenter the lone
     // Pelham 6 on its own line (o=0); the only cost is a small step at 125 St where
     // it peels off the bundle eastbound anyway.
     {

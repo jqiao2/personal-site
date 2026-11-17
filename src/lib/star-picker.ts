@@ -1,4 +1,4 @@
-// Behaviour for the StarPicker component: hover previews the value a click
+// Behavior for the StarPicker component: hover previews the value a click
 // would set, the click commits it, and leaving the row puts the committed value
 // back. Kept beside the markup so both composers get the same gesture rather
 // than each writing its own.

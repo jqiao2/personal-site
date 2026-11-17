@@ -164,7 +164,7 @@ function clean(rawTitle, existingAuthors) {
 	const article = title.match(/^(.*?),\s+(The|A|An)$/i);
 
 	if (article) {
-		title = `${capitalise(article[2])} ${article[1].trim()}`;
+		title = `${capitalize(article[2])} ${article[1].trim()}`;
 	}
 
 	return { title: title.replace(/\s+/g, ' ').trim(), authors };
@@ -185,7 +185,7 @@ function looksLikeAuthors(s) {
 	return /^[\p{L}.'’\-\s]+(?:\s*(?:&|and|,)\s*[\p{L}.'’\-\s]+)*$/u.test(s);
 }
 
-function capitalise(s) {
+function capitalize(s) {
 	return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 

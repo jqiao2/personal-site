@@ -28,9 +28,9 @@ comment on column public.restaurants.osm_id is
 comment on column public.restaurants.place_rank is
 	'Nominatim''s granularity grade for the matched object. >= 30 is a point on a thing; below that is an area whose centroid must never be stored as a location.';
 comment on column public.restaurants.borough is
-	'The tier between neighbourhood and city. Brooklyn, not New York. Read from OSM''s `suburb` when a finer `neighbourhood` is also present, else `city_district`. Null nearly everywhere outside New York, and that is the right reading.';
+	'The tier between neighborhood and city. Brooklyn, not New York. Read from OSM''s `suburb` when a finer `neighbourhood` is also present, else `city_district`. Null nearly everywhere outside New York, and that is the right reading.';
 comment on column public.restaurants.quarter is
-	'OSM''s `quarter`: a subdivision below the neighbourhood. Its own field, never a fallback for neighborhood.';
+	'OSM''s `quarter`: a subdivision below the neighborhood. Its own field, never a fallback for neighborhood.';
 
 create unique index if not exists restaurants_osm_object_key
 	on public.restaurants (osm_type, osm_id)

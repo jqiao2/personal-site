@@ -211,7 +211,7 @@ for (const a of activities) {
 				elevation_gain_m: a.elevation_gain_m,
 				avg_hr: a.avg_hr,
 				avg_power_w: a.avg_power_w,
-				// Honour a hand-corrected ski partition, so a re-score never clobbers
+				// Honor a hand-corrected ski partition, so a re-score never clobbers
 				// an edit with auto-detection (migration 0051).
 				ski_segments: a.ski_segments ?? null,
 				streams: s

@@ -13,7 +13,7 @@ export function formatWatchedDate(date: string | null): string | null {
 	});
 }
 
-/** First line of a review, trimmed to a single feed row (≤150 chars, ellipsised).
+/** First line of a review, trimmed to a single feed row (≤150 chars, ellipsized).
  *  Shared by the film and restaurant feeds. */
 export function excerpt(text: string | null): string | null {
 	if (!text) return null;

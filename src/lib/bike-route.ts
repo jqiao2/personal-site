@@ -15,7 +15,7 @@
 // calls. The screen-to-map placement and the overlay live on the page.
 //
 // Everything here is coordinate order [lng, lat] — GeoJSON's order, MapLibre's
-// order, BRouter's order — never [lat, lng]. Distances are metres.
+// order, BRouter's order — never [lat, lng]. Distances are meters.
 
 export type LngLat = [number, number];
 
@@ -48,7 +48,7 @@ const BATCH = 100;
 export const MAX_WAYPOINTS = 600;
 
 // Profiles the public brouter.de server ships. `trekking` is the sensible
-// bike default; `safety` favours quiet roads; `shortest` hugs the border
+// bike default; `safety` favors quiet roads; `shortest` hugs the border
 // hardest (fewest detours), which is often what an outline ride wants.
 export const PROFILES = ['trekking', 'fastbike', 'safety', 'shortest'] as const;
 
@@ -56,7 +56,7 @@ export type Profile = (typeof PROFILES)[number];
 
 // --- geometry -------------------------------------------------------------
 
-/** Metres between two [lng, lat] points (haversine). */
+/** Meters between two [lng, lat] points (haversine). */
 export function haversine(a: LngLat, b: LngLat): number {
 	const R = 6371000;
 	const toRad = Math.PI / 180;
@@ -167,9 +167,9 @@ function geomSize(geom: any): number {
 }
 
 /**
- * Walk the outline and drop a point every `spacing` metres. This both samples
+ * Walk the outline and drop a point every `spacing` meters. This both samples
  * and simplifies: the wiggles finer than the spacing vanish, which is what you
- * want — the ride should read as the country's shape, not chase every metre of
+ * want — the ride should read as the country's shape, not chase every meter of
  * a border no road follows anyway. The first point is always kept, and the last
  * is snapped back to the first so the ride closes into a loop.
  */
@@ -205,7 +205,7 @@ export function resample(ring: LngLat[], spacing: number, close = true): LngLat[
 	return out;
 }
 
-/** Length of a path in metres. */
+/** Length of a path in meters. */
 export function pathLength(coords: LngLat[]): number {
 	let s = 0;
 
@@ -224,7 +224,7 @@ export function pathLength(coords: LngLat[]): number {
  * of pushing. This cancels a spur of any length (a → x → y → x → a collapses to
  * a) and nests, and because a spur always returns to where it began, cutting it
  * never breaks the path: the route just skips the dead-end excursion. Iterated
- * to a fixed point, since removing one spur can make its neighbours adjacent.
+ * to a fixed point, since removing one spur can make its neighbors adjacent.
  * Genuine loops (which enclose area rather than retrace) are left alone.
  */
 export function removeBacktracks(coords: LngLat[]): LngLat[] {
@@ -359,7 +359,7 @@ export function retracedFraction(coords: LngLat[]): number {
 /**
  * Flatten a lng/lat ring into a centered unit box for drawing as a fixed-size
  * screen stencil. The longer axis spans [-0.5, 0.5]; the page scales that by a
- * pixel size and drops it at the map's centre. Longitude is squeezed by
+ * pixel size and drops it at the map's center. Longitude is squeezed by
  * cos(latitude) so the silhouette keeps its true proportions instead of
  * stretching east-west, and latitude is negated because screen y grows downward
  * while north is up. The geographic meaning is re-derived at generate time by
@@ -407,12 +407,12 @@ export function orientRing(ring: LngLat[], clockwise: boolean): LngLat[] {
 	return isClockwise === clockwise ? ring.slice() : ring.slice().reverse();
 }
 
-/** Metres from point `p` to segment `a`–`b`, in a local flat projection good
+/** Meters from point `p` to segment `a`–`b`, in a local flat projection good
  *  enough at ride scale (a few hundred km). */
 function pointToSegment(p: LngLat, a: LngLat, b: LngLat): number {
 	const latRad = (p[1] * Math.PI) / 180;
-	const mx = 111320 * Math.cos(latRad); // metres per degree lng at this latitude
-	const my = 110540; // metres per degree lat
+	const mx = 111320 * Math.cos(latRad); // meters per degree lng at this latitude
+	const my = 110540; // meters per degree lat
 	const px = p[0] * mx, py = p[1] * my;
 	const ax = a[0] * mx, ay = a[1] * my;
 	const bx = b[0] * mx, by = b[1] * my;
@@ -466,7 +466,7 @@ export function deviation(route: LngLat[], target: LngLat[]): Deviation {
 // the whole shape N/S/E/W (and, within a bound, scaling it up or down), keep any
 // move that makes the road route trace the outline more faithfully, and repeat.
 // The step starts bold — a quarter of the shape's own size — so early moves reach
-// clear across the area instead of inching; when no neighbour improves, the step
+// clear across the area instead of inching; when no neighbor improves, the step
 // halves to refine in place, and the sample spacing tightens each level. It ends
 // at the spacing floor or a hard cap on router calls, returning the best it saw.
 //
@@ -527,21 +527,21 @@ export interface DescentResult {
 	ring: LngLat[]; // the placed outline that produced the best route
 	waypoints: LngLat[];
 	routed: RoutedPath;
-	spacing: number; // metres, the spacing of the winning round
+	spacing: number; // meters, the spacing of the winning round
 	rounds: number;
 	scale: number; // final cumulative scale vs the start
 }
 
 export interface DescentOpts {
-	startSpacing: number; // metres
-	minSpacing: number; // metres — the floor
+	startSpacing: number; // meters
+	minSpacing: number; // meters — the floor
 	shrink?: number; // spacing multiplier per level, 0<shrink<1 (default 0.85)
 	maxScale?: number; // max |scale − 1| allowed, e.g. 0.15; 0 pins the size (default 0.15)
 	maxEvals?: number; // hard cap on router calls the whole search may make (default 60)
 	close?: boolean; // closed ring (country) or open trail (line drawing) — default true
-	// Pull toward where you originally placed the shape. The search minimises
-	// meanDeviation + homePull·(metres drifted from the start), so it only slides
-	// away when the road fit improves by more than homePull metres per metre moved,
+	// Pull toward where you originally placed the shape. The search minimizes
+	// meanDeviation + homePull·(meters drifted from the start), so it only slides
+	// away when the road fit improves by more than homePull meters per meter moved,
 	// and among near-equal fits it keeps your placement. 0 = pure road fit (wanders
 	// to any marginally-tighter spot); higher = stay put harder. Default 0.5.
 	homePull?: number;
@@ -577,7 +577,7 @@ export async function descend(
 	let round = 0;
 
 	// Route the shape at the current spacing and score it. `mean`/`max` are the raw
-	// road deviation (what the stats show); `score` is what the search minimises —
+	// road deviation (what the stats show); `score` is what the search minimizes —
 	// deviation plus a pull back toward the original placement, so it won't drift for
 	// a marginal fidelity gain. Null means "not a usable placement": too many
 	// waypoints, budget spent, or the router refused it (a 400 — the shape sits over
@@ -636,7 +636,7 @@ export async function descend(
 		const minStep = size * 0.01;
 
 		while (step >= minStep && evals < maxEvals && evals < levelCeil) {
-			// Neighbours: slide N/S/E/W by the current step, and (within the bound)
+			// Neighbors: slide N/S/E/W by the current step, and (within the bound)
 			// scale up/down. A move is adopted only when it improves the score — road
 			// fit net of the pull home — so drifting away has to earn its distance.
 			const moves: [number, number, number][] = [
@@ -764,9 +764,9 @@ export async function fetchOutline(query: string): Promise<Outline> {
 
 export interface RoutedPath {
 	coords: LngLat[];
-	/** Route length in metres. */
+	/** Route length in meters. */
 	length: number;
-	/** Total climb in metres, if the router reports it. */
+	/** Total climb in meters, if the router reports it. */
 	ascend: number | null;
 	/** Fraction (0–1) of the route on already-ridden road — the wrong-way proxy. */
 	retraced: number;

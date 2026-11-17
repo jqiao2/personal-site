@@ -5,10 +5,10 @@
 // paper. This file sanitizes that raster and vectorizes its strokes into the
 // { nodes, edges } graph that `postman.ts` orders and the stencil draws.
 //
-// Pipeline: ImageData → binary ink mask (threshold + despeckle) → centreline
+// Pipeline: ImageData → binary ink mask (threshold + despeckle) → centerline
 // polylines (skeleton tracing, injected so the WASM stays out of this module and
 // the graph maths below is testable) → snap shared endpoints into a graph →
-// normalize into the same centred unit box the country stencil uses.
+// normalize into the same centered unit box the country stencil uses.
 //
 // Coordinates here are image pixels until `normalizeGraph`, which mirrors
 // `normalizeShape` in bike-route.ts so a drawing and a country place identically.
@@ -129,7 +129,7 @@ export function buildGraph(polylines: Pt[][], snapDist = 4, simplifyTol = 1.5): 
 }
 
 /**
- * Fit a pixel-space graph into the centred unit box the stencil draws in — the
+ * Fit a pixel-space graph into the centered unit box the stencil draws in — the
  * longer axis spans [-0.5, 0.5], y already points down (image rows do too), so
  * no latitude negation is needed here. Returns a new graph; the input is
  * untouched. `paths` (the edge polylines) is what the SVG stencil renders.

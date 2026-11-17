@@ -1,7 +1,7 @@
 -- Who I watched a film with. A viewing is a shared event as often as not, and
 -- until now the only place that fact could live was the review prose.
 --
--- Modelled exactly like tags (a `friends` lookup + a `log_friends` join) because
+-- Modeled exactly like tags (a `friends` lookup + a `log_friends` join) because
 -- the shape is the same: many friends per viewing, one friend across many
 -- viewings, and a stable name set worth autocompleting. Keeping them as their own
 -- table rather than reusing `tags` means "watched with Mia" can later answer

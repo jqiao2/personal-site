@@ -1,13 +1,13 @@
 # 0035 — Stub the owner's writes when driving a page in dev
 
 **Type:** strategy
-**Applies when:** clicking through an owner page in dev with Playwright to check behaviour, and the page saves as you go (autosave, PUT/POST on every action).
+**Applies when:** clicking through an owner page in dev with Playwright to check behavior, and the page saves as you go (autosave, PUT/POST on every action).
 
 ## Symptom
 Dev talks to the live Supabase project and `requireOwner()` is true in dev, so a test click on /films/rank PUTs a real, reshuffled ranking over the owner's saved one.
 
 ## Fix
-Fulfil the write route yourself before navigating, and assert on what would have been sent:
+Fulfill the write route yourself before navigating, and assert on what would have been sent:
 
 ```js
 const puts = [];

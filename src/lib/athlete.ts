@@ -206,7 +206,7 @@ export interface WeighInRow {
  *  percent or two — so this only catches gross errors, not a heavy meal. */
 export const OUTLIER_FRACTION = 0.1;
 
-/** Validate and normalise a batch of weigh-ins (one item is just a batch of
+/** Validate and normalize a batch of weigh-ins (one item is just a batch of
  *  one). Converts to kg, defaults unit to lb and source to apple_health, and
  *  collapses to one row per calendar day — a backfill often carries two
  *  readings on a day, and body_weight's primary key is the day, so the last
@@ -457,7 +457,7 @@ export function plot(points: { date: string; value: number }[]): Plot | null {
 	};
 }
 
-/** The change across the visible window, as a signed number plus a judgement
+/** The change across the visible window, as a signed number plus a judgment
  *  taken from the metric's own direction — a falling threshold pace is an
  *  improvement, a falling FTP is not. */
 export function trend(

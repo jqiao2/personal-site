@@ -87,7 +87,7 @@ try {
 	await target.screenshot({ path: out, fullPage: el ? undefined : full });
 	console.log(`wrote ${out}`);
 
-	// 404s on optimised photos are routine without the production bucket; they
+	// 404s on optimized photos are routine without the production bucket; they
 	// are worth printing and not worth failing over.
 	for (const problem of problems.slice(0, 10)) console.log(`  · ${problem}`);
 } finally {

@@ -742,7 +742,7 @@ const config = {
 		function geoRow(hit: GeoHit, onPick: () => void): HTMLElement {
 			// An area is offered — it still fills in the words — but it is named
 			// as what it is, so nobody pins a restaurant to the middle of a
-			// neighbourhood by accident.
+			// neighborhood by accident.
 			const meta = [
 				hit.address || hit.display.split(',').slice(1, 3).join(',').trim(),
 				hit.cuisines.join(', ') || hit.kind,
@@ -809,7 +809,7 @@ const config = {
 			dropCarried();
 			// The meta stays "new place" even when a hit came with it, because
 			// the receipt below states the location and is the thing that can be
-			// cleared — a line up here claiming a neighbourhood would go on
+			// cleared — a line up here claiming a neighborhood would go on
 			// claiming it after the point was refused.
 			state.locked = { id: 0, name, meta: 'new place', visits: 0 };
 			// So Change reopens on the name that will be saved: a picked hit
@@ -895,7 +895,7 @@ const config = {
 				city: g?.city ?? null,
 				stateRegion: g?.stateRegion ?? null,
 				country: g?.country ?? null,
-				// A neighbourhood centroid is not where the restaurant is, so an
+				// A neighborhood centroid is not where the restaurant is, so an
 				// imprecise hit contributes its NAMES and nothing else.
 				lat: g?.precise ? g.lat : null,
 				lng: g?.precise ? g.lng : null,
@@ -1431,7 +1431,7 @@ const config = {
 	}
 	/* iOS sizes native date inputs from their own intrinsic width, which runs
 	   wider than the sheet and scrolls the body sideways. Dropping the native
-	   appearance lets the field honour the 100% width like every other input. */
+	   appearance lets the field honor the 100% width like every other input. */
 	.me__input[type='date'] {
 		-webkit-appearance: none;
 		appearance: none;

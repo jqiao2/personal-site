@@ -67,7 +67,7 @@ export const TRACKS: readonly { id: Track; label: string }[] = [
  *
  * These are the calibration knobs, gathered here rather than scattered through
  * the four mappers, because they are the one part of this card that is a
- * judgement rather than a measurement and they will want tuning.
+ * judgment rather than a measurement and they will want tuning.
  *
  * `FILM_MINUTES` — TMDB is missing a runtime often enough to matter, and a
  * mark with no size is worse than a mark with an average one. 105 is close to
@@ -83,7 +83,7 @@ export const TRACKS: readonly { id: Track; label: string }[] = [
  * measured time is honest in a way that flatters nobody: it excludes the
  * paperback on the train and every minute read on a device that doesn't sync.
  * The 1.3x is a deliberate thumb on the scale to bring a tracked reading day
- * back up to the size the day actually was. It is a fudge, and is labelled one.
+ * back up to the size the day actually was. It is a fudge, and is labeled one.
  *
  * `ACTIVITY` has no default: an activity always carries either moving or
  * elapsed seconds, so there is nothing to guess.
@@ -205,7 +205,7 @@ export function mealTier(fields: {
  *
  * `MARK_K` is set so a typical feature film (105 min) draws at ~86px on its
  * long side, which is most of the width of the ~134px cell it sits in. That
- * is deliberate: a mark is allowed to spill onto its neighbours (see
+ * is deliberate: a mark is allowed to spill onto its neighbors (see
  * `dayLayer`), so the size that reads best is the one a Polaroid actually is
  * relative to a page's daily square, not the largest one that would fit inside
  * the lines.
@@ -238,7 +238,7 @@ export function markSize(minutes: number): number {
  *
  * A photograph is whatever shape it was taken in, and a panorama at its true
  * ratio would come out as a 260px splinter twelve pixels tall — technically the
- * right area, useless as a picture. Clamping keeps every mark recognisable as
+ * right area, useless as a picture. Clamping keeps every mark recognizable as
  * an object stuck to a page. Posters (2:3) and covers sit well inside it.
  */
 export const ASPECT_MIN = 0.55;
@@ -318,7 +318,7 @@ export interface JournalMark extends JournalItem {
 	/** Degrees of tilt — pinned to `key`, small, and never zero, so a cluster
 	 *  looks stuck in by hand rather than laid out. */
 	tilt: number;
-	/** Offset from the centre of the day's square, in artboard px. Set by
+	/** Offset from the center of the day's square, in artboard px. Set by
 	 *  `placeCluster`, which needs the whole day, so it is 0,0 until then. */
 	dx: number;
 	dy: number;
@@ -608,14 +608,14 @@ export function cellScale(cell: CellBox): number {
  * density even as the pile gets bigger rather than leaving a hole in the
  * middle or a ring around the outside.
  *
- * THE BIGGEST PRINT ANCHORS THE PILE, BUT THE PILE IS WHAT'S CENTRED. The
+ * THE BIGGEST PRINT ANCHORS THE PILE, BUT THE PILE IS WHAT'S CENTERED. The
  * marks arrive sorted biggest first and the first one is laid at distance
  * zero, so the thing that took the most of the day is what the rest are
  * scattered over. Leaving it there, though, put the day's main event dead in
  * the middle of every square and pushed the pile off the bottom-right of the
  * ones with several prints — the square was being spent on one mark and the
  * others were spilling out of it. So once the day is placed, the WHOLE pile is
- * shifted so that its bounding box is centred on the day. A day with one print
+ * shifted so that its bounding box is centered on the day. A day with one print
  * is unchanged (its box is the pile), and a day with five gets its five spread
  * across the square with the big one wherever it landed.
  *
@@ -634,29 +634,29 @@ const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
  * `MAX_COVER` — the most of any one print that may end up hidden under the
  * prints laid over it. THIS IS THE ONE THAT MATTERS, and it has been wrong
  * twice. First the spacing was computed from the day's MEAN print size, so a
- * big print at the centre and a small one beside it were held apart by the
+ * big print at the center and a small one beside it were held apart by the
  * same distance as two small ones — and the small one landed square on top of
- * the big one. Then it was per-pair but modelled every print as a CIRCLE of
+ * the big one. Then it was per-pair but modeled every print as a CIRCLE of
  * its mean side, which is a poor stand-in for a 72 x 108 poster: two of them
  * side by side clear as circles while their real rectangles still overlap by
  * three fifths.
  *
  * So the constraint is the honest one, stated as what you actually want:
- * measure the real rectangles, add up how much of each print its neighbours
+ * measure the real rectangles, add up how much of each print its neighbors
  * hide, and keep that under `MAX_COVER`. At 0.3 a print is at least 70%
- * visible — enough to recognise a poster by, which is the whole test (a route
+ * visible — enough to recognize a poster by, which is the whole test (a route
  * outline you can't trace and a film you can't name are both failures).
  *
  * It is a TARGET now rather than a promise. Since a print may no longer leave
  * its own day, a Sunday with nine things on it has nowhere left to put the
- * ninth, and something has to give: the search minimises burial inside the
+ * ninth, and something has to give: the search minimizes burial inside the
  * day instead of escaping the day to avoid it. `AREA_BUDGET` is what keeps
  * that from getting out of hand.
  *
  * A budget on its own isn't quite enough, though: a 26px snack laid dead in
  * the middle of a 104px route hides only 6% of it, which is well inside the
  * budget and still obviously wrong — it reads as one print stuck to another
- * rather than as two things that happened. So a print's CENTRE must also fall
+ * rather than as two things that happened. So a print's CENTER must also fall
  * outside every print already placed. Two rules, because "how much is hidden"
  * and "is it stuck on top of something" are two different complaints.
  *
@@ -686,7 +686,7 @@ export const MIN_INSIDE = 0.5;
 
 export const AREA_BUDGET = 1.15;
 
-/** The ellipse's two axes, normalised so their mean is 1 — the pile stretches
+/** The ellipse's two axes, normalized so their mean is 1 — the pile stretches
  *  to the shape of the day it sits in without getting larger overall. */
 export function spreadOf(cell: CellBox): { x: number; y: number } {
 	const mean = (cell.w + cell.h) / 2;
@@ -839,7 +839,7 @@ export function placeCluster(marks: JournalMark[], cell: CellBox): JournalMark[]
 		return { ...mark, dx: Math.round(best.dx), dy: Math.round(best.dy) };
 	});
 
-	// Recentre on the pile's bounding box, so the day's main event isn't pinned
+	// Recenter on the pile's bounding box, so the day's main event isn't pinned
 	// to the middle of every square — but only as far as every print in the pile
 	// can move and still stay on its own day, which is what `room` collects.
 	const left = Math.min(...placed.map((b) => b.dx - b.w / 2));
@@ -915,7 +915,7 @@ export function dayLayer(date: number): number {
  * How much further one day's prints have to shrink to fit the day.
  *
  * A print may only spill half its body off its own date (`MIN_INSIDE`), which
- * a day with a film, a book, two meals and a ride cannot honour at full size —
+ * a day with a film, a book, two meals and a ride cannot honor at full size —
  * there is only so much square. So a day over `AREA_BUDGET` scales every print
  * in it by the same factor: the pile shrinks, and inside the day the areas
  * still stand in the same ratio as the minutes, which is the only comparison

@@ -5,7 +5,7 @@
 // map"), so it gets its own basemap rather than reusing the restaurant log's
 // cream-paper one (src/lib/map-style.ts) or inventing a third palette by eye.
 // Same authored-not-vendor approach as that file — MapTiler supplies the
-// vector tiles (OpenMapTiles schema), every colour below is ours, and the
+// vector tiles (OpenMapTiles schema), every color below is ours, and the
 // palette is exactly ACTIVITIES.md §2's ALPINE tokens (src/lib/
 // activity-tokens.ts), not a lookalike.
 //
@@ -21,7 +21,7 @@
 // page reserves blue for nothing so a terracotta pin has no competition; this
 // page's whole reason for existing is a blue route line, and real alpine
 // lakes and rivers really are that cold blue-green — glacier for wide fills,
-// lake's deeper tone for outlines — so water gets to be the honest colour
+// lake's deeper tone for outlines — so water gets to be the honest color
 // here instead of the one hue everything else avoids.
 //
 // WHY THERE IS A HILLSHADE AND A CONTOUR LAYER. A ride or hike's whole point
@@ -50,7 +50,7 @@ export const ACTIVITY_MAP_TOKENS = {
 	water: ALPINE.glacier,
 	// A deeper glacier tone — reads as the edge of a water fill without
 	// borrowing `lake`, which the route line owns. A river drawn in the exact
-	// route colour is indistinguishable from the track crossing it.
+	// route color is indistinguishable from the track crossing it.
 	waterLine: '#5aa9b5',
 	park: '#dfe9e1', // a desaturated tint of ALPINE.fir — forest, not lawn-green
 	forest: ALPINE.fir,

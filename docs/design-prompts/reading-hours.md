@@ -44,7 +44,7 @@ quick sketch of the other so I can see what I'm giving up.
 Every book has a detail page. It already has a section called **"When you read
 it"** — reading stretches, each drawn as a row of 17px squares, one per day, on
 a five-step gold intensity ramp, with gaps between stretches marked by a
-labelled rule. Above it is a "Your reading" section: a big progress percentage,
+labeled rule. Above it is a "Your reading" section: a big progress percentage,
 a row of stat blocks, a reading-pace line.
 
 Add the same hour histogram, scoped to this one book, in or beside "When you
@@ -194,7 +194,7 @@ Three things to take from it:
 ## What to hand back
 
 1. A single self-contained HTML file with all the mockups in it, on the real
-   palette and fonts, each state labelled.
+   palette and fonts, each state labeled.
 2. Both placements for the month card (the one you'd ship, larger; the
    alternative, smaller).
 3. Book-page version in all three data states, at desktop and phone widths.

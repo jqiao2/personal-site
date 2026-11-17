@@ -3,7 +3,7 @@
 // each series independently toggled, and a cursor that scrubs the map.
 //
 // WHY THIS SENDS DOWNSAMPLED STREAM ARRAYS TO THE CLIENT WHEN THE OTHER CHARTS
-// DELIBERATELY DON'T. The server-rendered SVG charts (removed in favour of this)
+// DELIBERATELY DON'T. The server-rendered SVG charts (removed in favor of this)
 // never had to ship the streams because a static path is arithmetic done once.
 // Scrubbing is not static: the client has to answer "what were the numbers, and
 // where on the map, at the point under the cursor" for a point it doesn't know
@@ -45,7 +45,7 @@ export interface GraphData {
 	/** Seconds from the start, per index — null (the whole array) if the activity
 	 *  has no time stream, in which case only the distance axis is offered. */
 	t: (number | null)[] | null;
-	/** Metres from the start, per index — null if no distance stream. */
+	/** Meters from the start, per index — null if no distance stream. */
 	d: (number | null)[] | null;
 	/** Coordinates per index, for the map scrub marker. Null (the whole array)
 	 *  when the streams carry no lat/lng — the graph still works, it just can't
@@ -54,13 +54,13 @@ export interface GraphData {
 	lng: (number | null)[] | null;
 	series: GraphSeries[];
 	/** Internal lap boundaries as offsets from the start, in the same units as
-	 *  the two axes (seconds and metres). One per boundary BETWEEN laps — the
+	 *  the two axes (seconds and meters). One per boundary BETWEEN laps — the
 	 *  activity's own start and end are not dividers, so an N-lap activity has
 	 *  N-1 entries. `t`/`d` is null on an axis a lap didn't record. Absent when
 	 *  the activity has fewer than two laps. */
 	laps?: { t: number | null; d: number | null }[];
 	/** Run/lift/idle bands for a ski day, as [start, end] offsets on each axis
-	 *  (seconds and metres from the start, matching `t`/`d`). Drawn as coloured
+	 *  (seconds and meters from the start, matching `t`/`d`). Drawn as colored
 	 *  spans behind the elevation trace so the sawtooth reads as its runs and
 	 *  lifts. An axis a segment couldn't place (no distance stream) is null.
 	 *  Absent for non-ski activities. */
@@ -163,7 +163,7 @@ export function buildGraphData(
 	return { n: idx.length, t, d, lat, lng, series, laps: lapBoundaries(laps), skiSegments: skiBands(streams, skiSegments) };
 }
 
-/** Cumulative distance (metres) along a `[lat, lng]` track, one entry per point,
+/** Cumulative distance (meters) along a `[lat, lng]` track, one entry per point,
  *  for activities whose device recorded a route but no distance channel. Summed
  *  with `haversine`; a null coordinate holds the running total and yields a null
  *  at that index (so the axis breaks there rather than lurching). */

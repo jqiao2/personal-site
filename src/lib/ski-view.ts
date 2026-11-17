@@ -4,7 +4,7 @@
 // formatStat in sports.ts: display units are decided in lib, not in frontmatter.
 //
 // Both builders take an already-resolved `SkiSegment[]` (from
-// `resolveSkiSegments`, which honours a saved edit) rather than recomputing, so
+// `resolveSkiSegments`, which honors a saved edit) rather than recomputing, so
 // a correction shows up identically wherever these are rendered.
 
 import type { SkiSegment, SkiStreams } from './ski';
@@ -43,7 +43,7 @@ export interface SkiRunView {
 	duration: string;
 	avgMph: number | null;
 	distanceMi: number | null;
-	/** Altitude down the run, normalised 0 (day's low) … 1 (day's high) and
+	/** Altitude down the run, normalized 0 (day's low) … 1 (day's high) and
 	 *  downsampled — the y-values for a small descending sparkline. */
 	spark: number[];
 }
@@ -83,7 +83,7 @@ export interface SkiEditRow {
 	distanceMi: number | null;
 }
 
-/** Build the read-only breakdown, or null when there are no runs (a mislabelled
+/** Build the read-only breakdown, or null when there are no runs (a mislabeled
  *  flat activity, or one edited down to nothing). `maxSpeedMs` is the activity's
  *  stored top speed — the per-sample speed stream is too GPS-noisy for a max, so
  *  the day max comes from the column and per-run speed is an average. */
@@ -168,7 +168,7 @@ export function buildSkiEditRows(segments: SkiSegment[]): SkiEditRow[] {
 	});
 }
 
-/** Downsample altitude[a..b] to SPARK_POINTS values, each normalised into the
+/** Downsample altitude[a..b] to SPARK_POINTS values, each normalized into the
  *  shared [lo, lo+span] scale so 1 is the day's high and 0 its low. */
 function sparkline(alt: number[], a: number, b: number, lo: number, span: number): number[] {
 	const count = b - a;

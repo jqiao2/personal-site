@@ -33,7 +33,7 @@
 // are already arrays by the time this runs; turning them into an area/line
 // path is arithmetic, not a rendering problem that needs a dependency. It also
 // means the potentially-thousands-of-samples stream arrays never have to be
-// serialised to the client at all — only the small, already-computed path
+// serialized to the client at all — only the small, already-computed path
 // strings are.
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityMap from '../../components/ActivityMap.astro';
@@ -264,7 +264,7 @@ const skiStreams: SkiStreams = {
 	moving: streams?.moving ?? undefined,
 };
 
-// The resolved segments honour a saved edit (activity.ski_segments), else
+// The resolved segments honor a saved edit (activity.ski_segments), else
 // auto-detect. One computation drives the breakdown, the profile bands and the
 // editor, so they never disagree.
 const skiSegments = isLiftServed ? resolveSkiSegments(skiStreams, activity.ski_segments) : [];

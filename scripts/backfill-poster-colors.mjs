@@ -1,8 +1,8 @@
-// Backfill: the poster background colour the closet prints each spine in
+// Backfill: the poster background color the closet prints each spine in
 // (migration 0072). syncMovieFromTmdb fills it for films cached from now on;
 // this does the ones already cached.
 //
-// Idempotent: only rows with a poster and no colour are read, so a re-run picks
+// Idempotent: only rows with a poster and no color are read, so a re-run picks
 // up just what failed or arrived since. --all recomputes every row, for when
 // posterColor itself changes.
 //
@@ -49,7 +49,7 @@ for (let i = 0; i < rows.length; i += CONCURRENCY) {
 
 			if (!color) {
 				failed++;
-				console.warn(`  no colour: ${m.id} ${m.title}`);
+				console.warn(`  no color: ${m.id} ${m.title}`);
 
 				return;
 			}
@@ -65,4 +65,4 @@ for (let i = 0; i < rows.length; i += CONCURRENCY) {
 	);
 }
 
-console.log(`${done} coloured, ${failed} without a colour`);
+console.log(`${done} colored, ${failed} without a color`);

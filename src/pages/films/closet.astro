@@ -334,13 +334,13 @@ const num = (n: number) => n.toLocaleString('en-US');
 		}
 
 		/* The two walls meet at the back corner, in the middle of the screen, and
-		   fall away towards you on either side. Skewing drops each wall's outer edge
+		   fall away toward you on either side. Skewing drops each wall's outer edge
 		   by half its width; the floor below starts exactly there.
 
-		   Depth is drawn, not modelled. In a wall's own skewed frame "back" is a 45°
+		   Depth is drawn, not modeled. In a wall's own skewed frame "back" is a 45°
 		   step — (-d, -d) on the left wall, (+d, -d) on the right — so every face
 		   that recedes (book tops, the bookcase top, its end panel) is a strip
-		   skewed by --lean. Only the faces towards the viewer are drawn: tops, and
+		   skewed by --lean. Only the faces toward the viewer are drawn: tops, and
 		   the side facing the room's open end. */
 		.room {
 			position: relative;
@@ -593,8 +593,8 @@ const num = (n: number) => n.toLocaleString('en-US');
 		/* The case's top, and its side facing the open end of the room. That side
 		   only exists where it can be seen: on the disc ending a row, as far back as
 		   the gap beside it reaches (--gap, set by the script), and on a pulled disc
-		   for the stretch that clears its neighbour. The cover printed on it darkens
-		   sharply towards the back — a glimpse, not the whole poster. Nothing is
+		   for the stretch that clears its neighbor. The cover printed on it darkens
+		   sharply toward the back — a glimpse, not the whole poster. Nothing is
 		   generated for any other disc, so their posters are never fetched. */
 		.sp__case::after,
 		.sp--edge .sp__case::before,
@@ -684,7 +684,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			letter-spacing: -0.3px;
 			opacity: 0.8;
 		}
-		/* Pulled towards you along the wall's normal — in the wall's skewed frame
+		/* Pulled toward you along the wall's normal — in the wall's skewed frame
 		   (dx, dx) once dx takes the wall's sign — part of its depth, so it still
 		   rests on the shelf. */
 		.sp:hover,
@@ -899,7 +899,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 			/* With no tops or sides to give the cases bulk, shade the spines the
 			   way the /books shelf does: light catching the hinge edge, falling
 			   off across the spine, and each case casting a shadow on its
-			   neighbour and the board. Flatter than a book's — a keepcase's spine
+			   neighbor and the board. Flatter than a book's — a keepcase's spine
 			   is moulded plastic, barely rounded. */
 			.sp__case {
 				background:

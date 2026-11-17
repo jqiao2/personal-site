@@ -202,7 +202,7 @@ export const PATCH: APIRoute = async ({ request, cookies }) => {
 
 				if (!edition) {
 					// The number is still worth keeping: it is a fact about the book that
-					// was just asserted by hand, and Open Library's catalogue grows. What
+					// was just asserted by hand, and Open Library's catalog grows. What
 					// failed was the lookup, and the message says so rather than implying
 					// the ISBN was rejected.
 					if (supplied && isbn !== book.isbn) await updateBook(id, { isbn });

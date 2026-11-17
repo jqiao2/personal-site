@@ -1,5 +1,5 @@
 -- Screening Room: the "queued" watchlist — films scheduled to watch on a day,
--- at home or in a theatre. Distinct from `watchlist` (an unordered "to watch"
+-- at home or in a theater. Distinct from `watchlist` (an unordered "to watch"
 -- pile): a queue entry has a date and, optionally, a synced Google Calendar
 -- event, so the two round-trip.
 --
@@ -10,7 +10,7 @@ create table if not exists public.screening_queue (
 	id              bigint generated always as identity primary key,
 	movie_id        bigint not null unique references public.movies (id) on delete cascade,
 	scheduled_date  date    not null,          -- the day planned to watch
-	venue           text,                       -- theatre name (e.g. "AMC 34th Street 14"); null = at home
+	venue           text,                       -- theater name (e.g. "AMC 34th Street 14"); null = at home
 	-- The Google Calendar event this entry is mirrored by, when synced. Null for a
 	-- manual add that hasn't been pushed, or when Calendar isn't configured. Lets a
 	-- later edit/remove update or delete the matching event, and dedupes the inbound

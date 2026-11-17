@@ -137,7 +137,7 @@ function mapLaps(laps: StravaLap[] | null | undefined): CanonicalLap[] | undefin
  *
  * Sport comes from `sport_type` (Strava's newer, finer field — "GravelRide",
  * "TrailRun") falling back to `type`. Both use the squashed CamelCase that
- * `sportFromXmlType` already normalises, so the archive's sport table is
+ * `sportFromXmlType` already normalizes, so the archive's sport table is
  * reused rather than copied. An unmapped sport throws, exactly as the archive
  * path does (canonical.ts's UnknownSportError note): a silent fall to 'other'
  * is a permanent lossy write, so the sync stops and asks for the slug instead.

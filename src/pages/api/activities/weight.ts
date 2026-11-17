@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ request }) => {
 		return apiError('expected JSON body', 400);
 	}
 
-	// Normalise the three accepted shapes down to a list of items.
+	// Normalize the three accepted shapes down to a list of items.
 	const items: WeighInInput[] = Array.isArray(body)
 		? (body as WeighInInput[])
 		: body && typeof body === 'object' && Array.isArray((body as { weights?: unknown }).weights)

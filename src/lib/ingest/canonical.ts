@@ -11,7 +11,7 @@
 //
 // The split that matters: a PARSER produces measurements (what the file says),
 // and `toRows` produces the record (what we store, including the derived
-// things — exertion, the normalised route path, the local calendar date). No
+// things — exertion, the normalized route path, the local calendar date). No
 // parser computes exertion, and no parser touches the database. That is what
 // makes it possible to re-run §3's cascade over the whole table when a
 // threshold changes without re-reading a single FIT file.
@@ -122,7 +122,7 @@ export interface CanonicalActivity {
  * Strava's `Activity Type` (from the archive's activities.csv) → our slug.
  *
  * WHY THIS THROWS ON AN UNKNOWN TYPE instead of falling back to 'other'.
- * `sportMeta()` deliberately degrades to 'other' so an unrecognised slug can
+ * `sportMeta()` deliberately degrades to 'other' so an unrecognized slug can
  * never 500 a page — that is a RENDERING safety net, and it must stay. Using
  * the same fallback at INGEST time would be a different thing entirely: a
  * silent, permanent, lossy write. Thirty activities land in 'other', nobody
@@ -185,7 +185,7 @@ export function sportFromStrava(providerType: string): Sport {
  * Strava writes the same vocabulary as `activities.csv` but squashed —
  * `Gravel Ride` comes down as `gravelride`, `Trail Run` as `trailrun`, and
  * older files use the plain lowercase word. So the table above is reused with
- * its keys normalised rather than copied and drifted. Returns null instead of
+ * its keys normalized rather than copied and drifted. Returns null instead of
  * throwing: a dropped file's type is a hint, and the caller has a `--sport`
  * override to fall back on.
  *
@@ -286,7 +286,7 @@ export function refineSport(sport: Sport, fitSport?: string, fitSubSport?: strin
 
 /**
  * A bike ride with no GPS track is a trainer ride, whatever the provider
- * labelled it. `refineSport` already does this for a FIT file's own sub-sport
+ * labeled it. `refineSport` already does this for a FIT file's own sub-sport
  * (indoorCycling/virtualActivity → virtual_ride), but a ride that arrives with
  * only Strava's plain "Ride" label — a Zwift session synced through the API, a
  * trainer ride exported to a routeless GPX — keeps `ride`, so it lands in the
@@ -394,7 +394,7 @@ export interface ActivityRowSet {
 // whatever draws it. Storage keeps the truth; display picks a resolution.
 //
 // The one thing trimmed on the way in is FLOAT NOISE, not samples. A device
-// that knows where it is to within a few metres still emits
+// that knows where it is to within a few meters still emits
 // `47.61234567890123`, and those trailing digits are an artifact of binary
 // float conversion rather than anything the GPS measured. Every sample is kept
 // at the precision its sensor actually has:

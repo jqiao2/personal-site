@@ -38,7 +38,7 @@ parallel safe
 as $$ select 5 $$;
 
 comment on function public.reading_day_min_pages() is
-	'Pages of a single book that must be turned in one local day before that book counts towards the day. Strictly greater than: at 5, six pages count and five do not. Read-side only — reading_sessions keeps everything.';
+	'Pages of a single book that must be turned in one local day before that book counts toward the day. Strictly greater than: at 5, six pages count and five do not. Read-side only — reading_sessions keeps everything.';
 
 -- ---------------------------------------------------------------------------
 -- book_days_all: the rollup before the threshold

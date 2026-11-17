@@ -25,6 +25,15 @@ The only editable part is the listing at `src/pages/archive.astro`. Archiving
 something new means moving the code into `src/pages/archive/` untouched and
 adding a row there.
 
+## American English
+
+Everything in the repo is written in American English: page copy, comments,
+identifiers, docs and the wiki. Color, behavior, center, meter, normalize,
+labeled, gray, catalog, toward. Keep British spellings only where they are
+someone else's: proper names (Vista Theatre, the Sceptre imprint), external
+data keys (OSM's `neighbourhood`), URLs (amctheatres.com) and the `aria-labelledby`
+attribute.
+
 ## Visual checks
 
 Anything whose correctness is visual — layout, overlap, a share card, a chart —
@@ -48,7 +57,7 @@ leading slash — Git Bash rewrites `/month` into a Windows path. See
 Nothing on the page animates. The content is the point, and motion pulls the eye
 off it. No `transition`, no `@keyframes`, no JS-driven tween, no scroll effect,
 no hover lift, no fade or slide on anything opening or closing. State changes are
-instant: a drawer is shown or hidden, a hover changes colour on the frame it is
+instant: a drawer is shown or hidden, a hover changes color on the frame it is
 hovered.
 
 The one exception is a loading spinner on a pending request. Adding a second

@@ -45,7 +45,7 @@ const evalIn = (js, scope) =>
 		...Object.values(scope),
 	);
 
-/** Stands in for the pins the component serialises into its config tag. */
+/** Stands in for the pins the component serializes into its config tag. */
 const samplePoints = [
 	{ name: 'Ba Xuyên', lng: -74.0161, lat: 40.6387, trip: true, visits: 11 },
 	{ name: 'Veselka', lng: -73.9866, lat: 40.7288, trip: false, visits: 2 },

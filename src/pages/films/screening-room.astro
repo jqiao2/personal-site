@@ -1,6 +1,6 @@
 ---
 // The Screening Room — the "queued" watchlist as one continuous calendar. Films
-// you've scheduled to watch (at home or in a theatre) sit on the day you plan to
+// you've scheduled to watch (at home or in a theater) sit on the day you plan to
 // see them. The run is a plain 7-column grid that scrolls forever, month seams
 // marked by nothing but a bolder grid line stepping around the 1st; the owner
 // can schedule a film onto any day, drag one to another day, remove one, and
@@ -355,7 +355,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 						body: JSON.stringify({
 							tmdbId: Number(film.dataset.tmdbId),
 							date: cell.dataset.date,
-							// Carried through so a move doesn't drop the theatre.
+							// Carried through so a move doesn't drop the theater.
 							venue: film.dataset.venue || null,
 						}),
 					});

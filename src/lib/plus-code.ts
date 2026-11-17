@@ -42,7 +42,7 @@ const PADDING = '0';
  * the grid is NOT square: five rows of latitude by four columns of longitude,
  * which is what keeps the cells nearly square on the ground at the latitudes
  * people live at. Reversing the two decodes every long code to the wrong
- * place by a few metres — close enough to look right and be wrong.
+ * place by a few meters — close enough to look right and be wrong.
  */
 const GRID_ROWS = 5;
 
@@ -57,7 +57,7 @@ const MAX_DIGITS = 15;
 
 // Zero characters before the separator is legal — "+2VX" is a code with all
 // eight leading characters dropped, and only means anything within a few
-// hundred metres of its reference.
+// hundred meters of its reference.
 const CODE = /^[23456789CFGHJMPQRVWX]*\+[23456789CFGHJMPQRVWX]*$/;
 
 export interface Point {
@@ -65,7 +65,7 @@ export interface Point {
 	lng: number;
 }
 
-/** Strip anything that isn't the code itself, and normalise case. */
+/** Strip anything that isn't the code itself, and normalize case. */
 function clean(raw: string): string {
 	return raw.trim().toUpperCase();
 }
@@ -122,10 +122,10 @@ export function findPlusCode(raw: string): { code: string; locality: string } | 
 }
 
 /**
- * Decode a full code to the CENTRE of the area it names.
+ * Decode a full code to the CENTER of the area it names.
  *
- * A code is an area, not a point — ten characters is about 14×14 metres, which
- * is a building — and its centre is the only defensible point to store. The
+ * A code is an area, not a point — ten characters is about 14×14 meters, which
+ * is a building — and its center is the only defensible point to store. The
  * south-west corner would be off by half a cell in two directions, always in
  * the same direction, which is a bias rather than a rounding.
  */
@@ -165,7 +165,7 @@ export function decodePlusCode(raw: string): Point | null {
 		lng += (value % GRID_COLUMNS) * cellLng;
 	}
 
-	// The centre of the smallest cell the code resolved to.
+	// The center of the smallest cell the code resolved to.
 	return { lat: lat + cellLat / 2, lng: lng + cellLng / 2 };
 }
 

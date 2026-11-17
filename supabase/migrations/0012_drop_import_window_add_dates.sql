@@ -4,8 +4,8 @@
 -- longer backfill. `watched.csv` has no watch date — its "Date" column is when a
 -- film was ADDED to the watched list — yet backfill-letterboxd.mjs feeds that
 -- column into `first_watched` (see its Phase 4). So every film marked watched
--- while working through the back catalogue in autumn 2021 carries the day it was
--- catalogued, not the day it was seen: 56 films on 2021-09-15, 39 on 2021-10-14,
+-- while working through the back catalog in autumn 2021 carries the day it was
+-- cataloged, not the day it was seen: 56 films on 2021-09-15, 39 on 2021-10-14,
 -- 34 on 2021-09-25. Those are cataloguing sessions, not viewing sessions.
 --
 -- Rule: within the import window, a date is only trustworthy if a diary entry

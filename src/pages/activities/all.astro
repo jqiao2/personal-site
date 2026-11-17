@@ -245,7 +245,7 @@ const scopeDummy: ActivityCardRow = {
 		</header>
 
 		<!-- Owner only: with no facets there is nothing in the panel to draw and
-		     nothing but sport and date the server would honour anyway. Hidden
+		     nothing but sport and date the server would honor anyway. Hidden
 		     rather than removed so the client script below — which wires the
 		     sort, the chips and the sliders on load — still finds every node it
 		     expects instead of dying on the first null and taking the infinite
@@ -1896,7 +1896,7 @@ const scopeDummy: ActivityCardRow = {
 		// actively regress a filter the URL set but the panel can't represent
 		// yet (e.g. an ?exmin= narrower than any slider drawn, because the
 		// collection has no range to size one from): the request already
-		// honoured it, but a DOM-only recount would silently drop it from the
+		// honored it, but a DOM-only recount would silently drop it from the
 		// badge and sentence, and then from the query itself on the next
 		// interaction. Chrome only needs to move once state actually changes,
 		// which is exactly what applyFilters() does.

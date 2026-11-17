@@ -55,7 +55,7 @@ Skip anything that is not a 200 GET/HEAD, already carries its own
 
 - **`Vary: Cookie` is only a sane cache key if you set exactly one cookie.** Add
   analytics or a consent banner and the visitor cache shatters into one entry per
-  person, silently undoing all of it. Vercel does honour arbitrary `Vary`.
+  person, silently undoing all of it. Vercel does honor arbitrary `Vary`.
 - **Branch on the same predicate the page rendered against** (`requireOwner`),
   not on `cookies.has(...)`. An expired cookie produced the visitor's page and
   should get the visitor's caching, and it keeps the dev server — where

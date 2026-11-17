@@ -30,7 +30,7 @@ import { pathToFileURL } from 'node:url';
 
 // How close two rows must be to be one place. About two short blocks: wide
 // enough for two sources to disagree about which door a restaurant uses, far too
-// narrow for the same-named place in the next neighbourhood to slip through.
+// narrow for the same-named place in the next neighborhood to slip through.
 const MERGE_RADIUS_M = 150;
 
 // ---------------------------------------------------------------------------
@@ -38,11 +38,11 @@ const MERGE_RADIUS_M = 150;
 // ---------------------------------------------------------------------------
 
 /**
- * The same normalisation the gazetteer stores names under (see gazetteer.ts).
+ * The same normalization the gazetteer stores names under (see gazetteer.ts).
  * Copied rather than imported: this file runs as plain .mjs with no TS hook, and
  * the .ts module pulls in the Supabase client at load. Keep the two in step.
  */
-export function normalise(raw) {
+export function normalize(raw) {
 	return String(raw ?? '')
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
@@ -53,7 +53,7 @@ export function normalise(raw) {
 
 const EARTH_M = 6371000;
 
-function metres(aLat, aLng, bLat, bLng) {
+function meters(aLat, aLng, bLat, bLng) {
 	const toRad = (d) => (d * Math.PI) / 180;
 	const dLat = toRad(bLat - aLat);
 	const dLng = toRad(bLng - aLng);
@@ -71,8 +71,8 @@ const cityKey = (r) => String(r.city ?? '').trim().toLowerCase();
 
 /** Are these two rows the same real place? Conservative — see the file header. */
 export function samePlace(a, b) {
-	const na = normalise(a.name);
-	const nb = normalise(b.name);
+	const na = normalize(a.name);
+	const nb = normalize(b.name);
 
 	if (!na || !nb) return false;
 	const nameMatch = na === nb || na.includes(nb) || nb.includes(na);
@@ -82,7 +82,7 @@ export function samePlace(a, b) {
 	if (hasCoords(a) && hasCoords(b)) {
 		// Both placed: the name matches, so it comes down to distance. This is the
 		// guard that keeps a franchise's branches apart.
-		return metres(a.lat, a.lng, b.lat, b.lng) < MERGE_RADIUS_M;
+		return meters(a.lat, a.lng, b.lat, b.lng) < MERGE_RADIUS_M;
 	}
 
 	// One or both unplaced — no distance to check. Require an EXACT name (not just

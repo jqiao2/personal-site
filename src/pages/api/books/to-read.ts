@@ -25,7 +25,7 @@ export const prerender = false;
 //   in later: the pile renders it as its own kind of row.
 //
 // `md5` stays null either way. That is what makes this a book with no file, and
-// it is why the Kindle cannot recognise it later without the merge in 0025.
+// it is why the Kindle cannot recognize it later without the merge in 0025.
 
 interface Body {
 	title?: unknown;

@@ -39,7 +39,7 @@ create table if not exists public.activity_gear (
 	-- the catalog name ("2023 Salsa Cutthroat").
 	nickname    text,
 	retired_at  timestamptz,
-	-- Denormalised running total (kept in sync by the app on write, not a
+	-- Denormalized running total (kept in sync by the app on write, not a
 	-- trigger — gear totals aren't consistency-critical and a trigger on every
 	-- activity insert would be a lot of machinery for a sidebar stat).
 	distance_m  double precision not null default 0,
@@ -53,7 +53,7 @@ create table if not exists public.activity_gear (
 comment on column public.activity_gear.nickname is
 	'What''s said in the UI when it differs from the catalog name — "the gravel bike" vs "2023 Salsa Cutthroat".';
 comment on column public.activity_gear.distance_m is
-	'Denormalised running total, kept in sync on write. Not FK-derived: a retired bike''s total shouldn''t change because an old ride got re-tagged.';
+	'Denormalized running total, kept in sync on write. Not FK-derived: a retired bike''s total shouldn''t change because an old ride got re-tagged.';
 
 create index if not exists activity_gear_kind_idx on public.activity_gear (kind);
 
@@ -182,7 +182,7 @@ create table if not exists public.activities (
 	-- The landing page's hand-picked top four, same convention as the film log's
 	-- watched.favorite and the restaurant log's restaurants.favorite_rank.
 	favorite_rank      smallint    check (favorite_rank is null or favorite_rank between 1 and 4),
-	-- Denormalised rather than "select exists(...) from activity_streams": the
+	-- Denormalized rather than "select exists(...) from activity_streams": the
 	-- list view reads this column and never touches activity_streams at all —
 	-- streams are big and only the detail page pays for them.
 	has_streams        boolean     not null default false,
@@ -207,9 +207,9 @@ comment on column public.activities.exertion_method is
 comment on column public.activities.exertion_confidence is
 	'measured (real sensor stream), estimated (derived from a stream via a model), or assumed (no stream, MET-table floor). The UI must show this alongside exertion, never the number alone.';
 comment on column public.activities.route_path is
-	'Normalised SVG path, viewBox 0 0 100 100, RDP-simplified to <=200 points — see ACTIVITIES.md §7 and src/lib/route-shape.ts. Null for anything with no GPS; that''s a deliberate second card design, not a broken first one.';
+	'Normalized SVG path, viewBox 0 0 100 100, RDP-simplified to <=200 points — see ACTIVITIES.md §7 and src/lib/route-shape.ts. Null for anything with no GPS; that''s a deliberate second card design, not a broken first one.';
 comment on column public.activities.has_streams is
-	'Denormalised from activity_streams so the list view never has to join the (large) streams table just to know whether a route/graph can be drawn.';
+	'Denormalized from activity_streams so the list view never has to join the (large) streams table just to know whether a route/graph can be drawn.';
 
 -- Partial unique: at most one activity per rank, any number at no rank.
 create unique index if not exists activities_favorite_rank_key

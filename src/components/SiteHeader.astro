@@ -3,7 +3,7 @@
 //
 // This replaces the half-dozen hand-copied nav strips that used to live in each
 // section's pages — wine tabs in the film log, paper tabs in the book log, the
-// menu bar in the restaurant log, and so on. They only ever differed in colour
+// menu bar in the restaurant log, and so on. They only ever differed in color
 // and typeface, so the markup is shared here and the look is a `theme` preset:
 // same four tabs, same Journal dropdown, same active logic everywhere, painted
 // to match the page.
@@ -45,7 +45,7 @@ const style = headerThemeStyle(theme, max);
 // on) applied to the section as a jq filter path — so the site reads as one
 // pipeline over a life. Home is the identity filter `.` (returns everything, the
 // cross-section feed); each section is the path that pulls it out. The `jq` stays
-// constant, the accent-coloured filter names the section — the tool is the small
+// constant, the accent-colored filter names the section — the tool is the small
 // constant, the hobby it surfaces is the loud part.
 const FILTERS: Record<string, string> = {
 	root: '.',
@@ -442,7 +442,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	}
 	/* Brand mark: `jq .section` set in mono so it reads as a jq filter. Themed by
 	   the same --sh-* vars as everything else — `jq` in the section's strong
-	   colour, the filter path in its accent. Its own right margin holds it off
+	   color, the filter path in its accent. Its own right margin holds it off
 	   the tabs; the mono face is the system stack, no webfont added for six
 	   glyphs. */
 	.sh__brand {
@@ -513,7 +513,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		padding-right: 4px;
 	}
 	/* The active underline belongs under the whole Journal tab — the label AND
-	   its caret — not just the label, or it reads as off-centre. Drawn as a
+	   its caret — not just the label, or it reads as off-center. Drawn as a
 	   full-width bar on the group so it can't shift the row's height. */
 	.sh-logs:has(.sh__link--active) {
 		position: relative;

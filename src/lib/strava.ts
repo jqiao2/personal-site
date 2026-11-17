@@ -127,7 +127,7 @@ async function tokenExchange(body: Record<string, string>): Promise<TokenRespons
 
 /** Exchange the `code` from the callback for the first token pair, and store
  *  it. Sets the sync watermark to now: this connection pulls rides made AFTER
- *  it was authorised, not the whole history (that's the archive importer). */
+ *  it was authorized, not the whole history (that's the archive importer). */
 export async function exchangeCode(code: string): Promise<void> {
 	const t = await tokenExchange({ code, grant_type: 'authorization_code' });
 	await writeTokens(t, STRAVA_SCOPE);

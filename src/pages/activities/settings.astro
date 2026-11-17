@@ -2,10 +2,10 @@
 // /activities/settings — owner only. Two ways in:
 //   - Files: upload a .fit/.gpx/.tcx and it's parsed, scored and stored on the
 //     spot (ACTIVITIES.md §4 step 2, over HTTP — see /api/activities/upload).
-//   - Strava: authorise once, then pull new rides (a daily cron does it
+//   - Strava: authorize once, then pull new rides (a daily cron does it
 //     hands-off; "Sync now" does it on demand — step 3).
 //
-// The whole back-catalogue is NOT this page's job — that's the offline archive
+// The whole back-catalog is NOT this page's job — that's the offline archive
 // importer (`npm run activities:import`, ACTIVITIES.md §4 step 1).
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import { requireOwner } from '../../lib/auth';

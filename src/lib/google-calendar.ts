@@ -131,7 +131,7 @@ export async function deleteEvent(eventId: string): Promise<void> {
 }
 
 /**
- * Single (non-recurring, non-cancelled) events on the Movies calendar from
+ * Single (non-recurring, non-canceled) events on the Movies calendar from
  * `timeMin` onward, oldest first. Pages through Google's `nextPageToken`. Used
  * by the inbound parse to pull AMC-style events into the queue.
  */

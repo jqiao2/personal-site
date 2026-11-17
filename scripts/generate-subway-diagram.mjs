@@ -10,8 +10,8 @@ import { writeFileSync } from "node:fs";
 import { SEGMENTS, SERVICES } from "../src/scripts/subway-data.js";
 import { sectionLines } from "./subway-bundles.mjs";
 
-// The bundler's thresholds are in metres; here one schematic unit stands in for
-// M of them. Parallel services share one centreline exactly, so a large M (tight
+// The bundler's thresholds are in meters; here one schematic unit stands in for
+// M of them. Parallel services share one centerline exactly, so a large M (tight
 // "same track" distance, many membership checks per straight) only sharpens the
 // bundles: at 30, the N/Q's few units alongside the R/W at Union Sq counted them in.
 const M = 100;

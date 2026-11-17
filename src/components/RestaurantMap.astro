@@ -8,9 +8,9 @@
 // pin is in Sunset Park and being told so.
 //
 // THE PIN CARRIES THE TRIP ANSWER, and nothing else. Filled means worth the
-// trip; blank means not. One question, two states, no key to memorise — which
+// trip; blank means not. One question, two states, no key to memorize — which
 // is the most a small mark can carry and be read at a glance. The verdict's six
-// rungs and three colour bands used to live here and asked far more of the
+// rungs and three color bands used to live here and asked far more of the
 // mark than that, and asked it of pins that often had no verdict at all: the
 // whole to-try map is places nobody has been to. Everything else about a place
 // — verdict, stars, heart, visit count — is one click away: the pin is a link
@@ -424,7 +424,7 @@ const hasKey = Boolean(config.key);
 
 <style is:global>
 	/* The vendor's chrome, restyled to the section's palette rather than left
-	   in its default blue-grey — the giveaway that a map was dropped in. */
+	   in its default blue-gray — the giveaway that a map was dropped in. */
 	.map__gl .maplibregl-ctrl-group {
 		background: #fdf7e8;
 		border: 1px solid var(--ink);
@@ -449,7 +449,7 @@ const hasKey = Boolean(config.key);
 		filter: drop-shadow(0 1px 1px rgba(47, 30, 18, 0.35));
 	}
 	/* Pins are allowed to overlap now, so the one being pointed at has to be
-	   able to come out from under its neighbours — otherwise the name label
+	   able to come out from under its neighbors — otherwise the name label
 	   under it renders behind them. */
 	.gl-pin:hover {
 		z-index: 3;

@@ -254,10 +254,10 @@ const pile = placeCluster(march4.marks, CELL);
 
 assert.equal(pile.length, march4.marks.length);
 
-// THE PILE IS CENTRED, NOT THE ANCHOR. The biggest print used to be pinned to
-// the middle of every day, which put the day's main event dead centre and hung
+// THE PILE IS CENTERED, NOT THE ANCHOR. The biggest print used to be pinned to
+// the middle of every day, which put the day's main event dead center and hung
 // the rest of the pile off one corner of the square. Now the whole pile is
-// shifted so its bounding box is centred, so the anchor is free to sit
+// shifted so its bounding box is centered, so the anchor is free to sit
 // wherever the scatter put it.
 const boundsOf = (marks) => ({
 	x: [
@@ -270,12 +270,12 @@ const boundsOf = (marks) => ({
 	],
 });
 
-// Only as far as it can go, mind: the shift is clamped so that recentring
+// Only as far as it can go, mind: the shift is clamped so that recentering
 // never pushes a print off its own day (see MIN_INSIDE below), so on a tight
 // pile the middle lands near the day's, not exactly on it.
 const bounds = boundsOf(pile);
 
-assert.ok(Math.abs(bounds.x[0] + bounds.x[1]) / 2 < CELL.w * 0.15, 'the pile is centred across');
+assert.ok(Math.abs(bounds.x[0] + bounds.x[1]) / 2 < CELL.w * 0.15, 'the pile is centered across');
 
 assert.ok(Math.abs(bounds.y[0] + bounds.y[1]) / 2 < CELL.h * 0.15, 'and down');
 
@@ -308,8 +308,8 @@ assert.deepEqual(
 
 // NOTHING GETS BURIED. This is the property that matters and the one that has
 // regressed twice — first from spacing off the day's mean print size, then from
-// modelling tall posters as circles. Measured the way you'd actually judge it:
-// how much of each print its neighbours hide, using the real rectangles.
+// modeling tall posters as circles. Measured the way you'd actually judge it:
+// how much of each print its neighbors hide, using the real rectangles.
 const area = (m) => m.box.w * m.box.h;
 
 const hiddenOf = (pile, i) =>
@@ -346,14 +346,14 @@ const lopsided = placeCluster([
 assert.ok(hiddenOf(lopsided, 0) / area(lopsided[0]) <= MAX_COVER + 0.01);
 
 // The coverage budget alone would have allowed this one: a 30px print laid dead
-// centre on a 72x108 poster hides only 11% of it. Its centre still has to clear
+// center on a 72x108 poster hides only 11% of it. Its center still has to clear
 // the poster's box, or it reads as stuck to it rather than beside it.
-// Measured against the big print, not the day: the pile gets recentred
+// Measured against the big print, not the day: the pile gets recentered
 // afterwards, so the anchor is no longer guaranteed to be at 0,0.
 assert.ok(
 	Math.abs(lopsided[1].dx - lopsided[0].dx) > 36 ||
 		Math.abs(lopsided[1].dy - lopsided[0].dy) > 54,
-	'a small print must not sit dead centre on a big one',
+	'a small print must not sit dead center on a big one',
 );
 
 // Two tall posters, the 16th's actual case: circles said they cleared, the
@@ -364,7 +364,7 @@ assert.ok(
 // the room isn't there. Containment wins that argument (a print you have to
 // trace back to its own date is worse than a partly covered one), so what the
 // search promises is the least burial available inside the day, and the number
-// to fail over is the one that stops a print being recognisable.
+// to fail over is the one that stops a print being recognizable.
 const CROWDED_COVER = 0.4;
 
 const posters = placeCluster([
