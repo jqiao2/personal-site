@@ -1,7 +1,7 @@
 // The flight poster's settings and status, as the admin page shows them. Pure:
 // the database side is flight-poster-db.ts.
 //
-// `PosterConfig` is the behaviour half of the board's config.json, in the same
+// `PosterConfig` is the behavior half of the board's config.json, in the same
 // shape, so the board feeds the site's reply straight into its own parser
 // (parseConfig in jqiao2/flight-poster src/config.cpp). Field names must stay
 // in step with that file, and the defaults with its config.example.json.
