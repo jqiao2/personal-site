@@ -3,14 +3,14 @@
 // This is the part of the map that decides whether it looks like part of a menu
 // or like an iframe someone dropped in the page, so none of it comes from a
 // vendor's stock style. MapTiler supplies the vector tiles (the OpenMapTiles
-// schema); every colour, width and label rule below is ours, and the palette is
+// schema); every color, width and label rule below is ours, and the palette is
 // the one the section is already printed in — cream ground, ink brown, a faded
 // green wash for water.
 //
 // WATER IS GREEN, WHICH IS THE ONE CHOICE PEOPLE QUESTION. Blue water on cream
 // paper reads as a map that has been dropped into the page from somewhere else:
 // it is the one hue in the default palette that no printed menu contains. A
-// faded green-grey sits in the same family as the parks and lets the terracotta
+// faded green-gray sits in the same family as the parks and lets the terracotta
 // pins be the only saturated thing on the screen — which is the point, because
 // the pins are the content and the basemap is the paper it is printed on.
 //
@@ -18,7 +18,7 @@
 // light to show a road; on paper you take ink away. Majors are a warm tan
 // with a hairline casing, minors a shade lighter — dark enough against the
 // cream to read as a street grid at a glance, not so dark they compete with a
-// pin. (They used to sit a hair off the ground colour, which read as a map
+// pin. (They used to sit a hair off the ground color, which read as a map
 // that had not finished loading.)
 //
 // The token names match the design bundle's basemap spec one for one, so the
@@ -39,7 +39,7 @@ export const MAP_TOKENS = {
 } as const;
 
 // The same basemap re-inked dark for /subway's map view: a near-black ground,
-// roads a few shades up from it, so the 24 service colours are the only bright
+// roads a few shades up from it, so the 24 service colors are the only bright
 // things on screen.
 export const SUBWAY_MAP_TOKENS = {
 	land: '#1a1c1e',
@@ -85,7 +85,7 @@ const GLYPHS = 'https://api.maptiler.com/fonts/{fontstack}/{range}.pbf';
  *
  * Labels are set in Noto Sans because that is what the tile server has glyphs
  * for; Archivo would need a self-hosted glyph range, which is a lot of pipeline
- * for type that renders at 11px under a pin. The label COLOUR and halo are ours,
+ * for type that renders at 11px under a pin. The label COLOR and halo are ours,
  * which is what actually makes them look set rather than default.
  */
 export function menuBasemap(key: string, t: Record<keyof typeof MAP_TOKENS, string> = MAP_TOKENS) {
@@ -196,7 +196,7 @@ export function menuBasemap(key: string, t: Record<keyof typeof MAP_TOKENS, stri
 			},
 			{
 				// Street names only when zoomed in past the point where the
-				// neighbourhood label alone stops being enough.
+				// neighborhood label alone stops being enough.
 				id: 'label-street',
 				type: 'symbol' as const,
 				source: 'base',

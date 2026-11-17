@@ -43,7 +43,7 @@ for (const arr of [small.t, small.d, small.lat, small.lng, ...small.series.map((
 	assert.equal(arr.length, small.n, 'all sampled arrays share the index count');
 }
 
-// Elevation converted metres→feet and rounded.
+// Elevation converted meters→feet and rounded.
 assert.equal(small.series[0].values[0], Math.round(100 * 3.28084));
 
 // Speed converted m/s→mph, one decimal.

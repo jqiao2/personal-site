@@ -24,8 +24,8 @@ type Marks = { st: Record<string, 1>; seg: Record<string, 1> };
 
 const on: maplibregl.ExpressionSpecification = ['boolean', ['feature-state', 'on'], false];
 
-// Unridden track is the service colour faded into the (dark) ground, as the
-// diagram fades it into its pale one. An opaque colour rather than line-opacity:
+// Unridden track is the service color faded into the (dark) ground, as the
+// diagram fades it into its pale one. An opaque color rather than line-opacity:
 // a segment is several pieces, and translucent pieces darken where their round
 // ends overlap — a dotted line.
 function fade(hex: string) {
@@ -55,17 +55,17 @@ function lineGeoJSON() {
 
 // One marker per platform a station's services use, all sharing the station id,
 // so marking a complex visited fills every one of its platforms. Only the
-// busiest platform carries the name, so a complex is labelled once.
+// busiest platform carries the name, so a complex is labeled once.
 const names = Object.fromEntries(STATIONS.map((s) => [s.id, s.name]));
 
 function stationGeoJSON() {
-	const labelled = new Set<number>();
+	const labeled = new Set<number>();
 
 	return {
 		type: 'FeatureCollection' as const,
 		features: [...STOPS].sort((a, b) => b.n - a.n).map((p) => {
-			const first = !labelled.has(p.id);
-			labelled.add(p.id);
+			const first = !labeled.has(p.id);
+			labeled.add(p.id);
 
 			return {
 				type: 'Feature' as const,
@@ -87,7 +87,7 @@ function linkGeoJSON() {
 	};
 }
 
-// a slot is a little wider than a line, so neighbours keep a visible gap
+// a slot is a little wider than a line, so neighbors keep a visible gap
 const offset: maplibregl.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 10, ['*', ['get', 'o'], 2.6], 13, ['*', ['get', 'o'], 4], 16, ['*', ['get', 'o'], 6.4]];
 
 export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) => void, onSt: (id: number) => void, onHover: (h: { kind: 'seg'; id: string } | { kind: 'st'; id: number } | null, e: MouseEvent) => void) {
@@ -117,7 +117,7 @@ export function mountGeoMap(el: HTMLElement, key: string, onSeg: (id: string) =>
 
 	map.on('load', () => {
 		// tolerance 0: the tiler otherwise simplifies per zoom and drops features that
-		// are tiny at that zoom — zoomed out, the few-metre pieces a slide through a
+		// are tiny at that zoom — zoomed out, the few-meter pieces a slide through a
 		// curve is drawn in vanished and left gaps in the lines
 		map.addSource('seg', { type: 'geojson', data: lineGeoJSON(), promoteId: 'id', tolerance: 0 });
 		map.addSource('st', { type: 'geojson', data: stationGeoJSON(), promoteId: 'id' });

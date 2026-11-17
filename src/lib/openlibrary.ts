@@ -94,7 +94,7 @@ async function getJson(url: string): Promise<unknown> {
 /**
  * Search works by title and author.
  *
- * The fields list is not an optimisation: the default response is enormous, and
+ * The fields list is not an optimization: the default response is enormous, and
  * `number_of_pages_median` and `first_publish_year` are the two values that let
  * you tell a 1974 original from a 1998 reissue in the picker.
  */
@@ -122,7 +122,7 @@ export async function searchBooks(query: string, limit = 8): Promise<OpenLibrary
 /**
  * Open Library's description is either a bare string or `{ type, value }`, and
  * frequently ends with a provenance footer under a rule of hyphens. Both shapes
- * are normalised to paragraphs here so the page can slice them without knowing
+ * are normalized to paragraphs here so the page can slice them without knowing
  * any of that.
  */
 function paragraphs(raw: unknown): string[] {
@@ -140,7 +140,7 @@ function paragraphs(raw: unknown): string[] {
 /**
  * Subjects, thinned to the few that read as genres.
  *
- * Open Library's subject list is a library catalogue, not a shelf label. The
+ * Open Library's subject list is a library catalog, not a shelf label. The
  * real list for The Power Broker is fourteen entries and includes
  * "Na9085.m68 c37 1974", "974.7/04/0924 b", "Moses, robert, 1888-1981" and
  * "New york (n.y.), history" — call numbers, a person as a heading, and
@@ -148,7 +148,7 @@ function paragraphs(raw: unknown): string[] {
  *
  * So the test is well-formedness rather than meaning: a genre chip is a short
  * phrase, and anything carrying a comma, a parenthesis, a subdivision dash or a
- * number is apparatus that only reads as a genre if you are a cataloguer. Some
+ * number is apparatus that only reads as a genre if you are a cataloger. Some
  * noise still gets through ("Group processes") — the alternative is a
  * hand-maintained vocabulary, which is a bigger promise than four chips are
  * worth. The bare Fiction/Nonfiction pair is dropped because it is displayed
@@ -194,7 +194,7 @@ function classify(raw: unknown): 'Fiction' | 'Nonfiction' | null {
 
 	if (!all) return null;
 
-	// Order matters, and it is not the obvious one. A novel's catalogue subjects
+	// Order matters, and it is not the obvious one. A novel's catalog subjects
 	// are full of nonfiction-looking words — Emma is shelved under "Historical
 	// Fiction" and "England, fiction", Foundation under "Psychohistory" — so a
 	// history/biography test that runs first calls half the classics nonfiction.
@@ -274,7 +274,7 @@ export async function lookupIsbn(isbn: string): Promise<OpenLibraryEdition | nul
 	try {
 		edition = (await getJson(`https://openlibrary.org/isbn/${clean}.json`)) as Record<string, unknown>;
 	} catch (e) {
-		// A 404 is an answer — this ISBN is not in their catalogue — while a 503 or
+		// A 404 is an answer — this ISBN is not in their catalog — while a 503 or
 		// a timeout is not, and the caller has to be able to tell them apart to
 		// know whether retrying is worth anything.
 		if (e instanceof Error && e.message.includes('404')) return null;

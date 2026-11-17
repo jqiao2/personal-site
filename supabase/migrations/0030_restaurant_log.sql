@@ -39,7 +39,7 @@ create table if not exists public.restaurants (
 
 	-- NULLABLE AND NULL A LOT. Strongly present in New York, largely absent
 	-- everywhere else. Renders as "Sunset Park, Brooklyn" when set and as plain
-	-- "Austin, TX" when not — an absent neighbourhood is the level of detail
+	-- "Austin, TX" when not — an absent neighborhood is the level of detail
 	-- that place warrants, not a missing field.
 	neighborhood    text,
 	city            text        not null,

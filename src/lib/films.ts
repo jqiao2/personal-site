@@ -60,8 +60,8 @@ async function syncMovieFromTmdb(tmdbId: number): Promise<MovieRow> {
 	const releasedOn = preferredReleaseDate(d);
 	const premieredOn = premiereDate(d);
 	const now = new Date().toISOString();
-	// The closet's spine colour (0072). Undefined when it can't be worked out:
-	// JSON drops an undefined key, so a failed read never blanks a stored colour.
+	// The closet's spine color (0072). Undefined when it can't be worked out:
+	// JSON drops an undefined key, so a failed read never blanks a stored color.
 	const color = (await posterColor(d.poster_path)) ?? undefined;
 
 	const base = {
@@ -2530,7 +2530,7 @@ export interface PersonStat {
 	rating: number | null;
 }
 
-/** A labelled bar in a histogram. */
+/** A labeled bar in a histogram. */
 export interface HistBar {
 	count: number;
 	/** How many of `count` were ever watched in a theater. */

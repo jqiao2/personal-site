@@ -1,4 +1,4 @@
-# 0007 — Placing SiteHeader on a page that centres its own column
+# 0007 — Placing SiteHeader on a page that centers its own column
 
 **Type:** strategy
 **Applies when:** adding `<SiteHeader>` to a page, or auditing which pages have one.
@@ -17,7 +17,7 @@ need nothing.
 box it sits in. That means on a page whose `.page` is
 `display: flex; justify-content: center`, you do **not** have to restructure
 the CSS — put the header inside `.wrap` as its first child and the bleed
-cancels the centring and the page's side padding exactly. Add
+cancels the centering and the page's side padding exactly. Add
 `overflow-x: hidden` to `.page`: `100vw` counts the scrollbar.
 
 ## Aligning the nav with the content under it

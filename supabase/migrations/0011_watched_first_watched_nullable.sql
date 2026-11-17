@@ -3,7 +3,7 @@
 -- Letterboxd's "watched" export carries no per-film watch date, so the import
 -- stamped every pre-existing film with the day the export was taken (2021-09-14).
 -- Those 313 rows aren't real watch dates — the films were seen at unknown times
--- before that. Null them out so "unknown" is honestly modelled as unknown rather
+-- before that. Null them out so "unknown" is honestly modeled as unknown rather
 -- than as a single implausible 313-film day, which otherwise dominates the 2021
 -- year stats.
 --

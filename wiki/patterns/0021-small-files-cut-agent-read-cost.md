@@ -10,7 +10,7 @@ Not encapsulation. **Token cost.** An agent has no eyes and no partial
 understanding: to change one function in `src/lib/films.ts` it tends to read the
 file, and that file is 2860 lines. Every oversized file an agent opens burns
 context it then can't spend on the actual task, and a god-module gets opened by
-almost every task in its feature. The metric to minimise is *how many lines an
+almost every task in its feature. The metric to minimize is *how many lines an
 agent must read to safely make a typical change*.
 
 Scoped-CSS encapsulation (wiki 0020) is a real constraint for `.astro`, but it's
@@ -65,8 +65,8 @@ without breaking styling.
 The split is only a win if a *typical* change now reads less. If moving code out
 means the next task has to read both the new file AND the old one to understand
 the flow, the boundary was wrong — cut along how tasks actually read, not along
-tidy taxonomy. Verify behaviour is unchanged (build/screenshot), since a
-read-cost refactor should be behaviour-neutral.
+tidy taxonomy. Verify behavior is unchanged (build/screenshot), since a
+read-cost refactor should be behavior-neutral.
 
 ## STANDING TASK — split these when you touch them
 
@@ -74,7 +74,7 @@ This is a live checklist, not a suggestion. **When a task edits one of the files
 below, split it as part of that same change** (apply the tactics above), then
 strike it off this list in the same PR. Do it opportunistically — a task that
 only reads the file leaves it alone; a task that meaningfully edits it pays the
-split-tax while it's already in there. Keep changes behaviour-neutral and verify
+split-tax while it's already in there. Keep changes behavior-neutral and verify
 with a build/screenshot. When a new file crosses ~800 lines, add it here.
 
 Highest leverage first (line counts as of origin/main, Sep 2026):

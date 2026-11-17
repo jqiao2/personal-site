@@ -91,7 +91,7 @@ function positiveIntOrNull(v: unknown): number | null {
 }
 
 /**
- * Validate and normalise a request body.
+ * Validate and normalize a request body.
  *
  * Throws SyncPayloadError with the failing field's path — the plugin runs
  * headless on a Kindle, so "sessions[37].start_time is required" in a response
@@ -125,7 +125,7 @@ export function parseSyncPayload(body: unknown): SyncPayload {
 function parseBook(raw: unknown, path: string): SyncBook {
 	if (!isObject(raw)) throw new SyncPayloadError(`${path} must be an object`);
 
-	const md5 = normaliseMd5(raw.md5, `${path}.md5`);
+	const md5 = normalizeMd5(raw.md5, `${path}.md5`);
 	const title = text(raw.title);
 
 	if (!title) throw new SyncPayloadError(`${path}.title is required`);
@@ -143,7 +143,7 @@ function parseBook(raw: unknown, path: string): SyncBook {
 function parseSession(raw: unknown, path: string, fallbackDevice: string): SyncSession {
 	if (!isObject(raw)) throw new SyncPayloadError(`${path} must be an object`);
 
-	const bookMd5 = normaliseMd5(raw.book_md5, `${path}.book_md5`);
+	const bookMd5 = normalizeMd5(raw.book_md5, `${path}.book_md5`);
 
 	const page = Number(raw.page);
 
@@ -186,7 +186,7 @@ function parseSession(raw: unknown, path: string, fallbackDevice: string): SyncS
  * case-folded: KOReader writes lowercase hex, but a hand-made payload or a
  * future ingest path might not, and `A1B2` and `a1b2` must not become two books.
  */
-function normaliseMd5(v: unknown, path: string): string {
+function normalizeMd5(v: unknown, path: string): string {
 	const s = text(v);
 
 	if (!s) throw new SyncPayloadError(`${path} is required`);

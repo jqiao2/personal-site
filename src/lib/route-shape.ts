@@ -30,10 +30,10 @@
 // WHY RAMER–DOUGLAS–PEUCKER AND NOT NAIVE DECIMATION (every Nth point). RDP
 // keeps points in proportion to how much they bend the line and throws away
 // points on a straight stretch, so a ride with one tight switchback and five
-// miles of straight road keeps the switchback's shape recognisable and
+// miles of straight road keeps the switchback's shape recognizable and
 // collapses the straight into two points. Every-Nth-point decimation has no
 // opinion about shape at all — it can erase the one hairpin that made the
-// route recognisable while keeping fifty near-collinear points along the
+// route recognizable while keeping fifty near-collinear points along the
 // straight. RDP is the one simplification algorithm whose output is still
 // describable as "the same route, fewer points" rather than "a resampling of
 // the route."
@@ -134,7 +134,7 @@ function encodeSignedValue(value: number): string {
 
 const EARTH_RADIUS_M = 6378137; // WGS84 equatorial radius — matches Web Mercator (EPSG:3857)
 
-/** Web Mercator projection, in metres (EPSG:3857-style, unscaled). Used only
+/** Web Mercator projection, in meters (EPSG:3857-style, unscaled). Used only
  *  for shape (see header comment) — never for area or for anything that
  *  needs true distance, which is what `haversine` is for instead. */
 export function mercator(lat: number, lng: number): [number, number] {
@@ -174,7 +174,7 @@ function perpendicularDistanceSq(p: [number, number], a: [number, number], b: [n
 
 /**
  * Ramer–Douglas–Peucker line simplification. `tolerance` is in the same
- * units as `points` (metres, when fed projected coordinates) — a point is
+ * units as `points` (meters, when fed projected coordinates) — a point is
  * kept only if it sits farther than `tolerance` from the straight line
  * connecting the points that survived on either side of it. Recursive by
  * nature; implemented with an explicit stack so a very long, very straight
@@ -235,7 +235,7 @@ export function simplify(points: [number, number][], tolerance: number): [number
  */
 function simplifyToLimit(points: [number, number][], maxPoints: number): [number, number][] {
 	if (points.length <= maxPoints) return points;
-	let tolerance = 0.5; // metres — a reasonable starting guess for GPS jitter
+	let tolerance = 0.5; // meters — a reasonable starting guess for GPS jitter
 	let result = points;
 
 	for (let i = 0; i < 20; i++) {
@@ -252,7 +252,7 @@ function simplifyToLimit(points: [number, number][], maxPoints: number): [number
 // Distance
 // ---------------------------------------------------------------------------
 
-/** Great-circle distance between two `[lat, lng]` points, in metres. This is
+/** Great-circle distance between two `[lat, lng]` points, in meters. This is
  *  the one place true distance matters (route length, dedupe's 200m
  *  start-point check) — everything drawn on screen goes through `mercator`
  *  instead, which is shape-preserving but not distance-preserving. */
@@ -285,7 +285,7 @@ export function pathLength(points: [number, number][]): number {
  * long GPS blackout. The stored tracks are ~1 Hz, so a "step" is roughly one
  * second of travel: real movement tops out around 30 m (a fast descent), and
  * the collection's 99.9th-percentile step is 27 m, while a genuine pause leaps
- * hundreds of metres to kilometres (activity 2086 jumps 12.9 km when a ride is
+ * hundreds of meters to kilometers (activity 2086 jumps 12.9 km when a ride is
  * stopped at 125th St and restarted in the Bronx). 200 m is the clean divide —
  * at 1 Hz that is >700 km/h, which nothing here does.
  */
@@ -367,7 +367,7 @@ export interface RoutePathOptions {
 
 /**
  * The full §7 pipeline: project to Web Mercator, simplify to at most
- * `maxPoints`, fit to a square viewBox preserving aspect ratio, centre it
+ * `maxPoints`, fit to a square viewBox preserving aspect ratio, center it
  * with padding, and emit an `M x y L x y …` path string at 1 decimal place.
  *
  * Returns `null` for fewer than 2 points, and also for 2-or-more points that

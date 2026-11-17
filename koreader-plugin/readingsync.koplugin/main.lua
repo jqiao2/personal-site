@@ -30,7 +30,7 @@ local ReadingSync = WidgetContainer:extend({
 })
 
 --- Name the menu entry in KOReader's own menu order, instead of leaving it to
---- the sorter's orphan handling to honour the sorting_hint below.
+--- the sorter's orphan handling to honor the sorting_hint below.
 ---
 --- Both routes end up in the same place, but this is the mechanism KOReader
 --- documents for plugins that aren't part of its core menu order, and it fails

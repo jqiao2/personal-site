@@ -20,11 +20,11 @@
 // --refresh re-downloads it.
 //
 // WHAT IT WILL AND WILL NOT DECIDE. Every one of the places this is aimed at
-// has a name and nothing else — no neighbourhood, no cuisine, no point — so the
+// has a name and nothing else — no neighborhood, no cuisine, no point — so the
 // name is the only thing to match on, and a name alone is thin evidence. Two
 // bars in this city are called The Canary. So the rule is deliberately mean:
 //
-//   1. Names are compared NORMALISED — accents folded, punctuation dropped,
+//   1. Names are compared NORMALIZED — accents folded, punctuation dropped,
 //      and the noise words a saved list collects ("Restaurant", "NYC", the
 //      borough someone appended) removed from both sides.
 //   2. A match counts only if exactly one establishment answers to that name,
@@ -153,7 +153,7 @@ const NOISE = new Set([
 	'THE', 'INC', 'LLC', 'CORP', 'CO', 'AND', 'OF',
 ]);
 
-function normalise(raw) {
+function normalize(raw) {
 	const folded = raw
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
@@ -166,11 +166,11 @@ function normalise(raw) {
 	const kept = words.filter((w) => !NOISE.has(w));
 
 	// A name made entirely of noise ("The Restaurant") keeps its words rather
-	// than normalising to nothing and matching everything.
+	// than normalizing to nothing and matching everything.
 	return (kept.length ? kept : words).join(' ');
 }
 
-function metres(a, b) {
+function meters(a, b) {
 	const R = 6371000;
 	const toRad = (d) => (d * Math.PI) / 180;
 	const dLat = toRad(b.lat - a.lat);
@@ -224,11 +224,11 @@ if (!db) {
 
 const rows = await source();
 
-/** Normalised name → the establishments answering to it. */
+/** Normalized name → the establishments answering to it. */
 const index = new Map();
 
 for (const r of rows) {
-	const key = normalise(r.name);
+	const key = normalize(r.name);
 
 	if (!key) continue;
 	const list = index.get(key) ?? [];
@@ -253,7 +253,7 @@ const ambiguous = [];
 const missing = [];
 
 for (const place of places) {
-	const key = normalise(place.name);
+	const key = normalize(place.name);
 	const candidates = index.get(key) ?? [];
 
 	if (candidates.length === 0) {
@@ -264,7 +264,7 @@ for (const place of places) {
 	// Several records for one restaurant is normal — a permit renewed, a second
 	// counter in the same building. Several records in different postcodes is
 	// two restaurants with one name, and nothing here can tell them apart.
-	const spread = candidates.every((c) => metres(candidates[0], c) <= SAME_PLACE_M);
+	const spread = candidates.every((c) => meters(candidates[0], c) <= SAME_PLACE_M);
 
 	if (!spread) {
 		ambiguous.push({ place, candidates });
@@ -300,7 +300,7 @@ function patch(place, hit) {
 	const set = { lat: hit.lat, lng: hit.lng };
 
 	// The source knows the borough, which is what the location line wants when
-	// there is no neighbourhood — "Queens, New York" rather than a bare city.
+	// there is no neighborhood — "Queens, New York" rather than a bare city.
 	if (!place.neighborhood && hit.boro && hit.boro !== 'Manhattan') set.neighborhood = hit.boro;
 
 	if (place.cuisines.length === 0 && cuisine) set.cuisines = [cuisine];

@@ -27,7 +27,7 @@ hand table. Fetch keywords once at log/sync time and store them; never at render
 
 ## Outcome (PR: Energy axis)
 `movies.keywords` (0073) + `scripts/backfill-movie-keywords.mjs`; genres and
-keywords share one weight table per axis (genres capitalised, keywords lower
+keywords share one weight table per axis (genres capitalized, keywords lower
 case, so no collisions). Across the full log 600/1,077 films carry a mood word.
 Rating correlates with realism −0.31 and energy −0.23 (vote count was −0.03).
 Realism and energy correlate 0.59 — Action/Adventure/Sci-Fi push both up; a

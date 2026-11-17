@@ -69,7 +69,7 @@ const TH = {
 //
 // activities.csv states `Elapsed Time`, `Distance`, `Max Heart Rate` and
 // `Relative Effort` TWICE. The first is Strava's rounded display copy, with
-// distance in KILOMETRES; the second is the precise one in metres. Reading the
+// distance in KILOMETERS; the second is the precise one in meters. Reading the
 // first by mistake would silently shrink every distance in the database by a
 // factor of a thousand.
 {
@@ -80,7 +80,7 @@ const TH = {
 
 	const row = readRow(['123', '4073', '34.69', '4073.0', '34690.4'], idx);
 	assert.equal(row.activityId, '123');
-	assert.equal(row.values['Distance'], '34690.4', 'the precise metres copy wins');
+	assert.equal(row.values['Distance'], '34690.4', 'the precise meters copy wins');
 }
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ const TH = {
 	assert.equal(sportFromXmlType('gravelride'), 'gravel_ride');
 	assert.equal(sportFromXmlType('Trail Run'), 'trail_run');
 	assert.equal(sportFromXmlType('Biking'), 'ride', 'TCX has its own word for it');
-	assert.equal(sportFromXmlType('9'), null, 'an unrecognised type must not guess');
+	assert.equal(sportFromXmlType('9'), null, 'an unrecognized type must not guess');
 	assert.equal(sportFromXmlType(null), null);
 	assert.equal(sportFromXmlType('Other'), null, "'Other' means the file does not know");
 	// A GPX a device wrote itself uses FIT's vocabulary, not Strava's.
@@ -163,7 +163,7 @@ const TH = {
 	assert.equal(a.title, 'Evening Gravel Ride');
 	assert.equal(a.elapsed_seconds, 600);
 
-	assert.equal(parseGpx(gpx, { sport: 'ride' }).sport, 'ride', 'a passed sport still wins — the csv knows about corrections');
+	assert.equal(parseGpx(gpx, { sport: 'ride' }).sport, 'ride', 'a passed sport still wins â€” the csv knows about corrections');
 
 	const untyped = gpx.replace('<type>gravelride</type>', '');
 	assert.throws(() => parseGpx(untyped, {}), UnknownSportError, 'no type and no override must stop, not become other');

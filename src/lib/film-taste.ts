@@ -32,7 +32,7 @@ export interface TastePoint {
 	p: [number, number, number];
 }
 
-// Each table holds TMDB genres (capitalised) and keywords (lower case); a term
+// Each table holds TMDB genres (capitalized) and keywords (lower case); a term
 // not listed is neutral and doesn't count toward the mean.
 
 // -1 light … +1 dark. Genres not listed (Action, Documentary, TV Movie) are neutral.

@@ -8,14 +8,14 @@
 // listener that moves the marker.
 //
 // The chips and axis toggle are rendered server-side so the graph reads as a
-// labelled thing with no JavaScript; the plot itself and the scrubbing are the
+// labeled thing with no JavaScript; the plot itself and the scrubbing are the
 // progressive enhancement on top.
 import type { GraphData } from '../lib/activity-graph';
 
 interface Props {
 	data: GraphData;
 	/** Indoor sports (trainer, treadmill, erg) whose distance is machine-simulated
-	 *  rather than travelled — for these, time is the honest default axis. */
+	 *  rather than traveled — for these, time is the honest default axis. */
 	preferTime?: boolean;
 }
 
@@ -121,7 +121,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		let lapsOn = false;
 		let skiOn = Boolean(data.skiSegments && data.skiSegments.length);
 
-		// --- Normalised geometry, computed once ---------------------------------
+		// --- Normalized geometry, computed once ---------------------------------
 		// x for each mode: axis value scaled to 0..1. Real device time/distance is
 		// monotonic and complete; a stray null falls back to its index fraction so
 		// the curve never collapses to the left edge.
@@ -217,7 +217,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 			}
 		}
 
-		// --- Ski run/lift bands (coloured spans, appended first of all so they
+		// --- Ski run/lift bands (colored spans, appended first of all so they
 		//     sit behind the lap rules and the traces) --------------------------
 		const RUN_FILL = '#1c6e8c'; // lake — the run
 		const LIFT_FILL = '#6b7b88'; // graniteSoft — the lift ride
@@ -543,7 +543,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		cursor: pointer;
 	}
 	/* Off: the whole chip fades and the swatch hollows out, so the toggle state
-	   reads without relying on colour alone. */
+	   reads without relying on color alone. */
 	.ag__chip[aria-pressed='false'] {
 		color: #6b7b88;
 		opacity: 0.55;
@@ -560,7 +560,7 @@ const hasSki = Boolean(data.skiSegments && data.skiSegments.length > 0);
 		box-shadow: inset 0 0 0 1.5px var(--c);
 	}
 	/* The laps swatch is the divider it toggles: a short dashed vertical rule,
-	   not a colour dot. */
+	   not a color dot. */
 	.ag__swatch--laps,
 	.ag__chip[aria-pressed='false'] .ag__swatch--laps {
 		background: transparent;

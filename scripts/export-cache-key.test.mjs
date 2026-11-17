@@ -3,7 +3,7 @@
 //
 // html-to-image caches every resource it fetches under the URL with the query
 // string cut off (lib/dataurl.js, `getCacheKey`) unless `includeQueryParams` is
-// set. `photoSrc` returns `/_vercel/image?url=…&w=320`, so every optimised
+// set. `photoSrc` returns `/_vercel/image?url=…&w=320`, so every optimized
 // photograph on a card is byte-identical up to the `?` and they all collapse
 // onto the one cache key — the first plate fetched gets drawn on every day.
 //
@@ -25,7 +25,7 @@ const b = photoSrc('https://photos.example.r2.dev/2/bbb.jpg', 320);
 
 // Outside Vite `import.meta.env` is undefined, so photo-src takes its
 // production branch — which is the branch that has this problem.
-assert.ok(a.startsWith('/_vercel/image?'), `expected an optimised URL, got ${a}`);
+assert.ok(a.startsWith('/_vercel/image?'), `expected an optimized URL, got ${a}`);
 
 assert.notEqual(a, b, 'two photographs must have two URLs');
 
@@ -38,17 +38,17 @@ assert.equal(
 );
 
 // ---- 2. every card that draws them opts out ------------------------------
-// Any page that renders a photoSrc URL *and* rasterises itself has to pass
+// Any page that renders a photoSrc URL *and* rasterizes itself has to pass
 // includeQueryParams, or it exports the same photograph everywhere.
 const CARDS = ['src/pages/month/[month].astro', 'src/pages/restaurants/month/[month].astro'];
 
 for (const card of CARDS) {
 	const source = readFileSync(card, 'utf8');
-	assert.ok(source.includes('photoSrc'), `${card} no longer draws optimised photos — drop it from CARDS`);
-	assert.ok(source.includes('toBlob'), `${card} no longer rasterises itself — drop it from CARDS`);
+	assert.ok(source.includes('photoSrc'), `${card} no longer draws optimized photos — drop it from CARDS`);
+	assert.ok(source.includes('toBlob'), `${card} no longer rasterizes itself — drop it from CARDS`);
 	assert.ok(
 		/includeQueryParams:\s*true/.test(source),
-		`${card} rasterises optimised photos without includeQueryParams — every photograph in its export will be the first one it fetched`,
+		`${card} rasterizes optimized photos without includeQueryParams — every photograph in its export will be the first one it fetched`,
 	);
 }
 
@@ -58,7 +58,7 @@ for (const card of ['src/pages/films/month/[month].astro', 'src/pages/books/mont
 	const source = readFileSync(card, 'utf8');
 	assert.ok(
 		!source.includes('photoSrc'),
-		`${card} started drawing optimised photos — add it to CARDS above`,
+		`${card} started drawing optimized photos — add it to CARDS above`,
 	);
 }
 

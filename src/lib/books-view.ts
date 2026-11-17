@@ -187,7 +187,7 @@ export function spineWidth(
 	const drawn = Math.max(MIN_DRAWN_SPINE, (width * height) / REFERENCE_SPINE_HEIGHT);
 
 	// Half-pixel steps rather than whole ones. At the small end of the scale a
-	// whole-pixel round quantises away most of the difference the linear scale was
+	// whole-pixel round quantizes away most of the difference the linear scale was
 	// adopted to show — 90 pages and 150 pages would come out the same width.
 	return Math.round(drawn * 2) / 2;
 }
@@ -228,7 +228,7 @@ export function half(px: number): number {
  *
  * Seeded from the id, so a book is bound the same way everywhere it is drawn:
  * the spine on the shelf and the stand-in cover on its own page are the same
- * object seen from two sides, and a book that changed colour between them would
+ * object seen from two sides, and a book that changed color between them would
  * read as two books.
  */
 const CLOTH_FAMILIES = [
@@ -249,7 +249,7 @@ export interface BookCloth {
 export function bookCloth(id: number | string): BookCloth {
 	const key = String(id);
 	const family = CLOTH_FAMILIES[hash32(`${key}~fam`) % CLOTH_FAMILIES.length];
-	// Jitter inside the family, so two books of the same colour standing next to
+	// Jitter inside the family, so two books of the same color standing next to
 	// each other are still visibly two books.
 	const hue = family.h + (seed01(key, 'hue') - 0.5) * 12;
 	const sat = Math.max(10, family.s + (seed01(key, 'sat') - 0.5) * 7);
@@ -791,7 +791,7 @@ export function buildHeatmap(
 	const byDay = new Map(days.map((d) => [d.day, d]));
 
 	const columns: HeatColumn[] = [];
-	let labelled = -1;
+	let labeled = -1;
 
 	for (let week = 0; week * 7 <= daysBetween(start, todayDay); week++) {
 		const columnStart = addDays(start, week * 7);
@@ -810,9 +810,9 @@ export function buildHeatmap(
 		const month = Number(columnStart.slice(5, 7));
 		// Label the column that opens a month, but only when the month actually
 		// starts inside it — otherwise the label sits a week off.
-		const showLabel = month !== labelled && Number(columnStart.slice(8)) <= 7;
+		const showLabel = month !== labeled && Number(columnStart.slice(8)) <= 7;
 
-		if (showLabel) labelled = month;
+		if (showLabel) labeled = month;
 		columns.push({ month: showLabel ? MONTHS[month - 1] : '', cells });
 	}
 

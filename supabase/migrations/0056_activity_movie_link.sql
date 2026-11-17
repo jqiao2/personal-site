@@ -7,7 +7,7 @@
 -- and "link to the diary entry", and doesn't break when the entry isn't
 -- written until the next day (a ride often ends before the film does).
 --
--- The title is denormalised alongside the id so the activity page can name the
+-- The title is denormalized alongside the id so the activity page can name the
 -- film without a TMDB round-trip or a join to the (possibly-uncached) `movies`
 -- table — the same shape as gear_name on activity_list. Both nullable together:
 -- an activity with no linked film sets neither.
@@ -18,4 +18,4 @@ alter table public.activities
 comment on column public.activities.movie_tmdb_id is
 	'TMDB id of the film watched during this (virtual) ride. Resolves to /films/movie/{id}, which lists the film''s diary entries. Null for anything with no linked film.';
 comment on column public.activities.movie_title is
-	'Denormalised title of the linked film, captured at link time so the activity page names it without a TMDB fetch or a join to movies. Travels with movie_tmdb_id.';
+	'Denormalized title of the linked film, captured at link time so the activity page names it without a TMDB fetch or a join to movies. Travels with movie_tmdb_id.';

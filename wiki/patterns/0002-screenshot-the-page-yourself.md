@@ -9,7 +9,7 @@ overlap, a share card, a chart, a map — in this repo.
 Layout work was being verified by reasoning about the CSS and then asking the user
 to paste a screenshot back. Two rounds of the month-in-review card went out that
 way: the geometry was checked numerically and passed, and the rendered page still
-had the day's ruled boxes painting over the neighbouring day's photographs, which
+had the day's ruled boxes painting over the neighboring day's photographs, which
 one look would have caught. Numbers can only check the property you thought to
 measure; a screenshot checks the ones you didn't.
 

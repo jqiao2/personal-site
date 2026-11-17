@@ -8,23 +8,23 @@
 // downloads a full-size frame for every 38 px thumbnail it shows.
 //
 // So the bucket URL stops being what a page renders and becomes the SOURCE an
-// optimiser reads. Vercel's `/_vercel/image` resizes and re-encodes it, and
+// optimizer reads. Vercel's `/_vercel/image` resizes and re-encodes it, and
 // each `<img>` carries a `srcset` of the widths it might actually need plus a
 // `sizes` telling the browser which to take.
 //
 // WHY VERCEL AND NOT THE BUCKET ITSELF. R2 has no built-in image transform
 // (that's a separate Cloudflare product, Images, with its own bill). Vercel's
-// optimiser is already part of the deployment at no extra cost, and it works
+// optimizer is already part of the deployment at no extra cost, and it works
 // on the photographs already in the bucket rather than only on new ones.
 //
 // WHAT IT COSTS. Vercel meters image transformations. The bill is bounded by
-// the CATALOGUE, not by traffic: a transformation is cached and reused, so the
+// the CATALOG, not by traffic: a transformation is cached and reused, so the
 // ceiling is (photographs × widths actually requested), a few hundred, once —
 // not one per page view. `minimumCacheTTL` in astro.config.mjs is set to a
 // year to keep it that way.
 
 /**
- * The widths the optimiser is allowed to produce, smallest first.
+ * The widths the optimizer is allowed to produce, smallest first.
  *
  * This is a contract with `imagesConfig.sizes` in astro.config.mjs, which
  * imports this very list rather than restating it: `/_vercel/image` refuses a
@@ -50,13 +50,13 @@ export const PHOTO_WIDTHS = [160, 320, 640, 1080, 1600];
 const QUALITY = 75;
 
 /**
- * True when there is no optimiser to talk to.
+ * True when there is no optimizer to talk to.
  *
  * `/_vercel/image` is served by the deployment, so it exists on preview and
  * production builds and does not exist under `astro dev` — where a request to
- * it would 404 and leave the page with broken images instead of unoptimised
+ * it would 404 and leave the page with broken images instead of unoptimized
  * ones. Local development therefore keeps the plain bucket URL, which is the
- * behaviour this module replaced and is correct, just heavier.
+ * behavior this module replaced and is correct, just heavier.
  */
 // Optional-chained so a plain-node importer (the test scripts, via
 // scripts/ts-hook.mjs) can load this module — outside Vite there is no
@@ -64,14 +64,14 @@ const QUALITY = 75;
 const RAW = import.meta.env?.DEV;
 
 /**
- * One optimised URL, big enough to be painted `width` CSS pixels wide.
+ * One optimized URL, big enough to be painted `width` CSS pixels wide.
  *
  * The width is SNAPPED UP to a declared rung rather than passed through. A
  * caller naturally reaches for the number in the stylesheet — 38, 124, 780 —
  * and none of those are rungs; `/_vercel/image` refuses a `w` the deployment
  * did not declare, so passing one through would turn a layout constant into a
  * broken image. Snapping here means every call site can say what it means and
- * none of them can produce a URL the optimiser will reject.
+ * none of them can produce a URL the optimizer will reject.
  */
 export function photoSrc(url: string, width: number): string {
 	if (RAW) return url;
@@ -109,7 +109,7 @@ export function photoWidthsFor(cssWidth: number): number[] {
  * every browser, and `src` alone is the honest fallback.
  *
  * Widths are given as `w` descriptors, which is what lets the browser combine
- * them with `sizes` and the device's pixel ratio. Only rungs the optimiser
+ * them with `sizes` and the device's pixel ratio. Only rungs the optimizer
  * knows about are emitted; anything else would be a request it refuses.
  */
 export function photoSrcSet(url: string, widths: number[]): string | undefined {

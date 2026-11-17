@@ -17,7 +17,7 @@
 // difference between them legible.
 //
 // THE HEATMAP IS ITS OWN TOGGLE, and only means anything over tiles. Off, the
-// squares are one colour and the map is the boolean the grid actually is.
+// squares are one color and the map is the boolean the grid actually is.
 // On, the same squares shade by how many activities crossed them — which is
 // worth *asking* for rather than being the default, because the boolean is
 // the honest picture of ground covered and the shading is a second question
@@ -198,8 +198,8 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		// last day one did. local_date is YYYY-MM-DD, so string order is date order.
 		type CellStat = { ids: Set<number>; first: string; last: string };
 
-		// Quantised grids, keyed by view *and* the active-family signature —
-		// quantising every track costs real time, so each filter combination is
+		// Quantized grids, keyed by view *and* the active-family signature —
+		// quantizing every track costs real time, so each filter combination is
 		// built once and kept if the reader flips back to it.
 		const cellData = new Map<string, { geo: ReturnType<typeof tilesToGeoJSON>; stats: Map<string, CellStat> }>();
 
@@ -276,10 +276,10 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			});
 		}
 
-		// Heatmap off: every unlocked square is the same colour, and the map is a
+		// Heatmap off: every unlocked square is the same color, and the map is a
 		// boolean — visited or not, which is the fog-of-war reading. Heatmap on:
 		// the same squares, shaded by how often they were crossed. One hue,
-		// four steps; a second colour would read as a second variable.
+		// four steps; a second color would read as a second variable.
 		const TILE_SHADES = ['#a9dde3', '#63b8c9', '#1c6e8c', '#12495e'];
 
 		const tileFill = () =>

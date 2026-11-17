@@ -61,7 +61,7 @@ assert.ok(Math.abs(sum.runSeconds - 300) < 40, `run time ~300s, got ${sum.runSec
 
 assert.ok(sum.liftSeconds > sum.runSeconds, 'a day is more lift than run');
 
-// A run's average speed is well above a lift's — the segments are labelled right.
+// A run's average speed is well above a lift's — the segments are labeled right.
 const run1 = segs.find((s) => s.type === 'run');
 
 const lift1 = segs.find((s) => s.type === 'lift');
@@ -152,7 +152,7 @@ assert.ok(exAfter.score > exBefore.score, 'the edit raises the exertion score');
 
 assert.equal(exAfter.method, 'ski');
 
-// Coalescing: after relabelling the idle between two runs AS a run, the three
+// Coalescing: after relabeling the idle between two runs AS a run, the three
 // adjacent runs collapse into one — how reclassify does the work of a merge.
 const three = [
 	{ t0: 0, t1: 100, type: 'run' },

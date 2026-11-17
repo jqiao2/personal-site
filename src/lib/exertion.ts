@@ -23,9 +23,9 @@
 // axis a 4-hour endurance ride, a 40-minute threshold run and a 90-minute
 // hike can be sorted and compared on at all — `/activities/all`'s exertion
 // filter and sort (§8) only make sense if every row is on the same number
-// line. So every method is normalised to the same TSS-equivalent: **an hour
+// line. So every method is normalized to the same TSS-equivalent: **an hour
 // at that sport's functional threshold scores 100**, whether "threshold" for
-// that hour was measured in watts, beats per minute, seconds per kilometre,
+// that hour was measured in watts, beats per minute, seconds per kilometer,
 // or (at the floor) just inferred from what that sport typically costs an
 // athlete of this build. The cascade tries the highest-fidelity method the
 // activity's actual data supports and stops there — see the five rungs below.
@@ -255,7 +255,7 @@ export interface TrimpInput {
  *  weighting is the point of using Banister over an unweighted average: a
  *  minute at 90% HRR is worth much more than a minute at 60%, the way a
  *  minute at 90% FTP is worth much more than 60% in the power world — TRIMP
- *  is HR's analogue to NP's 4th-power weighting, both trying to capture that
+ *  is HR's analog to NP's 4th-power weighting, both trying to capture that
  *  intensity costs faster than it averages.
  *
  *  When `hrStream` is given, this integrates second-by-second (in effect,
@@ -334,7 +334,7 @@ export function trimpToTss(trimp: number, lthrBpm: number, restHr: number, maxHr
  * downhill trail run as free speed.
  *
  * `Cr(grade) = 155.4g^5 - 30.4g^4 - 43.3g^3 + 46.3g^2 + 19.5g + 3.6`
- * (kcal per kg per km), normalised here to a multiplier by dividing by the
+ * (kcal per kg per km), normalized here to a multiplier by dividing by the
  * flat-ground value `Cr(0) = 3.6`.
  */
 export function gradeCostMultiplier(grade: number): number {
@@ -365,12 +365,12 @@ export function gradeAdjustedPace(speedMs: number, grade: number): number {
 export interface RunningTssInput {
 	seconds: number;
 	/** Average pace already grade-adjusted if elevation data was available —
-	 *  see `gradeAdjustedPace`. Seconds per kilometre. */
+	 *  see `gradeAdjustedPace`. Seconds per kilometer. */
 	gradeAdjustedPaceSPerKm: number;
 	thresholdPaceSPerKm: number;
 }
 
-/** rTSS: pace's analogue of power-based TSS. Because pace is inverse to
+/** rTSS: pace's analog of power-based TSS. Because pace is inverse to
  *  effort (a *smaller* number is faster), intensity factor is
  *  `threshold / actual`, the reciprocal of the power-side ratio — get this
  *  backwards and every run scores as harder the slower it went. */

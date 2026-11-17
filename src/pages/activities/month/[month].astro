@@ -40,7 +40,7 @@ import {
 	monthLabel,
 	monthQuery,
 	parseMonthKey,
-	summarise,
+	summarize,
 	weekRows,
 } from '../../../lib/activity-month';
 
@@ -97,7 +97,7 @@ const initial = geometry[aspect.id];
 
 const cells = buildCells(key, activities);
 
-const summary = summarise(key, activities);
+const summary = summarize(key, activities);
 
 const label = monthLabel(key);
 
@@ -854,7 +854,7 @@ const clientData = JSON.stringify({
 		// The card is exported as a flat image, so a hover popover can't live
 		// inside it the way a normal page's would — it's a single fixed-position
 		// element repositioned over whichever cell is under the pointer, entirely
-		// outside the artboard that gets rasterised.
+		// outside the artboard that gets rasterized.
 		const tip = document.querySelector<HTMLElement>('[data-tip]');
 
 		for (const cell of document.querySelectorAll<HTMLElement>('[data-lines]')) {

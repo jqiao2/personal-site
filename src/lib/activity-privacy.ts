@@ -111,7 +111,7 @@ const TOO_LONG_S = 16 * 3600;
  * Local time, because a run at 06:00 in Tokyo is not a run at 21:00 UTC. An
  * unknown offset, like an unknown anything here, stays private.
  *
- * Holidays and vacation days are not modelled; flip those by hand on the site.
+ * Holidays and vacation days are not modeled; flip those by hand on the site.
  */
 export function defaultPrivate(
 	startedAt: string,

@@ -6,7 +6,7 @@
 // were the days like", which none of them can, because a day is not made of one
 // track. So a cell is a CLUSTER: one mark per thing done, each sized by the
 // time it took (src/lib/journal-month.ts has the weights and the argument for
-// them), tilted a little, overlapping its neighbours the way things stuck into
+// them), tilted a little, overlapping its neighbors the way things stuck into
 // a journal overlap.
 //
 // WHY IT LOOKS LIKE PAPER. The four section cards are each art-directed to
@@ -178,7 +178,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 										>
 											{!c.outside && <span class="cell__n">{c.date}</span>}
 											{/* Biggest first: the day's main event is placed at the
-											    centre and the rest are scattered over it, so the later
+											    center and the rest are scattered over it, so the later
 											    ones in source order also paint on top — which is the
 											    order you would have stuck them in. */}
 											<div class="cluster">
@@ -365,7 +365,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 
 	/* The shared <MonthPicker>, skinned in the journal's paper and ink — and its
 	   tiles carry the four track dots (film, book, meal, move) in the journal's
-	   own colours instead of a count. */
+	   own colors instead of a count. */
 	.monthnav {
 		margin-top: 14px;
 		--mp-step-bg: var(--paper);
@@ -563,9 +563,9 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 		top: 50%;
 		width: var(--w);
 		height: var(--h);
-		/* Centred on its own placement, then tilted. Order matters: rotating
-		   before the centring translate would swing the print around the day's
-		   centre instead of its own. */
+		/* Centered on its own placement, then tilted. Order matters: rotating
+		   before the centering translate would swing the print around the day's
+		   center instead of its own. */
 		transform: translate(-50%, -50%) translate(var(--dx), var(--dy)) rotate(var(--t));
 		background: var(--paper-2);
 		border: 3px solid #fdfaf1;
@@ -587,7 +587,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 		display: block;
 	}
 	/* The route fills its print the way a photograph would; the fallback glyph
-	   sits small and centred, so the two never read as the same kind of face. */
+	   sits small and centered, so the two never read as the same kind of face. */
 	.mark__route {
 		position: absolute;
 		inset: 8%;
@@ -625,7 +625,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	}
 
 	/* A mark with no picture keeps its track's ink, which is the only place the
-	   four colours are load-bearing — a poster says "film" by itself, a blank
+	   four colors are load-bearing — a poster says "film" by itself, a blank
 	   square doesn't.
 
 	   THE RING IS A LAID-OUT BOX, NOT AN INSET SHADOW. It was

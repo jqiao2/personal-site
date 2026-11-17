@@ -3,7 +3,7 @@
 // so the 2 and 5 slide together as they bend off the 3/4 after Franklin Av, and
 // a shift hides in the bend instead of stepping sideways on a straight.
 //
-// Input lines are { sg, pts } in local metres (pts in the segment's stored
+// Input lines are { sg, pts } in local meters (pts in the segment's stored
 // direction). Output: segment id -> pieces [{ o, pts }], where `o` is the slot
 // for MapLibre's `line-offset` (positive = right of the piece's direction).
 //
@@ -28,19 +28,19 @@ const SHARED = 45; // further than that, only if truly parallel (side-by-side tu
 
 const CURVE_VERTEX = 4; // a vertex turning more than this many degrees is part of a curve...
 
-const CURVE_GAP = 60; // ...with the next such vertex if it is within this many metres...
+const CURVE_GAP = 60; // ...with the next such vertex if it is within this many meters...
 
 const CURVE_TURN = 15; // ...and the run counts as a curve once it turns this much in total
 
-const MERGE = 30; // bundle mates' tracks this close draw on one centreline...
+const MERGE = 30; // bundle mates' tracks this close draw on one centerline...
 
-const MERGE_END = 50; // ...and pull less and less out to this (the neighbour search's reach)
+const MERGE_END = 50; // ...and pull less and less out to this (the neighbor search's reach)
 
-const SMOOTH = 120; // ...the pull spread over this many metres either side
+const SMOOTH = 120; // ...the pull spread over this many meters either side
 
 const MIN_STRAIGHT = 60; // a cut at another line's station leaves no straight shorter than this
 
-const MIN_SLIDE = 80; // a slot change slides over at least this many metres
+const MIN_SLIDE = 80; // a slot change slides over at least this many meters
 
 const CHECK = 150;
 
@@ -177,7 +177,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
   // express's long straight (B/D from 34 St to W 4 St) breaks where its locals'
   // do: bundle mates then share boundaries and agree on who is in the bundle.
   // Measured as one straight, the B/D took the A/C/E from its last few hundred
-  // metres into the whole run and sat half a slot off the F/M all the way.
+  // meters into the whole run and sat half a slot off the F/M all the way.
   const stops = L.flatMap((l) => [l.pts[0], l.pts[l.pts.length - 1]]);
 
   for (const l of L) cutAt(l, stops, SAME_TRACK, MIN_STRAIGHT);
@@ -204,7 +204,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     if (across < least) { least = across; u = c; }
   }
 
-  // grid of edges for the neighbour search
+  // grid of edges for the neighbor search
   const grid = new Map();
   const key = (x, y) => Math.floor(x / CELL) + "," + Math.floor(y / CELL);
 
@@ -325,7 +325,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
 
   const sharing = share();
 
-  // the same service's best-aligned neighbouring segment at one end of line li:
+  // the same service's best-aligned neighboring segment at one end of line li:
   // { li, atStart, same } (`same`: stored running the same way through the station)
   const ends = new Map(); // "svc|station" -> [{ li, atStart }]
 
@@ -338,9 +338,9 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     }
   });
 
-  // 2b. One centreline per bundle. Bundle mates on separate tracks (an express
+  // 2b. One centerline per bundle. Bundle mates on separate tracks (an express
   //     beside its local, the B/D beside the N/Q on the Manhattan Bridge) are
-  //     metres apart, and the slots fan out in pixels from each one's own
+  //     meters apart, and the slots fan out in pixels from each one's own
   //     track, so close in they drew over each other. Each vertex moves to the
   //     weighted mean of its own track and its bundle mates' alongside: full
   //     weight within MERGE m, none past MERGE_END, so a branch drifting away
@@ -427,7 +427,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     l.pts = moved[li]; l.acc = acc; l.total = acc[acc.length - 1];
   });
 
-  function neighbour(li, atStart) {
+  function neighbor(li, atStart) {
     const l = L[li], st = atStart ? l.sg.a : l.sg.b;
     const out = atStart ? at(l.pts, l.acc, 0).t.map((v) => -v) : at(l.pts, l.acc, l.total).t;
     let best = null, bestDot = 0.3;
@@ -440,7 +440,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
       if (dot > bestDot) { bestDot = dot; best = n; }
     }
 
-    // a neighbour that begins where l begins (or ends where l ends) is stored the other way
+    // a neighbor that begins where l begins (or ends where l ends) is stored the other way
     return best && { ...best, same: best.atStart !== atStart };
   }
 
@@ -508,7 +508,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     for (let i = 1; i < l.straights.length; i++) runs.push([carried(l.straights[i - 1], l.straights[i]), l.straights[i - 1].i, l.straights[i].i, 1]);
 
     for (const atStart of [true, false]) {
-      const n = neighbour(li, atStart), mine = touching(l, atStart);
+      const n = neighbor(li, atStart), mine = touching(l, atStart);
 
       if (n) runs.push([carried(mine, touching(L[n.li], n.atStart)), mine.i, touching(L[n.li], n.atStart).i, n.same ? 1 : -1]);
     }
@@ -532,9 +532,9 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     s.off = (axis ? (t[0] * axis[0] + t[1] * axis[1] >= 0 ? 1 : -1) : (vote.get(r) >= 0 ? 1 : -1) * par[s.i]) * slot;
   }
 
-  // 4. at a station, the neighbour's slot read in l's direction (l's own if none)
+  // 4. at a station, the neighbor's slot read in l's direction (l's own if none)
   function across(li, atStart) {
-    const n = neighbour(li, atStart);
+    const n = neighbor(li, atStart);
 
     if (!n) return touching(L[li], atStart).off;
     const theirs = touching(L[n.li], n.atStart).off;
@@ -599,7 +599,7 @@ export function sectionLines(lines, order, { ease: easeLen = STATION_EASE, smoot
     }
 
     // Piece ends sit on the track's own vertices where one is near, and no piece
-    // is shorter than MIN_PIECE: an edge of a metre or two has a direction that
+    // is shorter than MIN_PIECE: an edge of a meter or two has a direction that
     // rounding makes close to random, and line-offset pushes it sideways along it.
     for (let i = 1; i < pieces.length; i++) {
       const b = pieces[i].a0;

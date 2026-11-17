@@ -15,7 +15,7 @@
 -- This only ever flips private → public on rows that pass; nothing already
 -- public is touched, so re-running it is a no-op.
 --
--- Holidays and vacation days are not modelled. A workout on a Monday off is
+-- Holidays and vacation days are not modeled. A workout on a Monday off is
 -- treated as work hours and stays private; flip those by hand.
 update public.activities a
 set private = false

@@ -165,7 +165,7 @@ export interface ActivityRow {
 	/** TMDB id of the film watched during a (virtual) ride (migration 0056), or
 	 * null. Links to /films/movie/{id}. */
 	movie_tmdb_id: number | null;
-	/** Denormalised title of the linked film, captured at link time. Travels with
+	/** Denormalized title of the linked film, captured at link time. Travels with
 	 * movie_tmdb_id. */
 	movie_title: string | null;
 }
@@ -1254,7 +1254,7 @@ export interface UpdateActivityInput {
 	hideFromReview?: boolean;
 	/** TMDB id of the film watched during the ride; null unlinks (migration 0056). */
 	movieTmdbId?: number | null;
-	/** Denormalised title stored with movieTmdbId; ignored unless movieTmdbId is set. */
+	/** Denormalized title stored with movieTmdbId; ignored unless movieTmdbId is set. */
 	movieTitle?: string | null;
 }
 
@@ -1265,7 +1265,7 @@ export interface UpdateActivityInput {
  * number on the site a claim rather than a reading.
  *
  * GEAR MOVES ITS MILEAGE WITH IT. `activity_gear.distance_m` is a
- * denormalised total "kept in sync by the app on write" (0034), so re-gearing
+ * denormalized total "kept in sync by the app on write" (0034), so re-gearing
  * a ride subtracts its distance from the old bike and adds it to the new one.
  * Without that the sidebar total drifts every time a mis-tagged ride is
  * fixed — silently, and in the direction of over-counting.
@@ -1443,7 +1443,7 @@ async function moveGearDistance(from: number | null, to: number | null, distance
  * MULTISPORT LEGS, NOT THEIR PARENT. A triathlon's parent row and its legs
  * can both carry a track over the same ground; counting both would make a
  * tile crossed once look crossed twice. Any row that turns out to be some
- * other row's parent is dropped in favour of its legs.
+ * other row's parent is dropped in favor of its legs.
  *
  * SIMPLIFIED BEFORE IT LEAVES. The stored tracks are ~1 Hz: 5.1M points
  * across the collection, 10.5 MB encoded, which is a page load nobody waits
@@ -1456,7 +1456,7 @@ const HEATMAP_SIMPLIFY_M = 8;
 
 function simplifyPoints(points: [number, number][]): [number, number][] {
 	if (points.length < 3) return points;
-	// Projected, because RDP's tolerance has to be in metres and degrees of
+	// Projected, because RDP's tolerance has to be in meters and degrees of
 	// longitude aren't. Mercator's scale error doesn't matter at 8 m.
 	const projected = points.map(([lat, lng]) => mercator(lat, lng));
 	const kept = simplify(projected, HEATMAP_SIMPLIFY_M);

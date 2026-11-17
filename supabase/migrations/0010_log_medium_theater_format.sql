@@ -28,7 +28,7 @@ create table if not exists public.theaters (
 -- ---------------------------------------------------------------------------
 -- formats: flat, extensible set of presentation formats. A lookup table (not an
 -- enum) so a new gimmick is just a new row, and combos live as their own row
--- ("IMAX 70mm", "IMAX 3D") rather than being modelled as separate fields.
+-- ("IMAX 70mm", "IMAX 3D") rather than being modeled as separate fields.
 -- ---------------------------------------------------------------------------
 create table if not exists public.formats (
 	id   bigint generated always as identity primary key,

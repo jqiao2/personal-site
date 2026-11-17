@@ -58,7 +58,7 @@ export interface MonthWatch {
 }
 
 /**
- * A day's watches in stack order: theatre watches on top, then liked, then by
+ * A day's watches in stack order: theater watches on top, then liked, then by
  * rating (unrated last), then by title. `id` breaks any remaining ties because
  * the Letterboxd import stamps a whole batch with one `created_at`.
  */
@@ -89,7 +89,7 @@ export interface CellFilm {
 	year: number | null;
 	poster: string | null;
 	liked: boolean;
-	/** Watched in a cinema — draws the theatre mark. */
+	/** Watched in a cinema — draws the theater mark. */
 	inTheater: boolean;
 	layer: number;
 	/** Degrees this print is rotated by; alternates so a stack looks hand-set. */
@@ -266,7 +266,7 @@ export interface SummaryStat {
  * deliberately does not: every watch is time spent, so a rewatch is counted
  * again, and the two numbers are allowed to disagree.
  */
-export function summarise(key: string, watches: MonthWatch[]): SummaryStat[] {
+export function summarize(key: string, watches: MonthWatch[]): SummaryStat[] {
 	const parsed = parseMonthKey(key);
 	const inMonth = parsed ? daysInMonth(parsed.year, parsed.month) : 0;
 	const distinct = new Set(watches.map((w) => w.tmdb_id));

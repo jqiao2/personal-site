@@ -30,7 +30,7 @@ import { supabasePublic } from '../../lib/supabase';
 
 export const prerender = false;
 
-// 38×30 in the stylesheet below, and this is the page that makes the optimiser
+// 38×30 in the stylesheet below, and this is the page that makes the optimizer
 // worth having: it lists every visit ever logged, three thumbnails apiece, so
 // serving the stored 1600px frame here meant a few hundred kilobytes each for
 // a picture the width of a fingernail.
@@ -276,28 +276,28 @@ const months = groupByMonth(matched);
 	/* A PHONE ROW IS EXACTLY TWO LINES: the date, the verdict and the name, then
 	   where it was and how it went.
 
-	   It used to be three, because the neighbourhood claimed a whole line to
+	   It used to be three, because the neighborhood claimed a whole line to
 	   itself (`width: 100%`) and pushed the rating onto a third — a line
 	   carrying nothing but four stars and a wide margin. What the full width was
 	   really buying was the LINE BREAK after the name, so that is bought
 	   directly instead: a zero-height item with a 100% basis, which fills the
 	   first line and starts a second without occupying any of it. The
-	   neighbourhood then shares that second line with the rating, which the
+	   neighborhood then shares that second line with the rating, which the
 	   spacer still pushes right, and the row costs two lines instead of three.
 
-	   The indent puts the neighbourhood under the name rather than under the
+	   The indent puts the neighborhood under the name rather than under the
 	   date (34px column + the row's 14px gap).
 
 	   BOTH FLEXIBLE ITEMS SIT ON A ZERO BASIS, and that is the part that is easy
 	   to get wrong: a wrapping flex container wraps an item BEFORE it shrinks
-	   it, so anything sized by its own text — a long name, a long neighbourhood
+	   it, so anything sized by its own text — a long name, a long neighborhood
 	   — takes a line of its own the moment it is wider than what is left, and
 	   the shrinking that would have avoided that happens afterwards, on a line
 	   it now has to itself. Basing them at 0 means neither can force a wrap:
 	   each takes the room its line has left and lays out inside it. The name
-	   runs on to a second line of text if it must, the neighbourhood ellipsises,
+	   runs on to a second line of text if it must, the neighborhood ellipsizes,
 	   and the row still costs two lines. The spacer gives up its stretch on the
-	   way past, since the neighbourhood is now what fills the line and two
+	   way past, since the neighborhood is now what fills the line and two
 	   things fighting over the same free space would leave it truncated with
 	   room to spare. */
 	@media (max-width: 620px) {

@@ -12,7 +12,7 @@ add or update a pattern.
 | [0004](patterns/0004-powershell-corrupts-utf8-files.md) | PowerShell corrupts UTF-8 files | failure-mode | rewriting/truncating a source file via PowerShell or shell text tools |
 | [0005](patterns/0005-localday-in-frontmatter-is-utc.md) | `localDay()` in Astro frontmatter is UTC | failure-mode | defaulting a date field to "today" |
 | [0006](patterns/0006-ski-lift-run-detection.md) | Segment a ski day into runs and lifts | strategy | ski/board exertion, run counts, or any climb/descent GPS track |
-| [0007](patterns/0007-siteheader-full-bleed-and-column.md) | Placing SiteHeader on a page that centres its own column | strategy | adding the site header to a page, or auditing which pages have one |
+| [0007](patterns/0007-siteheader-full-bleed-and-column.md) | Placing SiteHeader on a page that centers its own column | strategy | adding the site header to a page, or auditing which pages have one |
 | [0008](patterns/0008-gazetteer-only-had-dohmh.md) | The place gazetteer only ever had one of its four sources | failure-mode | a known restaurant is missing from suggestions, a suggestion is ALL CAPS, or co-located venues collapse into one |
 | [0009](patterns/0009-beli-export-import.md) | Getting a Beli account's lists out, and into the log | strategy | exporting Beli data, or talking to a reverse-engineered app backend behind a bot gate |
 | [0010](patterns/0010-astro-check-fails-in-worktrees.md) | Dev server/`astro check` fail in a worktree when MAIN has no `node_modules` | failure-mode | dev server or `astro sync` dies with "Tsconfig not found astro/tsconfigs/strict" in a `.claude/worktrees/*` checkout |
@@ -33,7 +33,7 @@ add or update a pattern.
 | [0025](patterns/0025-shot-without-playwright-browser-or-r2.md) | `npm run shot` with no Playwright browser and no R2 env | failure-mode | shot says the Chromium executable is missing, or dev 500s on "R2_* is not set" in a worktree |
 | [0026](patterns/0026-archive-imports-keep-lib-exports-alive.md) | The archive still imports from `src/lib` | failure-mode | deleting/renaming a lib export that seems unused outside the archive |
 | [0027](patterns/0027-letterboxd-rss-catch-up.md) | Catching the film log up from Letterboxd RSS | strategy | films were logged on Letterboxd while the site could not take them |
-| [0028](patterns/0028-gazetteer-misses-counters-inside-groceries.md) | The gazetteer misses food counters inside a grocery licence | failure-mode | a real food place is missing from suggestions though DOHMH + Overture are imported; Overture import errors on `categories` |
+| [0028](patterns/0028-gazetteer-misses-counters-inside-groceries.md) | The gazetteer misses food counters inside a grocery license | failure-mode | a real food place is missing from suggestions though DOHMH + Overture are imported; Overture import errors on `categories` |
 | [0029](patterns/0029-form-post-redirect-skipped-write-stamp.md) | A form post that redirects skipped the owner's write stamp | failure-mode | an owner form post 303s back and the page shows stale data |
 | [0030](patterns/0030-numeric-arrays-delta-encode-not-float.md) | Shrinking numeric arrays: delta-encode, don't switch to floats | strategy | a JSONB/array table of numeric series is eating the DB size cap |
 | [0031](patterns/0031-schematic-to-geographic-subway.md) | Putting the schematic subway on real track | strategy | geocoding id-less schematic data, slicing GTFS shapes, or parallel lines via MapLibre `line-offset` |

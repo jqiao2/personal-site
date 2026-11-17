@@ -491,7 +491,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 
 			// Pill length tracks how many lines run through the station — the number of
 			// services stopping there — so mega-transfers (Fulton St) and express stops
-			// (Queens Blvd) read larger. Centred on the station.
+			// (Queens Blvd) read larger. Centered on the station.
 			/** One rounded bar drawn across a bundle of lines: its angle and length. */
 			type Pill = { deg: number; len: number };
 
@@ -574,7 +574,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 			});
 
 			// A polyline scaled by k, each point moved slot·sp px to the right of the
-			// direction of travel (y points down), with mitred corners.
+			// direction of travel (y points down), with mitered corners.
 			function offsetPath(c: [number, number, number][], sp: number) {
 				const right = (i: number) => {
 					const dx = c[i + 1][0] - c[i][0], dy = c[i + 1][1] - c[i][1], l = Math.hypot(dx, dy);
@@ -588,7 +588,7 @@ import SiteHeader from '../components/SiteHeader.astro';
 					const n0 = i > 0 ? right(i - 1) : null, n1 = i < c.length - 1 ? right(i) : null;
 					const a = n0 ?? n1 ?? [0, 0], b = n1 ?? a;
 					const mx = a[0] + b[0], my = a[1] + b[1], ml = Math.hypot(mx, my) || 1;
-					// mitre: stretch the bisector so both offset edges keep their distance (capped at sharp turns)
+					// miter: stretch the bisector so both offset edges keep their distance (capped at sharp turns)
 					const s = (c[i][2] * sp) / Math.max(0.3, (mx * b[0] + my * b[1]) / ml);
 					d += (i ? ' L ' : 'M ') + (c[i][0] * k + (s * mx) / ml).toFixed(1) + ' ' + (c[i][1] * k + (s * my) / ml).toFixed(1);
 				}

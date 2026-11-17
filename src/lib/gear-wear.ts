@@ -233,7 +233,7 @@ export interface ComponentWear {
  * An override REPLACES an axis rather than adding one, and clearing it falls
  * back to the default — so a 45mm gravel tire can say 4,000–8,000 miles
  * without teaching COMPONENT_KINDS a new part kind. An override on an axis the
- * kind doesn't otherwise have (months on a chain, say) is honoured too: the
+ * kind doesn't otherwise have (months on a chain, say) is honored too: the
  * axis simply exists for that instance, which is the point of an override.
  */
 export function effectiveMeta(component: GearComponent): ComponentMeta {

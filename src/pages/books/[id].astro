@@ -2244,7 +2244,7 @@ const spines = Array.from({ length: 18 }, () => ({
 				button.textContent = label;
 
 				// A failed ISBN lookup has a reason worth reading — the number is not
-				// in their catalogue, or it is not an ISBN at all — and without it the
+				// in their catalog, or it is not an ISBN at all — and without it the
 				// button just flickers back and looks broken.
 				if (action === 'isbn' && isbnError) {
 					const body = (await res.json().catch(() => ({}))) as { error?: string };

@@ -26,7 +26,7 @@ let cached: { at: number; body: string } | null = null;
 
 // OWNER ONLY, and the cache above is why the check has to be the first thing
 // in the handler rather than a filter inside listRoutePolylines: one body is
-// memoised per instance, so if a visitor's request could ever populate it the
+// memoized per instance, so if a visitor's request could ever populate it the
 // next reader would be served whichever version happened to be built first.
 // The header is private/no-store for the same reason, one layer out.
 export const GET: APIRoute = async ({ cookies }) => {

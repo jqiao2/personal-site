@@ -28,7 +28,7 @@ alter table public.books
 comment on column public.books.display_title is
 	'Hand-edited title, preferred over the KOReader-derived one. Null means "no correction needed". Never written by the sync endpoint.';
 comment on column public.books.display_authors is
-	'Hand-edited author list. KOReader writes "N/A" for sideloaded EPUBs, which the ingest normalises to null, so this is usually the only author information there is.';
+	'Hand-edited author list. KOReader writes "N/A" for sideloaded EPUBs, which the ingest normalizes to null, so this is usually the only author information there is.';
 
 -- ---------------------------------------------------------------------------
 -- book_progress: prefer the corrected values

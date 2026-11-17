@@ -6,7 +6,7 @@
 -- films against 65% of 1980s ones). Ranked raw, it would collapse into "worked
 -- recently". The graph builder instead scores each film against a ±2-year
 -- window of its contemporaries, so this column stores the plain figure and the
--- normalisation lives in scripts/credit-graph/build.mjs.
+-- normalization lives in scripts/credit-graph/build.mjs.
 --
 -- 0 rather than null when TMDB has no figure, matching what the API returns;
 -- the builder treats 0 as "unknown" and excludes it from the comparison.

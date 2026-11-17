@@ -5,7 +5,7 @@
 //   - credit_people.region / region_list / era / reach / hit : each watched
 //     person's career-wide region, era and prominence.
 //   - src/data/credit-config.json : the stable bits the app needs but shouldn't
-//     recompute -- role + colour-mode legends, and the two percentile priors.
+//     recompute -- role + color-mode legends, and the two percentile priors.
 //
 // Uses the SAME logic as the corpus page (src/lib/credit-derive.mjs, copied from
 // build.mjs). Run once to seed; the movie-add path (src/lib/credit-sync.ts) keeps
@@ -201,7 +201,7 @@ async function main() {
 		grossPrior: grossPct.prior,
 		colorModes: [
 			{ key: 'role', label: 'Role', field: null, note: 'Two substantial roles split the node.', legend: ROLES.map((r) => ({ label: r.label, light: r.color, dark: r.color })) },
-			{ key: 'country', label: 'Where they work', field: 'country', filterField: 'countryList', note: `Coloured by where most of their films were made; filters match any country they have ${COUNTRY_MIN_FILMS}+ films in. Four colours reused down the list -- filter to read a specific one.`, legend: regionLegend() },
+			{ key: 'country', label: 'Where they work', field: 'country', filterField: 'countryList', note: `Colored by where most of their films were made; filters match any country they have ${COUNTRY_MIN_FILMS}+ films in. Four colors reused down the list -- filter to read a specific one.`, legend: regionLegend() },
 			{ key: 'era', label: 'Era of their career', field: 'era', note: 'The era containing the median year of their whole filmography.', legend: eraLegend() },
 		],
 	};

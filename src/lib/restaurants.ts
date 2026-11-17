@@ -331,7 +331,7 @@ export function searchTerms(query: string): string[] {
 /**
  * Every term must appear somewhere across the given fields — the name and where
  * a place is. A logged place has no street address, so "where" is the location
- * columns (neighbourhood, city, region, country). Empty terms match everything.
+ * columns (neighborhood, city, region, country). Empty terms match everything.
  */
 export function matchesSearch(fields: (string | null | undefined)[], terms: string[]): boolean {
 	if (terms.length === 0) return true;
@@ -747,7 +747,7 @@ export async function placesForMonth(
  * strikes next to it (see `searchGazetteer`), for the same reason: "Daily
  * Provisions Park" names no restaurant, and matching the whole string against
  * the name alone answers nothing. A logged place has no street address, so the
- * words that are not the name are matched against the neighbourhood and city,
+ * words that are not the name are matched against the neighborhood and city,
  * which is what this side knows about where a place is.
  */
 export async function searchPlaces(query: string, limit = 6): Promise<Place[]> {

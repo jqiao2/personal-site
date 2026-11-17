@@ -4,7 +4,7 @@
 // Fed a computed ZoneBin[] from src/lib/zones.ts; this file only draws it.
 // Rendered once for HR and once for power on the detail page.
 //
-// COLOUR IS EFFORT, NOT TAXONOMY — the palette's one rule (activity-tokens.ts).
+// COLOR IS EFFORT, NOT TAXONOMY — the palette's one rule (activity-tokens.ts).
 // Zones are an intensity ramp, so they earn a warm-cool gradient the way the
 // exertion scale earns alpenglow for "brutal": lake (easy, cold) → larch →
 // alpenglow (max). That is meaning, not one-hue-per-category, so it stays
@@ -161,7 +161,7 @@ const pct = (s: number) => (total > 0 ? (s / total) * 100 : 0);
 		background: transparent;
 	}
 	/* A zone with no time gets no bar — the min-width on the fill would otherwise
-	   leave a 2px sliver of colour that reads as a trace of time that isn't there. */
+	   leave a 2px sliver of color that reads as a trace of time that isn't there. */
 	.zones__row--empty .zones__fill {
 		display: none;
 	}

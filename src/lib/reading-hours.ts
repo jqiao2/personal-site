@@ -82,7 +82,7 @@ export function clockLabel(hour: number): string {
 /**
  * What stands in for the chart when there isn't enough of a day to draw one.
  *
- * Names the hours rather than apologising: "Only 11 pm and midnight" is a fact
+ * Names the hours rather than apologizing: "Only 11 pm and midnight" is a fact
  * about the book, and a more useful one than an empty chart would have been.
  */
 export function tooFewLine(hours: number[]): string {
@@ -129,7 +129,7 @@ export interface HourHistogram {
 }
 
 export interface HourInput {
-	/** 24 page-turn counts, midnight first. Short or long arrays are normalised. */
+	/** 24 page-turn counts, midnight first. Short or long arrays are normalized. */
 	hours: number[];
 	size: HourSize;
 	scale?: number;
@@ -137,8 +137,8 @@ export interface HourInput {
 	fallback?: string;
 }
 
-/** Centre of hour `i`'s column, as a percentage of the plot's width. */
-function centre(index: number): number {
+/** Center of hour `i`'s column, as a percentage of the plot's width. */
+function center(index: number): number {
 	return (index / HOURS_IN_DAY) * 100 + 100 / (HOURS_IN_DAY * 2);
 }
 
@@ -169,7 +169,7 @@ export function buildHistogram(input: HourInput): HourHistogram {
 	});
 
 	const labels: HourAxisLabel[] = geom.labels.map((hour) => {
-		const left = centre(hour);
+		const left = center(hour);
 
 		return {
 			text: axisLabel(hour),

@@ -8,7 +8,7 @@
 // UNITS ON THE WIRE. sports.ts's whole point is that this athlete's numbers
 // read as miles/feet/minutes, the way his watch already shows them — so the
 // query string speaks those units too (distmin=10 means "10 miles"), and this
-// module does the one conversion into the metres/seconds `ActivityQuery`
+// module does the one conversion into the meters/seconds `ActivityQuery`
 // actually filters on. A hand-typed link stays in the athlete's own units
 // instead of asking him to do metric math to edit one.
 //
@@ -18,7 +18,7 @@
 // that's a List-track requirement landing after the query layer shipped, and
 // this track doesn't own activities.ts. `ActivityFilterQuery` is
 // `ActivityQuery` plus that one extra field, and `fetchActivityPage` below is
-// the one place that knows how to honour it — by pulling the (small, few-
+// the one place that knows how to honor it — by pulling the (small, few-
 // hundred-row) filtered collection once and paging/filtering in JS rather
 // than teaching every caller a second, DB-less filter step.
 import { siteYear } from './day';
@@ -467,7 +467,7 @@ export function activityFilterSentence(s: ActivityFilterSummary): SentencePart[]
 		}
 	}
 
-	// §3's scale, spoken the way the slider itself is labelled — never a bare
+	// §3's scale, spoken the way the slider itself is labeled — never a bare
 	// number, so the sentence never implies the raw score means the same thing
 	// across a power-derived and a MET-derived value on its own.
 	if (s.exertionMin != null || s.exertionMax != null) {

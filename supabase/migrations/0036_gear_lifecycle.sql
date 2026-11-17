@@ -1,6 +1,6 @@
 -- Gear lifecycle — /activities/gear and /activities/gear/:id.
 --
--- 0034 gave gear an identity (kind, name, retired_at, a denormalised
+-- 0034 gave gear an identity (kind, name, retired_at, a denormalized
 -- distance_m). This adds the two things a gear PAGE needs that an identity
 -- doesn't: when the thing entered service, and — for bikes only — the parts
 -- bolted to it and how long each has been there.
@@ -12,7 +12,7 @@
 -- removed_on: replacing a chain closes one row and opens another, and the
 -- history is the table rather than something the table forgot.
 --
--- WHY NO 'miles on this component' COLUMN. It would be a denormalised total
+-- WHY NO 'miles on this component' COLUMN. It would be a denormalized total
 -- that must be re-summed every time an old ride is re-tagged to a different
 -- bike. The component's mileage is `sum(activities.distance_m) where gear_id =
 -- this bike and local_date between installed_on and coalesce(removed_on,

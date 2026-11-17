@@ -10,10 +10,10 @@
 // at the API-route layer — the same owner-gated write convention the rest of
 // the activity log uses.
 //
-// WHY EVERY TOTAL HERE IS DERIVED. activity_gear.distance_m is a denormalised
+// WHY EVERY TOTAL HERE IS DERIVED. activity_gear.distance_m is a denormalized
 // lifetime figure that 0034 keeps in sync on write. It cannot answer the only
 // question a component has ("how far since it was fitted"), because it has no
-// dates in it. Rather than run two sources of truth — a denormalised one for
+// dates in it. Rather than run two sources of truth — a denormalized one for
 // the gear and a derived one for its parts, which will disagree the first time
 // an old ride is re-tagged — everything on these pages is summed from the
 // activities themselves. PostgREST has no GROUP BY over a view, so the sum

@@ -26,7 +26,7 @@
 create table if not exists public.credit_roles (
 	role       text primary key,          -- stored in credits.role
 	label      text    not null,          -- display name, e.g. "Composer"
-	color      text    not null,          -- node colour, hex
+	color      text    not null,          -- node color, hex
 	min_films  integer not null,          -- graph filter: min credits to appear as a node
 	sort_order smallint not null          -- legend / pie-slice ordering
 );
@@ -69,7 +69,7 @@ create index if not exists credit_people_name_idx on public.credit_people (name)
 -- credits: the bipartite person↔film edges everything is derived from
 -- ---------------------------------------------------------------------------
 -- The primary key is (film_id, person_id, role): one person can hold two
--- different roles on the same film (the actor-directors the graph colours
+-- different roles on the same film (the actor-directors the graph colors
 -- half-and-half), but not the same role twice.
 create table if not exists public.credits (
 	film_id   integer not null references public.credit_films (tmdb_id) on delete cascade,

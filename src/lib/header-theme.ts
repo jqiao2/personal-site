@@ -1,7 +1,7 @@
 // The section palettes the header wears, as bags of CSS custom properties.
 //
 // Pulled out of SiteHeader so the mobile drawer's nav (DrawerNav) can paint the
-// collapsed tabs in the exact same section colours the header uses — `--sh-link`,
+// collapsed tabs in the exact same section colors the header uses — `--sh-link`,
 // `--sh-active`, `--sh-border`, `--sh-menu-bg`. One source of truth for both.
 //
 // `--sh-max` caps the header's inner column; `none` lets the strip run edge to
@@ -105,7 +105,7 @@ export const HEADER_THEMES: Record<HeaderTheme, Record<string, string>> = {
 	},
 };
 
-/** Serialise a theme's variables into an inline `style` string, with an optional
+/** Serialize a theme's variables into an inline `style` string, with an optional
     `--sh-max` override for pages whose column isn't the theme's default. */
 export function headerThemeStyle(theme: HeaderTheme = 'root', max?: string): string {
 	const vars = { ...(HEADER_THEMES[theme] ?? HEADER_THEMES.root), ...(max ? { '--sh-max': max } : {}) };

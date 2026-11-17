@@ -4,7 +4,7 @@
 -- The corpus page derives region / era / prominence at build time in
 -- scripts/credit-graph/build.mjs and ships them in a static JSON. The
 -- watched-films network needs the same per-person facts, but live: a film logged
--- today should colour and size correctly the next time the page is opened. So the
+-- today should color and size correctly the next time the page is opened. So the
 -- derivation is stored here and updated incrementally whenever a film is cached
 -- (src/lib/credit-sync.ts, on the movie-add path), with a full recompute in
 -- scripts/credit-graph/build-film-enrichment.mjs.

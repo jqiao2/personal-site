@@ -8,7 +8,7 @@
 // section rather than about a renderer.
 //
 // THE PIN CARRIES THE TRIP ANSWER, and only that. It used to carry the return
-// verdict across three colour bands, which asked the map to hold a six-rung
+// verdict across three color bands, which asked the map to hold a six-rung
 // ladder at 26px — and the verdict is the wrong question for a map anyway: it
 // answers "would I come back", which needs the visit to have happened, and
 // half the pins here are places nobody has been to yet. "Would I go out of my
@@ -18,7 +18,7 @@
 // stay behind on the list and the entry, where there is room to read them.
 //
 // NOTHING IS CLUSTERED. A screen-space cluster used to collapse pins closer
-// than 34px into a disc, which at neighbourhood zoom meant most of the New
+// than 34px into a disc, which at neighborhood zoom meant most of the New
 // York map was discs rather than places — the count is the one thing you
 // already know from the caption, and it hid the individual places that are the
 // content. Overlapping pins are the accepted cost: a pin under another pin is

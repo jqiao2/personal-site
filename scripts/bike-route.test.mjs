@@ -92,7 +92,7 @@ assert.equal((gpx.match(/<trkpt /g) || []).length, square.length, 'every point b
 
 assert.ok(!gpx.includes('<loop>'), 'name is escaped against breaking the XML');
 
-// normalizeShape centres the shape and fits its longer axis in [-0.5, 0.5].
+// normalizeShape centers the shape and fits its longer axis in [-0.5, 0.5].
 const norm = normalizeShape(square);
 
 let nMinX = Infinity, nMaxX = -Infinity, nMinY = Infinity, nMaxY = -Infinity;
@@ -102,7 +102,7 @@ for (const [x, y] of norm) {
 	nMinY = Math.min(nMinY, y); nMaxY = Math.max(nMaxY, y);
 }
 
-assert.ok(Math.abs(nMinX + nMaxX) < 1e-9 && Math.abs(nMinY + nMaxY) < 1e-9, 'normalized shape is centred on the origin');
+assert.ok(Math.abs(nMinX + nMaxX) < 1e-9 && Math.abs(nMinY + nMaxY) < 1e-9, 'normalized shape is centered on the origin');
 
 assert.ok(Math.max(nMaxX - nMinX, nMaxY - nMinY) - 1 < 1e-9, 'longer axis spans 1.0');
 

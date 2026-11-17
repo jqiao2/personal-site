@@ -46,7 +46,7 @@ Also check the longest track/direct ratios — a 5 km R "segment" was the clue.
 A slot that is fixed per segment can only change at a station, as a hard sideways
 step. Sampling every 10-20 m and smoothing worked but was noisy and heavy. What
 stuck (the user's design): split each line into **straights and curves** (a run
-of >4° vertices totalling ≥15°), give each straight one slot, and **interpolate
+of >4° vertices totaling ≥15°), give each straight one slot, and **interpolate
 the slot through the curve** — the 2/5 slide together as they bend off the 3/4
 at Franklin Av. At a station a service's two segments ease to the average of
 their slots over ~80 m. Interpolated stretches are 1/16-slot constant pieces
@@ -54,7 +54,7 @@ their slots over ~80 m. Interpolated stretches are 1/16-slot constant pieces
 and clicks still treat them as one line.
 
 - **Keep the global service order.** The user rejected re-ordering bundles to
-  minimise crossings; slots are the rank by `SERVICES` order.
+  minimize crossings; slots are the rank by `SERVICES` order.
 - **Shared = ≤15 m parallel, or ≤45 m truly parallel (|cos| > 0.97).** 15 m
   alone left side-by-side tunnels (2/3 vs 4/5 at Borough Hall, A/C/F vs R at Jay
   St) as separate bundles drawn over each other. 45 m with the loose angle pulled
@@ -84,11 +84,11 @@ and clicks still treat them as one line.
   Short pieces need the GeoJSON source's `tolerance: 0`: by default the tiler
   simplifies per zoom and drops features tiny at that zoom, so zoomed out the
   curves went missing.
-- Unridden lines use an **opaque faded colour**, not `line-opacity`: translucent
+- Unridden lines use an **opaque faded color**, not `line-opacity`: translucent
   pieces darken where their round ends overlap, making the line look dotted.
 
-- **Bundle mates share one centreline.** Slots fan out in pixels from each
-  service's own track, so an express a few metres off its local (Lex 4/5 vs 6)
+- **Bundle mates share one centerline.** Slots fan out in pixels from each
+  service's own track, so an express a few meters off its local (Lex 4/5 vs 6)
   or the B/D beside the N/Q on the Manhattan Bridge drew over each other close
   in. Each vertex moves to the weighted mean of its bundle mates' tracks (full
   within 30 m, none past 50 m, smoothed over ±60 m), ends at a station together.
@@ -115,8 +115,8 @@ and clicks still treat them as one line.
 - **A slot change gets at least 80 m.** A one-vertex curve gave a zero-length
   slide: the 1 jumped a slot at a corner near South Ferry. Short curves borrow
   length from the straights either side.
-- **Markers sit at the moved line ends,** not the raw platform: the centreline
-  pull can move an end tens of metres.
+- **Markers sit at the moved line ends,** not the raw platform: the centerline
+  pull can move an end tens of meters.
 - **Check overlaps by scan, not by eye.** Walk every piece, find parallel pieces
   of other services within 6 m, compare slots read against one fixed direction;
   < 0.75 apart is an overlap. What's left after the fixes is short slides.
@@ -135,7 +135,7 @@ replaced the renderer weld and the per-segment `o`.
 It's in screen px (constant bundle width at any zoom), but offsets to the line's
 right. Segments are stored a→b or b→a arbitrarily, so a slot must be read
 against a shared axis, not the line's own direction (see "Read left/right once
-per straight" above), or neighbours land on opposite sides.
+per straight" above), or neighbors land on opposite sides.
 
 ## Also
 - data.ny.gov intermittently serves a `healthdata.ny.gov` cert to Node's fetch

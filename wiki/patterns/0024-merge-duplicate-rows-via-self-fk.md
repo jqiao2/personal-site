@@ -35,8 +35,8 @@ place that other tables reference; a wrong dedupe is unrecoverable.
 - `restaurants.favorite_rank` was DROPPED in 0048 — the task's spec still listed
   it. Check the CURRENT schema (grep `add/drop column` across migrations), not a
   design doc, before writing merge/union field lists.
-- `normalise()` (gazetteer) splits on every non-alphanumeric, so `Wu's` →
-  `WU S`. Two apostrophe spellings do NOT normalise equal; don't assume they do
+- `normalize()` (gazetteer) splits on every non-alphanumeric, so `Wu's` →
+  `WU S`. Two apostrophe spellings do NOT normalize equal; don't assume they do
   in test fixtures. Real duplicates match because a source repeats the exact name
   or one name contains the other.
 - Dedupe detector must be conservative: name match AND haversine < ~150m, so a

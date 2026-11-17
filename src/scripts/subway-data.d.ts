@@ -6,7 +6,7 @@
 /** The schematic canvas the coordinates are laid out in (north up, not geographic). */
 export declare const CANVAS: { W: number; H: number };
 
-/** One service (1, 2, 3, A, C, E, … SIR) and the trunk line it shares a colour with. */
+/** One service (1, 2, 3, A, C, E, … SIR) and the trunk line it shares a color with. */
 export interface SubwayService {
 	svc: string;
 	trunk: string;

@@ -30,7 +30,7 @@ Two adjacent traps hit at the same time:
   (sigma/graphology) mid-session — pattern 0013. Dev-only; reload once.
 - **`prefers-color-scheme` is `light` headless.** A page that pins its own dark
   palette must tell the client renderer which theme to use (we added
-  `meta.forceTheme`); relying on `matchMedia` gives light-mode edge colours on a
+  `meta.forceTheme`); relying on `matchMedia` gives light-mode edge colors on a
   dark surface — a washed-out white-out that reads as "too dense" but is really
   the wrong palette.
 

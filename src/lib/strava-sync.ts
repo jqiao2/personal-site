@@ -1,6 +1,6 @@
 // Pull new rides from Strava — ACTIVITIES.md §4 step 3's engine.
 //
-// The archive importer carries the whole back-catalogue once; this keeps it
+// The archive importer carries the whole back-catalog once; this keeps it
 // current. It polls `/athlete/activities` for anything started after the
 // stored watermark, and for each new one it runs the SAME canonical pipeline
 // every other provider does: parse (providers/strava.ts) → dedupe → exertion +

@@ -4,7 +4,7 @@ import vercel from '@astrojs/vercel';
 import { loadEnv } from 'vite';
 import { PHOTO_WIDTHS } from './src/lib/photo-src.ts';
 
-// The photo bucket's hostname, which Vercel's image optimiser has to be told
+// The photo bucket's hostname, which Vercel's image optimizer has to be told
 // about by name: `/_vercel/image` will only read a source from a host the
 // deployment declared, which is what stops it being an open image proxy for
 // the whole internet.
@@ -16,7 +16,7 @@ import { PHOTO_WIDTHS } from './src/lib/photo-src.ts';
 const { R2_PUBLIC_URL } = loadEnv(process.env.NODE_ENV ?? 'production', process.cwd(), '');
 
 if (!R2_PUBLIC_URL) {
-	throw new Error('R2_PUBLIC_URL is not set — the image optimiser needs the photo bucket’s hostname');
+	throw new Error('R2_PUBLIC_URL is not set — the image optimizer needs the photo bucket’s hostname');
 }
 
 const photoHost = new URL(R2_PUBLIC_URL).hostname;
@@ -37,7 +37,7 @@ export default defineConfig({
 		// `imageService: true`: that would also swap Astro's own image service
 		// site-wide, which is a change to how every other page's images are
 		// built for no benefit here — nothing outside the restaurant log goes
-		// through the optimiser, and the URLs are assembled by hand in
+		// through the optimizer, and the URLs are assembled by hand in
 		// src/lib/photo-src.ts.
 		imagesConfig: {
 			sizes: PHOTO_WIDTHS,
@@ -51,7 +51,7 @@ export default defineConfig({
 			// for every rung; not worth it at these sizes.
 			formats: ['image/webp'],
 			// A stored path is `<visitId>/<timestamp>-<random>.<ext>` and is
-			// never written twice, so an optimised rendition of one can be kept
+			// never written twice, so an optimized rendition of one can be kept
 			// for as long as Vercel will keep it. This is also what holds the
 			// transformation count down to roughly one per photograph per
 			// width, ever.

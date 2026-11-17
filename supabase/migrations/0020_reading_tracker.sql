@@ -61,7 +61,7 @@ create table if not exists public.reading_sessions (
 
 	-- Snapshot of the book's page count at the time of reading. KOReader
 	-- repaginates when you change font size, so this drifts between sessions;
-	-- keeping it per-row lets us normalise later if we ever care.
+	-- keeping it per-row lets us normalize later if we ever care.
 	total_pages      integer,
 
 	device           text        not null default 'unknown',

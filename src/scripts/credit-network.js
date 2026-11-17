@@ -13,7 +13,7 @@
 //
 // Readability note: 25,236 nodes cannot all be legible at once. Fitting the
 // visible subset's bounding box to a 960px-wide canvas (what frameVisible does)
-// and taking the median nearest-neighbour distance gives 2.6px for the full set,
+// and taking the median nearest-neighbor distance gives 2.6px for the full set,
 // 7.1px at the 1,600 default and 9.8px at 600. So the "Show top" control is the
 // real lever, and it defaults well below the full set.
 //
@@ -52,7 +52,7 @@ const edgeSize = (weight) => Math.min(0.22 + Math.log2(weight) * 0.3, 1.8);
 /** How many nodes to show by default. Smaller nodes mean more fit legibly. */
 const DEFAULT_TOP_N = 1600;
 
-/** Dimming colours. These have to follow the colour scheme: a light grey on a
+/** Dimming colors. These have to follow the color scheme: a light gray on a
  * dark background reads as a *highlight*, which made hovering flash the rest of
  * the graph white. Edges stay alpha-blended so a dense field fades rather than
  * turning into a solid mat. */
@@ -65,11 +65,11 @@ const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
 
 let theme = prefersDark.matches ? THEME.dark : THEME.light;
 
-/** Draw a node's name with a halo in the page background colour.
+/** Draw a node's name with a halo in the page background color.
  *
  * Sigma's default label is plain fillText, which over a mesh of tens of
  * thousands of edges lands on top of whatever happens to be behind it and
- * becomes unreadable. Stroking the text in the surface colour first knocks a
+ * becomes unreadable. Stroking the text in the surface color first knocks a
  * small gap out of the graph behind each glyph. Geometry matches sigma's
  * default (drawDiscNodeLabel) so labels sit where they always did. */
 function drawLabelWithHalo(context, data, settings) {
@@ -115,7 +115,7 @@ async function main() {
 
 	const { roles, metrics, colorModes, nodes, edges, meta } = payload;
 
-	// A page can pin the renderer's light/dark colours (the film-log network is
+	// A page can pin the renderer's light/dark colors (the film-log network is
 	// always on the dark maroon surface, whatever the OS theme says).
 	if (meta.forceTheme && THEME[meta.forceTheme]) theme = THEME[meta.forceTheme];
 
@@ -127,7 +127,7 @@ async function main() {
 	const iFilms = at('films'), iMask = at('roleMask'), iGrossFilms = at('grossFilms');
 	const bucketAt = Object.fromEntries(colorModes.filter((m) => m.field).map((m) => [m.key, at(m.field)]));
 
-	// A dimension can colour by one field and filter on another: country paints
+	// A dimension can color by one field and filter on another: country paints
 	// the dominant one but matches on every country the person has worked in.
 	const memberAt = Object.fromEntries(
 		colorModes.filter((m) => m.filterField).map((m) => [m.key, at(m.filterField)]),
@@ -158,7 +158,7 @@ async function main() {
 
 		roles.forEach((r, ri) => {
 			// s_* is the slice's share (equal wedges for every role shown);
-			// c_* is its colour, filled in by applyColors below.
+			// c_* is its color, filled in by applyColors below.
 			attrs[`s_${r.role}`] = held[ri] ? 1 : 0;
 			attrs[`c_${r.role}`] = r.color;
 		});
@@ -189,12 +189,12 @@ async function main() {
 		});
 	}
 
-	// --- Colour --------------------------------------------------------------
-	/** Paint the pie slices for the active colour dimension.
+	// --- Color --------------------------------------------------------------
+	/** Paint the pie slices for the active color dimension.
 	 *
 	 * Only `role` is multi-valued, and it's the reason nodes are pies at all:
 	 * its slices differ, so a hyphenate reads half-and-half. Region and era are
-	 * single-valued, so every slice gets the same colour and the node renders as
+	 * single-valued, so every slice gets the same color and the node renders as
 	 * a plain disc — no separate node program needed. */
 	const isDark = () => theme === THEME.dark;
 
@@ -215,12 +215,12 @@ async function main() {
 		});
 	}
 
-	/** The label a node carries in the current colour dimension, for the panel. */
+	/** The label a node carries in the current color dimension, for the panel. */
 	/** Where a person sits in every non-role dimension, named in text. Shown
-	 * regardless of what the graph is currently coloured by — the countries
+	 * regardless of what the graph is currently colored by — the countries
 	 * someone works in are worth reading even while looking at roles — and it's
 	 * the secondary encoding that keeps identity off hue alone. Multi-valued
-	 * dimensions list all their buckets, the coloured one first. */
+	 * dimensions list all their buckets, the colored one first. */
 	function dimensionLabels(attrs) {
 		return colorModes
 			.filter((m) => m.field)
@@ -330,8 +330,8 @@ async function main() {
 	/** Rebuild the spatial index, re-running the reducers for the elements named.
 	 *
 	 * Needed whenever the frame or the visible set moves, since that invalidates the
-	 * label grid, the hover quadtree and the normalisation. Moving nodes *within* an
-	 * unchanged frame does not need this: `updateNode` re-normalises each node it
+	 * label grid, the hover quadtree and the normalization. Moving nodes *within* an
+	 * unchanged frame does not need this: `updateNode` re-normalizes each node it
 	 * touches, so a layout tick can go through `repaint` instead. */
 	function reindex(nodes = [], edges = []) {
 		renderer.refresh({ partialGraph: { nodes, edges }, skipIndexation: false });
@@ -437,7 +437,7 @@ async function main() {
 		const focus = state.hovered ?? state.selected;
 
 		if (focus && key !== focus && !state.neighbors?.has(key)) {
-			// Recolour every slice to the theme's dim grey, leaving wedge geometry
+			// Recolor every slice to the theme's dim gray, leaving wedge geometry
 			// alone, so an unrelated node fades back without changing shape.
 			const dimmed = { ...attrs, color: theme.node, label: '', zIndex: 0 };
 
@@ -499,7 +499,7 @@ async function main() {
 		graph.setNodeAttribute(dragged, 'x', pos.x);
 		graph.setNodeAttribute(dragged, 'y', pos.y);
 
-		// Feed the drag back into the simulation so neighbours follow along.
+		// Feed the drag back into the simulation so neighbors follow along.
 		if (pinned?.hasNode(dragged)) pinned.mergeNodeAttributes(dragged, { x: pos.x, y: pos.y });
 		event.preventSigmaDefault();
 		event.original.preventDefault();
@@ -699,7 +699,7 @@ async function main() {
 			<p class="muted small">
 				${a.films} films · ${m.label}: <strong>${shown}</strong>
 				${dims.map((d) => `<br>${escapeHtml(d)}`).join('')}
-				${minor ? `<br><span class="minor">also ${escapeHtml(minor)} credits (below the ${(payload.roleShareFloor * 100).toFixed(0)}% share to colour the node)</span>` : ''}
+				${minor ? `<br><span class="minor">also ${escapeHtml(minor)} credits (below the ${(payload.roleShareFloor * 100).toFixed(0)}% share to color the node)</span>` : ''}
 			</p>
 			<p class="muted small">${partners.length} collaborators</p>
 			<ol class="partners">
@@ -868,15 +868,15 @@ async function main() {
 		applyFilters();
 	});
 
-	// Colour-by selector. The filter groups below double as the legend, so there
-	// is no separate colour key to fall out of sync with them.
+	// Color-by selector. The filter groups below double as the legend, so there
+	// is no separate color key to fall out of sync with them.
 	const colorSel = $('#color-by');
 	colorSel.innerHTML = colorModes.map((m) => `<option value="${m.key}">${m.label}</option>`).join('');
 	colorSel.value = state.colorBy;
 	const colorNote = $('#color-note');
 
-	// One checkbox group per dimension. Every dimension both colours and filters;
-	// only the active one shows swatches, since a coloured key next to a
+	// One checkbox group per dimension. Every dimension both colors and filters;
+	// only the active one shows swatches, since a colored key next to a
 	// dimension the nodes aren't painted by would just contradict the canvas.
 	const groupsEl = $('#filter-groups');
 
@@ -890,7 +890,7 @@ async function main() {
 			.map(
 				(m) => `<div class="group" data-dim="${m.key}">
 					<div class="group-head">
-						<h3>${m.label}${m.key === state.colorBy ? ' <span class="muted">— colouring</span>' : ''}</h3>
+						<h3>${m.label}${m.key === state.colorBy ? ' <span class="muted">— coloring</span>' : ''}</h3>
 						<button type="button" class="link" data-all="${m.key}">all</button>
 						<button type="button" class="link" data-only="${m.key}">none</button>
 					</div>
@@ -965,7 +965,7 @@ async function main() {
 	 * that the dense core doesn't visibly coarsen. */
 	const BARNES_HUT_THETA = 1.2;
 
-	/** Pull toward the centre. Well *above* graphology's inferred 0.05, which is the
+	/** Pull toward the center. Well *above* graphology's inferred 0.05, which is the
 	 * opposite of what wanting a more open layout suggests.
 	 *
 	 * The reason is `frameVisible`: it fits the layout's bounding box to the canvas,
@@ -974,7 +974,7 @@ async function main() {
 	 * the core — and weak gravity lets the periphery fly outward, growing the box,
 	 * which fitting to a fixed canvas turns into a *smaller*, denser core.
 	 *
-	 * Measured on the default 1,600-node view, as median nearest-neighbour distance
+	 * Measured on the default 1,600-node view, as median nearest-neighbor distance
 	 * once fitted to a 960px canvas: gravity 0.02 gives 4.3px, the inferred 0.05
 	 * gives 6.1px, 0.1 gives 7.7px, 0.25 gives 10.9px and 0.5 gives 12.6px. The gain
 	 * flattens after 0.25. `scalingRatio` is not a second lever for the same reason
@@ -1007,17 +1007,17 @@ async function main() {
 	 * on a clock. That self-tunes: a bigger graph, a slower machine or a heavier
 	 * filter all just take the polls they need.
 	 *
-	 * Rest is measured on positions normalised into their own bounding box. FA2
+	 * Rest is measured on positions normalized into their own bounding box. FA2
 	 * expands more or less indefinitely, so raw displacement never settles to
-	 * zero; normalising divides that global drift out and leaves only the
+	 * zero; normalizing divides that global drift out and leaves only the
 	 * structural rearrangement, which does converge. */
 	const SETTLE_POLL_MS = 350;
-	/** Mean normalised movement per poll under which the layout counts as at rest —
+	/** Mean normalized movement per poll under which the layout counts as at rest —
 	 * the average node shifting <0.25% of the canvas between polls.
 	 *
 	 * Measured rather than picked. Movement on a 3,000-node view decays from ~0.025
 	 * to ~0.0024 over twenty seconds, and NOT monotonically: it falls to ~0.005 by
-	 * 2.5s, then climbs back to ~0.013 between 8s and 16s as the layout reorganises,
+	 * 2.5s, then climbs back to ~0.013 between 8s and 16s as the layout reorganizes,
 	 * before finally trailing off. That rebound is the trap — it sits below any
 	 * threshold loose enough to be reached quickly, so a naive rule stops at ~4s
 	 * with the real spreading still ahead of it. 0.0025 sits under the rebound. */
@@ -1041,7 +1041,7 @@ async function main() {
 	 * so a re-settle at an unchanged filter state shouldn't pay for it twice. */
 	let pinnedGeneration = -1;
 
-	/** Positions of `keys` in `source`, normalised into their own bounding box, so a
+	/** Positions of `keys` in `source`, normalized into their own bounding box, so a
 	 * uniformly expanding layout reads as no movement at all.
 	 *
 	 * Read off the simulation rather than the rendered graph, so that how often
@@ -1075,7 +1075,7 @@ async function main() {
 		return raw;
 	}
 
-	/** Mean per-node distance between two normalised snapshots. */
+	/** Mean per-node distance between two normalized snapshots. */
 	function meanShift(a, b) {
 		if (!a.length) return 0;
 		let sum = 0;
@@ -1093,7 +1093,7 @@ async function main() {
 	 * graphology hands back the live object, not a copy — and then repainting once
 	 * costs a single pass per sync instead of 25,236 refreshes per iteration.
 	 *
-	 * A repaint rather than a reindex, because `updateNode` re-normalises each node
+	 * A repaint rather than a reindex, because `updateNode` re-normalizes each node
 	 * it touches: nothing needs the frame rebuilt until the run ends. */
 	function syncPositions() {
 		if (!pinned) return;
@@ -1209,7 +1209,7 @@ async function main() {
 	const resettleBox = $('#auto-resettle');
 	$('#reset-view').addEventListener('click', () => {
 		frameVisible();
-		// The frame drives Sigma's normalisation, so moving it needs a reprocess.
+		// The frame drives Sigma's normalization, so moving it needs a reprocess.
 		reindex();
 		renderer.getCamera().animatedReset({ duration: 400 });
 	});

@@ -5,7 +5,7 @@
 // from the numbers a head unit recorded.
 //
 // TWO FACES BY DESIGN, NOT BY ACCIDENT. Most activities have `route_path`: a
-// normalised `M x y L x y…` string already fitted to a 0-0-100-100 viewBox at
+// normalized `M x y L x y…` string already fitted to a 0-0-100-100 viewBox at
 // ingest time (src/lib/route-shape.ts owns that math). Those get a static
 // stroked-line map — no tiles, no JS, cheap enough to run forty-to-a-page. A
 // trainer ride, a treadmill run and a pool swim have no GPS at all, and that
@@ -76,7 +76,7 @@ const stats = a.redacted ? [] : cardStats(a, size === 'cell' ? 2 : 3);
 const face = a.redacted || hasRoute ? null : noGpsStats(a);
 
 // A redacted card has nowhere to go, so it isn't a link. Astro renders a
-// dynamic tag name from a capitalised variable.
+// dynamic tag name from a capitalized variable.
 const Element = a.redacted ? 'div' : 'a';
 
 // Pull the route's start point out of "M x y …" to place the start dot —
@@ -313,7 +313,7 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	}
 	.ac--redacted.ac--row {
 		/* No meta block to fill the rest of the line, so the card is its face
-		   rather than a 120px glyph with a metre of empty card after it. */
+		   rather than a 120px glyph with a meter of empty card after it. */
 		width: fit-content;
 	}
 	.ac--redacted.ac--row .ac__face {

@@ -17,7 +17,7 @@ const NO_TH = {
 const activity = {
 	id: 987654321,
 	name: 'Cutthroat shakedown',
-	description: 'first ride on the new tyres',
+	description: 'first ride on the new tires',
 	type: 'Ride',
 	sport_type: 'GravelRide',
 	start_date: '2026-08-20T15:00:00Z',
@@ -53,7 +53,7 @@ assert.equal(c.sport, 'gravel_ride', 'sport_type GravelRide → gravel_ride');
 
 assert.equal(c.title, 'Cutthroat shakedown');
 
-assert.equal(c.notes, 'first ride on the new tyres');
+assert.equal(c.notes, 'first ride on the new tires');
 
 assert.equal(c.utc_offset_minutes, -420, 'utc_offset seconds → minutes');
 
@@ -107,16 +107,16 @@ assert.equal(indoorRow.route_path, null, 'no route without a track');
 // ride — the bug where a Zwift session synced through the API kept `ride` and
 // sat in the outdoor bucket (migration 0046 backfilled these; virtualizeGpslessRide
 // keeps every new one correct at ingest). Standalone activities only.
-const labelledRide = activityToCanonical(
+const labeledRide = activityToCanonical(
 	{ id: 3, type: 'Ride', sport_type: 'Ride', start_date: '2026-08-20T02:00:00Z', elapsed_time: 3600 },
 	{ time: { data: [0, 1] }, watts: { data: [200, 210] } },
 );
 
-assert.equal(labelledRide.sport, 'ride', 'Strava label alone gives ride, GPS or not');
+assert.equal(labeledRide.sport, 'ride', 'Strava label alone gives ride, GPS or not');
 
-assert.equal(virtualizeGpslessRide(labelledRide).sport, 'virtual_ride', 'a GPS-less ride is reclassified to virtual_ride');
+assert.equal(virtualizeGpslessRide(labeledRide).sport, 'virtual_ride', 'a GPS-less ride is reclassified to virtual_ride');
 
-assert.equal(virtualizeGpslessRide(labelledRide).sub_sport, 'indoor');
+assert.equal(virtualizeGpslessRide(labeledRide).sub_sport, 'indoor');
 
 // A ride WITH a track is left alone.
 assert.equal(virtualizeGpslessRide(c).sport, 'gravel_ride', 'a ride with a GPS track keeps its sport');

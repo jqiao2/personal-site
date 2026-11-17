@@ -8,10 +8,10 @@ import type { DiaryVisit, Photo, Place, VisitDetail } from './restaurants';
 /**
  * How a place is located, at whatever granularity it has.
  *
- * "Sunset Park, Brooklyn" when there's a neighbourhood, "Austin, TX" when there
+ * "Sunset Park, Brooklyn" when there's a neighborhood, "Austin, TX" when there
  * isn't. The fallback must not read as a missing field — an absent
- * neighbourhood is the level of detail that place warrants, and geocoders are
- * unreliable about neighbourhoods outside New York anyway.
+ * neighborhood is the level of detail that place warrants, and geocoders are
+ * unreliable about neighborhoods outside New York anyway.
  */
 export function placeLine(place: {
 	neighborhood: string | null;
@@ -40,7 +40,7 @@ export function cuisineLine(cuisines: string[]): string {
  *
  *   placed    — it has coordinates. The map can draw it; the location line is
  *               a fact confirmed by whoever pinned it.
- *   located   — no coordinates, but the words are real: a neighbourhood or a
+ *   located   — no coordinates, but the words are real: a neighborhood or a
  *               state/region is on record, which only gets there by being
  *               typed in or read off a geocode. The map still has nothing to
  *               draw.
@@ -54,7 +54,7 @@ export function cuisineLine(cuisines: string[]): string {
  * left 34 pages quietly asserting a city nobody chose.
  *
  * What IS distinguishable: a place that has been located, by any route, comes
- * away with a neighbourhood or a region, because both the geocoder and the
+ * away with a neighborhood or a region, because both the geocoder and the
  * by-hand form write one. So their absence, together with no point, is the
  * honest signal that nothing about this location was ever confirmed — and it
  * flips the moment anything is, without a migration or a provenance column to
@@ -124,7 +124,7 @@ export function primaryCuisine(cuisines: string[]): string {
  *     ├───────────────────┤  under it in small caps — a menu's price column,
  *     │ Name           ♥  │  blown up to fill the slot a poster would have
  *     │ Cuisine ····· $$  │
- *     │ ◑ Neighbourhood   │
+ *     │ ◑ Neighborhood   │
  *     └───────────────────┘
  *
  * The head is a fixed height, so a photo tile and a no-photo tile occupy the

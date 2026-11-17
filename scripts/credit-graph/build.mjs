@@ -46,7 +46,7 @@ const FROM = opt('from', 'cache');
 
 const MIN_EDGE = num('min-edge', 2);
 
-/** Share of a person's credits a role needs before it colours their node. */
+/** Share of a person's credits a role needs before it colors their node. */
 const ROLE_SHARE_FLOOR = Number.parseFloat(opt('role-share', '0.25'));
 
 const ITERATIONS = num('iterations', 400);
@@ -185,23 +185,23 @@ async function loadFromDb() {
 }
 
 // ---------------------------------------------------------------------------
-// Colour dimensions
+// Color dimensions
 // ---------------------------------------------------------------------------
 
 /**
  * The countries a person works in — every one with ~8+ graphed people, plus a
  * neutral catch-all.
  *
- * FOUR colours, deliberately repeated across the list. This replaces an earlier
- * attempt to give the twelve biggest industries a colour each, which was the
- * wrong goal: it spent the whole colour space chasing unique hues and ended up
+ * FOUR colors, deliberately repeated across the list. This replaces an earlier
+ * attempt to give the twelve biggest industries a color each, which was the
+ * wrong goal: it spent the whole color space chasing unique hues and ended up
  * with a palette whose worst pair was indistinguishable in practice. Reported
- * plainly by a colour-blind reader — the twelve could barely be told apart — and
+ * plainly by a color-blind reader — the twelve could barely be told apart — and
  * the measurement agrees with them.
  *
  * A network graph is an "all pairs" surface: any two nodes can end up adjacent,
  * so the palette is only as good as its WORST pair, under normal vision and all
- * three colour-blindness types (Machado severity 1.0, distance in OKLab x100):
+ * three color-blindness types (Machado severity 1.0, distance in OKLab x100):
  *
  *     palette                       normal floor   CVD floor
  *     12 unique hues (previous)         9.6           7.6
@@ -212,9 +212,9 @@ async function loadFromDb() {
  *
  * Four is where the cliff is: dropping from 5 to 4 buys a 46% wider floor, and
  * going the other way collapses it. 21.3 against the old 7.6 is not a tweak,
- * it is the difference between "these are two colours" and "these are the same
- * colour". The four survive because they separate on LIGHTNESS as much as hue
- * (OKLab L 0.44 / 0.52 / 0.73 / 0.75), and lightness is the channel colour
+ * it is the difference between "these are two colors" and "these are the same
+ * color". The four survive because they separate on LIGHTNESS as much as hue
+ * (OKLab L 0.44 / 0.52 / 0.73 / 0.75), and lightness is the channel color
  * blindness leaves intact — which is exactly why the old purple-heavy set,
  * where four entries sat at L 0.43-0.44, failed.
  *
@@ -224,7 +224,7 @@ async function loadFromDb() {
  *
  * What repetition costs: hue no longer identifies a country on its own. It never
  * fully did — twenty-four countries were never going to have twenty-four legible
- * hues — so this makes the honest version explicit. Colour now says "roughly
+ * hues — so this makes the honest version explicit. Color now says "roughly
  * which part of the list", and the legend, the filter list and the details panel
  * carry the actual identity. Filtering to one country is the precise instrument.
  *
@@ -249,7 +249,7 @@ const CYCLE = [
  * No `color` here: the cycle below assigns one by position, so this list is
  * purely "which countries, in what order". Re-sorting it repaints, which is
  * fine and expected now that hue is a grouping cue rather than an identity —
- * the previous list had to freeze colours per country precisely because hue
+ * the previous list had to freeze colors per country precisely because hue
  * was doing work it could not actually do. */
 const COUNTRY_LIST = [
 	{ code: 'US', label: 'United States' },
@@ -305,10 +305,10 @@ const COUNTRY_MIN_FILMS = 3;
  * Eras of film history, by the midpoint of a person's career.
  *
  * A single-hue ramp is the textbook encoding for ordered data, but five steps of
- * one blue are indistinguishable on a 3px dot — the whole point of the colour is
+ * one blue are indistinguishable on a 3px dot — the whole point of the color is
  * lost. So this walks a viridis-style path instead, which still reads as ordered
  * (lightness moves monotonically through the sequence) while separating the
- * steps by hue as well. It clears the colour-blind and normal-vision floors in
+ * steps by hue as well. It clears the color-blind and normal-vision floors in
  * both modes, which the single-hue version could not do at five steps.
  *
  * Here the two themes DO get their own steps: the ramp has to run away from
@@ -408,7 +408,7 @@ function careerEra(filmIds, filmById) {
  * So a film is scored by its PERCENTILE among films released around the same
  * time: "how big was this, for its moment", on 0..1. The comparison window is
  * ±2 years, widened until it holds at least MIN_WINDOW films so that thin early
- * years borrow from their neighbours.
+ * years borrow from their neighbors.
  *
  * Returns per-film percentiles plus the corpus mean, used as a shrinkage prior.
  */
@@ -432,7 +432,7 @@ function eraPercentiles(films, field, requirePositive) {
 
 	for (const arr of byYear.values()) arr.sort((a, b) => a - b);
 
-	// Memoised comparison window per year: widen ±1 until it has enough films.
+	// Memoized comparison window per year: widen ±1 until it has enough films.
 	const windows = new Map();
 
 	const windowFor = (year) => {
@@ -593,7 +593,7 @@ async function main() {
 	}
 
 	// 2. Keep people who clear the threshold in at least one role. Their roles for
-	//    colouring are exactly the ones they cleared — a director with 40 acting
+	//    coloring are exactly the ones they cleared — a director with 40 acting
 	//    credits and 6 directing credits reads as both; one with 2 doesn't.
 	const qualified = new Map();
 
@@ -607,7 +607,7 @@ async function main() {
 		// so a role also has to account for ROLE_SHARE_FLOOR of the person's
 		// credits to earn a slice of the node. If that would leave nothing (every
 		// cleared role is a small share), keep the largest so the node still has
-		// a colour.
+		// a color.
 		const totalCredits = p.counts.reduce((a, b) => a + b, 0);
 		const major = cleared.filter((i) => p.counts[i] / totalCredits >= ROLE_SHARE_FLOOR);
 
@@ -700,7 +700,7 @@ async function main() {
 	// respace a layout that had just been shipped at a different density. Gravity is
 	// well above the inferred 0.05 because the page fits the layout's bounding box to
 	// the canvas, which means a *tighter* periphery is what leaves the core room to
-	// spread: on the 1,600-node default view, median nearest-neighbour distance goes
+	// spread: on the 1,600-node default view, median nearest-neighbor distance goes
 	// from 6.1px at 0.05 to 10.9px at 0.25.
 	const settings = {
 		...forceAtlas2.inferSettings(graph),
@@ -749,9 +749,9 @@ async function main() {
 			},
 		],
 		roleShareFloor: ROLE_SHARE_FLOOR,
-		// What a node's colour can encode. `role` splits a node into equal slices
+		// What a node's color can encode. `role` splits a node into equal slices
 		// (the only multi-valued one); region and era are single-valued, so the
-		// client paints every slice the same colour. Each carries both mode's
+		// client paints every slice the same color. Each carries both mode's
 		// steps — dark is a selected palette, not an automatic flip.
 		colorModes: [
 			{
@@ -765,11 +765,11 @@ async function main() {
 				key: 'country',
 				label: 'Where they work',
 				field: 'country',
-				// Colour by the dominant country, but filter on every country they
+				// Color by the dominant country, but filter on every country they
 				// have a real body of work in — so Jackie Chan paints Hong Kong yet
 				// still answers a filter for the United States.
 				filterField: 'countryList',
-				note: `Coloured by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. Only four colours, reused down the list — too many countries for hue to name one, so filter to read a specific country.`,
+				note: `Colored by where most of their films were made; filtering matches any country they have ${COUNTRY_MIN_FILMS}+ films in. Only four colors, reused down the list — too many countries for hue to name one, so filter to read a specific country.`,
 				legend: COUNTRIES.map((c) => ({ label: c.label, light: c.color, dark: c.color })),
 			},
 			{
@@ -802,8 +802,8 @@ async function main() {
 	const jsonPath = path.join(OUT_DIR, 'credit-network.json');
 	await writeFile(jsonPath, JSON.stringify(payload));
 
-	// GEXF for real Gephi. Give nodes their colour and a size so the file is
-	// useful the moment it opens, rather than a grey hairball.
+	// GEXF for real Gephi. Give nodes their color and a size so the file is
+	// useful the moment it opens, rather than a gray hairball.
 	const colorOf = (a) => {
 		const mine = roles.filter((r) => a.roles.split('+').includes(r.role));
 
@@ -830,7 +830,7 @@ async function main() {
 	).length;
 
 	console.log(
-		`${multi.length.toLocaleString()} people are drawn split-colour ` +
+		`${multi.length.toLocaleString()} people are drawn split-color ` +
 			`(${cleared.toLocaleString()} clear two thresholds, but only these hold ` +
 			`>=${(ROLE_SHARE_FLOOR * 100).toFixed(0)}% of their credits in each).`,
 	);

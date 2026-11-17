@@ -281,7 +281,7 @@ const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 		}
 	}
 
-	// Keep the stencil the same screen size and centred as the map resizes.
+	// Keep the stencil the same screen size and centered as the map resizes.
 	if (typeof ResizeObserver !== 'undefined') new ResizeObserver(drawStencil).observe(mapEl);
 
 	// --- the generated route (a real map layer, moves with the map) ----------

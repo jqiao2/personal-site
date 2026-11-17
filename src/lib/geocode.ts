@@ -4,7 +4,7 @@
 // geocoder is an address and place index with no POI layer: "Wu's Wonton King"
 // returns villages in Spain, "Katz's Delicatessen New York" returns Katz Pond,
 // and a proximity bias toward New York changes nothing. It is excellent at
-// "165 East Broadway, Manhattan" and at neighbourhood names — just not at the
+// "165 East Broadway, Manhattan" and at neighborhood names — just not at the
 // thing this section is made of, which is restaurants called by their names.
 //
 // Nominatim reads OpenStreetMap, where restaurants are first-class objects with
@@ -13,12 +13,12 @@
 //
 // THE POLICY IS THE REASON THIS IS SERVER-SIDE. Nominatim asks for a real
 // identifying User-Agent and no more than one request a second, and it is a
-// volunteer-run service, so honouring that is the rent. A browser cannot set a
+// volunteer-run service, so honoring that is the rent. A browser cannot set a
 // User-Agent, and a debounced field in a browser cannot be rate-limited across
 // tabs — so the lookup goes through our own route, which sets the header and
 // paces the calls in one place.
 //
-// THE RESULT IS A SUGGESTION, NOT AN ANSWER. OSM's idea of a neighbourhood is
+// THE RESULT IS A SUGGESTION, NOT AN ANSWER. OSM's idea of a neighborhood is
 // its own: Ba Xuyên comes back as "Dyker Heights" when anyone who lives there
 // would say Sunset Park, and Katz's lands in "Manhattan Community Board 3".
 // That is why the composer keeps every field editable after a pick — the brief
@@ -54,7 +54,7 @@ export interface GeocodeHit {
 	stateRegion: string | null;
 	/** ISO-3166-1 alpha-2, upper-cased — the shape `restaurants.country` wants. */
 	country: string | null;
-	/** OSM's own classification, humanised: "restaurant", "fast food", "cafe"… */
+	/** OSM's own classification, humanized: "restaurant", "fast food", "cafe"… */
 	kind: string | null;
 	/**
 	 * The cuisines OSM records, title-cased — "Vietnamese", "Sandwich".
@@ -71,16 +71,16 @@ export interface GeocodeHit {
 	 * Whether lat/lng is THE RESTAURANT, or merely the middle of an area.
 	 *
 	 * This is the difference between a pin on a door and a pin floating in the
-	 * centre of Sunset Park, and only the first is worth putting on a map. OSM
+	 * center of Sunset Park, and only the first is worth putting on a map. OSM
 	 * grades every result with a `place_rank`: an actual object at a point — a
 	 * restaurant node, a building, a house number — is 30, while a
-	 * neighbourhood is 24, a city lower still. So 30 is the line, and anything
+	 * neighborhood is 24, a city lower still. So 30 is the line, and anything
 	 * under it is an area whose centroid must never be stored as a location.
 	 *
-	 * The neighbourhood is still read off these results, because that is what
-	 * it is for: categorising a place, not locating it. The two come from
+	 * The neighborhood is still read off these results, because that is what
+	 * it is for: categorizing a place, not locating it. The two come from
 	 * different parts of the same answer — the point from the object, the
-	 * neighbourhood from its address — and only the point has to be exact.
+	 * neighborhood from its address — and only the point has to be exact.
 	 */
 	precise: boolean;
 }
@@ -102,12 +102,12 @@ interface NominatimRow {
 }
 
 /** "fast_food" → "fast food", "vietnamese" → "Vietnamese". */
-function humanise(value: string): string {
+function humanize(value: string): string {
 	return value.trim().replace(/_/g, ' ');
 }
 
 function titleCase(value: string): string {
-	const v = humanise(value);
+	const v = humanize(value);
 
 	return v ? v[0].toUpperCase() + v.slice(1) : v;
 }
@@ -139,7 +139,7 @@ export async function geocode(query: string, limit = 5): Promise<GeocodeHit[]> {
 		if (!res.ok) return [];
 		const rows = (await res.json()) as NominatimRow[];
 
-		// Exact points first. A neighbourhood that happens to share a name with
+		// Exact points first. A neighborhood that happens to share a name with
 		// the restaurant you meant should never be the first thing offered.
 		return rows
 			.map(toHit)
@@ -152,7 +152,7 @@ export async function geocode(query: string, limit = 5): Promise<GeocodeHit[]> {
 function toHit(row: NominatimRow): GeocodeHit {
 	const a = row.address ?? {};
 	// OSM spreads "the city" across half a dozen keys depending on how the
-	// country is administered, and the neighbourhood across three. Take the
+	// country is administered, and the neighborhood across three. Take the
 	// first that exists, most specific first.
 	const neighborhood = a.neighbourhood ?? a.suburb ?? a.quarter ?? null;
 	const city = a.city ?? a.town ?? a.village ?? a.municipality ?? a.county ?? null;
@@ -167,7 +167,7 @@ function toHit(row: NominatimRow): GeocodeHit {
 		city,
 		stateRegion,
 		country: a.country_code ? a.country_code.toUpperCase() : null,
-		kind: row.type ? humanise(row.type) : null,
+		kind: row.type ? humanize(row.type) : null,
 		cuisines: (row.extratags?.cuisine ?? '')
 			.split(';')
 			.map((c) => titleCase(c))

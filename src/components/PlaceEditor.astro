@@ -171,7 +171,7 @@ const config = {
 				    stored as one. Saying that out loud at the moment of confirming
 				    beats a place silently staying off the map. */}
 				<div class="pe__warn" data-pe-area-warn hidden>
-					This result is the centre of an area, not a door. Confirming it fills in the words and leaves
+					This result is the center of an area, not a door. Confirming it fills in the words and leaves
 					the place off the map.
 				</div>
 
@@ -354,7 +354,7 @@ const config = {
 			timer = window.setTimeout(async () => {
 				// The imported gazetteer answers first and offline; the live
 				// geocoder still runs, because it knows everywhere that is not
-				// New York. Both are labelled, because a place page is exactly
+				// New York. Both are labeled, because a place page is exactly
 				// where you want to know whether the point came from the health
 				// department or from whoever last edited the map.
 				const { hits, reachable } = await lookupPlaces(name, where);
@@ -501,7 +501,7 @@ const config = {
 			}
 
 			// An imprecise hit is the right kind of reference here: recovery only
-			// needs somewhere within half a degree, and a town centre is that.
+			// needs somewhere within half a degree, and a town center is that.
 			const full = recoverPlusCode(code, ref.lat, ref.lng);
 			const point = full ? decodePlusCode(full) : null;
 
@@ -658,7 +658,7 @@ const config = {
 
 				if (cuisine) body.cuisines = cuisine.split(',').map((c) => c.trim()).filter(Boolean);
 				// Only a point-precise hit contributes coordinates. An area's
-				// centroid is a pin floating in the middle of a neighbourhood.
+				// centroid is a pin floating in the middle of a neighborhood.
 				body.lat = h.precise ? h.lat : null;
 				body.lng = h.precise ? h.lng : null;
 			} else {
@@ -966,7 +966,7 @@ const config = {
 	}
 
 	/* An area hit is offered, and named as what it is, so nobody pins a
-	   restaurant to the middle of a neighbourhood by accident. */
+	   restaurant to the middle of a neighborhood by accident. */
 	.pe__hit-tail {
 		margin-left: auto;
 		font-family: var(--mono);

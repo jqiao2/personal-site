@@ -49,7 +49,7 @@
 			"label": "Where they work",
 			"field": "country",
 			"filterField": "countryList",
-			"note": "Coloured by where most of their films were made; filters match any country they have 3+ films in. Four colours reused down the list -- filter to read a specific one.",
+			"note": "Colored by where most of their films were made; filters match any country they have 3+ films in. Four colors reused down the list -- filter to read a specific one.",
 			"legend": [
 				{
 					"label": "United States",

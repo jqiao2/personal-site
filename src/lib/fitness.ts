@@ -4,7 +4,7 @@
 // redraws the same shape when the timeframe changes — one implementation, not
 // two that drift (the same split as src/lib/athlete.ts).
 //
-// THE MODEL. Bannister's impulse-response, as TrainingPeaks' PMC popularised
+// THE MODEL. Bannister's impulse-response, as TrainingPeaks' PMC popularized
 // it. Each day carries a training load; this site already computes one per
 // activity — `exertion`, a TSS-equivalent where an hour at threshold scores
 // 100 (ACTIVITIES.md §3) — so a day's load is the sum of its activities'

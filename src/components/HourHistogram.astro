@@ -213,7 +213,7 @@ const gap = Math.round(11 * (size === 'mini' ? scale : 1));
 			const col = cols[i];
 			col.setAttribute('data-on', '');
 			tip.textContent = col.dataset.tip ?? '';
-			// Centre on the column, then pull the tooltip inside the plot at the
+			// Center on the column, then pull the tooltip inside the plot at the
 			// ends — at 2am the box is wider than the space left of it.
 			const left = (i / HOURS) * 100 + 100 / (HOURS * 2);
 			tip.style.left = `${left.toFixed(2)}%`;

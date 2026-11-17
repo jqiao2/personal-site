@@ -22,7 +22,7 @@ arbitrary auto-laps, each spanning part of a lift AND part of a run.
 
 Segment the **altitude** stream, not speed. The per-sample speed channel on
 these exports spikes to 55 m/s (200 km/h) on GPS glitches; altitude drifts a few
-metres but its *trend* is clean. `src/lib/ski.ts`:
+meters but its *trend* is clean. `src/lib/ski.ts`:
 
 1. Smooth altitude over a ~15s centered window (kills baro/GPS noise).
 2. Walk it with a hysteresis band (`NOISE_M = 8`): a segment closes at a running
@@ -60,14 +60,14 @@ detection everywhere via `resolveSkiSegments(streams, override)` — display,
 profile, and the exertion score. Key moves:
 
 - **Reclassify is the whole editor** — no split/merge/drag. Merge falls out for
-  free: `coalesce()` joins adjacent same-type segments, so relabelling the idle
+  free: `coalesce()` joins adjacent same-type segments, so relabeling the idle
   between two runs collapses the three. Split (rare) is deferred.
-- **Exertion must honour the override**, so `computeExertion` takes an optional
+- **Exertion must honor the override**, so `computeExertion` takes an optional
   `ski_segments`, and BOTH `saveSkiSegments` (the editor) and
   `recompute-exertion.mjs` pass it — otherwise a bulk re-score silently reverts
   every edit to auto-detection.
 - **Profile bands**: `buildGraphData` takes the resolved segments and emits
-  axis-offset bands (`skiSegments`), drawn as coloured `<rect>`s behind the
+  axis-offset bands (`skiSegments`), drawn as colored `<rect>`s behind the
   elevation trace in ActivityGraph, toggled by a chip, ON by default for ski.
   Read the bands off the RAW stream indices, not the downsampled graph indices,
   or they drift from the turn that defined them.

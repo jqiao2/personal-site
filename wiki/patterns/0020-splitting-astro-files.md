@@ -34,7 +34,7 @@ styling guide, Sep 2026.)
    of `<script>` it owns. `StarPicker.astro` is the template: small, self-styled,
    reused. This is the main lever. It keeps styles scoped *and* shrinks the file.
 
-2. **Extract shared, skinnable UI as one component parameterised by CSS custom
+2. **Extract shared, skinnable UI as one component parameterized by CSS custom
    properties + slots/props** — never by copying a stylesheet between two files.
    `StarPicker` already does this: hosts pass `--sp-empty` / `--sp-fill` / `--sp-size`
    and get the same widget in their own palette. The rating row (five stars + two

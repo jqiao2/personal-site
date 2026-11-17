@@ -152,7 +152,7 @@ export const ASPECTS: readonly Aspect[] = [
 	{ id: '9:16', slug: 'story', label: 'Story', height: 1920 },
 ];
 
-/** The aspect a `?fmt=` names, or the default for anything unrecognised. */
+/** The aspect a `?fmt=` names, or the default for anything unrecognized. */
 export function aspectBySlug(slug: string | null): Aspect {
 	return ASPECTS.find((a) => a.slug === slug) ?? ASPECTS[0];
 }

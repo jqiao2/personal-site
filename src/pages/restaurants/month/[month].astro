@@ -159,8 +159,8 @@ const query = monthQuery(aspect);
 							</div>
 						</div>
 
-						{/* THE PHOTOGRAPHS GO THROUGH THE IMAGE OPTIMISER, and here that is
-						    about ORIGIN rather than bytes. The export rasterises the card
+						{/* THE PHOTOGRAPHS GO THROUGH THE IMAGE OPTIMIZER, and here that is
+						    about ORIGIN rather than bytes. The export rasterizes the card
 						    through a canvas, so every photograph on it has to be readable
 						    cross-origin — and the bucket's public r2.dev host answers with
 						    no `Access-Control-Allow-Origin` at all, which no bucket CORS
@@ -170,7 +170,7 @@ const query = monthQuery(aspect);
 						    `/_vercel/image` is same-origin, so there is nothing to allow.
 						    The card is a fixed 1080px artboard exported at pixelRatio 1,
 						    so a cell is ~150px and the 320 rung is already 2x it.
-						    `cacheBust` below appends a `&v=` the optimiser ignores.
+						    `cacheBust` below appends a `&v=` the optimizer ignores.
 
 						    A DAY WITH TWO MEALS IN IT stacks: the better-ranked cover sits
 						    on top and the one under it is turned a few degrees so its
@@ -339,7 +339,7 @@ const query = monthQuery(aspect);
 	// our own — is server-side rendering, and this account's key is not entitled
 	// to it: those endpoints answer "Invalid key" for the key their vector tiles
 	// accept. Stock raster tiles do work, and the first version of this used
-	// them, warmed towards the palette with a sepia filter. But the map on this
+	// them, warmed toward the palette with a sepia filter. But the map on this
 	// card should be the same map as the section's, and that style
 	// (menuBasemap — green water, ink labels, roads drawn by taking ink away)
 	// only exists as something MapLibre draws. So MapLibre draws it, once, in a
@@ -347,7 +347,7 @@ const query = monthQuery(aspect);
 	// snapshotted to a data URL and dropped into its cell.
 	//
 	// The snapshot is what makes this survivable downstream: the export
-	// rasterises the DOM, which a live WebGL canvas comes out of blank, but a
+	// rasterizes the DOM, which a live WebGL canvas comes out of blank, but a
 	// data URL is just another image by then. `preserveDrawingBuffer` is what
 	// makes the canvas readable at all, and the map is rendered at the cell's
 	// own size so the street labels land at the size they were designed for
@@ -618,7 +618,7 @@ const query = monthQuery(aspect);
 	   Rows share that height evenly, so one grid fits all three aspects without a
 	   second set of numbers — but a cell is capped at 190px so the story artboard,
 	   which has 500px more than it needs, doesn't crop every photograph into a
-	   column. Past the cap the grid centres itself in what's left. */
+	   column. Past the cap the grid centers itself in what's left. */
 	.strip {
 		margin-top: 26px;
 		flex: 1 1 auto;
@@ -668,7 +668,7 @@ const query = monthQuery(aspect);
 		z-index: 1;
 	}
 	/* A stacked cell's under-plate spills past its own square, so it paints over
-	   its neighbours rather than under whichever of them comes later in source
+	   its neighbors rather than under whichever of them comes later in source
 	   order. Both of these also make the cell a stacking context, which is what
 	   keeps the plate layering below a matter of the cell it's in. */
 	.cell--stack {
@@ -736,7 +736,7 @@ const query = monthQuery(aspect);
 		color: var(--ink);
 	}
 	/* On a photograph the numeral and the needle need their own ground — a plate
-	   can be any colour at all, and both of these are small. */
+	   can be any color at all, and both of these are small. */
 	.cell--plated .cell__n {
 		left: 0;
 		top: 0;

@@ -1,6 +1,6 @@
 -- Production countries on the credit-graph film mirror.
 --
--- Feeds the "where they work" node colouring on /projects/credit-network: a
+-- Feeds the "where they work" node coloring on /projects/credit-network: a
 -- person is placed by the region most of their films were produced in.
 --
 -- Stored as the full ISO 3166-1 list in TMDB's order rather than a single

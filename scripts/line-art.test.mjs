@@ -34,22 +34,22 @@ function makeImg(w, h, dark) {
 }
 
 // 2. buildGraph snaps shared endpoints into junction nodes. A "plus": two
-//    strokes crossing at the centre, given as four polylines meeting there.
+//    strokes crossing at the center, given as four polylines meeting there.
 {
 	const c = [5, 5];
 
 	const polylines = [
-		[[5, 0], [5, 5]], // north spoke -> centre
-		[[5, 5], [5, 9]], // centre -> south
-		[[0, 5], [5, 5]], // west -> centre
-		[[5, 5], [9, 5]], // centre -> east
+		[[5, 0], [5, 5]], // north spoke -> center
+		[[5, 5], [5, 9]], // center -> south
+		[[0, 5], [5, 5]], // west -> center
+		[[5, 5], [9, 5]], // center -> east
 	];
 
 	const g = buildGraph(polylines, 2, 0.5);
-	// 5 nodes: centre + 4 tips.
+	// 5 nodes: center + 4 tips.
 	assert.equal(g.nodes.length, 5);
 	assert.equal(g.edges.length, 4);
-	// The centre node has degree 4.
+	// The center node has degree 4.
 	const deg = g.nodes.map(() => 0);
 
 	for (const e of g.edges) { deg[e.a]++; deg[e.b]++; }
@@ -58,7 +58,7 @@ function makeImg(w, h, dark) {
 	assert.equal(deg.filter((d) => d === 1).length, 4, 'four leaf tips');
 }
 
-// 3. normalizeGraph centres and fits into the unit box (longer axis in [-.5,.5]).
+// 3. normalizeGraph centers and fits into the unit box (longer axis in [-.5,.5]).
 {
 	const g = { nodes: [[0, 0], [10, 0], [10, 4]], edges: [{ a: 0, b: 1, pts: [[0, 0], [10, 0]] }] };
 	const { graph, paths } = normalizeGraph(g);

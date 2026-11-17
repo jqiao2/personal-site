@@ -36,7 +36,7 @@ wiki across every iteration, even reverted ones).
   `activities.ski_segments` (0051) stores a hand-corrected partition that
   `resolveSkiSegments` uses in place of detection everywhere (display, profile,
   exertion); the editor is reclassify-only, with merge falling out of coalescing.
-  Profile gained coloured run/lift bands (ActivityGraph). Extended pattern 0006
+  Profile gained colored run/lift bands (ActivityGraph). Extended pattern 0006
   with the override + testing notes (saveSkiSegments needs Astro's import.meta.env,
   and a form POST to astro dev needs a matching Origin header or it 403s).
 - 2026-09-02 — Audited /films and /books for the unified header. Eight rendered
@@ -44,7 +44,7 @@ wiki across every iteration, even reverted ones).
   the restaurant log's strip-over-topbar arrangement. Two things were worth
   keeping: the audit has to read `src/layouts` too (restaurants inherit the
   header from their layout and never name it), and the 100vw bleed lets the
-  strip sit inside a narrower centred `.wrap` without touching that page's CSS —
+  strip sit inside a narrower centered `.wrap` without touching that page's CSS —
   but the nav only lines up if `--sh-max` is the column plus twice the header
   gutter, which is what the new `max` prop is for. Wrote pattern 0007.
 - 2026-09-02 — The place gazetteer only ever had `dohmh` imported (30k rows), so
@@ -146,7 +146,7 @@ wiki across every iteration, even reverted ones).
 - Drag and drop is native HTML5, and the drop reuses the existing
   `POST /api/films/screening-queue` (it already upserts by movie, so a re-POST
   with a new date IS the move, and the Google event is re-created for free).
-  The poster's `data-venue` rides along so a move doesn't drop the theatre.
+  The poster's `data-venue` rides along so a move doesn't drop the theater.
 - Verified in a real browser with a throwaway Playwright script and a stubbed
   POST: 84 → 168 cells on scroll, appended cells styled, drag moved the poster
   and sent `date: 2026-09-13`.
@@ -167,7 +167,7 @@ wiki across every iteration, even reverted ones).
   here, and it is now moot since those routes are static.
 
 - 2026-09-10: Added pattern 0020 (splitting oversized .astro files). Prompted by a
-  request to detangle CSS out of components; research showed externalising a
+  request to detangle CSS out of components; research showed externalizing a
   scoped `<style>` makes it global, so the pattern reframes the detangle as
   component-splitting + custom-property theming + logic-to-lib, not CSS extraction.
 
@@ -187,7 +187,7 @@ wiki across every iteration, even reverted ones).
 - 2026-09-23 — /log paginated all-entries feed; screenshots via msedge channel since Playwright Chromium + R2 env + live DB were all unavailable (0025).
 - 2026-09-24 — Fluid Active CPU ran out again: owner pages now private max-age=60 + Vary: Cookie, guarded by a `wv` write-stamp cookie re-set after owner /api writes; film-credit-network private for a day; visitor s-maxage 6 h → 24 h. Memory size ruled out (separate meter). Supabase still unreachable locally; headers verified with a throwaway probe endpoint. Updated 0018.
 - 2026-10-10: backfilled 20 Letterboxd entries (Sep 15–Oct 7) after the Supabase pause via RSS → logFilm(); see 0027.
-- 2026-10-11: Bagels & Grill (9 Bay 50th St) missing; it is a counter inside a grocery licence. DOHMH lacks it, Overture has it as a grocery the importer drops, and Overture 2026-09 renamed categories→taxonomy (import broken). See 0028.
+- 2026-10-11: Bagels & Grill (9 Bay 50th St) missing; it is a counter inside a grocery license. DOHMH lacks it, Overture has it as a grocery the importer drops, and Overture 2026-09 renamed categories→taxonomy (import broken). See 0028.
 - 2026-10-11 — 0029: owner form-post redirects weren't re-stamping the write cookie (activity↔meal links, PR #257).
 - 2026-10-11: applied 0068 via MCP execute_sql + history insert (pooler timed out); see 0011.
 - 2026-10-12: DB at 88% of free tier. 0069 dropped 41 never-scanned indexes (405→369 MB); JSONB→real[] would GROW activity_streams (binary floats don't compress), delta-encoded fixed-point ints shrink it ~66%. Index rule promoted to CLAUDE.md.
@@ -196,9 +196,9 @@ wiki across every iteration, even reverted ones).
 - 2026-10-12 — 0031: /subway gained a Map view (same ids/log over MapLibre). Station matching: name must dominate, the schematic's affine fit is km off outside Manhattan.
 - 2026-10-12 — 0031 rev: straight chords rejected; Map view now slices GTFS shapes per service between the stops it really serves (stop_times), per-platform markers, 15 m multi-sample bundles. Three schematic phantom links found (VIA/SKIP).
 - 2026-10-12 — 0031 rev 2: subway map slots now per straight, interpolated through curves (scripts/subway-bundles.mjs); symmetric 15/45 m membership fixed W 4 St + downtown Brooklyn overlaps; user wants global service order kept.
-- 2026-10-12 — 0031 rev 3: subway map jitter = per-straight left/right mirroring on winding track + sub-metre edges under line-offset; fixed with parity-linked groups and vertex-snapped pieces.
+- 2026-10-12 — 0031 rev 3: subway map jitter = per-straight left/right mirroring on winding track + sub-meter edges under line-offset; fixed with parity-linked groups and vertex-snapped pieces.
 - 2026-10-12 — /subway owner log saved to subway_marks (0071) via /api/subway/log; guests start blank. execute_sql DELETE hung with no prompt — used the owner API to remove a test row (0011).
-- 2026-10-13 0031: subway diagram moved onto the map's bundler; map bundles now share one centreline and cut at every line's stations (express/local and Manhattan Bridge overlaps); map view dark; F B'way-Lafayette–2 Av restored in the schematic generator.
+- 2026-10-13 0031: subway diagram moved onto the map's bundler; map bundles now share one centerline and cut at every line's stations (express/local and Manhattan Bridge overlaps); map view dark; F B'way-Lafayette–2 Av restored in the schematic generator.
 - 2026-10-13 0031: phantom M B'way-Lafayette–Marcy and R Canal–DeKalb replaced at the source with Essex–Marcy and Jay St–DeKalb; saved marks on retired ids move to their successor on load.
 - 2026-10-13 0031: map slot shifts in 1/16-slot steps instead of 1/4 — the staircase on bends is gone (62 KB gz).
 - 2026-10-13 0031: zoomed-out gaps in curves — geojson tiler dropped the short slide pieces; tolerance: 0 on the seg source.
@@ -207,7 +207,7 @@ wiki across every iteration, even reverted ones).
 - 2026-10-15 — /films/closet (watchlist + watched as isometric disc walls): a hover lift on the hit-area element itself flickers at the edge (it moves out from under the pointer); lift an inner layer instead. JS-built dialog rows needed :global styles (see astro-scoped-styles memory).
 - 2026-10-15 — closet: a clip-path diamond (the floor) still hit-tests as its full rectangle and swallowed hovers on the skewed walls' feet — pointer-events:none on decorative clipped boxes. Skewed siblings need :has()-raised z-index so a pulled item clears the other wall/floor.
 - 2026-10-15 — closet: offsetting a repeating-linear-gradient with background-position moves the whole box-sized image and wraps its BOTTOM to the top (background-repeat tiles the box, not the cycle) — a stray slice of the last cycle appeared under the top rail. Offset the gradient's stops instead.
-- 2026-10-16: Talk to Me (594) and Presence (657) were Letterboxd-backfill mislinks to same-title shorts; fix-obsession-tmdb-id.mjs generalised to scripts/fix-tmdb-id.mjs <movies.id> <tmdb_id>, which also clears credits/poster colour for their backfills.
+- 2026-10-16: Talk to Me (594) and Presence (657) were Letterboxd-backfill mislinks to same-title shorts; fix-obsession-tmdb-id.mjs generalized to scripts/fix-tmdb-id.mjs <movies.id> <tmdb_id>, which also clears credits/poster color for their backfills.
 - 2026-10-16 — taste space research: vote-count axis is flat (median 5k votes, corr with rating −0.03); TMDB keywords include mood adjectives on ~53% of films → valence × arousal axes. See 0032.
 - 2026-10-19 — /films/stats theater heatmap (0074 theater lat/lng, geocoded via Nominatim). Local .env has no PUBLIC_MAPTILER_KEY, so shots show the heat on bare ground only; the basemap is verifiable only on a deploy.
 - 2026-10-19 — film lists (/films/lists, smart lists = saved /films/watched query strings). Migration 0076 was taken by a sibling session mid-task; renumbered to 0077 and pushed with a temporary copy of its file. See 0033.
@@ -218,3 +218,4 @@ wiki across every iteration, even reverted ones).
 2026-11-05 — 0080 first failed on add column not null: recipes already had 74 rows from a sync on the PR preview, which reaches the live database. Check row counts before a not-null migration; rewritten to keep the rows.
 2026-11-12 — film lists: drag to reorder + ?sort= views. Only list in the DB was smart, so drag was checked by marking its cells draggable in-page with the PUT stubbed (0035); the goto after dragTo hung (0037).
 2026-11-16 — /projects/flight-poster: exploded-view guest page + owner admin; the LAN-only board POSTs status to /api/flight-poster/sync and pulls settings back (single-row table 0082). Zod 4 defaults bit (0038). Firmware built with pio pip-installed on Windows (`python -m platformio run -e esp32s3`, ~2 min with toolchain download).
+2026-11-17 — repo-wide American English sweep (784 spellings, 211 files, archive untouched). Gotchas: catalogue→catalog needs its own rule (stem swap gave "cataloge"); scripts/ingest.test.mjs held a lone cp1252 0x97 byte, so a read-as-UTF-8/write-back turns it into U+FFFD — check rewritten files for � (see 0004/0036). Kept: OSM `neighbourhood`, Vista/Logan Theatre, Sceptre, amctheatres, aria-labelledby.

@@ -29,7 +29,7 @@ const selfTest = process.argv.includes('--selftest');
 // ---------------------------------------------------------------------------
 
 /** Lower-cased, unaccented, unpunctuated — the form two names/cities compare in. */
-function normalise(s) {
+function normalize(s) {
 	return (s ?? '')
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
@@ -96,7 +96,7 @@ function dedupeKeys(p) {
 
 	if (p.google_place_id) keys.push(`g:${p.google_place_id.toLowerCase()}`);
 	const { city } = splitCity(p.city);
-	keys.push(`n:${normalise(p.name)}|${normalise(city)}`);
+	keys.push(`n:${normalize(p.name)}|${normalize(city)}`);
 
 	return keys;
 }
@@ -155,7 +155,7 @@ const seen = new Set();
 
 for (const r of existing ?? []) {
 	if (r.google_place_id) seen.add(`g:${r.google_place_id.toLowerCase()}`);
-	seen.add(`n:${normalise(r.name)}|${normalise(r.city)}`);
+	seen.add(`n:${normalize(r.name)}|${normalize(r.city)}`);
 }
 
 console.log(`on record: ${existing?.length ?? 0} places`);
@@ -229,12 +229,12 @@ if (newBeen.length) {
 
 	for (const r of placed) {
 		if (r.google_place_id) idByKey.set(`g:${r.google_place_id.toLowerCase()}`, r.id);
-		idByKey.set(`n:${normalise(r.name)}`, r.id);
+		idByKey.set(`n:${normalize(r.name)}`, r.id);
 	}
 
 	const visits = newBeen
 		.map((p) => {
-			const id = (p.google_place_id && idByKey.get(`g:${p.google_place_id.toLowerCase()}`)) ?? idByKey.get(`n:${normalise(p.name)}`);
+			const id = (p.google_place_id && idByKey.get(`g:${p.google_place_id.toLowerCase()}`)) ?? idByKey.get(`n:${normalize(p.name)}`);
 
 			if (!id) return null;
 			const visitedOn = p.visit_dates?.[0] ?? ((p.ranked_on ?? '').slice(0, 10) || null);

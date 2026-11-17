@@ -50,7 +50,7 @@ create table if not exists public.place_sources (
 	/**
 	 * The name with accents folded, punctuation dropped and case flattened —
 	 * what search matches on. Stored rather than computed per query, because it
-	 * is the indexed column and 30k of them will not normalise themselves.
+	 * is the indexed column and 30k of them will not normalize themselves.
 	 */
 	name_norm   text        not null,
 
@@ -59,7 +59,7 @@ create table if not exists public.place_sources (
 
 	address     text,
 	-- Borough in New York, the equivalent elsewhere; renders as the
-	-- neighbourhood does on a place.
+	-- neighborhood does on a place.
 	locality    text,
 	city        text,
 	region      text,
@@ -89,7 +89,7 @@ create index if not exists place_sources_name_trgm
 	on public.place_sources using gin (name_norm gin_trgm_ops);
 
 create index if not exists place_sources_source_idx on public.place_sources (source);
--- Cheap proximity: the composer ranks by distance from the map's centre, and a
+-- Cheap proximity: the composer ranks by distance from the map's center, and a
 -- personal gazetteer is small enough that a box filter on two btrees beats
 -- adding PostGIS for it.
 create index if not exists place_sources_lat_idx on public.place_sources (lat);

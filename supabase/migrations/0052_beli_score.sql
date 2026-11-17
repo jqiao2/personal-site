@@ -1,6 +1,6 @@
 -- Beli's own 0–10 score, kept on places brought in from a Beli export.
 --
--- The restaurant log's judgement lives on a VISIT: a star rating (0.5–5) and
+-- The restaurant log's judgment lives on a VISIT: a star rating (0.5–5) and
 -- the return verdict (see 0030). Beli's number is a different thing — one
 -- ranking-derived score per place, on a 0–10 scale, computed by their app from
 -- pairwise comparisons rather than assigned. It does not map cleanly onto

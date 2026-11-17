@@ -57,7 +57,7 @@ assert.deepEqual(cutWeek.days.map((d) => d.edgeTop), [false, true, true, true, t
 
 assert.deepEqual(cutWeek.days.map((d) => d.edgeLeft), [false, true, false, false, false, false, false]);
 
-// Only the 1st is labelled, and it says which month it opens.
+// Only the 1st is labeled, and it says which month it opens.
 assert.deepEqual(cutWeek.days.map((d) => d.monthLabel), [null, 'Sep', null, null, null, null, null]);
 
 // A week wholly inside a month carries no seam at all.

@@ -97,8 +97,8 @@ async function fetchRetry(url, opts, tries = 5) {
 // Shared shaping
 // ---------------------------------------------------------------------------
 
-/** The name as the index stores it. Must match the API's normaliser exactly. */
-export function normalise(raw) {
+/** The name as the index stores it. Must match the API's normalizer exactly. */
+export function normalize(raw) {
 	return raw
 		.normalize('NFD')
 		.replace(/[̀-ͯ]/g, '')
@@ -154,7 +154,7 @@ async function fromDohmh() {
 				source: 'dohmh',
 				source_id: r.camis,
 				name: (r.dba ?? '').trim(),
-				name_norm: normalise(r.dba ?? ''),
+				name_norm: normalize(r.dba ?? ''),
 				lat,
 				lng,
 				address: [r.building, r.street].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim() || null,
@@ -191,9 +191,9 @@ const BOROUGHS = { 'NEW YORK': null, KINGS: 'Brooklyn', QUEENS: 'Queens', BRONX:
  *
  * A bagel shop or a deli counter inside a grocery is often licensed by the
  * state as a retail food store, not permitted by the city as a restaurant —
- * so it is on this list and not on the health department's. Only licences
+ * so it is on this list and not on the health department's. Only licenses
  * with food preparation (type C) or a bakery (B) are kept; a bare "A" is a
- * shop with nothing to eat on the spot. One row per licence, already current.
+ * shop with nothing to eat on the spot. One row per license, already current.
  */
 async function fromNys() {
 	const counties = Object.keys(BOROUGHS).map((c) => `'${c}'`).join(',');
@@ -203,7 +203,7 @@ async function fromNys() {
 		`&$where=county in(${counties}) and (estab_type like '%25B%25' or estab_type like '%25C%25') and georeference is not null` +
 		`&$limit=50000`;
 
-	process.stderr.write('  fetching state licences…\n');
+	process.stderr.write('  fetching state licenses…\n');
 	const res = await fetchRetry(url, { headers: { accept: 'application/json' } });
 
 	if (!res.ok) throw new Error(`data.ny.gov answered ${res.status}`);
@@ -218,7 +218,7 @@ async function fromNys() {
 				source: 'nys',
 				source_id: r.license_number,
 				name,
-				name_norm: normalise(name),
+				name_norm: normalize(name),
 				lat: Number(lat),
 				lng: Number(lng),
 				// Street names carry stray filler ("CROPSEY AVE ###").
@@ -355,7 +355,7 @@ async function fromOverture() {
 			source: 'overture',
 			source_id: String(r.id),
 			name: String(r.name).trim(),
-			name_norm: normalise(String(r.name)),
+			name_norm: normalize(String(r.name)),
 			lat: Number(r.lat),
 			lng: Number(r.lng),
 			address: r.address ?? null,
@@ -415,7 +415,7 @@ async function fromFoursquare() {
 			source: 'foursquare',
 			source_id: String(x.fsq_place_id),
 			name: String(x.name).trim(),
-			name_norm: normalise(String(x.name)),
+			name_norm: normalize(String(x.name)),
 			lat: Number(x.lat),
 			lng: Number(x.lng),
 			address: x.address ?? null,

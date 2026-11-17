@@ -56,7 +56,7 @@ export function spineHeight(id: number | string): number {
 /**
  * Surnames that are two words. Not exhaustive and never will be — it covers the
  * particles common enough to be worth catching, and anything it misses prints
- * the last word, which is wrong in the same way a library catalogue is wrong.
+ * the last word, which is wrong in the same way a library catalog is wrong.
  */
 const PARTICLE = /^(le|la|de|del|della|da|van|von|du|den|der|ten|ter|di|st\.?|bin|ibn|mac|mc|o')$/i;
 
@@ -140,7 +140,7 @@ function spineType(width: number, height: number, title: string, author: string)
 
 /**
  * What a series or edition note adds in parentheses — "(Dune Chronicles, #1)",
- * "(Penguin Classics)" — is catalogue apparatus rather than the book's name, and
+ * "(Penguin Classics)" — is catalog apparatus rather than the book's name, and
  * on a spine it crowds out the name itself. The tooltip keeps the whole title.
  */
 function stripParentheticals(title: string): string {

@@ -70,7 +70,7 @@ function toLocal(d: Date): string {
 }
 
 /** `date` shifted by `n` days (negative to go backward). Crosses month/year
- * boundaries correctly because `Date#setDate` normalises the whole object. */
+ * boundaries correctly because `Date#setDate` normalizes the whole object. */
 export function addDays(date: string, n: number): string {
 	const d = parseLocal(date);
 	d.setDate(d.getDate() + n);

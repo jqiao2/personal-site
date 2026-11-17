@@ -55,7 +55,7 @@ export interface SkiSegment {
 	seconds: number;
 	startAlt: number;
 	endAlt: number;
-	/** Metres descended (runs) or climbed (lifts), always positive. 0 for idle. */
+	/** Meters descended (runs) or climbed (lifts), always positive. 0 for idle. */
 	vertical: number;
 	distanceM: number | null;
 	/** Average ground speed over the segment (distance ÷ time), m/s. Averaged
@@ -79,8 +79,8 @@ export interface SkiSummary {
 }
 
 // Tuned against this archive's Slopes/Strava exports (see ski.test.mjs). All in
-// metres/seconds. NOISE is the altitude wiggle ignored before a reversal counts
-// as a real turn (GPS/baro noise on these files runs a few metres); MIN_*_M are
+// meters/seconds. NOISE is the altitude wiggle ignored before a reversal counts
+// as a real turn (GPS/baro noise on these files runs a few meters); MIN_*_M are
 // how much net vertical a segment needs before it's a real run or lift rather
 // than a traverse or a mid-station bump.
 const NOISE_M = 8;
@@ -92,7 +92,7 @@ const MIN_LIFT_M = 25;
 const SMOOTH_WINDOW_S = 15;
 
 /** Centered moving average of `values` over a ±window/2 second window, so a
- *  handful of noisy metres don't register as a turn. Two-pointer, O(n). */
+ *  handful of noisy meters don't register as a turn. Two-pointer, O(n). */
 function smoothOverTime(values: number[], time: number[], windowS: number): number[] {
 	const n = values.length;
 	const out = new Array<number>(n);
@@ -234,7 +234,7 @@ function overrideRawSegments(streams: SkiStreams, override: SkiSegmentOverride[]
 	return raw;
 }
 
-/** Merge neighbouring segments of the same type into one. This is what turns a
+/** Merge neighboring segments of the same type into one. This is what turns a
  *  reclassification into a merge: relabel the idle sitting between two runs and
  *  the three collapse into a single run, on screen and in the score. */
 function coalesce(raw: RawSegment[]): RawSegment[] {

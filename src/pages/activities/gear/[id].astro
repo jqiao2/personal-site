@@ -84,7 +84,7 @@ const subtitle =
 			: '';
 
 // The gear's own start date if it's known; otherwise the earliest activity
-// tagged to it, which is a floor and is labelled as one.
+// tagged to it, which is a floor and is labeled as one.
 const start = gear.first_used_on ?? use.firstDate;
 
 const startIsFloor = !gear.first_used_on && !!use.firstDate;
@@ -677,7 +677,7 @@ function usedText(w: ComponentWear): string {
 			font-size: 11.5px;
 			color: var(--granite-soft);
 		}
-		/* An overridden window is marked, not recoloured — a reader comparing two
+		/* An overridden window is marked, not recolored — a reader comparing two
 		   chains has to know one is being judged against a different ruler, but
 		   that fact is a footnote, not a status. */
 		.part__own {

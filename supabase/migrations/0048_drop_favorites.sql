@@ -1,11 +1,11 @@
 -- Drop the per-section "favorites" feature. It is replaced by cross-section
 -- pinned journal entries (journal_pins, migration 0047), so the three
--- favourite columns and everything hanging off them come out here.
+-- favorite columns and everything hanging off them come out here.
 --
 -- APPLY THIS ONLY AFTER the code that stops reading these columns is deployed.
 -- The columns are additive-safe to keep around, so the new code runs fine while
 -- they still exist; dropping them before the new code is live would break the
--- old code's favourites queries. Order: deploy, then apply.
+-- old code's favorites queries. Order: deploy, then apply.
 --
 -- Two of the three columns are exposed through a view, and a view built with
 -- `select r.*` / an explicit column list depends on the column by name — so the

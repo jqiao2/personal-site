@@ -109,10 +109,10 @@ function stars(rating: number): string {
 }
 
 /**
- * A colour for the book, derived from its title.
+ * A color for the book, derived from its title.
  *
- * Real books have no cover colour on file, and the hero wash needs one. Hashing
- * the title means the same book is the same colour on every render and two
+ * Real books have no cover color on file, and the hero wash needs one. Hashing
+ * the title means the same book is the same color on every render and two
  * books are rarely the same — decorative, but consistently so.
  */
 function bookHue(title: string): string {
@@ -417,7 +417,7 @@ function readDates(from: string, to: string): string {
  *
  * Names with no role in brackets are dropped rather than guessed at. An export
  * carries plenty of them — Frankenstein lists Lord Byron and Mary
- * Wollstonecraft as bare names — and printing an unlabelled name under a byline
+ * Wollstonecraft as bare names — and printing an unlabeled name under a byline
  * reads as a claim about authorship that nothing here can support.
  */
 function buildContributorLine(contributors: string[]): string | null {
@@ -596,7 +596,7 @@ export function buildBookPage(input: BookPageInput): BookPageView {
 							// Said on the square itself, because this is the only page on the
 							// site that draws one — a reader comparing it against the shelf
 							// grid should not have to guess why the day is missing there.
-							(light ? ' · too little to count towards the day' : '')
+							(light ? ' · too little to count toward the day' : '')
 						: ' · nothing read'),
 				level: record && !light ? heatLevel(record.pages, maxPages) : 0,
 				read: !!record,

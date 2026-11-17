@@ -91,12 +91,12 @@ create table public.activity_streams_packed (
 	time_s_packed     int[],  -- seconds          x1
 	lat_packed        int[],  -- degrees          x1e6
 	lng_packed        int[],  -- degrees          x1e6
-	altitude_m_packed int[],  -- metres           x10
-	distance_m_packed int[],  -- metres           x10
+	altitude_m_packed int[],  -- meters           x10
+	distance_m_packed int[],  -- meters           x10
 	heartrate_packed  int[],  -- bpm              x1
 	cadence_packed    int[],  -- rpm / spm        x1
 	power_w_packed    int[],  -- watts            x1
-	speed_ms_packed   int[],  -- metres/second    x100
+	speed_ms_packed   int[],  -- meters/second    x100
 	temp_c_packed     int[],  -- °C               x10
 	grade_packed      int[],  -- percent          x100
 	moving            boolean[]

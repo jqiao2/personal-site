@@ -31,7 +31,7 @@ import {
 	monthOf,
 	monthQuery,
 	parseMonthKey,
-	summarise,
+	summarize,
 	weekRows,
 	type MonthBook,
 } from '../../../lib/reading-month-view';
@@ -107,7 +107,7 @@ const initial = geometry[geometryKey(aspect.id, summaryOn, hoursOn)];
 
 const cells = buildCells(key, month.days, books, finished);
 
-const figures = summarise(key, month.days, finishedThisMonth.size);
+const figures = summarize(key, month.days, finishedThisMonth.size);
 
 const label = monthLabel(key);
 
@@ -607,7 +607,7 @@ const clientData = JSON.stringify({
 		width: var(--cell);
 		height: calc(var(--cell) * 1.5);
 	}
-	/* Hovering fans the stack open and lifts it over its neighbours. Screen only. */
+	/* Hovering fans the stack open and lifts it over its neighbors. Screen only. */
 	.cell:hover {
 		z-index: 30;
 		--fan: 2.4;

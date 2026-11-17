@@ -69,12 +69,12 @@ const joined = (out) => {
 }
 
 // 4. An express 10 m off its local (separate tracks, one bundle) is drawn on
-//    one shared centreline, so the slots fan both from the same line.
+//    one shared centerline, so the slots fan both from the same line.
 {
   const out = sectionLines([line("4", 1, 2, [[0, 10], [1000, 10]]), line("6", 1, 2, [[0, 0], [1000, 0]])], ["4", "6"]);
   const y = (id) => out[id][0].pts[Math.floor(out[id][0].pts.length / 2)][1];
 
-  assert.ok(Math.abs(y("4|1|2") - y("6|1|2")) < 0.5, `one centreline: ${y("4|1|2")} vs ${y("6|1|2")}`);
+  assert.ok(Math.abs(y("4|1|2") - y("6|1|2")) < 0.5, `one centerline: ${y("4|1|2")} vs ${y("6|1|2")}`);
 }
 
 // 5. One straight with different mates at each end: the F runs with the G from

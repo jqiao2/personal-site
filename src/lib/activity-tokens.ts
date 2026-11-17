@@ -25,10 +25,10 @@
 // graniteSoft, which is what makes the blue legible as an answer instead of as
 // decoration.
 //
-// WHY A SPORT IS A MARK AND A WORD, NOT A COLOUR. Strava's own history is the
-// warning here: give every sport family its own chip colour and by the time
+// WHY A SPORT IS A MARK AND A WORD, NOT A COLOR. Strava's own history is the
+// warning here: give every sport family its own chip color and by the time
 // you've added gravel rides, virtual rides and indoor trainers to cycling
-// alone, the legend is longer than the map. Colour in this palette is reserved
+// alone, the legend is longer than the map. Color in this palette is reserved
 // for *meaning* — water is glacier, land effort is fir, danger-zone exertion is
 // alpenglow — so it stays a small, memorable vocabulary instead of growing one
 // swatch per taxonomy entry. A sport says what it is with an icon and a label,
@@ -37,9 +37,9 @@
 // WHY ELEVATION IS TERRAIN, NOT A CHART. A line chart of altitude over time
 // asks the reader to do arithmetic — rise over run, translated back into "was
 // that steep." A filled silhouette in `fir` over a `scree` ground reads the
-// way the actual climb felt: a shape you recognise as a hill before you've
+// way the actual climb felt: a shape you recognize as a hill before you've
 // consciously parsed a single axis. Fills over lines, everywhere elevation
-// appears, for the same reason a topo map shades slope instead of labelling it.
+// appears, for the same reason a topo map shades slope instead of labeling it.
 import { formatStat, sportMeta, type StatRow } from './sports';
 
 export const ALPINE = {
@@ -52,7 +52,7 @@ export const ALPINE = {
 	lakeDeep: '#12495e', // hover/pressed, and the deep end of a gradient
 	glacier: '#8fd0d8', // a second cold tone: water fills, swim sports
 	fir: '#3f6b52', // subalpine fir — hikes, trails, elevation fills
-	larch: '#d99a3a', // the one warm note. Autumn larch. PRs, favourites, peaks.
+	larch: '#d99a3a', // the one warm note. Autumn larch. PRs, favorites, peaks.
 	scree: '#c9d4dc', // hairlines, borders, empty grid cells
 	alpenglow: '#c96f5e', // reserved for maximum-exertion marks only
 } as const;
@@ -72,7 +72,7 @@ export const EXERTION_SCALE = [
 	{ max: Infinity, label: 'brutal' as const, ink: 'alpenglow' as const },
 ];
 
-/** The visual weight for an exertion score: a colour from ALPINE. */
+/** The visual weight for an exertion score: a color from ALPINE. */
 export function exertionInk(score: number | null | undefined): AlpineColor {
 	const bucket = EXERTION_SCALE.find((b) => (score ?? 0) < b.max) ?? EXERTION_SCALE[EXERTION_SCALE.length - 1];
 

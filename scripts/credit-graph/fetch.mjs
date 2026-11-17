@@ -157,7 +157,7 @@ const DISCOVER_CONCURRENCY = 12;
  * single year comes near 10k films — plus one unsliced vote_count sweep, which
  * catches films TMDB has no release date for and backstops any year-slicing gap.
  *
- * Two phases so the whole thing parallelises: fetch every slice's page 1 to learn
+ * Two phases so the whole thing parallelizes: fetch every slice's page 1 to learn
  * its page count, then fetch all remaining pages at once. Sequentially this is
  * ~1,650 round-trips (~14 minutes); pooled it is well under two.
  */
