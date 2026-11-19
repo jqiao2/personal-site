@@ -1,0 +1,155 @@
+---
+// MTA Savant leaderboards: every subway line and bus route over the last 12
+// months, each cell shaded by percentile. Static — built from data.ny.gov at
+// deploy time.
+import Layout from '../../../layouts/Layout.astro';
+import MtaBullet from '../../../components/MtaBullet.astro';
+import { MODES, leaderboard } from '../../../lib/mta-savant-view';
+
+const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await leaderboard(mode)) })));
+---
+
+<Layout title="MTA Savant" wide>
+	<h1>MTA Savant</h1>
+	<p class="sub">
+		Every subway line and bus route, last 12 months through {boards[0].latest}. Shaded by percentile, <span class="poor">poor</span> to <span class="great">great</span>. Click a column to sort.
+	</p>
+
+	{
+		boards.map((b) => (
+			<section>
+				<h2>{b.mode === 'subway' ? 'Subway' : 'Bus'}</h2>
+				<div class="scroll">
+					<table class="stats" data-sortable>
+						<thead>
+							<tr>
+								<th>{b.mode === 'subway' ? 'Line' : 'Route'}</th>
+								{b.metricLabels.map((l, i) => (
+									<th>
+										<button type="button" data-col={i + 1}>
+											{l}
+										</button>
+									</th>
+								))}
+							</tr>
+						</thead>
+						<tbody>
+							{b.rows.map((r) => (
+								<tr>
+									<th>
+										<a href={`/projects/mta-savant/${b.mode}/${r.line.slug}`}>
+											<MtaBullet line={r.line} />
+											{b.mode === 'bus' && <span class="name">{r.line.name}</span>}
+										</a>
+									</th>
+									{r.cells.map((c) =>
+										c ? (
+											<td data-v={c.pct} style={`background:${c.color};color:${c.ink}`}>
+												{c.text}
+											</td>
+										) : (
+											<td data-v="-1">—</td>
+										)
+									)}
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		))
+	}
+
+	<p class="sub">
+		Source: MTA performance datasets on <a href="https://data.ny.gov/">data.ny.gov</a>. Modeled after
+		<a href="https://baseballsavant.mlb.com/">Baseball Savant</a>.
+	</p>
+</Layout>
+
+<script>
+	// Sort a leaderboard by a column's percentile, best first.
+	for (const table of document.querySelectorAll<HTMLTableElement>('[data-sortable]')) {
+		table.tHead!.addEventListener('click', (e) => {
+			// SAFETY: a click inside the thead always targets an element, never a text node.
+			const col = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-col]')?.dataset.col;
+
+			if (!col) return;
+			const body = table.tBodies[0];
+			const v = (tr: HTMLTableRowElement) => Number(tr.cells[Number(col)].dataset.v);
+			body.append(...[...body.rows].sort((a, b) => v(b) - v(a)));
+		});
+	}
+</script>
+
+<style>
+	h2 {
+		font-size: 1.15rem;
+		margin: 2rem 0 0.5rem;
+	}
+	.sub {
+		font-family: var(--sans);
+		font-size: 0.85rem;
+		color: var(--ink-soft);
+	}
+	.poor {
+		color: rgb(53, 97, 173);
+	}
+	.great {
+		color: rgb(215, 33, 41);
+	}
+	.scroll {
+		overflow-x: auto;
+		max-height: 80vh;
+		overflow-y: auto;
+	}
+	.stats {
+		border-collapse: collapse;
+		font-family: var(--sans);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+		width: 100%;
+	}
+	.stats th,
+	.stats td {
+		padding: 0.3rem 0.6rem;
+		text-align: right;
+		border-bottom: 1px solid var(--rule-soft);
+		white-space: nowrap;
+	}
+	.stats thead th {
+		position: sticky;
+		top: 0;
+		background: var(--paper);
+		border-bottom: 2px solid var(--rule);
+		vertical-align: bottom;
+		white-space: normal;
+	}
+	.stats thead button {
+		font: inherit;
+		font-weight: 600;
+		color: inherit;
+		background: none;
+		border: 0;
+		padding: 0;
+		cursor: pointer;
+		text-align: right;
+	}
+	.stats thead button:hover {
+		color: var(--link);
+	}
+	.stats tbody th {
+		text-align: left;
+	}
+	.stats tbody th a {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		text-decoration: none;
+	}
+	.name {
+		font-weight: 400;
+		max-width: 16rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+</style>

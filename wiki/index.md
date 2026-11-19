@@ -44,3 +44,4 @@ add or update a pattern.
 | [0036](patterns/0036-crlf-breaks-scripted-string-edits.md) | Scripted string edits miss in CRLF files | failure-mode | editing source with a node/sed script, especially a multi-line match |
 | [0037](patterns/0037-playwright-hangs-after-html5-drag.md) | Playwright navigation hangs after an HTML5 `dragTo` | failure-mode | driving native drag and drop with Playwright, then navigating |
 | [0038](patterns/0038-zod-4-nested-defaults-need-prefault.md) | Zod 4: nested defaults need `.prefault({})`; coerce in a pipe needs `<string>` | failure-mode | an `astro/zod` schema fills a stored blob with defaults, or pipes form strings into `z.coerce.number()` |
+| [0039](patterns/0039-mta-open-data-per-line-metrics.md) | MTA per-line metrics from data.ny.gov | strategy | pulling MTA subway/bus performance by line/route, or a line's history splits around Sep 2024 |
