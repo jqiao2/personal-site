@@ -384,6 +384,11 @@ const { line } = page;
 			grid-template-columns: 3.75rem 1fr 4.25rem;
 			column-gap: 0.45rem;
 		}
+		/* "Wait Value" and friends take two lines rather than a wider column. */
+		.label {
+			white-space: normal;
+			line-height: 1.1;
+		}
 	}
 
 	.key {
