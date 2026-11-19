@@ -35,3 +35,7 @@
   `agency = 'NYCT Subway' and update_number = 0` to count each incident once.
   Alerts use GTFS ids (H = Rockaway shuttle, 6X/7X/FX = express variants) and lag
   the other datasets by a couple of months.
+- Wait/Ride/Net Value (`src/lib/mta-savant-value.ts`) are run-value analogues:
+  (rider-weighted mode average − line's per-rider extra minutes) × riders ÷ 60 =
+  rider-hours/month above average. Each mode sums to zero; check that after any
+  change to the rates or the riders series.

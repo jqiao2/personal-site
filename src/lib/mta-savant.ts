@@ -474,7 +474,7 @@ export function trailing(ds: Dataset) {
 export const inYear = (year: number) => (month: string) => month.startsWith(`${year}-`);
 
 // ponytail: O(n²) per metric, memoized so 350 bus pages pay it once per window.
-const memo = new Map<string, Map<string, { value: number; pct: number; rank: number; of: number }>>();
+const memo = new Map<string, Ranked>();
 
 /**
  * Percentile rank, 0–100, where 100 is best: the share of other lines this one beats.
@@ -491,11 +491,23 @@ export function percentiles(ds: Dataset, key: string, window: string, pick: (mon
 		.map((l) => ({ id: l.id, v: valueOf(ds, l.id, key, pick) }))
 		.filter((x): x is { id: string; v: number } => x.v !== null);
 
-	const out = new Map<string, { value: number; pct: number; rank: number; of: number }>();
+	const out = rank(vals, metric.higherIsBetter);
+
+	memo.set(memoKey, out);
+
+	return out;
+}
+
+export type Ranked = Map<string, { value: number; pct: number; rank: number; of: number }>;
+
+/** Rank a field of lines by value; percentile is the share of the others each one beats. */
+export function rank(vals: { id: string; v: number }[], higherIsBetter: boolean): Ranked {
+	const out: Ranked = new Map();
 
 	for (const x of vals) {
-		const beaten = vals.filter((o) => (metric.higherIsBetter ? o.v < x.v : o.v > x.v)).length;
-		const better = vals.filter((o) => (metric.higherIsBetter ? o.v > x.v : o.v < x.v)).length;
+		const beaten = vals.filter((o) => (higherIsBetter ? o.v < x.v : o.v > x.v)).length;
+		const better = vals.filter((o) => (higherIsBetter ? o.v > x.v : o.v < x.v)).length;
+
 		out.set(x.id, {
 			value: x.v,
 			pct: vals.length > 1 ? Math.round((100 * beaten) / (vals.length - 1)) : 50,
@@ -503,8 +515,6 @@ export function percentiles(ds: Dataset, key: string, window: string, pick: (mon
 			of: vals.length,
 		});
 	}
-
-	memo.set(memoKey, out);
 
 	return out;
 }

@@ -12,6 +12,7 @@ import {
 	type Line,
 	type Mode,
 } from './mta-savant';
+import { VALUE_STATS, formatValue, values } from './mta-savant-value';
 
 export const MODES: Mode[] = ['subway', 'bus'];
 
@@ -103,6 +104,22 @@ export async function linePage(mode: Mode, slug: string) {
 	const line = ds.lines.find((l) => l.slug === slug)!;
 	const window = trailing(ds);
 
+	// Savant opens with Value (batting, baserunning run value); so does this.
+	const valueRows = VALUE_STATS.map((v) => {
+		const p = values(ds, v.key, 'trailing', window).get(line.id);
+
+		return {
+			group: 'Value',
+			abbr: v.label,
+			label: v.title,
+			value: p ? formatValue(p.value) : '—',
+			pct: p?.pct ?? null,
+			rank: p ? `${p.rank} of ${p.of}` : '',
+			color: p ? pctColor(p.pct) : '',
+			ink: p ? pctInk(p.pct) : '',
+		};
+	});
+
 	const rankings = ds.metrics.map((m) => {
 		const p = percentiles(ds, m.key, 'trailing', window).get(line.id);
 
@@ -141,10 +158,13 @@ export async function linePage(mode: Mode, slug: string) {
 		latest: monthLabel(ds.latest),
 		columns: ds.metrics.map((m) => ({ abbr: m.abbr, label: m.label })),
 		// Savant's sections: one heading per group, in the order metrics first name them.
-		rankingGroups: [...new Set(rankings.map((r) => r.group))].map((name) => ({
-			name,
-			rows: rankings.filter((r) => r.group === name),
-		})),
+		rankingGroups: [
+			{ name: 'Value', rows: valueRows },
+			...[...new Set(rankings.map((r) => r.group))].map((name) => ({
+				name,
+				rows: rankings.filter((r) => r.group === name),
+			})),
+		],
 		table,
 		trends: ds.metrics.map((m) => trend(ds, line.id, m.key)).filter((t): t is Trend => t !== null),
 		// 350-odd bus routes is too many to list; keep to the same prefix (B, BX, Q, SIM...).
