@@ -1,0 +1,31 @@
+/* MTA Savant follows the subway's own graphic standards (Vignelli and Noorda's
+   1970 NYCTA manual): Helvetica, bold type under the heavy rule that tops every
+   sign (the black band, inverted), and a plain white page. Imported only by the
+   /projects/mta-savant pages, so these globals stay on them. */
+
+html:root {
+	--serif: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+	--sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: light) {
+	html:root {
+		--paper: #fff;
+		--card: #f6f6f6;
+		--ink: #000;
+		--ink-soft: #595959;
+		--rule: #cfcfcf;
+		--rule-soft: #e4e4e4;
+	}
+}
+
+/* A sign, inverted: page-colored band, ink Helvetica, the heavy rule across its top. */
+.sign {
+	color: var(--ink);
+	font-family: var(--sans);
+	font-weight: 700;
+	letter-spacing: -0.01em;
+	line-height: 1.15;
+	padding: 0.45rem 0 0.35rem;
+	border-top: 4px solid var(--ink);
+}

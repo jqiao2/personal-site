@@ -2,6 +2,7 @@
 // MTA Savant leaderboards: every subway line and bus route over the last 12
 // months, each cell shaded by percentile. Static — built from data.ny.gov at
 // deploy time.
+import '../../../styles/mta.css';
 import Layout from '../../../layouts/Layout.astro';
 import MtaBullet from '../../../components/MtaBullet.astro';
 import { MODES, leaderboard } from '../../../lib/mta-savant-view';
@@ -10,7 +11,7 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 ---
 
 <Layout title="MTA Savant" wide>
-	<h1>MTA Savant</h1>
+	<h1 class="sign">MTA Savant</h1>
 	<p class="sub">
 		Every subway line and bus route, last 12 months through {boards[0].latest}. Shaded by percentile, <span class="poor">poor</span> to <span class="great">great</span>. Click a column to sort.
 	</p>
@@ -18,7 +19,7 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 	{
 		boards.map((b) => (
 			<section>
-				<h2>{b.mode === 'subway' ? 'Subway' : 'Bus'}</h2>
+				<h2 class="sign">{b.mode === 'subway' ? 'Subway' : 'Bus'}</h2>
 				<div class="scroll">
 					<table class="stats" data-sortable>
 						<thead>

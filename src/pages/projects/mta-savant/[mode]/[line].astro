@@ -2,6 +2,7 @@
 // One line's page, Baseball Savant player-page style: percentile rankings for the
 // trailing 12 months, a year-by-year table and monthly trends against the
 // field's median. Static — built from data.ny.gov at deploy time.
+import '../../../../styles/mta.css';
 import Layout from '../../../../layouts/Layout.astro';
 import MtaBullet from '../../../../components/MtaBullet.astro';
 import { loadDataset, type Mode } from '../../../../lib/mta-savant';
@@ -24,7 +25,7 @@ const { line } = page;
 <Layout title={`${line.short} · MTA Savant`} wide>
 	<p class="crumb"><a href="/projects/mta-savant">MTA Savant</a> / {mode === 'subway' ? 'Subway' : 'Bus'}</p>
 
-	<header class="hero">
+	<header class="hero sign">
 		<MtaBullet line={line} size="lg" />
 		<div>
 			<h1>{line.name}</h1>
@@ -34,7 +35,7 @@ const { line } = page;
 
 	<div class="grid">
 		<section>
-			<h2>Percentile rankings</h2>
+			<h2 class="sign">Percentile rankings</h2>
 			<p class="sub">Last 12 months, against every {mode === 'subway' ? 'line' : 'route'}</p>
 			<div class="savant">
 				<div class="row scalehead" aria-hidden="true">
@@ -49,7 +50,7 @@ const { line } = page;
 				{
 					page.rankingGroups.map((g) => (
 						<>
-							<h3 class="group">{g.name}</h3>
+							<h3 class="group sign">{g.name}</h3>
 							<ul class="ranks">
 								{g.rows.map((r) => (
 									<li class="row">
@@ -79,7 +80,7 @@ const { line } = page;
 		</section>
 
 		<section>
-			<h2>Trends</h2>
+			<h2 class="sign">Trends</h2>
 			<p class="sub">Monthly, <span class="key own" style={`background:${line.color}`}></span> this {mode === 'subway' ? 'line' : 'route'} vs <span class="key median"></span> median</p>
 			<div class="trends">
 				{
@@ -122,7 +123,7 @@ const { line } = page;
 	</div>
 
 	<section>
-		<h2>By year</h2>
+		<h2 class="sign">By year</h2>
 		<div class="scroll">
 			<table class="stats">
 				<thead>
@@ -232,12 +233,14 @@ const { line } = page;
 		display: flex;
 		align-items: center;
 		gap: 1.25rem;
-		padding: 1rem 0 1.5rem;
-		border-bottom: 1px solid var(--rule);
-		margin-bottom: 1.5rem;
+		padding: 0.9rem 0 0.75rem;
+		margin: 0.75rem 0 1.75rem;
 	}
 	.hero h1 {
 		margin: 0;
+	}
+	.hero .meta {
+		font-weight: 400;
 	}
 	.meta,
 	.sub {
@@ -247,8 +250,8 @@ const { line } = page;
 		margin: 0;
 	}
 	h2 {
-		font-size: 1.15rem;
-		margin: 0 0 0.15rem;
+		font-size: 1.1rem;
+		margin: 0 0 0.4rem;
 	}
 	.grid {
 		display: grid;
@@ -268,18 +271,17 @@ const { line } = page;
 		--great: rgb(215, 33, 41);
 		--avg: rgb(140, 170, 178);
 		--poor: rgb(53, 97, 173);
-		--teal: #5b8f97;
 		font-family: var(--sans);
 		margin-top: 0.75rem;
 	}
 	.row {
 		display: grid;
-		grid-template-columns: 6.5rem 1fr 5.5rem;
+		grid-template-columns: 5rem 1fr 5rem;
 		align-items: center;
 		column-gap: 0.6rem;
 	}
 	.scalehead {
-		font-size: 0.8rem;
+		font-size: 0.7rem;
 		text-transform: uppercase;
 		letter-spacing: 0.02em;
 	}
@@ -307,20 +309,17 @@ const { line } = page;
 		color: var(--great);
 	}
 	.group {
-		font-size: 1.2rem;
-		font-weight: 700;
-		margin: 1rem 0 0.35rem;
-		padding-bottom: 0.2rem;
-		border-bottom: 3px solid var(--teal);
+		font-size: 0.9rem;
+		margin: 0.9rem 0 0.3rem;
 	}
 	.ranks {
 		list-style: none;
 		padding: 0;
 		margin: 0;
-		font-size: 0.95rem;
+		font-size: 0.85rem;
 	}
 	.ranks li {
-		height: 2.6rem;
+		height: 1.9rem;
 	}
 	.label,
 	.value {
@@ -329,7 +328,7 @@ const { line } = page;
 		align-items: center;
 		justify-content: flex-end;
 		text-align: right;
-		border-bottom: 1px dashed var(--teal);
+		border-bottom: 1px solid var(--rule);
 		white-space: nowrap;
 	}
 	.ranks li:last-child .label,
@@ -341,9 +340,9 @@ const { line } = page;
 	}
 	.bar {
 		position: relative;
-		height: 2.2rem;
+		height: 1.45rem;
 		/* The track: a thin rule through the middle, the full width. */
-		background: linear-gradient(var(--rule), var(--rule)) 0 50% / 100% 0.45rem no-repeat;
+		background: linear-gradient(var(--rule), var(--rule)) 0 50% / 100% 0.3rem no-repeat;
 	}
 	.fill {
 		position: absolute;
@@ -365,18 +364,26 @@ const { line } = page;
 	.dot {
 		position: absolute;
 		top: 50%;
-		left: clamp(1.2rem, var(--p), calc(100% - 1.2rem));
+		left: clamp(0.85rem, var(--p), calc(100% - 0.85rem));
 		transform: translate(-50%, -50%);
-		width: 2.4rem;
-		height: 2.4rem;
+		width: 1.7rem;
+		height: 1.7rem;
 		border-radius: 999px;
 		display: grid;
 		place-items: center;
 		background: var(--c);
-		border: 3px solid #fff;
-		font-size: 1rem;
+		border: 2px solid #fff;
+		font-size: 0.75rem;
 		font-weight: 700;
 		z-index: 1;
+	}
+
+	/* Phones: give the bar more of the width. */
+	@media (max-width: 600px) {
+		.row {
+			grid-template-columns: 3.75rem 1fr 4.25rem;
+			column-gap: 0.45rem;
+		}
 	}
 
 	.key {
