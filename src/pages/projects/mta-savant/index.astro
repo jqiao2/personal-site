@@ -19,6 +19,9 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 		boards.map((b) => (
 			<section>
 				<h2>{b.mode === 'subway' ? 'Subway' : 'Bus'}</h2>
+				{b.mode === 'bus' && (
+					<input type="search" class="search" data-search placeholder="Route or neighborhood" aria-label="Search bus routes" />
+				)}
 				<div class="scroll">
 					<table class="stats" data-sortable>
 						<thead>
@@ -67,16 +70,55 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 </Layout>
 
 <script>
-	// Sort a leaderboard by a column's percentile, best first.
+	// Sort a leaderboard by a column's percentile. Clicking the same column cycles
+	// best first → worst first → the original order; a new column starts at best first.
+	// Lines with no value for the column stay at the bottom either way.
 	for (const table of document.querySelectorAll<HTMLTableElement>('[data-sortable]')) {
+		const body = table.tBodies[0];
+		const original = [...body.rows];
+
 		table.tHead!.addEventListener('click', (e) => {
 			// SAFETY: a click inside the thead always targets an element, never a text node.
-			const col = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-col]')?.dataset.col;
+			const button = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-col]');
 
-			if (!col) return;
-			const body = table.tBodies[0];
-			const v = (tr: HTMLTableRowElement) => Number(tr.cells[Number(col)].dataset.v);
-			body.append(...[...body.rows].sort((a, b) => v(b) - v(a)));
+			if (!button) return;
+
+			const th = button.parentElement!;
+			const was = th.getAttribute('aria-sort');
+			const dir = was === 'descending' ? 'ascending' : was === 'ascending' ? 'none' : 'descending';
+
+			for (const other of table.tHead!.querySelectorAll('th[aria-sort]')) other.removeAttribute('aria-sort');
+
+			if (dir === 'none') {
+				body.append(...original);
+
+				return;
+			}
+
+			th.setAttribute('aria-sort', dir);
+
+			const col = Number(button.dataset.col);
+			const v = (tr: HTMLTableRowElement) => Number(tr.cells[col].dataset.v);
+			const sign = dir === 'descending' ? 1 : -1;
+
+			body.append(
+				...[...body.rows].sort((a, b) => {
+					if (v(a) < 0 || v(b) < 0) return v(b) - v(a);
+
+					return sign * (v(b) - v(a));
+				})
+			);
+		});
+	}
+
+	// Bus search: hide rows whose route id and name don't contain the query.
+	for (const input of document.querySelectorAll<HTMLInputElement>('[data-search]')) {
+		const rows = [...input.parentElement!.querySelectorAll('tbody tr')];
+
+		input.addEventListener('input', () => {
+			const q = input.value.trim().toLowerCase();
+
+			for (const tr of rows) tr.toggleAttribute('hidden', !tr.cells[0].textContent!.toLowerCase().includes(q));
 		});
 	}
 </script>
@@ -96,6 +138,18 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 	}
 	.great {
 		color: rgb(215, 33, 41);
+	}
+	.search {
+		font: inherit;
+		font-family: var(--sans);
+		font-size: 0.9rem;
+		width: min(100%, 20rem);
+		padding: 0.35rem 0.55rem;
+		margin-bottom: 0.5rem;
+		background: var(--card);
+		color: var(--ink);
+		border: 1px solid var(--rule);
+		border-radius: 4px;
 	}
 	.scroll {
 		overflow-x: auto;
@@ -136,6 +190,15 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 	}
 	.stats thead button:hover {
 		color: var(--link);
+	}
+	.stats th[aria-sort] button {
+		color: var(--link);
+	}
+	.stats th[aria-sort='descending'] button::after {
+		content: ' ▼';
+	}
+	.stats th[aria-sort='ascending'] button::after {
+		content: ' ▲';
 	}
 	.stats tbody th {
 		text-align: left;
