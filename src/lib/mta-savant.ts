@@ -28,6 +28,8 @@ export interface Metric {
 	/** Baseball-style column name: w = rider-weighted, % = rate, /1K like K/9. */
 	abbr: string;
 	label: string;
+	/** Section of the percentile rankings, like Savant's Batting / Running. */
+	group: string;
 	higherIsBetter: boolean;
 	format: (v: number) => string;
 	num: Series;
@@ -50,6 +52,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 	subway: [
 		{
 			key: 'riders',
+			group: 'Ridership',
 			abbr: 'RID',
 			label: 'Riders per month',
 			higherIsBetter: true,
@@ -58,6 +61,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'wait',
+			group: 'Reliability',
 			abbr: 'WA%',
 			label: 'Wait assessment: share of gaps between trains that stay close to the scheduled gap',
 			higherIsBetter: true,
@@ -67,6 +71,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'otp',
+			group: 'Reliability',
 			abbr: 'OTP%',
 			label: 'Terminal on-time performance',
 			higherIsBetter: true,
@@ -76,6 +81,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'delivered',
+			group: 'Reliability',
 			abbr: 'SD%',
 			label: 'Service delivered: trains run of trains scheduled, peak',
 			higherIsBetter: true,
@@ -85,6 +91,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'cjtp',
+			group: 'Journey',
 			abbr: 'wJT%',
 			label: 'Weighted journey time: rides within 5 minutes of schedule, weighted by riders',
 			higherIsBetter: true,
@@ -94,6 +101,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'apt',
+			group: 'Journey',
 			abbr: 'wAPT',
 			label: 'Additional platform time: minutes per rider spent waiting beyond schedule',
 			higherIsBetter: false,
@@ -103,6 +111,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'att',
+			group: 'Journey',
 			abbr: 'wATT',
 			label: 'Additional train time: minutes per rider on board beyond schedule',
 			higherIsBetter: false,
@@ -113,6 +122,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		{
 			// Per 1,000 scheduled trips, so a long, busy line isn't punished for its size.
 			key: 'delays',
+			group: 'Disruptions',
 			abbr: 'DLY/1K',
 			label: 'Trains delayed per 1,000 scheduled trips',
 			higherIsBetter: false,
@@ -122,6 +132,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'incidents',
+			group: 'Disruptions',
 			abbr: 'INC',
 			label: 'Major incidents per month',
 			higherIsBetter: false,
@@ -131,6 +142,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		{
 			// One row per update; update 0 is the alert going out, so each incident counts once.
 			key: 'alerts',
+			group: 'Disruptions',
 			abbr: 'ALT',
 			label: 'Unplanned service alerts per month (delays, reroutes, suspensions)',
 			higherIsBetter: false,
@@ -148,6 +160,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 	bus: [
 		{
 			key: 'riders',
+			group: 'Ridership',
 			abbr: 'RID',
 			label: 'Riders per month',
 			higherIsBetter: true,
@@ -156,6 +169,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'speed',
+			group: 'Journey',
 			abbr: 'MPH',
 			label: 'Average speed, mph',
 			higherIsBetter: true,
@@ -165,6 +179,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'wait',
+			group: 'Reliability',
 			abbr: 'WA%',
 			label: 'Wait assessment: share of gaps between buses that stay close to the scheduled gap',
 			higherIsBetter: true,
@@ -174,6 +189,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'delivered',
+			group: 'Reliability',
 			abbr: 'SD%',
 			label: 'Service delivered: buses run of buses scheduled',
 			higherIsBetter: true,
@@ -183,6 +199,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'cjtp',
+			group: 'Journey',
 			abbr: 'wJT%',
 			label: 'Weighted journey time: rides within 5 minutes of schedule, weighted by riders',
 			higherIsBetter: true,
@@ -192,6 +209,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'abst',
+			group: 'Journey',
 			abbr: 'wAST',
 			label: 'Additional bus stop time: minutes per rider waiting beyond schedule',
 			higherIsBetter: false,
@@ -201,6 +219,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'att',
+			group: 'Journey',
 			abbr: 'wATT',
 			label: 'Additional travel time: minutes per rider on board beyond schedule',
 			higherIsBetter: false,
@@ -493,7 +512,7 @@ export function percentiles(ds: Dataset, key: string, window: string, pick: (mon
 /** Savant's scale: deep blue (worst) through gray to deep red (best). */
 export function pctColor(p: number) {
 	const blue = [53, 97, 173];
-	const gray = [200, 200, 200];
+	const gray = [184, 204, 209];
 	const red = [215, 33, 41];
 	const [a, b, t] = p < 50 ? [blue, gray, p / 50] : [gray, red, (p - 50) / 50];
 

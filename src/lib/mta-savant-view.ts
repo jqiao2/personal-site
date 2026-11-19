@@ -30,6 +30,8 @@ export interface Trend {
 	bottom: string;
 	from: string;
 	to: string;
+	/** One per month for the hover readout: [x, own y, median y, month, own, median]; nulls where unreported. */
+	points: [number, number | null, number | null, string, string, string][];
 }
 
 function trend(ds: Dataset, id: string, key: string): Trend | null {
@@ -61,7 +63,26 @@ function trend(ds: Dataset, id: string, key: string): Trend | null {
 	const path = (pts: (readonly [string, number])[]) =>
 		pts.map(([m, v], i) => `${i ? 'L' : 'M'}${x(m).toFixed(1)} ${y(v).toFixed(1)}`).join('');
 
+	const ownBy = new Map(own);
+	const medBy = new Map(medians);
+	const round = (n: number) => Math.round(n * 10) / 10;
+
+	const points = [...new Set([...ownBy.keys(), ...medBy.keys()])].sort().map((m): Trend['points'][number] => {
+		const o = ownBy.get(m);
+		const md = medBy.get(m);
+
+		return [
+			round(x(m)),
+			o === undefined ? null : round(y(o)),
+			md === undefined ? null : round(y(md)),
+			monthLabel(m),
+			o === undefined ? '—' : metric.format(o),
+			md === undefined ? '—' : metric.format(md),
+		];
+	});
+
 	return {
+		points,
 		abbr: metric.abbr,
 		label: metric.label,
 		line: path(own),
@@ -86,6 +107,7 @@ export async function linePage(mode: Mode, slug: string) {
 		const p = percentiles(ds, m.key, 'trailing', window).get(line.id);
 
 		return {
+			group: m.group,
 			abbr: m.abbr,
 			label: m.label,
 			value: p ? m.format(p.value) : '—',
@@ -118,7 +140,11 @@ export async function linePage(mode: Mode, slug: string) {
 		line,
 		latest: monthLabel(ds.latest),
 		columns: ds.metrics.map((m) => ({ abbr: m.abbr, label: m.label })),
-		rankings,
+		// Savant's sections: one heading per group, in the order metrics first name them.
+		rankingGroups: [...new Set(rankings.map((r) => r.group))].map((name) => ({
+			name,
+			rows: rankings.filter((r) => r.group === name),
+		})),
 		table,
 		trends: ds.metrics.map((m) => trend(ds, line.id, m.key)).filter((t): t is Trend => t !== null),
 		// 350-odd bus routes is too many to list; keep to the same prefix (B, BX, Q, SIM...).
