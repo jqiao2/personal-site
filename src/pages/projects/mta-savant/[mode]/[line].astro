@@ -36,29 +36,46 @@ const { line } = page;
 		<section>
 			<h2>Percentile rankings</h2>
 			<p class="sub">Last 12 months, against every {mode === 'subway' ? 'line' : 'route'}</p>
-			<ul class="ranks">
+			<div class="savant">
+				<div class="row scalehead" aria-hidden="true">
+					<span></span>
+					<span class="marks">
+						<span class="poor">Poor<i>▲</i></span>
+						<span class="avg">Average<i>▲</i></span>
+						<span class="great">Great<i>▲</i></span>
+					</span>
+					<span></span>
+				</div>
 				{
-					page.rankings.map((r) => (
-						<li>
-							<span class="label" title={r.label}>{r.abbr}</span>
-							<span class="track">
-								{r.pct !== null && (
-									<>
-										<span class="fill" style={`width:${r.pct}%;background:${r.color}`} />
-										<span class="dot" style={`left:${r.pct}%;background:${r.color};color:${r.ink}`}>
-											{r.pct}
+					page.rankingGroups.map((g) => (
+						<>
+							<h3 class="group">{g.name}</h3>
+							<ul class="ranks">
+								{g.rows.map((r) => (
+									<li class="row">
+										<span class="label" title={r.label}>
+											{r.abbr}
 										</span>
-									</>
-								)}
-							</span>
-							<span class="value" title={r.rank}>
-								{r.value}
-							</span>
-						</li>
+										<span class="bar" style={r.pct === null ? undefined : `--p:${r.pct}%;--c:${r.color}`}>
+											{r.pct !== null && (
+												<>
+													<span class="fill" />
+													<span class="dot" style={`color:${r.ink}`}>
+														{r.pct}
+													</span>
+												</>
+											)}
+										</span>
+										<span class="value" title={r.rank}>
+											{r.value}
+										</span>
+									</li>
+								))}
+							</ul>
+						</>
 					))
 				}
-			</ul>
-			<p class="legend"><span class="poor">Poor</span><span>Average</span><span class="great">Great</span></p>
+			</div>
 		</section>
 
 		<section>
@@ -67,12 +84,32 @@ const { line } = page;
 			<div class="trends">
 				{
 					page.trends.map((t) => (
-						<figure>
+						<figure data-trend={JSON.stringify(t.points)}>
 							<figcaption title={t.label}>{t.abbr}</figcaption>
-							<svg viewBox={TREND_VIEWBOX} role="img" aria-label={`${t.label}, ${t.from} to ${t.to}`}>
-								<path d={t.median} class="median" />
-								<path d={t.line} stroke={line.color} class="own" />
-							</svg>
+							<div class="plot">
+								<svg viewBox={TREND_VIEWBOX} role="img" aria-label={`${t.label}, ${t.from} to ${t.to}`}>
+									<path d={t.median} class="median" />
+									<path d={t.line} stroke={line.color} class="own" />
+									<g data-cross display="none">
+										<line class="cross" y1="0" y2="100%" />
+										<circle class="mark" r="3" fill="var(--ink-soft)" data-mark-median />
+										<circle class="mark" r="3.5" fill={line.color} data-mark-own />
+									</g>
+								</svg>
+								<div class="tip" data-tip hidden aria-hidden="true">
+									<div class="tip-date" data-tip-date></div>
+									<div class="tip-row">
+										<span class="tip-sw" style={`background:${line.color}`}></span>
+										{line.short}
+										<b data-tip-own></b>
+									</div>
+									<div class="tip-row">
+										<span class="tip-sw median"></span>
+										Median
+										<b data-tip-median></b>
+									</div>
+								</div>
+							</div>
 							<div class="scale">
 								<span>{t.bottom} – {t.top}</span>
 								<span>{t.from.slice(-4)}–{t.to.slice(-4)}</span>
@@ -122,6 +159,68 @@ const { line } = page;
 	</nav>
 </Layout>
 
+<script>
+	// Hover a trend: snap a crosshair and readout to the month nearest the pointer,
+	// as on /activities/fitness. The SVG scales to its box, so the pointer's x is
+	// mapped back into viewBox units before the nearest month is found.
+	type Point = [number, number | null, number | null, string, string, string];
+
+	for (const fig of document.querySelectorAll<HTMLElement>('[data-trend]')) {
+		// SAFETY: the page writes this attribute from Trend['points'], which is Point[].
+		const points = JSON.parse(fig.dataset.trend!) as Point[];
+		const svg = fig.querySelector('svg')!;
+		const cross = svg.querySelector<SVGGElement>('[data-cross]')!;
+		const line = cross.querySelector('line')!;
+		const own = cross.querySelector<SVGCircleElement>('[data-mark-own]')!;
+		const median = cross.querySelector<SVGCircleElement>('[data-mark-median]')!;
+		const tip = fig.querySelector<HTMLElement>('[data-tip]')!;
+		const width = svg.viewBox.baseVal.width;
+
+		const place = (dot: SVGCircleElement, x: number, y: number | null) => {
+			dot.setAttribute('display', y === null ? 'none' : 'inline');
+			dot.setAttribute('cx', String(x));
+			dot.setAttribute('cy', String(y ?? 0));
+		};
+
+		const scrub = (clientX: number) => {
+			const rect = svg.getBoundingClientRect();
+
+			if (rect.width === 0 || points.length === 0) return;
+
+			const vbX = ((clientX - rect.left) / rect.width) * width;
+			let best = points[0];
+
+			for (const p of points) if (Math.abs(p[0] - vbX) < Math.abs(best[0] - vbX)) best = p;
+
+			const [x, yOwn, yMedian, month, ownText, medianText] = best;
+
+			cross.removeAttribute('display');
+			line.setAttribute('x1', String(x));
+			line.setAttribute('x2', String(x));
+			place(own, x, yOwn);
+			place(median, x, yMedian);
+
+			tip.removeAttribute('hidden');
+			tip.querySelector('[data-tip-date]')!.textContent = month;
+			tip.querySelector('[data-tip-own]')!.textContent = ownText;
+			tip.querySelector('[data-tip-median]')!.textContent = medianText;
+
+			// Follow the crosshair, flipping left past the middle so the box stays on the chart.
+			const px = (x / width) * rect.width;
+
+			tip.style.left = `${px}px`;
+			tip.style.transform = px > rect.width / 2 ? 'translateX(calc(-100% - 8px))' : 'translateX(8px)';
+		};
+
+		svg.addEventListener('pointermove', (e) => scrub(e.clientX));
+		svg.addEventListener('pointerdown', (e) => scrub(e.clientX));
+		svg.addEventListener('pointerleave', () => {
+			cross.setAttribute('display', 'none');
+			tip.setAttribute('hidden', '');
+		});
+	}
+</script>
+
 <style>
 	.crumb {
 		font-family: var(--sans);
@@ -141,8 +240,7 @@ const { line } = page;
 		margin: 0;
 	}
 	.meta,
-	.sub,
-	.legend {
+	.sub {
 		font-family: var(--sans);
 		font-size: 0.85rem;
 		color: var(--ink-soft);
@@ -164,59 +262,121 @@ const { line } = page;
 		}
 	}
 
+	/* Savant's percentile panel: right-aligned names, a full-height bar filled to
+	   the percentile, a thin track after it, the number in a ringed dot at the end. */
+	.savant {
+		--great: rgb(215, 33, 41);
+		--avg: rgb(140, 170, 178);
+		--poor: rgb(53, 97, 173);
+		--teal: #5b8f97;
+		font-family: var(--sans);
+		margin-top: 0.75rem;
+	}
+	.row {
+		display: grid;
+		grid-template-columns: 6.5rem 1fr 5.5rem;
+		align-items: center;
+		column-gap: 0.6rem;
+	}
+	.scalehead {
+		font-size: 0.8rem;
+		text-transform: uppercase;
+		letter-spacing: 0.02em;
+	}
+	.marks {
+		display: flex;
+		justify-content: space-between;
+	}
+	.marks > span {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		line-height: 1.1;
+	}
+	.marks i {
+		font-style: normal;
+		font-size: 0.6rem;
+	}
+	.poor {
+		color: var(--poor);
+	}
+	.avg {
+		color: var(--avg);
+	}
+	.great {
+		color: var(--great);
+	}
+	.group {
+		font-size: 1.2rem;
+		font-weight: 700;
+		margin: 1rem 0 0.35rem;
+		padding-bottom: 0.2rem;
+		border-bottom: 3px solid var(--teal);
+	}
 	.ranks {
 		list-style: none;
 		padding: 0;
-		margin: 1rem 0 0.5rem;
-		font-family: var(--sans);
-		font-size: 0.85rem;
+		margin: 0;
+		font-size: 0.95rem;
 	}
 	.ranks li {
-		display: grid;
-		grid-template-columns: 9.5rem 1fr 5.5rem;
-		align-items: center;
-		gap: 0.75rem;
-		height: 1.9rem;
+		height: 2.6rem;
 	}
-	.track {
+	.label,
+	.value {
+		align-self: stretch;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		text-align: right;
+		border-bottom: 1px dashed var(--teal);
+		white-space: nowrap;
+	}
+	.ranks li:last-child .label,
+	.ranks li:last-child .value {
+		border-bottom: 0;
+	}
+	.value {
+		font-variant-numeric: tabular-nums;
+	}
+	.bar {
 		position: relative;
-		height: 0.4rem;
-		background: var(--rule-soft);
-		border-radius: 999px;
+		height: 2.2rem;
+		/* The track: a thin rule through the middle, the full width. */
+		background: linear-gradient(var(--rule), var(--rule)) 0 50% / 100% 0.45rem no-repeat;
 	}
 	.fill {
 		position: absolute;
 		inset: 0 auto 0 0;
-		border-radius: 999px;
+		width: var(--p);
+		background: var(--c);
+	}
+	/* Savant's faint guides at the 10th, 50th and 90th percentiles. */
+	.bar::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background:
+			linear-gradient(rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.45)) 10% 0 / 2px 100% no-repeat,
+			linear-gradient(rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.45)) 50% 0 / 2px 100% no-repeat,
+			linear-gradient(rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.45)) 90% 0 / 2px 100% no-repeat;
+		pointer-events: none;
 	}
 	.dot {
 		position: absolute;
 		top: 50%;
+		left: clamp(1.2rem, var(--p), calc(100% - 1.2rem));
 		transform: translate(-50%, -50%);
-		width: 1.6rem;
-		height: 1.6rem;
+		width: 2.4rem;
+		height: 2.4rem;
 		border-radius: 999px;
 		display: grid;
 		place-items: center;
-		font-size: 0.75rem;
+		background: var(--c);
+		border: 3px solid #fff;
+		font-size: 1rem;
 		font-weight: 700;
-		border: 2px solid var(--paper);
-	}
-	.value {
-		text-align: right;
-		font-variant-numeric: tabular-nums;
-	}
-	.legend {
-		display: flex;
-		justify-content: space-between;
-		margin-left: 10.25rem;
-		margin-right: 6.25rem;
-	}
-	.poor {
-		color: rgb(53, 97, 173);
-	}
-	.great {
-		color: rgb(215, 33, 41);
+		z-index: 1;
 	}
 
 	.key {
@@ -266,6 +426,59 @@ const { line } = page;
 		display: flex;
 		justify-content: space-between;
 		color: var(--ink-soft);
+	}
+	.plot {
+		position: relative;
+	}
+	.cross {
+		stroke: var(--ink-soft);
+		stroke-width: 0.75;
+		opacity: 0.6;
+	}
+	.mark {
+		stroke: var(--card);
+		stroke-width: 1.5;
+	}
+	[hidden] {
+		display: none;
+	}
+	.tip {
+		position: absolute;
+		top: 4px;
+		left: 0;
+		pointer-events: none;
+		background: var(--card);
+		border: 1px solid var(--rule);
+		border-radius: 0.4rem;
+		padding: 0.3rem 0.5rem;
+		box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+		z-index: 2;
+		min-width: 7.5rem;
+		white-space: nowrap;
+	}
+	.tip-date {
+		font-weight: 600;
+	}
+	.tip-row {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		color: var(--ink-soft);
+	}
+	.tip-row b {
+		margin-left: auto;
+		padding-left: 0.6rem;
+		color: var(--ink);
+		font-variant-numeric: tabular-nums;
+	}
+	.tip-sw {
+		width: 10px;
+		height: 3px;
+		flex: none;
+	}
+	.tip-sw.median {
+		height: 0;
+		border-top: 2px dashed var(--ink-soft);
 	}
 
 	.scroll {
