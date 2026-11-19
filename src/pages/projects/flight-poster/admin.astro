@@ -119,6 +119,7 @@ const f = v.current?.flight;
 			<label>Latitude <input name="lat" type="number" step="0.0001" value={c.home.lat} required /></label>
 			<label>Longitude <input name="lon" type="number" step="0.0001" value={c.home.lon} required /></label>
 			<label>Radius (NM) <input name="radius_nm" type="number" min="1" max="250" value={c.home.radius_nm} required /></label>
+			<button type="button" data-locate>Use current location</button>
 		</fieldset>
 
 		<fieldset>
@@ -163,6 +164,34 @@ const f = v.current?.flight;
 		)
 	}
 </Layout>
+
+<script>
+	const locate = document.querySelector<HTMLButtonElement>('[data-locate]');
+
+	const form = locate?.form;
+
+	locate?.addEventListener('click', () => {
+		if (!form) return;
+
+		const label = locate.textContent;
+
+		locate.disabled = true;
+		locate.textContent = 'Locating…';
+		navigator.geolocation.getCurrentPosition(
+			({ coords }) => {
+				form.lat.value = coords.latitude.toFixed(4);
+				form.lon.value = coords.longitude.toFixed(4);
+				locate.disabled = false;
+				locate.textContent = label;
+			},
+			(err) => {
+				locate.disabled = false;
+				locate.textContent = err.code === err.PERMISSION_DENIED ? 'Location blocked' : 'Location unavailable';
+			},
+			{ enableHighAccuracy: true, timeout: 15000 },
+		);
+	});
+</script>
 
 <style>
 	.crumb {
@@ -275,6 +304,11 @@ const f = v.current?.flight;
 	.settings input:not([type='checkbox']) {
 		font: inherit;
 		padding: 0.25rem 0.4rem;
+	}
+
+	.settings [data-locate] {
+		align-self: end;
+		justify-self: start;
 	}
 
 	.log {
