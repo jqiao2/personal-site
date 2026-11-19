@@ -288,11 +288,27 @@ export const slugOf = (id: string) => id.toLowerCase().replace('+', '-sbs').repl
 
 async function soql<T>(ds: string, params: Record<string, string>): Promise<T[]> {
 	const url = `${SOCRATA}/${ds}.json?${new URLSearchParams({ $limit: '100000', ...params })}`;
-	const res = await fetch(url);
 
-	if (!res.ok) throw new Error(`data.ny.gov ${ds}: ${res.status} ${await res.text()}`);
+	// The site's whole build waits on these, so one slow connect or 5xx from
+	// data.ny.gov shouldn't sink a deploy: retry with backoff before giving up.
+	for (let attempt = 1; ; attempt++) {
+		try {
+			const res = await fetch(url);
 
-	return res.json();
+			if (res.ok) return await res.json();
+
+			const message = `data.ny.gov ${ds}: ${res.status} ${await res.text()}`;
+
+			// A 4xx is a bad query, which no retry fixes.
+			if (res.status < 500 && res.status !== 429) throw new Error(message, { cause: 'fatal' });
+
+			throw new Error(message);
+		} catch (error) {
+			if (attempt === 4 || (error instanceof Error && error.cause === 'fatal')) throw error;
+
+			await new Promise((resolve) => setTimeout(resolve, 2000 * 2 ** attempt));
+		}
+	}
 }
 
 // ponytail: 2019 floor keeps the bus pulls to ~35k rows each; widen if older seasons matter.
