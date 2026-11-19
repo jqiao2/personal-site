@@ -379,6 +379,39 @@ const { line } = page;
 		z-index: 1;
 	}
 
+	/* Phones: the desktop sizes made each row as tall as a thumb. */
+	@media (max-width: 600px) {
+		.row {
+			grid-template-columns: 3.75rem 1fr 4.25rem;
+			column-gap: 0.45rem;
+		}
+		.scalehead {
+			font-size: 0.65rem;
+		}
+		.group {
+			font-size: 1rem;
+			margin-top: 0.75rem;
+			border-bottom-width: 2px;
+		}
+		.ranks {
+			font-size: 0.8rem;
+		}
+		.ranks li {
+			height: 1.75rem;
+		}
+		.bar {
+			height: 1.35rem;
+			background-size: 100% 0.3rem;
+		}
+		.dot {
+			left: clamp(0.8rem, var(--p), calc(100% - 0.8rem));
+			width: 1.6rem;
+			height: 1.6rem;
+			border-width: 2px;
+			font-size: 0.72rem;
+		}
+	}
+
 	.key {
 		display: inline-block;
 		width: 1rem;
