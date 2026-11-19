@@ -159,11 +159,11 @@ export async function linePage(mode: Mode, slug: string) {
 		columns: ds.metrics.map((m) => ({ abbr: m.abbr, label: m.label })),
 		// Savant's sections: one heading per group, in the order metrics first name them.
 		rankingGroups: [
-			{ name: 'Value', rows: valueRows },
-			...[...new Set(rankings.map((r) => r.group))].map((name) => ({
-				name,
-				rows: rankings.filter((r) => r.group === name),
-			})),
+			// Riders sit with the values, as the volume half of them.
+			{ name: 'Value', rows: [...valueRows, ...rankings.filter((r) => r.group === 'Value')] },
+			...[...new Set(rankings.map((r) => r.group))].flatMap((name) =>
+				name === 'Value' ? [] : [{ name, rows: rankings.filter((r) => r.group === name) }]
+			),
 		],
 		table,
 		trends: ds.metrics.map((m) => trend(ds, line.id, m.key)).filter((t): t is Trend => t !== null),

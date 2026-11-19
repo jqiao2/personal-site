@@ -52,7 +52,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 	subway: [
 		{
 			key: 'riders',
-			group: 'Ridership',
+			group: 'Value',
 			abbr: 'RID',
 			label: 'Riders per month',
 			higherIsBetter: true,
@@ -160,7 +160,7 @@ export const METRICS: Record<Mode, Metric[]> = {
 	bus: [
 		{
 			key: 'riders',
-			group: 'Ridership',
+			group: 'Value',
 			abbr: 'RID',
 			label: 'Riders per month',
 			higherIsBetter: true,
