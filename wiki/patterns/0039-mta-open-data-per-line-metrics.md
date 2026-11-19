@@ -28,3 +28,10 @@
 - `sp9g-mzjh` (end-to-end running times) only returned GS rows when grouped by line.
 - A bus route has several `route_type` rows in `bzwk-3hb4` (B44+ is SBS *and*
   School Limited); prefer the non-school one.
+- The W has no OTP, trains-delayed or major-incident rows after spring 2018 (and
+  the delays dataset's column docs leave it out): it is probably reported under the
+  N. For a stat every line has, service alerts `7kct-peq7` tag lines in
+  `affected` as `"A | H"`; group by that string server-side and split in JS. Filter
+  `agency = 'NYCT Subway' and update_number = 0` to count each incident once.
+  Alerts use GTFS ids (H = Rockaway shuttle, 6X/7X/FX = express variants) and lag
+  the other datasets by a couple of months.

@@ -15,6 +15,12 @@ export type Mode = 'subway' | 'bus';
 interface Series {
 	ds: string;
 	expr: string;
+	/** Datasets that don't follow the line/month/month-start shape say how they differ. */
+	lineCol?: string;
+	dateCol?: string;
+	where?: string;
+	/** The line column lists several lines, "A | C | E"; credit each one. */
+	split?: boolean;
 }
 
 export interface Metric {
@@ -122,6 +128,22 @@ export const METRICS: Record<Mode, Metric[]> = {
 			format: (v) => v.toFixed(1),
 			num: { ds: 'ereg-mcvp', expr: 'sum(count)' },
 		},
+		{
+			// One row per update; update 0 is the alert going out, so each incident counts once.
+			key: 'alerts',
+			abbr: 'ALT',
+			label: 'Unplanned service alerts per month (delays, reroutes, suspensions)',
+			higherIsBetter: false,
+			format: (v) => v.toFixed(0),
+			num: {
+				ds: '7kct-peq7',
+				expr: 'count(*)',
+				lineCol: 'affected',
+				dateCol: 'date',
+				where: "agency = 'NYCT Subway' and update_number = 0",
+				split: true,
+			},
+		},
 	],
 	bus: [
 		{
@@ -196,6 +218,11 @@ const SUBWAY_ALIAS = new Map([
 	['GS', 'S 42nd'],
 	['H', 'S Rock'],
 	['J', 'JZ'],
+	['Z', 'JZ'],
+	// Alerts name the express variants separately.
+	['6X', '6'],
+	['7X', '7'],
+	['FX', 'F'],
 ]);
 
 interface LineStyle {
@@ -269,22 +296,24 @@ async function soql<T>(ds: string, params: Record<string, string>): Promise<T[]>
 }
 
 // ponytail: 2019 floor keeps the bus pulls to ~35k rows each; widen if older seasons matter.
-const SINCE = "month >= '2019-01-01'";
+const SINCE = '2019-01-01';
 
 async function series(mode: Mode, s: Series) {
-	const col = mode === 'subway' ? 'line' : 'route_id';
+	const col = s.lineCol ?? (mode === 'subway' ? 'line' : 'route_id');
+	const date = s.dateCol ?? 'month';
+	const alias = (id: string) => (mode === 'subway' ? (SUBWAY_ALIAS.get(id) ?? id) : id);
 
 	const rows = await soql<Record<string, string>>(s.ds, {
-		$select: `${col} as id, month, ${s.expr} as v`,
-		$where: `${SINCE} and ${col} is not null`,
-		$group: `${col}, month`,
+		$select: `${col} as id, date_trunc_ym(${date}) as m, ${s.expr} as v`,
+		$where: [`${date} >= '${SINCE}'`, `${col} is not null`, s.where].filter(Boolean).join(' and '),
+		$group: `${col}, m`,
 	});
 
-	return rows.map((r) => ({
-		id: mode === 'subway' ? (SUBWAY_ALIAS.get(r.id) ?? r.id) : r.id,
-		month: r.month.slice(0, 7),
-		v: Number(r.v),
-	}));
+	return rows.flatMap((r) => {
+		const ids = s.split ? new Set(r.id.split(' | ').map(alias)) : [alias(r.id)];
+
+		return [...ids].map((id) => ({ id, month: r.m.slice(0, 7), v: Number(r.v) }));
+	});
 }
 
 async function busRoutes() {
