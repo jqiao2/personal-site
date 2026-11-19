@@ -1,0 +1,48 @@
+---
+// A subway bullet (circle) or bus route tag (rounded box) in the line's own color.
+import type { Line } from '../lib/mta-savant';
+
+interface Props {
+	line: Line;
+	size?: 'sm' | 'lg';
+}
+
+const { line, size = 'sm' } = Astro.props;
+---
+
+<span
+	class:list={['bullet', size, { tag: line.short.length > 1 }]}
+	title={line.name}
+	style={`background:${line.color};color:${line.text}`}>{line.short}</span
+>
+
+<style>
+	.bullet {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-family: var(--sans);
+		font-weight: 700;
+		border-radius: 999px;
+		line-height: 1;
+		white-space: nowrap;
+	}
+	.sm {
+		min-width: 1.5rem;
+		height: 1.5rem;
+		font-size: 0.85rem;
+	}
+	.lg {
+		min-width: 4rem;
+		height: 4rem;
+		font-size: 2.4rem;
+	}
+	.tag {
+		border-radius: 0.3rem;
+		padding: 0 0.35em;
+	}
+	.lg.tag {
+		font-size: 1.8rem;
+		padding: 0 0.4em;
+	}
+</style>

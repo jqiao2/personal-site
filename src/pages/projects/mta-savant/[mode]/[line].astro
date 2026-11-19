@@ -1,0 +1,320 @@
+---
+// One line's page, Baseball Savant player-page style: percentile rankings for the
+// trailing 12 months, a season-by-season table and monthly trends against the
+// field's median. Static — built from data.ny.gov at deploy time.
+import Layout from '../../../../layouts/Layout.astro';
+import MtaBullet from '../../../../components/MtaBullet.astro';
+import { loadDataset, type Mode } from '../../../../lib/mta-savant';
+import { MODES, TREND_VIEWBOX, linePage } from '../../../../lib/mta-savant-view';
+
+export async function getStaticPaths() {
+	const sets = await Promise.all(MODES.map(loadDataset));
+
+	return sets.flatMap((ds) => ds.lines.map((l) => ({ params: { mode: ds.mode, line: l.slug } })));
+}
+
+// SAFETY: getStaticPaths above only emits modes from MODES and slugs from the dataset.
+const { mode, line: slug } = Astro.params as { mode: Mode; line: string };
+
+const page = await linePage(mode, slug);
+
+const { line } = page;
+---
+
+<Layout title={`${line.short} · MTA Savant`} wide>
+	<p class="crumb"><a href="/projects/mta-savant">MTA Savant</a> / {mode === 'subway' ? 'Subway' : 'Bus'}</p>
+
+	<header class="hero">
+		<MtaBullet line={line} size="lg" />
+		<div>
+			<h1>{line.name}</h1>
+			<p class="meta">{line.group} · data through {page.latest}</p>
+		</div>
+	</header>
+
+	<div class="grid">
+		<section>
+			<h2>Percentile rankings</h2>
+			<p class="sub">Last 12 months, against every {mode === 'subway' ? 'line' : 'route'}</p>
+			<ul class="ranks">
+				{
+					page.rankings.map((r) => (
+						<li>
+							<span class="label">{r.label}</span>
+							<span class="track">
+								{r.pct !== null && (
+									<>
+										<span class="fill" style={`width:${r.pct}%;background:${r.color}`} />
+										<span class="dot" style={`left:${r.pct}%;background:${r.color};color:${r.ink}`}>
+											{r.pct}
+										</span>
+									</>
+								)}
+							</span>
+							<span class="value" title={r.rank}>
+								{r.value}
+							</span>
+						</li>
+					))
+				}
+			</ul>
+			<p class="legend"><span class="poor">Poor</span><span>Average</span><span class="great">Great</span></p>
+		</section>
+
+		<section>
+			<h2>Trends</h2>
+			<p class="sub">Monthly, <span class="key own" style={`background:${line.color}`}></span> this {mode === 'subway' ? 'line' : 'route'} vs <span class="key median"></span> median</p>
+			<div class="trends">
+				{
+					page.trends.map((t) => (
+						<figure>
+							<figcaption>{t.label}</figcaption>
+							<svg viewBox={TREND_VIEWBOX} role="img" aria-label={`${t.label}, ${t.from} to ${t.to}`}>
+								<path d={t.median} class="median" />
+								<path d={t.line} stroke={line.color} class="own" />
+							</svg>
+							<div class="scale">
+								<span>{t.bottom} – {t.top}</span>
+								<span>{t.from.slice(-4)}–{t.to.slice(-4)}</span>
+							</div>
+						</figure>
+					))
+				}
+			</div>
+		</section>
+	</div>
+
+	<section>
+		<h2>By season</h2>
+		<div class="scroll">
+			<table class="stats">
+				<thead>
+					<tr>
+						<th>Season</th>
+						{page.metricLabels.map((l) => <th>{l}</th>)}
+					</tr>
+				</thead>
+				<tbody>
+					{
+						page.table.map((row) => (
+							<tr>
+								<th>{row.label}</th>
+								{row.cells.map((c) => (
+									<td style={c.color ? `background:${c.color};color:${c.ink}` : undefined}>{c.text}</td>
+								))}
+							</tr>
+						))
+					}
+				</tbody>
+			</table>
+		</div>
+		<p class="sub">Cells shaded by percentile within that season.</p>
+	</section>
+
+	<nav class="others" aria-label={mode === 'subway' ? 'Other lines' : 'Other routes'}>
+		{
+			page.siblings.map((l) => (
+				<a href={`/projects/mta-savant/${mode}/${l.slug}`} aria-current={l.id === line.id ? 'page' : undefined}>
+					<MtaBullet line={l} />
+				</a>
+			))
+		}
+	</nav>
+</Layout>
+
+<style>
+	.crumb {
+		font-family: var(--sans);
+		font-size: 0.85rem;
+		color: var(--ink-soft);
+		margin: 0;
+	}
+	.hero {
+		display: flex;
+		align-items: center;
+		gap: 1.25rem;
+		padding: 1rem 0 1.5rem;
+		border-bottom: 1px solid var(--rule);
+		margin-bottom: 1.5rem;
+	}
+	.hero h1 {
+		margin: 0;
+	}
+	.meta,
+	.sub,
+	.legend {
+		font-family: var(--sans);
+		font-size: 0.85rem;
+		color: var(--ink-soft);
+		margin: 0;
+	}
+	h2 {
+		font-size: 1.15rem;
+		margin: 0 0 0.15rem;
+	}
+	.grid {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+		gap: 2.5rem;
+		margin-bottom: 2rem;
+	}
+	@media (max-width: 800px) {
+		.grid {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	.ranks {
+		list-style: none;
+		padding: 0;
+		margin: 1rem 0 0.5rem;
+		font-family: var(--sans);
+		font-size: 0.85rem;
+	}
+	.ranks li {
+		display: grid;
+		grid-template-columns: 9.5rem 1fr 5.5rem;
+		align-items: center;
+		gap: 0.75rem;
+		height: 1.9rem;
+	}
+	.track {
+		position: relative;
+		height: 0.4rem;
+		background: var(--rule-soft);
+		border-radius: 999px;
+	}
+	.fill {
+		position: absolute;
+		inset: 0 auto 0 0;
+		border-radius: 999px;
+	}
+	.dot {
+		position: absolute;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: 1.6rem;
+		height: 1.6rem;
+		border-radius: 999px;
+		display: grid;
+		place-items: center;
+		font-size: 0.75rem;
+		font-weight: 700;
+		border: 2px solid var(--paper);
+	}
+	.value {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.legend {
+		display: flex;
+		justify-content: space-between;
+		margin-left: 10.25rem;
+		margin-right: 6.25rem;
+	}
+	.poor {
+		color: rgb(53, 97, 173);
+	}
+	.great {
+		color: rgb(215, 33, 41);
+	}
+
+	.key {
+		display: inline-block;
+		width: 1rem;
+		height: 3px;
+		vertical-align: middle;
+	}
+	.key.median {
+		border-top: 2px dashed var(--ink-soft);
+		height: 0;
+	}
+	.trends {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		gap: 1rem;
+		margin-top: 1rem;
+	}
+	figure {
+		margin: 0;
+		font-family: var(--sans);
+		font-size: 0.75rem;
+	}
+	figcaption {
+		font-weight: 600;
+	}
+	svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		background: var(--card);
+		border: 1px solid var(--rule-soft);
+	}
+	svg path {
+		fill: none;
+		stroke-linejoin: round;
+	}
+	path.own {
+		stroke-width: 2;
+	}
+	path.median {
+		stroke: var(--ink-soft);
+		stroke-width: 1;
+		stroke-dasharray: 3 3;
+	}
+	.scale {
+		display: flex;
+		justify-content: space-between;
+		color: var(--ink-soft);
+	}
+
+	.scroll {
+		overflow-x: auto;
+		margin: 0.75rem 0 0.35rem;
+	}
+	.stats {
+		border-collapse: collapse;
+		font-family: var(--sans);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+		width: 100%;
+	}
+	.stats th,
+	.stats td {
+		padding: 0.35rem 0.6rem;
+		text-align: right;
+		border-bottom: 1px solid var(--rule-soft);
+		white-space: nowrap;
+	}
+	.stats thead th {
+		font-weight: 600;
+		border-bottom: 2px solid var(--rule);
+		vertical-align: bottom;
+		white-space: normal;
+	}
+	.stats tbody th {
+		text-align: left;
+	}
+	.stats tbody tr:last-child th,
+	.stats tbody tr:last-child td {
+		font-weight: 700;
+		border-top: 2px solid var(--rule);
+	}
+
+	.others {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		margin-top: 2.5rem;
+		padding-top: 1rem;
+		border-top: 1px solid var(--rule);
+	}
+	.others a {
+		text-decoration: none;
+		opacity: 0.75;
+	}
+	.others a:hover,
+	.others a[aria-current] {
+		opacity: 1;
+	}
+</style>
