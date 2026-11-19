@@ -22,6 +22,7 @@ const TREND_H = 110;
 const PAD = 6;
 
 export interface Trend {
+	abbr: string;
 	label: string;
 	line: string;
 	median: string;
@@ -61,6 +62,7 @@ function trend(ds: Dataset, id: string, key: string): Trend | null {
 		pts.map(([m, v], i) => `${i ? 'L' : 'M'}${x(m).toFixed(1)} ${y(v).toFixed(1)}`).join('');
 
 	return {
+		abbr: metric.abbr,
 		label: metric.label,
 		line: path(own),
 		median: path(medians),
@@ -84,6 +86,7 @@ export async function linePage(mode: Mode, slug: string) {
 		const p = percentiles(ds, m.key, 'trailing', window).get(line.id);
 
 		return {
+			abbr: m.abbr,
 			label: m.label,
 			value: p ? m.format(p.value) : '—',
 			pct: p?.pct ?? null,
@@ -114,7 +117,7 @@ export async function linePage(mode: Mode, slug: string) {
 	return {
 		line,
 		latest: monthLabel(ds.latest),
-		metricLabels: ds.metrics.map((m) => m.label),
+		columns: ds.metrics.map((m) => ({ abbr: m.abbr, label: m.label })),
 		rankings,
 		table,
 		trends: ds.metrics.map((m) => trend(ds, line.id, m.key)).filter((t): t is Trend => t !== null),
@@ -140,5 +143,5 @@ export async function leaderboard(mode: Mode) {
 		// Retired routes with nothing in the window stay reachable from their own page, not here.
 		.filter((r) => r.cells.some(Boolean));
 
-	return { latest: monthLabel(ds.latest), metricLabels: ds.metrics.map((m) => m.label), rows };
+	return { latest: monthLabel(ds.latest), columns: ds.metrics.map((m) => ({ abbr: m.abbr, label: m.label })), rows };
 }

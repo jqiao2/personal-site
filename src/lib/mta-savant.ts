@@ -15,10 +15,18 @@ export type Mode = 'subway' | 'bus';
 interface Series {
 	ds: string;
 	expr: string;
+	/** Datasets that don't follow the line/month/month-start shape say how they differ. */
+	lineCol?: string;
+	dateCol?: string;
+	where?: string;
+	/** The line column lists several lines, "A | C | E"; credit each one. */
+	split?: boolean;
 }
 
 export interface Metric {
 	key: string;
+	/** Baseball-style column name: w = rider-weighted, % = rate, /1K like K/9. */
+	abbr: string;
 	label: string;
 	higherIsBetter: boolean;
 	format: (v: number) => string;
@@ -42,14 +50,16 @@ export const METRICS: Record<Mode, Metric[]> = {
 	subway: [
 		{
 			key: 'riders',
-			label: 'Riders / mo',
+			abbr: 'RID',
+			label: 'Riders per month',
 			higherIsBetter: true,
 			format: int,
 			num: { ds: SUBWAY_CJ, expr: 'sum(num_passengers)' },
 		},
 		{
 			key: 'wait',
-			label: 'Wait assessment',
+			abbr: 'WA%',
+			label: 'Wait assessment: share of gaps between trains that stay close to the scheduled gap',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: 's666-h6b7', expr: 'sum(num_timepoints_passing_wait_assessment)' },
@@ -57,7 +67,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'otp',
-			label: 'Terminal on-time',
+			abbr: 'OTP%',
+			label: 'Terminal on-time performance',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: SUBWAY_OTP, expr: 'sum(num_on_time_trips)' },
@@ -65,7 +76,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'delivered',
-			label: 'Service delivered',
+			abbr: 'SD%',
+			label: 'Service delivered: trains run of trains scheduled, peak',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: '32ch-sei3', expr: 'sum(num_actual_trains)' },
@@ -73,7 +85,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'cjtp',
-			label: 'Journey on time',
+			abbr: 'wJT%',
+			label: 'Weighted journey time: rides within 5 minutes of schedule, weighted by riders',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: SUBWAY_CJ, expr: 'sum(num_passengers)-sum(over_five_mins)' },
@@ -81,7 +94,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'apt',
-			label: 'Extra platform time',
+			abbr: 'wAPT',
+			label: 'Additional platform time: minutes per rider spent waiting beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: SUBWAY_CJ, expr: 'sum(total_apt)' },
@@ -89,7 +103,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'att',
-			label: 'Extra train time',
+			abbr: 'wATT',
+			label: 'Additional train time: minutes per rider on board beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: SUBWAY_CJ, expr: 'sum(total_att)' },
@@ -98,7 +113,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		{
 			// Per 1,000 scheduled trips, so a long, busy line isn't punished for its size.
 			key: 'delays',
-			label: 'Delays / 1k trips',
+			abbr: 'DLY/1K',
+			label: 'Trains delayed per 1,000 scheduled trips',
 			higherIsBetter: false,
 			format: (v) => (v * 1000).toFixed(0),
 			num: { ds: '9zbp-wz3y', expr: 'sum(delays)' },
@@ -106,31 +122,51 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'incidents',
-			label: 'Major incidents / mo',
+			abbr: 'INC',
+			label: 'Major incidents per month',
 			higherIsBetter: false,
 			format: (v) => v.toFixed(1),
 			num: { ds: 'ereg-mcvp', expr: 'sum(count)' },
+		},
+		{
+			// One row per update; update 0 is the alert going out, so each incident counts once.
+			key: 'alerts',
+			abbr: 'ALT',
+			label: 'Unplanned service alerts per month (delays, reroutes, suspensions)',
+			higherIsBetter: false,
+			format: (v) => v.toFixed(0),
+			num: {
+				ds: '7kct-peq7',
+				expr: 'count(*)',
+				lineCol: 'affected',
+				dateCol: 'date',
+				where: "agency = 'NYCT Subway' and update_number = 0",
+				split: true,
+			},
 		},
 	],
 	bus: [
 		{
 			key: 'riders',
-			label: 'Riders / mo',
+			abbr: 'RID',
+			label: 'Riders per month',
 			higherIsBetter: true,
 			format: int,
 			num: { ds: BUS_CJ, expr: 'sum(number_of_customers)' },
 		},
 		{
 			key: 'speed',
-			label: 'Avg speed',
+			abbr: 'MPH',
+			label: 'Average speed, mph',
 			higherIsBetter: true,
-			format: (v) => `${v.toFixed(1)} mph`,
+			format: (v) => v.toFixed(1),
 			num: { ds: 'cudb-vcni', expr: 'sum(total_mileage)' },
 			den: { ds: 'cudb-vcni', expr: 'sum(total_operating_time)' },
 		},
 		{
 			key: 'wait',
-			label: 'Wait assessment',
+			abbr: 'WA%',
+			label: 'Wait assessment: share of gaps between buses that stay close to the scheduled gap',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: 'v4z4-2h6n', expr: 'sum(number_of_trips_passing_wait)' },
@@ -138,7 +174,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'delivered',
-			label: 'Service delivered',
+			abbr: 'SD%',
+			label: 'Service delivered: buses run of buses scheduled',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: '6qwi-vjde', expr: 'sum(actual_number_of_buses)' },
@@ -146,7 +183,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'cjtp',
-			label: 'Journey on time',
+			abbr: 'wJT%',
+			label: 'Weighted journey time: rides within 5 minutes of schedule, weighted by riders',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: BUS_CJ, expr: 'sum(customer_journey_time*number_of_customers)' },
@@ -154,7 +192,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'abst',
-			label: 'Extra stop time',
+			abbr: 'wAST',
+			label: 'Additional bus stop time: minutes per rider waiting beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: BUS_CJ, expr: 'sum(additional_bus_stop_time*number_of_customers)' },
@@ -162,7 +201,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'att',
-			label: 'Extra travel time',
+			abbr: 'wATT',
+			label: 'Additional travel time: minutes per rider on board beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: BUS_CJ, expr: 'sum(additional_travel_time*number_of_customers)' },
@@ -178,6 +218,11 @@ const SUBWAY_ALIAS = new Map([
 	['GS', 'S 42nd'],
 	['H', 'S Rock'],
 	['J', 'JZ'],
+	['Z', 'JZ'],
+	// Alerts name the express variants separately.
+	['6X', '6'],
+	['7X', '7'],
+	['FX', 'F'],
 ]);
 
 interface LineStyle {
@@ -243,30 +288,48 @@ export const slugOf = (id: string) => id.toLowerCase().replace('+', '-sbs').repl
 
 async function soql<T>(ds: string, params: Record<string, string>): Promise<T[]> {
 	const url = `${SOCRATA}/${ds}.json?${new URLSearchParams({ $limit: '100000', ...params })}`;
-	const res = await fetch(url);
 
-	if (!res.ok) throw new Error(`data.ny.gov ${ds}: ${res.status} ${await res.text()}`);
+	// The site's whole build waits on these, so one slow connect or 5xx from
+	// data.ny.gov shouldn't sink a deploy: retry with backoff before giving up.
+	for (let attempt = 1; ; attempt++) {
+		try {
+			const res = await fetch(url);
 
-	return res.json();
+			if (res.ok) return await res.json();
+
+			const message = `data.ny.gov ${ds}: ${res.status} ${await res.text()}`;
+
+			// A 4xx is a bad query, which no retry fixes.
+			if (res.status < 500 && res.status !== 429) throw new Error(message, { cause: 'fatal' });
+
+			throw new Error(message);
+		} catch (error) {
+			if (attempt === 4 || (error instanceof Error && error.cause === 'fatal')) throw error;
+
+			await new Promise((resolve) => setTimeout(resolve, 2000 * 2 ** attempt));
+		}
+	}
 }
 
 // ponytail: 2019 floor keeps the bus pulls to ~35k rows each; widen if older seasons matter.
-const SINCE = "month >= '2019-01-01'";
+const SINCE = '2019-01-01';
 
 async function series(mode: Mode, s: Series) {
-	const col = mode === 'subway' ? 'line' : 'route_id';
+	const col = s.lineCol ?? (mode === 'subway' ? 'line' : 'route_id');
+	const date = s.dateCol ?? 'month';
+	const alias = (id: string) => (mode === 'subway' ? (SUBWAY_ALIAS.get(id) ?? id) : id);
 
 	const rows = await soql<Record<string, string>>(s.ds, {
-		$select: `${col} as id, month, ${s.expr} as v`,
-		$where: `${SINCE} and ${col} is not null`,
-		$group: `${col}, month`,
+		$select: `${col} as id, date_trunc_ym(${date}) as m, ${s.expr} as v`,
+		$where: [`${date} >= '${SINCE}'`, `${col} is not null`, s.where].filter(Boolean).join(' and '),
+		$group: `${col}, m`,
 	});
 
-	return rows.map((r) => ({
-		id: mode === 'subway' ? (SUBWAY_ALIAS.get(r.id) ?? r.id) : r.id,
-		month: r.month.slice(0, 7),
-		v: Number(r.v),
-	}));
+	return rows.flatMap((r) => {
+		const ids = s.split ? new Set(r.id.split(' | ').map(alias)) : [alias(r.id)];
+
+		return [...ids].map((id) => ({ id, month: r.m.slice(0, 7), v: Number(r.v) }));
+	});
 }
 
 async function busRoutes() {
