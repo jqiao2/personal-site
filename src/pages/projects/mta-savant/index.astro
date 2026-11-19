@@ -19,18 +19,20 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 		boards.map((b) => (
 			<section>
 				<h2>{b.mode === 'subway' ? 'Subway' : 'Bus'}</h2>
-				{b.mode === 'bus' && (
-					<input type="search" class="search" data-search placeholder="Route or neighborhood" aria-label="Search bus routes" />
-				)}
 				<div class="scroll">
 					<table class="stats" data-sortable>
 						<thead>
 							<tr>
-								<th>{b.mode === 'subway' ? 'Line' : 'Route'}</th>
-								{b.metricLabels.map((l, i) => (
+								<th class="lead">
+									{b.mode === 'bus' && (
+										<input type="search" class="search" data-search placeholder="Route or neighborhood" aria-label="Search bus routes" />
+									)}
+									{b.mode === 'subway' ? 'Line' : 'Route'}
+								</th>
+								{b.columns.map((c, i) => (
 									<th>
-										<button type="button" data-col={i + 1}>
-											{l}
+										<button type="button" data-col={i + 1} title={c.label}>
+											{c.abbr}
 										</button>
 									</th>
 								))}
@@ -113,7 +115,7 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 
 	// Bus search: hide rows whose route id and name don't contain the query.
 	for (const input of document.querySelectorAll<HTMLInputElement>('[data-search]')) {
-		const rows = [...input.parentElement!.querySelectorAll('tbody tr')];
+		const rows = [...input.closest('table')!.tBodies[0].rows];
 
 		input.addEventListener('input', () => {
 			const q = input.value.trim().toLowerCase();
@@ -139,13 +141,18 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 	.great {
 		color: rgb(215, 33, 41);
 	}
+	.stats thead th.lead {
+		text-align: left;
+	}
 	.search {
+		display: block;
 		font: inherit;
 		font-family: var(--sans);
 		font-size: 0.9rem;
-		width: min(100%, 20rem);
+		width: 16rem;
 		padding: 0.35rem 0.55rem;
-		margin-bottom: 0.5rem;
+		margin-bottom: 0.4rem;
+		font-weight: 400;
 		background: var(--card);
 		color: var(--ink);
 		border: 1px solid var(--rule);

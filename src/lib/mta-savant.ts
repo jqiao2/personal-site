@@ -19,6 +19,8 @@ interface Series {
 
 export interface Metric {
 	key: string;
+	/** Baseball-style column name: w = rider-weighted, % = rate, /1K like K/9. */
+	abbr: string;
 	label: string;
 	higherIsBetter: boolean;
 	format: (v: number) => string;
@@ -42,14 +44,16 @@ export const METRICS: Record<Mode, Metric[]> = {
 	subway: [
 		{
 			key: 'riders',
-			label: 'Riders / mo',
+			abbr: 'RID',
+			label: 'Riders per month',
 			higherIsBetter: true,
 			format: int,
 			num: { ds: SUBWAY_CJ, expr: 'sum(num_passengers)' },
 		},
 		{
 			key: 'wait',
-			label: 'Wait assessment',
+			abbr: 'WA%',
+			label: 'Wait assessment: share of gaps between trains that stay close to the scheduled gap',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: 's666-h6b7', expr: 'sum(num_timepoints_passing_wait_assessment)' },
@@ -57,7 +61,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'otp',
-			label: 'Terminal on-time',
+			abbr: 'OTP%',
+			label: 'Terminal on-time performance',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: SUBWAY_OTP, expr: 'sum(num_on_time_trips)' },
@@ -65,7 +70,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'delivered',
-			label: 'Service delivered',
+			abbr: 'SD%',
+			label: 'Service delivered: trains run of trains scheduled, peak',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: '32ch-sei3', expr: 'sum(num_actual_trains)' },
@@ -73,7 +79,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'cjtp',
-			label: 'Journey on time',
+			abbr: 'wJT%',
+			label: 'Weighted journey time: rides within 5 minutes of schedule, weighted by riders',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: SUBWAY_CJ, expr: 'sum(num_passengers)-sum(over_five_mins)' },
@@ -81,7 +88,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'apt',
-			label: 'Extra platform time',
+			abbr: 'wAPT',
+			label: 'Additional platform time: minutes per rider spent waiting beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: SUBWAY_CJ, expr: 'sum(total_apt)' },
@@ -89,7 +97,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'att',
-			label: 'Extra train time',
+			abbr: 'wATT',
+			label: 'Additional train time: minutes per rider on board beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: SUBWAY_CJ, expr: 'sum(total_att)' },
@@ -98,7 +107,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		{
 			// Per 1,000 scheduled trips, so a long, busy line isn't punished for its size.
 			key: 'delays',
-			label: 'Delays / 1k trips',
+			abbr: 'DLY/1K',
+			label: 'Trains delayed per 1,000 scheduled trips',
 			higherIsBetter: false,
 			format: (v) => (v * 1000).toFixed(0),
 			num: { ds: '9zbp-wz3y', expr: 'sum(delays)' },
@@ -106,7 +116,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'incidents',
-			label: 'Major incidents / mo',
+			abbr: 'INC',
+			label: 'Major incidents per month',
 			higherIsBetter: false,
 			format: (v) => v.toFixed(1),
 			num: { ds: 'ereg-mcvp', expr: 'sum(count)' },
@@ -115,22 +126,25 @@ export const METRICS: Record<Mode, Metric[]> = {
 	bus: [
 		{
 			key: 'riders',
-			label: 'Riders / mo',
+			abbr: 'RID',
+			label: 'Riders per month',
 			higherIsBetter: true,
 			format: int,
 			num: { ds: BUS_CJ, expr: 'sum(number_of_customers)' },
 		},
 		{
 			key: 'speed',
-			label: 'Avg speed',
+			abbr: 'MPH',
+			label: 'Average speed, mph',
 			higherIsBetter: true,
-			format: (v) => `${v.toFixed(1)} mph`,
+			format: (v) => v.toFixed(1),
 			num: { ds: 'cudb-vcni', expr: 'sum(total_mileage)' },
 			den: { ds: 'cudb-vcni', expr: 'sum(total_operating_time)' },
 		},
 		{
 			key: 'wait',
-			label: 'Wait assessment',
+			abbr: 'WA%',
+			label: 'Wait assessment: share of gaps between buses that stay close to the scheduled gap',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: 'v4z4-2h6n', expr: 'sum(number_of_trips_passing_wait)' },
@@ -138,7 +152,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'delivered',
-			label: 'Service delivered',
+			abbr: 'SD%',
+			label: 'Service delivered: buses run of buses scheduled',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: '6qwi-vjde', expr: 'sum(actual_number_of_buses)' },
@@ -146,7 +161,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'cjtp',
-			label: 'Journey on time',
+			abbr: 'wJT%',
+			label: 'Weighted journey time: rides within 5 minutes of schedule, weighted by riders',
 			higherIsBetter: true,
 			format: pct,
 			num: { ds: BUS_CJ, expr: 'sum(customer_journey_time*number_of_customers)' },
@@ -154,7 +170,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'abst',
-			label: 'Extra stop time',
+			abbr: 'wAST',
+			label: 'Additional bus stop time: minutes per rider waiting beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: BUS_CJ, expr: 'sum(additional_bus_stop_time*number_of_customers)' },
@@ -162,7 +179,8 @@ export const METRICS: Record<Mode, Metric[]> = {
 		},
 		{
 			key: 'att',
-			label: 'Extra travel time',
+			abbr: 'wATT',
+			label: 'Additional travel time: minutes per rider on board beyond schedule',
 			higherIsBetter: false,
 			format: min,
 			num: { ds: BUS_CJ, expr: 'sum(additional_travel_time*number_of_customers)' },

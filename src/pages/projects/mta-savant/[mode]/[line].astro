@@ -1,6 +1,6 @@
 ---
 // One line's page, Baseball Savant player-page style: percentile rankings for the
-// trailing 12 months, a season-by-season table and monthly trends against the
+// trailing 12 months, a year-by-year table and monthly trends against the
 // field's median. Static — built from data.ny.gov at deploy time.
 import Layout from '../../../../layouts/Layout.astro';
 import MtaBullet from '../../../../components/MtaBullet.astro';
@@ -40,7 +40,7 @@ const { line } = page;
 				{
 					page.rankings.map((r) => (
 						<li>
-							<span class="label">{r.label}</span>
+							<span class="label" title={r.label}>{r.abbr}</span>
 							<span class="track">
 								{r.pct !== null && (
 									<>
@@ -68,7 +68,7 @@ const { line } = page;
 				{
 					page.trends.map((t) => (
 						<figure>
-							<figcaption>{t.label}</figcaption>
+							<figcaption title={t.label}>{t.abbr}</figcaption>
 							<svg viewBox={TREND_VIEWBOX} role="img" aria-label={`${t.label}, ${t.from} to ${t.to}`}>
 								<path d={t.median} class="median" />
 								<path d={t.line} stroke={line.color} class="own" />
@@ -85,13 +85,13 @@ const { line } = page;
 	</div>
 
 	<section>
-		<h2>By season</h2>
+		<h2>By year</h2>
 		<div class="scroll">
 			<table class="stats">
 				<thead>
 					<tr>
-						<th>Season</th>
-						{page.metricLabels.map((l) => <th>{l}</th>)}
+						<th>Year</th>
+						{page.columns.map((c) => <th title={c.label}>{c.abbr}</th>)}
 					</tr>
 				</thead>
 				<tbody>
@@ -108,7 +108,7 @@ const { line } = page;
 				</tbody>
 			</table>
 		</div>
-		<p class="sub">Cells shaded by percentile within that season.</p>
+		<p class="sub">Cells shaded by percentile within that year.</p>
 	</section>
 
 	<nav class="others" aria-label={mode === 'subway' ? 'Other lines' : 'Other routes'}>
