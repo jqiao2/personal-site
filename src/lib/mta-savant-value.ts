@@ -6,7 +6,8 @@
 // Wait Value is the time off the vehicle (extra platform or stop wait beyond the
 // schedule), Ride Value the time on it (extra minutes on board beyond the
 // schedule). "Average" is rider-weighted across the mode, so a mode's values sum
-// to zero, as run values do.
+// to zero, as run values do. The rider-hours are then scaled so the line
+// furthest from average scores ±100: 0 is average, and gaps stay proportional.
 import { rank, valueOf, type Dataset, type Mode, type Ranked } from './mta-savant';
 
 export interface ValueStat {
@@ -25,12 +26,12 @@ export const VALUE_STATS: ValueStat[] = [
 	{
 		key: 'wait',
 		label: 'Wait Value',
-		title: 'Rider-hours a month saved waiting for the train or bus, against the average line',
+		title: 'Time riders save waiting for the train or bus against the average line, times riders; −100 to 100, 0 is average',
 	},
 	{
 		key: 'ride',
 		label: 'Ride Value',
-		title: 'Rider-hours a month saved on board, against the average line',
+		title: 'Time riders save on board against the average line, times riders; −100 to 100, 0 is average',
 	},
 ];
 
@@ -59,9 +60,10 @@ export function values(ds: Dataset, key: ValueStat['key'], window: string, pick:
 	if (hit) return hit;
 
 	const hours = hoursAbove(ds, RATE[ds.mode][key], pick);
+	const scale = Math.max(...[...hours.values()].map(Math.abs)) || 1;
 
 	const out = rank(
-		[...hours].map(([id, v]) => ({ id, v })),
+		[...hours].map(([id, v]) => ({ id, v: (100 * v) / scale })),
 		true
 	);
 
@@ -70,10 +72,9 @@ export function values(ds: Dataset, key: ValueStat['key'], window: string, pick:
 	return out;
 }
 
-/** Signed, compact rider-hours: +12.3k, −840. */
+/** Signed whole number on the −100 to 100 scale: +54, −12, 0. */
 export function formatValue(v: number) {
-	const sign = v > 0.5 ? '+' : v < -0.5 ? '−' : '';
-	const a = Math.abs(v);
+	const n = Math.round(v);
 
-	return sign + (a >= 1000 ? `${(a / 1000).toFixed(1)}k` : Math.round(a).toLocaleString('en-US'));
+	return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0';
 }

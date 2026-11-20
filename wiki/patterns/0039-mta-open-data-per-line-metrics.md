@@ -37,5 +37,6 @@
   the other datasets by a couple of months.
 - Wait/Ride/Net Value (`src/lib/mta-savant-value.ts`) are run-value analogues:
   (rider-weighted mode average − line's per-rider extra minutes) × riders ÷ 60 =
-  rider-hours/month above average. Each mode sums to zero; check that after any
+  rider-hours/month above average, then scaled so the most extreme line in the
+  mode is ±100. Each mode sums to zero; check that after any
   change to the rates or the riders series.
