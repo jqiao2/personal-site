@@ -10,7 +10,7 @@
 import { rank, valueOf, type Dataset, type Mode, type Ranked } from './mta-savant';
 
 export interface ValueStat {
-	key: string;
+	key: 'wait' | 'ride';
 	label: string;
 	title: string;
 }
@@ -32,7 +32,6 @@ export const VALUE_STATS: ValueStat[] = [
 		label: 'Ride Value',
 		title: 'Rider-hours a month saved on board, against the average line',
 	},
-	{ key: 'net', label: 'Net Value', title: 'Wait Value plus Ride Value' },
 ];
 
 /** Rider-hours a month above average, per line, for one rate over the window. */
@@ -52,26 +51,19 @@ function hoursAbove(ds: Dataset, rate: string, pick: (month: string) => boolean)
 
 const memo = new Map<string, Ranked>();
 
-/** Ranked Wait, Ride and Net Value for every line over the window. */
-export function values(ds: Dataset, key: string, window: string, pick: (month: string) => boolean): Ranked {
+/** Ranked Wait or Ride Value for every line over the window. */
+export function values(ds: Dataset, key: ValueStat['key'], window: string, pick: (month: string) => boolean): Ranked {
 	const memoKey = `${ds.mode}|${key}|${window}`;
 	const hit = memo.get(memoKey);
 
 	if (hit) return hit;
 
-	const wait = hoursAbove(ds, RATE[ds.mode].wait, pick);
-	const ride = hoursAbove(ds, RATE[ds.mode].ride, pick);
-	const pickFrom = key === 'wait' ? wait : key === 'ride' ? ride : null;
+	const hours = hoursAbove(ds, RATE[ds.mode][key], pick);
 
-	const vals = pickFrom
-		? [...pickFrom].map(([id, v]) => ({ id, v }))
-		: [...wait].flatMap(([id, w]) => {
-				const r = ride.get(id);
-
-				return r === undefined ? [] : [{ id, v: w + r }];
-			});
-
-	const out = rank(vals, true);
+	const out = rank(
+		[...hours].map(([id, v]) => ({ id, v })),
+		true
+	);
 
 	memo.set(memoKey, out);
 
