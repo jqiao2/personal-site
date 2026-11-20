@@ -20,7 +20,7 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 		boards.map((b) => (
 			<section>
 				<h2 class="sign">{b.mode === 'subway' ? 'Subway' : 'Bus'}</h2>
-				<div class="scroll">
+				<div class:list={['scroll', { tall: b.mode === 'subway' }]}>
 					<table class="stats" data-sortable>
 						<thead>
 							<tr>
@@ -163,6 +163,11 @@ const boards = await Promise.all(MODES.map(async (mode) => ({ mode, ...(await le
 		overflow-x: auto;
 		max-height: 80vh;
 		overflow-y: auto;
+	}
+	/* The subway's two dozen lines fit; only the 350-odd bus routes need their own scroll. */
+	.scroll.tall {
+		max-height: none;
+		overflow-y: visible;
 	}
 	.stats {
 		border-collapse: collapse;

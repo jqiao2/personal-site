@@ -1,87 +1,107 @@
-// Value: MTA Savant's answer to Savant's batting and baserunning run value. Run
-// value counts runs above an average player, so it is quality times playing
-// time; here it is rider-hours a month saved against the average line, so it is
-// lost-or-saved minutes per rider times riders.
+// Ride and Wait Value: MTA Savant's offensive and defensive WAR. WAR sums every
+// part of a player's game in one currency (runs), measures it against a
+// replacement-level player, and scales it by playing time. So here:
 //
-// Wait Value is the time off the vehicle (extra platform or stop wait beyond the
-// schedule), Ride Value the time on it (extra minutes on board beyond the
-// schedule). "Average" is rider-weighted across the mode, so a mode's values sum
-// to zero, as run values do.
+// - Every stat is sorted onto one side. Ride Value (offense) is what happens on
+//   board; Wait Value (defense) is everything before boarding.
+// - The common currency is a z-score within the mode, sign-flipped where lower
+//   is better, and a line's rate on a side is the mean of its z-scores there.
+// - Replacement level is the 20th-percentile line's rate on that side.
+// - Value = (rate − replacement) × riders, scaled so the best line is 100.
+//   0 is a replacement-level line; below it goes negative.
+//
+// Journey on time (wJT%) spans both sides, so it is left out of both.
 import { rank, valueOf, type Dataset, type Mode, type Ranked } from './mta-savant';
 
 export interface ValueStat {
-	key: string;
+	key: 'ride' | 'wait';
 	label: string;
 	title: string;
 }
 
-/** The per-rider minutes each value is built from, by mode. */
-const RATE: Record<Mode, { wait: string; ride: string }> = {
-	subway: { wait: 'apt', ride: 'att' },
-	bus: { wait: 'abst', ride: 'att' },
+/** Which metrics feed each side, by mode. */
+const SIDES: Record<Mode, Record<ValueStat['key'], string[]>> = {
+	subway: { ride: ['att', 'otp', 'delays', 'incidents'], wait: ['apt', 'wait', 'delivered', 'alerts'] },
+	bus: { ride: ['att', 'speed'], wait: ['abst', 'wait', 'delivered'] },
 };
+
+// ponytail: equal weights and a fixed 20th-percentile replacement line; weight
+// by how much each stat costs riders if the split ever feels off.
+const REPLACEMENT_PCT = 0.2;
 
 export const VALUE_STATS: ValueStat[] = [
 	{
-		key: 'wait',
-		label: 'Wait Value',
-		title: 'Rider-hours a month saved waiting for the train or bus, against the average line',
-	},
-	{
 		key: 'ride',
 		label: 'Ride Value',
-		title: 'Rider-hours a month saved on board, against the average line',
+		title: 'Offensive WAR: extra time on board, on-time arrivals, delays and incidents (bus: time on board, speed) against a replacement-level line, times riders; best line is 100',
 	},
-	{ key: 'net', label: 'Net Value', title: 'Wait Value plus Ride Value' },
+	{
+		key: 'wait',
+		label: 'Wait Value',
+		title: 'Defensive WAR: extra platform wait, even gaps, service delivered and alerts (bus: stop wait, gaps, service) against a replacement-level line, times riders; best line is 100',
+	},
 ];
 
-/** Rider-hours a month above average, per line, for one rate over the window. */
-function hoursAbove(ds: Dataset, rate: string, pick: (month: string) => boolean) {
-	const lines = ds.lines.flatMap((l) => {
-		const minutes = valueOf(ds, l.id, rate, pick);
-		const riders = valueOf(ds, l.id, 'riders', pick);
+/** Mean signed z-score per line over one side's metrics; lines missing a metric average the rest. */
+function rates(ds: Dataset, keys: string[], pick: (month: string) => boolean) {
+	const zs = new Map<string, number[]>();
 
-		return minutes === null || riders === null ? [] : [{ id: l.id, minutes, riders }];
-	});
+	for (const key of keys) {
+		const metric = ds.metrics.find((m) => m.key === key)!;
 
-	const total = lines.reduce((sum, l) => sum + l.riders, 0);
-	const average = lines.reduce((sum, l) => sum + l.minutes * l.riders, 0) / total;
+		const vals = ds.lines.flatMap((l) => {
+			const v = valueOf(ds, l.id, key, pick);
 
-	return new Map(lines.map((l) => [l.id, ((average - l.minutes) * l.riders) / 60]));
+			return v === null ? [] : [{ id: l.id, v }];
+		});
+
+		const mean = vals.reduce((sum, x) => sum + x.v, 0) / vals.length;
+		const sd = Math.sqrt(vals.reduce((sum, x) => sum + (x.v - mean) ** 2, 0) / vals.length) || 1;
+
+		for (const x of vals) {
+			const z = ((x.v - mean) / sd) * (metric.higherIsBetter ? 1 : -1);
+
+			(zs.get(x.id) ?? zs.set(x.id, []).get(x.id)!).push(z);
+		}
+	}
+
+	return new Map([...zs].map(([id, list]) => [id, list.reduce((a, b) => a + b, 0) / list.length]));
 }
 
 const memo = new Map<string, Ranked>();
 
-/** Ranked Wait, Ride and Net Value for every line over the window. */
-export function values(ds: Dataset, key: string, window: string, pick: (month: string) => boolean): Ranked {
+/** Ranked Ride or Wait Value for every line over the window. */
+export function values(ds: Dataset, key: ValueStat['key'], window: string, pick: (month: string) => boolean): Ranked {
 	const memoKey = `${ds.mode}|${key}|${window}`;
 	const hit = memo.get(memoKey);
 
 	if (hit) return hit;
 
-	const wait = hoursAbove(ds, RATE[ds.mode].wait, pick);
-	const ride = hoursAbove(ds, RATE[ds.mode].ride, pick);
-	const pickFrom = key === 'wait' ? wait : key === 'ride' ? ride : null;
+	const rate = rates(ds, SIDES[ds.mode][key], pick);
+	const sorted = [...rate.values()].sort((a, b) => a - b);
+	const replacement = sorted[Math.floor(REPLACEMENT_PCT * (sorted.length - 1))];
 
-	const vals = pickFrom
-		? [...pickFrom].map(([id, v]) => ({ id, v }))
-		: [...wait].flatMap(([id, w]) => {
-				const r = ride.get(id);
+	const raw = [...rate].flatMap(([id, r]) => {
+		const riders = valueOf(ds, id, 'riders', pick);
 
-				return r === undefined ? [] : [{ id, v: w + r }];
-			});
+		return riders === null ? [] : [{ id, v: (r - replacement) * riders }];
+	});
 
-	const out = rank(vals, true);
+	const best = Math.max(...raw.map((x) => x.v)) || 1;
+
+	const out = rank(
+		raw.map((x) => ({ id: x.id, v: (100 * x.v) / best })),
+		true
+	);
 
 	memo.set(memoKey, out);
 
 	return out;
 }
 
-/** Signed, compact rider-hours: +12.3k, −840. */
+/** Signed whole number, best line = 100: +54, −12, 0. */
 export function formatValue(v: number) {
-	const sign = v > 0.5 ? '+' : v < -0.5 ? '−' : '';
-	const a = Math.abs(v);
+	const n = Math.round(v);
 
-	return sign + (a >= 1000 ? `${(a / 1000).toFixed(1)}k` : Math.round(a).toLocaleString('en-US'));
+	return n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0';
 }

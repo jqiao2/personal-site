@@ -175,19 +175,34 @@ export async function linePage(mode: Mode, slug: string) {
 export async function leaderboard(mode: Mode) {
 	const ds = await loadDataset(mode);
 	const window = trailing(ds);
-	const ranks = ds.metrics.map((m) => percentiles(ds, m.key, 'trailing', window));
+
+	// Wait and Ride Value lead, as on a line's own page, then the metrics.
+	const stats = [
+		...VALUE_STATS.map((v) => ({
+			abbr: v.label,
+			label: v.title,
+			format: formatValue,
+			ranked: values(ds, v.key, 'trailing', window),
+		})),
+		...ds.metrics.map((m) => ({
+			abbr: m.abbr,
+			label: m.label,
+			format: m.format,
+			ranked: percentiles(ds, m.key, 'trailing', window),
+		})),
+	];
 
 	const rows = ds.lines
 		.map((line: Line) => ({
 			line,
-			cells: ds.metrics.map((m, i) => {
-				const p = ranks[i].get(line.id);
+			cells: stats.map((s) => {
+				const p = s.ranked.get(line.id);
 
-				return p ? { text: m.format(p.value), color: pctColor(p.pct), ink: pctInk(p.pct), pct: p.pct } : null;
+				return p ? { text: s.format(p.value), color: pctColor(p.pct), ink: pctInk(p.pct), pct: p.pct } : null;
 			}),
 		}))
 		// Retired routes with nothing in the window stay reachable from their own page, not here.
 		.filter((r) => r.cells.some(Boolean));
 
-	return { latest: monthLabel(ds.latest), columns: ds.metrics.map((m) => ({ abbr: m.abbr, label: m.label })), rows };
+	return { latest: monthLabel(ds.latest), columns: stats.map((s) => ({ abbr: s.abbr, label: s.label })), rows };
 }
