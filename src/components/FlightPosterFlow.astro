@@ -1,0 +1,137 @@
+---
+// One poll of the flight poster, as a flowchart. Mirrors runCycle() in
+// jqiao2/flight-poster src/app.cpp; the numbers are the defaults in
+// src/lib/flight-poster.ts.
+---
+
+<figure class="flow">
+	<svg viewBox="0 0 460 760" role="img" aria-labelledby="flow-title">
+		<title id="flow-title">
+			Every five minutes the board wakes; outside 7am to 11pm it goes back to sleep. Otherwise it checks in with the
+			site, asks adsb.fi what is within 25 nautical miles, keeps the airliners, looks up each route on adsbdb and picks
+			one, weighted toward far cities. If that is a new city and an hour has passed since the last redraw, or a city was
+			queued from the site, it draws the poster from the microSD card. Then it sleeps until the next poll.
+		</title>
+		<defs>
+			<marker id="flow-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path class="head" d="M0 0 L8 4 L0 8 Z" />
+			</marker>
+		</defs>
+
+		<!-- steps: column x 70–370, center 220 -->
+		<rect class="step" x="70" y="10" width="300" height="44" rx="22" />
+		<text class="t" x="220" y="37">Wake up every five minutes</text>
+
+		<polygon class="ask" points="86,84 354,84 370,106 354,128 86,128 70,106" />
+		<text class="t" x="220" y="111">Between 7am and 11pm?</text>
+
+		<rect class="step" x="70" y="158" width="300" height="52" />
+		<text class="t" x="220" y="180">Check in with the site</text>
+		<text class="s" x="220" y="198">send status · get settings</text>
+
+		<rect class="step" x="70" y="240" width="300" height="52" />
+		<text class="t" x="220" y="262">Ask adsb.fi what is overhead</text>
+		<text class="s" x="220" y="280">everything within 25 nautical miles</text>
+
+		<rect class="step" x="70" y="322" width="300" height="52" />
+		<text class="t" x="220" y="344">Keep the airliners</text>
+		<text class="s" x="220" y="362">airline callsign · above 1,500 ft</text>
+
+		<rect class="step" x="70" y="404" width="300" height="52" />
+		<text class="t" x="220" y="426">Look up each route on adsbdb</text>
+		<text class="s" x="220" y="444">where it came from, where it is going</text>
+
+		<rect class="step" x="70" y="486" width="300" height="52" />
+		<text class="t" x="220" y="508">Pick one plane</text>
+		<text class="s" x="220" y="526">weighted toward far-away cities</text>
+
+		<polygon class="ask" points="86,568 354,568 370,594 354,620 86,620 70,594" />
+		<text class="t" x="220" y="590">A new city, and an hour since</text>
+		<text class="t" x="220" y="608">the last redraw?</text>
+
+		<rect class="step" x="70" y="650" width="300" height="52" />
+		<text class="t" x="220" y="672">Draw its poster from the microSD</text>
+		<text class="s" x="220" y="690">about 20 seconds, six inks</text>
+
+		<rect class="step" x="70" y="722" width="300" height="34" rx="17" />
+		<text class="t" x="220" y="744">Sleep until the next poll</text>
+
+		<!-- main spine -->
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 54 V83" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 128 V157" />
+		<text class="l" x="228" y="146">yes</text>
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 210 V239" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 292 V321" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 374 V403" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 456 V485" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 538 V567" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 620 V649" />
+		<text class="l" x="228" y="638">yes</text>
+		<path class="wire" marker-end="url(#flow-arrow)" d="M220 702 V721" />
+
+		<!-- "no" rail on the right, into sleep -->
+		<path class="wire" d="M370 106 H420 V739" />
+		<path class="wire" d="M370 594 H420" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M420 739 H371" />
+		<text class="l" x="378" y="100">no</text>
+		<text class="l" x="378" y="588">no</text>
+
+		<!-- a city queued from the admin page skips straight to the draw -->
+		<path class="wire" stroke-dasharray="4 3" d="M70 184 H45 V676" />
+		<path class="wire" stroke-dasharray="4 3" marker-end="url(#flow-arrow)" d="M45 676 H69" />
+		<text class="l" x="40" y="430" transform="rotate(-90 40 430)" text-anchor="middle">a city queued from the site</text>
+
+		<!-- loop back to the top -->
+		<path class="wire" d="M70 739 H18 V32" />
+		<path class="wire" marker-end="url(#flow-arrow)" d="M18 32 H69" />
+	</svg>
+</figure>
+
+<style>
+	.flow {
+		margin: 1.5rem 0;
+	}
+
+	.flow svg {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+
+	.step {
+		fill: var(--card);
+		stroke: var(--border);
+	}
+
+	.ask {
+		fill: var(--bg);
+		stroke: var(--ink-soft);
+	}
+
+	.wire {
+		fill: none;
+		stroke: var(--ink-soft);
+		stroke-width: 1.25;
+	}
+
+	.head {
+		fill: var(--ink-soft);
+	}
+
+	.t {
+		fill: var(--fg);
+		font: 15px var(--serif);
+		text-anchor: middle;
+	}
+
+	.s {
+		fill: var(--ink-soft);
+		font: 12px var(--sans);
+		text-anchor: middle;
+	}
+
+	.l {
+		fill: var(--ink-soft);
+		font: italic 12px var(--serif);
+	}
+</style>
