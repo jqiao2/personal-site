@@ -2,6 +2,7 @@
 // The flight poster, for visitors: an exploded view of the frame. Static; the
 // owner's settings live at /projects/flight-poster/admin, linked below for the
 // owner only (hidden client-side, see SiteHeader.astro).
+import FlightPosterFlow from '../../components/FlightPosterFlow.astro';
 import Layout from '../../layouts/Layout.astro';
 import { H, LAYERS, VIEWBOX, W, layerMatrix, leaderEnd } from '../../lib/flight-poster-exploded';
 
@@ -99,11 +100,7 @@ const INKS = [
 	</figure>
 
 	<h2>How it works</h2>
-	<ol>
-		<li>Every five minutes, from 7am to 11pm, the board asks adsb.fi what is in the sky within 25 nautical miles.</li>
-		<li>It keeps the airliners, looks up each one's route on adsbdb, and picks one, weighted toward the far-away cities.</li>
-		<li>It draws that city's poster from the microSD card. A full refresh takes about 20 seconds, so it only redraws when the city changes, and never more than once an hour.</li>
-	</ol>
+	<FlightPosterFlow />
 	<p>
 		The panel holds its picture with the power off, and it only draws power while it refreshes. There are six inks,
 		and every poster is dithered down to them:
