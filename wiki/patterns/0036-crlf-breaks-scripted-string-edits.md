@@ -14,3 +14,6 @@ Use the Edit tool for anything multi-line. It matches CRLF files. In a script, c
 
 ## Seen
 - 2026-11-04 — recipes library: `nav.ts`, `SiteHeader.astro` and `strava/sync.ts`.
+
+Also: a Bash-tool heredoc here can halve double backslashes even when quoted, so a
+`new RegExp` template silently misses. Use `String.raw` with single backslashes.
