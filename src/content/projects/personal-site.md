@@ -2,7 +2,7 @@
 title: Personal Site
 description: This site — an Astro-based place to document career work and hobbies.
 repoUrl: https://github.com/jqiao2/personal-site
-date: 2026-07-10
+date: 2026-11-22
 tags: [astro, typescript]
 ---
 
