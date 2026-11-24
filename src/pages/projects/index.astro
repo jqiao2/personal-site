@@ -12,7 +12,7 @@ import Layout from '../../layouts/Layout.astro';
 const interactive: {
 	href: string;
 	title: string;
-	tag: string;
+	tags: string[];
 	description: string;
 	// Last real work on it. Set by hand: Vercel builds from a shallow clone, so
 	// git can't say, and repo-wide sweeps shouldn't count as touching a project.
@@ -27,59 +27,45 @@ const interactive: {
 		href: '/month',
 		date: '2026-11-12',
 		title: 'Journal',
-		tag: 'live',
-		description:
-			'My own Letterboxd, Goodreads, restaurant diary and Strava, built end to end with Claude ' +
-			'Code — films, books, meals and activities, each logged its own way, then drawn together on ' +
-			'one paper calendar where every day is a cluster of what I did, each mark sized by the time it took.',
+		tags: ['web', 'data viz'],
+		description: 'Films, books, meals and activities, logged and drawn together on one calendar.',
 	},
 	{
 		href: '/projects/credit-network',
 		date: '2026-09-16',
 		title: 'Credit Network',
-		tag: 'interactive',
+		tags: ['data viz', 'film'],
 		ownerOnly: true,
-		description:
-			'A collaboration graph of actors, directors and composers drawn from ~36,000 TMDB films — ' +
-			'force-directed, filterable and draggable.',
+		description: 'A collaboration graph of actors, directors and composers across ~36,000 films.',
 	},
 	{
 		href: '/subway',
 		date: '2026-10-14',
 		title: 'Subway Map',
-		tag: 'wip',
-		description:
-			'An interactive MTA map, its geometry generated from the official schematic — click a line ' +
-			'to mark it ridden, a station to mark it visited, and watch the coverage add up.',
+		tags: ['map', 'transit'],
+		description: 'An interactive map for tracking every NYC subway line I’ve ridden and station I’ve visited.',
 	},
 	{
 		href: '/projects/mta-savant',
 		date: '2026-11-20',
 		title: 'MTA Savant',
-		tag: 'data',
-		description:
-			'Baseball Savant for the subway and buses — every line and route gets a player page of percentile ' +
-			'rankings, season-by-season stats and monthly trends, built from the MTA’s open performance data.',
+		tags: ['data viz', 'transit'],
+		description: 'Baseball Savant for NYC transit: percentile rankings for every subway line and bus route.',
 	},
 	{
 		href: '/projects/flight-poster',
 		date: '2026-11-22',
 		title: 'Flight Poster',
-		tag: 'hardware',
-		description:
-			'A framed 13.3″ color e-ink poster that shows a vintage travel poster for wherever the plane ' +
-			'flying over the apartment is coming from or going to. An ESP32 picks the flight from live ADS-B data.',
+		tags: ['hardware', 'e-ink'],
+		description: 'A framed e-ink display that shows a vintage travel poster for the plane flying over my apartment.',
 	},
 	{
 		href: '/bike-outline',
 		date: '2026-09-12',
 		title: 'Bike Outline Generator',
-		tag: 'interactive',
+		tags: ['map', 'cycling'],
 		ownerOnly: true,
-		description:
-			'I ride the routes shaped like countries. Load a silhouette, float it over the map as a fixed-size ' +
-			'stencil, pan and zoom to drop it on roads you want to ride, and it routes the shape there — ' +
-			'clockwise or counter-clockwise — scores how faithfully the roads trace it, and exports a GPX.',
+		description: 'Turns the outline of a country into a bike route on real roads, exported as a GPX.',
 	},
 ];
 
@@ -89,7 +75,7 @@ const projects = [
 	...(await getCollection('projects')).map(({ id, data }) => ({
 		href: `/projects/${id}`,
 		title: data.title,
-		tag: undefined,
+		tags: data.tags,
 		description: data.description,
 		date: data.date,
 		ownerOnly: false,
@@ -103,7 +89,7 @@ const projects = [
 		{
 			projects.map((project) => (
 				<li data-owner-only-nav={project.ownerOnly ? '' : undefined}>
-					<a href={project.href}>{project.title}</a> {project.tag && <span class="tag">{project.tag}</span>}
+					<a href={project.href}>{project.title}</a> {project.tags.map((tag) => <><span class="tag">{tag}</span>{' '}</>)}
 					<p>{project.description}</p>
 				</li>
 			))

@@ -1,9 +1,9 @@
 ---
 title: Post Scheduler Bot
-description: A bot that schedules and posts a week's worth of Reddit submissions on a daily cadence.
+description: Schedules a week of Reddit posts and submits them daily.
 repoUrl: https://github.com/jqiao2/postSchedulerBot
 date: 2018-05-12
-tags: [python, reddit, automation, bot]
+tags: [bot, reddit]
 ---
 
 Posts to Reddit daily, pulling from a week's worth of pre-written post files (one file per day,

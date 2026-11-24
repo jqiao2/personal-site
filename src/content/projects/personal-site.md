@@ -1,9 +1,9 @@
 ---
 title: Personal Site
-description: This site — an Astro-based place to document career work and hobbies.
+description: This site, built with Astro.
 repoUrl: https://github.com/jqiao2/personal-site
 date: 2026-11-22
-tags: [astro, typescript]
+tags: [web]
 ---
 
 Built with Astro and Markdown content collections. Started as a Django project, rebuilt as a

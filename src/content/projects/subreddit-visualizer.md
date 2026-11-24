@@ -1,9 +1,9 @@
 ---
 title: Subreddit Visualizer
-description: Maps subreddit relationships on Reddit into a Gephi network graph using PRAW and GephiStreamer.
+description: A network graph of subreddits, linked by how they mention each other.
 repoUrl: https://github.com/jqiao2/SubredditVisualizer
 date: 2018-05-26
-tags: [python, reddit, graph, gephi]
+tags: [data viz, reddit]
 ---
 
 Uses PRAW, GephiStreamer, and Sigma.js to map (almost) all subreddits on Reddit, connecting them by
