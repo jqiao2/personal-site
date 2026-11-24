@@ -7,14 +7,16 @@ import Layout from '../layouts/Layout.astro';
 
 const experience = [
 	{
-		company: 'Brigit.com, Payments Team',
-		role: 'Software Engineer',
+		company: 'Brigit, Payments',
+		role: 'Software Engineer III',
 		location: 'New York, NY',
 		dates: 'Oct 2025 -- Present',
 		bullets: [
-			'Designed and shipped a Redis caching layer across three bank tables, cutting endpoint <strong>P95 latency by 85%</strong> (163ms to 24.6ms) and eliminating a production bottleneck during peak subscription processing (480 requests/s)',
-			'Integrated Worldpay as a second ACH payment processor from the ground up -- batch XML handling, SFTP file delivery, return/NOC handling, and account funding -- adding processor redundancy to a stack previously dependent on a single vendor; currently processing <strong>$250k/month</strong> in a phased rollout',
-			'Created Claude AI coding agents automating the design doc to scoped Jira tickets to draft PR workflow with human approval at every step; adopted across multiple engineering teams and in active refinement',
+			"Led the end-to-end integration of Worldpay as Brigit's second payment processor (ACH, card, returns, NOCs, chargebacks), from one-pager to hypercare; serving <strong>100k payments per day</strong>",
+			"Designed and shipped a Redis layer in front of our backend's most trafficked endpoint relieving DB lock waits of up to 3.7s, dropping peak p99 latency by <strong>89%</strong>; held through peak subscription day, presented as an engineering tech talk",
+			'Architected payment routing system replacement, eliminating cross-pod calls and letting the team shift traffic between bank partners without code changes',
+			'Spotted a database 50 days from its storage limit and designed a plan to cut its largest table (22 TB) by <strong>45%</strong>, with a 2-year retention window and a Snowflake archive',
+			'Drove AI adoption on the team by designing and building Claude agent engineering workflows, while promoting agentic best practices amongst engineers',
 		],
 	},
 	{
@@ -100,8 +102,22 @@ const education = {
 };
 
 const skills = {
-	languages: ['Python', 'Java', 'C', 'PHP', 'C++'],
-	tools: ['Git', 'PostgreSQL', 'Redis', 'AWS', 'GCS', 'Kubernetes', 'Claude', 'Spark', 'OpenCV'],
+	languages: ['Python', 'C', 'Java', 'PHP', 'C++', 'JavaScript'],
+	tools: [
+		'Git',
+		'MySQL',
+		'PostgreSQL',
+		'Redis',
+		'AWS',
+		'GCS',
+		'Docker',
+		'Kubernetes',
+		'NumPy',
+		'TensorFlow',
+		'PyTorch',
+		'OpenCV',
+		'Claude',
+	],
 };
 
 const projects = [
