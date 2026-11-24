@@ -5,10 +5,6 @@
 import { getCollection } from 'astro:content';
 import Layout from '../../layouts/Layout.astro';
 
-const projects = (await getCollection('projects')).sort(
-	(a, b) => b.data.date.valueOf() - a.data.date.valueOf()
-);
-
 // Projects that live on this site rather than in a repo, so they aren't in the
 // content collection — they're pages, and they link straight to the thing itself.
 // Kept out of the collection deliberately: an entry with id "credit-network"
@@ -18,6 +14,9 @@ const interactive: {
 	title: string;
 	tag: string;
 	description: string;
+	// Last real work on it. Set by hand: Vercel builds from a shallow clone, so
+	// git can't say, and repo-wide sweeps shouldn't count as touching a project.
+	date: string;
 	ownerOnly?: boolean;
 }[] = [
 	{
@@ -26,6 +25,7 @@ const interactive: {
 		// Links to the month-in-review page, which is where all four meet — the
 		// same place the site's own Journal tab points.
 		href: '/month',
+		date: '2026-11-12',
 		title: 'Journal',
 		tag: 'live',
 		description:
@@ -35,6 +35,7 @@ const interactive: {
 	},
 	{
 		href: '/projects/credit-network',
+		date: '2026-09-16',
 		title: 'Credit Network',
 		tag: 'interactive',
 		ownerOnly: true,
@@ -44,6 +45,7 @@ const interactive: {
 	},
 	{
 		href: '/subway',
+		date: '2026-10-14',
 		title: 'Subway Map',
 		tag: 'wip',
 		description:
@@ -52,6 +54,7 @@ const interactive: {
 	},
 	{
 		href: '/projects/mta-savant',
+		date: '2026-11-20',
 		title: 'MTA Savant',
 		tag: 'data',
 		description:
@@ -60,6 +63,7 @@ const interactive: {
 	},
 	{
 		href: '/projects/flight-poster',
+		date: '2026-11-22',
 		title: 'Flight Poster',
 		tag: 'hardware',
 		description:
@@ -68,6 +72,7 @@ const interactive: {
 	},
 	{
 		href: '/bike-outline',
+		date: '2026-09-12',
 		title: 'Bike Outline Generator',
 		tag: 'interactive',
 		ownerOnly: true,
@@ -77,24 +82,29 @@ const interactive: {
 			'clockwise or counter-clockwise — scores how faithfully the roads trace it, and exports a GPX.',
 	},
 ];
+
+// Most recently touched first, wherever the project lives.
+const projects = [
+	...interactive.map((project) => ({ ...project, date: new Date(project.date) })),
+	...(await getCollection('projects')).map(({ id, data }) => ({
+		href: `/projects/${id}`,
+		title: data.title,
+		tag: undefined,
+		description: data.description,
+		date: data.date,
+		ownerOnly: false,
+	})),
+].sort((a, b) => b.date.valueOf() - a.date.valueOf());
 ---
 
 <Layout title="Projects">
 	<h1>Projects</h1>
 	<ul>
 		{
-			interactive.map((project) => (
-				<li data-owner-only-nav={project.ownerOnly ? '' : undefined}>
-					<a href={project.href}>{project.title}</a> <span class="tag">{project.tag}</span>
-					<p>{project.description}</p>
-				</li>
-			))
-		}
-		{
 			projects.map((project) => (
-				<li>
-					<a href={`/projects/${project.id}`}>{project.data.title}</a>
-					<p>{project.data.description}</p>
+				<li data-owner-only-nav={project.ownerOnly ? '' : undefined}>
+					<a href={project.href}>{project.title}</a> {project.tag && <span class="tag">{project.tag}</span>}
+					<p>{project.description}</p>
 				</li>
 			))
 		}
