@@ -47,3 +47,4 @@ add or update a pattern.
 | [0039](patterns/0039-mta-open-data-per-line-metrics.md) | MTA per-line metrics from data.ny.gov | strategy | pulling MTA subway/bus performance by line/route, or a line's history splits around Sep 2024 |
 | [0040](patterns/0040-bot-protection-blocks-device-syncs.md) | Vercel bot protection blocks device syncs silently | failure-mode | a Kindle, Shortcut or board sync goes quiet, an endpoint answers 429, or adding a machine-to-machine endpoint |
 | [0041](patterns/0041-navigation-api-for-the-previous-page.md) | The previous page comes from the Navigation API, not the referrer | strategy | adding a back link, or needing to know which page of ours came before this one |
+| [0042](patterns/0042-letterboxd-watchlist-scrape.md) | Reading a Letterboxd watchlist | strategy | syncing or importing a Letterboxd watchlist, or turning a Letterboxd film into a TMDB id |
