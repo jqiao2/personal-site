@@ -17,6 +17,7 @@
 // because it wasn't being read: the sidecar says what the verdict is now, the
 // list says what it was each time, and a chart of eleven points was a third
 // answer to a question the page had already answered twice.
+import BackLink from '../../../components/BackLink.astro';
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../../components/MealEditor.astro';
 import PlaceEditor from '../../../components/PlaceEditor.astro';
@@ -115,7 +116,7 @@ const UNCONFIRMED = `Nobody confirmed this. “${place.city}” was assumed when
 >
 	<div class="rl-page rl-page--flush">
 		<div class="rl-topbar">
-			<a class="rl-back" href="/restaurants/places">&larr; Jason&rsquo;s restaurant log</a>
+			<BackLink href="/restaurants/places" label="Restaurants" theme="restaurant" />
 			<span class="rl-tag">Restaurants</span>
 		</div>
 

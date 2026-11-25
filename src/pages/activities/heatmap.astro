@@ -33,6 +33,7 @@
 // for geolocation on load and opens there; the all-time bounds are the
 // fallback for a denial, a timeout, or a browser without the API — never a
 // blank world view.
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import SiteHeader from '../../components/SiteHeader.astro';
@@ -73,7 +74,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 
 			<header class="head">
 				<div>
-					<a class="back" href="/activities">← Activity log</a>
+					<BackLink href="/activities" label="Activity log" theme="activity" />
 					<h1 class="head__title">Heatmap</h1>
 				</div>
 				<div class="head__controls">
@@ -613,13 +614,6 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		gap: 18px;
 		flex-wrap: wrap;
 		padding: var(--ph-top) 28px var(--ph-below);
-	}
-	.back {
-		font-size: 12.5px;
-		color: var(--granite-soft);
-	}
-	.back:hover {
-		color: var(--lake);
 	}
 	.head__title {
 		font-family: var(--serif);

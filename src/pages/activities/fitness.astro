@@ -12,6 +12,7 @@
 // toggle and the custom From/To pickers only re-slice and redraw it client-side,
 // through the same plotPmc the server rendered with — one implementation, not
 // two that drift (the same split as /activities/athlete).
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { requireOwner } from '../../lib/auth';
@@ -107,7 +108,7 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 			<header class="head">
-				<a class="back" href="/activities">← Activity log</a>
+				<BackLink href="/activities" label="Activity log" theme="activity" />
 				<h1 class="head__title">Fitness trend</h1>
 			</header>
 
@@ -417,7 +418,6 @@ const inputTo = initial.length ? initial[initial.length - 1].date : to;
 		gap: 2rem;
 	}
 	.head { display: flex; flex-direction: column; gap: var(--ph-gap); margin: calc(var(--ph-top) - 2rem) 0 calc(var(--ph-below) - 2rem); }
-	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
 	.head__title { margin: 0; font-size: var(--ph-title); line-height: var(--ph-title-lh); }
 	.muted { color: var(--granite-soft); }
 	.flash { margin: 0; padding: 0.5rem 0.75rem; border-radius: 0.5rem; font-size: 0.9rem; }

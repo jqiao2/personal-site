@@ -35,6 +35,7 @@
 // means the potentially-thousands-of-samples stream arrays never have to be
 // serialized to the client at all — only the small, already-computed path
 // strings are.
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityMap from '../../components/ActivityMap.astro';
 import ActivityGraph from '../../components/ActivityGraph.astro';
@@ -497,7 +498,7 @@ const exInk = exertionInk(activity.exertion);
 <ActivityLayout title={pageTitle}>
 	<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 	<div class="page">
-		<a class="back" href="/activities" data-back>&larr; Activities</a>
+		<BackLink href="/activities" label="Activities" theme="activity" style="margin-bottom: 1rem" />
 
 		{
 			parent && (
@@ -1008,15 +1009,6 @@ const exInk = exertionInk(activity.exertion);
 		max-width: 1100px;
 		margin: 0 auto;
 		padding: var(--ph-top) 1.5rem 5rem;
-	}
-	.back {
-		display: inline-block;
-		font-size: 0.85rem;
-		color: #6b7b88;
-		margin-bottom: 1rem;
-	}
-	.back:hover {
-		color: #1c6e8c;
 	}
 
 	.parent-banner {

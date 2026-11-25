@@ -13,6 +13,7 @@
 // fetchActivityFacets pages that same small table once — cheap enough to
 // read right here, so the panel is fully server-rendered on first paint and
 // there is no "loading filters…" state to design for.
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
 import { requireOwner } from '../../lib/auth';
@@ -236,7 +237,7 @@ const scopeDummy: ActivityCardRow = {
 		</div>
 
 		<header class="head">
-			<a class="back" href="/activities">← Jason's activity log</a>
+			<BackLink href="/activities" label="Jason's activity log" theme="activity" style="margin-bottom: var(--ph-gap)" />
 			<h1>All activities</h1>
 			<div class="sub">
 				<span class="sub__n">{num(collectionTotal)}</span> activities logged · showing{' '}
@@ -492,15 +493,6 @@ const scopeDummy: ActivityCardRow = {
 
 		.head {
 			margin-bottom: var(--ph-below);
-		}
-		.back {
-			display: inline-block;
-			font-size: 0.8rem;
-			color: #6b7b88;
-			margin-bottom: var(--ph-gap);
-		}
-		.back:hover {
-			color: #1c6e8c;
 		}
 		h1 {
 			font-size: var(--ph-title);

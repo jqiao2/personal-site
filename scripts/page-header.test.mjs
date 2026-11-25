@@ -26,7 +26,7 @@ export function problems(source, ownTitle = false) {
 	for (const [, selector, body] of css.matchAll(/([^{};>]+)\{([^{}]*)\}/g)) {
 		const size = body.match(/(?:^|[;\s])font(?:-size)?:\s*([^;]+)/)?.[1];
 
-		if (!ownTitle && /(?:\bh1|\.head__title)\s*(?:,|$)/.test(selector.trim()) && size && !size.includes('var(--ph-title)')) {
+		if (!ownTitle && /(?:\bh1|(?:^|[ ,])\.(?:rl-)?head__title)\s*(?:,|$)/.test(selector.trim()) && size && !size.includes('var(--ph-title)')) {
 			found.push(`title is ${size}, not var(--ph-title)`);
 		}
 
@@ -34,7 +34,7 @@ export function problems(source, ownTitle = false) {
 
 		if (!padding) continue;
 
-		if (selector.trim().endsWith('.topbar') && !padding.startsWith('var(--ph-top)')) {
+		if (selector.trim().endsWith('topbar') && !padding.startsWith('var(--ph-top)')) {
 			found.push(`.topbar padding is ${padding}, not var(--ph-top)`);
 		}
 
@@ -53,12 +53,16 @@ const bad = '<div class="page"><SiteHeader /></div><style>.page { padding: 3rem;
 
 if (problems(bad).length !== 3) throw new Error('page-header check no longer catches a bad page');
 
-const pages = readdirSync('src/pages', { recursive: true })
-	.map((f) => f.replaceAll(sep, '/'))
-	.filter((f) => f.endsWith('.astro') && !f.startsWith('archive/'));
+// Layouts too: the restaurant log keeps its page header in one.
+const pages = ['layouts', 'pages'].flatMap((dir) =>
+	readdirSync(`src/${dir}`, { recursive: true })
+		.map((f) => f.replaceAll(sep, '/'))
+		.filter((f) => f.endsWith('.astro') && !f.startsWith('archive/'))
+		.map((name) => ({ name, path: `src/${dir}/${name}` })),
+);
 
-const failures = pages.flatMap((f) =>
-	problems(readFileSync(`src/pages/${f}`, 'utf8'), OWN_TITLE.has(f)).map((p) => `src/pages/${f}: ${p}`),
+const failures = pages.flatMap(({ name, path }) =>
+	problems(readFileSync(path, 'utf8'), OWN_TITLE.has(name)).map((p) => `${path}: ${p}`),
 );
 
 if (failures.length) {
@@ -66,4 +70,4 @@ if (failures.length) {
 	process.exit(1);
 }
 
-console.log(`page headers: ${pages.length} pages ok`);
+console.log(`page headers: ${pages.length} files ok`);

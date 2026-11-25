@@ -16,6 +16,7 @@
 // and marks where the part sits in it. Parts with no mileage interval at all
 // (bearings, valves) get no bar rather than a fabricated one: see
 // ComponentWear.fraction in src/lib/gear.ts.
+import BackLink from '../../../components/BackLink.astro';
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
 import SiteHeader from '../../../components/SiteHeader.astro';
 import { requireOwner } from '../../../lib/auth';
@@ -159,7 +160,7 @@ function usedText(w: ComponentWear): string {
 			<SiteHeader pathname="/activities" theme="activity" />
 
 			<div class="wrap">
-				<a class="back" href="/activities/gear">← Gear</a>
+				<BackLink href="/activities/gear" label="Gear" theme="activity" />
 
 				<header class="head">
 					<div class="head__id">
@@ -537,14 +538,6 @@ function usedText(w: ComponentWear): string {
 		}
 
 
-		.back {
-			font-size: 13px;
-			color: var(--granite-soft);
-			align-self: flex-start;
-		}
-		.back:hover {
-			color: var(--lake);
-		}
 
 		.head {
 			display: flex;

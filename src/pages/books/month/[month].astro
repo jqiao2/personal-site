@@ -7,6 +7,7 @@
 // the punctuation — which is why a book finished that day sits on top of the
 // stack however few pages it took, and why the seal is the one thing that is
 // never optional.
+import BackLink from '../../../components/BackLink.astro';
 import BookLayout from '../../../layouts/BookLayout.astro';
 import HourHistogram from '../../../components/HourHistogram.astro';
 import {
@@ -143,9 +144,7 @@ const clientData = JSON.stringify({
 			<SiteHeader pathname={Astro.url.pathname} theme="book" max="956px" />
 
 			<header class="topbar">
-				<a class="back" href="/books" data-back>
-					<span class="back__arrow">←</span><span>Books</span>
-				</a>
+				<BackLink href="/books" label="Books" theme="book" />
 				<span class="topbar__tag">Share</span>
 			</header>
 
@@ -346,19 +345,6 @@ const clientData = JSON.stringify({
 		padding: var(--ph-top) 0 var(--ph-rule);
 		border-bottom: 1px solid #45341f;
 		margin-bottom: var(--ph-rule);
-	}
-	.back {
-		display: flex;
-		align-items: center;
-		gap: 9px;
-		font-size: 13px;
-		color: #a68f6e;
-	}
-	.back:hover {
-		color: #f2e6cd;
-	}
-	.back__arrow {
-		font-size: 15px;
 	}
 	.topbar__tag {
 		font-size: 11.5px;
@@ -909,16 +895,6 @@ const clientData = JSON.stringify({
 		fitScaler(viewport, { width: data.width });
 		viewport.style.setProperty('--card-h', card.style.getPropertyValue('--card-h'));
 		wireHistoryReplace(query);
-
-		// "Back" means the page that sent you here, not /books — the href is the
-		// fallback for a direct load or a shared link. Because a month step replaces
-		// its history entry, one step back is always out of the card.
-		document.querySelector<HTMLAnchorElement>('[data-back]')?.addEventListener('click', (event) => {
-			if (document.referrer && new URL(document.referrer).origin === location.origin) {
-				event.preventDefault();
-				history.back();
-			}
-		});
 
 		// ---- aspect and the two bands ----
 		// One repaint for all three controls: each only picks a different

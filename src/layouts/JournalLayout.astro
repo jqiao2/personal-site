@@ -13,7 +13,7 @@
 // and a fifth would just be noise.
 //
 // Same anatomy as BookLayout.astro: an <html> shell that loads the shared
-// Archivo + Newsreader pair, a reset, the history-aware `a.back` script, slot.
+// Archivo + Newsreader pair, a reset, slot.
 import { Font } from 'astro:assets';
 
 interface Props {
@@ -37,21 +37,6 @@ const { title } = Astro.props;
 	<body>
 		<slot />
 		<script>
-			// "Back" goes to the page that sent you here when that page was ours; the
-			// href stays the fallback for direct loads. Same rule as every other
-			// section's layout.
-			for (const a of document.querySelectorAll('a.back')) {
-				a.addEventListener('click', (e) => {
-					const ref = document.referrer;
-					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
-
-					if (history.length > 1 && sameOrigin) {
-						e.preventDefault();
-						history.back();
-					}
-				});
-			}
-
 			// Stepping to another month is a navigation, but the card is one place, so
 			// a step replaces its history entry instead of stacking one per month —
 			// otherwise Back walks you through every month you looked at. The
@@ -141,10 +126,6 @@ const { title } = Astro.props;
 				max-width: 1120px;
 				margin: 0 auto;
 				padding: var(--ph-top) clamp(14px, 4vw, 32px) 60px;
-			}
-			.j-back {
-				font-size: 12.5px;
-				color: var(--ink-3);
 			}
 			.j-btn {
 				background: var(--paper);

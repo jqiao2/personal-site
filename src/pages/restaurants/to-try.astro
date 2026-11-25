@@ -25,6 +25,7 @@
 // than an opinion, so the pins are drawn open — the same shape with nothing
 // inside it. Set against the visited map, the difference reads without a
 // legend: a full pin is a verdict, an open one is a plan.
+import BackLink from '../../components/BackLink.astro';
 import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
 import RestaurantMap from '../../components/RestaurantMap.astro';
 import MealEditor from '../../components/MealEditor.astro';
@@ -187,7 +188,7 @@ function href(changes: Record<string, string | string[] | null>): string {
 	<div class="rl-page">
 		<div class="rl-head">
 			<div>
-				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<BackLink href="/restaurants" label="Jason's restaurant log" theme="restaurant" />
 				<div class="rl-head__title">To try</div>
 			</div>
 			<div class="head-right">

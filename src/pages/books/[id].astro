@@ -1,4 +1,5 @@
 ---
+import BackLink from '../../components/BackLink.astro';
 import BookCover from '../../components/BookCover.astro';
 import BookReviewEditor from '../../components/BookReviewEditor.astro';
 import BookLayout from '../../layouts/BookLayout.astro';
@@ -92,9 +93,7 @@ const spines = Array.from({ length: 18 }, () => ({
 			</div>
 			<div class="hero__inner">
 				<div class="wrap hero__row">
-					<a class="back" href="/books" data-back>
-						<span class="back__arrow">←</span><span>Books</span>
-					</a>
+					<BackLink href="/books" label="Books" theme="book" style="--back: #e8dbc2; --back-hover: #fff2da" />
 					<div class="hero__status">
 						<span class:list={['dot', v.heroDotClass]}></span>
 						<span class="hero__status-label">{v.heroStatus}</span>
@@ -786,19 +785,6 @@ const spines = Array.from({ length: 18 }, () => ({
 		gap: 18px;
 		padding-top: 22px;
 		flex-wrap: wrap;
-	}
-	.back {
-		display: inline-flex;
-		align-items: center;
-		gap: 9px;
-		font-size: 13px;
-		color: #e8dbc2;
-	}
-	.back:hover {
-		color: #fff2da;
-	}
-	.back__arrow {
-		font-size: 15px;
 	}
 	.hero__status {
 		display: inline-flex;
@@ -2149,16 +2135,6 @@ const spines = Array.from({ length: 18 }, () => ({
 </style>
 
 <script>
-	// Back link: prefer real history when you arrived from inside the site, so
-	// "← Books" returns you to the shelf you were scrolled to rather than the
-	// top of a fresh one.
-	document.querySelector<HTMLAnchorElement>('[data-back]')?.addEventListener('click', (e) => {
-		if (document.referrer && new URL(document.referrer).origin === location.origin) {
-			e.preventDefault();
-			history.back();
-		}
-	});
-
 	// Blurb: show the rest.
 	const blurb = document.querySelector('[data-blurb]');
 

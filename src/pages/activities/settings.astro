@@ -7,6 +7,7 @@
 //
 // The whole back-catalog is NOT this page's job — that's the offline archive
 // importer (`npm run activities:import`, ACTIVITIES.md §4 step 1).
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import { requireOwner } from '../../lib/auth';
 import SiteHeader from '../../components/SiteHeader.astro';
@@ -57,7 +58,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 			<header class="head">
-				<a class="back" href="/activities">← Activity log</a>
+				<BackLink href="/activities" label="Activity log" theme="activity" />
 				<h1 class="head__title">Files</h1>
 			</header>
 
@@ -259,7 +260,6 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 		gap: 1.25rem;
 	}
 	.head { display: flex; flex-direction: column; gap: var(--ph-gap); margin: calc(var(--ph-top) - 1.25rem) 0 calc(var(--ph-below) - 1.25rem); }
-	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
 	.head__title { margin: 0; font-size: var(--ph-title); line-height: var(--ph-title-lh); }
 	.status {
 		display: grid;

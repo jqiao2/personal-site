@@ -6,9 +6,9 @@
 // bright") the section exists to carry.
 //
 // STRUCTURE. Deliberately the same shape as FilmLayout.astro — an <html> shell
-// that loads its two webfonts, a global reset, the history-aware `a.back`
-// script, then `<slot />` — because a reader who has already learned "this
-// framework wraps a page" from the film log shouldn't have to relearn it here.
+// that loads its two webfonts, a global reset, then `<slot />` —
+// because a reader who has already learned "this framework
+// wraps a page" from the film log shouldn't have to relearn it here.
 // What differs is only what art direction demands: the palette, the two
 // typefaces, and the vertical wash instead of a flat ground.
 //
@@ -46,23 +46,6 @@ const { title } = Astro.props;
 	</head>
 	<body>
 		<slot />
-		<script>
-			// "Back" links go to the actual previous page when you arrived from within
-			// the site; the href stays a fallback for direct loads / new tabs / external
-			// referrers (where history.back() would leave the site). Copied verbatim
-			// from FilmLayout.astro so the two sections agree on what a back link does.
-			for (const a of document.querySelectorAll('a.back')) {
-				a.addEventListener('click', (e) => {
-					const ref = document.referrer;
-					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
-
-					if (history.length > 1 && sameOrigin) {
-						e.preventDefault();
-						history.back();
-					}
-				});
-			}
-		</script>
 		<style is:global>
 			/* Country-flag emoji (🇦🇷 …) have no glyphs in Windows' Segoe UI Emoji,
 			   so a flag in an activity title renders as the bare letters "AR". This

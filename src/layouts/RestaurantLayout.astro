@@ -67,21 +67,6 @@ const { title, pathname, sidebar = false } = Astro.props;
 		<slot />
 
 		<script>
-			// "Back" links return to the actual previous page when you arrived from
-			// inside the site; the href stays a fallback for direct loads and new
-			// tabs, where history.back() would leave the site entirely.
-			for (const a of document.querySelectorAll('a.rl-back')) {
-				a.addEventListener('click', (e) => {
-					const ref = document.referrer;
-					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
-
-					if (history.length > 1 && sameOrigin) {
-						e.preventDefault();
-						history.back();
-					}
-				});
-			}
-
 			// FILTERS ARE LINKS, so the server can render the narrowed list and the
 			// query string stays shareable — but a chip press is not a navigation.
 			// Left alone, every chip, sort, view toggle and "clear all" stacks its own
@@ -397,7 +382,7 @@ const { title, pathname, sidebar = false } = Astro.props;
 			.rl-page {
 				max-width: var(--column);
 				margin: 0 auto;
-				padding: 30px var(--gutter) 80px;
+				padding: var(--ph-top) var(--gutter) 80px;
 			}
 			.rl-page--flush {
 				padding-top: 0;
@@ -448,21 +433,17 @@ const { title, pathname, sidebar = false } = Astro.props;
 				padding-bottom: 10px;
 			}
 			.rl-head__title {
-				margin-top: 6px;
+				margin-top: var(--ph-gap);
 				font-family: var(--display);
-				font-size: 30px;
-				line-height: 1;
+				font-size: var(--ph-title);
+				line-height: var(--ph-title-lh);
 				color: var(--ink);
-			}
-			.rl-back {
-				font-size: 12px;
-				color: var(--ink-3);
 			}
 			.rl-topbar {
 				display: flex;
 				align-items: center;
 				justify-content: space-between;
-				padding: 14px 0;
+				padding: var(--ph-top) 0 var(--ph-rule);
 				border-bottom: 1px solid var(--rule-2);
 			}
 			.rl-tag {

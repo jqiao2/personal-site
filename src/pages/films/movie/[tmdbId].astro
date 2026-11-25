@@ -1,4 +1,5 @@
 ---
+import BackLink from '../../../components/BackLink.astro';
 import { Font } from 'astro:assets';
 import EntryEditor from '../../../components/EntryEditor.astro';
 import PosterLoader from '../../../components/PosterLoader.astro';
@@ -176,8 +177,7 @@ const editorFilm = {
 const logButtonLabel = movieLogs.length > 0 ? 'Log or review again' : 'Log or review';
 
 // An unwatched film is nearly always arrived at from the watchlist, a watched one
-// from the "All films" grid, so the back link's fallback follows the mode. The
-// click handler below still prefers real history when you came from within the site.
+// from the "All films" grid, so the back link's fallback follows the mode.
 const back = seen
 	? { href: '/films/watched', label: 'Films watched' }
 	: { href: '/films/watchlist', label: 'Watchlist' };
@@ -232,9 +232,7 @@ const [manualLists, onLists] = isOwner
 				<div class="backdrop__scrim"></div>
 				<div class="backdrop__bar">
 					<div class="wrap">
-						<a class="back" href={back.href}>
-							<span class="back__arrow">←</span><span>{back.label}</span>
-						</a>
+						<BackLink href={back.href} label={back.label} theme="film" style="--back: #e9d9c4; --back-hover: #fff" />
 					</div>
 				</div>
 			</div>
@@ -566,19 +564,6 @@ const [manualLists, onLists] = isOwner
 				left: 0;
 				right: 0;
 				padding: 24px 0;
-			}
-			.back {
-				display: inline-flex;
-				align-items: center;
-				gap: 9px;
-				font-size: 13px;
-				color: #e9d9c4;
-			}
-			.back:hover {
-				color: #fff;
-			}
-			.back__arrow {
-				font-size: 15px;
 			}
 
 			/* Content layout */
@@ -1140,21 +1125,6 @@ const [manualLists, onLists] = isOwner
 
 					for (const panel of document.querySelectorAll<HTMLElement>('[data-panel]')) {
 						panel.hidden = panel.dataset.panel !== tab.dataset.tab;
-					}
-				});
-			}
-
-			// "Back" links go to the actual previous page when you arrived from within
-			// the site; the href stays a fallback for direct loads / new tabs / external
-			// referrers (where history.back() would leave the site).
-			for (const a of document.querySelectorAll('a.back')) {
-				a.addEventListener('click', (e) => {
-					const ref = document.referrer;
-					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
-
-					if (history.length > 1 && sameOrigin) {
-						e.preventDefault();
-						history.back();
 					}
 				});
 			}

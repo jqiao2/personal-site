@@ -1,4 +1,5 @@
 ---
+import BackLink from '../../components/BackLink.astro';
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import WatchlistComposer from '../../components/WatchlistComposer.astro';
 import ScreeningPreview from '../../components/ScreeningPreview.astro';
@@ -101,9 +102,7 @@ const dMax = hasReleaseRange ? onTrack(query.releaseYearMax, relHi) : 0;
 			<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
 
 			<header class="topbar">
-				<a class="back" href="/films">
-					<span class="back__arrow">←</span><span>Jason's film log</span>
-				</a>
+				<BackLink href="/films" label="Jason's film log" theme="film" />
 				<span class="topbar__tag">Watchlist</span>
 			</header>
 
@@ -334,19 +333,6 @@ const dMax = hasReleaseRange ? onTrack(query.releaseYearMax, relHi) : 0;
 			padding: var(--ph-top) 0 var(--ph-rule);
 			border-bottom: 1px solid #4a2529;
 			margin-bottom: var(--ph-rule);
-		}
-		.back {
-			display: flex;
-			align-items: center;
-			gap: 9px;
-			font-size: 13px;
-			color: #a2857a;
-		}
-		.back:hover {
-			color: #f4e8d1;
-		}
-		.back__arrow {
-			font-size: 15px;
 		}
 		.topbar__tag {
 			font-size: 11.5px;

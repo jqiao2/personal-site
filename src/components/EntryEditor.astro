@@ -1736,7 +1736,7 @@ const headTitle = mode === 'edit' ? 'Edit entry' : mode === 'log' ? 'Log a film'
 					throw new Error(data.error || 'Delete failed');
 				}
 
-				window.location.href = cfg.deleteRedirect;
+				window.location.replace(cfg.deleteRedirect);
 			} catch (err) {
 				msg.className = 'save-msg error';
 				msg.textContent = err instanceof Error ? err.message : 'Delete failed';
