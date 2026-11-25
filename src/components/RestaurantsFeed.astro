@@ -6,6 +6,7 @@
 import VerdictMark from './VerdictMark.astro';
 import DrawerNav from './DrawerNav.astro';
 import { requireOwner } from '../lib/auth';
+import { countPending } from '../lib/food-inbox';
 import { getRestaurantStats, listRecentVisits } from '../lib/restaurants';
 import { placeLine, shortDate, visitMarks } from '../lib/restaurant-view';
 import { starText, excerpt } from '../lib/format';
@@ -19,6 +20,8 @@ const [stats, recent, isOwner] = await Promise.all([
 	listRecentVisits(25),
 	requireOwner(Astro.cookies),
 ]);
+
+const pending = isOwner ? await countPending() : 0;
 
 const num = (n: number) => n.toLocaleString('en-US');
 
@@ -34,7 +37,12 @@ const navRows = [
 	{ label: 'Diary', href: '/restaurants/diary', count: num(stats.visits) },
 	{ label: 'To try', href: '/restaurants/to-try', count: num(stats.toTry) },
 	{ label: 'Stats', href: '/restaurants/stats', count: '→' },
-	...(isOwner ? [{ label: 'Month in review', href: monthHref, count: '→' }] : []),
+	...(isOwner
+		? [
+				{ label: 'Photo inbox', href: '/restaurants/inbox', count: num(pending) },
+				{ label: 'Month in review', href: monthHref, count: '→' },
+			]
+		: []),
 ];
 ---
 

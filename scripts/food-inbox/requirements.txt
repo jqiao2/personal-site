@@ -1,0 +1,6 @@
+pillow
+pillow-heif
+numpy
+onnxruntime
+tokenizers
+huggingface_hub

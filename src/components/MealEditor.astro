@@ -180,6 +180,14 @@ const config = {
 		previous: PreviousVisit | null;
 	}
 
+	/** What /restaurants/inbox opens the composer with. */
+	interface InboxOpen {
+		photos: { id: number; url: string }[];
+		day: string;
+		place: PlaceSpec | null;
+		hit: GeoHit | null;
+	}
+
 	interface Config {
 		redirect: string;
 		place: PlaceSpec | null;
@@ -235,6 +243,8 @@ const config = {
 		// two lists side by side could not say that.
 		type PhotoItem =
 			| { kind: 'stored'; id: number; url: string }
+			// Waiting on /restaurants/inbox; the save moves it onto the visit.
+			| { kind: 'inbox'; id: number; url: string }
 			| ({ kind: 'new' } & PreparedPhoto);
 
 		const state = {
@@ -246,6 +256,8 @@ const config = {
 			editing: false,
 			placeId: null as number | null,
 			placeName: '',
+			// The day a photograph from the inbox was taken, or null for "today".
+			day: null as string | null,
 			locked: null as PlaceSpec | null,
 			rating: 0,
 			verdict: 0,
@@ -399,6 +411,7 @@ const config = {
 				editing: edit,
 				placeId: place?.id ?? null,
 				placeName: '',
+				day: null,
 				locked: place,
 				rating: initial?.rating ?? inherited?.rating ?? 0,
 				verdict: initial?.verdict ?? inherited?.verdict ?? 0,
@@ -499,7 +512,8 @@ const config = {
 						// A file the browser made for the preview is the browser's to
 						// free; a stored one is the server's, and it is only marked.
 						if (p.kind === 'new') URL.revokeObjectURL(p.url);
-						else state.removed.push(p.id);
+						// One from the inbox just stays there.
+						else if (p.kind === 'stored') state.removed.push(p.id);
 						state.photos.splice(i, 1);
 						render();
 					});
@@ -586,7 +600,7 @@ const config = {
 			state.hearted = from.previous?.hearted ?? false;
 			// The date is not inherited: another meal somewhere is one you are
 			// logging today, not a repeat of the last one's date.
-			dateField().value = localDay();
+			dateField().value = state.day ?? localDay();
 			state.borrowed = Boolean(from.previous || from.trip);
 		}
 
@@ -1004,6 +1018,24 @@ const config = {
 					continue;
 				}
 
+				if (p.kind === 'inbox') {
+					try {
+						const moved = await fetch(`/api/restaurants/inbox/${p.id}`, {
+							method: 'POST',
+							headers: { 'content-type': 'application/json' },
+							body: JSON.stringify({ visitId }),
+						});
+
+						if (moved.ok) {
+							for (const id of (await moved.json()).ids) order.push(Number(id));
+						} else failures.push('a photograph is still in the inbox');
+					} catch {
+						failures.push('a photograph is still in the inbox');
+					}
+
+					continue;
+				}
+
 				const form = new FormData();
 				form.append('photo', p.file, p.file.name);
 				form.append('width', String(p.width));
@@ -1086,6 +1118,26 @@ const config = {
 		document.querySelectorAll('[data-open-meal-editor]').forEach((el) =>
 			el.addEventListener('click', () => open('log', (el as HTMLElement).dataset.openMealEditor === 'edit')),
 		);
+		// /restaurants/inbox opens a visit with its photographs, their day and,
+		// when a suggestion was pressed, the place already filled in.
+		document.addEventListener('meal-editor:inbox', (e) => {
+			// SAFETY: only /restaurants/inbox dispatches this event, with this detail.
+			const { photos, day, place, hit } = (e as CustomEvent<InboxOpen>).detail;
+			open('log');
+			state.photos = photos.map((p): PhotoItem => ({ kind: 'inbox', ...p }));
+			state.day = day;
+			dateField().value = day;
+
+			if (place) {
+				state.placeId = place.id;
+				state.locked = place;
+				state.revisit = place.visits > 0;
+				carryFrom({ trip: Boolean(place.trip), previous: place.previous ?? null });
+			} else if (hit) pickNew(hit.name, hit);
+
+			$('[data-me-title]')!.textContent = state.locked ? 'Log a visit' : 'Log a meal';
+			render();
+		});
 		document.querySelectorAll('[data-open-try-editor]').forEach((el) =>
 			el.addEventListener('click', () => open('try')),
 		);

@@ -1,0 +1,305 @@
+---
+// The photo inbox: food from my camera roll that has no visit yet, grouped into
+// meals. A meal leaves by being logged or by being dismissed.
+import BackLink from '../../components/BackLink.astro';
+import MealEditor from '../../components/MealEditor.astro';
+import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
+import { requireOwner } from '../../lib/auth';
+import { listPendingMeals, suggestPlaces, visitsOn } from '../../lib/food-inbox';
+import { listFriends, listTags } from '../../lib/restaurants';
+import { longDate } from '../../lib/restaurant-view';
+
+export const prerender = false;
+
+if (!(await requireOwner(Astro.cookies))) return Astro.redirect('/films/login?next=/restaurants/inbox');
+
+// Each meal costs two gazetteer lookups, so the page is cut before they run.
+const PER_PAGE = 15;
+
+const [meals, tagOptions, friendOptions] = await Promise.all([listPendingMeals(), listTags(), listFriends()]);
+
+const pages = Math.max(1, Math.ceil(meals.length / PER_PAGE));
+
+const asked = Number.parseInt(Astro.url.searchParams.get('page') ?? '1', 10);
+
+// Clamped, because logging the last meal of the last page leaves it empty.
+const page = Math.min(pages, Math.max(1, asked || 1));
+
+const shown = meals.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+const [suggestions, visits] = await Promise.all([
+	Promise.all(shown.map((m) => (m.point ? suggestPlaces(m.point) : []))),
+	visitsOn(shown.map((m) => m.day)),
+]);
+
+const total = meals.reduce((n, m) => n + m.photos.length, 0);
+
+const clock = (takenAt: string) =>
+	new Date(`${takenAt}Z`).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+---
+
+<RestaurantLayout title="Photo inbox" pathname={Astro.url.pathname}>
+	<main class="ib">
+		<div class="rl-head">
+			<div>
+				<BackLink href="/restaurants" label="Jason's restaurant log" theme="restaurant" />
+				<h1 class="rl-head__title">Photo inbox</h1>
+			</div>
+			<div class="ib__count" data-count>{total} {total === 1 ? 'photo' : 'photos'}</div>
+		</div>
+
+		{total === 0 && <p class="rl-empty ib__empty">Nothing to log.</p>}
+
+		{
+			shown.map((meal, i) => (
+				<section class="meal" data-meal data-day={meal.day}>
+					<h2 class="meal__day">
+						{longDate(meal.day)} <span class="meal__time">{clock(meal.photos[0].takenAt)}</span>
+					</h2>
+
+					<div class="meal__photos">
+						{meal.photos.map((p) => (
+							<div class="shot" data-photo={p.id}>
+								<label class="shot__pick">
+									<img
+										src={p.url}
+										alt={`Taken at ${clock(p.takenAt)}`}
+										width={p.width}
+										height={p.height}
+										loading="lazy"
+									/>
+									<input type="checkbox" checked aria-label="Include this photo" />
+								</label>
+								<button type="button" class="shot__x" data-dismiss aria-label="Delete this photo">
+									×
+								</button>
+							</div>
+						))}
+					</div>
+
+					<div class="meal__acts">
+						{(visits.get(meal.day) ?? []).map((v) => (
+							<button type="button" class="rl-chip" data-attach={v.id}>
+								+ Add to {v.name}
+								{v.photos > 0 && <span class="rl-chip__n">{v.photos}</span>}
+							</button>
+						))}
+						{suggestions[i].map((s) => (
+							<button type="button" class="rl-chip" data-suggest={JSON.stringify(s)}>
+								{s.kind === 'logged' ? s.place.name : s.hit.name}
+								<span class="rl-chip__n">
+									{Math.round(s.distance)} m · {s.label}
+								</span>
+							</button>
+						))}
+						<button type="button" class="rl-btn rl-btn--primary" data-log>
+							Log somewhere else
+						</button>
+						<button type="button" class="rl-btn" data-dismiss-all>
+							Delete selected
+						</button>
+					</div>
+				</section>
+			))
+		}
+
+		{
+			pages > 1 && (
+				<nav class="ib__pages" aria-label="Pages">
+					{page > 1 ? <a href={`?page=${page - 1}`}>← Newer</a> : <span />}
+					<span>
+						{page} of {pages}
+					</span>
+					{page < pages ? <a href={`?page=${page + 1}`}>Older →</a> : <span />}
+				</nav>
+			)
+		}
+	</main>
+
+	<MealEditor
+		redirect={Astro.url.pathname + Astro.url.search}
+		tagOptions={tagOptions}
+		friendOptions={friendOptions}
+	/>
+</RestaurantLayout>
+
+<script>
+	import type { Suggestion } from '../../lib/food-inbox';
+
+	const selected = (meal: HTMLElement) =>
+		Array.from(meal.querySelectorAll<HTMLElement>('[data-photo]')).filter((s) => s.querySelector('input')?.checked);
+
+	/** The photo is off the server's list, so take it off this one. */
+	function drop(shot: HTMLElement) {
+		const meal = shot.closest<HTMLElement>('[data-meal]');
+		shot.remove();
+
+		const count = document.querySelector('[data-count]');
+		const left = Number.parseInt(count?.textContent ?? '1', 10) - 1;
+
+		if (count) count.textContent = `${left} ${left === 1 ? 'photo' : 'photos'}`;
+
+		if (meal && !meal.querySelector('[data-photo]')) meal.remove();
+
+		// The page ran dry: bring up the next one, or the empty state.
+		if (!document.querySelector('[data-meal]')) location.reload();
+	}
+
+	/** Send one request per photo, and drop the ones that went through. */
+	async function each(meal: HTMLElement, shots: HTMLElement[], init: RequestInit) {
+		const buttons = meal.querySelectorAll('button');
+		buttons.forEach((b) => (b.disabled = true));
+		let failed = 0;
+
+		for (const shot of shots) {
+			const res = await fetch(`/api/restaurants/inbox/${shot.dataset.photo}`, init).catch(() => null);
+
+			// A 404 is a photo already dealt with in another tab.
+			if (res?.ok || res?.status === 404) drop(shot);
+			else failed++;
+		}
+
+		buttons.forEach((b) => (b.disabled = false));
+
+		if (failed > 0) window.alert(`${failed} ${failed === 1 ? 'photo' : 'photos'} could not be updated.`);
+	}
+
+	function compose(meal: HTMLElement, suggestion: Suggestion | null) {
+		const photos = selected(meal).map((s) => ({
+			id: Number(s.dataset.photo),
+			url: s.querySelector('img')?.src ?? '',
+		}));
+
+		if (photos.length === 0) return;
+		document.dispatchEvent(
+			new CustomEvent('meal-editor:inbox', {
+				detail: {
+					photos,
+					day: meal.dataset.day,
+					place: suggestion?.kind === 'logged' ? suggestion.place : null,
+					hit: suggestion?.kind === 'new' ? suggestion.hit : null,
+				},
+			}),
+		);
+	}
+
+	document.querySelector('.ib')?.addEventListener('click', (e) => {
+		const button = e.target instanceof Element ? e.target.closest<HTMLElement>('button') : null;
+		const meal = button?.closest<HTMLElement>('[data-meal]');
+
+		if (!button || !meal) return;
+		const { suggest, attach } = button.dataset;
+
+		if (suggest) compose(meal, JSON.parse(suggest));
+		else if ('log' in button.dataset) compose(meal, null);
+		else if (attach) {
+			void each(meal, selected(meal), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ visitId: Number(attach) }),
+			});
+		} else if ('dismissAll' in button.dataset) void each(meal, selected(meal), { method: 'DELETE' });
+		else {
+			const shot = button.closest<HTMLElement>('[data-photo]');
+
+			if (shot) void each(meal, [shot], { method: 'DELETE' });
+		}
+	});
+</script>
+
+<style>
+	.ib {
+		max-width: 1120px;
+		margin: 0 auto;
+		padding: var(--ph-top) clamp(14px, 4vw, 32px) 64px;
+	}
+	.ib__count {
+		font-family: var(--mono);
+		font-size: 12px;
+		color: var(--ink-3);
+	}
+	.ib__empty {
+		margin-top: var(--ph-below);
+	}
+	.meal {
+		padding: 22px 0 24px;
+		border-bottom: 1px solid var(--rule);
+	}
+	.meal__day {
+		font-size: 14px;
+		font-weight: 600;
+	}
+	.meal__time {
+		font-family: var(--mono);
+		font-size: 12px;
+		font-weight: 400;
+		color: var(--ink-3);
+	}
+	.meal__photos {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 10px;
+		margin-top: 12px;
+	}
+	.shot {
+		position: relative;
+	}
+	.shot__pick {
+		display: block;
+		cursor: pointer;
+	}
+	.shot img {
+		display: block;
+		width: auto;
+		height: 190px;
+		max-width: 100%;
+		object-fit: cover;
+		background: var(--sunk);
+	}
+	.shot__pick:has(input:not(:checked)) img {
+		opacity: 0.4;
+	}
+	.shot input {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+		width: 20px;
+		height: 20px;
+		margin: 0;
+		accent-color: var(--terracotta);
+	}
+	.shot__x {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+		width: 30px;
+		height: 30px;
+		border: none;
+		background: rgba(36, 24, 18, 0.72);
+		color: var(--ground);
+		font-size: 17px;
+		line-height: 1;
+		cursor: pointer;
+	}
+	.shot__x:hover {
+		background: var(--terracotta-deep);
+	}
+	.meal__acts {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 8px;
+		margin-top: 14px;
+	}
+	.ib__pages {
+		display: flex;
+		justify-content: space-between;
+		padding-top: 18px;
+		font-size: 13px;
+	}
+	@media (max-width: 640px) {
+		.shot img {
+			height: 140px;
+		}
+	}
+</style>

@@ -42,3 +42,4 @@ scripts/.cache/
 
 # scratch: screenshots from `npm run shot`, and anything else throwaway
 tmp/
+__pycache__/
