@@ -1,5 +1,6 @@
 ---
 // Owner-only: one recipe, as a post.
+import BackLink from '../../components/BackLink.astro';
 import Layout from '../../layouts/Layout.astro';
 import { requireOwner } from '../../lib/auth';
 import { formatWatchedDate } from '../../lib/format';
@@ -26,7 +27,7 @@ const facts = [
 ---
 
 <Layout title={`${recipe.title} · Recipes`}>
-	<p class="back"><a href="/recipes">← Recipes</a></p>
+	<BackLink href="/recipes" label="Recipes" style="margin-bottom: 1.25rem" />
 
 	<p class="meta">
 		<time datetime={recipe.added}>{formatWatchedDate(recipe.added)}</time>
@@ -101,11 +102,6 @@ const facts = [
 </Layout>
 
 <style>
-	.back {
-		margin: 0 0 1.25rem;
-		font-family: var(--sans);
-		font-size: 0.85rem;
-	}
 	.meta {
 		display: flex;
 		flex-wrap: wrap;

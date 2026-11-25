@@ -67,21 +67,6 @@ const { title, pathname, sidebar = false } = Astro.props;
 		<slot />
 
 		<script>
-			// "Back" links return to the actual previous page when you arrived from
-			// inside the site; the href stays a fallback for direct loads and new
-			// tabs, where history.back() would leave the site entirely.
-			for (const a of document.querySelectorAll('a.rl-back')) {
-				a.addEventListener('click', (e) => {
-					const ref = document.referrer;
-					const sameOrigin = !!ref && new URL(ref).origin === location.origin;
-
-					if (history.length > 1 && sameOrigin) {
-						e.preventDefault();
-						history.back();
-					}
-				});
-			}
-
 			// FILTERS ARE LINKS, so the server can render the narrowed list and the
 			// query string stays shareable — but a chip press is not a navigation.
 			// Left alone, every chip, sort, view toggle and "clear all" stacks its own
@@ -453,10 +438,6 @@ const { title, pathname, sidebar = false } = Astro.props;
 				font-size: 30px;
 				line-height: 1;
 				color: var(--ink);
-			}
-			.rl-back {
-				font-size: 12px;
-				color: var(--ink-3);
 			}
 			.rl-topbar {
 				display: flex;

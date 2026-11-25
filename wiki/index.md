@@ -46,3 +46,4 @@ add or update a pattern.
 | [0038](patterns/0038-zod-4-nested-defaults-need-prefault.md) | Zod 4: nested defaults need `.prefault({})`; coerce in a pipe needs `<string>` | failure-mode | an `astro/zod` schema fills a stored blob with defaults, or pipes form strings into `z.coerce.number()` |
 | [0039](patterns/0039-mta-open-data-per-line-metrics.md) | MTA per-line metrics from data.ny.gov | strategy | pulling MTA subway/bus performance by line/route, or a line's history splits around Sep 2024 |
 | [0040](patterns/0040-bot-protection-blocks-device-syncs.md) | Vercel bot protection blocks device syncs silently | failure-mode | a Kindle, Shortcut or board sync goes quiet, an endpoint answers 429, or adding a machine-to-machine endpoint |
+| [0041](patterns/0041-navigation-api-for-the-previous-page.md) | The previous page comes from the Navigation API, not the referrer | strategy | adding a back link, or needing to know which page of ours came before this one |

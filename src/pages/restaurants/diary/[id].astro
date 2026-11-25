@@ -8,6 +8,7 @@
 // survive; on a map pin only the verdict does; the heart never leaves the entry
 // except as a ♥ beside a name. That ordering is the whole answer to "three
 // overlapping opinions" — they are ranked by how far they travel.
+import BackLink from '../../../components/BackLink.astro';
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../../components/MealEditor.astro';
 import PhotoWall from '../../../components/PhotoWall.astro';
@@ -60,7 +61,7 @@ const paragraphs = (visit.review ?? '').split(/\n{2,}/).map((p) => p.trim()).fil
 >
 	<div class="rl-page rl-page--flush">
 		<div class="rl-topbar">
-			<a class="rl-back" href="/restaurants/diary">&larr; Jason&rsquo;s restaurant log</a>
+			<BackLink href="/restaurants/diary" label="Diary" theme="restaurant" />
 			<span class="rl-tag">Diary</span>
 		</div>
 

@@ -1,0 +1,99 @@
+---
+// The one back link. Its text and target are the previous page on this site, as
+// the browser's own history has it; `href` and `label` are the fallback when
+// there isn't one (a direct visit). SiteHeader records each page's name.
+interface Props {
+	/** Where to go when there is no previous page on the site. */
+	href: string;
+	/** What that page is called. */
+	label: string;
+	theme?: 'root' | 'film' | 'activity' | 'book' | 'restaurant' | 'journal';
+	style?: string;
+}
+
+const { href, label, theme = 'root', style } = Astro.props;
+---
+
+<a class:list={['back-link', `back-link--${theme}`]} href={href} style={style}><span aria-hidden="true">←</span><span class="back-link__label">Back to {label}</span></a>
+{/* Inline, so the fallback is never painted first and then swapped. */}
+<script is:inline>
+	(() => {
+		const link = document.currentScript.previousElementSibling;
+		const skip = [location.pathname, '/films/login'];
+		const nav = window.navigation;
+		// Entries on this same page are filter changes and form posts; step past them.
+		const prev = nav?.currentEntry
+			? nav
+					.entries()
+					.slice(0, nav.currentEntry.index)
+					.findLast((e) => e.url && !skip.includes(new URL(e.url).pathname))
+			: undefined;
+		// No history here, but a page of ours opened this tab (or the browser has no
+		// Navigation API): the referrer is still the previous page.
+		const url = prev?.url ?? (nav?.currentEntry?.index > 0 ? '' : document.referrer);
+		if (!url) return;
+		const { origin, pathname } = new URL(url);
+		if (origin !== location.origin || skip.includes(pathname)) return;
+
+		let name = null;
+		try {
+			name = localStorage.getItem(`title:${pathname}`);
+		} catch {
+			// Storage blocked: the link still goes to the right page.
+		}
+		link.href = url;
+		link.lastElementChild.textContent = name ? `Back to ${name}` : 'Back';
+		if (!prev) return;
+		// Traverse rather than navigate, so scroll position and filters come back too.
+		link.addEventListener('click', (e) => {
+			if (e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+			e.preventDefault();
+			nav.traverseTo(prev.key);
+		});
+	})();
+</script>
+
+<style>
+	a.back-link {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 9px;
+		min-width: 0;
+		max-width: 100%;
+		vertical-align: top;
+		font-size: 13px;
+		line-height: 1.4;
+		text-decoration: none;
+		color: var(--back);
+	}
+	a.back-link:hover {
+		color: var(--back-hover);
+	}
+	.back-link__label {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.back-link--root {
+		font-family: var(--sans);
+		--back: var(--link);
+		--back-hover: var(--link-hover);
+	}
+	.back-link--film {
+		--back: #a2857a;
+		--back-hover: #f4e8d1;
+	}
+	.back-link--activity {
+		--back: #6b7b88;
+		--back-hover: #1c6e8c;
+	}
+	.back-link--book {
+		--back: #a68f6e;
+		--back-hover: #f2e6cd;
+	}
+	.back-link--restaurant,
+	.back-link--journal {
+		--back: var(--ink-3);
+		--back-hover: var(--ink);
+	}
+</style>

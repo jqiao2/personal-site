@@ -22,6 +22,7 @@
 //
 // The calendar arithmetic and the artboard are the family's shared ones
 // (share-card.ts), and the export is the same one the other four use.
+import BackLink from '../../components/BackLink.astro';
 import JournalLayout from '../../layouts/JournalLayout.astro';
 import { listMonthWatches } from '../../lib/films';
 import { getReadingMonth } from '../../lib/books-queries';
@@ -128,7 +129,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	<div class="j-page">
 		<div class="head">
 			<div>
-				<a class="j-back" href="/projects">&larr; Projects</a>
+				<BackLink href="/projects" label="Projects" theme="journal" />
 				<div class="head__title">The month in review</div>
 			</div>
 			<div class="controls">

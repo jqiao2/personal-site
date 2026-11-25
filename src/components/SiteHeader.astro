@@ -96,6 +96,18 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 	if (document.cookie.split('; ').includes('owner=1')) document.documentElement.dataset.owner = '1';
 </script>
 
+{/* What this page is called, for the next page's back link (BackLink.astro). A
+    title reads "Page — section" or "Page · section"; only the page is kept.
+    ponytail: one short key per path, never pruned; fine until it nears 5 MB. */}
+<script is:inline>
+	try {
+		const name = location.pathname === '/' ? 'Home' : document.title.split(/ [—·] /)[0];
+		localStorage.setItem(`title:${location.pathname}`, name);
+	} catch {
+		// Storage blocked: the back link just says "Back".
+	}
+</script>
+
 <header class="sh" style={style} data-theme={theme}>
 	<nav class="sh__inner" aria-label="Primary">
 		<a class="sh__brand" href="/" aria-label={`jq ${filter} — home`}>
