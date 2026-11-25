@@ -33,3 +33,12 @@ optional `max` prop for this — the film subpages run 760–1000px against the
 film log's 1120px card, and skipping it left the nav ~90px off. The nav text
 still sits 15px inside that, which is the link's own padding and is correct;
 compare against `films/index`, where card and header share 1120px.
+
+## Never pad the top of the box around it
+
+The bleed only cancels sideways. A `.page { padding: 3rem }` around the header
+pushes the strip 48px down the page, which reads as a too-tall header
+(fitness, athlete and settings all did this). Put the top space under the strip
+with `--ph-top`. The `--ph-*` variables in SiteHeader's global style hold every
+page-header dimension: top space, back-to-title gap, title size, space below.
+`npm run headers:test` (part of `npm run build`) fails a page that picks its own.

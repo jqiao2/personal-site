@@ -519,17 +519,17 @@ const today = new Date().toLocaleDateString('en-CA');
 		min-height: 100dvh;
 		background: var(--snow);
 		color: var(--granite);
-		padding: clamp(1rem, 4vw, 3rem);
+		padding: 0 clamp(14px, 4vw, 32px) 3rem;
 	}
 	.card {
-		max-width: 72rem;
+		max-width: 1056px;
 		margin: 0 auto;
 		display: flex;
 		flex-direction: column;
 		gap: 2rem;
 	}
-	.head { display: flex; flex-direction: column; gap: 0.35rem; }
-	.head__title { margin: 0; font-size: 1.6rem; }
+	.head { display: flex; flex-direction: column; gap: var(--ph-gap); margin: calc(var(--ph-top) - 2rem) 0 calc(var(--ph-below) - 2rem); }
+	.head__title { margin: 0; font-size: var(--ph-title); line-height: var(--ph-title-lh); }
 	.sec {
 		margin: 0 0 0.75rem;
 		font-size: 0.75rem;
