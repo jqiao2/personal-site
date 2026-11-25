@@ -343,9 +343,9 @@ const clientData = JSON.stringify({
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 26px 0 22px;
+		padding: var(--ph-top) 0 var(--ph-rule);
 		border-bottom: 1px solid #45341f;
-		margin-bottom: 30px;
+		margin-bottom: var(--ph-rule);
 	}
 	.back {
 		display: flex;
@@ -372,15 +372,15 @@ const clientData = JSON.stringify({
 		justify-content: space-between;
 		gap: 16px;
 		flex-wrap: wrap;
-		margin-bottom: 22px;
+		margin-bottom: var(--ph-below);
 	}
 	h1 {
 		font-family: var(--font-newsreader);
 		font-weight: 500;
-		font-size: 44px;
+		font-size: var(--ph-title);
 		color: #f2e6cd;
 		letter-spacing: -0.5px;
-		line-height: 1;
+		line-height: var(--ph-title-lh);
 		margin: 0;
 	}
 	.dims {

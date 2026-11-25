@@ -331,9 +331,9 @@ const dMax = hasReleaseRange ? onTrack(query.releaseYearMax, relHi) : 0;
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			padding: 26px 0 22px;
+			padding: var(--ph-top) 0 var(--ph-rule);
 			border-bottom: 1px solid #4a2529;
-			margin-bottom: 34px;
+			margin-bottom: var(--ph-rule);
 		}
 		.back {
 			display: flex;
@@ -357,9 +357,9 @@ const dMax = hasReleaseRange ? onTrack(query.releaseYearMax, relHi) : 0;
 
 		.titleblock {
 			display: flex;
-			align-items: flex-end;
+			align-items: flex-start;
 			justify-content: space-between;
-			margin-bottom: 26px;
+			margin-bottom: var(--ph-below);
 			flex-wrap: wrap;
 			gap: 16px;
 		}
@@ -371,10 +371,10 @@ const dMax = hasReleaseRange ? onTrack(query.releaseYearMax, relHi) : 0;
 		h1 {
 			font-family: var(--font-newsreader);
 			font-weight: 500;
-			font-size: 52px;
+			font-size: var(--ph-title);
 			color: #f4e8d1;
 			letter-spacing: -0.5px;
-			line-height: 1;
+			line-height: var(--ph-title-lh);
 			margin: 0;
 		}
 		.add-btn {
@@ -999,9 +999,6 @@ const dMax = hasReleaseRange ? onTrack(query.releaseYearMax, relHi) : 0;
 			}
 		}
 		@media (max-width: 560px) {
-			h1 {
-				font-size: 40px;
-			}
 			.grid {
 				grid-template-columns: repeat(3, 1fr);
 			}

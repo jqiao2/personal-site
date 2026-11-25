@@ -612,7 +612,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 		justify-content: space-between;
 		gap: 18px;
 		flex-wrap: wrap;
-		padding: 30px 28px 18px;
+		padding: var(--ph-top) 28px var(--ph-below);
 	}
 	.back {
 		font-size: 12.5px;
@@ -623,10 +623,11 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	}
 	.head__title {
 		font-family: var(--serif);
-		font-size: 32px;
+		font-size: var(--ph-title);
+		line-height: var(--ph-title-lh);
 		font-weight: 400;
 		color: var(--granite);
-		margin: 4px 0 0;
+		margin: var(--ph-gap) 0 0;
 		letter-spacing: -0.2px;
 	}
 	.head__controls {
@@ -759,7 +760,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 
 	@media (max-width: 860px) {
 		.head {
-			padding: 22px 18px 14px;
+			padding: var(--ph-top) 18px var(--ph-below);
 		}
 		.page {
 			min-height: 100dvh;

@@ -94,9 +94,9 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			padding: 26px 0 22px;
+			padding: var(--ph-top) 0 var(--ph-rule);
 			border-bottom: 1px solid #4a2529;
-			margin-bottom: 34px;
+			margin-bottom: var(--ph-rule);
 		}
 		.back {
 			display: flex;
@@ -122,17 +122,17 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 			display: flex;
 			align-items: flex-end;
 			justify-content: space-between;
-			margin-bottom: 20px;
+			margin-bottom: var(--ph-below);
 			flex-wrap: wrap;
 			gap: 16px;
 		}
 		h1 {
 			font-family: var(--font-newsreader);
 			font-weight: 500;
-			font-size: 52px;
+			font-size: var(--ph-title);
 			color: #f4e8d1;
 			letter-spacing: -0.5px;
-			line-height: 1;
+			line-height: var(--ph-title-lh);
 			margin: 0;
 		}
 		.titleblock__actions {
@@ -218,9 +218,6 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 		}
 
 		@media (max-width: 640px) {
-			h1 {
-				font-size: 40px;
-			}
 		}
 	</style>
 

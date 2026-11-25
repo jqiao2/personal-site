@@ -249,7 +249,7 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 		min-height: 100dvh;
 		background: var(--snow);
 		color: var(--granite);
-		padding: clamp(1rem, 4vw, 3rem);
+		padding: 0 clamp(14px, 4vw, 32px) 3rem;
 	}
 	.card {
 		max-width: 46rem;
@@ -258,9 +258,9 @@ const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-US',
 		flex-direction: column;
 		gap: 1.25rem;
 	}
-	.head { display: flex; flex-direction: column; gap: 0.25rem; }
+	.head { display: flex; flex-direction: column; gap: var(--ph-gap); margin: calc(var(--ph-top) - 1.25rem) 0 calc(var(--ph-below) - 1.25rem); }
 	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
-	.head__title { margin: 0; font-size: 1.6rem; }
+	.head__title { margin: 0; font-size: var(--ph-title); line-height: var(--ph-title-lh); }
 	.status {
 		display: grid;
 		grid-template-columns: max-content 1fr;

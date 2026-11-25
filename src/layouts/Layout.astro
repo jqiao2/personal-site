@@ -130,10 +130,18 @@ const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.p
 				color: var(--link-hover);
 			}
 
+			:global(main > h1) {
+				font-size: var(--ph-title);
+				line-height: var(--ph-title-lh);
+				margin: var(--ph-gap) 0 var(--ph-below);
+			}
+			:global(main > h1:first-child) {
+				margin-top: 0;
+			}
 			main {
 				max-width: var(--measure);
 				margin: 0 auto;
-				padding: 2rem;
+				padding: var(--ph-top) 2rem 2rem;
 			}
 			main.wide {
 				/* border-box so the outer width is a true 1120px — matching the
@@ -143,7 +151,7 @@ const { title, showTmdbFooter = false, wide = false, sidebar = false } = Astro.p
 				max-width: var(--shell);
 				/* Match SiteHeader's inner gutter so the header column and the
 				   home content align at the same left/right edge. */
-				padding: 2rem clamp(14px, 4vw, 32px);
+				padding: var(--ph-top) clamp(14px, 4vw, 32px) 2rem;
 			}
 			footer {
 				border-top: 1px solid var(--rule);

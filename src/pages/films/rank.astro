@@ -81,9 +81,9 @@ const data = JSON.stringify(await loadRanking()).replace(/</g, '\\u003c');
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
-			padding: 26px 0 22px;
+			padding: var(--ph-top) 0 var(--ph-rule);
 			border-bottom: 1px solid #4a2529;
-			margin-bottom: 34px;
+			margin-bottom: var(--ph-rule);
 		}
 		.back {
 			display: flex;
