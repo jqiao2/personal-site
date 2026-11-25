@@ -74,6 +74,7 @@ Reads are public; writes require the owner cookie (log in first).
 | GET | `/api/films/watchlist` | – | List watchlist |
 | POST | `/api/films/watchlist` `{tmdbId}` | owner | Add to watchlist |
 | DELETE | `/api/films/watchlist?tmdbId=` | owner | Remove from watchlist |
+| GET/POST | `/api/films/watchlist/letterboxd-sync` | cron / owner | Pull the Letterboxd watchlist in (daily cron; POST `?force=1` lets more than 25 removals through) |
 
 ### Create-a-log body
 
