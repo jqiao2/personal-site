@@ -957,7 +957,7 @@ const scopeDummy: ActivityCardRow = {
 		// deliberate, small duplicate of activityFilterSentence's logic rather
 		// than an import of it; sports.ts and activity-tokens.ts have no such
 		// server dependency and are imported directly.
-		import { sportMeta, sportIcon } from '../../lib/sports';
+		import { LOCK_ICON, sportMeta, sportIcon } from '../../lib/sports';
 		import { ALPINE, activityDate, cardStats, exertionLabel, noGpsStats } from '../../lib/activity-tokens';
 		// Type-only — erased at build, so this brings in none of activities.ts's
 		// runtime code (and, through it, supabase.ts) the way a value import
@@ -1504,14 +1504,13 @@ const scopeDummy: ActivityCardRow = {
 			const wrap = el('div', 'row-item', pageScope);
 
 			// Mirrors ActivityCard.astro's redacted branch — a private activity
-			// seen by a visitor is a sport glyph in a <div>, not a link to a page
+			// seen by a visitor is a labeled row in a <div>, not a link to a page
 			// that would 404. The API has already emptied every other field; this
 			// only has to agree with it about what to draw.
 			if (a.redacted) {
 				const box = el('div', 'ac ac--row ac--redacted', cardScope);
 				setAlpine(box);
-				box.setAttribute('aria-label', sportMeta(a.sport).label);
-				box.title = sportMeta(a.sport).label;
+				box.title = `Private activity: ${sportMeta(a.sport).label}`;
 				const rface = el('div', 'ac__face', cardScope);
 				const rsvg = svgEl('svg', cardScope) as unknown as SVGSVGElement;
 				rsvg.setAttribute('class', 'ac__redacted-mark');
@@ -1525,6 +1524,29 @@ const scopeDummy: ActivityCardRow = {
 				rsvg.appendChild(rpath);
 				rface.appendChild(rsvg as unknown as Node);
 				box.appendChild(rface);
+
+				const rmeta = el('div', 'ac__meta', cardScope);
+				const rtitle = el('div', 'ac__title ac__title--private', cardScope);
+				const lock = svgEl('svg', cardScope);
+				lock.setAttribute('class', 'ac__lock');
+				lock.setAttribute('viewBox', '0 0 24 24');
+				lock.setAttribute('fill', 'none');
+				lock.setAttribute('stroke', 'currentColor');
+				lock.setAttribute('stroke-width', '1.8');
+				lock.setAttribute('aria-hidden', 'true');
+				const lockPath = svgEl('path', cardScope);
+				lockPath.setAttribute('d', LOCK_ICON);
+				lock.appendChild(lockPath);
+				rtitle.appendChild(lock as unknown as Node);
+				rtitle.appendChild(el('span', undefined, cardScope, 'Private activity'));
+				rmeta.appendChild(rtitle);
+				const rsport = el('div', 'ac__sport', cardScope);
+				rsport.appendChild(el('span', undefined, cardScope, sportMeta(a.sport).label));
+				rmeta.appendChild(rsport);
+				const rdate = el('time', 'ac__date figure', cardScope, activityDate(a.local_date));
+				rdate.setAttribute('datetime', a.local_date);
+				rmeta.appendChild(rdate);
+				box.appendChild(rmeta);
 				wrap.appendChild(box);
 
 				return wrap;

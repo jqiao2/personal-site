@@ -56,7 +56,7 @@ function isDegraded(err: { code?: string; message?: string } | null): boolean {
 // returns them). Kept flat rather than nested; the pages reshape as needed.
 // ---------------------------------------------------------------------------
 
-import { redactActivities } from './activity-privacy';
+import { HEATMAP_PUBLIC_BEFORE, onPublicHeatmap, redactActivities } from './activity-privacy';
 import type { SkiSegmentOverride } from './ski';
 import { computeExertion, type Thresholds } from './exertion';
 
@@ -1428,7 +1428,7 @@ async function moveGearDistance(from: number | null, to: number | null, distance
 
 /**
  * Every outdoor activity's full-fidelity polyline, all-time — the heatmap's
- * whole input. Selects three columns rather than `*` because this is the one
+ * whole input. Selects a few columns rather than `*` because this is the one
  * read in the file that deliberately fetches the entire collection at once:
  * a `select('*')` here would drag every stat column across the wire for
  * nothing.
@@ -1506,25 +1506,26 @@ export async function listRoutePolylines(
 		sport: string;
 		sub_sport: string | null;
 		polyline: string;
+		private?: boolean;
 	}[] = [];
 
 	for (let offset = 0; ; offset += PAGE) {
 		// A track is the single most identifying thing this table holds — it
-		// starts at a front door. A visitor gets the published ones only, at the
-		// query, so a private route is never even loaded into a process that is
-		// answering a stranger.
+		// starts at a front door. A visitor gets the published ones from before
+		// HEATMAP_PUBLIC_BEFORE only, at the query, so no other route is ever
+		// loaded into a process that is answering a stranger.
 		// Reads the base `activities` table, not the `activity_list` view: 0064
 		// dropped `polyline` from the view (it was 72% of every feed row's egress)
 		// and this is one of the two readers the migration named. The view's other
 		// job here — hiding soft-deleted rows — is done by the deleted_at filter.
 		let req = supabasePublic
 			.from('activities')
-			.select('id, parent_id, local_date, sport, sub_sport, polyline')
+			.select('id, parent_id, local_date, sport, sub_sport, polyline, private')
 			.is('deleted_at', null)
 			.not('polyline', 'is', null);
 
-		if (!isOwner) req = req.eq('private', false);
-		const { data, error } = await req.range(offset, offset + PAGE - 1);
+		if (!isOwner) req = req.eq('private', false).is('parent_id', null).lt('local_date', HEATMAP_PUBLIC_BEFORE);
+		const { data, error } = await req.order('id').range(offset, offset + PAGE - 1);
 
 		if (error) {
 			if (isDegraded(error)) return [];
@@ -1537,9 +1538,10 @@ export async function listRoutePolylines(
 		if (page.length < PAGE) break;
 	}
 
-	const parents = new Set(rows.map((r) => r.parent_id).filter((id): id is number => id != null));
+	const visible = isOwner ? rows : rows.filter(onPublicHeatmap);
+	const parents = new Set(visible.map((r) => r.parent_id).filter((id): id is number => id != null));
 
-	return rows
+	return visible
 		.filter((r) => !parents.has(r.id) && r.sub_sport !== 'indoor' && !sportMeta(r.sport).indoor)
 		.flatMap((r) =>
 			splitTrack(r.polyline).map((polyline) => ({

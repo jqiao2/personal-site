@@ -5,8 +5,9 @@
 //
 // "Journal" is a dropdown: it collapses the four logs (films, books,
 // restaurants, activities) into one tab, and the tab itself points at the
-// month-in-review page that draws all four on one calendar. The individual
-// logs hang off it as children. Subway is no longer a tab — it lives on the
+// month-in-review page that draws all four on one calendar. That page is
+// owner-only, so a visitor's Journal tab opens the menu and links nowhere. The
+// individual logs hang off it as children. Subway is no longer a tab — it lives on the
 // projects page now, as the interactive thing it is.
 
 import type { HeaderTheme } from './header-theme';
@@ -101,7 +102,7 @@ const SECTION_NAV: Partial<Record<HeaderTheme, readonly SectionLink[]>> = {
 		{ href: '/activities/all', label: 'All activities' },
 		{ href: '/activities/training', label: 'Training calendar' },
 		{ href: '/activities/fitness', label: 'Fitness trend', ownerOnly: true },
-		{ href: '/activities/heatmap', label: 'Heatmap', ownerOnly: true },
+		{ href: '/activities/heatmap', label: 'Heatmap' },
 		{ href: '/activities/athlete', label: 'Athlete', ownerOnly: true },
 		{ href: '/activities/gear', label: 'Gear', ownerOnly: true },
 		{ href: '/activities/month', label: 'Month in review', ownerOnly: true },
