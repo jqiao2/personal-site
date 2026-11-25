@@ -52,6 +52,23 @@ pages need no login: `requireOwner()` is true in dev. Pass the route WITHOUT a
 leading slash — Git Bash rewrites `/month` into a Windows path. See
 `wiki/patterns/0002-screenshot-the-page-yourself.md`.
 
+## Page headers
+
+Every page header has the same dimensions. They live once, as the `--ph-*`
+variables in `SiteHeader.astro`'s global style; a page brings its own typeface
+and color and never its own numbers.
+
+- `--ph-top` under the nav, `--ph-gap` from back link to title, `--ph-title` and
+  `--ph-title-lh` on the h1, `--ph-below` after it. A ruled `.topbar` puts
+  `--ph-rule` on each side of its line.
+- No mobile override of the title size, and no top padding on the box that
+  holds `<SiteHeader>`: it pushes the nav down the page.
+- To change a dimension, change the variable, so every page moves together.
+
+`npm run headers:test` checks this and runs first in `npm run build`. Titles
+beside artwork or on a floating panel are the only exceptions, listed in
+`OWN_TITLE` in `scripts/page-header.test.mjs`.
+
 ## The site does not move
 
 Nothing on the page animates. The content is the point, and motion pulls the eye

@@ -41,4 +41,4 @@ pushes the strip 48px down the page, which reads as a too-tall header
 (fitness, athlete and settings all did this). Put the top space under the strip
 with `--ph-top`. The `--ph-*` variables in SiteHeader's global style hold every
 page-header dimension: top space, back-to-title gap, title size, space below.
-Use them on new pages instead of picking numbers.
+`npm run headers:test` (part of `npm run build`) fails a page that picks its own.
