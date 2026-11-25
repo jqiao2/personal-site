@@ -21,6 +21,7 @@
 // The one thing the model CANNOT answer is what anything cost: `price_band` is
 // a band for the restaurant, not a bill for the meal, so "spend over time" is
 // not available and shouldn't be sketched as if it were.
+import BackLink from '../../components/BackLink.astro';
 import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
 import MealEditor from '../../components/MealEditor.astro';
 import { requireOwner } from '../../lib/auth';
@@ -63,7 +64,7 @@ const maxPrice = Math.max(1, ...priceCounts.map((p) => p.n));
 	<div class="rl-page">
 		<div class="rl-head">
 			<div>
-				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<BackLink href="/restaurants" label="Jason's restaurant log" theme="restaurant" />
 				<div class="rl-head__title">Stats</div>
 			</div>
 			<span class="rl-tag">Not built yet</span>

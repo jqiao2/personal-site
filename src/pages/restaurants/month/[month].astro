@@ -19,6 +19,7 @@
 // the same grid draws itself as ruled paper with the needles on it, which is the
 // calendar this card had before the photographs went in — no empty state, no
 // second layout.
+import BackLink from '../../../components/BackLink.astro';
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import VerdictMark from '../../../components/VerdictMark.astro';
 import MonthPicker from '../../../components/MonthPicker.astro';
@@ -111,7 +112,7 @@ const query = monthQuery(aspect);
 	<div class="rl-page">
 		<div class="rl-head">
 			<div>
-				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<BackLink href="/restaurants" label="Jason's restaurant log" theme="restaurant" />
 				<div class="rl-head__title">Month in review</div>
 			</div>
 			<div class="controls">

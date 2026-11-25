@@ -21,6 +21,7 @@
 // line honest about what it is measuring. The one exception is FTP and
 // power-to-weight, which are the same test divided by the same weight and so
 // draw the identical shape twice — they share a card and a switcher instead.
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { requireOwner } from '../../lib/auth';
@@ -139,7 +140,7 @@ const today = new Date().toLocaleDateString('en-CA');
 			<SiteHeader pathname={Astro.url.pathname} theme="activity" />
 
 			<header class="head">
-				<a class="back" href="/activities">← Activity log</a>
+				<BackLink href="/activities" label="Activity log" theme="activity" />
 				<h1 class="head__title">Athlete</h1>
 			</header>
 
@@ -528,7 +529,6 @@ const today = new Date().toLocaleDateString('en-CA');
 		gap: 2rem;
 	}
 	.head { display: flex; flex-direction: column; gap: 0.35rem; }
-	.back { color: var(--lake); text-decoration: none; font-size: 0.85rem; }
 	.head__title { margin: 0; font-size: 1.6rem; }
 	.sec {
 		margin: 0 0 0.75rem;

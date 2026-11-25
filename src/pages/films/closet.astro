@@ -1,4 +1,5 @@
 ---
+import BackLink from '../../components/BackLink.astro';
 import FilmLayout from '../../layouts/FilmLayout.astro';
 import SiteHeader from '../../components/SiteHeader.astro';
 import { loadCloset, type ClosetSpine } from '../../lib/closet';
@@ -24,7 +25,7 @@ const num = (n: number) => n.toLocaleString('en-US');
 		<SiteHeader pathname={Astro.url.pathname} theme="film" max="1064px" />
 
 		<header class="top">
-			<a class="back" href="/films">← Jason's film log</a>
+			<BackLink href="/films" label="Jason's film log" theme="film" style="--back: #c8a98a; --back-hover: #f0d488" />
 			<div class="sort" role="group" aria-label="Sort">
 				<button type="button" data-sort="r" aria-pressed="true">Recent</button>
 				<button type="button" data-sort="a" aria-pressed="false">A–Z</button>
@@ -302,14 +303,6 @@ const num = (n: number) => n.toLocaleString('en-US');
 			align-items: center;
 			gap: 16px;
 			font-family: var(--font-archivo);
-		}
-		.back {
-			color: #c8a98a;
-			font-size: 13px;
-			text-decoration: none;
-		}
-		.back:hover {
-			color: #f0d488;
 		}
 		.sort {
 			display: flex;

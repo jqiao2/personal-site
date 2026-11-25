@@ -17,6 +17,7 @@
 // two dates — which is thin, but those dates have to be settable somewhere, and
 // a second editor bolted onto this list would be a whole parallel way to edit a
 // thing that already has one.
+import BackLink from '../../../components/BackLink.astro';
 import ActivityLayout from '../../../layouts/ActivityLayout.astro';
 import SiteHeader from '../../../components/SiteHeader.astro';
 import { ALPINE } from '../../../lib/activity-tokens';
@@ -152,9 +153,7 @@ function servedText(g: GearWithUse): string {
 
 					<div class="side__rule"></div>
 					<nav class="side__nav">
-						<a class="navrow navrow--link navrow--last" href="/activities">
-							<span>Back to the log</span><span class="navrow__n">→</span>
-						</a>
+						<BackLink href="/activities" label="Activity log" theme="activity" />
 					</nav>
 				</aside>
 
@@ -302,25 +301,6 @@ function servedText(g: GearWithUse): string {
 		.side__nav {
 			display: flex;
 			flex-direction: column;
-		}
-		.navrow {
-			display: flex;
-			justify-content: space-between;
-			align-items: center;
-			padding: 11px 0;
-			font-size: 14px;
-			color: var(--granite);
-			border-bottom: 1px solid var(--scree);
-		}
-		.navrow--last {
-			border-bottom: none;
-		}
-		.navrow--link:hover {
-			color: var(--lake);
-		}
-		.navrow__n {
-			color: var(--granite-soft);
-			font-size: 13px;
 		}
 
 		.main {

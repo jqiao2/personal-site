@@ -15,6 +15,7 @@
 // exactly the 12 weeks immediately older than what's on screen, no overlap and
 // no gap. listActivityDays needs `before` = the day AFTER that cursor so its
 // strict `local_date < before` still includes the cursor day itself.
+import BackLink from '../../components/BackLink.astro';
 import ActivityLayout from '../../layouts/ActivityLayout.astro';
 import ActivityCard, { type ActivityRow as ActivityCardRow } from '../../components/ActivityCard.astro';
 import TrainingWeek from '../../components/TrainingWeek.astro';
@@ -121,7 +122,7 @@ const scopeDummy: ActivityCardRow = {
 					</div>
 
 					<header class="head">
-						<a class="back" href="/activities">← Jason's activity log</a>
+						<BackLink href="/activities" label="Jason's activity log" theme="activity" />
 						<h1 class="head__title">Training calendar</h1>
 					</header>
 
@@ -264,13 +265,6 @@ const scopeDummy: ActivityCardRow = {
 				display: flex;
 				flex-direction: column;
 				gap: 6px;
-			}
-			.back {
-				font-size: 0.8rem;
-				color: var(--lake);
-			}
-			.back:hover {
-				color: var(--lake-deep);
 			}
 			.head__title {
 				font-family: var(--serif);

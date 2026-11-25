@@ -1,4 +1,5 @@
 ---
+import BackLink from '../../../components/BackLink.astro';
 import FilmLayout from '../../../layouts/FilmLayout.astro';
 import EntryEditor from '../../../components/EntryEditor.astro';
 import { getDiaryEntry, listTheaterNames, listTags, listFriends } from '../../../lib/films';
@@ -78,9 +79,7 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			<SiteHeader pathname={Astro.url.pathname} theme="film" max="824px" />
 
 			<header class="topbar">
-				<a class="back" href="/films/diary">
-					<span class="back__arrow">←</span><span>Film diary</span>
-				</a>
+				<BackLink href="/films/diary" label="Film diary" theme="film" />
 				<span class="topbar__tag">Diary entry</span>
 			</header>
 
@@ -233,19 +232,6 @@ const pinned = isOwner ? await isPinned('film', entry.id) : false;
 			padding: 26px 0 22px;
 			border-bottom: 1px solid #4a2529;
 			margin-bottom: 40px;
-		}
-		.back {
-			display: flex;
-			align-items: center;
-			gap: 9px;
-			font-size: 13px;
-			color: #a2857a;
-		}
-		.back:hover {
-			color: #f4e8d1;
-		}
-		.back__arrow {
-			font-size: 15px;
 		}
 		.topbar__tag {
 			font-size: 11.5px;

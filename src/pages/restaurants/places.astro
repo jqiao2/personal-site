@@ -19,6 +19,7 @@
 // for exactly that reason. What they are not is history: the layout sends any
 // link that only re-states this page through location.replace, so Back leaves for
 // wherever you came from rather than unwinding the chips you pressed.
+import BackLink from '../../components/BackLink.astro';
 import RestaurantLayout from '../../layouts/RestaurantLayout.astro';
 import RestaurantMap from '../../components/RestaurantMap.astro';
 import MealEditor from '../../components/MealEditor.astro';
@@ -197,7 +198,7 @@ const sorts: { key: PlaceSort; label: string }[] = [
 	<div class="rl-page">
 		<div class="rl-head">
 			<div>
-				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<BackLink href="/restaurants" label="Jason's restaurant log" theme="restaurant" />
 				<div class="rl-head__title">Restaurants</div>
 			</div>
 			<div class="head-right">

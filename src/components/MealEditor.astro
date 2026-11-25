@@ -1079,7 +1079,7 @@ const config = {
 				return;
 			}
 
-			location.href = ($('[data-me-delete]') as HTMLElement).dataset.redirect ?? '/restaurants/diary';
+			location.replace(($('[data-me-delete]') as HTMLElement).dataset.redirect ?? '/restaurants/diary');
 		}
 
 		// -- wiring -------------------------------------------------------------

@@ -1,6 +1,7 @@
 ---
 // Every month that has a meal in it, newest first — the index the month card
 // steps through.
+import BackLink from '../../../components/BackLink.astro';
 import RestaurantLayout from '../../../layouts/RestaurantLayout.astro';
 import { requireOwner } from '../../../lib/auth';
 import { groupByMonth, listDiary } from '../../../lib/restaurants';
@@ -26,7 +27,7 @@ const years = [...new Set(months.map((m) => m.key.slice(0, 4)))];
 	<div class="rl-page">
 		<div class="rl-head">
 			<div>
-				<a class="rl-back" href="/restaurants">&larr; Jason&rsquo;s restaurant log</a>
+				<BackLink href="/restaurants" label="Jason's restaurant log" theme="restaurant" />
 				<div class="rl-head__title">Month in review</div>
 			</div>
 			<span class="rl-count">{months.length} month{months.length === 1 ? '' : 's'}</span>
