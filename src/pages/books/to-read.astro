@@ -654,7 +654,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 		.wrap {
 			display: flex;
 			justify-content: center;
-			padding: 34px clamp(14px, 4vw, 24px) 90px;
+			padding: var(--ph-top) clamp(14px, 4vw, 24px) 90px;
 		}
 		.col {
 			width: 100%;
@@ -666,7 +666,7 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 			text-transform: uppercase;
 			letter-spacing: 1.5px;
 			color: #8a745a;
-			margin-bottom: 14px;
+			margin-bottom: var(--ph-gap);
 		}
 		.crumb__link {
 			color: #8a745a;
@@ -685,15 +685,15 @@ const ghostStyle = `width:${PILE_COVER_WIDTH}px; height:${GHOST_HEIGHT}px`;
 			justify-content: space-between;
 			gap: 14px;
 			flex-wrap: wrap;
-			margin-bottom: 30px;
+			margin-bottom: var(--ph-below);
 		}
 		.head__title {
 			font-family: var(--font-newsreader);
 			font-weight: 500;
-			font-size: clamp(38px, 9vw, 52px);
+			font-size: var(--ph-title);
 			color: #f2e6cd;
 			letter-spacing: -0.5px;
-			line-height: 1;
+			line-height: var(--ph-title-lh);
 			margin: 0;
 		}
 		.head__note {

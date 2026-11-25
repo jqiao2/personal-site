@@ -352,6 +352,20 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 </script>
 
 <style is:global>
+	/* Page-header dimensions, one set for every page that carries this header:
+	   the space under the nav, the page title, and the space around it. Pages
+	   keep their own typeface and color. */
+	:root {
+		--ph-top: 26px;
+		/* Back link to title. Where a ruled topbar sits between them, --ph-rule
+		   goes on each side of its 1px line and adds up to the same gap. */
+		--ph-gap: 25px;
+		--ph-rule: 12px;
+		--ph-title: 34px;
+		--ph-title-lh: 1.15;
+		--ph-below: 24px;
+	}
+
 	/* Owner sign-in, hidden client-side. The button and dialog are in the markup
 	   for everyone (so the page is one cacheable static file); the inline script
 	   at the top of the header sets html[data-owner] before paint when the
@@ -439,6 +453,7 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		font-family: var(--sh-font);
 	}
 	.sh__inner {
+		min-height: 57px;
 		/* border-box so the column's outer width is exactly --sh-max on every
 		   host layout — the section layouts set a global border-box, but Layout
 		   (home/about/projects) doesn't, which otherwise made this strip 64px
@@ -615,15 +630,10 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 
 	/* Mobile: the primary tabs fold into the hamburger drawer (rendered there by
 	   DrawerNav) on every page, leaving the header a single row of action buttons
-	   + hamburger. The tabs no longer set the row height, so pad the strip to keep
-	   breathing room above the divider. */
+	   + hamburger. .sh__inner's min-height keeps the strip as tall as on desktop. */
 	@media (max-width: 820px) {
 		.sh__tabs {
 			display: none;
-		}
-		.sh__inner {
-			padding-top: 13px;
-			padding-bottom: 15px;
 		}
 	}
 

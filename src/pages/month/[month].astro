@@ -331,9 +331,10 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 		flex-wrap: wrap;
 	}
 	.head__title {
-		margin-top: 4px;
+		margin-top: var(--ph-gap);
 		font-family: var(--prose);
-		font-size: 27px;
+		font-size: var(--ph-title);
+		line-height: var(--ph-title-lh);
 	}
 	.controls {
 		display: flex;
@@ -368,7 +369,7 @@ const pickerMonths = MONTH_ABBR.map((abbr, i) => {
 	   tiles carry the four track dots (film, book, meal, move) in the journal's
 	   own colors instead of a count. */
 	.monthnav {
-		margin-top: 14px;
+		margin-top: var(--ph-below);
 		--mp-step-bg: var(--paper);
 		--mp-step-border: var(--rule-2);
 		--mp-step-fg: var(--ink-2);

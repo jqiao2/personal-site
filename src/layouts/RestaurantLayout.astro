@@ -382,7 +382,7 @@ const { title, pathname, sidebar = false } = Astro.props;
 			.rl-page {
 				max-width: var(--column);
 				margin: 0 auto;
-				padding: 30px var(--gutter) 80px;
+				padding: var(--ph-top) var(--gutter) 80px;
 			}
 			.rl-page--flush {
 				padding-top: 0;
@@ -433,17 +433,17 @@ const { title, pathname, sidebar = false } = Astro.props;
 				padding-bottom: 10px;
 			}
 			.rl-head__title {
-				margin-top: 6px;
+				margin-top: var(--ph-gap);
 				font-family: var(--display);
-				font-size: 30px;
-				line-height: 1;
+				font-size: var(--ph-title);
+				line-height: var(--ph-title-lh);
 				color: var(--ink);
 			}
 			.rl-topbar {
 				display: flex;
 				align-items: center;
 				justify-content: space-between;
-				padding: 14px 0;
+				padding: var(--ph-top) 0 var(--ph-rule);
 				border-bottom: 1px solid var(--rule-2);
 			}
 			.rl-tag {

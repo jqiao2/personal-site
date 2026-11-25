@@ -237,7 +237,7 @@ const scopeDummy: ActivityCardRow = {
 		</div>
 
 		<header class="head">
-			<BackLink href="/activities" label="Jason's activity log" theme="activity" style="margin-bottom: 0.6rem" />
+			<BackLink href="/activities" label="Jason's activity log" theme="activity" style="margin-bottom: var(--ph-gap)" />
 			<h1>All activities</h1>
 			<div class="sub">
 				<span class="sub__n">{num(collectionTotal)}</span> activities logged · showing{' '}
@@ -485,17 +485,18 @@ const scopeDummy: ActivityCardRow = {
 		.page {
 			max-width: 1100px;
 			margin: 0 auto;
-			padding: 2rem 1.5rem 6rem;
+			padding: var(--ph-top) 1.5rem 6rem;
 		}
 		#scope-source {
 			display: none;
 		}
 
 		.head {
-			margin-bottom: 1.5rem;
+			margin-bottom: var(--ph-below);
 		}
 		h1 {
-			font-size: 2.6rem;
+			font-size: var(--ph-title);
+			line-height: var(--ph-title-lh);
 			margin: 0 0 0.4rem;
 			letter-spacing: -0.5px;
 		}
@@ -935,9 +936,6 @@ const scopeDummy: ActivityCardRow = {
 			}
 		}
 		@media (max-width: 560px) {
-			h1 {
-				font-size: 2rem;
-			}
 			.panel {
 				padding: 1rem 0.9rem;
 			}
