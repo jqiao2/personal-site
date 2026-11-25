@@ -224,3 +224,4 @@ wiki across every iteration, even reverted ones).
 2026-11-24 — Kindle sync silent since Aug 28: bot protection (on since Sep 13) challenged it with a 429, and Apple Health weigh-ins too. Added a firewall bypass for the three token-checked device endpoints, limited to requests with a Bearer header (0040).
 2026-11-24 — unified header dimensions: nav strip 58px everywhere, page titles and spacing on the --ph-* variables in SiteHeader; three activity pages padded the nav down 48px (0007).
 2026-11-24 — One BackLink component replaces every hand-written back link; label and target follow the Navigation API history (0041).
+2026-11-24 — `OWNER_DEV=0` gives a visitor view in dev; the heatmap went public behind a server-side date cutoff (`HEATMAP_PUBLIC_BEFORE`).

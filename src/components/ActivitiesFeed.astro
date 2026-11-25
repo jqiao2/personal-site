@@ -15,7 +15,7 @@ import DrawerNav from './DrawerNav.astro';
 import { requireOwner } from '../lib/auth';
 import { getActivityStats, type ActivityListRow } from '../lib/activities';
 import { fetchActivityPage, activityQueryFromParams } from '../lib/activity-params';
-import { sportMeta, sportIcon, formatStat, type StatKey } from '../lib/sports';
+import { LOCK_ICON, sportMeta, sportIcon, formatStat, type StatKey } from '../lib/sports';
 import { excerpt } from '../lib/format';
 import { activityDate } from '../lib/activity-tokens';
 
@@ -97,6 +97,12 @@ function routeStart(path: string): { x: number; y: number } | null {
 									<time>{activityDate(a.local_date)}</time>
 									<span class="tag">{label}</span>
 								</p>
+								<p class="item__private">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+										<path d={LOCK_ICON} />
+									</svg>
+									Private activity
+								</p>
 							</div>
 							<div class="item__thumb item__thumb--glyph" aria-hidden="true">
 								<svg viewBox="0 0 24 24" fill="none" stroke="var(--granite-soft)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -164,7 +170,7 @@ function routeStart(path: string): { x: number; y: number } | null {
 			<a class="navrow navrow--link" href="/activities/all">
 				<span>All activities</span>{isOwner && <span class="navrow__n">{num(totalActivities)}</span>}
 			</a>
-			<a class:list={['navrow', 'navrow--link', !isOwner && 'navrow--last']} href="/activities/training">
+			<a class="navrow navrow--link" href="/activities/training">
 				<span>Training calendar</span><span class="navrow__n">→</span>
 			</a>
 			{isOwner && (
@@ -172,11 +178,9 @@ function routeStart(path: string): { x: number; y: number } | null {
 					<span>Fitness trend</span><span class="navrow__n">→</span>
 				</a>
 			)}
-			{isOwner && (
-				<a class="navrow navrow--link" href="/activities/heatmap">
-					<span>Heatmap</span><span class="navrow__n">→</span>
-				</a>
-			)}
+			<a class:list={['navrow', 'navrow--link', !isOwner && 'navrow--last']} href="/activities/heatmap">
+				<span>Heatmap</span><span class="navrow__n">→</span>
+			</a>
 			{isOwner && (
 				<a class="navrow navrow--link" href="/activities/athlete">
 					<span>Athlete</span><span class="navrow__n">→</span>
@@ -258,6 +262,19 @@ function routeStart(path: string): { x: number; y: number } | null {
 		font-size: 22px;
 		line-height: 1.2;
 		margin: 0;
+	}
+	.item__private {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		margin: 0;
+		font-size: 14px;
+		color: var(--granite-soft);
+	}
+	.item__private svg {
+		width: 15px;
+		height: 15px;
+		flex: none;
 	}
 	.item__title a {
 		color: var(--granite);

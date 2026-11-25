@@ -782,6 +782,10 @@ const SPORT_ICONS: Record<string, string> = {
 	other: 'M12 3l7 9-7 9-7-9z',
 };
 
+/** The mark on a private activity a visitor sees redacted. Same 24x24 stroke
+ *  grid as the sport glyphs. */
+export const LOCK_ICON = 'M6 11h12v9H6zM8.5 11V8a3.5 3.5 0 0 1 7 0v3';
+
 /** Icon path for a sport slug. Unknown slugs fall through `sportMeta`'s
  *  'other' default, same as everywhere else; an icon key with no path (a row
  *  added to the table above before its glyph was drawn) falls back to the

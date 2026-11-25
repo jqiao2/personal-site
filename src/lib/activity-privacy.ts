@@ -7,6 +7,7 @@
 //   redactActivities — the row itself, handed to a template or an API client.
 //   visitorQuery     — the QUESTION, which leaks the row's numbers even when
 //                      the row never leaves the server. See its comment.
+// The public heatmap's cutoff date lives here too: see HEATMAP_PUBLIC_BEFORE.
 import type { ActivityListRow } from './activities';
 import type { ActivityFilterQuery } from './activity-params';
 
@@ -82,6 +83,23 @@ export function visitorQuery(query: ActivityFilterQuery): ActivityFilterQuery {
 		sort: 'date',
 		sortDir: query.sortDir,
 	};
+}
+
+// ---------------------------------------------------------------------------
+// The public heatmap.
+// ---------------------------------------------------------------------------
+
+/** First local day a visitor's heatmap leaves out. Every track at once shows
+ *  where someone lives and what they do every week, so the public map stops
+ *  well short of now, even for activities that are public one at a time. */
+export const HEATMAP_PUBLIC_BEFORE = '2022-08-01';
+
+/** May this track be on the visitor's heatmap? The query in listRoutePolylines
+ *  asks the database the same thing; this re-checks the rows that came back, so
+ *  an edit to that query can't widen the public map. Legs stay out: a leg's own
+ *  flag says nothing about its parent's. */
+export function onPublicHeatmap(row: { private?: boolean | null; local_date: string; parent_id: number | null }): boolean {
+	return row.private === false && row.parent_id === null && row.local_date < HEATMAP_PUBLIC_BEFORE;
 }
 
 // ---------------------------------------------------------------------------

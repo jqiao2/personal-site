@@ -56,13 +56,15 @@ const style = headerThemeStyle(theme);
 				// The Journal tab is a submenu, not a flat dump of the four logs: a
 				// native <details> so it toggles with no JS, opened by default when
 				// you're already inside one of the logs.
-				<details class="dnav__group" data-owner-only-nav open={n.children.some((c) => c.active) || undefined}>
+				<details class="dnav__group" open={n.children.some((c) => c.active) || undefined}>
 					<summary class:list={['dnav__row', 'dnav__summary', n.active && 'dnav__row--active']}>
-						{/* The label is a link to the month in review; only the caret
-						    (the rest of the summary) opens the submenu. */}
-						<a class="dnav__label" href={n.href} aria-current={n.active ? 'page' : undefined}>
+						{/* For the owner the label links to the month in review and the
+						    rest of the summary opens the submenu. A visitor can't open
+						    that page, so for them the whole row toggles. */}
+						<a class="dnav__label" href={n.href} aria-current={n.active ? 'page' : undefined} data-owner-only-nav>
 							{n.label}
 						</a>
+						<span data-visitor-only-nav>{n.label}</span>
 						<svg class="dnav__caret" viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
 							<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
 						</svg>

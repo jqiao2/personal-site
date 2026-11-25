@@ -1,5 +1,5 @@
 ---
-// /activities/heatmap — every outdoor track ever recorded, on one map, in two
+// /activities/heatmap — outdoor tracks, on one map, in two
 // readings of the same data:
 //
 //   routes — the tracks themselves, drawn faintly and stacked, so a road
@@ -43,18 +43,15 @@ import { TILE_FEET } from '../../lib/heatmap';
 
 export const prerender = false;
 
-// OWNER ONLY. This page is every track ever recorded on one map — the single
-// most identifying thing the log holds, and the exact disclosure activities
-// being private by default (migration 0043) exists to stop. There is no
-// redacted version of a heatmap: a map with the private routes taken out is,
-// by default, an empty map, and one with them in is the whole leak.
-if (!(await requireOwner(Astro.cookies))) {
-	return Astro.redirect(`/films/login?redirect=${encodeURIComponent(Astro.url.pathname)}`);
-}
+// The owner's map is every track ever recorded — the single most identifying
+// thing the log holds. A visitor's is public activities from before
+// HEATMAP_PUBLIC_BEFORE (activity-privacy.ts), cut off server-side: this page
+// carries no track data, and /api/activities/routes decides who gets what.
+const isOwner = await requireOwner(Astro.cookies);
 
 const key = import.meta.env.PUBLIC_MAPTILER_KEY ?? '';
 
-const config = { key, tokens: ACTIVITY_MAP_TOKENS };
+const config = { key, tokens: ACTIVITY_MAP_TOKENS, isOwner };
 ---
 
 <ActivityLayout title="Heatmap · Jason's activity log">
@@ -136,7 +133,11 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 	const legend = document.querySelector<HTMLElement>('[data-legend]');
 
 	if (tag && host && status) {
-		const cfg = JSON.parse(tag.textContent || '{}') as { key: string; tokens: { route: string } };
+		const cfg = JSON.parse(tag.textContent || '{}') as {
+			key: string;
+			tokens: { route: string };
+			isOwner: boolean;
+		};
 
 		const map = new maplibregl.Map({
 			container: host,
@@ -177,7 +178,9 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			);
 		}
 
-		goToUser();
+		// A visitor isn't near these tracks, so they open on the tracks themselves
+		// and aren't asked for their location unless they press the button.
+		if (cfg.isOwner) goToUser();
 		document.querySelector('[data-locate]')?.addEventListener('click', () => goToUser(true));
 
 		// --- data -------------------------------------------------------------
@@ -422,7 +425,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			const hit = cellAt(e);
 
 			if (!hit || !pill) return hideHover();
-			map.getCanvas().style.cursor = 'pointer';
+			map.getCanvas().style.cursor = cfg.isOwner ? 'pointer' : '';
 			pill.style.left = `${e.point.x}px`;
 			pill.style.top = `${e.point.y}px`;
 			// Flip to the cursor's left near the right edge, where .map clips it.
@@ -453,6 +456,10 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			// A touch has no hover, so the first tap on a cell shows its pill and
 			// the second goes through. With a mouse, hover has already shown it.
 			if (hit.key !== hoverKey) return showHover(e);
+
+			// The list ignores ?ids= for a visitor (visitorQuery), so there is
+			// nowhere to go.
+			if (!cfg.isOwner) return;
 			// ponytail: ids ride in the URL; a cell crossed ~1000+ times would
 			// make a URL too long for the list API's Supabase call — switch to a
 			// server-side cell lookup if a commute ever gets there.
@@ -493,6 +500,20 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 			}
 		}
 
+		// Where a visitor's map opens: the starts in the one-degree square most
+		// tracks begin in. The bounds of everything span an ocean, at which zoom
+		// the page looks empty.
+		function busiest(): [number, number][] {
+			const squares = new Map<string, [number, number][]>();
+
+			for (const { points } of tracks) {
+				const key = points[0].map(Math.floor).join(',');
+				squares.set(key, [...(squares.get(key) ?? []), points[0]]);
+			}
+
+			return [...squares.values()].reduce((a, b) => (b.length > a.length ? b : a));
+		}
+
 		fetch('/api/activities/routes')
 			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
 			.then((data: { routes: { id: number; date: string; family: SportFamily; polyline: string }[] }) => {
@@ -514,7 +535,7 @@ const config = { key, tokens: ACTIVITY_MAP_TOKENS };
 					applyView();
 
 					if (cameraSettled) return;
-					const all = trackBounds(tracks.flatMap((t) => t.points));
+					const all = trackBounds(cfg.isOwner ? tracks.flatMap((t) => t.points) : busiest());
 
 					if (!all) return;
 					cameraSettled = true;

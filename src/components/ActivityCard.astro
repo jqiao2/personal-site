@@ -25,7 +25,7 @@
 // card size via `vector-effect="non-scaling-stroke"`, and the browser paints
 // it in the same pass as the text next to it.
 import { ALPINE, activityDate, cardStats, noGpsStats, type CardStatRow } from '../lib/activity-tokens';
-import { sportIcon, sportMeta } from '../lib/sports';
+import { LOCK_ICON, sportIcon, sportMeta } from '../lib/sports';
 
 // The card asks activity-tokens.ts what to say under its face — cardStats()
 // for the stat line, noGpsStats() for the big numbers a routeless card gives
@@ -87,7 +87,8 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 ---
 
 <!-- REDACTED CARD. A private activity, seen by a visitor: the sport glyph and
-     nothing else — no title, no stats, no route. It is a <div> and not an <a>
+     a lock, plus the sport and day on a row — no title, no stats, no route.
+     It is a <div> and not an <a>
      because the detail page it would link to 404s for this reader, and a link
      that is always a dead end is worse than no link. The sport label lives in
      aria-label/title rather than on the face, so a screen reader gets the one
@@ -96,8 +97,9 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 <Element
 	class:list={['ac', `ac--${size}`, a.redacted && 'ac--redacted']}
 	href={a.redacted ? undefined : `/activities/${a.id}`}
-	aria-label={a.redacted ? label : undefined}
-	title={a.redacted ? label : undefined}
+	role={a.redacted && size !== 'row' ? 'img' : undefined}
+	aria-label={a.redacted && size !== 'row' ? `Private activity: ${label}` : undefined}
+	title={a.redacted ? `Private activity: ${label}` : undefined}
 	style={{
 		'--sky': ALPINE.sky,
 		'--snow': ALPINE.snow,
@@ -110,11 +112,30 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 	}}
 >
 	{a.redacted ? (
+	<Fragment>
 		<div class="ac__face">
 			<svg class="ac__redacted-mark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
 				<path d={glyph} />
 			</svg>
+			{size !== 'row' && (
+				<svg class="ac__lock ac__lock--corner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+					<path d={LOCK_ICON} />
+				</svg>
+			)}
 		</div>
+		{size === 'row' && (
+			<div class="ac__meta">
+				<div class="ac__title ac__title--private">
+					<svg class="ac__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+						<path d={LOCK_ICON} />
+					</svg>
+					<span>Private activity</span>
+				</div>
+				<div class="ac__sport"><span>{label}</span></div>
+				<time class="ac__date figure" datetime={a.local_date}>{activityDate(a.local_date)}</time>
+			</div>
+		)}
+	</Fragment>
 	) : (
 	<Fragment>
 	<div class="ac__face">
@@ -291,9 +312,8 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		white-space: nowrap;
 	}
 
-	/* Redacted: the whole card is the face, and the face is one glyph. No meta
-	   block, so the card is square-ish at every size instead of leaving an
-	   empty strip where the title used to be. */
+	/* Redacted: the face is the sport glyph. A tile or cell stops there, with the
+	   lock in the corner; a row says "Private activity" where the title goes. */
 	.ac--redacted .ac__face {
 		border-bottom: none;
 		display: flex;
@@ -311,14 +331,29 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		stroke-linecap: round;
 		stroke-linejoin: round;
 	}
-	.ac--redacted.ac--row {
-		/* No meta block to fill the rest of the line, so the card is its face
-		   rather than a 120px glyph with a meter of empty card after it. */
-		width: fit-content;
+	.ac__lock {
+		width: 0.95rem;
+		height: 0.95rem;
+		flex: none;
+		color: var(--granite-soft);
+		stroke-linecap: round;
+		stroke-linejoin: round;
 	}
+	.ac__lock--corner {
+		position: absolute;
+		top: 0.4rem;
+		right: 0.4rem;
+	}
+	.ac__title--private {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--granite-soft);
+	}
+	/* There is no route to draw, so the row doesn't keep a map's height. */
 	.ac--redacted.ac--row .ac__face {
-		border-right: none;
-		width: 88px;
+		aspect-ratio: auto;
+		min-height: 64px;
 	}
 
 	/* tile — the landing page's top-four, largest of the three. */
@@ -375,6 +410,10 @@ const start = startMatch ? { x: Number(startMatch[1]), y: Number(startMatch[2]) 
 		align-items: center;
 		column-gap: 1.25rem;
 		padding: 0 1rem;
+	}
+	/* No stats column, so no gap for one after the date. */
+	.ac--redacted.ac--row .ac__meta {
+		grid-template-columns: minmax(0, 1fr) auto auto;
 	}
 	.ac--row .ac__title {
 		min-width: 0;

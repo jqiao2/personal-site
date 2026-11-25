@@ -8,7 +8,7 @@ export const prerender = false;
 // GET /api/activities/routes → { routes: [{ family, polyline }, …] }
 // (family is src/lib/sports.ts's SportFamily — the axis the heatmap filters on.)
 //
-// Every outdoor track, all-time, for /activities/heatmap. Fetched by the page
+// Every outdoor track the reader may see, for /activities/heatmap. Fetched by the page
 // rather than inlined into it: this is the largest payload the section serves,
 // and the map, the geolocation prompt and the shell around them are all
 // interactive before it lands.
@@ -22,25 +22,33 @@ export const prerender = false;
 // bigger version of this.
 const TTL_MS = 10 * 60 * 1000;
 
-let cached: { at: number; body: string } | null = null;
+type Cached = { at: number; body: string };
 
-// OWNER ONLY, and the cache above is why the check has to be the first thing
-// in the handler rather than a filter inside listRoutePolylines: one body is
-// memoized per instance, so if a visitor's request could ever populate it the
-// next reader would be served whichever version happened to be built first.
-// The header is private/no-store for the same reason, one layer out.
+const cached: { owner: Cached | null; visitor: Cached | null } = { owner: null, visitor: null };
+
+// TWO BODIES, NEVER ONE. The owner gets everything; a visitor gets public
+// activities from before HEATMAP_PUBLIC_BEFORE (listRoutePolylines applies that
+// at the query). Each has its own slot above, because a shared one would serve
+// the next reader whichever version happened to be built first. The owner's
+// header is private/no-store for the same reason, one layer out; a visitor's is
+// an hour at the CDN, so an activity made private leaves the map the same day.
 export const GET: APIRoute = async ({ cookies }) => {
-	if (!(await requireOwner(cookies))) return apiError('unauthorized', 401);
+	const isOwner = await requireOwner(cookies);
+	const slot = isOwner ? 'owner' : 'visitor';
 
 	try {
-		if (!cached || Date.now() - cached.at > TTL_MS) {
-			cached = { at: Date.now(), body: JSON.stringify({ routes: await listRoutePolylines(true) }) };
+		let entry = cached[slot];
+
+		if (!entry || Date.now() - entry.at > TTL_MS) {
+			entry = { at: Date.now(), body: JSON.stringify({ routes: await listRoutePolylines(isOwner) }) };
+			cached[slot] = entry;
 		}
 
-		return new Response(cached.body, {
+		return new Response(entry.body, {
 			headers: {
 				'content-type': 'application/json; charset=utf-8',
-				'cache-control': 'private, no-store',
+				'cache-control': isOwner ? 'private, no-store' : 'public, max-age=0, s-maxage=3600',
+				vary: 'Cookie',
 			},
 		});
 	} catch (e) {

@@ -8,7 +8,7 @@
 // src/lib/activity-privacy.ts, which is deliberately free of any database
 // import so this can run with no .env and no network.
 import assert from 'node:assert/strict';
-import { redactActivities, visitorQuery, defaultPrivate } from '../src/lib/activity-privacy.ts';
+import { redactActivities, visitorQuery, defaultPrivate, onPublicHeatmap } from '../src/lib/activity-privacy.ts';
 
 const ride = (over = {}) => ({
 	id: 7,
@@ -140,6 +140,17 @@ for (const value of [undefined, null, true, 'false', 0]) {
 		if (['sports', 'dateFrom', 'dateTo', 'sortDir', 'sort'].includes(key)) continue;
 		assert.equal(q[key], undefined, `${key} reached the query`);
 	}
+}
+
+// --- onPublicHeatmap: public, top-level, and before August 2022 --------------
+{
+	const track = (over = {}) => onPublicHeatmap({ private: false, parent_id: null, local_date: '2022-07-31', ...over });
+	assert.equal(track(), true);
+	assert.equal(track({ local_date: '2022-08-01' }), false, 'the cutoff day itself is out');
+	assert.equal(track({ local_date: '2026-01-01' }), false);
+	assert.equal(track({ parent_id: 4 }), false);
+
+	for (const value of [undefined, null, true]) assert.equal(track({ private: value }), false);
 }
 
 // ---------------------------------------------------------------------------

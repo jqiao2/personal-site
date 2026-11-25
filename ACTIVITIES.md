@@ -307,13 +307,14 @@ That difference decides most of the design:
 | `/activities` | Landing. Top-four favorites, then a reverse-chronological Mon–Sun **week** calendar; each day is a vertical list of that day's activities. |
 | `/activities/all` | Every activity, reverse chronological, with filters and sorts. |
 | `/activities/[id]` | One activity. Interactive map first; the stats shown depend on the sport. |
-| `/activities/heatmap` | Owner-only. Every outdoor track on one map. |
+| `/activities/heatmap` | Outdoor tracks on one map. The owner sees every one; a visitor sees public activities dated before `HEATMAP_PUBLIC_BEFORE` (2022-08-01). |
 | `/activities/month` | Owner-only. Index of months. |
 | `/activities/month/[month]` | Owner-only. The month in activities — a share card, same family as `/films/month/[month]`. |
 | `/activities/athlete` | Owner-only. FTP/LTHR/HR/threshold pace/CSS/weight/height over time — the inputs every exertion score is measured against — as a versioned table, a per-metric progress graph, and the form that amends them. |
 | `/activities/import` | Owner-only. Strava archive import + file drop. |
 | `/api/activities/list` | Reads, redacted for a visitor exactly as the pages are. |
-| `/api/activities/facets`, `/api/activities/routes` | Owner-only — both describe the private collection outright. |
+| `/api/activities/facets` | Owner-only — it describes the private collection outright. |
+| `/api/activities/routes` | The heatmap's tracks, filtered at the query for a visitor. |
 | `/api/activities/weight` | Bearer-token (`WEIGHT_SYNC_TOKEN`) POST — the iOS scale-sync Shortcut. See "The weigh-in sync". |
 | `/api/activities/**` (writes) | Owner-only. |
 
@@ -322,7 +323,7 @@ That difference decides most of the design:
 **Every activity is private by default** (`activities.private`, migration
 0043 — `not null default true`, which backfilled every row that existed before
 it). Private means owner-only: a visitor sees the activity in the day grid as a
-**bare sport icon** — no title, no stats, no route, and no link, because
+**sport icon and a lock** (plus the words "Private activity" in the lists) — no title, no stats, no route, and no link, because
 `/activities/[id]` 404s for them — and gets nothing else anywhere. `private =
 false` opts one activity back into the full public card, from the checkbox in
 its own edit form.

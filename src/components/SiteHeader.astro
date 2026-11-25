@@ -117,8 +117,12 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		{
 			nav.map((n) =>
 				n.children ? (
-					<div class="sh-logs" data-logs data-owner-only-nav>
+					<div class="sh-logs" data-logs>
+						{/* The month page is owner-only, so a visitor's Journal is the
+						    toggle's own label rather than a link. Both are rendered, and
+						    one hidden client-side, to keep the page one static file. */}
 						<a
+							data-owner-only-nav
 							class:list={['sh__link', 'sh-logs__link', n.active && 'sh__link--active']}
 							href={n.href}
 							aria-current={n.active ? 'page' : undefined}
@@ -130,9 +134,15 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 							class="sh-logs__toggle"
 							aria-haspopup="true"
 							aria-expanded="false"
-							aria-label="Open logs menu"
+							aria-label="Journal menu"
 							data-logs-toggle
 						>
+							<span
+								class:list={['sh__link', 'sh-logs__link', n.active && 'sh__link--active']}
+								data-visitor-only-nav
+							>
+								{n.label}
+							</span>
 							<svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
 								<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
 							</svg>
@@ -377,11 +387,12 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		display: none;
 	}
 
-	/* The Journal group (the four logs + the owner-only month-in-review it points
-	   at) is owner-facing, so it's hidden from visitors. Same client-side trick,
-	   inverted: rendered for everyone so the page stays one cacheable static file,
-	   then hidden until the inline script above marks html[data-owner] before paint
-	   — so the owner sees it with no flash and a visitor never does. */
+	/* Owner-facing nav (Recipes, the Journal tab's link to the month in review).
+	   Same client-side trick, inverted: rendered for everyone so the page stays
+	   one cacheable static file, then hidden until the inline script above marks
+	   html[data-owner] before paint — so the owner sees it with no flash and a
+	   visitor never does. data-visitor-only-nav is its opposite. */
+	html[data-owner] [data-visitor-only-nav],
 	html:not([data-owner]) [data-owner-only-nav] {
 		display: none;
 	}
@@ -564,7 +575,15 @@ const ownDrawerWide = !sidebar && sectionNav(theme, pathname, owner).length > 0;
 		background: none;
 		border: none;
 		color: var(--sh-link);
+		font: inherit;
 		cursor: pointer;
+	}
+	.sh-logs__toggle .sh__link {
+		padding-left: 13px;
+	}
+	.sh-logs:hover .sh-logs__toggle .sh__link:not(.sh__link--active),
+	.sh-logs:focus-within .sh-logs__toggle .sh__link:not(.sh__link--active) {
+		color: var(--sh-hover);
 	}
 	.sh-logs:hover .sh-logs__toggle,
 	.sh-logs:focus-within .sh-logs__toggle {
