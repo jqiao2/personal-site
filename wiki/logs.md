@@ -227,3 +227,4 @@ wiki across every iteration, even reverted ones).
 2026-11-24 — `OWNER_DEV=0` gives a visitor view in dev; the heatmap went public behind a server-side date cutoff (`HEATMAP_PUBLIC_BEFORE`).
 2026-11-25 — added 0043 (iCloud Photos on Windows), from the food photo inbox.
 2026-11-25 — Daily Letterboxd watchlist sync: scrape the watchlist pages, slug → TMDB id from the film page, Letterboxd owns the films it lists (0042).
+2026-11-26 — list "Add a film" results were unstyled: scoped CSS never reaches createElement nodes; use `:global()` under a scoped parent (0044).

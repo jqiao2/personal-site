@@ -289,14 +289,16 @@ const arrangeable = isOwner && !smart && sort === '';
 			list-style: none;
 			margin: 0;
 			padding: 4px;
-			background: #241012;
+			max-height: 360px;
+			overflow-y: auto;
+			background: #1c0d0e;
 			border: 1px solid #4a2529;
 			border-radius: 8px;
 		}
 		.add__results[hidden] {
 			display: none;
 		}
-		.add__results button {
+		.add__results :global(button) {
 			width: 100%;
 			display: flex;
 			align-items: center;
@@ -311,15 +313,20 @@ const arrangeable = isOwner && !smart && sort === '';
 			text-align: left;
 			cursor: pointer;
 		}
-		.add__results button:hover {
-			background: #2c1518;
+		.add__results :global(button:hover) {
+			background: #331619;
 		}
-		.add__results img {
-			width: 28px;
-			height: 42px;
+		.add__results :global(img) {
+			width: 30px;
+			height: 45px;
+			flex-shrink: 0;
 			object-fit: cover;
 			border-radius: 3px;
-			background: #2c1518;
+			background: #4a2529;
+		}
+		.add__results :global(.r-year) {
+			color: #a2857a;
+			margin-left: 6px;
 		}
 
 		.empty {
@@ -564,7 +571,17 @@ const arrangeable = isOwner && !smart && sort === '';
 				img.alt = '';
 
 				if (m.poster_path) img.src = `https://image.tmdb.org/t/p/w92${m.poster_path}`;
-				b.append(img, `${m.title}${m.release_date ? ` (${m.release_date.slice(0, 4)})` : ''}`);
+				const label = document.createElement('span');
+				label.textContent = m.title;
+
+				if (m.release_date) {
+					const year = document.createElement('span');
+					year.className = 'r-year';
+					year.textContent = m.release_date.slice(0, 4);
+					label.append(year);
+				}
+
+				b.append(img, label);
 				b.addEventListener('click', async () => {
 					const body = JSON.stringify({ listId, tmdbId: m.id });
 
