@@ -223,14 +223,14 @@ export async function visitsOn(days: string[]): Promise<Map<string, DayVisit[]>>
 async function pendingObject(id: number) {
 	const { data, error } = await supabaseAdmin
 		.from('food_inbox')
-		.select('storage_path, width, height')
+		.select('storage_path, width, height, taken_at')
 		.eq('id', id)
 		.eq('status', 'pending')
 		.maybeSingle();
 
 	if (error) throw new Error(error.message);
 
-	return data?.storage_path ? { path: String(data.storage_path), width: data.width, height: data.height } : null;
+	return data?.storage_path ? { path: String(data.storage_path), width: data.width, height: data.height, takenAt: String(data.taken_at) } : null;
 }
 
 async function download(path: string): Promise<Blob> {
@@ -287,6 +287,13 @@ export async function logPending(id: number, visitId: number): Promise<number[] 
 			.eq('id', id);
 		throw e;
 	}
+
+	// The visit's time is its earliest photograph: same-day visits sort by it.
+	await supabaseAdmin
+		.from('restaurant_visits')
+		.update({ eaten_at: photo.takenAt })
+		.eq('id', visitId)
+		.or(`eaten_at.is.null,eaten_at.gt.${photo.takenAt}`);
 
 	// The photograph is safely on the visit; a leftover copy is only bytes.
 	await supabaseAdmin.storage.from(BUCKET).remove([photo.path]);

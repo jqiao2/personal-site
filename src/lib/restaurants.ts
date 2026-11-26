@@ -129,6 +129,8 @@ export interface DiaryVisit {
 	 *  getVisit only fetches it off the base table when includePrivate. */
 	private_note: string | null;
 	tags: string[];
+	/** When the photographs say it was eaten, zoneless; null when none did. */
+	eaten_at: string | null;
 	restaurant_name: string;
 	cuisines: string[];
 	neighborhood: string | null;
@@ -258,6 +260,7 @@ export async function listRecentVisits(limit = 4): Promise<VisitDetail[]> {
 		.from('restaurant_diary')
 		.select('*')
 		.order('visited_on', { ascending: false })
+		.order('eaten_at', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false })
 		.limit(limit);
 
@@ -548,6 +551,7 @@ export async function getPlace(id: number): Promise<PlaceDetail | null> {
 		.select('*')
 		.eq('restaurant_id', id)
 		.order('visited_on', { ascending: false })
+		.order('eaten_at', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false });
 
 	if (visitError) throw new Error(visitError.message);
@@ -611,6 +615,7 @@ export async function listDiary(limit = 400): Promise<DiaryVisit[]> {
 		.from('restaurant_diary')
 		.select('*')
 		.order('visited_on', { ascending: false })
+		.order('eaten_at', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false })
 		.limit(limit);
 
@@ -651,6 +656,7 @@ export async function listMonthVisits(key: string): Promise<VisitDetail[]> {
 		.gte('visited_on', start)
 		.lt('visited_on', end)
 		.order('visited_on')
+		.order('eaten_at', { nullsFirst: true })
 		.order('id');
 
 	if (error) throw new Error(error.message);
@@ -808,6 +814,7 @@ export async function previousVisits(placeIds: number[]): Promise<Map<number, Pr
 		.select('restaurant_id, visited_on, rating, verdict, hearted')
 		.in('restaurant_id', ids)
 		.order('visited_on', { ascending: false })
+		.order('eaten_at', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false });
 
 	if (error) throw new Error(error.message);
@@ -1214,6 +1221,7 @@ export async function setPlaceHearted(id: number, hearted: boolean): Promise<voi
 		.eq('restaurant_id', id)
 		.is('deleted_at', null)
 		.order('visited_on', { ascending: false })
+		.order('eaten_at', { ascending: false, nullsFirst: false })
 		.order('id', { ascending: false })
 		.limit(1)
 		.maybeSingle();

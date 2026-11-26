@@ -81,7 +81,7 @@ async function selectActivities(filter: { ids: number[] } | { from: string; to: 
 }
 
 async function selectMeals(filter: { ids: number[] } | { from: string; to: string }): Promise<LinkedMeal[]> {
-	let q = supabaseAdmin.from('restaurant_diary').select('id, restaurant_name, visited_on').order('visited_on').order('id');
+	let q = supabaseAdmin.from('restaurant_diary').select('id, restaurant_name, visited_on').order('visited_on').order('eaten_at', { nullsFirst: true }).order('id');
 
 	if ('ids' in filter) {
 		if (filter.ids.length === 0) return [];
