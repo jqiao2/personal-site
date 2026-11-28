@@ -14,3 +14,4 @@
   also keeps unreviewed photos off R2's public URL.
 - To drive an owner page before its migration is applied, point `SUPABASE_URL` at
   a small local proxy that passes reads through and fakes the new table.
+- Suggestions outside the imported areas: the sync asks Nominatim (`q=restaurant`, `viewbox` + `bounded=1`, one request a second) and upserts the hits into `place_sources` as `osm`. overpass-api.de answered 406 to every request from here.
