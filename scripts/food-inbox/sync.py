@@ -11,12 +11,16 @@ import argparse
 import hashlib
 import io
 import json
+import math
 import msvcrt
 import os
+import re
 import sys
 import time
 import traceback
+import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from datetime import datetime
@@ -40,6 +44,13 @@ SAME_HASH = 6
 # iCloud writes a file before it has finished downloading it.
 SETTLE_SECONDS = 60
 MAX_ATTEMPTS = 5
+# Same as RADIUS_M in src/lib/food-inbox.ts: how far a suggestion may be.
+RADIUS_M = 150
+# What OpenStreetMap is asked for near a photo the gazetteer does not cover.
+KINDS = ("restaurant", "cafe", "bar", "pub", "fast food", "ice cream", "bakery")
+NOMINATIM = "https://nominatim.openstreetmap.org/search"
+# Nominatim's usage policy: name the app, and one request a second.
+AGENT = "jqiao.vercel.app food photo inbox"
 
 
 def load_env(path):
@@ -75,6 +86,24 @@ class Supabase:
     def photos(self):
         body, _ = self.call("GET", "/rest/v1/restaurant_photos?select=id,storage_path&limit=1000&order=id.desc")
         return json.loads(body)
+
+    def pending_points(self):
+        body, _ = self.call("GET", "/rest/v1/food_inbox?select=lat,lng&status=eq.pending&lat=not.is.null")
+        return json.loads(body)
+
+    def places_near(self, box):
+        south, north, west, east = box
+        path = f"/rest/v1/place_sources?select=id&lat=gte.{south}&lat=lte.{north}&lng=gte.{west}&lng=lte.{east}&limit=1"
+        body, _ = self.call("GET", path)
+        return bool(json.loads(body))
+
+    def add_places(self, rows):
+        self.call(
+            "POST",
+            "/rest/v1/place_sources?on_conflict=source,source_id",
+            json.dumps(rows).encode(),
+            {"Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=minimal"},
+        )
 
     def add(self, row, webp):
         path = f"{uuid.uuid4()}.webp"
@@ -135,11 +164,11 @@ def same(a, b):
 class State:
     """What this PC has already looked at. Lives outside the repo."""
 
-    KEYS = ("seen", "tries", "logged", "sent")
+    KEYS = ("seen", "tries", "logged", "sent", "looked")
 
     def __init__(self):
         self.path = HOME / "state.json"
-        self.seen, self.tries, self.logged, self.sent = {}, {}, {}, {}
+        self.seen, self.tries, self.logged, self.sent, self.looked = {}, {}, {}, {}, {}
         if self.path.exists():
             self.__dict__.update(json.loads(self.path.read_text(encoding="utf8")))
 
@@ -165,6 +194,72 @@ def learn_logged(db, env, state):
                 state.logged[key] = dhash(Image.open(io.BytesIO(res.read())))
         except Exception as e:
             print(f"logged photo {key}: {e}")
+
+
+def normalize(raw):
+    """The gazetteer's search key. Must match normalize() in src/lib/gazetteer.ts."""
+    folded = "".join(c for c in unicodedata.normalize("NFD", raw) if not 0x300 <= ord(c) <= 0x36F)
+    return re.sub(r"[^A-Z0-9]+", " ", folded.upper()).strip()
+
+
+def box_around(lat, lng, radius):
+    """south, north, west, east. Same arithmetic as boxAround() in food-inbox-group.ts."""
+    d_lat = radius / 111_320
+    d_lng = radius / (111_320 * max(0.01, math.cos(math.radians(lat))))
+    return lat - d_lat, lat + d_lat, lng - d_lng, lng + d_lng
+
+
+def osm_place(hit):
+    a = hit.get("address") or {}
+    tags = hit.get("extratags") or {}
+    street = " ".join(x for x in (a.get("house_number"), a.get("road")) if x)
+    cuisines = [c.strip().replace("_", " ").capitalize() for c in tags.get("cuisine", "").split(";") if c.strip()]
+    return {
+        "source": "osm",
+        "source_id": f"{hit['osm_type']}/{hit['osm_id']}",
+        "name": hit["name"],
+        "name_norm": normalize(hit["name"]),
+        "lat": float(hit["lat"]),
+        "lng": float(hit["lon"]),
+        "address": street or None,
+        "locality": a.get("suburb") or a.get("neighbourhood"),
+        "city": a.get("city") or a.get("town") or a.get("village") or a.get("hamlet"),
+        "region": a.get("state"),
+        "country": (a.get("country_code") or "").upper() or None,
+        "cuisines": cuisines or [hit.get("type", "").replace("_", " ").capitalize()],
+        "phone": tags.get("phone"),
+        "website": tags.get("website"),
+    }
+
+
+def find_places(db, state):
+    """Where a waiting photo has no gazetteer place nearby (outside New York and
+    the other imported areas), ask OpenStreetMap and add what it knows to the
+    gazetteer, so the inbox has suggestions there too."""
+    for p in db.pending_points():
+        cell = f"{p['lat']:.3f},{p['lng']:.3f}"
+        if cell in state.looked:
+            continue
+        if db.places_near(box_around(p["lat"], p["lng"], RADIUS_M)):
+            state.looked[cell] = "covered"
+            continue
+        south, north, west, east = box_around(p["lat"], p["lng"], RADIUS_M + 100)
+        found = {}
+        for kind in KINDS:
+            query = urllib.parse.urlencode({
+                "format": "jsonv2", "q": kind, "viewbox": f"{west},{north},{east},{south}",
+                "bounded": 1, "limit": 50, "addressdetails": 1, "extratags": 1,
+            })
+            req = urllib.request.Request(f"{NOMINATIM}?{query}", headers={"User-Agent": AGENT})
+            with urllib.request.urlopen(req, timeout=60) as res:
+                for hit in json.loads(res.read()):
+                    if hit.get("name"):
+                        found[f"{hit['osm_type']}/{hit['osm_id']}"] = osm_place(hit)
+            time.sleep(1.1)
+        if found:
+            db.add_places(list(found.values()))
+        state.looked[cell] = len(found)
+        print(f"places near {cell}: {len(found)} from OpenStreetMap", flush=True)
 
 
 def candidates(state, since):
@@ -250,6 +345,9 @@ def main():
     state = State()
     todo = candidates(state, args.since)[: args.limit]
     if not todo:
+        if not args.dry_run:
+            find_places(Supabase(load_env(REPO / ".env")), state)
+            state.save()
         return
 
     # Imported late so the usual run, with nothing new, costs nothing.
@@ -289,6 +387,7 @@ def main():
                 state.save()
 
     if not args.dry_run:
+        find_places(db, state)
         state.save()
 
 
